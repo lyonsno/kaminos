@@ -1067,11 +1067,15 @@ async function exerciseNoRenderService(mode, {
   returnedActive = true,
   returnedMode = 'lease-driven',
   expectActivationFailure = false,
+  successorBeforeService = null,
+  successorDuringService = false,
+  deactivateAfterService = false,
 } = {}) {
   const device = { queue: {} };
   const volumeState = { frameCount: 801 };
   let rafCallback = null;
   let fallbackCallback = null;
+  let throwNextTransition = false;
   const context = {
     __kaminosVolumePrototype: {
       foregroundGpuContext: () => ({
@@ -1081,10 +1085,16 @@ async function exerciseNoRenderService(mode, {
         queueIdentity: 'queue-current-source',
       }),
       debugState: () => volumeState,
-      setForegroundOpportunityMode: async () => ({
-        active: returnedActive,
-        foregroundOpportunityMode: returnedMode,
-      }),
+      setForegroundOpportunityMode: async () => {
+        if (throwNextTransition) {
+          throwNextTransition = false;
+          throw new Error('synthetic transition failure');
+        }
+        return {
+          active: returnedActive,
+          foregroundOpportunityMode: returnedMode,
+        };
+      },
     },
     performance: { now: () => 100 },
     requestAnimationFrame(callback) {
@@ -1104,16 +1114,34 @@ async function exerciseNoRenderService(mode, {
   context.__kaminosSharpForegroundOpportunity = () => ({ product: 'hook' });
   const activationResult = await context.__kaminosVolumePrototype.setForegroundOpportunityMode(true);
   assert.equal(activationResult.foregroundOpportunityMode, returnedMode);
-  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.activationReceiptCount, 1);
-  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.activationReceiptRetention, 'uncapped');
-  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.activationReceipts.length, 1);
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.modeTransitionReceiptCount, 1);
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.modeTransitionReceiptRetention, 'uncapped');
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.modeTransitionReceipts.length, 1);
   if (!expectActivationFailure) {
-    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt.requestedActive, true);
-    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt.returned.active, true);
+    const activationReceipt = context.__kaminosCurrentSourceNoRenderAssay.modeTransitionReceipts[0];
+    assert.equal(activationReceipt.requestedActive, true);
+    assert.equal(activationReceipt.returned.active, true);
     assert.equal(
-      context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt.returned.foregroundOpportunityMode,
+      activationReceipt.returned.foregroundOpportunityMode,
       'lease-driven',
     );
+  }
+  if (successorBeforeService === 'deactivate') {
+    returnedMode = 'ordinary-raf';
+    await context.__kaminosVolumePrototype.setForegroundOpportunityMode(false);
+  } else if (successorBeforeService === 'ordinary-active') {
+    returnedMode = 'ordinary-raf';
+    await context.__kaminosVolumePrototype.setForegroundOpportunityMode(true);
+  } else if (successorBeforeService === 'thrown-active') {
+    throwNextTransition = true;
+    await assert.rejects(
+      context.__kaminosVolumePrototype.setForegroundOpportunityMode(true),
+      /synthetic transition failure/,
+    );
+    const thrownTransition = context.__kaminosCurrentSourceNoRenderAssay.modeTransitionReceipts[1];
+    assert.equal(thrownTransition.status, 'threw');
+    assert.equal(thrownTransition.requestedActive, true);
+    assert.match(thrownTransition.error, /synthetic transition failure/);
   }
   const hook = context.__kaminosSharpForegroundOpportunity;
   const request = hook({
@@ -1131,9 +1159,22 @@ async function exerciseNoRenderService(mode, {
     queue: device.queue,
     signal: new AbortController().signal,
   });
+  if (successorDuringService) {
+    returnedMode = 'ordinary-raf';
+    await context.__kaminosVolumePrototype.setForegroundOpportunityMode(false);
+    if (rafCallback) rafCallback(116.67);
+    await assert.rejects(resultPromise, /lease-driven activation changed during service/);
+    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceCount, 0);
+    return null;
+  }
+  if (successorBeforeService) {
+    if (rafCallback) rafCallback(116.67);
+    await assert.rejects(resultPromise, /requires quiesced lease-driven volume mode/);
+    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceCount, 0);
+    return null;
+  }
   if (expectActivationFailure) {
     await assert.rejects(resultPromise, /requires quiesced lease-driven volume mode/);
-    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt, null);
     assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceCount, 0);
     return null;
   }
@@ -1153,23 +1194,45 @@ async function exerciseNoRenderService(mode, {
   assert.equal(receipt.rafCallbackObserved, mode === 'observed-raf-callback');
   assert.equal(receipt.renderedProductFrameObserved, false);
   assert.equal(receipt.presentedProductFrameObserved, false);
-  assert.equal(
-    receipt.activationReceiptId,
-    context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt.receiptId,
-  );
+  assert.equal(receipt.deviceIdentity, 'device-current-source');
+  assert.equal(receipt.queueIdentity, 'queue-current-source');
+  assert.equal(receipt.activationReceiptId, 'volume-mode-transition:1');
+  assert.equal(receipt.activationTransitionOrdinal, 1);
+  assert.ok(receipt.serviceStartEvidenceOrdinal > 2);
+  assert.ok(receipt.serviceCompletedEvidenceOrdinal > receipt.serviceStartEvidenceOrdinal);
   assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceCount, 1);
   assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceRetention, 'uncapped');
   assert.equal(context.__kaminosCurrentSourceNoRenderAssay.services.length, 1);
   assert.equal(context.__kaminosCurrentSourceNoRenderAssay.services[0].requestId, receipt.requestId);
-  return receipt;
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.requestRetention, 'uncapped');
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.requests.length, 1);
+  assert.deepEqual(
+    { ...context.__kaminosCurrentSourceNoRenderAssay.productGpuIdentity },
+    { deviceIdentity: 'device-current-source', queueIdentity: 'queue-current-source' },
+  );
+  assert.deepEqual(
+    { ...context.__kaminosCurrentSourceNoRenderAssay.productRouteIdentity },
+    { routeId: 'sharp-image-to-splat-live-v0', runId: `run-${mode}` },
+  );
+  if (deactivateAfterService) {
+    returnedMode = 'ordinary-raf';
+    await context.__kaminosVolumePrototype.setForegroundOpportunityMode(false);
+  }
+  return { receipt, assay: context.__kaminosCurrentSourceNoRenderAssay };
 }
 
-const observedRafReceipt = await exerciseNoRenderService('observed-raf-callback');
-const fallbackReceipt = await exerciseNoRenderService('non-present-fallback');
+for (const successorBeforeService of ['deactivate', 'ordinary-active', 'thrown-active']) {
+  await exerciseNoRenderService(`stale-after-${successorBeforeService}`, { successorBeforeService });
+}
+await exerciseNoRenderService('transition-during-service', { successorDuringService: true });
+const observedRafResult = await exerciseNoRenderService('observed-raf-callback', { deactivateAfterService: true });
+const fallbackResult = await exerciseNoRenderService('non-present-fallback');
 await exerciseNoRenderService('invalid-activation', {
   returnedMode: 'ordinary-raf',
   expectActivationFailure: true,
 });
+const observedRafReceipt = observedRafResult.receipt;
+const fallbackReceipt = fallbackResult.receipt;
 assert.equal(fallbackReceipt.fallbackReason, 'raf-suspended-or-delayed');
 assert.equal(fallbackReceipt.rafTimestampMs, null);
 
@@ -1186,33 +1249,9 @@ const assembleNoRenderTerminalEvidence = vm.runInNewContext(`(() => {
   const validateNoRenderAssayEvidence = (${noRenderValidatorSource[0]});
   return (${noRenderAssemblerSource[0]});
 })()`);
-const validNoRenderAssay = {
-  schema: 'kaminos.current-source-no-render-assay.v0',
-  status: 'armed',
-  presentationIsolation: 'foreground-opportunity-no-render-v0',
-  productHookAssignments: 1,
-  requestCount: 2,
-  serviceCount: 2,
-  observedRafCallbackCount: 1,
-  nonPresentFallbackCount: 1,
-  activationReceiptCount: 1,
-  activationReceiptRetention: 'uncapped',
-  activationReceipts: [{
-    schema: 'kaminos.volume-foreground-mode-transition-receipt.v0',
-    receiptId: 'volume-mode-transition:1',
-    status: 'returned',
-    requestedActive: true,
-    source: 'setForegroundOpportunityMode-return',
-    returned: { active: true, foregroundOpportunityMode: 'lease-driven' },
-  }],
-  serviceRetention: 'uncapped',
-  services: [observedRafReceipt, fallbackReceipt].map((receipt, index) => ({
-    ...receipt,
-    requestId: `terminal-request-${index + 1}`,
-  })),
-};
-validNoRenderAssay.leaseDrivenActivationReceipt = validNoRenderAssay.activationReceipts[0];
+const validNoRenderAssay = structuredClone(observedRafResult.assay);
 assert.equal(validateNoRenderAssayEvidence(validNoRenderAssay).length, 0);
+assert.equal(validateNoRenderAssayEvidence(fallbackResult.assay).length, 0);
 const validTerminalAdmission = assembleNoRenderTerminalEvidence({
   enabled: true,
   assay: validNoRenderAssay,
@@ -1221,18 +1260,31 @@ const validTerminalAdmission = assembleNoRenderTerminalEvidence({
 });
 assert.equal(validTerminalAdmission.ok, true);
 assert.equal(validTerminalAdmission.failures.length, 0);
-assert.equal(validTerminalAdmission.fullRoute.noRenderAssay.services.length, 2);
+assert.equal(validTerminalAdmission.fullRoute.noRenderAssay.services.length, 1);
 assert.equal(validTerminalAdmission.fullRoute.output.sha256, 'abc');
 assert.equal(validTerminalAdmission.lastTrustworthyEvidence.preflight, 'preserved');
-assert.equal(validTerminalAdmission.lastTrustworthyEvidence.noRenderAssay.services.length, 2);
+assert.equal(validTerminalAdmission.lastTrustworthyEvidence.noRenderAssay.services.length, 1);
 for (const [label, mutate, expectedFailure] of [
   ['missing assignment', value => { value.productHookAssignments = 0; }, 'product-hook-unassigned'],
-  ['zero requests', value => { value.requestCount = 0; }, 'request-count-empty'],
-  ['partial service', value => { value.serviceCount = 1; value.services = value.services.slice(0, 1); }, 'request-service-count-mismatch'],
-  ['missing activation receipt', value => { value.activationReceiptCount = 0; value.activationReceipts = []; value.leaseDrivenActivationReceipt = null; }, 'activation-receipt-empty'],
-  ['inactive activation return', value => { value.leaseDrivenActivationReceipt.returned.active = false; }, 'lease-driven-activation-unverified'],
-  ['unretained activation return', value => { value.leaseDrivenActivationReceipt = { ...value.leaseDrivenActivationReceipt, receiptId: 'not-retained' }; }, 'lease-driven-activation-not-retained'],
+  ['zero requests', value => { value.requestCount = 0; value.requests = []; }, 'request-count-empty'],
+  ['partial service', value => { value.serviceCount = 0; value.services = []; }, 'request-service-count-mismatch'],
+  ['missing product identity', value => { value.productGpuIdentity.deviceIdentity = null; }, 'product-gpu-identity-invalid'],
+  ['missing product route identity', value => { value.productRouteIdentity.runId = ''; }, 'product-route-identity-invalid'],
+  ['capped requests', value => { value.requestRetention = 'last-only'; }, 'request-retention-capped-or-missing'],
+  ['request product mismatch', value => { value.requests[0].queueIdentity = 'wrong-queue'; }, 'request-product-gpu-identity-mismatch'],
+  ['request route mismatch', value => { value.requests[0].runId = 'wrong-run'; }, 'request-product-route-identity-mismatch'],
+  ['missing service identity', value => { delete value.services[0].deviceIdentity; }, 'service-gpu-identity-mismatch'],
+  ['swapped service identity', value => { value.services[0].queueIdentity = 'wrong-queue'; }, 'service-gpu-identity-mismatch'],
+  ['missing transition ledger', value => { value.modeTransitionReceiptCount = 0; value.modeTransitionReceipts = []; }, 'service-activation-identity-mismatch'],
+  ['capped transition ledger', value => { value.modeTransitionReceiptRetention = 'last-only'; }, 'mode-transition-retention-capped-or-missing'],
+  ['transition count divergence', value => { value.modeTransitionReceiptCount += 1; }, 'mode-transition-count-mismatch'],
+  ['duplicate transition identity', value => { value.modeTransitionReceipts.push({ ...value.modeTransitionReceipts[0], transitionOrdinal: value.modeTransitionReceiptCount + 1 }); value.modeTransitionReceiptCount += 1; }, 'mode-transition-identity-invalid'],
+  ['reordered transition chronology', value => { value.modeTransitionReceipts[1].startedEvidenceOrdinal = value.modeTransitionReceipts[0].completedEvidenceOrdinal; }, 'mode-transition-sequence-invalid'],
+  ['pending transition', value => { value.modeTransitionReceipts[0].status = 'pending'; }, 'mode-transition-status-invalid'],
+  ['inactive activation return', value => { value.modeTransitionReceipts[0].returned.active = false; }, 'lease-driven-activation-unverified'],
   ['service activation mismatch', value => { value.services[0].activationReceiptId = 'wrong-activation'; }, 'service-activation-identity-mismatch'],
+  ['service activation chronology', value => { value.services[0].serviceStartEvidenceOrdinal = value.modeTransitionReceipts[0].completedEvidenceOrdinal; }, 'service-activation-chronology-invalid'],
+  ['service after deactivation', value => { value.modeTransitionReceipts[1].startedEvidenceOrdinal = value.services[0].serviceStartEvidenceOrdinal + 1; }, 'service-activation-superseded'],
   ['malformed receipt', value => { value.services[0].schema = 'wrong'; }, 'service-schema-invalid'],
   ['submitted volume work', value => { value.services[0].commandBufferCount = 1; }, 'volume-command-buffer-submitted'],
   ['presentation overclaim', value => { value.services[0].presentedProductFrameObserved = true; }, 'render-or-presentation-overclaim'],
