@@ -378,7 +378,9 @@ async function waitForSpawnedBrowserCdp() {
     const cdpPort = Number(portLine);
     if (!Number.isInteger(cdpPort) || cdpPort <= 0 || cdpPort > 65535
       || !browserWebSocketPath?.startsWith('/devtools/browser/')) {
-      throw new Error(`Spawned browser wrote invalid DevToolsActivePort: ${JSON.stringify(content)}`);
+      lastEndpointError = new Error(`Spawned browser wrote incomplete DevToolsActivePort: ${JSON.stringify(content)}`);
+      await sleep(50);
+      continue;
     }
     try {
       const version = await cdpAtPort(cdpPort, '/json/version');

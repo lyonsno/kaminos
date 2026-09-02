@@ -1722,6 +1722,7 @@ for (const [pattern, message] of [
   [/sampleNow\('pre-capture'\)[\s\S]*attemptInFlightHybridCapture[\s\S]*sampleNow\('post-capture'\)/, 'Transient capture must verify the same settle epoch immediately before and after screenshot I/O'],
   [/compactWitnessSummary\([\s\S]*console\.log\(JSON\.stringify\(terminalSummary/, 'Successful stdout must emit only the compact locator summary'],
   [/Runtime\.exceptionThrown/, 'Witness must fail loud on browser runtime exceptions'],
+  [/if \(!Number\.isInteger\(cdpPort\)[\s\S]*lastEndpointError = new Error\(`Spawned browser wrote incomplete DevToolsActivePort[\s\S]*await sleep\(50\);[\s\S]*continue;/, 'A momentarily empty or partial DevToolsActivePort file must remain retryable inside the bounded browser-launch wait'],
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],
   [/lastTrustworthyEvidence/, 'Witness failures after inference must preserve the last trustworthy route and heartbeat evidence'],
   [/const fireOperationTimeoutMs = fireTimeoutMs;/, 'An uncapped firing must not inherit a hidden per-operation deadline'],
