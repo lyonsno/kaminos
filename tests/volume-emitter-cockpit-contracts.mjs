@@ -54,8 +54,8 @@ assert.match(
 );
 assert.match(
   cockpit,
-  /const emitterMorphologyControls = new Set\(\['emitter-assay-family', 'volume-input-radius', 'volume-flow-rate'\]\)/,
-  'only morphology-bearing controls enter the analytic descriptor path',
+  /const emitterMorphologyControls = new Set\(\['emitter-assay-family', 'volume-emitter-source-law', 'volume-emitter-source-depth', 'volume-input-radius', 'volume-flow-rate'\]\)/,
+  'only source-law and morphology-bearing controls enter the analytic descriptor path',
 );
 assert.match(
   cockpit,

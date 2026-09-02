@@ -51,6 +51,8 @@ const prototype = {
     return {
       mode: descriptor ? 'analytic-fixed' : 'off',
       family: descriptor?.family ?? 'cluster',
+      sourceLaw: descriptor?.sourceLaw ?? 'legacy-volume',
+      sourceDepth: descriptor?.sourceDepth ?? 0.04,
       coordinateSpace: descriptor ? 'volume-local' : 'none',
       count: descriptor ? 1 : 0,
     };
@@ -97,7 +99,7 @@ assert.doesNotMatch(
 assert.match(core, /fn externalEmitterInfluence\([\s\S]*?for \(var i:/, 'the generic segment carrier remains available for real arbitrary trails');
 
 const syncControls = cockpit.match(/const syncControls = event => \{[\s\S]*?\n  };/)?.[0] || '';
-assert.match(cockpit, /const emitterMorphologyControls = new Set\(\['emitter-assay-family', 'volume-input-radius', 'volume-flow-rate'\]\)/, 'only morphology-bearing controls update the compact descriptor');
+assert.match(cockpit, /const emitterMorphologyControls = new Set\(\['emitter-assay-family', 'volume-emitter-source-law', 'volume-emitter-source-depth', 'volume-input-radius', 'volume-flow-rate'\]\)/, 'only source-law and morphology-bearing controls update the compact descriptor');
 assert.match(cockpit, /if \(emitterMorphologyControls\.has\(event\?\.target\?\.id\)[\s\S]*?selectedEmitterFamily !== 'cluster'\)/, 'fixed morphology updates are explicitly isolated from the general slider path');
 assert.match(
   syncControls,

@@ -35,6 +35,8 @@ function makePrototype({ analyticOverride = null, carrierOverride = null, primit
       return analyticOverride?.(descriptor) || {
         mode: descriptor ? 'analytic-fixed' : 'off',
         family: descriptor?.family ?? 'cluster',
+        sourceLaw: descriptor?.sourceLaw ?? 'legacy-volume',
+        sourceDepth: descriptor?.sourceDepth ?? 0.04,
         coordinateSpace: descriptor ? 'volume-local' : 'none',
         count: descriptor ? 1 : 0,
         frameId: descriptor?.frameId ?? null,

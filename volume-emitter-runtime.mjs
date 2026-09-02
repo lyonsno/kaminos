@@ -118,6 +118,12 @@ function verifyAnalyticReceipt(descriptor, receipt) {
   if (receipt.coordinateSpace !== 'volume-local') {
     throw new Error(`analytic emitter coordinate space mismatch: requested volume-local, effective ${receipt.coordinateSpace ?? 'missing'}`);
   }
+  if (receipt.sourceLaw !== descriptor.sourceLaw) {
+    throw new Error(`analytic emitter source law mismatch: requested ${descriptor.sourceLaw}, effective ${receipt.sourceLaw ?? 'missing'}`);
+  }
+  if (receipt.sourceDepth !== descriptor.sourceDepth) {
+    throw new Error(`analytic emitter source depth mismatch: requested ${descriptor.sourceDepth}, effective ${receipt.sourceDepth ?? 'missing'}`);
+  }
 }
 
 function assayGeometry(family, inputRadius) {
@@ -149,6 +155,8 @@ export function applyVolumeEmitterFamilyRuntime({
   }
   const inputRadius = finiteNumber(controls.inputRadius, 'controls.inputRadius');
   const requestedCoreFlowRate = finiteNumber(controls.flowRate, 'controls.flowRate');
+  const sourceLaw = String(controls.emitterSourceLaw ?? 'legacy-volume');
+  const sourceDepth = finiteNumber(controls.emitterSourceDepth ?? 0.04, 'controls.emitterSourceDepth');
   if (inputRadius < 0.08 || inputRadius > 0.7) {
     throw new Error(`controls.inputRadius ${inputRadius} must be within [0.08, 0.7]`);
   }
@@ -187,6 +195,8 @@ export function applyVolumeEmitterFamilyRuntime({
       ...assayGeometry(requestedFamily, inputRadius),
       strength: requestedCoreFlowRate,
       velocitySpeed: 0.22,
+      sourceLaw,
+      sourceDepth,
       chemistry: HELD_ASSAY_CHEMISTRY,
       temporal: HELD_ASSAY_TEMPORAL,
       lifetime: 0.55,
@@ -215,6 +225,8 @@ export function applyVolumeEmitterFamilyRuntime({
       family: requestedFamily,
       coreFlowRate: requestedCoreFlowRate,
       inputRadius,
+      sourceLaw,
+      sourceDepth,
       frameId,
       timestampMs,
     },
@@ -224,6 +236,8 @@ export function applyVolumeEmitterFamilyRuntime({
       sourceStrength: compilerReceipt?.effective.strength ?? 0,
       sourceCount: sourceReceipt.count,
       sourceMode: sourceReceipt.mode,
+      sourceLaw: compilerReceipt?.effective.sourceLaw ?? 'inactive',
+      sourceDepth: compilerReceipt?.effective.sourceDepth ?? null,
       coordinateSpace: sourceReceipt.coordinateSpace,
       externalStrength: fixedAnalytic ? compilerReceipt.effective.strength : 0,
       externalEmitterCount: sourceReceipt.count,

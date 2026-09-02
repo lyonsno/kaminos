@@ -9,6 +9,11 @@ export const VOLUME_EMITTER_FAMILIES = Object.freeze([
   'ring',
 ]);
 
+export const VOLUME_EMITTER_SOURCE_LAWS = Object.freeze([
+  'legacy-volume',
+  'shallow-primary',
+]);
+
 const DEFAULT_CHEMISTRY = Object.freeze({
   smoke: 0.24,
   heat: 1.32,
@@ -179,6 +184,11 @@ export function compileVolumeEmitterFamily(request = {}) {
   const requestedDirection = vec3(request.direction, 'direction', [0, 1, 0]);
   const axis = normalize(requestedDirection, 'direction');
   const radius = numberInRange(request.radius ?? 0.04, 'radius', 0.006, 0.18);
+  const sourceLaw = String(request.sourceLaw ?? 'legacy-volume');
+  if (!VOLUME_EMITTER_SOURCE_LAWS.includes(sourceLaw)) {
+    throw new Error(`unsupported emitter source law: ${sourceLaw || 'missing-source-law'}`);
+  }
+  const sourceDepth = numberInRange(request.sourceDepth ?? 0.04, 'sourceDepth', 0.006, 0.36);
   const strength = numberInRange(request.strength ?? 1, 'strength', 0, 4);
   const velocitySpeed = numberInRange(request.velocitySpeed ?? 0.22, 'velocitySpeed', 0, 3);
   const lifetime = numberInRange(request.lifetime ?? 0.55, 'lifetime', 0.016, 8);
@@ -225,6 +235,8 @@ export function compileVolumeEmitterFamily(request = {}) {
     ...familyRequested,
     strength,
     velocitySpeed,
+    sourceLaw,
+    sourceDepth,
     chemistry,
     temporal,
     lifetime,
@@ -246,11 +258,16 @@ export function compileVolumeEmitterFamily(request = {}) {
     extent,
     strength: effectiveStrength,
     velocitySpeed,
+    sourceLaw,
+    sourceDepth,
     chemistry,
     temporal: effectiveTemporal,
     support,
+    injectedFields: sourceLaw === 'shallow-primary'
+      ? ['velocity', 'smoke', 'heat', 'fuel']
+      : ['velocity', 'smoke', 'heat', 'fuel', 'detail', 'flame', 'fire-detail', 'microstructure'],
     compactSupport: {
-      interior: 'full',
+      interior: sourceLaw === 'shallow-primary' ? 'shallow-inlet' : 'full',
       transition: 'one-grid-cell-smoothstep',
       exterior: 'zero',
     },
@@ -267,6 +284,8 @@ export function compileVolumeEmitterFamily(request = {}) {
       support,
       strength: effectiveStrength,
       velocitySpeed,
+      sourceLaw,
+      sourceDepth,
       chemistry,
       temporal: effectiveTemporal,
       sourceCount: 1,

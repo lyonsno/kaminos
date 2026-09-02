@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 187,
+  "controlCount": 190,
   "controls": [
     {
       "key": "volume-scene",
@@ -14,6 +14,27 @@
       "tagName": "SELECT",
       "type": "select-one",
       "additiveDefault": "cluster"
+    },
+    {
+      "key": "volume-emitter-source-law",
+      "param": "volume_emitter_source_law",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "legacy-volume"
+    },
+    {
+      "key": "volume-emitter-source-depth",
+      "param": "volume_emitter_source_depth",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.04
+    },
+    {
+      "key": "volume-fixed-source-dephase",
+      "param": "volume_fixed_source_dephase",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
     },
     {
       "key": "volume-artistic-swirl",
