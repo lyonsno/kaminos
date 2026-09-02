@@ -1753,6 +1753,15 @@ assert.match(
   'The exact firing-start CDP evaluation must consume the caller-owned deadline, including explicit uncapped mode',
 );
 
+const monitorFiringSectionStart = witness.indexOf('const fireDeadlineAtMs');
+const monitorFiringSectionEnd = witness.indexOf('if (noRenderAssay && routeState.noRenderAssay)', monitorFiringSectionStart);
+assert.ok(monitorFiringSectionStart >= 0 && monitorFiringSectionEnd > monitorFiringSectionStart);
+assert.match(
+  witness.slice(monitorFiringSectionStart, monitorFiringSectionEnd),
+  /phase = 'monitoring-friendly-firing'[\s\S]*\}\)\(\)`, fireOperationTimeoutMs\);/,
+  'The exact live route-state poll must consume the caller-owned deadline and report its monitoring phase truthfully',
+);
+
 assert.doesNotMatch(
   witness,
   /\n\s*backgroundHeartbeat,\n\s*foregroundKilnHeartbeat,/,

@@ -2147,6 +2147,7 @@ try {
     const fireDeadlineAtMs = fireTimeoutMs === null ? null : Date.now() + fireTimeoutMs;
     let observedRunning = false;
     let routeState = null;
+    phase = 'monitoring-friendly-firing';
     while (fireDeadlineAtMs === null || Date.now() < fireDeadlineAtMs) {
       await sleep(1000);
       routeState = await evaluate(ws, `(() => {
@@ -2182,7 +2183,7 @@ try {
           } : null;
         })(),
         });
-      })()`);
+      })()`, fireOperationTimeoutMs);
       if (noRenderAssay && routeState.noRenderAssay) {
         lastTrustworthyEvidence = {
           ...lastTrustworthyEvidence,
