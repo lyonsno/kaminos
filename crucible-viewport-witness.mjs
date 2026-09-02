@@ -73,7 +73,7 @@ const inFlightMaxObservationGapMs = Number(args.get('in-flight-max-observation-g
 const fireTimeoutMs = args.has('fire-timeout-ms')
   ? Number(args.get('fire-timeout-ms'))
   : null;
-const fireOperationTimeoutMs = fireTimeoutMs ?? 20000;
+const fireOperationTimeoutMs = fireTimeoutMs;
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
 const packageLock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8'));
 const sourceLockedWebgpuKitVersion = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version || null;
@@ -485,11 +485,13 @@ let seq = 0;
 function wsRequest(ws, method, params = {}, timeoutMs = 20000) {
   const id = ++seq;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${method} timed out`)), timeoutMs);
+    const timer = timeoutMs === null
+      ? null
+      : setTimeout(() => reject(new Error(`${method} timed out`)), timeoutMs);
     const onMessage = event => {
       const message = JSON.parse(event.data);
       if (message.id !== id) return;
-      clearTimeout(timer);
+      if (timer !== null) clearTimeout(timer);
       ws.removeEventListener('message', onMessage);
       if (message.error) reject(new Error(`${method}: ${JSON.stringify(message.error)}`));
       else resolve(message.result || {});
@@ -2046,7 +2048,7 @@ try {
       const sidebar = document.getElementById('sidebar');
       const before = window.kaminosCrucibleViewportDebugState?.() || null;
       return { before, tuckedSidebarWidth: sidebar?.getBoundingClientRect().width ?? null };
-    })()`);
+    })()`, fireOperationTimeoutMs);
     const openHitTarget = await clickVisibleElementCenter(ws, 'crucible-viewport-console-toggle');
     await sleep(360);
     const toggleExpanded = await evaluate(ws, `(() => {
