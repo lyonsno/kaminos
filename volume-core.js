@@ -5008,7 +5008,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     );
     var local = smokeCol;
     local = mix(local, flameCol * 0.30 + radianceEmission * 0.70, stockRenderMode * fireMix * pyroStockFireVisibility);
-    local = local + shellColor * shellRenderMode * smoothstep(0.002, 0.060, shellAlpha) * 0.92;
+    // Shell visibility weight is step-invariant: alpha already carries the
+    // per-step rayStepOpacity scaling, so gating on rayStepOpacity-scaled
+    // shellAlpha double-scaled by step length and collapsed as raySteps grew.
+    let shellVisibilityBody = clamp(shellMask * fireVisualAuthority * shellWrinkle * fireSnuffDamping, 0.0, 2.4);
+    local = local + shellColor * shellRenderMode * smoothstep(0.020, 0.520, shellVisibilityBody) * 0.92;
     if (FIRE_PROBE > 10.5) {
       fireProbeAccum = max(fireProbeAccum, shellColor * smoothstep(0.002, 0.060, shellAlpha) * 8.0);
     }
@@ -14198,6 +14202,133 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         return { ok: true, cells, slotStats, frontNaN, frontMax: +frontMax.toFixed(3), frame: state.frameCount };
       } finally {
         staging.destroy();
+      }
+    },
+    async sampleShellChainCensus(options = {}) {
+      if (!gpuInitialized || !device) return { ok: false, reason: 'gpu-not-initialized' };
+      const fire = Number.isFinite(options.fire) ? options.fire : 0.10;
+      const raySteps = Number.isFinite(options.raySteps) ? options.raySteps : 160;
+      const shell = state.topologyShellControls || {};
+      const gains = {
+        thermal: shell.thermal ?? 0.85,
+        reaction: shell.reaction ?? 1.10,
+        front: shell.front ?? 1.25,
+        edge: shell.edge ?? 0.85,
+        curl: shell.curl ?? 0.25,
+        divergence: shell.divergence ?? 0.0,
+        amount: shell.amount ?? 1.10,
+        width: shell.width ?? 0.90,
+        coreSuppress: shell.coreSuppress ?? 0.55,
+        bite: shell.bite ?? 0.80,
+      };
+      const bytes = fluidBufferBytes(gridSize);
+      const staging = device.createBuffer({ label: 'kaminos shell census staging', size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const frontStaging = device.createBuffer({ label: 'kaminos shell census front staging', size: frontFieldBufferBytes(gridSize), usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      try {
+        const encoder = device.createCommandEncoder({ label: 'kaminos shell census copy' });
+        encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
+        encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontStaging, 0, frontFieldBufferBytes(gridSize));
+        device.queue.submit([encoder.finish()]);
+        await staging.mapAsync(GPUMapMode.READ);
+        await frontStaging.mapAsync(GPUMapMode.READ);
+        const data = new Float32Array(staging.getMappedRange());
+        const front = new Float32Array(frontStaging.getMappedRange());
+        const n = gridSize;
+        const idx = (x, y, z) => ((z * n + y) * n + x);
+        const cl = v => Math.max(0, Math.min(n - 1, v));
+        const slotAt = (x, y, z, slot) => {
+          const base = idx(cl(x), cl(y), cl(z)) * 16 + slot * 4;
+          return [data[base], data[base + 1], data[base + 2], data[base + 3]];
+        };
+        const ss = (e0, e1, x) => {
+          const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+          return t * t * (3 - 2 * t);
+        };
+        const clampf = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const fireGain = 0.42 + fire * 1.15;
+        const spanNominal = 2.0;
+        const rayStepOpacity = (spanNominal / raySteps) * 3.65;
+        const widthTerm = 0.050 + gains.width * 0.070;
+        const carrierScale = 0.52 + gains.width * 0.62;
+        const track = () => ({ max: 0, sum: 0, count: 0 });
+        const add = (t, v) => { t.count += 1; t.sum += v; if (v > t.max) t.max = v; };
+        const stats = {
+          thermal: track(), reaction: track(), frontS: track(), edge: track(), curl: track(), div: track(),
+          carrierRaw: track(), carrier: track(), mask: track(), wrinkle: track(), alpha: track(), weight: track(),
+        };
+        let activeCells = 0;
+        let visibleCells = 0;
+        for (let z = 1; z < n - 1; z += 1) {
+          for (let y = 1; y < n - 1; y += 1) {
+            for (let x = 1; x < n - 1; x += 1) {
+              const st = slotAt(x, y, z, 0);
+              const material = slotAt(x, y, z, 1);
+              const fireLayer = slotAt(x, y, z, 2);
+              const microLayer = slotAt(x, y, z, 3);
+              const topo = front[idx(x, y, z)];
+              const velMag = Math.hypot(st[0], st[1], st[2]);
+              const rawTemp = clampf(fireLayer[0] * 1.22 + fireLayer[1] * 0.46 + fireLayer[2] * 0.40 + microLayer[2] * 1.18 + microLayer[3] * 0.48 + material[1] * 0.20 + velMag * 0.30, 0, 2.4);
+              if (rawTemp < 0.04 && topo < 0.002 && fireLayer[2] < 0.01) continue;
+              activeCells += 1;
+              const heat = material[1];
+              const fuel = material[2];
+              const flameDetail = fireLayer[2];
+              const combustionFront = fireLayer[3];
+              const ember = fireLayer[1];
+              const microSmoke = microLayer[0];
+              const interfaceShred = microLayer[1];
+              const fireLick = microLayer[2];
+              const renderTemp = rawTemp * fireGain;
+              const vxp = slotAt(x + 1, y, z, 0); const vxn = slotAt(x - 1, y, z, 0);
+              const vyp = slotAt(x, y + 1, z, 0); const vyn = slotAt(x, y - 1, z, 0);
+              const vzp = slotAt(x, y, z + 1, 0); const vzn = slotAt(x, y, z - 1, 0);
+              const curlV = [
+                ((vyp[2] - vyn[2]) - (vzp[1] - vzn[1])) * 0.5,
+                ((vzp[0] - vzn[0]) - (vxp[2] - vxn[2])) * 0.5,
+                ((vxp[1] - vxn[1]) - (vyp[0] - vyn[0])) * 0.5,
+              ];
+              const curlDebug = Math.hypot(curlV[0], curlV[1], curlV[2]);
+              const divDebug = Math.abs(((vxp[0] - vxn[0]) + (vyp[1] - vyn[1]) + (vzp[2] - vzn[2])) * 0.5);
+              const rawExtinction = clampf((material[0] * 0.74 + microSmoke * 0.42 + interfaceShred * 0.34 + material[3] * 0.12) * (0.34 + 2.0 * 0.46), 0, 2.3);
+              const curlActivity = ss(0.006, 0.16, curlDebug);
+              const thermalSupport = ss(0.018, 0.62, rawTemp + renderTemp * 0.20 + heat * 0.20 + ember * 0.12);
+              const reactionSupport = ss(0.004, 0.30, flameDetail * 0.72 + fireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
+              const frontSupport = ss(0.001, 0.088, topo * 1.08 + combustionFront * 0.54 + fireLick * 0.12);
+              const edgeSupport = ss(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + rawExtinction * 0.08 + curlDebug * 0.42);
+              const curlSupport = curlActivity * ss(0.010, 0.52, rawTemp + heat * 0.16 + flameDetail * 0.28 + combustionFront * 0.16);
+              const divSupport = ss(0.010, 0.18, divDebug) * ss(0.010, 0.46, rawTemp + heat * 0.18 + flameDetail * 0.32);
+              const carrierRaw = gains.thermal * thermalSupport + gains.reaction * reactionSupport + gains.front * frontSupport + gains.edge * edgeSupport + gains.curl * curlSupport + gains.divergence * divSupport;
+              const carrier = clampf(1 - Math.exp(-Math.max(0, carrierRaw) * carrierScale), 0, 1.65);
+              const coreBody = ss(0.26, 1.18, rawTemp * 0.36 + renderTemp * 0.18 + flameDetail * 0.44 + heat * 0.12 + ember * 0.12) * (1 - clampf(frontSupport * 0.54 + edgeSupport * 0.30 + curlActivity * 0.12, 0, 0.86));
+              const mask = clampf(carrier * (1 + gains.coreSuppress * (-coreBody * 0.82)), 0, 1.35);
+              const wrinkle = clampf(1 + gains.bite * (frontSupport * 0.26 + edgeSupport * 0.24 + curlActivity * 0.20), 0, 2.4);
+              const alpha = clampf(mask * gains.amount * rayStepOpacity * widthTerm * wrinkle, 0, 0.20);
+              const weight = ss(0.002, 0.060, alpha);
+              add(stats.thermal, thermalSupport); add(stats.reaction, reactionSupport); add(stats.frontS, frontSupport);
+              add(stats.edge, edgeSupport); add(stats.curl, curlSupport); add(stats.div, divSupport);
+              add(stats.carrierRaw, carrierRaw); add(stats.carrier, carrier); add(stats.mask, mask);
+              add(stats.wrinkle, wrinkle); add(stats.alpha, alpha); add(stats.weight, weight);
+              if (weight > 0.05) visibleCells += 1;
+            }
+          }
+        }
+        staging.unmap();
+        frontStaging.unmap();
+        const summarize = t => ({ max: +t.max.toFixed(5), mean: +(t.count ? t.sum / t.count : 0).toFixed(5) });
+        return {
+          ok: true,
+          identity: 'shell-chain-cpu-census-v0',
+          frame: state.frameCount,
+          activeCells,
+          visibleCells,
+          rayStepOpacity: +rayStepOpacity.toFixed(5),
+          assumptions: { fire, raySteps, spanNominal, quench: 0, bonfire: 0 },
+          gains,
+          stats: Object.fromEntries(Object.entries(stats).map(([k, t]) => [k, summarize(t)])),
+        };
+      } finally {
+        staging.destroy();
+        frontStaging.destroy();
       }
     },
     fireIrradianceLightField,

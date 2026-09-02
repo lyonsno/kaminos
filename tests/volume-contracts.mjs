@@ -2312,3 +2312,13 @@ assert.match(index, /fireLightFieldStrength/, 'receiver pass has an explicit str
 assert.match(index, /sceneProjectionMatrixInverse/, 'receiver pass binds the scene camera projection inverse explicitly; the output-pass TSL camera nodes resolve to the fullscreen quad camera and must not be used for unprojection');
 assert.match(index, /sceneCameraWorldMatrix\.value\.copy\(camera\.matrixWorld\)/, 'receiver pass refreshes scene-camera matrices every frame');
 assert.match(core, /uniforms\[316\] = state\.selectiveHeadLiveEffectiveRole === 'off'\s*\? 0\s*: \(1 - selectiveCompositionDefinition\.raymarchFireAuthority\)/, 'an inactive selective-head splat layer must not strip raymarch fire authority: the smoke-only partition uniform is gated on the effective role, not the raw composition request');
+
+// Shell-lab fire visibility must be step-invariant: the color weight rides a
+// step-length-free carrier body (mask * authority * wrinkle * snuff); alpha
+// already carries per-step rayStepOpacity scaling. Gating shellColor on the
+// rayStepOpacity-scaled shellAlpha double-scales by step length and collapses
+// the flame toward invisibility as raySteps grows (the Sept 2026 smoke-only
+// plain-route regression).
+assert.match(core, /let shellVisibilityBody = clamp\(shellMask \* fireVisualAuthority \* shellWrinkle \* fireSnuffDamping/, 'shell visibility weight is built from a step-invariant carrier body');
+assert.match(core, /shellColor \* shellRenderMode \* smoothstep\(0\.020, 0\.520, shellVisibilityBody\)/, 'shell color enters the accumulation gated by the step-invariant body, not by per-step shellAlpha');
+assert.doesNotMatch(core, /local = local \+ shellColor \* shellRenderMode \* smoothstep\(0\.002, 0\.060, shellAlpha\)/, 'the old rayStepOpacity-scaled shellAlpha visibility gate must not return');
