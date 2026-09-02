@@ -2048,7 +2048,7 @@ try {
       const sidebar = document.getElementById('sidebar');
       const before = window.kaminosCrucibleViewportDebugState?.() || null;
       return { before, tuckedSidebarWidth: sidebar?.getBoundingClientRect().width ?? null };
-    })()`, fireOperationTimeoutMs);
+    })()`);
     const openHitTarget = await clickVisibleElementCenter(ws, 'crucible-viewport-console-toggle');
     await sleep(360);
     const toggleExpanded = await evaluate(ws, `(() => {
@@ -2131,7 +2131,7 @@ try {
         presentation: presentation.value,
         flameContinuity: flameContinuity.value,
       };
-    })()`);
+    })()`, fireOperationTimeoutMs);
     if (captureInFlight) {
       phase = 'installing-in-flight-hybrid-settle-monitor';
       const installedMonitor = await evaluate(ws, buildInFlightHybridSettleMonitorExpression({

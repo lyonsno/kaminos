@@ -1743,6 +1743,15 @@ for (const [pattern, message] of [
   assert.match(witness, pattern, message);
 }
 
+const startFiringSectionStart = witness.indexOf("phase = 'starting-friendly-firing'");
+const startFiringSectionEnd = witness.indexOf('if (captureInFlight)', startFiringSectionStart);
+assert.ok(startFiringSectionStart >= 0 && startFiringSectionEnd > startFiringSectionStart);
+assert.match(
+  witness.slice(startFiringSectionStart, startFiringSectionEnd),
+  /\}\)\(\)`, fireOperationTimeoutMs\);/,
+  'The exact firing-start CDP evaluation must consume the caller-owned deadline, including explicit uncapped mode',
+);
+
 assert.doesNotMatch(
   witness,
   /\n\s*backgroundHeartbeat,\n\s*foregroundKilnHeartbeat,/,
