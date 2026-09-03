@@ -16,6 +16,7 @@ const hud = id => document.getElementById(id);
 const state = {
   frameIntervals: [],
   framesDuringInference: 0,
+  worstGapDuringInference: 0,
   inferring: false,
   lastRouteResult: null,
 };
@@ -57,9 +58,13 @@ async function createSharedGpu() {
 function startFrameMonitor() {
   let last = performance.now();
   const tick = now => {
-    state.frameIntervals.push(now - last);
+    const dt = now - last;
+    state.frameIntervals.push(dt);
     if (state.frameIntervals.length > 600) state.frameIntervals.shift();
-    if (state.inferring) state.framesDuringInference++;
+    if (state.inferring) {
+      state.framesDuringInference++;
+      if (dt > state.worstGapDuringInference) state.worstGapDuringInference = dt;
+    }
     last = now;
     requestAnimationFrame(tick);
   };
@@ -152,6 +157,25 @@ async function fetchTestImageData() {
   return ctx.getImageData(0, 0, img.width, img.height);
 }
 
+// On-device chunk telemetry: THIS browser's run is the measurement of record
+// (headless harness frame numbers are compositor-quantized and only relative).
+function renderChunkTelemetry(sched, worstGapMs) {
+  let panel = document.getElementById('chunk-telemetry');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'chunk-telemetry';
+    panel.style.cssText = 'margin-top:10px;border-top:1px solid #2a2a33;padding-top:8px;font-size:0.72rem;';
+    document.getElementById('hud').appendChild(panel);
+  }
+  const waits = (sched?.eventTrace?.events || [])
+    .filter(e => e.kind === 'queue-work-done-end' || e.kind === 'readback-wait-end')
+    .map(e => ({ label: e.chunk || (Number.isFinite(e.firstBlock) ? `blocks ${e.firstBlock}-${e.lastBlock}` : e.phase), waitMs: e.waitMs ?? 0 }))
+    .sort((a, b) => b.waitMs - a.waitMs);
+  const rows = waits.slice(0, 5).map(w =>
+    `<div style="display:flex;justify-content:space-between"><span style="color:#9a958a">${w.label}</span><span>${w.waitMs.toFixed(0)}ms</span></div>`).join('');
+  panel.innerHTML = `<div style="color:#9a958a;margin-bottom:3px">worst frame gap this run: <b style="color:${worstGapMs > 34 ? '#e06c5a' : '#79c98f'}">${worstGapMs.toFixed(0)}ms</b> · ${waits.length} chunks · worst queue waits:</div>${rows}`;
+}
+
 function paintDepth(result) {
   const canvas = document.getElementById('depth-canvas');
   canvas.width = result.width; canvas.height = result.height;
@@ -176,6 +200,7 @@ async function runInference(inference) {
   hud('hud-infer').textContent = 'running (cooperative)…';
   hud('hud-infer').className = 'v warn';
   state.framesDuringInference = 0;
+  state.worstGapDuringInference = 0;
   state.inferring = true;
   const t0 = performance.now();
   try {
@@ -196,6 +221,7 @@ async function runInference(inference) {
     const sched = result.schedulerVerificationReceipt;
     hud('hud-sched').textContent = sched ? `${sched.status} / ${sched.classification}` : 'missing';
     hud('hud-sched').className = `v ${sched?.status === 'verified' ? 'good' : 'warn'}`;
+    renderChunkTelemetry(sched, state.worstGapDuringInference);
     paintDepth(result);
   } catch (e) {
     state.inferring = false;
