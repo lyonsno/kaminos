@@ -3547,7 +3547,6 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
 }
 
-@compute @workgroup_size(4, 4, 4)
 // Fire irradiance light field: a compact world-space RGB lattice seeded from
 // the same advancing fluid state and emission law as the visible raymarch
 // flame. Identity: fire-irradiance-lattice-32-same-state-rgb-v0. The lattice

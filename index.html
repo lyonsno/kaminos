@@ -2936,7 +2936,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=latest-fire-compose-0902';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=latest-fire-compose-0902b';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import { VOLUME_EMITTER_SOURCE_LAWS } from './volume-emitter-basis.mjs';
 import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
@@ -3104,6 +3104,10 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
+// Declared ahead of the early volume-tab activation: setActiveTab reaches
+// stopFingerFluidBench, whose bench state otherwise sits later in the module.
+let fingerFluidBenchAnimationFrame = null;
+let fingerFluidBenchRunning = false;
 if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
 const publishVolumeCockpitLayoutPhase = phase => {
@@ -3237,12 +3241,10 @@ let fingerJuiceHostState = {
 };
 let fingerJuiceHostRouteInitialized = false;
 let fingerFluidBenchRouteInitialized = false;
-let fingerFluidBenchAnimationFrame = null;
 let fingerFluidBenchFrameStartedAt = performance.now();
 let fingerFluidBenchLastFrameMs = 26.5;
 let fingerFluidBenchSolver = null;
 let fingerFluidBenchSolverPromise = null;
-let fingerFluidBenchRunning = false;
 let fingerFluidBenchSimulationPaused = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
