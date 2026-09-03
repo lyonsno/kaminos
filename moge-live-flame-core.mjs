@@ -180,7 +180,11 @@ async function runInference(inference) {
   const t0 = performance.now();
   try {
     const result = await inference.run(imageData, {
-      scheduler: { mode: 'cooperative', yieldMs: 4, vitBlockChunkSize: 1, waitForSubmittedWorkDone: true },
+      scheduler: {
+        mode: 'cooperative', yieldMs: 0, vitBlockChunkSize: 1,
+        splitVitBlocks: true, splitDecoderResBlocks: true,
+        waitForSubmittedWorkDone: true,
+      },
     });
     const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
     state.inferring = false;
