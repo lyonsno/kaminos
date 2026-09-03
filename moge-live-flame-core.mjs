@@ -208,7 +208,7 @@ async function runInference(inference) {
       scheduler: {
         mode: 'cooperative', yieldMs: 0, vitBlockChunkSize: 1,
         splitVitBlocks: true, splitDecoderResBlocks: true,
-        waitForSubmittedWorkDone: true,
+        pacing: 'bounded-prefix', maxInFlightChunks: 2,
       },
     });
     const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
