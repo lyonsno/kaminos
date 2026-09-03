@@ -332,6 +332,58 @@ WGSL, execute model kernels, observe physical buffer destruction, prove
 numerical parity by itself, or claim foreground cadence. Those remain real
 adapter and product-route obligations.
 
+## Localize Numerical Drift
+
+Capture model-selected intermediate tensors and compare them with an external
+reference without making the runtime understand the model's stage graph:
+
+```js
+import {
+  compareWebGpuParityArrays,
+  createWebGpuParityCaptureRegistry,
+  decodeWebGpuParityCaptureChunks,
+  encodeWebGpuParityCaptureChunks,
+} from "@kaminos/webgpu-inference-kit";
+
+const captures = createWebGpuParityCaptureRegistry({ runId: invocationId });
+captures.capture("decoder.fusion", await readDecoderFusion(), {
+  shape: [1, 256, 96, 96],
+  layout: "NCHW",
+});
+
+const chunks = await encodeWebGpuParityCaptureChunks(
+  captures.get("decoder.fusion"),
+  { chunkByteLength: 18 * 1024 * 1024 },
+);
+
+// `chunks` can cross a browser automation or worker boundary. The receiver
+// verifies run, stage, ordering, byte coverage, per-chunk digests, and the
+// complete tensor digest before exposing the reconstructed values.
+const captured = await decodeWebGpuParityCaptureChunks(chunks, {
+  expectedRunId: invocationId,
+  expectedStageId: "decoder.fusion",
+});
+
+const comparison = compareWebGpuParityArrays(captured.values, referenceValues, {
+  stageId: captured.stageId,
+  sampling: { mode: "stride", stride: 4, offset: 0 },
+});
+```
+
+Comparison is exhaustive unless the caller explicitly supplies a deterministic
+stride. Results retain source and compared element counts, the effective sample
+plan, array types, value summaries, non-finite counts, maximum and RMS error,
+relative L2 error, and cosine similarity. Unequal lengths, selected non-finite
+values, empty selections, invalid shapes, non-finite metrics, and transport
+identity or integrity failures reject instead of producing a partial result.
+
+The model port owns stage names, hook placement, GPU readback timing, shape and
+layout meaning, convention alignment, and the tolerance used for its parity
+claim. For example, normalization changes, equivalent quaternion signs, border
+exclusion, and final mesh or splat interpretation belong beside the model that
+defines those semantics. The kit owns the comparison and transport mechanics;
+it does not infer model equivalence from a generic threshold.
+
 ## Build Runtime Primitives
 
 ```js
