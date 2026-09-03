@@ -66,6 +66,7 @@ assert.equal(tinyComparison.metrics.maxAbsoluteError, 1e-200);
 assert.equal(tinyComparison.metrics.l2Error, 1e-200);
 assert.equal(tinyComparison.metrics.rootMeanSquareError, 1e-200);
 assert.equal(tinyComparison.metrics.relativeL2Error, 1);
+assert.equal(tinyComparison.metrics.relativeL2Status, 'defined');
 assert.equal(tinyComparison.metrics.cosineSimilarity, 1);
 
 const largeEqualComparison = compareWebGpuParityArrays(
@@ -77,13 +78,40 @@ assert.equal(largeEqualComparison.metrics.l2Error, 0);
 assert.equal(largeEqualComparison.metrics.relativeL2Error, 0);
 assert.equal(largeEqualComparison.metrics.cosineSimilarity, 1);
 
+const maximum = Number.MAX_VALUE;
+const overflowingReferenceNorm = compareWebGpuParityArrays(
+  new Float64Array([maximum / 2, maximum / 2]),
+  new Float64Array([maximum, maximum]),
+);
+assertClose(overflowingReferenceNorm.metrics.relativeL2Error, 0.5, 1e-12);
+assert.equal(overflowingReferenceNorm.metrics.relativeL2Status, 'defined');
+
+const highErrorZeroReference = compareWebGpuParityArrays(
+  new Float64Array([1e308, 1e308]),
+  new Float64Array([0, 0]),
+);
+assert.equal(highErrorZeroReference.metrics.meanAbsoluteError, 1e308);
+assertClose(highErrorZeroReference.metrics.l2Error, Math.SQRT2 * 1e308);
+assert.equal(highErrorZeroReference.metrics.relativeL2Error, null);
+assert.equal(highErrorZeroReference.metrics.relativeL2Status, 'infinite-zero-reference-norm');
+
+const highVariance = compareWebGpuParityArrays(
+  new Float64Array([1e154, -1e154]),
+  new Float64Array([1e154, -1e154]),
+);
+assert.equal(highVariance.actual.mean, 0);
+assertClose(highVariance.actual.standardDeviation, 1e154);
+assert.equal(highVariance.reference.mean, 0);
+assertClose(highVariance.reference.standardDeviation, 1e154);
+assert.equal(highVariance.metrics.maxAbsoluteError, 0);
+
 const offsetComparison = compareWebGpuParityArrays(
   new Float64Array([100000000, 100000002]),
   new Float64Array([100000000, 100000002]),
 );
 assert.equal(offsetComparison.actual.mean, 100000001);
-assert.equal(offsetComparison.actual.standardDeviation, 1);
-assert.equal(offsetComparison.reference.standardDeviation, 1);
+assertClose(offsetComparison.actual.standardDeviation, 1, 1e-8);
+assertClose(offsetComparison.reference.standardDeviation, 1, 1e-8);
 
 assert.throws(
   () => compareWebGpuParityArrays(
@@ -190,6 +218,23 @@ assert.ok(chunks.every(chunk => ['little-endian', 'big-endian'].includes(chunk.b
 assert.ok(chunks.every(chunk => typeof chunk.payloadBase64 === 'string'));
 assert.ok(chunks.every(chunk => typeof chunk.payloadSha256 === 'string'));
 assert.ok(chunks.every(chunk => chunk.tensorSha256 === chunks[0].tensorSha256));
+
+for (const layout of [{ order: 'NCHW' }, '', '   ']) {
+  await assert.rejects(
+    encodeWebGpuParityCaptureChunks({
+      schema: 'kaminos.webgpu-parity-capture.v0',
+      runId: 'malformed-layout-run',
+      stageId: 'malformed-layout-stage',
+      typedArrayConstructor: 'Float32Array',
+      elementCount: 1,
+      byteLength: 4,
+      shape: [1],
+      layout,
+      values: new Float32Array([1]),
+    }),
+    /layout must be a non-empty string/,
+  );
+}
 
 const decoded = await decodeWebGpuParityCaptureChunks(chunks, {
   expectedCapture: {

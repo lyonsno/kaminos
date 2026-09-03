@@ -122,20 +122,31 @@ function describeNonFinite(values, indices) {
 function summarize(values, indices) {
   let count = 0;
   let mean = 0;
-  let secondMoment = 0;
+  let scale = 0;
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (const index of indices) {
     const value = values[index];
     count += 1;
-    const delta = value - mean;
-    mean += delta / count;
-    const deltaFromNewMean = value - mean;
-    secondMoment += delta * deltaFromNewMean;
+    mean = mean * ((count - 1) / count) + value / count;
+    scale = Math.max(scale, Math.abs(value));
     min = Math.min(min, value);
     max = Math.max(max, value);
   }
-  const standardDeviation = Math.sqrt(Math.max(0, secondMoment / count));
+  let normalizedSquaredDeviation = 0;
+  let compensation = 0;
+  if (scale > 0) {
+    const normalizedMean = mean / scale;
+    for (const index of indices) {
+      const deviation = values[index] / scale - normalizedMean;
+      const squared = deviation * deviation;
+      const adjusted = squared - compensation;
+      const next = normalizedSquaredDeviation + adjusted;
+      compensation = (next - normalizedSquaredDeviation) - adjusted;
+      normalizedSquaredDeviation = next;
+    }
+  }
+  const standardDeviation = scale * Math.sqrt(Math.max(0, normalizedSquaredDeviation / count));
   if (!Number.isFinite(mean) || !Number.isFinite(standardDeviation)) {
     throw new RangeError('value summary is outside the finite JavaScript number range');
   }
@@ -160,6 +171,19 @@ function createScaledNormAccumulator() {
     },
     value() {
       return scale === 0 ? 0 : scale * Math.sqrt(scaledSquares);
+    },
+    ratioTo(other) {
+      if (scale === 0) return 0;
+      if (other.scale() === 0) return Number.POSITIVE_INFINITY;
+      const logRatio = Math.log(scale) - Math.log(other.scale())
+        + 0.5 * (Math.log(scaledSquares) - Math.log(other.scaledSquares()));
+      return Math.exp(logRatio);
+    },
+    scale() {
+      return scale;
+    },
+    scaledSquares() {
+      return scaledSquares;
     },
   };
 }
@@ -216,7 +240,8 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
     );
   }
 
-  let sumAbsoluteError = 0;
+  let meanAbsoluteError = 0;
+  let errorCount = 0;
   const errorNormAccumulator = createScaledNormAccumulator();
   const referenceNormAccumulator = createScaledNormAccumulator();
   let maxAbsoluteError = -1;
@@ -225,7 +250,9 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
     const actualValue = actual[index];
     const referenceValue = reference[index];
     const absoluteError = Math.abs(actualValue - referenceValue);
-    sumAbsoluteError += absoluteError;
+    errorCount += 1;
+    meanAbsoluteError = meanAbsoluteError * ((errorCount - 1) / errorCount)
+      + absoluteError / errorCount;
     errorNormAccumulator.add(absoluteError);
     referenceNormAccumulator.add(referenceValue);
     if (absoluteError > maxAbsoluteError) {
@@ -235,19 +262,26 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
   }
 
   const l2Error = errorNormAccumulator.value();
-  const referenceL2Norm = referenceNormAccumulator.value();
-  const relativeL2Error = referenceL2Norm === 0
-    ? (l2Error === 0 ? 0 : Number.POSITIVE_INFINITY)
-    : l2Error / referenceL2Norm;
+  let relativeL2Error;
+  let relativeL2Status;
+  if (referenceNormAccumulator.scale() === 0) {
+    relativeL2Error = l2Error === 0 ? 0 : null;
+    relativeL2Status = l2Error === 0 ? 'defined' : 'infinite-zero-reference-norm';
+  } else {
+    const ratio = errorNormAccumulator.ratioTo(referenceNormAccumulator);
+    relativeL2Error = Number.isFinite(ratio) ? ratio : null;
+    relativeL2Status = Number.isFinite(ratio) ? 'defined' : 'outside-finite-range';
+  }
   const metrics = {
     maxAbsoluteError,
     worstSourceIndex,
     worstActual: actual[worstSourceIndex],
     worstReference: reference[worstSourceIndex],
-    meanAbsoluteError: sumAbsoluteError / indices.length,
+    meanAbsoluteError,
     rootMeanSquareError: l2Error / Math.sqrt(indices.length),
     l2Error,
     relativeL2Error,
+    relativeL2Status,
     cosineSimilarity: stableCosineSimilarity(actual, reference, indices),
   };
   for (const [name, value] of Object.entries(metrics)) {
@@ -390,6 +424,7 @@ export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
     throw new RangeError('capture elementCount and byteLength must match values');
   }
   const shape = normalizeShape(capture.shape, capture.values.length);
+  const layout = capture.layout == null ? null : requireIdentity('capture.layout', capture.layout);
   const chunkByteLength = options.chunkByteLength ?? 18 * 1024 * 1024;
   if (!Number.isSafeInteger(chunkByteLength) || chunkByteLength <= 0) {
     throw new TypeError('chunkByteLength must be a positive safe integer');
@@ -415,7 +450,7 @@ export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
     elementCount: capture.elementCount,
     totalByteLength: capture.byteLength,
     shape,
-    layout: capture.layout ?? null,
+    layout,
     byteOrder: PLATFORM_BYTE_ORDER,
     tensorSha256,
   }, chunkPlan);
@@ -433,7 +468,7 @@ export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
       elementCount: capture.elementCount,
       totalByteLength: capture.byteLength,
       shape,
-      layout: capture.layout ?? null,
+      layout,
       byteOrder: PLATFORM_BYTE_ORDER,
       chunkIndex,
       chunkCount,
