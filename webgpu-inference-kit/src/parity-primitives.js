@@ -1,6 +1,7 @@
 export const WEBGPU_PARITY_COMPARISON_SCHEMA = 'kaminos.webgpu-parity-comparison.v0';
 export const WEBGPU_PARITY_CAPTURE_SCHEMA = 'kaminos.webgpu-parity-capture.v0';
 export const WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA = 'kaminos.webgpu-parity-capture-chunk.v0';
+export const WEBGPU_PARITY_CAPTURE_MANIFEST_SCHEMA = 'kaminos.webgpu-parity-capture-manifest.v0';
 
 const TYPED_ARRAYS = new Map([
   ['Int8Array', Int8Array],
@@ -58,7 +59,7 @@ function normalizeShape(shape, elementCount) {
 }
 
 function normalizeSampling(sampling, sourceElementCount) {
-  if (sampling == null || sampling.mode === 'all') {
+  if (sampling == null) {
     return Object.freeze({
       mode: 'all',
       stride: 1,
@@ -67,7 +68,22 @@ function normalizeSampling(sampling, sourceElementCount) {
       lastSourceIndex: sourceElementCount === 0 ? null : sourceElementCount - 1,
     });
   }
-  if (!isPlainObject(sampling) || sampling.mode !== 'stride') {
+  if (!isPlainObject(sampling)) throw new TypeError('sampling must be an object');
+  if (sampling.mode === 'all') {
+    const stride = sampling.stride ?? 1;
+    const offset = sampling.offset ?? 0;
+    if (stride !== 1 || offset !== 0) {
+      throw new TypeError('sampling mode all requires stride 1 and offset 0');
+    }
+    return Object.freeze({
+      mode: 'all',
+      stride,
+      offset,
+      firstSourceIndex: sourceElementCount === 0 ? null : 0,
+      lastSourceIndex: sourceElementCount === 0 ? null : sourceElementCount - 1,
+    });
+  }
+  if (sampling.mode !== 'stride') {
     throw new TypeError('sampling must use mode all or stride');
   }
   const { stride, offset = 0 } = sampling;
@@ -104,20 +120,78 @@ function describeNonFinite(values, indices) {
 }
 
 function summarize(values, indices) {
-  let sum = 0;
-  let sumSquares = 0;
+  let count = 0;
+  let mean = 0;
+  let secondMoment = 0;
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (const index of indices) {
     const value = values[index];
-    sum += value;
-    sumSquares += value * value;
+    count += 1;
+    const delta = value - mean;
+    mean += delta / count;
+    const deltaFromNewMean = value - mean;
+    secondMoment += delta * deltaFromNewMean;
     min = Math.min(min, value);
     max = Math.max(max, value);
   }
-  const mean = sum / indices.length;
-  const standardDeviation = Math.sqrt(Math.max(0, sumSquares / indices.length - mean * mean));
+  const standardDeviation = Math.sqrt(Math.max(0, secondMoment / count));
+  if (!Number.isFinite(mean) || !Number.isFinite(standardDeviation)) {
+    throw new RangeError('value summary is outside the finite JavaScript number range');
+  }
   return Object.freeze({ min, max, mean, standardDeviation });
+}
+
+function createScaledNormAccumulator() {
+  let scale = 0;
+  let scaledSquares = 1;
+  return {
+    add(value) {
+      const absolute = Math.abs(value);
+      if (absolute === 0) return;
+      if (scale < absolute) {
+        const ratio = scale / absolute;
+        scaledSquares = 1 + scaledSquares * ratio * ratio;
+        scale = absolute;
+      } else {
+        const ratio = absolute / scale;
+        scaledSquares += ratio * ratio;
+      }
+    },
+    value() {
+      return scale === 0 ? 0 : scale * Math.sqrt(scaledSquares);
+    },
+  };
+}
+
+function compensatedAdd(state, value) {
+  const adjusted = value - state.compensation;
+  const next = state.sum + adjusted;
+  state.compensation = (next - state.sum) - adjusted;
+  state.sum = next;
+}
+
+function stableCosineSimilarity(actual, reference, indices) {
+  let actualScale = 0;
+  let referenceScale = 0;
+  for (const index of indices) {
+    actualScale = Math.max(actualScale, Math.abs(actual[index]));
+    referenceScale = Math.max(referenceScale, Math.abs(reference[index]));
+  }
+  if (actualScale === 0 || referenceScale === 0) return null;
+
+  const dot = { sum: 0, compensation: 0 };
+  const actualSquares = { sum: 0, compensation: 0 };
+  const referenceSquares = { sum: 0, compensation: 0 };
+  for (const index of indices) {
+    const scaledActual = actual[index] / actualScale;
+    const scaledReference = reference[index] / referenceScale;
+    compensatedAdd(dot, scaledActual * scaledReference);
+    compensatedAdd(actualSquares, scaledActual * scaledActual);
+    compensatedAdd(referenceSquares, scaledReference * scaledReference);
+  }
+  const denominator = Math.sqrt(actualSquares.sum * referenceSquares.sum);
+  return denominator === 0 ? null : Math.max(-1, Math.min(1, dot.sum / denominator));
 }
 
 export function compareWebGpuParityArrays(actual, reference, options = {}) {
@@ -143,10 +217,8 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
   }
 
   let sumAbsoluteError = 0;
-  let sumSquaredError = 0;
-  let actualSquaredNorm = 0;
-  let referenceSquaredNorm = 0;
-  let dotProduct = 0;
+  const errorNormAccumulator = createScaledNormAccumulator();
+  const referenceNormAccumulator = createScaledNormAccumulator();
   let maxAbsoluteError = -1;
   let worstSourceIndex = null;
   for (const index of indices) {
@@ -154,31 +226,29 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
     const referenceValue = reference[index];
     const absoluteError = Math.abs(actualValue - referenceValue);
     sumAbsoluteError += absoluteError;
-    sumSquaredError += absoluteError * absoluteError;
-    actualSquaredNorm += actualValue * actualValue;
-    referenceSquaredNorm += referenceValue * referenceValue;
-    dotProduct += actualValue * referenceValue;
+    errorNormAccumulator.add(absoluteError);
+    referenceNormAccumulator.add(referenceValue);
     if (absoluteError > maxAbsoluteError) {
       maxAbsoluteError = absoluteError;
       worstSourceIndex = index;
     }
   }
 
-  const l2Error = Math.sqrt(sumSquaredError);
-  const relativeL2Error = referenceSquaredNorm === 0
-    ? (sumSquaredError === 0 ? 0 : Number.POSITIVE_INFINITY)
-    : Math.sqrt(sumSquaredError / referenceSquaredNorm);
-  const cosineDenominator = Math.sqrt(actualSquaredNorm * referenceSquaredNorm);
+  const l2Error = errorNormAccumulator.value();
+  const referenceL2Norm = referenceNormAccumulator.value();
+  const relativeL2Error = referenceL2Norm === 0
+    ? (l2Error === 0 ? 0 : Number.POSITIVE_INFINITY)
+    : l2Error / referenceL2Norm;
   const metrics = {
     maxAbsoluteError,
     worstSourceIndex,
     worstActual: actual[worstSourceIndex],
     worstReference: reference[worstSourceIndex],
     meanAbsoluteError: sumAbsoluteError / indices.length,
-    rootMeanSquareError: Math.sqrt(sumSquaredError / indices.length),
+    rootMeanSquareError: l2Error / Math.sqrt(indices.length),
     l2Error,
     relativeL2Error,
-    cosineSimilarity: cosineDenominator === 0 ? null : dotProduct / cosineDenominator,
+    cosineSimilarity: stableCosineSimilarity(actual, reference, indices),
   };
   for (const [name, value] of Object.entries(metrics)) {
     if (value != null && typeof value === 'number' && !Number.isFinite(value)) {
@@ -283,6 +353,28 @@ function captureBytes(capture) {
   return new Uint8Array(capture.values.buffer, capture.values.byteOffset, capture.values.byteLength);
 }
 
+function createCaptureManifest(fields, chunkPlan) {
+  return {
+    schema: WEBGPU_PARITY_CAPTURE_MANIFEST_SCHEMA,
+    captureSchema: WEBGPU_PARITY_CAPTURE_SCHEMA,
+    runId: fields.runId,
+    stageId: fields.stageId,
+    typedArrayConstructor: fields.typedArrayConstructor,
+    elementCount: fields.elementCount,
+    totalByteLength: fields.totalByteLength,
+    shape: fields.shape,
+    layout: fields.layout,
+    byteOrder: fields.byteOrder,
+    chunkCount: chunkPlan.length,
+    chunkPlan,
+    tensorSha256: fields.tensorSha256,
+  };
+}
+
+async function digestCaptureManifest(manifest) {
+  return sha256Hex(new TextEncoder().encode(JSON.stringify(manifest)));
+}
+
 export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
   if (!isPlainObject(capture) || capture.schema !== WEBGPU_PARITY_CAPTURE_SCHEMA) {
     throw new TypeError(`capture.schema must be ${WEBGPU_PARITY_CAPTURE_SCHEMA}`);
@@ -302,14 +394,36 @@ export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
   if (!Number.isSafeInteger(chunkByteLength) || chunkByteLength <= 0) {
     throw new TypeError('chunkByteLength must be a positive safe integer');
   }
-  const bytes = captureBytes(capture);
+  // Snapshot before the first await so one encoded artifact cannot mix caller
+  // mutations from different points in the asynchronous digest sequence.
+  const bytes = captureBytes(capture).slice();
   if (bytes.byteLength === 0) throw new RangeError('capture values must not be empty');
-  const tensorSha256 = await sha256Hex(bytes);
   const chunkCount = Math.ceil(bytes.byteLength / chunkByteLength);
-  const chunks = [];
-  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+  const chunkPlan = Object.freeze(Array.from({ length: chunkCount }, (_, chunkIndex) => {
     const byteOffset = chunkIndex * chunkByteLength;
-    const payload = bytes.subarray(byteOffset, Math.min(byteOffset + chunkByteLength, bytes.byteLength));
+    return Object.freeze({
+      chunkIndex,
+      byteOffset,
+      byteLength: Math.min(chunkByteLength, bytes.byteLength - byteOffset),
+    });
+  }));
+  const tensorSha256 = await sha256Hex(bytes);
+  const captureManifest = createCaptureManifest({
+    runId: capture.runId,
+    stageId: capture.stageId,
+    typedArrayConstructor,
+    elementCount: capture.elementCount,
+    totalByteLength: capture.byteLength,
+    shape,
+    layout: capture.layout ?? null,
+    byteOrder: PLATFORM_BYTE_ORDER,
+    tensorSha256,
+  }, chunkPlan);
+  const captureSha256 = await digestCaptureManifest(captureManifest);
+  const chunks = [];
+  for (const plan of chunkPlan) {
+    const { chunkIndex, byteOffset, byteLength } = plan;
+    const payload = bytes.subarray(byteOffset, byteOffset + byteLength);
     chunks.push(Object.freeze({
       schema: WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA,
       captureSchema: WEBGPU_PARITY_CAPTURE_SCHEMA,
@@ -324,10 +438,11 @@ export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
       chunkIndex,
       chunkCount,
       byteOffset,
-      byteLength: payload.byteLength,
+      byteLength,
       payloadBase64: bytesToBase64(payload),
       payloadSha256: await sha256Hex(payload),
       tensorSha256,
+      captureSha256,
     }));
   }
   return Object.freeze(chunks);
@@ -342,23 +457,38 @@ function requireEqualMetadata(chunk, first, field, index) {
 export async function decodeWebGpuParityCaptureChunks(chunks, options = {}) {
   if (!Array.isArray(chunks) || chunks.length === 0) throw new TypeError('chunks must be a non-empty array');
   if (!isPlainObject(options)) throw new TypeError('options must be an object');
+  if (!isPlainObject(options.expectedCapture)) {
+    throw new TypeError('expectedCapture with runId and stageId is required');
+  }
+  const expectedCapture = options.expectedCapture;
+  requireIdentity('expectedCapture.runId', expectedCapture.runId);
+  requireIdentity('expectedCapture.stageId', expectedCapture.stageId);
   const first = chunks[0];
   if (!isPlainObject(first) || first.schema !== WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA) {
     throw new TypeError(`chunk schema must be ${WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA}`);
   }
+  if (first.captureSchema !== WEBGPU_PARITY_CAPTURE_SCHEMA) {
+    throw new TypeError(`capture schema must be ${WEBGPU_PARITY_CAPTURE_SCHEMA}`);
+  }
   requireIdentity('chunk runId', first.runId);
   requireIdentity('chunk stageId', first.stageId);
-  if (options.expectedRunId != null && first.runId !== options.expectedRunId) {
-    throw new Error(`runId must match expected ${options.expectedRunId}`);
+  if (first.runId !== expectedCapture.runId) {
+    throw new Error(`runId must match expected ${expectedCapture.runId}`);
   }
-  if (options.expectedStageId != null && first.stageId !== options.expectedStageId) {
-    throw new Error(`stageId must match expected ${options.expectedStageId}`);
+  if (first.stageId !== expectedCapture.stageId) {
+    throw new Error(`stageId must match expected ${expectedCapture.stageId}`);
   }
   if (!Number.isSafeInteger(first.chunkCount) || first.chunkCount <= 0 || first.chunkCount !== chunks.length) {
     throw new RangeError('chunk count must match the declared chunkCount');
   }
   const Constructor = TYPED_ARRAYS.get(first.typedArrayConstructor);
   if (!Constructor) throw new TypeError('typedArrayConstructor is unsupported');
+  if (
+    expectedCapture.typedArrayConstructor != null
+    && first.typedArrayConstructor !== expectedCapture.typedArrayConstructor
+  ) {
+    throw new Error('typedArrayConstructor must match expectedCapture');
+  }
   if (!Number.isSafeInteger(first.totalByteLength) || first.totalByteLength <= 0) {
     throw new RangeError('totalByteLength must be a positive safe integer');
   }
@@ -372,13 +502,26 @@ export async function decodeWebGpuParityCaptureChunks(chunks, options = {}) {
     throw new Error(`byteOrder ${first.byteOrder} cannot be decoded on this ${PLATFORM_BYTE_ORDER} host`);
   }
   const shape = normalizeShape(first.shape, first.elementCount);
+  if (expectedCapture.shape != null) {
+    const expectedShape = normalizeShape(expectedCapture.shape, first.elementCount);
+    if (JSON.stringify(shape) !== JSON.stringify(expectedShape)) {
+      throw new Error('shape must match expectedCapture');
+    }
+  }
+  if (first.layout != null) requireIdentity('chunk layout', first.layout);
+  if (Object.hasOwn(expectedCapture, 'layout')) {
+    if (expectedCapture.layout != null) requireIdentity('expectedCapture.layout', expectedCapture.layout);
+    if (first.layout !== expectedCapture.layout) throw new Error('layout must match expectedCapture');
+  }
   const output = new Uint8Array(first.totalByteLength);
   let nextByteOffset = 0;
 
   const commonFields = [
     'captureSchema', 'runId', 'stageId', 'typedArrayConstructor', 'elementCount',
     'totalByteLength', 'shape', 'layout', 'byteOrder', 'chunkCount', 'tensorSha256',
+    'captureSha256',
   ];
+  const chunkPlan = [];
   for (const [index, chunk] of chunks.entries()) {
     if (!isPlainObject(chunk) || chunk.schema !== WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA) {
       throw new TypeError(`chunk ${index} has the wrong schema`);
@@ -386,6 +529,14 @@ export async function decodeWebGpuParityCaptureChunks(chunks, options = {}) {
     for (const field of commonFields) requireEqualMetadata(chunk, first, field, index);
     if (chunk.chunkIndex !== index) throw new Error(`chunks must be ordered; chunkIndex ${index} expected`);
     if (chunk.byteOffset !== nextByteOffset) throw new Error('chunk byte offsets must be contiguous');
+    if (!Number.isSafeInteger(chunk.byteLength) || chunk.byteLength <= 0) {
+      throw new RangeError('chunk byteLength must be a positive safe integer');
+    }
+    chunkPlan.push(Object.freeze({
+      chunkIndex: chunk.chunkIndex,
+      byteOffset: chunk.byteOffset,
+      byteLength: chunk.byteLength,
+    }));
     const payload = base64ToBytes(chunk.payloadBase64);
     if (payload.byteLength !== chunk.byteLength) throw new RangeError('chunk payload byteLength mismatch');
     if (await sha256Hex(payload) !== chunk.payloadSha256) throw new Error('chunk payload digest mismatch');
@@ -397,6 +548,20 @@ export async function decodeWebGpuParityCaptureChunks(chunks, options = {}) {
   }
   if (nextByteOffset !== output.byteLength) throw new RangeError('chunk payloads do not cover totalByteLength');
   if (await sha256Hex(output) !== first.tensorSha256) throw new Error('tensor digest mismatch');
+  const captureManifest = createCaptureManifest({
+    runId: first.runId,
+    stageId: first.stageId,
+    typedArrayConstructor: first.typedArrayConstructor,
+    elementCount: first.elementCount,
+    totalByteLength: first.totalByteLength,
+    shape,
+    layout: first.layout ?? null,
+    byteOrder: first.byteOrder,
+    tensorSha256: first.tensorSha256,
+  }, chunkPlan);
+  if (await digestCaptureManifest(captureManifest) !== first.captureSha256) {
+    throw new Error('capture digest mismatch');
+  }
 
   return Object.freeze({
     schema: WEBGPU_PARITY_CAPTURE_SCHEMA,

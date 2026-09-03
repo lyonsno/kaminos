@@ -360,8 +360,13 @@ const chunks = await encodeWebGpuParityCaptureChunks(
 // verifies run, stage, ordering, byte coverage, per-chunk digests, and the
 // complete tensor digest before exposing the reconstructed values.
 const captured = await decodeWebGpuParityCaptureChunks(chunks, {
-  expectedRunId: invocationId,
-  expectedStageId: "decoder.fusion",
+  expectedCapture: {
+    runId: invocationId,
+    stageId: "decoder.fusion",
+    typedArrayConstructor: "Float32Array",
+    shape: [1, 256, 96, 96],
+    layout: "NCHW",
+  },
 });
 
 const comparison = compareWebGpuParityArrays(captured.values, referenceValues, {

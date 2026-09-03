@@ -1,0 +1,61 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebGPU Inference Kit parity primitive browser smoke</title>
+<script type="module">
+  const requestedModuleUrl = new URL('../src/index.js', import.meta.url).href;
+  try {
+    const {
+      compareWebGpuParityArrays,
+      createWebGpuParityCaptureRegistry,
+      decodeWebGpuParityCaptureChunks,
+      encodeWebGpuParityCaptureChunks,
+    } = await import(requestedModuleUrl);
+    const runId = 'kaminos-parity-browser-smoke';
+    const stageId = 'decoder.fusion';
+    const registry = createWebGpuParityCaptureRegistry({ runId });
+    registry.capture(stageId, new Float32Array([1, 2, 3, 5]), {
+      shape: [1, 4],
+      layout: 'NC',
+    });
+    const chunks = await encodeWebGpuParityCaptureChunks(registry.get(stageId), {
+      chunkByteLength: 5,
+    });
+    const decoded = await decodeWebGpuParityCaptureChunks(chunks, {
+      expectedCapture: {
+        runId,
+        stageId,
+        typedArrayConstructor: 'Float32Array',
+        shape: [1, 4],
+        layout: 'NC',
+      },
+    });
+    const comparison = compareWebGpuParityArrays(
+      decoded.values,
+      new Float32Array([1, 2.5, 3, 4]),
+      { stageId },
+    );
+    document.documentElement.dataset.paritySmoke = btoa(JSON.stringify({
+      status: 'succeeded',
+      requestedModuleUrl,
+      effectiveModuleUrl: requestedModuleUrl,
+      runId,
+      stageId,
+      chunkCount: chunks.length,
+      tensorSha256: chunks[0].tensorSha256,
+      captureSha256: chunks[0].captureSha256,
+      values: Array.from(decoded.values),
+      comparison: JSON.parse(JSON.stringify(comparison)),
+      userAgent: navigator.userAgent,
+    }));
+  } catch (error) {
+    document.documentElement.dataset.paritySmoke = btoa(JSON.stringify({
+      status: 'failed',
+      requestedModuleUrl,
+      effectiveModuleUrl: null,
+      failurePhase: 'browser-module-exercise',
+      lastTrustworthyEvidence: 'smoke page loaded',
+      error: { name: error.name, message: error.message, stack: error.stack },
+      userAgent: navigator.userAgent,
+    }));
+  }
+</script>
