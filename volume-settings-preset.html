@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Settings Preset</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #050607; color: #edf4f5; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #050607; }
+    main { width: min(680px, calc(100vw - 32px)); border: 1px solid #314149; border-radius: 6px; padding: 20px; background: #0b1012; }
+    strong { display: block; font-size: 18px; }
+    #status { margin-top: 8px; color: #9eb0b5; font: 13px/1.5 "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
+    #status.failed { color: #ff9d8d; }
+  </style>
+</head>
+<body>
+  <main>
+    <strong id="preset-title">Loading volume settings preset</strong>
+    <div id="status">Validating exact controls...</div>
+  </main>
+  <script type="module">
+    import {
+      buildVolumeSettingsPresetTarget,
+      buildVolumeSettingsPresetVisualTarget,
+      validateVolumeSettingsPresetDocument,
+    } from './volume-settings-preset-contract.mjs';
+
+    const status = document.getElementById('status');
+    const presetTitle = document.getElementById('preset-title');
+    const params = new URLSearchParams(location.search);
+    const presetId = params.get('preset');
+    const view = params.get('view');
+    const assayToolbarModes = params.getAll('assay_toolbar');
+    const assayToolbarRequested = assayToolbarModes.length === 1 && assayToolbarModes[0] === '1';
+    async function loadPreset() {
+      if (!presetId) throw new Error('settings preset id is required');
+      if (assayToolbarModes.length > 1 || (assayToolbarModes.length === 1 && !assayToolbarRequested)) {
+        throw new Error('diagnostic toolbar mode must be exactly 1 when requested');
+      }
+      const [response, schemaResponse] = await Promise.all([
+        fetch(`/api/volume-settings-preset?id=${encodeURIComponent(presetId)}`, { cache: 'no-store' }),
+        fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
+      ]);
+      const [artifact, schema] = await Promise.all([response.json(), schemaResponse.json()]);
+      if (!response.ok) throw new Error(artifact.error || `settings preset lookup failed: ${response.status}`);
+      if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
+      const receipt = validateVolumeSettingsPresetDocument(artifact, presetId, schema);
+      presetTitle.textContent = 'Volume settings preset';
+      if (!view) {
+        const target = buildVolumeSettingsPresetTarget(receipt, location.origin);
+        status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | entering live cockpit`;
+        location.replace(target);
+        return;
+      }
+      const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view, { assayToolbar: assayToolbarRequested });
+      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin + ${receipt.rendererControlCount} renderer + ${receipt.presentationControlCount} presentation controls | effective ${view} view`;
+      location.replace(target);
+    }
+
+    loadPreset().catch(error => {
+      status.classList.add('failed');
+      status.textContent = `SETTINGS PRESET LOAD FAILED | ${error?.message || error}`;
+      console.error('KAMINOS SETTINGS PRESET LOAD FAILED', error);
+    });
+  </script>
+</body>
+</html>

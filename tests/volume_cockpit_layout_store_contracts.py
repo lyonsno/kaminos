@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+import serve
+
+
+def sample_layout():
+    schema = json.loads((ROOT / "volume-settings-preset-schema-v2.json").read_text())
+    control_ids = [entry["key"] for entry in [*schema["controls"], *schema["rendererControls"]]]
+    return {
+        "identity": "kaminos.volume.cockpit-layout.v1",
+        "layoutId": "operator-layout",
+        "label": "Operator Layout",
+        "groups": [{
+            "id": "primary-controls",
+            "label": "Primary Controls",
+            "surface": "primary",
+            "collapsed": False,
+            "controlIds": control_ids,
+        }],
+    }
+
+
+def main():
+    for name in (
+        "write_volume_cockpit_layout",
+        "read_volume_cockpit_layout",
+        "list_volume_cockpit_layouts",
+        "activate_volume_cockpit_layout",
+    ):
+        assert callable(getattr(serve, name, None)), f"volume cockpit layout store API is missing: {name}"
+
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        layout_store = root / "layouts"
+        parsed = serve.parse_server_arguments([
+            "18420",
+            "--volume-settings-store", str(root / "settings"),
+            "--volume-basin-session-store", str(root / "sessions"),
+            "--volume-cockpit-layout-store", str(layout_store),
+        ])
+        assert len(parsed) == 4
+        port, _, _, effective_layout_store = parsed
+        assert port == 18420
+        assert effective_layout_store == layout_store.resolve()
+
+        first = serve.write_volume_cockpit_layout(layout_store, sample_layout(), activate=True)
+        assert first["identity"] == "kaminos.volume.cockpit-layout-write-receipt.v1"
+        assert first["requested"]["layoutId"] == "operator-layout"
+        assert first["effective"]["storePath"] == str(layout_store.resolve())
+        assert first["effective"]["layoutPath"].startswith(str(layout_store.resolve()))
+        assert first["effective"]["contentHash"].startswith("sha256:")
+
+        loaded = serve.read_volume_cockpit_layout(layout_store, "operator-layout")
+        assert loaded["layout"] == sample_layout()
+        index = serve.list_volume_cockpit_layouts(layout_store)
+        assert index["activeLayoutId"] == "operator-layout"
+        assert [entry["layoutId"] for entry in index["entries"]] == ["operator-layout"]
+
+        changed = sample_layout()
+        changed["label"] = "Operator Layout Renamed"
+        second = serve.write_volume_cockpit_layout(layout_store, changed, activate=True)
+        assert second["effective"]["layoutId"] == "operator-layout"
+        assert serve.read_volume_cockpit_layout(layout_store, "operator-layout")["layout"]["label"] == changed["label"]
+
+        active_path = layout_store / "active.json"
+        active = json.loads(active_path.read_text())
+        active["contentHash"] = "sha256:" + ("0" * 64)
+        active_path.write_text(json.dumps(active))
+        try:
+            serve.list_volume_cockpit_layouts(layout_store)
+        except ValueError as error:
+            assert "active pointer content hash mismatch" in str(error).lower()
+        else:
+            raise AssertionError("layout index trusted an active pointer for different content")
+        serve.write_volume_cockpit_layout(layout_store, changed, activate=True)
+
+        retired_layout = sample_layout()
+        retired_layout["layoutId"] = "retired-layout"
+        retired_layout["label"] = "Retired Layout"
+        retired_layout["groups"][0]["controlIds"].append("volume-majorant-grid")
+        retired_hash = serve._volume_cockpit_layout_hash(retired_layout)
+        retired_artifact = {
+            "identity": "kaminos.volume.cockpit-layout-artifact.v1",
+            "layoutId": "retired-layout",
+            "contentHash": f"sha256:{retired_hash}",
+            "writtenAt": "2026-08-31T21:00:00Z",
+            "source": {"kind": "contract"},
+            "layout": retired_layout,
+        }
+        retired_path = layout_store / "layouts" / "retired-layout.json"
+        retired_path.write_text(json.dumps(retired_artifact, indent=2) + "\n")
+        retired_bytes = retired_path.read_bytes()
+        projected_retired = serve.read_volume_cockpit_layout(layout_store, "retired-layout")
+        assert "volume-majorant-grid" not in projected_retired["layout"]["groups"][0]["controlIds"]
+        assert projected_retired["schemaProjection"]["retiredControlsStripped"] == [
+            {"groupId": "primary-controls", "id": "volume-majorant-grid"},
+        ]
+        assert "volume-majorant-grid" in json.loads(retired_path.read_text())["layout"]["groups"][0]["controlIds"], (
+            "read-time projection mutated the immutable stored layout"
+        )
+        activation = serve.activate_volume_cockpit_layout(layout_store, "retired-layout")
+        assert activation["identity"] == "kaminos.volume.cockpit-layout-activation-receipt.v1"
+        assert activation["effective"]["contentHash"] == retired_artifact["contentHash"]
+        assert retired_path.read_bytes() == retired_bytes, "activation rewrote the projected historical layout"
+        active = json.loads((layout_store / "active.json").read_text())
+        assert active["layoutId"] == "retired-layout"
+        assert active["contentHash"] == retired_artifact["contentHash"]
+
+        edited_projection = projected_retired["layout"]
+        edited_projection["label"] = "Retired Layout Explicitly Edited"
+        edited = serve.write_volume_cockpit_layout(layout_store, edited_projection, activate=True)
+        assert edited["effective"]["contentHash"] != retired_artifact["contentHash"]
+        assert retired_path.read_bytes() != retired_bytes, "an explicit edit failed to persist new layout content"
+
+        bad = sample_layout()
+        bad["groups"][0]["controlIds"].append("volume-not-in-schema")
+        try:
+            serve.write_volume_cockpit_layout(layout_store, bad, activate=True)
+        except ValueError as error:
+            assert "unknown" in str(error).lower()
+        else:
+            raise AssertionError("layout store accepted an unknown canonical control")
+
+    print("volume cockpit layout store contracts passed")
+
+
+if __name__ == "__main__":
+    main()

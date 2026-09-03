@@ -16,9 +16,17 @@ assert.match(core, /boundarySplatComputeBindGroupLayout\s*=\s*device\.createBind
 assert.match(core, /boundarySplatComputeBindGroups\s*=\s*fluidBuffers\.map[\s\S]*binding:\s*4,\s*resource:\s*\{\s*buffer:\s*boundarySplatCameraBuffer/, 'compute bind groups attach the existing camera uniform without restoring the candidate copy');
 assert.match(core, /normalizeBoundarySplatMode[\s\S]*'learned'/, 'renderer accepts learned mode without collapsing to off');
 assert.match(page, /<option value="learned">learned attributes<\/option>/, 'primary interface exposes learned attribute mode');
-assert.match(page, /BOUNDARY_SPLAT_MODE_VALUES\s*=\s*new Set\(\['off',\s*'analytic',\s*'learned'\]\)/, 'browser route preserves learned mode');
+assert.match(
+  page,
+  /BOUNDARY_SPLAT_MODE_VALUES\s*=\s*new Set\(\[\s*'off',\s*'analytic',\s*'learned',\s*'analytic_conserved',\s*'learned_conserved',\s*'world_covariance',\s*'kernel_moment_covariance',\s*'kernel_moment_full_flame_union',?\s*\]\)/,
+  'browser route preserves learned mode alongside the explicit conserved and covariance modes',
+);
 assert.match(core, /boundarySplatAttributeModelIdentity:\s*boundarySplatEffectiveAttributeModelIdentity\(controlsSnapshot\.boundarySplatMode\)/, 'runtime evidence reports only the applied model identity');
-assert.match(core, /boundarySplatEffectiveAttributeModelIdentity[\s\S]*normalizeBoundarySplatMode\(mode\)\s*===\s*'learned'[\s\S]*BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY[\s\S]*null/, 'applied model identity is null outside learned mode');
+assert.match(
+  core,
+  /boundarySplatEffectiveAttributeModelIdentity[\s\S]*normalized === 'learned'[\s\S]*normalized === 'learned_conserved'[\s\S]*normalized === 'world_covariance'[\s\S]*normalized === 'kernel_moment_covariance'[\s\S]*normalized === 'kernel_moment_full_flame_union'[\s\S]*BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY[\s\S]*null/,
+  'applied model identity covers learned attributes in learned and covariance modes but not analytic modes',
+);
 assert.match(core, /state\.boundarySplatAttributeModelIdentity\s*=\s*boundarySplatEffectiveAttributeModelIdentity\(state\.boundarySplatMode\)/, 'runtime applied-model identity follows effective mode');
 assert.match(core, /boundarySplatRendererIdentity:\s*boundarySplatEffectiveRendererIdentity\(/, 'runtime evidence distinguishes analytic and learned renderers');
 assert.match(core, /state\.volumeReconstructionStyle\s*=\s*state\.boundarySplatRendererIdentity/, 'rendered frame reconstruction style follows effective learned identity');
@@ -26,6 +34,10 @@ assert.match(core, /makeBoundarySplatCopyDisposition\(state\.boundarySplatCopyBy
 assert.match(core, /makeBoundarySplatGpuProfile\(\{[\s\S]*rendererIdentity:\s*state\.boundarySplatRendererIdentity/, 'GPU profile evidence follows the effective learned renderer identity');
 assert.match(core, /boundarySplatCopyDisposition:\s*makeBoundarySplatCopyDisposition\(0,\s*boundarySplatEffectiveRendererIdentity\(controlsSnapshot\.boundarySplatMode\)\)/, 'initial evidence identity does not dereference runtime state during construction');
 assert.match(witness, /boundarySplatAttributeModelIdentity:\s*sample\.boundarySplatAttributeModelIdentity\s*\?\?\s*state\.boundarySplatAttributeModelIdentity/, 'witness preserves the exact learned model identity');
-assert.match(core, /boundarySplatLearnedAttributesRequested[\s\S]*normalizeBoundarySplatMode\(controlsSnapshot\.boundarySplatMode\)\s*===\s*'learned'/, 'learned activation follows the effective routed mode');
+assert.match(
+  core,
+  /boundarySplatLearnedAttributesRequested[\s\S]*mode === 'learned'[\s\S]*mode === 'learned_conserved'[\s\S]*mode === 'world_covariance'[\s\S]*mode === 'kernel_moment_covariance'[\s\S]*mode === 'kernel_moment_full_flame_union'/,
+  'learned attribute activation follows every effective mode that consumes the learned attribute model',
+);
 
 console.log('boundary splat learned attribute live contracts passed');

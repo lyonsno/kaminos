@@ -1,0 +1,90 @@
+{
+  "schema": "kaminos.volume.raymarch-specialization-witness.v0",
+  "status": "captured",
+  "failurePhase": null,
+  "requestedUrl": "http://127.0.0.1:18416/volume-selective-head-live.html?role=truthHigh&composition=raymarch-only-v0&warmup_steps=0&volume_fire_render_mode=stock&volume_pyro_fire_mode=stock&volume_pyro_compare=base",
+  "effectiveUrl": "http://127.0.0.1:18416/volume-selective-head-live.html?role=truthHigh&composition=raymarch-only-v0&warmup_steps=0&volume_fire_render_mode=stock&volume_pyro_fire_mode=stock&volume_pyro_compare=base&volume_raymarch_smoke=on&volume_presentation=beauty&volume_appearance_selection=structural-a&volume_appearance_decomposition=off",
+  "effectiveRoute": "exact-basin-selective-head-live-v0",
+  "rendererRoute": "native-3d-compute-fluid-raymarch-v0",
+  "backend": "WebGPU:apple",
+  "sourceCommit": "02c373476903a492be2398d67ee837eeba2c568c",
+  "sourceTreeStatus": "M flow-kernel-descriptor-socket.mjs\n M index.html\n M kiln-volume-fire-adapter.mjs\n M tests/kiln-volume-fire-adapter-contracts.mjs\n M tests/volume-appearance-decomposition-contracts.mjs\n M tests/volume-contracts.mjs\n M tests/volume-flow-kernel-descriptor-socket-contracts.mjs\n M tests/volume-flow-reconstruction-kernel-contracts.mjs\n M tests/volume-intrinsic-presentation-contracts.mjs\n M tests/volume-intrinsic-presentation-witness-contracts.mjs\n M tests/volume-layer-coefficient-live-union-overlay-contracts.mjs\n M tests/volume-layer-coefficient-live-union-remap-contracts.mjs\n M tests/volume-layer-coefficient-live-union-runtime-contracts.mjs\n M tests/volume-selective-head-live-contracts.mjs\n M volume-boundary-splat-full-support-multiplicity-witness.mjs\n M volume-core.js\n M volume-dense-cue-splat-bridge.mjs\n M volume-dynamic-texture-proof.mjs\n M volume-intrinsic-presentation-witness.mjs\n M volume-layer-coefficient-live-union-overlay.mjs\n M volume-layer-coefficient-live-union-remap.py\n M volume-layer-coefficient-live-union-witness.mjs\n M volume-nonridge-randomized-capture-witness.mjs\n M volume-nonridge-source-basis-capture-witness.mjs\n M volume-render-pair-corpus.mjs\n M volume-render-pair-dataset.mjs\n M volume-selective-head-live.html\n M volume-settings-preset-schema-v1.json\n M volume-settings-preset-schema-v2.json\n M volume-sweep.mjs\n M volume-witness.mjs\n?? artifacts/volume-raymarch-specialization-witness/\n?? tests/volume-production-raymarch-retirement-contracts.mjs\n?? tests/volume-raymarch-specialization-witness-contracts.mjs\n?? volume-raymarch-specialization-witness.mjs",
+  "sourceDiffSha256": "2d315d2a293b77ee2354de92b249a1ecbd41830c04e893935447d6d42ec3da87",
+  "sampleCount": 3,
+  "sameStateIdentity": {
+    "simStepCount": 8,
+    "controlsHash": "d7e386d2d1e140b4cba67c27867805e1b535e74ff8bff6e98e082cdee1cf3fe5",
+    "cameraHash": "28623006ec28307bf4ab689bd954032e6338d2b0ab049cc765d859ab1269aa35",
+    "renderPhaseTimeMs": 1000,
+    "renderPhaseFrame": 8
+  },
+  "compositionContract": {
+    "identity": "raymarch-only-v0",
+    "raymarchApplied": true,
+    "splatApplied": false
+  },
+  "arms": {
+    "full": {
+      "specialization": {
+        "identity": "raymarch-shader-specialization-receipt-v0",
+        "requested": "lean-stock-direct-cell-raymarch-v0",
+        "effective": "full-authored-raymarch-v0",
+        "eligible": true,
+        "refusalReasons": [],
+        "debugOverride": "force-full",
+        "fallbackReason": "debug-force-full"
+      },
+      "pixelHash": "3d7aac0d4bf74911bdc15b0cd674aa56092a4172714ab5a18cab9cfec007f908",
+      "nonblank": true,
+      "matchedRaymarchRasterMs": [
+        50.428044,
+        50.312273,
+        48.692174
+      ],
+      "medianMatchedRaymarchRasterMs": 50.312273
+    },
+    "lean": {
+      "specialization": {
+        "identity": "raymarch-shader-specialization-receipt-v0",
+        "requested": "lean-stock-direct-cell-raymarch-v0",
+        "effective": "lean-stock-direct-cell-raymarch-v0",
+        "eligible": true,
+        "refusalReasons": [],
+        "debugOverride": "auto",
+        "fallbackReason": null
+      },
+      "pixelHash": "3d7aac0d4bf74911bdc15b0cd674aa56092a4172714ab5a18cab9cfec007f908",
+      "nonblank": true,
+      "matchedRaymarchRasterMs": [
+        39.607124,
+        39.10382,
+        42.350187
+      ],
+      "medianMatchedRaymarchRasterMs": 39.607124
+    }
+  },
+  "pixelDelta": {
+    "maxChannelDelta": 0,
+    "meanAbsChannelDelta": 0,
+    "changedPixelRatio": 0
+  },
+  "browserEvents": [
+    {
+      "method": "Runtime.consoleAPICalled",
+      "type": "log",
+      "text": "WebGPU renderer initialized, backend: WebGPUBackend"
+    }
+  ],
+  "artifacts": {
+    "full": {
+      "path": "/private/tmp/kaminos-handy-basin-atlas-rail-recorder-0830-handy-majorant-free-raymarch-0830/artifacts/volume-raymarch-specialization-witness/20260831-direct-cell-lean-v0/full-authored-raymarch.png",
+      "byteLength": 347283,
+      "sha256": "fbcfbf0e935109fa154f86a8df8c103323604773cd48a4b848877373f003e644"
+    },
+    "lean": {
+      "path": "/private/tmp/kaminos-handy-basin-atlas-rail-recorder-0830-handy-majorant-free-raymarch-0830/artifacts/volume-raymarch-specialization-witness/20260831-direct-cell-lean-v0/lean-stock-direct-cell-raymarch.png",
+      "byteLength": 347283,
+      "sha256": "fbcfbf0e935109fa154f86a8df8c103323604773cd48a4b848877373f003e644"
+    }
+  }
+}

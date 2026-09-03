@@ -1,0 +1,1229 @@
+{
+  "identity": "kaminos-volume-settings-preset-schema-v1",
+  "controlCount": 184,
+  "controls": [
+    {
+      "key": "volume-basin-slot",
+      "param": "volume_basin_slot",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-look-library-kind",
+      "param": "volume_look_library_kind",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-look-library-entry",
+      "param": "volume_look_library_entry",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-look-library-name",
+      "param": "volume_look_library_name",
+      "tagName": "INPUT",
+      "type": "text"
+    },
+    {
+      "key": "volume-look-library-json",
+      "param": "volume_look_library_json",
+      "tagName": "TEXTAREA",
+      "type": "textarea"
+    },
+    {
+      "key": "volume-scene",
+      "param": "volume_scene",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-pyro-compare",
+      "param": "volume_pyro_compare",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-reaction-live-view",
+      "param": "volume_reaction_live_view",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-reaction-boundary-gradient",
+      "param": "volume_reaction_boundary_gradient",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-support-thermal",
+      "param": "volume_reaction_boundary_support_thermal",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-support-reaction",
+      "param": "volume_reaction_boundary_support_reaction",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-support-front",
+      "param": "volume_reaction_boundary_support_front",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-support-interface",
+      "param": "volume_reaction_boundary_support_interface",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-cut",
+      "param": "volume_reaction_boundary_cut",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-softness",
+      "param": "volume_reaction_boundary_softness",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-core-reject",
+      "param": "volume_reaction_boundary_core_reject",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-topology",
+      "param": "volume_reaction_boundary_topology",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-curl",
+      "param": "volume_reaction_boundary_curl",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-divergence",
+      "param": "volume_reaction_boundary_divergence",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-contrast",
+      "param": "volume_reaction_boundary_contrast",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-gamma",
+      "param": "volume_reaction_boundary_gamma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-opacity",
+      "param": "volume_reaction_boundary_opacity",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-boundary-sidecar-source",
+      "param": "volume_boundary_sidecar_source",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-boundary-sidecar-view",
+      "param": "volume_boundary_sidecar_view",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-boundary-splat-mode",
+      "param": "volume_boundary_splat_mode",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-boundary-splat-radius",
+      "param": "volume_boundary_splat_radius",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-boundary-splat-sharpness",
+      "param": "volume_boundary_splat_sharpness",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-boundary-sidecar-blur",
+      "param": "volume_boundary_sidecar_blur",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-boundary-sidecar-width",
+      "param": "volume_boundary_sidecar_width",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-boundary-sidecar-ridge",
+      "param": "volume_boundary_sidecar_ridge",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-ridge",
+      "param": "volume_reaction_boundary_fire_ridge",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-ridge-cut",
+      "param": "volume_reaction_boundary_fire_ridge_cut",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-tip",
+      "param": "volume_reaction_boundary_fire_tip",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-erosion",
+      "param": "volume_reaction_boundary_fire_erosion",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-clean-blue",
+      "param": "volume_reaction_boundary_fire_clean_blue",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-soot",
+      "param": "volume_reaction_boundary_fire_soot",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-yellow",
+      "param": "volume_reaction_boundary_fire_yellow",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-warmth",
+      "param": "volume_reaction_boundary_fire_warmth",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-luma",
+      "param": "volume_reaction_boundary_fire_luma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-heat-min",
+      "param": "volume_reaction_heat_min",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-heat-max",
+      "param": "volume_reaction_heat_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-fuel-min",
+      "param": "volume_reaction_fuel_min",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-fuel-max",
+      "param": "volume_reaction_fuel_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-flame-min",
+      "param": "volume_reaction_flame_min",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-flame-max",
+      "param": "volume_reaction_flame_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-front-min",
+      "param": "volume_reaction_front_min",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-front-max",
+      "param": "volume_reaction_front_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-gradient-min",
+      "param": "volume_reaction_gradient_min",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-gradient-max",
+      "param": "volume_reaction_gradient_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-core-min",
+      "param": "volume_reaction_core_min",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-core-max",
+      "param": "volume_reaction_core_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-core-reject",
+      "param": "volume_reaction_core_reject",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-topology-gain",
+      "param": "volume_reaction_topology_gain",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-stretch-erode",
+      "param": "volume_reaction_stretch_erode",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-divergence-min",
+      "param": "volume_reaction_divergence_min",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-divergence-max",
+      "param": "volume_reaction_divergence_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-divergence-gain",
+      "param": "volume_reaction_divergence_gain",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-curl-warp",
+      "param": "volume_reaction_curl_warp",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-shell-gamma",
+      "param": "volume_reaction_shell_gamma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-reaction-shell-contrast",
+      "param": "volume_reaction_shell_contrast",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-density",
+      "param": "volume_density",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-fire",
+      "param": "volume_fire",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-radiance",
+      "param": "volume_radiance",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-absorption",
+      "param": "volume_absorption",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-glow",
+      "param": "volume_glow",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-smoke",
+      "param": "volume_smoke",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-curl",
+      "param": "volume_curl",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-microdetail",
+      "param": "volume_microdetail",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-interface-shred",
+      "param": "volume_interface_shred",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-fire-licks",
+      "param": "volume_fire_licks",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-projection",
+      "param": "volume_projection",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-speed",
+      "param": "volume_speed",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-fire-scale",
+      "param": "volume_fire_scale",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-detail-scale",
+      "param": "volume_detail_scale",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-plume-height",
+      "param": "volume_plume_height",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-wind-strength",
+      "param": "volume_wind_strength",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-wind-angle",
+      "param": "volume_wind_angle",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-wind-height",
+      "param": "volume_wind_height",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-input-radius",
+      "param": "volume_input_radius",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-flow-rate",
+      "param": "volume_flow_rate",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-steps",
+      "param": "volume_steps",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-adaptive-rays",
+      "param": "volume_adaptive_rays",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-occupancy-skip",
+      "param": "volume_occupancy_skip",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-render-scale",
+      "param": "volume_render_scale",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-residual-mode",
+      "param": "volume_residual_mode",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-residual-strength",
+      "param": "volume_residual_strength",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-residual-feature-debug",
+      "param": "volume_residual_feature_debug",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-residual-model-url",
+      "param": "volume_residual_model_url",
+      "tagName": "INPUT",
+      "type": "text"
+    },
+    {
+      "key": "volume-resolution",
+      "param": "volume_resolution",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-grid-overlay",
+      "param": "volume_grid_overlay",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-flow-debug",
+      "param": "volume_flow_debug",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-fire-render-mode",
+      "param": "volume_fire_render_mode",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-shell-inspect-mode",
+      "param": "volume_shell_inspect_mode",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-shell-amount",
+      "param": "volume_shell_amount",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-width",
+      "param": "volume_shell_width",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-thermal",
+      "param": "volume_shell_thermal",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-reaction",
+      "param": "volume_shell_reaction",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-front",
+      "param": "volume_shell_front",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-edge",
+      "param": "volume_shell_edge",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-curl",
+      "param": "volume_shell_curl",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-core-suppress",
+      "param": "volume_shell_core_suppress",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-bite",
+      "param": "volume_shell_bite",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-heat",
+      "param": "volume_shell_heat",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-divergence",
+      "param": "volume_shell_divergence",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-luma",
+      "param": "volume_shell_luma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-exposure",
+      "param": "volume_shell_exposure",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-soft-clip",
+      "param": "volume_shell_soft_clip",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-shell-smoke",
+      "param": "volume_shell_smoke",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-oracle-activity-cue",
+      "param": "volume_oracle_activity_cue",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-oracle-activity-display",
+      "param": "volume_oracle_activity_display",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-oracle-activity-curl-noise",
+      "param": "volume_oracle_activity_curl_noise",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-oracle-activity-vorticity",
+      "param": "volume_oracle_activity_vorticity",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-oracle-activity-material",
+      "param": "volume_oracle_activity_material",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-detail",
+      "param": "volume_pyro_detail",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-material-gain",
+      "param": "volume_pyro_material_gain",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-interface-focus",
+      "param": "volume_pyro_interface_focus",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-fire-mode",
+      "param": "volume_pyro_fire_mode",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-pyro-flame-paint",
+      "param": "volume_pyro_flame_paint",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-stock-mix",
+      "param": "volume_pyro_stock_mix",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flame-luma",
+      "param": "volume_pyro_flame_luma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flame-core-color",
+      "param": "volume_pyro_flame_core_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-flame-edge-color",
+      "param": "volume_pyro_flame_edge_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-look-freeze",
+      "param": "volume_look_freeze",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-bite",
+      "param": "volume_pyro_flow_bite",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-border",
+      "param": "volume_pyro_flow_border",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-teeth",
+      "param": "volume_pyro_flow_teeth",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-rise",
+      "param": "volume_pyro_flow_rise",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-fire-lock",
+      "param": "volume_pyro_flow_fire_lock",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-luma",
+      "param": "volume_pyro_flow_luma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-radiance",
+      "param": "volume_pyro_flow_radiance",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-spikes",
+      "param": "volume_pyro_flow_spikes",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-flow-cool-color",
+      "param": "volume_pyro_flow_cool_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-flow-hot-color",
+      "param": "volume_pyro_flow_hot_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-radiance",
+      "param": "volume_pyro_radiance",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-gate",
+      "param": "volume_pyro_radiance_gate",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-spill",
+      "param": "volume_pyro_radiance_spill",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-warmth",
+      "param": "volume_pyro_radiance_warmth",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-hue",
+      "param": "volume_pyro_radiance_hue",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-chroma",
+      "param": "volume_pyro_radiance_chroma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-luma",
+      "param": "volume_pyro_radiance_luma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-cool-color",
+      "param": "volume_pyro_radiance_cool_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-radiance-warm-color",
+      "param": "volume_pyro_radiance_warm_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-radiance-source",
+      "param": "volume_pyro_radiance_source",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-pyro-radiance-height",
+      "param": "volume_pyro_radiance_height",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-border",
+      "param": "volume_pyro_radiance_border",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-teeth",
+      "param": "volume_pyro_radiance_teeth",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-rise",
+      "param": "volume_pyro_radiance_rise",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-radiance-fire-lock",
+      "param": "volume_pyro_radiance_fire_lock",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-edge-bite",
+      "param": "volume_pyro_edge_bite",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-border",
+      "param": "volume_pyro_bite_border",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-teeth",
+      "param": "volume_pyro_bite_teeth",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-wake",
+      "param": "volume_pyro_bite_wake",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-height",
+      "param": "volume_pyro_bite_height",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-fire-lock",
+      "param": "volume_pyro_bite_fire_lock",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-core",
+      "param": "volume_pyro_bite_core",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-core-cut",
+      "param": "volume_pyro_bite_core_cut",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-rim",
+      "param": "volume_pyro_bite_rim",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-rim-cut",
+      "param": "volume_pyro_bite_rim_cut",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-after",
+      "param": "volume_pyro_bite_after",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-after-cut",
+      "param": "volume_pyro_bite_after_cut",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-heat",
+      "param": "volume_pyro_bite_heat",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-chroma",
+      "param": "volume_pyro_bite_chroma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-luma",
+      "param": "volume_pyro_bite_luma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-bite-ember-color",
+      "param": "volume_pyro_bite_ember_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-bite-hot-color",
+      "param": "volume_pyro_bite_hot_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-smoke-fold",
+      "param": "volume_pyro_smoke_fold",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-fold-border",
+      "param": "volume_pyro_fold_border",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-fold-wake",
+      "param": "volume_pyro_fold_wake",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-wake-lift",
+      "param": "volume_pyro_wake_lift",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-wake-warmth",
+      "param": "volume_pyro_wake_warmth",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-wake-luma",
+      "param": "volume_pyro_wake_luma",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-wake-shadow-color",
+      "param": "volume_pyro_wake_shadow_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-wake-ember-color",
+      "param": "volume_pyro_wake_ember_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-pyro-diagnostic-paint",
+      "param": "volume_pyro_diagnostic_paint",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pyro-carrier-view",
+      "param": "volume_pyro_carrier_view",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-pyro-overdrive",
+      "param": "volume_pyro_overdrive",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pressure-mode",
+      "param": "volume_pressure_mode",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-pressure-tier-overlay",
+      "param": "volume_pressure_tier_overlay",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pressure-tier-lower-max",
+      "param": "volume_pressure_tier_lower_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pressure-tier-hero-min",
+      "param": "volume_pressure_tier_hero_min",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-pressure-tier-hero-max",
+      "param": "volume_pressure_tier_hero_max",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-canonical-spread",
+      "param": "volume_canonical_spread",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-canonical-centerline",
+      "param": "volume_canonical_centerline",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-canonical-body-balance",
+      "param": "volume_canonical_body_balance",
+      "tagName": "INPUT",
+      "type": "range"
+    }
+  ],
+  "retiredControls": [
+    {
+      "axis": "domControls",
+      "key": "volume-majorant-skip",
+      "param": "volume_majorant_skip",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-majorant-smooth",
+      "param": "volume_majorant_smooth",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-majorant-guard",
+      "param": "volume_majorant_guard",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-temporal-accum",
+      "param": "volume_temporal_accum",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-temporal-jitter",
+      "param": "volume_temporal_jitter",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-history-clamp",
+      "param": "volume_history_clamp",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-majorant-grid",
+      "param": "volume_majorant_grid",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": [
+        "24",
+        "32",
+        "48"
+      ]
+    }
+  ],
+  "legacyUnroutedParams": [
+    "volume_look_library_json"
+  ],
+  "routeExtraParams": [
+    "volume_quality_reason"
+  ],
+  "activationParam": {
+    "key": "kaminos_volume_smoke",
+    "value": "1"
+  },
+  "excludedStateFields": [
+    "fluidField",
+    "frontField",
+    "boundarySidecar",
+    "splatInstances",
+    "historyBuffers",
+    "pressureState",
+    "replayState"
+  ],
+  "forbiddenPresetFields": [
+    "fluidField",
+    "frontField",
+    "boundarySidecar",
+    "splatInstances",
+    "historyBuffers",
+    "pressureState",
+    "replayState",
+    "href",
+    "camera",
+    "volumeDebugState",
+    "viewport",
+    "fullField",
+    "fullFieldImport"
+  ],
+  "allowedNativePresetFields": [
+    "identity",
+    "kind",
+    "schemaIdentity",
+    "savedAt",
+    "route",
+    "domControls",
+    "controlCount",
+    "stateExclusions",
+    "note",
+    "name"
+  ],
+  "allowedLegacyDomPresetFields": [
+    "identity",
+    "kind",
+    "status",
+    "name",
+    "savedAt",
+    "sourceHref",
+    "discoveredContextCount",
+    "controlCount",
+    "domControls",
+    "controlsByParam",
+    "route",
+    "exclusions",
+    "failurePhase"
+  ],
+  "rendererControls": [],
+  "presentationControls": []
+}

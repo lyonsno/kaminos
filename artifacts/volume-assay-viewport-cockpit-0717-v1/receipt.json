@@ -1,0 +1,71 @@
+{
+  "identity": "kaminos-volume-assay-viewport-cockpit-witness-v1",
+  "status": "visually-inspected",
+  "timestamp": "2026-07-17T18:15:51Z",
+  "repo": "kaminos",
+  "sourceTree": "kaminos-feature-worktree",
+  "publicationAuthority": "feature-branch-only",
+  "sourceBaseHead": "4918a09a4ae24f19550ac256da3632fbd7fc4c2f",
+  "requestedRoute": "http://127.0.0.1:18781/volume-settings-preset.html?preset=vsp-902ef7efc65170f032f01f9dfff7b8c776b64a01e6c80caf2c4ec97004b461e7&view=smoke-hybrid",
+  "effectiveRoute": "exact-basin-selective-head-live-v0",
+  "settingsPresetId": "vsp-902ef7efc65170f032f01f9dfff7b8c776b64a01e6c80caf2c4ec97004b461e7",
+  "settingsAuthority": "shared-volume-settings-preset-v2",
+  "requestedComposition": "smoke-raymarch-under-splats-v0",
+  "backend": "WebGPU:apple",
+  "desktopPlacementReceipt": {
+    "identity": "kaminos-volume-assay-viewport-placement-v0",
+    "requestedTab": "volume",
+    "activeTab": "volume",
+    "targetElement": "#viewport",
+    "visible": true,
+    "contained": true,
+    "fallbackApplied": false,
+    "viewport": { "width": 672, "height": 757 },
+    "toolbar": { "width": 656, "height": 98.140625 }
+  },
+  "tabIsolation": {
+    "testedTabs": [
+      "assets",
+      "forge",
+      "motion",
+      "worlds",
+      "finger-juice-host",
+      "finger-juice",
+      "greenroom",
+      "pipeline",
+      "search",
+      "generate"
+    ],
+    "allToolbarHidden": true,
+    "allVisibleFalse": true,
+    "reason": "non-volume-tab",
+    "fallbackApplied": false
+  },
+  "responsiveIsolation": {
+    "browserViewport": { "width": 700, "height": 900 },
+    "flameViewport": { "width": 380, "height": 900 },
+    "availableFlameViewportWidth": 20,
+    "authoredMixOverlayWidth": 360,
+    "toolbarHidden": true,
+    "visible": false,
+    "reason": "insufficient-volume-viewport-space",
+    "fallbackApplied": false
+  },
+  "restoredVolume": {
+    "activeTab": "volume",
+    "toolbarHidden": false,
+    "visible": true,
+    "contained": true
+  },
+  "images": {
+    "desktop_candidate_fix.png": "52316932b37494168018ae5430fd52b30dc52eb9cfb58f6df0dd4d3118a307d6",
+    "narrow_observed_menu_mismatch.png": "c85a740811d60d9a19eed002003ed4992af77548f070e7fd2c93d411ab8a705c",
+    "narrow_candidate_fix.png": "18f59d0aad8cd826a152a45361557e175eb8d402073c1ce0856ebe7c0bc744ec",
+    "live-volume.png": "6dfb5eba5725bf444044cdd7aaf4e078c75618aae155109a364d7713317883f1",
+    "live-cockpit.png": "2e7d96ae5902ff9305914e191af793503a0386c72020d4388fb0ac2ea6391c97",
+    "live-cockpit-collapsed.png": "605b19cf4ff784e2b2ed11d1129e2beddf37fc403d7c856561225d266e9e4610"
+  },
+  "liveWitness": "live-witness.json",
+  "continuousFrameDelta": 125,
+  "continuousSimStepDelta": 125
+}

@@ -10,38 +10,88 @@
     * { box-sizing: border-box; }
     body { margin: 0; overflow: hidden; background: #050607; }
     iframe { width: 100vw; height: 100vh; border: 0; display: block; }
-    #toolbar { position: fixed; z-index: 10; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid rgba(190, 215, 220, .28); background: rgba(6, 9, 10, .90); backdrop-filter: blur(8px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
-    #title { min-width: 210px; }
-    #title strong { display: block; font-size: 13px; line-height: 1.25; }
-    #title span { display: block; color: #91a3a8; font-size: 10px; margin-top: 2px; }
-    #roles, #compositions { display: flex; gap: 4px; }
-    button { min-height: 32px; padding: 0 11px; border: 1px solid #35454b; border-radius: 4px; background: #12191c; color: #dce7e9; font: inherit; font-size: 12px; cursor: pointer; }
+    #toolbar { position: fixed; z-index: 10; display: block; width: min(860px, calc(100vw - 24px)); padding: 8px 9px 7px; border: 1px solid rgba(153, 184, 192, .34); background: rgba(6, 9, 10, .88); backdrop-filter: blur(10px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
+    #toolbar[hidden] { display: none; }
+    #toolbar-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    #title { min-width: 0; flex: 1; }
+    #title strong { display: block; font-size: 11px; line-height: 1.2; }
+    #title span { display: block; overflow: hidden; color: #84979c; font-size: 9px; line-height: 1.3; margin-top: 2px; text-overflow: ellipsis; white-space: nowrap; }
+    #toolbar-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 7px; margin-top: 7px; }
+    #presentations, #smoke-presentations { display: flex; gap: 3px; }
+    .select-control { display: flex; align-items: center; gap: 5px; min-width: 0; color: #829499; font-size: 9px; }
+    select { min-height: 28px; max-width: 210px; padding: 0 24px 0 7px; border: 1px solid #35454b; border-radius: 4px; background: #11191c; color: #dce7e9; font: inherit; font-size: 10px; }
+    #roles { max-width: 176px; }
+    #appearance-assay { max-width: 220px; }
+    button { min-height: 28px; padding: 0 9px; border: 1px solid #35454b; border-radius: 4px; background: #12191c; color: #dce7e9; font: inherit; font-size: 10px; cursor: pointer; white-space: nowrap; }
     button[aria-pressed="true"] { background: #275768; border-color: #6db1c3; color: #fff; }
-    #status { margin-left: auto; max-width: min(52vw, 660px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9eafb4; font: 10px/1.35 "SF Mono", Menlo, monospace; }
-    #status.bad { color: #ff9d8d; }
+    button:disabled { cursor: not-allowed; opacity: .36; }
+    select:disabled { cursor: not-allowed; opacity: .42; }
+    #status { margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9eafb4; font: 9px/1.35 "SF Mono", Menlo, monospace; }
+    #status.bad { color: #ff9d8d; white-space: normal; overflow-wrap: anywhere; user-select: text; text-overflow: clip; overflow: visible; }
+    @media (max-width: 780px) {
+      #toolbar { width: calc(100vw - 16px); }
+      #title span { display: none; }
+      .select-control { flex: 1 1 150px; }
+      select, #roles { width: 100%; max-width: none; }
+    }
   </style>
 </head>
 <body>
-  <div id="toolbar">
-    <div id="title">
-      <strong>Continuous same-history live assay</strong>
-      <span>Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render</span>
+  <div id="toolbar" hidden>
+    <div id="toolbar-head">
+      <div id="title">
+        <strong>Continuous same-history live assay</strong>
+        <span id="assay-source">Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render</span>
+      </div>
+      <div id="presentations" role="group" aria-label="Volume presentation">
+        <button type="button" data-presentation="beauty">Beauty</button>
+        <button type="button" data-presentation="intrinsic">Intrinsic</button>
+      </div>
+      <div id="smoke-presentations" role="group" aria-label="Raymarch smoke presentation">
+        <button type="button" data-smoke-presentation="on">Smoke On</button>
+        <button type="button" data-smoke-presentation="off">Smoke Off</button>
+      </div>
     </div>
-    <div id="roles" role="group" aria-label="Live reconstruction role">
-      <button type="button" data-role="truthHigh">Truth high</button>
-      <button type="button" data-role="lowPhaseAligned">Low phase-aligned control</button>
-      <button type="button" data-role="selectiveFullResidual">Selective full residual</button>
-    </div>
-    <div id="compositions" role="group" aria-label="Renderer composition">
-      <button type="button" data-composition="splat-only-v0">Splat only</button>
-      <button type="button" data-composition="smoke-raymarch-under-splats-v0">Smoke hybrid</button>
-      <button type="button" data-composition="raymarch-only-v0">Raymarch only</button>
-      <button type="button" data-composition="full-raymarch-under-splats-diagnostic-v0">Full hybrid diagnostic</button>
+    <div id="toolbar-controls">
+      <label class="select-control" for="appearance-assay">Optical view
+        <select id="appearance-assay" aria-label="Appearance decomposition">
+          <option value="structural-a" data-appearance-assay="structural-a">A</option>
+          <option value="broad-carrier-b" data-appearance-assay="broad-carrier-b">B coefficients</option>
+          <option value="b-applied-to-fixed-a" data-appearance-assay="b-applied-to-fixed-a">B on A</option>
+          <option value="a-plus-b-recomposition" data-appearance-assay="a-plus-b-recomposition">A+B</option>
+          <option value="smoke-off-beauty-control" data-appearance-assay="smoke-off-beauty-control">Control</option>
+          <option value="complete-flame-emission" data-appearance-assay="complete-flame-emission">Complete Emission</option>
+          <option value="complete-flame-extinction" data-appearance-assay="complete-flame-extinction">Complete Extinction</option>
+          <option value="ridge-owned-emission" data-appearance-assay="ridge-owned-emission">Ridge Emission</option>
+          <option value="ridge-owned-extinction" data-appearance-assay="ridge-owned-extinction">Ridge Extinction</option>
+          <option value="non-ridge-emission" data-appearance-assay="non-ridge-emission">Non-Ridge Emission</option>
+          <option value="non-ridge-extinction" data-appearance-assay="non-ridge-extinction">Non-Ridge Extinction</option>
+          <option value="positive-optical-recomposition" data-appearance-assay="positive-optical-recomposition">Positive Sum</option>
+          <option value="ridge-emission-under-ridge-extinction" data-appearance-assay="ridge-emission-under-ridge-extinction">Ridge E / Ridge X</option>
+          <option value="ridge-emission-under-total-flame-extinction" data-appearance-assay="ridge-emission-under-total-flame-extinction">Ridge E / Total X</option>
+          <option value="nonridge-emission-under-total-flame-extinction" data-appearance-assay="nonridge-emission-under-total-flame-extinction">Non-Ridge E / Total X</option>
+          <option value="complete-flame-under-total-extinction" data-appearance-assay="complete-flame-under-total-extinction">Complete E / Total X</option>
+        </select>
+      </label>
+      <button id="appearance-assay-enabled" type="button" data-assay-enabled aria-pressed="false">Assay Off</button>
+      <button id="splats-enabled" type="button" data-splats-enabled aria-pressed="true">Splats On</button>
+      <label class="select-control" for="roles">Field
+        <select id="roles" aria-label="Live reconstruction role">
+          <option value="truthHigh" data-role="truthHigh">Truth high</option>
+          <option value="lowPhaseAligned" data-role="lowPhaseAligned">Low phase-aligned control</option>
+          <option value="selectiveFullResidual" data-role="selectiveFullResidual">Selective full residual</option>
+        </select>
+      </label>
     </div>
     <div id="status">Starting exact basin...</div>
   </div>
   <iframe id="basin" title="Kaminos exact selective-head live basin"></iframe>
   <script type="module">
+    import {
+      validateVolumeSettingsPresetDocument,
+      validateVolumeSettingsPresetVisualTarget,
+    } from './volume-settings-preset-contract.mjs';
+
     const ROUTE_IDENTITY = 'exact-basin-selective-head-live-v0';
     const WARMUP_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
     const ANCHOR_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
@@ -53,30 +103,225 @@
       'raymarch-only-v0',
       'full-raymarch-under-splats-diagnostic-v0',
     ];
+    const presentations = ['beauty', 'intrinsic'];
+    const raymarchSmokePresentations = ['on', 'off'];
+    const appearanceAssaySelections = [
+      'structural-a',
+      'broad-carrier-b',
+      'b-applied-to-fixed-a',
+      'a-plus-b-recomposition',
+      'smoke-off-beauty-control',
+      'complete-flame-emission',
+      'complete-flame-extinction',
+      'ridge-owned-emission',
+      'ridge-owned-extinction',
+      'non-ridge-emission',
+      'non-ridge-extinction',
+      'positive-optical-recomposition',
+      'ridge-emission-under-ridge-extinction',
+      'ridge-emission-under-total-flame-extinction',
+      'nonridge-emission-under-total-flame-extinction',
+      'complete-flame-under-total-extinction',
+    ];
+    const appearanceAssayModes = ['off', ...appearanceAssaySelections];
     const roleAuthorities = Object.freeze({
       truthHigh: 'current-high-field-reference-no-learned-composition-v0',
       lowPhaseAligned: 'phase-aligned-low-field-control-v0',
       selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
     });
     const params = new URLSearchParams(location.search);
+    const assayToolbarRequested = params.get('assay_toolbar') === '1';
     let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
     let requestedComposition = compositions.includes(params.get('composition')) ? params.get('composition') : 'smoke-raymarch-under-splats-v0';
-    const warmupTarget = Math.max(0, Math.floor(Number(params.get('warmup_steps') ?? 96) || 0));
+    let legacyDiagnosticCompositionRequested = requestedComposition === 'full-raymarch-under-splats-diagnostic-v0';
+    let requestedPresentation = presentations.includes(params.get('volume_presentation')) ? params.get('volume_presentation') : 'beauty';
+    const requestedRaymarchSmokePresentationRaw = params.get('volume_raymarch_smoke');
+    let requestedRaymarchSmokePresentation = raymarchSmokePresentations.includes(requestedRaymarchSmokePresentationRaw)
+      ? requestedRaymarchSmokePresentationRaw
+      : (requestedComposition === 'splat-only-v0' ? 'off' : 'on');
+    let requestedSplatsEnabled = requestedComposition !== 'raymarch-only-v0';
+    const requestedAppearanceAssayRaw = params.get('volume_appearance_decomposition');
+    let requestedAppearanceAssay = appearanceAssayModes.includes(requestedAppearanceAssayRaw)
+      ? requestedAppearanceAssayRaw
+      : 'off';
+    const requestedAppearanceAssaySelectionRaw = params.get('volume_appearance_selection');
+    let requestedAppearanceAssaySelection = appearanceAssaySelections.includes(requestedAppearanceAssaySelectionRaw)
+      ? requestedAppearanceAssaySelectionRaw
+      : (requestedAppearanceAssay !== 'off' ? requestedAppearanceAssay : 'structural-a');
+    let requestedAppearanceAssayEnabled = requestedAppearanceAssay !== 'off';
+    const warmupParam = params.get('warmup_steps');
+    const parsedWarmupTarget = warmupParam === null ? 96 : Number(warmupParam);
+    const warmupParamValid = warmupParam === null
+      || warmupParam === '0'
+      || (warmupParam.trim() !== '' && Number.isFinite(parsedWarmupTarget) && parsedWarmupTarget >= 1);
+    const warmupTarget = warmupParam === '0'
+      ? 0
+      : (warmupParamValid ? Math.max(1, Math.floor(parsedWarmupTarget)) : 96);
+    const warmupAuthority = warmupTarget === 0
+      ? 'fresh-live-settings-no-anchor-v0'
+      : WARMUP_AUTHORITY;
     const anchorBase = String(params.get('anchor_base') || 'http://127.0.0.1:18537').replace(/\/$/, '');
     let warmupStarted = false;
     let warmupComplete = warmupTarget === 0;
-    let warmupReceipt = null;
-    let warmupError = null;
+    let warmupReceipt = warmupTarget === 0
+      ? { ok: true, authority: warmupAuthority, completedSteps: 0, importedAnchor: false }
+      : null;
+    let warmupError = warmupParamValid ? null : `invalid warmup_steps: ${JSON.stringify(warmupParam)}`;
+    if (requestedRaymarchSmokePresentationRaw !== null
+      && !raymarchSmokePresentations.includes(requestedRaymarchSmokePresentationRaw)) {
+      warmupError ||= `unsupported-raymarch-smoke-presentation-mode:${requestedRaymarchSmokePresentationRaw}`;
+    }
+    if (requestedAppearanceAssayRaw !== null && !appearanceAssayModes.includes(requestedAppearanceAssayRaw)) {
+      warmupError ||= `unsupported-appearance-decomposition-mode:${requestedAppearanceAssayRaw}`;
+    }
+    if (requestedAppearanceAssaySelectionRaw !== null
+      && !appearanceAssaySelections.includes(requestedAppearanceAssaySelectionRaw)) {
+      warmupError ||= `unsupported-appearance-decomposition-selection:${requestedAppearanceAssaySelectionRaw}`;
+    }
+    const sourceSettingsPresetRequestedId = params.get('settings_preset') || null;
+    let sourceSettingsPresetReceipt = null;
     const basin = document.getElementById('basin');
     const status = document.getElementById('status');
+    const operatorToolbar = document.getElementById('toolbar');
+    let viewportResizeObserver = null;
+    let activeTabMutationObserver = null;
+    function syncVolumeAssayViewportPlacement() {
+      const innerDocument = basin.contentDocument;
+      const innerWindow = basin.contentWindow;
+      const viewport = innerDocument?.querySelector('#viewport');
+      if (!viewport || !innerWindow) return null;
+      const authoredMixPanel = innerDocument.querySelector('#volume-authored-mix-panel');
+      const activeTab = innerWindow.__kaminosActiveTab?.()
+        || innerDocument.querySelector('.tab.active[data-tab]')?.dataset.tab
+        || null;
+      const viewportRect = viewport.getBoundingClientRect();
+      const authoredMixRect = authoredMixPanel && !authoredMixPanel.hidden
+        ? authoredMixPanel.getBoundingClientRect()
+        : null;
+      const authoredMixOverlapsViewport = Boolean(authoredMixRect)
+        && authoredMixRect.width > 0
+        && authoredMixRect.left < viewportRect.right
+        && authoredMixRect.right > viewportRect.left;
+      const availableViewportRight = authoredMixOverlapsViewport
+        ? Math.max(viewportRect.left, Math.min(viewportRect.right, authoredMixRect.left))
+        : viewportRect.right;
+      const availableViewportWidth = Math.max(0, availableViewportRight - viewportRect.left);
+      const inset = availableViewportWidth < 780 ? 8 : 12;
+      const requestedVisible = assayToolbarRequested && activeTab === 'volume';
+      let reason = requestedVisible
+        ? null
+        : (assayToolbarRequested ? 'non-volume-tab' : 'diagnostic-toolbar-not-requested');
+      let visible = requestedVisible
+        && availableViewportWidth >= 280
+        && viewportRect.height >= 120;
+      if (requestedVisible && !visible) reason = 'insufficient-volume-viewport-space';
+      operatorToolbar.hidden = !visible;
+      if (visible) {
+        operatorToolbar.style.left = `${Math.ceil(viewportRect.left + inset)}px`;
+        operatorToolbar.style.top = `${Math.ceil(viewportRect.top + inset)}px`;
+        operatorToolbar.style.width = `${Math.max(0, Math.floor(availableViewportWidth - inset * 2))}px`;
+      }
+      let toolbarRect = visible ? operatorToolbar.getBoundingClientRect() : null;
+      let contained = Boolean(toolbarRect)
+        && toolbarRect.left >= viewportRect.left
+        && toolbarRect.top >= viewportRect.top
+        && toolbarRect.right <= availableViewportRight
+        && toolbarRect.bottom <= viewportRect.bottom;
+      if (visible && !contained) {
+        visible = false;
+        reason = 'insufficient-volume-viewport-space';
+        operatorToolbar.hidden = true;
+        toolbarRect = null;
+        contained = false;
+      }
+      const receipt = {
+        identity: 'kaminos-volume-assay-viewport-placement-v0',
+        sourceRoute: ROUTE_IDENTITY,
+        requestedTab: 'volume',
+        activeTab,
+        targetElement: '#viewport',
+        requestedVisible,
+        visible,
+        contained,
+        reason,
+        viewportRect: {
+          left: viewportRect.left,
+          top: viewportRect.top,
+          right: viewportRect.right,
+          bottom: viewportRect.bottom,
+          width: viewportRect.width,
+          height: viewportRect.height,
+        },
+        availableViewportRect: {
+          left: viewportRect.left,
+          top: viewportRect.top,
+          right: availableViewportRight,
+          bottom: viewportRect.bottom,
+          width: availableViewportWidth,
+          height: viewportRect.height,
+        },
+        authoredMixOverlap: authoredMixOverlapsViewport ? {
+          left: authoredMixRect.left,
+          right: authoredMixRect.right,
+          width: authoredMixRect.width,
+        } : null,
+        toolbarRect: toolbarRect ? {
+          left: toolbarRect.left,
+          top: toolbarRect.top,
+          right: toolbarRect.right,
+          bottom: toolbarRect.bottom,
+          width: toolbarRect.width,
+          height: toolbarRect.height,
+        } : null,
+        fallbackApplied: false,
+      };
+      innerWindow.__kaminosVolumeAssayViewportPlacementReceipt = receipt;
+      return receipt;
+    }
+    function admitVolumeAssayViewport() {
+      const innerDocument = basin.contentDocument;
+      const innerWindow = basin.contentWindow;
+      if (!innerDocument || !innerWindow) return null;
+      innerWindow.__kaminosSetActiveTab?.('volume');
+      const viewport = innerDocument.querySelector('#viewport');
+      if (!viewport) return null;
+      const authoredMixPanel = innerDocument.querySelector('#volume-authored-mix-panel');
+      viewportResizeObserver?.disconnect();
+      viewportResizeObserver = new ResizeObserver(syncVolumeAssayViewportPlacement);
+      viewportResizeObserver.observe(viewport);
+      if (authoredMixPanel) viewportResizeObserver.observe(authoredMixPanel);
+      activeTabMutationObserver?.disconnect();
+      activeTabMutationObserver = new MutationObserver(syncVolumeAssayViewportPlacement);
+      for (const tab of innerDocument.querySelectorAll('.tab[data-tab]')) {
+        activeTabMutationObserver.observe(tab, { attributes: true, attributeFilter: ['class'] });
+      }
+      if (authoredMixPanel) {
+        activeTabMutationObserver.observe(authoredMixPanel, {
+          attributes: true,
+          attributeFilter: ['hidden', 'data-collapsed', 'class', 'style'],
+        });
+      }
+      return syncVolumeAssayViewportPlacement();
+    }
+    basin.addEventListener('load', admitVolumeAssayViewport);
+    const operatorOverlayResizeObserver = new ResizeObserver(syncVolumeAssayViewportPlacement);
+    operatorOverlayResizeObserver.observe(operatorToolbar);
+    window.addEventListener('resize', syncVolumeAssayViewportPlacement);
+    document.getElementById('assay-source').textContent = warmupTarget === 0
+      ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
+      : 'Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render';
     const buttons = Array.from(document.querySelectorAll('[data-role]'));
-    const compositionButtons = Array.from(document.querySelectorAll('[data-composition]'));
+    const presentationButtons = Array.from(document.querySelectorAll('[data-presentation]'));
+    const smokePresentationButtons = Array.from(document.querySelectorAll('[data-smoke-presentation]'));
+    const roleSelect = document.getElementById('roles');
+    const appearanceAssaySelect = document.getElementById('appearance-assay');
+    const appearanceAssayEnabledButton = document.getElementById('appearance-assay-enabled');
+    const splatsEnabledButton = document.getElementById('splats-enabled');
     const basinQuery = new URLSearchParams({
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
       volume_resolution: '160',
-      volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
       volume_boundary_splat_mode: 'learned',
@@ -107,9 +352,6 @@
       volume_steps: '88',
       volume_adaptive_rays: '1',
       volume_occupancy_skip: '1',
-      volume_majorant_skip: '0',
-      volume_majorant_smooth: '1',
-      volume_majorant_guard: '1',
       volume_temporal_accum: '0',
       volume_temporal_jitter: '0',
       volume_history_clamp: '0',
@@ -118,7 +360,31 @@
       volume_residual_feature_debug: '0',
       volume_quality_reason: 'selective-head-continuous-live-assay',
     });
-    basin.src = `./?${basinQuery}`;
+    for (const [key, value] of params) {
+      if (key.startsWith('volume_') || key.startsWith('full_support_')) basinQuery.set(key, value);
+    }
+    if (params.has('settings_preset_authority') && !sourceSettingsPresetRequestedId) {
+      warmupError ||= 'settings preset authority was requested without a settings preset id';
+    }
+    if (sourceSettingsPresetRequestedId && !warmupError) {
+      try {
+        const [artifactResponse, schemaResponse] = await Promise.all([
+          fetch(`/api/volume-settings-preset?id=${encodeURIComponent(sourceSettingsPresetRequestedId)}`, { cache: 'no-store' }),
+          fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
+        ]);
+        if (!artifactResponse.ok) throw new Error(`settings preset artifact load failed (${artifactResponse.status})`);
+        if (!schemaResponse.ok) throw new Error(`settings preset schema load failed (${schemaResponse.status})`);
+        sourceSettingsPresetReceipt = validateVolumeSettingsPresetDocument(
+          await artifactResponse.json(),
+          sourceSettingsPresetRequestedId,
+          await schemaResponse.json(),
+        );
+        validateVolumeSettingsPresetVisualTarget(sourceSettingsPresetReceipt, params);
+      } catch (error) {
+        warmupError = `settings preset visual admission failed: ${error?.message || String(error)}`;
+      }
+    }
+    if (!warmupError) basin.src = `./?${basinQuery}`;
 
     function prototype() {
       return basin.contentWindow?.__kaminosVolumePrototype || null;
@@ -127,6 +393,7 @@
     function setRole(role) {
       if (!roles.includes(role)) return;
       requestedRole = role;
+      roleSelect.value = role;
       for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.role === role));
       const next = new URL(location.href);
       next.searchParams.set('role', role);
@@ -134,35 +401,325 @@
       prototype()?.setSelectiveHeadLiveRole?.(warmupComplete ? role : 'off');
     }
 
+    function deriveRequestedBeautyComposition() {
+      if (legacyDiagnosticCompositionRequested) return 'full-raymarch-under-splats-diagnostic-v0';
+      if (!requestedSplatsEnabled) return 'raymarch-only-v0';
+      return requestedRaymarchSmokePresentation === 'on'
+        ? 'smoke-raymarch-under-splats-v0'
+        : 'splat-only-v0';
+    }
+
+    function syncBoundaryRasterControlAvailability() {
+      const boundaryRasterSelect = basin.contentDocument?.getElementById('volume-boundary-splat-mode');
+      if (!boundaryRasterSelect) return;
+      const disabled = requestedAppearanceAssayEnabled
+        || requestedPresentation !== 'beauty'
+        || !requestedSplatsEnabled;
+      boundaryRasterSelect.disabled = disabled;
+      boundaryRasterSelect.setAttribute('aria-disabled', String(disabled));
+      boundaryRasterSelect.title = disabled
+        ? 'Boundary Raster is remembered while the effective renderer does not apply splats.'
+        : '';
+    }
+
+    function syncSubordinateControlAvailability() {
+      const disabled = requestedAppearanceAssayEnabled || requestedPresentation !== 'beauty';
+      splatsEnabledButton.disabled = disabled;
+      splatsEnabledButton.setAttribute('aria-disabled', String(disabled));
+      for (const button of smokePresentationButtons) {
+        button.disabled = disabled;
+        button.setAttribute('aria-disabled', String(disabled));
+      }
+      syncBoundaryRasterControlAvailability();
+    }
+
+    function applyRequestedBeautyComposition() {
+      requestedComposition = deriveRequestedBeautyComposition();
+      const next = new URL(location.href);
+      next.searchParams.set('composition', requestedComposition);
+      history.replaceState(null, '', next);
+      if (requestedAppearanceAssayEnabled) {
+        return {
+          ok: false,
+          reason: 'appearance-assay-overrides-beauty-composition',
+          requestedComposition,
+          effectiveAppearanceAssay: requestedAppearanceAssay,
+        };
+      }
+      if (requestedPresentation !== 'beauty') {
+        return {
+          ok: false,
+          reason: 'intrinsic-overrides-beauty-composition',
+          requestedComposition,
+          effectivePresentation: requestedPresentation,
+        };
+      }
+      return prototype()?.setSelectiveHeadLiveRenderComposition?.(requestedComposition) || null;
+    }
+
+    function setSplatsEnabled(enabled) {
+      if (requestedAppearanceAssayEnabled || requestedPresentation !== 'beauty') {
+        return {
+          ok: false,
+          reason: requestedAppearanceAssayEnabled
+            ? 'splats-control-overridden-by-appearance-assay'
+            : 'splats-control-overridden-by-intrinsic',
+          requestedSplatsEnabled,
+        };
+      }
+      requestedSplatsEnabled = Boolean(enabled);
+      legacyDiagnosticCompositionRequested = false;
+      splatsEnabledButton.setAttribute('aria-pressed', String(requestedSplatsEnabled));
+      splatsEnabledButton.textContent = requestedSplatsEnabled ? 'Splats On' : 'Splats Off';
+      syncSubordinateControlAvailability();
+      return applyRequestedBeautyComposition();
+    }
+
     function setComposition(composition) {
-      if (!compositions.includes(composition)) return;
+      if (!compositions.includes(composition)) return null;
+      if (requestedAppearanceAssayEnabled) {
+        return {
+          ok: false,
+          reason: 'composition-controls-disabled-during-appearance-assay',
+          requestedComposition,
+          effectiveAppearanceAssay: requestedAppearanceAssay,
+        };
+      }
+      if (requestedPresentation !== 'beauty') {
+        return {
+          ok: false,
+          reason: 'composition-controls-disabled-during-intrinsic',
+          requestedComposition,
+          effectivePresentation: requestedPresentation,
+        };
+      }
       requestedComposition = composition;
-      for (const button of compositionButtons) button.setAttribute('aria-pressed', String(button.dataset.composition === composition));
+      legacyDiagnosticCompositionRequested = composition === 'full-raymarch-under-splats-diagnostic-v0';
+      requestedSplatsEnabled = composition !== 'raymarch-only-v0';
+      splatsEnabledButton.setAttribute('aria-pressed', String(requestedSplatsEnabled));
+      splatsEnabledButton.textContent = requestedSplatsEnabled ? 'Splats On' : 'Splats Off';
       const next = new URL(location.href);
       next.searchParams.set('composition', composition);
       history.replaceState(null, '', next);
-      prototype()?.setSelectiveHeadLiveRenderComposition?.(composition);
+      syncSubordinateControlAvailability();
+      return prototype()?.setSelectiveHeadLiveRenderComposition?.(composition) || null;
+    }
+
+    function setPresentation(presentation) {
+      if (!presentations.includes(presentation)) return null;
+      if (presentation === 'intrinsic' && requestedAppearanceAssayEnabled) {
+        setAppearanceAssayEnabled(false);
+      }
+      requestedPresentation = presentation;
+      for (const button of presentationButtons) button.setAttribute('aria-pressed', String(button.dataset.presentation === presentation));
+      syncSubordinateControlAvailability();
+      const next = new URL(location.href);
+      next.searchParams.set('volume_presentation', presentation);
+      history.replaceState(null, '', next);
+      const receipt = prototype()?.setVolumePresentationMode?.(presentation) || null;
+      if (presentation === 'beauty' && !requestedAppearanceAssayEnabled) {
+        applyRequestedBeautyComposition();
+        prototype()?.setRaymarchSmokePresentationMode?.(requestedRaymarchSmokePresentation);
+      }
+      return receipt;
+    }
+
+    function setRaymarchSmokePresentation(mode, { preserveDiagnostic = false } = {}) {
+      if (!raymarchSmokePresentations.includes(mode)) return null;
+      requestedRaymarchSmokePresentation = mode;
+      if (!preserveDiagnostic) legacyDiagnosticCompositionRequested = false;
+      for (const button of smokePresentationButtons) {
+        button.setAttribute('aria-pressed', String(button.dataset.smokePresentation === mode));
+      }
+      const next = new URL(location.href);
+      next.searchParams.set('volume_raymarch_smoke', mode);
+      history.replaceState(null, '', next);
+      const receipt = prototype()?.setRaymarchSmokePresentationMode?.(mode) || null;
+      const compositionReceipt = applyRequestedBeautyComposition();
+      const effectiveRaymarchSmokePresentation = receipt?.effectiveMode || null;
+      return {
+        ...receipt,
+        requestedRaymarchSmokePresentation,
+        effectiveRaymarchSmokePresentation,
+        compositionReceipt,
+      };
+    }
+
+    function applyAppearanceAssayState() {
+      requestedAppearanceAssay = requestedAppearanceAssayEnabled ? requestedAppearanceAssaySelection : 'off';
+      appearanceAssaySelect.value = requestedAppearanceAssaySelection;
+      appearanceAssayEnabledButton.setAttribute('aria-pressed', String(requestedAppearanceAssayEnabled));
+      appearanceAssayEnabledButton.textContent = requestedAppearanceAssayEnabled ? 'Assay On' : 'Assay Off';
+      const next = new URL(location.href);
+      next.searchParams.set('volume_appearance_selection', requestedAppearanceAssaySelection);
+      next.searchParams.set('volume_appearance_decomposition', requestedAppearanceAssay);
+      history.replaceState(null, '', next);
+      const appearanceDecompositionReceipt = prototype()?.setAppearanceDecompositionMode?.(requestedAppearanceAssay) || null;
+      syncSubordinateControlAvailability();
+      if (!requestedAppearanceAssayEnabled && requestedPresentation === 'beauty') applyRequestedBeautyComposition();
+      const effectiveAppearanceAssay = appearanceDecompositionReceipt?.effectiveMode || null;
+      return {
+        ...appearanceDecompositionReceipt,
+        requestedAppearanceAssay,
+        requestedAppearanceAssaySelection,
+        requestedAppearanceAssayEnabled,
+        effectiveAppearanceAssay,
+      };
+    }
+
+    function setAppearanceAssaySelection(mode) {
+      if (!appearanceAssaySelections.includes(mode)) return null;
+      requestedAppearanceAssaySelection = mode;
+      appearanceAssaySelect.value = mode;
+      const next = new URL(location.href);
+      next.searchParams.set('volume_appearance_selection', mode);
+      history.replaceState(null, '', next);
+      return requestedAppearanceAssayEnabled
+        ? applyAppearanceAssayState()
+        : {
+            ok: true,
+            requestedAppearanceAssay: 'off',
+            requestedAppearanceAssaySelection,
+            requestedAppearanceAssayEnabled,
+            applied: false,
+            reason: 'assay-selection-remembered-while-disabled',
+          };
+    }
+
+    function setAppearanceAssayEnabled(enabled) {
+      const nextEnabled = Boolean(enabled);
+      if (nextEnabled && requestedPresentation !== 'beauty') {
+        setPresentation('beauty');
+      }
+      requestedAppearanceAssayEnabled = nextEnabled;
+      return applyAppearanceAssayState();
+    }
+
+    function setAppearanceAssay(mode) {
+      if (!appearanceAssayModes.includes(mode)) return null;
+      if (mode === 'off') return setAppearanceAssayEnabled(false);
+      setAppearanceAssaySelection(mode);
+      return setAppearanceAssayEnabled(true);
+    }
+
+    function passReceiptMatchesComposition(receipt, composition) {
+      if (!receipt || receipt.composition !== composition || receipt.fallbackReason) return false;
+      if (composition === 'splat-only-v0') return receipt.splatApplied === true && receipt.raymarchApplied === false;
+      if (composition === 'raymarch-only-v0') return receipt.raymarchApplied === true && receipt.splatApplied === false;
+      if (composition === 'smoke-raymarch-under-splats-v0') return receipt.raymarchApplied === true && receipt.splatApplied === true;
+      if (composition === 'full-raymarch-under-splats-diagnostic-v0') return receipt.raymarchApplied === true && receipt.splatApplied === true;
+      return false;
     }
 
     function debugState() {
       const state = prototype()?.debugState?.() || null;
+      const effectiveRole = state?.selectiveHeadLiveEffectiveRole || null;
+      const effectiveComposition = state?.selectiveHeadLiveCompositionEffective || null;
+      const passReceipt = state?.selectiveHeadLivePassReceipt || null;
+      const volumePresentationReceipt = state?.volumePresentationReceipt || null;
+      const effectivePresentation = volumePresentationReceipt?.effectiveMode || state?.volumePresentationModeEffective || null;
+      const raymarchSmokePresentationReceipt = state?.raymarchSmokePresentationReceipt || null;
+      const effectiveRaymarchSmokePresentation = raymarchSmokePresentationReceipt?.effectiveMode
+        || state?.raymarchSmokePresentationModeEffective
+        || null;
+      const appearanceDecompositionReceipt = state?.appearanceDecompositionReceipt || null;
+      const effectiveAppearanceAssay = appearanceDecompositionReceipt?.effectiveMode
+        || state?.appearanceDecompositionModeEffective
+        || null;
+      const splatPassRequested = !requestedAppearanceAssayEnabled
+        && requestedPresentation === 'beauty'
+        && requestedSplatsEnabled;
+      const effectiveSplatsApplied = requestedAppearanceAssayEnabled
+        ? appearanceDecompositionReceipt?.application?.splatsApplied === true
+        : requestedPresentation === 'intrinsic'
+          ? volumePresentationReceipt?.application?.splatsApplied === true
+          : passReceipt?.splatApplied === true;
+      const compositionOverrideReason = requestedAppearanceAssayEnabled
+        ? 'appearance-assay-overrides-beauty-composition'
+        : requestedPresentation === 'intrinsic'
+          ? 'intrinsic-overrides-beauty-composition'
+          : null;
+      const fallback = (effectiveRole !== requestedRole ? state?.selectiveHeadLiveFallbackReason : null)
+        || (!compositionOverrideReason && effectiveComposition !== requestedComposition
+          ? state?.selectiveHeadLiveCompositionFallbackReason
+          : null)
+        || (splatPassRequested ? state?.boundarySplatFallbackReason : null)
+        || volumePresentationReceipt?.fallbackReason
+        || raymarchSmokePresentationReceipt?.fallbackReason
+        || appearanceDecompositionReceipt?.fallbackReason
+        || null;
+      const appliedPresentation = volumePresentationReceipt?.application || null;
+      const appearanceApplication = appearanceDecompositionReceipt?.application || null;
+      const raymarchSmokeApplied = requestedAppearanceAssayEnabled
+        ? appearanceApplication?.smokeApplied === true
+        : requestedPresentation === 'intrinsic'
+          ? appliedPresentation?.smokeApplied === true
+          : passReceipt?.raymarchApplied === true && effectiveRaymarchSmokePresentation === 'on';
+      const presentationSettled = requestedAppearanceAssayEnabled
+        ? effectiveAppearanceAssay === requestedAppearanceAssay
+          && appearanceApplication?.raymarchApplied === true
+          && appearanceApplication?.splatsApplied === false
+          && appearanceApplication?.residualApplied === false
+          && appearanceApplication?.smokeApplied === false
+        : requestedPresentation === 'intrinsic'
+        ? effectivePresentation === 'intrinsic'
+          && appliedPresentation?.effectiveMode === 'intrinsic'
+          && appliedPresentation?.raymarchApplied === true
+          && appliedPresentation?.splatsApplied === false
+        : effectivePresentation === 'beauty'
+          && effectiveComposition === requestedComposition
+          && passReceiptMatchesComposition(passReceipt, requestedComposition);
+      const rendererSettled = warmupComplete
+        && state?.active
+        && effectiveRole === requestedRole
+        && presentationSettled;
       return {
         routeIdentity: ROUTE_IDENTITY,
-        status: warmupError || state?.error ? 'failed' : warmupComplete && state?.active ? 'running' : 'warming',
+        status: warmupError || state?.error || fallback
+          ? 'failed'
+          : (rendererSettled ? 'running' : (warmupComplete && state?.active ? 'settling' : 'warming')),
         requestedRole,
         requestedComposition,
-        warmupAuthority: WARMUP_AUTHORITY,
+        legacyDiagnosticCompositionRequested,
+        requestedSplatsEnabled,
+        effectiveSplatsApplied,
+        compositionOverrideReason,
+        requestedPresentation,
+        effectivePresentation,
+        volumePresentationReceipt,
+        requestedRaymarchSmokePresentation,
+        effectiveRaymarchSmokePresentation,
+        raymarchSmokeApplied,
+        raymarchSmokePresentationReceipt,
+        requestedAppearanceAssay,
+        requestedAppearanceAssaySelection,
+        requestedAppearanceAssayEnabled,
+        effectiveAppearanceAssay,
+        appearanceDecompositionReceipt,
+        sourceCaptureId: params.get('basin_capture') || null,
+        sourceSettingsPresetRequestedId,
+        sourceSettingsPresetId: sourceSettingsPresetReceipt?.presetId || null,
+        sourceSettingsPresetAuthority: sourceSettingsPresetReceipt?.sourcePresetAuthority || null,
+        sourceSettingsPresetAlias: sourceSettingsPresetReceipt?.alias || null,
+        sourceSettingsPresetLabel: sourceSettingsPresetReceipt?.label || null,
+        sourceSettingsPresetContentHash: sourceSettingsPresetReceipt?.contentHash || null,
+        sourceSettingsPresetStorePath: sourceSettingsPresetReceipt?.storePath || null,
+        sourceSettingsPresetSchemaIdentity: sourceSettingsPresetReceipt?.schemaIdentity || null,
+        sourceSettingsPresetControlCount: Object.keys(sourceSettingsPresetReceipt?.preset?.domControls || {}).length,
+        warmupAuthority,
         warmupTarget,
         warmupComplete,
         warmupStarted,
         warmupReceipt,
-        effectiveRole: state?.selectiveHeadLiveEffectiveRole || null,
+        effectiveRole,
         roleAuthority: state?.selectiveHeadLiveRoleAuthority || null,
         compositionAuthority: state?.selectiveHeadLiveCompositionAuthority || null,
-        effectiveComposition: state?.selectiveHeadLiveCompositionEffective || null,
-        compositionFallbackReason: state?.selectiveHeadLiveCompositionFallbackReason || null,
-        selectiveHeadLivePassReceipt: state?.selectiveHeadLivePassReceipt || null,
-        fallbackReason: state?.selectiveHeadLiveFallbackReason || null,
+        effectiveComposition,
+        compositionFallbackReason: !compositionOverrideReason && effectiveComposition !== requestedComposition
+          ? state?.selectiveHeadLiveCompositionFallbackReason || 'requested-effective-composition-mismatch'
+          : null,
+        selectiveHeadLivePassReceipt: passReceipt,
+        fallbackReason: fallback,
         modelIdentity: state?.selectiveHeadLiveModelIdentity || null,
         featureAuthority: state?.selectiveHeadLiveFeatureAuthority || null,
         pairAuthority: state?.selectiveHeadLivePairAuthority || null,
@@ -172,13 +729,14 @@
         simStepCount: state?.simStepCount || 0,
         encodedFrameCount: state?.selectiveHeadLive?.encodedFrameCount || 0,
         timing: state?.timing || null,
-        boundarySplatFallbackReason: state?.boundarySplatFallbackReason || null,
+        boundarySplatFallbackReason: splatPassRequested ? state?.boundarySplatFallbackReason || null : null,
         error: warmupError || state?.error || null,
       };
     }
 
     async function initializeWarmup() {
       if (warmupStarted) return;
+      if (warmupError) throw new Error(warmupError);
       const started = performance.now();
       while (!prototype()?.debugState?.()?.active) {
         if (performance.now() - started > 120000) throw new Error('exact basin did not activate before replay warmup');
@@ -200,7 +758,10 @@
       }
       warmupComplete = true;
       prototype().setSelectiveHeadLiveRole(requestedRole);
-      prototype().setSelectiveHeadLiveRenderComposition(requestedComposition);
+      prototype().setSelectiveHeadLiveRenderComposition(deriveRequestedBeautyComposition());
+      prototype().setVolumePresentationMode(requestedPresentation);
+      prototype().setRaymarchSmokePresentationMode(requestedRaymarchSmokePresentation);
+      prototype().setAppearanceDecompositionMode(requestedAppearanceAssay);
       await prototype().setActive(true);
     }
 
@@ -217,10 +778,23 @@
       return prototype()?.stepSelectiveHeadLiveCaptureFrame?.() || null;
     }
 
-    for (const button of buttons) button.addEventListener('click', () => setRole(button.dataset.role));
-    for (const button of compositionButtons) button.addEventListener('click', () => setComposition(button.dataset.composition));
+    roleSelect.addEventListener('change', () => setRole(roleSelect.value));
+    for (const button of presentationButtons) button.addEventListener('click', () => setPresentation(button.dataset.presentation));
+    for (const button of smokePresentationButtons) button.addEventListener('click', () => setRaymarchSmokePresentation(button.dataset.smokePresentation));
+    appearanceAssaySelect.addEventListener('change', () => setAppearanceAssaySelection(appearanceAssaySelect.value));
+    appearanceAssayEnabledButton.addEventListener('click', () => setAppearanceAssayEnabled(!requestedAppearanceAssayEnabled));
+    splatsEnabledButton.addEventListener('click', () => setSplatsEnabled(!requestedSplatsEnabled));
+    appearanceAssaySelect.value = requestedAppearanceAssaySelection;
+    splatsEnabledButton.setAttribute('aria-pressed', String(requestedSplatsEnabled));
+    splatsEnabledButton.textContent = requestedSplatsEnabled ? 'Splats On' : 'Splats Off';
     setRole(requestedRole);
-    setComposition(requestedComposition);
+    setRaymarchSmokePresentation(requestedRaymarchSmokePresentation, { preserveDiagnostic: true });
+    if (requestedAppearanceAssayEnabled) {
+      setAppearanceAssay(requestedAppearanceAssaySelection);
+    } else {
+      setPresentation(requestedPresentation);
+      setAppearanceAssayEnabled(false);
+    }
     const loop = () => {
       const state = debugState();
       const targetRole = state.warmupComplete ? requestedRole : 'off';
@@ -228,24 +802,51 @@
         prototype().setSelectiveHeadLiveRole(targetRole);
       }
       const fallback = state.fallbackReason || state.compositionFallbackReason || state.boundarySplatFallbackReason;
-      const pass = state.selectiveHeadLivePassReceipt || {};
+      const appliedPass = state.volumePresentationReceipt?.application || state.selectiveHeadLivePassReceipt || {};
       status.classList.toggle('bad', Boolean(fallback || state.error));
       status.textContent = [
-        state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`,
+        state.sourceSettingsPresetId
+          ? `settings preset: ${state.sourceSettingsPresetId} (${state.sourceSettingsPresetAuthority})`
+          : (state.sourceSettingsPresetRequestedId
+              ? `settings preset rejected: ${state.sourceSettingsPresetRequestedId}`
+              : (state.sourceCaptureId ? `legacy capture: ${state.sourceCaptureId}` : 'source: direct route')),
+        state.warmupAuthority === 'fresh-live-settings-no-anchor-v0'
+          ? 'fresh settings live: no anchor imported'
+          : (state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`),
         `effective role: ${state.effectiveRole || 'starting'}`,
         `role authority: ${state.roleAuthority || roleAuthorities[requestedRole]}`,
         `effective composition: ${state.effectiveComposition || 'starting'}`,
+        `splats: requested ${state.requestedSplatsEnabled ? 'on' : 'off'} -> applied ${state.effectiveSplatsApplied ? 'on' : 'off'}${state.compositionOverrideReason ? ` (${state.compositionOverrideReason})` : ''}`,
+        `presentation: ${state.requestedPresentation} -> ${state.effectivePresentation || 'starting'}`,
+        `raymarch smoke: ${state.requestedRaymarchSmokePresentation} -> ${state.effectiveRaymarchSmokePresentation || 'starting'} / applied: ${state.raymarchSmokeApplied ? 'on' : 'off'}`,
+        `appearance assay: ${state.requestedAppearanceAssayEnabled ? 'on' : 'off'} / ${state.requestedAppearanceAssaySelection} -> ${state.effectiveAppearanceAssay || 'starting'}`,
         `composition authority: ${state.compositionAuthority || 'loading'}`,
-        `pass receipt: raymarch ${pass.raymarchApplied ? 'applied' : 'off'} / splat ${pass.splatApplied ? 'applied' : 'off'}`,
+        `pass receipt: raymarch ${appliedPass.raymarchApplied ? 'applied' : 'off'} / splat ${(appliedPass.splatsApplied ?? appliedPass.splatApplied) ? 'applied' : 'off'}`,
         `model identity: ${state.modelIdentity || 'loading'}`,
         `step: ${state.simStepCount}`,
         `fps: ${Number(state.timing?.rafFps || 0).toFixed(1)}`,
         `fallback: ${fallback || 'none'}`,
         state.error ? `error: ${state.error}` : '',
       ].filter(Boolean).join(' | ');
+      status.title = status.textContent;
+      syncBoundaryRasterControlAvailability();
       requestAnimationFrame(loop);
     };
-    window.__kaminosSelectiveHeadLive = { routeIdentity: ROUTE_IDENTITY, debugState, setRole, setComposition, captureFrame, setCapturePaused, stepCaptureFrame };
+    window.__kaminosSelectiveHeadLive = {
+      routeIdentity: ROUTE_IDENTITY,
+      debugState,
+      setRole,
+      setComposition,
+      setPresentation,
+      setRaymarchSmokePresentation,
+      setSplatsEnabled,
+      setAppearanceAssay,
+      setAppearanceAssaySelection,
+      setAppearanceAssayEnabled,
+      captureFrame,
+      setCapturePaused,
+      stepCaptureFrame,
+    };
     loop();
     initializeWarmup().catch(error => { warmupError = error?.message || String(error); });
   </script>

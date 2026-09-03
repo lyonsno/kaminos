@@ -1,17 +1,4 @@
 import {
-  LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
-  LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
-  LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-  LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
-  LIQUID_FIRE_CONTACT_STATS_WORDS,
-  LIQUID_FIRE_SOURCE_REIGNITION_POLICY,
-  LIQUID_FIRE_SOURCE_STATE_MODEL,
-  LIQUID_FIRE_SOURCE_STATE_WORDS,
-  createLiquidFireContactConsumerShaderWGSL,
-  liquidFireContactConsumerParams,
-  validateLiquidFireContactSourceDescriptor,
-} from './liquid-fire-contact-consumer.mjs';
-import {
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY,
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL,
 } from './models/boundary-splat-attribute/live-support-h64-v0/boundary-splat-attribute-model.generated.js';
@@ -21,6 +8,19 @@ import {
   packBoundarySplatFeatureCapture,
 } from './boundary-splat-feature-capture.mjs';
 import {
+  NONRIDGE_OPTICAL_ROW_IDENTITY,
+  NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS,
+} from './volume-nonridge-randomized-capture-contract.mjs';
+import {
+  CAUSAL_CONTROL_FIELDS,
+  SOURCE_BASIS_GPU_ROW_FLOATS,
+} from './volume-nonridge-source-basis-capture.mjs';
+import {
+  FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
+  FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
+  decodeFlowKernelDescriptorCapture,
+} from './flow-kernel-descriptor-socket.mjs';
+import {
   SELECTIVE_HEAD_LIVE_FEATURE_AUTHORITY,
   SELECTIVE_HEAD_LIVE_MODEL,
   SELECTIVE_HEAD_LIVE_MODEL_URL,
@@ -28,12 +28,35 @@ import {
   SELECTIVE_HEAD_LIVE_ROUTE,
   createSelectiveHeadLiveRuntime,
 } from './selective-head-live-runtime.mjs';
+import {
+  normalizeVolumeScene,
+  volumeSceneReceipt,
+} from './volume-scene-ontology.mjs';
+import { resolveVolumeCoreEmitterSource } from './volume-emitter-runtime.mjs';
+import {
+  auditLayerCoefficientLiveUnionPopulation,
+  createLayerCoefficientLiveUnionGpuResources,
+  loadLayerCoefficientLiveUnionOverlay,
+} from './volume-layer-coefficient-live-union-overlay.mjs';
+import {
+  adjudicateStageBOpticalLayers,
+  validateStageBOpticalAuthority,
+} from './volume-stage-b-optical-adjudication.mjs';
+import {
+  PERSISTENT_COHORT_GPU_SOURCE_AUTHORITY,
+  packPersistentSparseCohortGpuRows,
+} from './volume-persistent-sparse-cohort-gpu-consumer.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
+const NONRIDGE_OPTICAL_CAPTURE_IDENTITY = 'kaminos.volume.positive-nonridge-optical-capture.v0';
+const NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY = 'kaminos.volume.nonridge-source-basis-full-grid-capture.v0';
+const LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY = 'live-raymarch-complete-flame-native-cell-coefficients-v0';
+const LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES = 4 * Float32Array.BYTES_PER_ELEMENT;
+const LIVE_COMPLETE_FLAME_PROJECTED_FOOTPRINT_AUTHORITY = 'native-cell-projected-footprint-jacobian-v0';
 const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
@@ -46,14 +69,267 @@ const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
 const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
+const BOUNDARY_SPLAT_WORLD_COVARIANCE_RENDERER_IDENTITY = 'live-boundary-sidecar-world-tangent-covariance-splats-v0';
+const BOUNDARY_SPLAT_KERNEL_MOMENT_RENDERER_IDENTITY = 'live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0';
+const BOUNDARY_SPLAT_FULL_FLAME_UNION_RENDERER_IDENTITY = 'live-ridge-nonridge-union-kernel-moment-covariance-splats-v0';
+const NONRIDGE_LIVE_SELECTOR_AUTHORITY = 'explicit-source-field-operator-v0';
+const NONRIDGE_LIVE_SELECTOR_RECIPE_SHA256 = '541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9';
+const BOUNDARY_SPLAT_LIVE_UNION_COMPOSITION_IDENTITY = 'separate-ridge-nonridge-shared-total-extinction-v0';
+const BOUNDARY_SPLAT_RIDGE_LAYER_IDENTITY = 'authored-ridge-support-coefficient-layer-v0';
+const BOUNDARY_SPLAT_NONRIDGE_LAYER_IDENTITY = 'authored-nonridge-support-coefficient-layer-v0';
+const BOUNDARY_SPLAT_CAMERA_FACING_AUTHORITY = 'camera-facing-billboard-v0';
+const BOUNDARY_SPLAT_LEARNED_CAMERA_FACING_AUTHORITY = 'learned-camera-facing-billboard-v0';
+const BOUNDARY_SPLAT_WORLD_TANGENT_AUTHORITY = 'world-gradient-tangent-covariance-v0';
+const BOUNDARY_SPLAT_KERNEL_MOMENT_AUTHORITY = 'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0';
+const BOUNDARY_SPLAT_AREA_OPACITY_CONSERVATION_AUTHORITY = 'rendered-gaussian-integrated-alpha-conserved-v0';
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY = 'externally-uploaded-boundary-sidecar-plus-live-fluid-material-v0';
 const EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY = 'chunked-external-boundary-sidecar-upload-v0';
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
+const BOUNDARY_SPLAT_GPU_PROFILE_CONSUMER = 'boundary-splat-gpu-profile';
+const BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER = 'boundary-splat-footprint-audit';
+const FOUR_ARM_HELD_STATE_LEDGER_CONSUMER = 'four-arm-held-state-ledger';
+const FULL_FIELD_DEBUG_EXPORT_SIDECAR_CONSUMER = 'full-field-debug-export-sidecar';
+const FULL_FIELD_DEBUG_EXPORT_SPLAT_CONSUMER = 'full-field-debug-export-splats';
+const NONRIDGE_OPTICAL_CAPTURE_SIDECAR_CONSUMER = 'nonridge-optical-capture-sidecar';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
+const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
+const BOUNDARY_SPLAT_HDR_TARGET_FORMAT = 'rgba16float';
+const BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY = 'raymarch-matched-exponential-power-grade-v0';
+const BOUNDARY_SPLAT_ADDITIVE_PRESENTATION_IDENTITY = 'direct-additive-presentation-v0';
+const BOUNDARY_SPLAT_ADDITIVE_BLEND_IDENTITY = 'additive-rgb-gaussian-alpha-v0';
+const BOUNDARY_SPLAT_OPTICAL_MODE = 'matched-optical-recurrence-v0';
+const BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS = 16;
+const BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY = 'depth-binned-emission-optical-depth-v0';
+const BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY = 'depth-binned-exponential-self-transmittance-v0';
+const BOUNDARY_SPLAT_OPTICAL_DEPTH_INTERVAL_IDENTITY = 'camera-linear-volume-aabb-near-zero-far-one-v0';
+const BOUNDARY_SPLAT_OPTICAL_ORDERING_IDENTITY = 'far-to-near-alpha-over-v0';
+const BOUNDARY_SPLAT_OPTICAL_ALPHA_IDENTITY = 'one-minus-exp-negative-summed-optical-depth-v0';
+const BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY = 'camera-linear-volume-aabb-near-zero-far-one-v0';
+const BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_ORDERING = 'far-to-near-alpha-over-near-authoritative-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
-const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
+const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 96;
+const BOUNDARY_SPLAT_DRAW_STATE_BYTES = 80;
+const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
+const BOUNDARY_SPLAT_INSTANCE_ALLOCATION_IDENTITY = 'boundary-splat-projected-area-nested-tiers-v0';
+const BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_IDENTITY = 'boundary-splat-live-union-projected-footprint-hash-thinning-v0';
+const BOUNDARY_SPLAT_INSTANCE_RESIDENCY_IDENTITY = 'gpu-compacted-stable-native-cell-id-nested-set-audit-v0';
+const BOUNDARY_SPLAT_INSTANCE_STABLE_ORDER_IDENTITY = 'boundary-splat-deterministic-native-cell-hash-order-v0';
+const BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS = Object.freeze([6, 9, 24]);
+const BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT = BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS.length;
+const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES = 32;
+const BOUNDARY_SPLAT_INSTANCE_TIER_GROUP_STRIDE_BYTES = 32;
+const BOUNDARY_SPLAT_MAX_INSTANCES = 128;
+const BOUNDARY_SPLAT_INSTANCE_HISTORY_DEPTH = 1;
+const BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT = 10;
+const FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY = 'flow-tangent-five-tap-bilinear-v0';
+const FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY = 'flow-kernel-moment-gaussian-raster-v0';
+const FULL_SUPPORT_STAGE_A_TRANSPORT_IDENTITY = 'per-splat-self-extinction-additive-rgb-v0';
+const FULL_SUPPORT_BILINEAR_DEPOSITS_PER_CANDIDATE = 20;
+const PERSISTENT_COHORT_CHARGED_DEPOSITS_PER_CANDIDATE = 15;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const NONRIDGE_OPTICAL_ROW_STRIDE_BYTES = NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES = SOURCE_BASIS_GPU_ROW_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES = FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+const BOUNDARY_SPLAT_RUNTIME_COTANGENT_AUTHORITY = 'runtime-cotangent-packed-in-candidate-shape-v0';
+
+export function boundarySplatCapacityLimitReceipt({
+  capacity,
+  descriptorRowsRequested = false,
+  featureCaptureRequested = false,
+  limits = {},
+} = {}) {
+  const normalizedCapacity = Math.max(1, Math.floor(Number(capacity) || 1));
+  const requiredCandidateBytes = normalizedCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+  const requiredDescriptorBytes = (descriptorRowsRequested ? normalizedCapacity : 1) * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
+  const requiredFeatureBytes = (featureCaptureRequested ? normalizedCapacity : 1) * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+  const requiredStorageBufferBytes = Math.max(requiredCandidateBytes, requiredDescriptorBytes, requiredFeatureBytes);
+  const maxBufferSize = Math.max(0, Number(limits.maxBufferSize) || 0);
+  const maxStorageBufferBindingSize = Math.max(0, Number(limits.maxStorageBufferBindingSize) || 0);
+  const supported = requiredStorageBufferBytes <= maxBufferSize
+    && requiredStorageBufferBytes <= maxStorageBufferBindingSize;
+  return {
+    identity: 'boundary-splat-capacity-device-limit-admission-v0',
+    capacity: normalizedCapacity,
+    descriptorRowsRequested: Boolean(descriptorRowsRequested),
+    featureCaptureRequested: Boolean(featureCaptureRequested),
+    requiredCandidateBytes,
+    requiredDescriptorBytes,
+    requiredFeatureBytes,
+    requiredStorageBufferBytes,
+    limits: { maxBufferSize, maxStorageBufferBindingSize },
+    supported,
+    failureReason: supported
+      ? null
+      : `boundary-splat-capacity-exceeds-device-limits:required=${requiredStorageBufferBytes}:maxBufferSize=${maxBufferSize}:maxStorageBufferBindingSize=${maxStorageBufferBindingSize}`,
+  };
+}
+
+export function boundarySplatFallbackRaymarchFireSuppression({
+  requestedRaymarchFireAuthority = 1,
+  splatRequested = false,
+  splatAvailable = true,
+} = {}) {
+  if (splatRequested && !splatAvailable) return 0;
+  return 1 - Math.max(0, Math.min(1, Number(requestedRaymarchFireAuthority) || 0));
+}
+
+export function boundarySplatTelemetryReceiptApplies({
+  receiptGeneration,
+  currentGeneration,
+} = {}) {
+  return Number.isInteger(receiptGeneration)
+    && Number.isInteger(currentGeneration)
+    && receiptGeneration === currentGeneration;
+}
+
+export function boundarySplatTelemetryControlSignature(controls = {}) {
+  return Object.keys(controls)
+    .sort()
+    .map(key => `${key}:${JSON.stringify(controls[key])}`)
+    .join('|');
+}
+
+export function normalizeBoundarySplatInstanceCount(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(1, Math.min(BOUNDARY_SPLAT_MAX_INSTANCES, requested));
+}
+
+export function boundarySplatInstanceLayout(requestedCount) {
+  const count = normalizeBoundarySplatInstanceCount(requestedCount);
+  if (count === 1) return [[0, 0, 0, 1]];
+  const columns = Math.ceil(Math.sqrt(count * 1.35));
+  const rows = Math.ceil(count / columns);
+  const spacingX = count > 64 ? 0.36 : count > 25 ? 0.48 : 0.68;
+  const spacingZ = count > 64 ? 0.30 : count > 25 ? 0.40 : 0.52;
+  const scale = count > 96 ? 0.24 : count > 49 ? 0.30 : count > 16 ? 0.42 : 0.56;
+  return Array.from({ length: count }, (_, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    return [
+      (column - (columns - 1) * 0.5 + (row % 2 ? 0.5 : 0)) * spacingX,
+      0,
+      (row - (rows - 1) * 0.5) * spacingZ,
+      scale,
+    ];
+  });
+}
+
+export function boundarySplatProjectedInstanceDiameterPx(transform, viewProjElements, viewportWidth, viewportHeight) {
+  const [x, y, z] = transform?.translate || [0, 0, 0];
+  const scale = Math.max(0, Number(transform?.scale) || 0);
+  const matrix = viewProjElements || [];
+  const width = Math.max(1, Number(viewportWidth) || 1);
+  const height = Math.max(1, Number(viewportHeight) || 1);
+  if (matrix.length < 16 || scale <= 0) return 0;
+  const project = ([px, py, pz]) => {
+    const clipX = matrix[0] * px + matrix[4] * py + matrix[8] * pz + matrix[12];
+    const clipY = matrix[1] * px + matrix[5] * py + matrix[9] * pz + matrix[13];
+    const clipW = matrix[3] * px + matrix[7] * py + matrix[11] * pz + matrix[15];
+    if (!Number.isFinite(clipW) || clipW <= 0.0001) return null;
+    return [(clipX / clipW * 0.5 + 0.5) * width, (0.5 - clipY / clipW * 0.5) * height];
+  };
+  const center = project([x, y, z]);
+  if (!center) return Number.POSITIVE_INFINITY;
+  const extent = scale * 1.35;
+  let radius = 0;
+  for (const offset of [[extent, 0, 0], [0, extent, 0], [0, 0, extent]]) {
+    const projected = project([x + offset[0], y + offset[1], z + offset[2]]);
+    if (projected) radius = Math.max(radius, Math.hypot(projected[0] - center[0], projected[1] - center[1]));
+  }
+  return radius * 2;
+}
+
+export function boundarySplatProjectedInstanceTargetPixels(projectedDiameterPx) {
+  const diameter = Number(projectedDiameterPx);
+  if (!Number.isFinite(diameter)) return 24;
+  if (diameter >= 384) return 24;
+  if (diameter >= 160) return 9;
+  return 6;
+}
+
+export function auditBoundarySplatNestedResidency({
+  candidateNativeCellIds,
+  selectedCandidateIndicesByTarget,
+} = {}) {
+  const candidates = Array.from(candidateNativeCellIds || []);
+  const candidateIdentitySet = new Set();
+  for (const nativeCellId of candidates) {
+    if (!Number.isInteger(nativeCellId) || nativeCellId < 0) {
+      throw new Error(`invalid-candidate-native-cell-id:${nativeCellId}`);
+    }
+    if (candidateIdentitySet.has(nativeCellId)) {
+      throw new Error(`duplicate-candidate-native-cell-id:${nativeCellId}`);
+    }
+    candidateIdentitySet.add(nativeCellId);
+  }
+  const nativeCellIdsByTarget = {};
+  const nativeCellSetsByTarget = {};
+  for (const targetPixels of BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS) {
+    const selectedIndices = Array.from(selectedCandidateIndicesByTarget?.[targetPixels] || []);
+    const nativeCellIds = [];
+    const selectedNativeCellIds = new Set();
+    for (const candidateIndex of selectedIndices) {
+      if (!Number.isInteger(candidateIndex) || candidateIndex < 0 || candidateIndex >= candidates.length) {
+        throw new Error(`target-${targetPixels}-candidate-index-out-of-range:${candidateIndex}:${candidates.length}`);
+      }
+      const nativeCellId = candidates[candidateIndex];
+      if (selectedNativeCellIds.has(nativeCellId)) {
+        throw new Error(`target-${targetPixels}-duplicate-native-cell-id:${nativeCellId}`);
+      }
+      selectedNativeCellIds.add(nativeCellId);
+      nativeCellIds.push(nativeCellId);
+    }
+    nativeCellIds.sort((a, b) => a - b);
+    nativeCellIdsByTarget[targetPixels] = nativeCellIds;
+    nativeCellSetsByTarget[targetPixels] = selectedNativeCellIds;
+  }
+  for (const [lowerTarget, upperTarget] of [[6, 9], [9, 24]]) {
+    for (const nativeCellId of nativeCellSetsByTarget[lowerTarget]) {
+      if (!nativeCellSetsByTarget[upperTarget].has(nativeCellId)) {
+        throw new Error(`target-${lowerTarget}-not-nested-in-target-${upperTarget}:${nativeCellId}`);
+      }
+    }
+  }
+  return {
+    identity: BOUNDARY_SPLAT_INSTANCE_RESIDENCY_IDENTITY,
+    nestedSetValidated: true,
+    nativeCellIdsByTarget,
+  };
+}
+
+export function boundarySplatAllocateInstanceTiers(descriptors) {
+  const groupsByTarget = new Map(BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS.map(target => [target, []]));
+  for (const descriptor of descriptors || []) {
+    const targetPixels = boundarySplatProjectedInstanceTargetPixels(descriptor.projectedDiameterPx);
+    groupsByTarget.get(targetPixels).push({ ...descriptor, targetPixels });
+  }
+  const packedDescriptors = [];
+  const groups = [];
+  for (const targetPixels of BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS) {
+    const members = groupsByTarget.get(targetPixels);
+    if (!members?.length) continue;
+    const descriptorStart = packedDescriptors.length;
+    for (const descriptor of members) {
+      packedDescriptors.push({ ...descriptor, renderDescriptorIndex: packedDescriptors.length });
+    }
+    groups.push({
+      groupIndex: groups.length,
+      targetIndex: BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS.indexOf(targetPixels),
+      targetPixels,
+      descriptorStart,
+      descriptorCount: members.length,
+    });
+  }
+  return {
+    identity: BOUNDARY_SPLAT_INSTANCE_ALLOCATION_IDENTITY,
+    targets: [...BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS],
+    descriptors: packedDescriptors,
+    groups,
+  };
+}
+
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
@@ -61,8 +337,51 @@ const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-co
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
+const INTRINSIC_PRESENTATION_TARGET_IDENTITY = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
+const BEAUTY_PRESENTATION_TARGET_IDENTITY = 'authored-beauty-renderer-v0';
+const RAYMARCH_SMOKE_PRESENTATION_ON_IDENTITY = 'authored-raymarch-smoke-radiance-extinction-v0';
+const RAYMARCH_SMOKE_PRESENTATION_OFF_IDENTITY = 'raymarch-smoke-radiance-extinction-suppressed-v0';
+const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
+  off: { uniform: 0, targetIdentity: 'appearance-decomposition-off-v0' },
+  'structural-a': { uniform: 1, targetIdentity: INTRINSIC_PRESENTATION_TARGET_IDENTITY },
+  'broad-carrier-b': { uniform: 2, targetIdentity: 'pre-tone-map-signed-broad-carrier-coefficients-v0' },
+  'b-applied-to-fixed-a': { uniform: 3, targetIdentity: 'pre-tone-map-b-optical-effect-on-fixed-structural-a-v0' },
+  'a-plus-b-recomposition': { uniform: 4, targetIdentity: 'nonlinear-optical-a-plus-b-recomposition-v0' },
+  'smoke-off-beauty-control': { uniform: 5, targetIdentity: 'smoke-off-beauty-optical-control-v0' },
+  'complete-flame-emission': { uniform: 6, targetIdentity: 'smoke-off-complete-flame-emission-coefficient-v0' },
+  'complete-flame-extinction': { uniform: 7, targetIdentity: 'smoke-off-complete-flame-extinction-coefficient-v0' },
+  'ridge-owned-emission': { uniform: 8, targetIdentity: 'nonnegative-ridge-owned-flame-emission-coefficient-v0' },
+  'ridge-owned-extinction': { uniform: 9, targetIdentity: 'nonnegative-ridge-owned-flame-extinction-coefficient-v0' },
+  'non-ridge-emission': { uniform: 10, targetIdentity: 'nonnegative-non-ridge-flame-emission-coefficient-v0' },
+  'non-ridge-extinction': { uniform: 11, targetIdentity: 'nonnegative-non-ridge-flame-extinction-coefficient-v0' },
+  'positive-optical-recomposition': { uniform: 12, targetIdentity: 'nonnegative-ridge-plus-non-ridge-optical-recomposition-v0' },
+  'ridge-emission-under-ridge-extinction': {
+    uniform: 13,
+    targetIdentity: 'ridge-emission-transported-under-ridge-only-extinction-v0',
+    emissionMask: Object.freeze({ ridge: true, nonRidge: false }),
+    extinctionMask: Object.freeze({ ridge: true, nonRidge: false }),
+  },
+  'ridge-emission-under-total-flame-extinction': {
+    uniform: 14,
+    targetIdentity: 'ridge-emission-transported-under-total-flame-extinction-v0',
+    emissionMask: Object.freeze({ ridge: true, nonRidge: false }),
+    extinctionMask: Object.freeze({ ridge: true, nonRidge: true }),
+  },
+  'nonridge-emission-under-total-flame-extinction': {
+    uniform: 15,
+    targetIdentity: 'nonridge-emission-transported-under-total-flame-extinction-v0',
+    emissionMask: Object.freeze({ ridge: false, nonRidge: true }),
+    extinctionMask: Object.freeze({ ridge: true, nonRidge: true }),
+  },
+  'complete-flame-under-total-extinction': {
+    uniform: 16,
+    targetIdentity: 'complete-flame-transported-under-total-flame-extinction-v0',
+    emissionMask: Object.freeze({ ridge: true, nonRidge: true }),
+    extinctionMask: Object.freeze({ ridge: true, nonRidge: true }),
+  },
+});
 const DEFAULT_GRID_SIZE = 96;
-const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
+const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 136, 140, 160];
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
 const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
   off: 'off',
@@ -83,6 +402,12 @@ const SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS = Object.freeze({
     splat: false,
     raymarchFireAuthority: 1,
     compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
+  },
+  'smoke-raymarch-only-v0': {
+    raymarch: true,
+    splat: false,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0',
   },
   'smoke-raymarch-under-splats-v0': {
     raymarch: true,
@@ -131,9 +456,19 @@ const BOUNDARY_SPLAT_CHANNELS = [
   'radiusY',
   'ridge',
   'fireSignal',
+  'worldNormalX',
+  'worldNormalY',
+  'worldNormalZ',
+  'baseIntegratedAlpha',
+  'ridgeEmissionCoefficient',
+  'ridgeExtinctionCoefficient',
+  'nonRidgeEmissionCoefficient',
+  'nonRidgeExtinctionCoefficient',
+  'nativeCellIndex',
+  'ridgeAdmitted',
+  'nonRidgeAdmitted',
+  'nonRidgeScore',
 ];
-const DEFAULT_MAJORANT_GRID_SIZE = 48;
-const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const FIRE_IRRADIANCE_LATTICE_IDENTITY = 'fire-irradiance-lattice-32-same-state-rgb-v0';
 const FIRE_IRRADIANCE_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
 const FIRE_IRRADIANCE_PROPAGATION_IDENTITY = 'irradiance-lattice-axis-diffusion-4-round-v0';
@@ -145,8 +480,44 @@ const FIRE_IRRADIANCE_PROPAGATION_ROUNDS = 4;
 const KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY = 'kaminos-three-volume-shared-webgpu-device-v0';
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
-const DEFAULT_VOLUME_SCENE = 'compact_plume';
-const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'bonfire_plume']);
+
+export function canonicalizeBoundarySplatAuditRows(values, instanceCount, strideFloats) {
+  if (!(values instanceof Float32Array)) throw new TypeError('boundary splat audit values must be Float32Array');
+  if (!Number.isInteger(instanceCount) || instanceCount < 0) throw new RangeError('boundary splat audit instance count is invalid');
+  if (!Number.isInteger(strideFloats) || strideFloats < 5) throw new RangeError('boundary splat audit stride is invalid');
+  if (values.length < instanceCount * strideFloats) throw new RangeError('boundary splat audit payload is partial');
+  const order = Array.from({ length: instanceCount }, (_, index) => index);
+  const valueBits = new Uint32Array(values.buffer, values.byteOffset, values.length);
+  for (let index = 0; index < instanceCount * strideFloats; index += 1) {
+    if (!Number.isFinite(values[index])) throw new Error(`boundary splat audit payload contains non-finite value at ${index}`);
+  }
+  order.sort((leftIndex, rightIndex) => {
+    const leftOffset = leftIndex * strideFloats;
+    const rightOffset = rightIndex * strideFloats;
+    for (let channel = 0; channel < strideFloats; channel += 1) {
+      const leftValue = values[leftOffset + channel];
+      const rightValue = values[rightOffset + channel];
+      if (leftValue < rightValue) return -1;
+      if (leftValue > rightValue) return 1;
+      const leftBits = valueBits[leftOffset + channel];
+      const rightBits = valueBits[rightOffset + channel];
+      if (leftBits !== rightBits) return leftBits < rightBits ? -1 : 1;
+    }
+    return 0;
+  });
+  const positionSupport = new Float32Array(instanceCount * 4);
+  const attributes = new Float32Array(instanceCount * (strideFloats - 4));
+  for (let canonicalIndex = 0; canonicalIndex < order.length; canonicalIndex += 1) {
+    const sourceOffset = order[canonicalIndex] * strideFloats;
+    positionSupport.set(values.subarray(sourceOffset, sourceOffset + 4), canonicalIndex * 4);
+    attributes.set(
+      values.subarray(sourceOffset + 4, sourceOffset + strideFloats),
+      canonicalIndex * (strideFloats - 4),
+    );
+  }
+  return { positionSupport, attributes };
+}
+
 const CANONICAL_SOURCE_MODE_VALUES = {
   current: 0,
   passive_bottom: 1,
@@ -157,10 +528,12 @@ const CANONICAL_RENDER_MODE_VALUES = {
   default: 0,
   smoke_only: 1,
 };
-const CANONICAL_MOTION_MODE_VALUES = {
+const CANONICAL_LEGACY_MOTION_REQUEST_VALUES = {
   animated: 0,
   frozen: 1,
 };
+export const CANONICAL_ANALYTIC_MOTION_RETIREMENT_IDENTITY = 'retired-analytic-canonical-motion-v0';
+const CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE = 0;
 const CANONICAL_CONTENT_MODE_VALUES = {
   smoke: 0,
   fire: 1,
@@ -178,7 +551,7 @@ function normalizeSelectiveHeadLiveRole(value) {
   return SELECTIVE_HEAD_LIVE_ROLES.has(role) ? role : 'off';
 }
 
-function selectiveHeadLiveRoleAuthority(role) {
+export function selectiveHeadLiveRoleAuthority(role) {
   return SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES[normalizeSelectiveHeadLiveRole(role)];
 }
 
@@ -188,6 +561,7 @@ function normalizeSelectiveHeadLiveRenderComposition(value) {
   if (normalized === 'raymarch-under-splats-v0' || normalized === 'hybrid') return 'full-raymarch-under-splats-diagnostic-v0';
   if (normalized === 'smoke-hybrid') return 'smoke-raymarch-under-splats-v0';
   if (normalized === 'splat-only') return 'splat-only-v0';
+  if (normalized === 'smoke-only') return 'smoke-raymarch-only-v0';
   if (normalized === 'raymarch-only') return 'raymarch-only-v0';
   return SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION;
 }
@@ -250,16 +624,105 @@ function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE)
   return fallback;
 }
 
-function normalizeMajorantGridSize(value) {
-  const requested = Number(value);
-  if (SUPPORTED_MAJORANT_GRID_SIZES.includes(requested)) return requested;
-  return DEFAULT_MAJORANT_GRID_SIZE;
-}
-
 function normalizeRenderScale(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return 0.85;
   return Math.max(0.1, Math.min(1, requested));
+}
+
+const RETIRED_RAYMARCH_CONTROL_KEYS = Object.freeze([
+  'majorantSkip',
+  'majorantSmooth',
+  'majorantGuard',
+  'majorantGrid',
+  'majorantCadence',
+  'temporalAccum',
+  'temporalJitter',
+  'historyClamp',
+]);
+const RETIRED_RAYMARCH_CONTROL_RECEIPT_LIFETIME = 'volume-prototype-runtime-v0';
+
+export function stripRetiredRaymarchControls(controls = {}) {
+  const next = { ...controls };
+  const retiredRaymarchControls = [];
+  for (const key of RETIRED_RAYMARCH_CONTROL_KEYS) {
+    if (!Object.hasOwn(next, key)) continue;
+    retiredRaymarchControls.push({ key, value: next[key] });
+    delete next[key];
+  }
+  return { controls: next, retiredRaymarchControls };
+}
+
+export function updateRetiredRaymarchControlReceipt(previousReceipt = [], observedReceipt = []) {
+  const previousByKey = new Map(previousReceipt.map(row => [row.key, row]));
+  const observedByKey = new Map(observedReceipt.map(row => [row.key, row]));
+  return RETIRED_RAYMARCH_CONTROL_KEYS
+    .map(key => previousByKey.get(key) || observedByKey.get(key))
+    .filter(Boolean)
+    .map(row => ({ key: row.key, value: row.value }));
+}
+
+export function retiredRaymarchControlReceiptPayload(source = {}) {
+  if (!Object.hasOwn(source, 'retiredRaymarchControls')) {
+    throw new Error('missing-retired-raymarch-controls-receipt');
+  }
+  if (!Array.isArray(source.retiredRaymarchControls)) {
+    throw new Error('invalid-retired-raymarch-controls-receipt');
+  }
+  if (!Object.hasOwn(source, 'retiredRaymarchControlReceiptLifetime')) {
+    throw new Error('missing-retired-raymarch-control-receipt-lifetime');
+  }
+  if (source.retiredRaymarchControlReceiptLifetime !== RETIRED_RAYMARCH_CONTROL_RECEIPT_LIFETIME) {
+    throw new Error(`invalid-retired-raymarch-control-receipt-lifetime:${source.retiredRaymarchControlReceiptLifetime}`);
+  }
+  return {
+    retiredRaymarchControls: source.retiredRaymarchControls.map(row => ({ key: row.key, value: row.value })),
+    retiredRaymarchControlReceiptLifetime: source.retiredRaymarchControlReceiptLifetime,
+  };
+}
+
+function normalizeVolumePresentationMode(value) {
+  const requestedRaw = String(value || 'beauty').trim().toLowerCase();
+  const requested = requestedRaw === 'intrinsic' ? 'intrinsic' : 'beauty';
+  return {
+    requestedRaw,
+    requested,
+    fallbackReason: requestedRaw === requested ? null : `unsupported-volume-presentation-mode:${requestedRaw}`,
+  };
+}
+
+function normalizeRaymarchSmokePresentationMode(value) {
+  const requestedRaw = String(value ?? 'on').trim().toLowerCase();
+  const requested = requestedRaw === 'off' ? 'off' : 'on';
+  return {
+    requestedRaw,
+    requested,
+    fallbackReason: requestedRaw === requested ? null : `unsupported-raymarch-smoke-presentation-mode:${requestedRaw}`,
+  };
+}
+
+function normalizeAppearanceDecompositionMode(value) {
+  const requestedRaw = String(value ?? 'off').trim().toLowerCase();
+  const requested = Object.hasOwn(APPEARANCE_DECOMPOSITION_MODES, requestedRaw) ? requestedRaw : 'off';
+  return {
+    requestedRaw,
+    requested,
+    fallbackReason: requestedRaw === requested ? null : `unsupported-appearance-decomposition-mode:${requestedRaw}`,
+  };
+}
+
+function boundarySplatIntrinsicPresentationOverrides(controls = {}) {
+  return {
+    ...controls,
+    boundarySplatMode: 'off',
+    boundarySplatFeatureCapture: false,
+    volumeResidualMode: 'off',
+    fireRenderMode: 'stock',
+    shellInspectMode: 'boundary_fire',
+    raySteps: controls.raySteps,
+    adaptiveRays: controls.adaptiveRays,
+    renderScale: controls.renderScale,
+  };
 }
 
 function normalizeBrowserResidualMode(value) {
@@ -279,10 +742,6 @@ function normalizeBrowserResidualFeatureDebug(value) {
   return normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'debug' ? 1 : 0;
 }
 
-function normalizeVolumeScene(value) {
-  return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
-}
-
 function normalizeCanonicalSourceMode(value) {
   return Object.hasOwn(CANONICAL_SOURCE_MODE_VALUES, value) ? value : 'current';
 }
@@ -300,15 +759,33 @@ function canonicalRenderModeValue(value) {
 }
 
 function normalizeCanonicalMotionMode(value) {
-  return Object.hasOwn(CANONICAL_MOTION_MODE_VALUES, value) ? value : 'animated';
+  return Object.hasOwn(CANONICAL_LEGACY_MOTION_REQUEST_VALUES, value) ? value : 'animated';
 }
 
-function canonicalMotionModeValue(value) {
-  return CANONICAL_MOTION_MODE_VALUES[normalizeCanonicalMotionMode(value)] || 0;
+export function canonicalMotionCompatibilityReceipt(value) {
+  return {
+    identity: CANONICAL_ANALYTIC_MOTION_RETIREMENT_IDENTITY,
+    requested: normalizeCanonicalMotionMode(value),
+    effective: 'retired',
+    uniformValue: CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE,
+  };
 }
 
 function normalizeCanonicalContentMode(value) {
   return Object.hasOwn(CANONICAL_CONTENT_MODE_VALUES, value) ? value : 'smoke';
+}
+
+export function canonicalSourceControlSignature(snapshot = {}) {
+  return [
+    normalizeVolumeScene(snapshot.volumeScene),
+    snapshot.inputRadius,
+    snapshot.flowRate,
+    normalizeCanonicalSourceMode(snapshot.canonicalSourceMode),
+    normalizeCanonicalContentMode(snapshot.canonicalContentMode),
+    snapshot.canonicalSourceY,
+    snapshot.canonicalSourceInjection,
+    snapshot.canonicalBuoyancy,
+  ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
 }
 
 function canonicalContentModeValue(value) {
@@ -346,10 +823,226 @@ function boundarySidecarViewValue(value) {
 
 function normalizeBoundarySplatMode(value) {
   const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
-  return normalized === 'analytic' || normalized === 'learned' ? normalized : 'off';
+  return ['analytic', 'learned', 'analytic_conserved', 'learned_conserved', 'world_covariance', 'kernel_moment_covariance', 'kernel_moment_full_flame_union'].includes(normalized)
+    ? normalized
+    : 'off';
+}
+
+export function resolveBoundarySplatExecutionPlan({
+  boundarySplatMode = 'off',
+  renderComposition = SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+  boundarySidecarSource = 'live',
+  boundarySidecarView = 'off',
+  volumePresentationMode = 'beauty',
+  appearanceDecompositionMode = 'off',
+  boundarySplatFeatureCapture = false,
+  flowKernelDescriptorCapture = false,
+  boundarySplatInstanceConsumer = false,
+  explicitSplatConsumer = null,
+  explicitSidecarConsumer = null,
+} = {}) {
+  const mode = normalizeBoundarySplatMode(boundarySplatMode);
+  const compositionRequest = selectiveHeadLiveRenderCompositionRequest(renderComposition);
+  const source = normalizeBoundarySidecarSource(boundarySidecarSource);
+  const view = normalizeBoundarySidecarView(boundarySidecarView);
+  const presentationActive = normalizeVolumePresentationMode(volumePresentationMode).requested !== 'intrinsic'
+    && normalizeAppearanceDecompositionMode(appearanceDecompositionMode).requested === 'off';
+  const namedExplicitSplatConsumer = explicitSplatConsumer ? String(explicitSplatConsumer) : null;
+  const namedExplicitSidecarConsumer = explicitSidecarConsumer ? String(explicitSidecarConsumer) : null;
+  const instanceConsumerRequested = normalizeSimProfileFlag(boundarySplatInstanceConsumer);
+  const diagnosticSplatConsumer = presentationActive && mode !== 'off' && (
+    normalizeBoundarySplatFeatureCapture(boundarySplatFeatureCapture)
+    || normalizeFlowKernelDescriptorCapture(flowKernelDescriptorCapture)
+    || instanceConsumerRequested
+    || Boolean(namedExplicitSplatConsumer)
+  );
+  const presentationSplatConsumer = presentationActive
+    && mode !== 'off'
+    && compositionRequest.definition.splat;
+  const splatDispatch = presentationSplatConsumer || diagnosticSplatConsumer;
+  const raymarchStructureConsumer = presentationActive
+    && compositionRequest.definition.raymarch
+    && source !== 'live';
+  const sidecarViewConsumer = presentationActive && view !== 'off';
+  const explicitSidecarDispatch = presentationActive && Boolean(namedExplicitSidecarConsumer);
+  const sidecarDispatch = source !== 'override' && (
+    splatDispatch
+    || raymarchStructureConsumer
+    || sidecarViewConsumer
+    || explicitSidecarDispatch
+  );
+  const splatConsumer = presentationSplatConsumer
+    ? 'presentation'
+    : diagnosticSplatConsumer
+      ? (namedExplicitSplatConsumer || (instanceConsumerRequested ? 'instance-consumer' : 'diagnostic-capture'))
+      : 'off';
+  const sidecarConsumer = !sidecarDispatch
+    ? 'off'
+    : splatDispatch
+      ? 'splat-reconstruction'
+      : raymarchStructureConsumer
+        ? 'raymarch-structure'
+        : sidecarViewConsumer
+          ? 'sidecar-view'
+          : namedExplicitSidecarConsumer;
+  return {
+    identity: 'boundary-splat-consumer-execution-plan-v0',
+    presentationActive,
+    renderCompositionRequestedRaw: compositionRequest.raw,
+    renderComposition: compositionRequest.requested,
+    boundarySplatMode: mode,
+    boundarySidecarSource: source,
+    boundarySidecarView: view,
+    splatDispatch,
+    splatConsumer,
+    sidecarDispatch,
+    sidecarConsumer,
+  };
+}
+
+export function validateFullFieldDerivedBufferMaterialization(
+  derivedBuffers = {},
+  { requireDrawState = false } = {},
+) {
+  if (derivedBuffers.boundarySidecarBuilt !== true) {
+    return {
+      ok: false,
+      failurePhase: 'derived-buffer-materialization',
+      reason: 'full-field-sidecar-not-built',
+    };
+  }
+  if (
+    normalizeBoundarySplatMode(derivedBuffers.boundarySplatMode) !== 'off'
+    && derivedBuffers.boundarySplatsEncoded !== true
+  ) {
+    return {
+      ok: false,
+      failurePhase: 'derived-buffer-materialization',
+      reason: 'full-field-splats-not-encoded',
+    };
+  }
+  if (normalizeBoundarySplatMode(derivedBuffers.boundarySplatMode) !== 'off' && requireDrawState) {
+    const draw = derivedBuffers.boundarySplatDraw;
+    if (!draw || typeof draw !== 'object') {
+      return {
+        ok: false,
+        failurePhase: 'derived-buffer-materialization',
+        reason: 'full-field-splat-draw-state-missing',
+      };
+    }
+    if (Number(draw.instanceCount) <= 0 || Number(draw.candidateCount) <= 0) {
+      return {
+        ok: false,
+        failurePhase: 'derived-buffer-materialization',
+        reason: 'full-field-splat-population-empty',
+      };
+    }
+  }
+  return { ok: true, failurePhase: null, reason: null };
+}
+
+export function classifyBoundarySplatUnionCell({
+  gradientGain = 0,
+  fireEnergy = 0,
+  fireEmission = 0,
+  fireDetail = 0,
+  microZ = 0,
+  materialHeat = 0,
+  structuralSignal = 0,
+} = {}) {
+  const fireSignal = Math.max(0, Math.min(1,
+    (Number(fireEnergy) * 1.25
+      + Number(fireEmission) * 0.52
+      + Number(fireDetail) * 0.86
+      + Number(microZ) * 0.72
+      + Number(materialHeat) * 0.24) / 1.5,
+  ));
+  const gatedFireSignal = Number(gradientGain) >= 1e-6 ? fireSignal : 0;
+  const nonRidgeScore = smoothstep01(0.00392156862745098, 0.011764705882352941, gatedFireSignal);
+  const ridgeAdmitted = Number(structuralSignal) >= 0.11;
+  const nonRidgeAdmitted = nonRidgeScore >= 0.5;
+  const membership = ridgeAdmitted
+    ? (nonRidgeAdmitted ? 'overlap' : 'ridge-only')
+    : (nonRidgeAdmitted ? 'nonridge-only' : 'none');
+  return {
+    selectorAuthority: NONRIDGE_LIVE_SELECTOR_AUTHORITY,
+    selectorRecipeSha256: NONRIDGE_LIVE_SELECTOR_RECIPE_SHA256,
+    fireSignal,
+    nonRidgeScore,
+    ridgeAdmitted,
+    nonRidgeAdmitted,
+    membership,
+    admitted: ridgeAdmitted || nonRidgeAdmitted,
+  };
+}
+
+export function composeBoundarySplatOpticalLayers({ emission = [0, 0, 0], extinction = 0, ridgeOwnershipWeight = 0 } = {}) {
+  const completeEmission = Array.from(emission, value => Math.max(0, Number(value) || 0));
+  if (completeEmission.length !== 3) throw new Error('boundary splat emission must contain three coefficients');
+  const completeExtinction = Math.max(0, Number(extinction) || 0);
+  const ridgeWeight = Math.max(0, Math.min(1, Number(ridgeOwnershipWeight) || 0));
+  const ridgeEmission = completeEmission.map(value => value * ridgeWeight);
+  const nonRidgeEmission = completeEmission.map((value, index) => value - ridgeEmission[index]);
+  const ridgeExtinction = completeExtinction * ridgeWeight;
+  const nonRidgeExtinction = completeExtinction - ridgeExtinction;
+  return {
+    compositionIdentity: BOUNDARY_SPLAT_LIVE_UNION_COMPOSITION_IDENTITY,
+    ridge: { identity: BOUNDARY_SPLAT_RIDGE_LAYER_IDENTITY, emission: ridgeEmission, extinction: ridgeExtinction },
+    nonRidge: { identity: BOUNDARY_SPLAT_NONRIDGE_LAYER_IDENTITY, emission: nonRidgeEmission, extinction: nonRidgeExtinction },
+    recomposedEmission: ridgeEmission.map((value, index) => value + nonRidgeEmission[index]),
+    sharedTotalExtinction: ridgeExtinction + nonRidgeExtinction,
+  };
+}
+
+function normalizeBoundarySplatPresentationMode(value) {
+  const requestedRaw = String(value ?? 'current-additive-v0').trim();
+  const requested = requestedRaw === 'matched-presentation-v0' || requestedRaw === BOUNDARY_SPLAT_OPTICAL_MODE
+    ? requestedRaw
+    : 'current-additive-v0';
+  return {
+    requestedRaw,
+    requested,
+    fallbackReason: requestedRaw === requested ? null : `unsupported-boundary-splat-presentation-mode:${requestedRaw}`,
+  };
+}
+
+function makeBoundarySplatPresentationReceipt({ requestedRaw, requested, effective, fallbackReason = null, telemetry = null } = {}) {
+  const matched = effective === 'matched-presentation-v0';
+  const optical = effective === BOUNDARY_SPLAT_OPTICAL_MODE;
+  return {
+    identity: 'boundary-splat-presentation-receipt-v0',
+    requestedModeRaw: requestedRaw ?? requested ?? 'current-additive-v0',
+    requestedMode: requested ?? 'current-additive-v0',
+    effectiveMode: effective ?? 'current-additive-v0',
+    targetFormat: optical ? `${BOUNDARY_SPLAT_HDR_TARGET_FORMAT}-array` : (matched ? BOUNDARY_SPLAT_HDR_TARGET_FORMAT : 'presentation-target-format'),
+    layerFormat: optical ? BOUNDARY_SPLAT_HDR_TARGET_FORMAT : null,
+    resolveIdentity: matched || optical ? BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY : BOUNDARY_SPLAT_ADDITIVE_PRESENTATION_IDENTITY,
+    curve: matched || optical
+      ? { exposure: 0.96, vignetteBase: 0.80, vignetteGain: 0.18, power: 0.84 }
+      : null,
+    blendIdentity: optical ? BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY : BOUNDARY_SPLAT_ADDITIVE_BLEND_IDENTITY,
+    accumulationIdentity: optical ? BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY : BOUNDARY_SPLAT_ADDITIVE_BLEND_IDENTITY,
+    transportIdentity: optical ? BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY : (matched ? 'none-additive-control-v0' : null),
+    depthBins: optical ? {
+      requested: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      effective: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      intervalIdentity: BOUNDARY_SPLAT_OPTICAL_DEPTH_INTERVAL_IDENTITY,
+      orderingIdentity: BOUNDARY_SPLAT_OPTICAL_ORDERING_IDENTITY,
+      alphaIdentity: BOUNDARY_SPLAT_OPTICAL_ALPHA_IDENTITY,
+    } : null,
+    intermediateClamped: false,
+    intermediateReadbackStatus: matched || optical ? (telemetry?.status || 'pending') : 'not-applicable',
+    hdrTelemetry: telemetry,
+    fallbackReason,
+  };
 }
 
 function normalizeBoundarySplatFeatureCapture(value) {
+  if (value === true || value === 1) return true;
+  return ['1', 'true', 'on'].includes(String(value || '').toLowerCase());
+}
+
+function normalizeFlowKernelDescriptorCapture(value) {
   if (value === true || value === 1) return true;
   return ['1', 'true', 'on'].includes(String(value || '').toLowerCase());
 }
@@ -362,16 +1055,72 @@ function normalizeBoundarySplatSharpness(value) {
   return clampFinite(value, 1, 12, 3.4);
 }
 
+function normalizeBoundarySplatRadianceGain(value) {
+  return clampFinite(value, 0.05, 2, 1);
+}
+
+function normalizeFlowKernelStrength(value) {
+  return clampFinite(value, 0, 1, 0);
+}
+
+function normalizeFlowKernelRadius(value) {
+  return clampFinite(value, 0.0025, 0.12, 0.03);
+}
+
+function normalizeFlowKernelCoherence(value) {
+  return clampFinite(value, 0, 2, 1);
+}
+
+function flowKernelRequestedControls(controls = {}) {
+  return {
+    strength: Number(controls.flowKernelStrength ?? 0),
+    radiusWorld: Number(controls.flowKernelRadius ?? 0.03),
+    coherence: Number(controls.flowKernelCoherence ?? 1),
+  };
+}
+
+function flowKernelEffectiveControls(controls = {}) {
+  return {
+    strength: normalizeFlowKernelStrength(controls.flowKernelStrength),
+    radiusWorld: normalizeFlowKernelRadius(controls.flowKernelRadius),
+    coherence: normalizeFlowKernelCoherence(controls.flowKernelCoherence),
+  };
+}
+
+function normalizeBoundarySplatOpacityGain(value) {
+  return clampFinite(value, 0.05, 2, 1);
+}
+
 function boundarySplatEffectiveRendererIdentity(mode) {
-  return normalizeBoundarySplatMode(mode) === 'learned'
-    ? BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY
-    : BOUNDARY_SPLAT_RENDERER_IDENTITY;
+  const normalized = normalizeBoundarySplatMode(mode);
+  if (normalized === 'kernel_moment_full_flame_union') return BOUNDARY_SPLAT_FULL_FLAME_UNION_RENDERER_IDENTITY;
+  if (normalized === 'kernel_moment_covariance') return BOUNDARY_SPLAT_KERNEL_MOMENT_RENDERER_IDENTITY;
+  if (normalized === 'world_covariance') return BOUNDARY_SPLAT_WORLD_COVARIANCE_RENDERER_IDENTITY;
+  if (normalized === 'learned' || normalized === 'learned_conserved') return BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY;
+  return BOUNDARY_SPLAT_RENDERER_IDENTITY;
 }
 
 function boundarySplatEffectiveAttributeModelIdentity(mode) {
-  return normalizeBoundarySplatMode(mode) === 'learned'
+  const normalized = normalizeBoundarySplatMode(mode);
+  return normalized === 'learned' || normalized === 'learned_conserved' || normalized === 'world_covariance' || normalized === 'kernel_moment_covariance' || normalized === 'kernel_moment_full_flame_union'
     ? BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY
     : null;
+}
+
+function boundarySplatFootprintAuthority(mode) {
+  const normalized = normalizeBoundarySplatMode(mode);
+  if (normalized === 'kernel_moment_covariance' || normalized === 'kernel_moment_full_flame_union') return BOUNDARY_SPLAT_KERNEL_MOMENT_AUTHORITY;
+  if (normalized === 'world_covariance') return BOUNDARY_SPLAT_WORLD_TANGENT_AUTHORITY;
+  if (normalized === 'learned' || normalized === 'learned_conserved') return BOUNDARY_SPLAT_LEARNED_CAMERA_FACING_AUTHORITY;
+  return BOUNDARY_SPLAT_CAMERA_FACING_AUTHORITY;
+}
+
+function boundarySplatAreaOpacityConserved(mode) {
+  return ['analytic_conserved', 'learned_conserved', 'world_covariance', 'kernel_moment_covariance', 'kernel_moment_full_flame_union'].includes(normalizeBoundarySplatMode(mode));
+}
+
+function boundarySplatAttributeSetId(mode) {
+  return boundarySplatEffectiveAttributeModelIdentity(mode) || 'analytic-boundary-splat-attributes-v0';
 }
 
 function normalizeWindStrength(value) {
@@ -446,15 +1195,11 @@ function applyRuntimeQualityControls(controls = {}) {
     cap('renderScale', 0.75);
     cap('raySteps', 96);
     floor('adaptiveRays', 0.45);
-    floor('majorantCadence', 2);
   } else if (effective === 'holdover') {
     cap('renderScale', 0.70);
     cap('raySteps', 72);
     floor('adaptiveRays', 0.65);
     floor('occupancySkip', 0.25);
-    floor('majorantSkip', 0.35);
-    floor('majorantCadence', 4);
-    floor('temporalAccum', 0.42);
     next.pressureStrategy = 'global';
     next.pressureIterations = Math.min(1, Number.isFinite(Number(next.pressureIterations)) ? Number(next.pressureIterations) : 1);
   } else if (effective === 'impostor') {
@@ -462,9 +1207,6 @@ function applyRuntimeQualityControls(controls = {}) {
     cap('raySteps', 48);
     floor('adaptiveRays', 0.85);
     floor('occupancySkip', 0.45);
-    floor('majorantSkip', 0.55);
-    floor('majorantCadence', 8);
-    floor('temporalAccum', 0.65);
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
   }
@@ -487,9 +1229,6 @@ function runtimeQualityReceipt(controls = {}) {
       raySteps: clampFinite(controls.raySteps, 24, 160, 96),
       adaptiveRays: clampFinite(controls.adaptiveRays, 0, 1, 0.65),
       occupancySkip: clampFinite(controls.occupancySkip, 0, 1, 0.35),
-      majorantSkip: clampFinite(controls.majorantSkip, 0, 1, 0.70),
-      majorantCadence: normalizeMajorantBuildCadence(controls.majorantCadence),
-      temporalAccum: clampFinite(controls.temporalAccum, 0, 0.85, 0.25),
       pressureStrategy: normalizePressureStrategy(controls.pressureStrategy, controls.volumeScene),
       pressureIterations: normalizePressureIterationCount(controls.pressureIterations, controls.volumeScene),
     },
@@ -508,15 +1247,20 @@ function normalizeBonfireAblationValue(value, fallback = 1, max = 1.5) {
 }
 
 function normalizeBonfireAblationControls(controls = {}) {
+  const requestedShear = normalizeBonfireAblationValue(controls.bonfireShear);
+  const requestedTemporal = normalizeBonfireAblationValue(controls.bonfireTemporal);
   return {
     recenter: normalizeBonfireAblationValue(controls.bonfireRecenter),
     lateralDamping: normalizeBonfireAblationValue(controls.bonfireLateralDamping),
-    shear: normalizeBonfireAblationValue(controls.bonfireShear),
+    shear: 0,
     detailForces: normalizeBonfireAblationValue(controls.bonfireDetailForces),
     depinch: normalizeBonfireAblationValue(controls.bonfireDepinch),
     projection: normalizeBonfireAblationValue(controls.bonfireProjection),
-    temporal: normalizeBonfireAblationValue(controls.bonfireTemporal),
+    temporal: 0,
     instabilityProbe: normalizeBonfireAblationValue(controls.bonfireInstabilityProbe, 0, 1),
+    requestedShear,
+    requestedTemporal,
+    periodicMacroForcePolicy: MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED,
   };
 }
 
@@ -571,10 +1315,6 @@ function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize) {
 
 function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
-}
-
-function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
-  return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
 function irradianceLatticeBufferBytes(irradianceGridSize = DEFAULT_FIRE_IRRADIANCE_GRID_SIZE) {
@@ -635,17 +1375,12 @@ export async function requestKaminosSharedWebGpuDevice() {
     requiredFeatures,
   };
 }
-
 function boundarySidecarBufferBytes(gridSize) {
   return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
 function frontFieldBufferBytes(gridSize) {
   return gridCellCount(gridSize) * Float32Array.BYTES_PER_ELEMENT;
-}
-
-function quenchFieldBufferBytes(gridSize) {
-  return (gridCellCount(gridSize) + LIQUID_FIRE_SOURCE_STATE_WORDS) * Uint32Array.BYTES_PER_ELEMENT;
 }
 
 function pressureBufferBytes(gridSize) {
@@ -675,13 +1410,14 @@ const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
-const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-force-active-v0';
-const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
-const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-force-active-v0';
-const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
+const MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED = 'retired-periodic-bonfire-macro-forces-v0';
+const MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED = 'retired-periodic-scalar-advection-slip-v0';
+const MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED = 'retired-periodic-detail-force-basis-v0';
+const MAIN_FLUID_PERIODIC_ENTRAINMENT_SWAY_STRATEGY_RETIRED = 'retired-periodic-entrainment-sway-v0';
+const MAIN_FLUID_EXTERNAL_CARRIER_HIDDEN_FLICKER_STRATEGY_RETIRED = 'retired-hidden-external-emitter-flicker-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
-const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
+const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_FIELDS = 'transported-field-detail-direction-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
@@ -690,9 +1426,6 @@ const PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY = 'pyro-dynamic-detail-atlas-v0';
 const PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE = 'pyro-dynamic-detail-authority-live-fields-v0';
 const PYRO_DYNAMIC_DETAIL_RESET_POLICY = 'pyro-dynamic-detail-reset-policy-v0';
 const PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT = 'pyro-dynamic-detail-material-contract-v0';
-const PYRO_DYNAMIC_DETAIL_PHASE_BASE_STEP = 0.004;
-const PYRO_DYNAMIC_DETAIL_PHASE_FIRE_STEP = 0.018;
-const PYRO_DYNAMIC_DETAIL_PHASE_SMOKE_STEP = 0.004;
 const PYRO_DYNAMIC_DETAIL_CELL_BLEND = 0.14;
 const PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT = {
   width: 8,
@@ -788,6 +1521,258 @@ function writePyroPaletteUniform(uniforms, offset, value, fallback) {
   uniforms[offset + 1] = rgb[1];
   uniforms[offset + 2] = rgb[2];
   uniforms[offset + 3] = 1;
+}
+
+export const LEGACY_BOUNDARY_FIRE_CLEAN_ENDPOINT = Object.freeze([0.12, 0.42, 1.75]);
+export const LEGACY_BOUNDARY_FIRE_SOOT_ENDPOINT = Object.freeze([1.55, 0.86, 0.18]);
+const DEFAULT_BOUNDARY_FIRE_CLEAN_COLOR = '#4a86ff';
+const DEFAULT_BOUNDARY_FIRE_SOOT_COLOR = '#ffc460';
+
+export function srgbChannelToLinear(channel) {
+  return channel <= 0.04045
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+function normalizeHexColor(value, fallback) {
+  const raw = String(value || fallback || '#ffffff').trim();
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
+  if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toLowerCase()}`;
+  return String(fallback || '#ffffff').toLowerCase();
+}
+
+export function boundaryFireSrgbEndpoint(value, fallback, legacyEndpoint) {
+  const hex = normalizeHexColor(value, fallback);
+  const normalizedFallback = normalizeHexColor(fallback, '#ffffff');
+  if (hex === normalizedFallback) return [...legacyEndpoint];
+  const linear = [1, 3, 5].map(offset => (
+    srgbChannelToLinear(parseInt(hex.slice(offset, offset + 2), 16) / 255)
+  ));
+  const peak = Math.max(...linear);
+  if (peak <= Number.EPSILON) return [...legacyEndpoint];
+  const legacyPeak = Math.max(...legacyEndpoint);
+  return linear.map(channel => channel / peak * legacyPeak);
+}
+
+function writeBoundaryFirePaletteUniform(uniforms, offset, value, fallback, legacyEndpoint) {
+  const rgb = boundaryFireSrgbEndpoint(value, fallback, legacyEndpoint);
+  uniforms[offset] = rgb[0];
+  uniforms[offset + 1] = rgb[1];
+  uniforms[offset + 2] = rgb[2];
+  uniforms[offset + 3] = 1;
+}
+
+const ANALYTIC_EMITTER_FAMILY_MODE = Object.freeze({
+  wick: 1,
+  nozzle: 2,
+  ribbon: 3,
+  ring: 4,
+});
+
+const ANALYTIC_EMITTER_SOURCE_LAW_MODE = Object.freeze({
+  'legacy-volume': 0,
+  'shallow-primary': 1,
+});
+
+function analyticEmitterVec3(value, label) {
+  if (!Array.isArray(value) || value.length !== 3 || value.some(component => !Number.isFinite(Number(component)))) {
+    throw new Error(`${label} must be a finite vec3`);
+  }
+  return value.map(Number);
+}
+
+function normalizeAnalyticEmitterVec3(value, label) {
+  const vector = analyticEmitterVec3(value, label);
+  const length = Math.hypot(...vector);
+  if (length <= 1e-9) throw new Error(`${label} must be non-zero`);
+  return vector.map(component => component / length);
+}
+
+function orthonormalAnalyticEmitterSupportAxis(axis, value) {
+  const support = normalizeAnalyticEmitterVec3(value, 'analytic emitter supportAxis');
+  const projection = support[0] * axis[0] + support[1] * axis[1] + support[2] * axis[2];
+  const perpendicular = support.map((component, index) => component - axis[index] * projection);
+  const length = Math.hypot(...perpendicular);
+  if (length <= 1e-9) throw new Error('analytic emitter supportAxis must not be parallel to axis');
+  return perpendicular.map(component => component / length);
+}
+
+function normalizeAnalyticEmitterDescriptor(descriptor) {
+  if (descriptor === null || descriptor === undefined) return null;
+  if (!descriptor || typeof descriptor !== 'object' || Array.isArray(descriptor)) {
+    throw new Error('analytic emitter descriptor must be an object or null');
+  }
+  const family = String(descriptor.family || '');
+  if (!Object.hasOwn(ANALYTIC_EMITTER_FAMILY_MODE, family)) {
+    throw new Error(`unsupported analytic emitter family: ${family || 'missing-family'}`);
+  }
+  if (descriptor.coordinateSpace !== 'volume-local') {
+    throw new Error(`analytic emitter coordinate space must be volume-local, got ${descriptor.coordinateSpace || 'missing'}`);
+  }
+  const chemistry = descriptor.chemistry || {};
+  const sourceLaw = String(descriptor.sourceLaw ?? 'legacy-volume');
+  if (!Object.hasOwn(ANALYTIC_EMITTER_SOURCE_LAW_MODE, sourceLaw)) {
+    throw new Error(`unsupported analytic emitter source law: ${sourceLaw || 'missing-source-law'}`);
+  }
+  const axis = normalizeAnalyticEmitterVec3(descriptor.axis, 'analytic emitter axis');
+  const supportAxis = orthonormalAnalyticEmitterSupportAxis(axis, descriptor.supportAxis);
+  const normalized = {
+    ...descriptor,
+    family,
+    origin: analyticEmitterVec3(descriptor.origin, 'analytic emitter origin'),
+    axis,
+    supportAxis,
+    radius: clampFinite(descriptor.radius, 0.006, 0.18, 0.04),
+    extent: clampFinite(descriptor.extent, 0.012, 1.8, 0.32),
+    strength: clampFinite(descriptor.strength, 0, 4, 0),
+    velocitySpeed: clampFinite(descriptor.velocitySpeed, 0, 3, 0.22),
+    sourceLaw,
+    sourceDepth: clampFinite(descriptor.sourceDepth, 0.006, 0.36, 0.04),
+    chemistry: {
+      smoke: clampFinite(chemistry.smoke, 0, 3, 0),
+      heat: clampFinite(chemistry.heat, 0, 4, 0),
+      fuel: clampFinite(chemistry.fuel, 0, 3, 0),
+      flame: clampFinite(chemistry.flame, 0, 4, 0),
+      detail: clampFinite(chemistry.detail, 0, 3, 0),
+    },
+  };
+  return normalized;
+}
+
+function analyticEmitterComponentwiseHalfExtent(descriptor, antialiasMargin) {
+  const axis = descriptor.axis;
+  const supportAxis = descriptor.supportAxis;
+  const radius = descriptor.radius;
+  const extent = descriptor.extent;
+  if (descriptor.sourceLaw === 'shallow-primary') {
+    const sourceHalfDepth = descriptor.sourceDepth * 0.5;
+    if (descriptor.family === 'wick' || descriptor.family === 'nozzle') {
+      return axis.map(component => (
+        Math.abs(component) * sourceHalfDepth
+        + radius * Math.sqrt(Math.max(0, 1 - component * component))
+        + antialiasMargin
+      ));
+    }
+    if (descriptor.family === 'ribbon') {
+      const secondaryAxis = [
+        axis[1] * supportAxis[2] - axis[2] * supportAxis[1],
+        axis[2] * supportAxis[0] - axis[0] * supportAxis[2],
+        axis[0] * supportAxis[1] - axis[1] * supportAxis[0],
+      ];
+      return axis.map((component, index) => (
+        Math.abs(supportAxis[index]) * extent * 0.5
+        + Math.abs(component) * sourceHalfDepth
+        + Math.abs(secondaryAxis[index]) * radius
+        + antialiasMargin
+      ));
+    }
+    return axis.map(component => {
+      const planarProjection = Math.sqrt(Math.max(0, 1 - component * component));
+      return (extent + radius) * planarProjection
+        + Math.abs(component) * sourceHalfDepth
+        + antialiasMargin;
+    });
+  }
+  if (descriptor.family === 'wick') {
+    return axis.map(component => Math.abs(component) * extent * 0.5 + radius + antialiasMargin);
+  }
+  if (descriptor.family === 'nozzle') {
+    return axis.map(component => Math.abs(component) * extent * 0.5 + radius + antialiasMargin);
+  }
+  if (descriptor.family === 'ribbon') {
+    const secondaryAxis = [
+      axis[1] * supportAxis[2] - axis[2] * supportAxis[1],
+      axis[2] * supportAxis[0] - axis[0] * supportAxis[2],
+      axis[0] * supportAxis[1] - axis[1] * supportAxis[0],
+    ];
+    return axis.map((component, index) => (
+      Math.abs(supportAxis[index]) * extent * 0.5
+      + Math.abs(component) * radius * 0.42
+      + Math.abs(secondaryAxis[index]) * radius
+      + antialiasMargin
+    ));
+  }
+  return axis.map(component => (
+    extent * Math.sqrt(Math.max(0, 1 - component * component))
+    + radius
+    + antialiasMargin
+  ));
+}
+
+export function analyticEmitterInjectionDispatch(descriptor, gridSize) {
+  const grid = normalizeGridSize(gridSize);
+  const inactive = {
+    active: false,
+    family: 'cluster',
+    grid,
+    workgroupSize: [4, 4, 4],
+    cellMin: [0, 0, 0],
+    cellExtent: [0, 0, 0],
+    workgroups: [0, 0, 0],
+    cellCount: 0,
+  };
+  if (descriptor === null || descriptor === undefined) return inactive;
+  const normalized = normalizeAnalyticEmitterDescriptor(descriptor);
+  const cellWidth = 2 / grid;
+  const halfExtent = analyticEmitterComponentwiseHalfExtent(normalized, cellWidth * 0.5);
+  const center = normalized.family === 'nozzle'
+    ? normalized.origin.map((component, index) => component + normalized.axis[index] * (
+      normalized.sourceLaw === 'shallow-primary' ? normalized.sourceDepth * 0.5 : normalized.extent * 0.5
+    ))
+    : normalized.origin;
+  const cellMin = center.map((component, index) => Math.max(
+    0,
+    Math.min(grid, Math.floor(((component - halfExtent[index]) + 1) * grid * 0.5 - 0.5)),
+  ));
+  const cellMax = center.map((component, index) => Math.max(
+    0,
+    Math.min(grid, Math.ceil(((component + halfExtent[index]) + 1) * grid * 0.5 + 0.5)),
+  ));
+  const cellExtent = cellMax.map((value, index) => Math.max(0, value - cellMin[index]));
+  const workgroups = cellExtent.map(cells => Math.ceil(cells / 4));
+  const cellCount = cellExtent.reduce((product, cells) => product * cells, 1);
+  if (cellCount === 0) return inactive;
+  return {
+    active: true,
+    family: normalized.family,
+    grid,
+    workgroupSize: [4, 4, 4],
+    cellMin,
+    cellExtent,
+    workgroups,
+    cellCount,
+  };
+}
+
+function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds, speed) {
+  floats.fill(0);
+  if (!descriptor || !dispatch.active) return;
+  const familyMode = ANALYTIC_EMITTER_FAMILY_MODE[descriptor.family] || 0;
+  floats[0] = descriptor.origin[0];
+  floats[1] = descriptor.origin[1];
+  floats[2] = descriptor.origin[2];
+  floats[3] = familyMode;
+  floats[4] = descriptor.axis[0];
+  floats[5] = descriptor.axis[1];
+  floats[6] = descriptor.axis[2];
+  floats[7] = descriptor.strength;
+  floats[8] = descriptor.supportAxis[0];
+  floats[9] = descriptor.supportAxis[1];
+  floats[10] = descriptor.supportAxis[2];
+  floats[11] = descriptor.radius;
+  floats[12] = descriptor.extent;
+  floats[13] = descriptor.velocitySpeed;
+  floats[14] = descriptor.chemistry.detail;
+  floats[15] = timeSeconds;
+  floats[16] = descriptor.chemistry.smoke;
+  floats[17] = descriptor.chemistry.heat;
+  floats[18] = descriptor.chemistry.fuel;
+  floats[19] = descriptor.chemistry.flame;
+  floats[20] = Number.isFinite(Number(speed)) ? Number(speed) : 1;
+  floats[21] = ANALYTIC_EMITTER_SOURCE_LAW_MODE[descriptor.sourceLaw] || 0;
+  floats[22] = descriptor.sourceDepth;
+  words.set([...dispatch.cellMin, dispatch.grid], 24);
+  words.set([...dispatch.cellExtent, 0], 28);
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -889,6 +1874,35 @@ function normalizePyroFireMode(value) {
   return 'hybrid';
 }
 
+export function leanStockRaymarchAdmission({
+  legacyPyroBackedOff = false,
+  fireRenderMode = 'shell',
+  pyroFireMode = 'hybrid',
+  pyroCompareMode = 'live',
+  presentationMode = 'beauty',
+  smokePresentationMode = 'on',
+  appearanceDecompositionActive = false,
+  nonRidgeOpticalCaptureActive = false,
+  nonRidgeSourceBasisCaptureActive = false,
+  liveCompleteFlameOpticalCoefficientsEnabled = false,
+} = {}) {
+  const refusalReasons = [];
+  if (legacyPyroBackedOff !== true) refusalReasons.push('pyro-not-explicitly-backed-off');
+  if (normalizeFireRenderMode(fireRenderMode) !== 'stock') refusalReasons.push('fire-render-mode-not-stock');
+  if (normalizePyroFireMode(pyroFireMode) !== 'stock') refusalReasons.push('pyro-fire-mode-not-stock');
+  if (normalizePyroCompareMode(pyroCompareMode) !== 'base') refusalReasons.push('pyro-compare-mode-not-base');
+  if (presentationMode !== 'beauty') refusalReasons.push('presentation-mode-not-beauty');
+  if (smokePresentationMode !== 'on') refusalReasons.push('smoke-presentation-not-on');
+  if (appearanceDecompositionActive) refusalReasons.push('appearance-decomposition-active');
+  if (nonRidgeOpticalCaptureActive) refusalReasons.push('nonridge-optical-capture-active');
+  if (nonRidgeSourceBasisCaptureActive) refusalReasons.push('nonridge-source-basis-capture-active');
+  if (liveCompleteFlameOpticalCoefficientsEnabled) refusalReasons.push('live-complete-flame-coefficients-active');
+  return {
+    eligible: refusalReasons.length === 0,
+    refusalReasons,
+  };
+}
+
 function pyroFireModeValue(value) {
   const mode = normalizePyroFireMode(value);
   if (mode === 'stock') return 0;
@@ -899,12 +1913,6 @@ function pyroFireModeValue(value) {
 function fireLickOperatorGainFromAmount(value) {
   const amount = clampFinite(value, 0, 5, 0);
   return amount * (0.82 + amount * 0.110);
-}
-
-function normalizeMajorantBuildCadence(value) {
-  const requested = Math.round(Number(value));
-  if (!Number.isFinite(requested)) return 1;
-  return Math.max(1, Math.min(8, requested));
 }
 
 function defaultPressureIterationsForScene(value) {
@@ -1021,19 +2029,46 @@ function externalEmitterNowMs() {
   return globalThis.performance?.now?.() ?? Date.now();
 }
 
-function syntheticHandTrailEmitters(nowMs = externalEmitterNowMs()) {
-  const t = nowMs * 0.001;
+export const SYNTHETIC_HAND_TRAIL_MOTION_IDENTITY = 'deterministic-nonperiodic-hand-trail-v0';
+const SYNTHETIC_HAND_TRAIL_KEYFRAME_MS = 900;
+
+function syntheticTrailSignedUnit(step, emitterIndex, channel) {
+  let bits = Math.imul(Math.trunc(step) + 1, 0x45d9f3b)
+    ^ Math.imul(emitterIndex + 11, 0x27d4eb2d)
+    ^ Math.imul(channel + 29, 0x165667b1);
+  bits ^= bits >>> 16;
+  bits = Math.imul(bits, 0x7feb352d);
+  bits ^= bits >>> 15;
+  bits = Math.imul(bits, 0x846ca68b);
+  bits ^= bits >>> 16;
+  return (bits >>> 0) / 0xffffffff * 2 - 1;
+}
+
+function syntheticTrailSmoothUnit(value) {
+  return value * value * (3 - 2 * value);
+}
+
+function syntheticTrailSignal(nowMs, emitterIndex, channel) {
+  const keyframe = Math.max(0, Number(nowMs) || 0) / SYNTHETIC_HAND_TRAIL_KEYFRAME_MS;
+  const step = Math.floor(keyframe);
+  const blend = syntheticTrailSmoothUnit(keyframe - step);
+  const start = syntheticTrailSignedUnit(step, emitterIndex, channel);
+  const end = syntheticTrailSignedUnit(step + 1, emitterIndex, channel);
+  return start + (end - start) * blend;
+}
+
+export function syntheticHandTrailEmitters(nowMs = externalEmitterNowMs()) {
   const emitters = [];
   for (let i = 0; i < 5; i += 1) {
     const f = i - 2;
-    const phase = t * 1.75 + i * 0.72;
-    const x = f * 0.105 + Math.sin(phase * 0.81) * 0.035;
-    const y = -0.58 + Math.sin(phase * 0.63) * 0.28 + i * 0.012;
-    const z = Math.cos(phase * 0.74) * 0.055;
-    const dx = Math.cos(phase * 1.17) * 0.075;
-    const dy = 0.05 + Math.sin(phase * 0.91) * 0.045;
-    const dz = Math.sin(phase * 1.23) * 0.055;
+    const x = f * 0.105 + syntheticTrailSignal(nowMs, i, 0) * 0.025;
+    const y = -0.58 + syntheticTrailSignal(nowMs, i, 1) * 0.18 + i * 0.012;
+    const z = syntheticTrailSignal(nowMs, i, 2) * 0.045;
+    const dx = 0.0675 + syntheticTrailSignal(nowMs, i, 3) * 0.0125;
+    const dy = 0.045 + syntheticTrailSignal(nowMs, i, 4) * 0.020;
+    const dz = syntheticTrailSignal(nowMs, i, 5) * 0.040;
     emitters.push({
+      motionIdentity: SYNTHETIC_HAND_TRAIL_MOTION_IDENTITY,
       start: [x - dx, y - dy, z - dz],
       end: [x + dx, y + dy, z + dz],
       radius: 0.030 + i * 0.002,
@@ -1099,10 +2134,9 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
 
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
-override MAJORANT_GRID: u32 = 24u;
 override IRRADIANCE_GRID: u32 = 32u;
 override TRANSPARENT_CANVAS: f32 = 0.0;
-override FIRE_PROBE: f32 = 0.0;
+override LEAN_STOCK_RAYMARCH: bool = false;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -1115,7 +2149,7 @@ struct Uniforms {
   source_controls: vec4<f32>,
   radiance_controls: vec4<f32>,
   occupancy_controls: vec4<f32>,
-  temporal_controls: vec4<f32>,
+  reserved_render_controls: vec4<f32>,
   scale_controls: vec4<f32>,
   scene_controls: vec4<f32>,
   bonfire_ablation_controls: vec4<f32>,
@@ -1163,7 +2197,16 @@ struct Uniforms {
   selective_live_render_controls: vec4<f32>,
   oracle_activity_controls: vec4<f32>,
   oracle_activity_controls2: vec4<f32>,
-  previousViewProj: mat4x4<f32>,
+  reconstruction_kernel_controls: vec4<f32>,
+  volume_presentation_controls: vec4<f32>,
+  boundary_fire_palette_clean: vec4<f32>,
+  boundary_fire_palette_soot: vec4<f32>,
+  reserved_source_extension_0: vec4<f32>,
+  reserved_source_extension_1: vec4<f32>,
+  reserved_source_extension_2: vec4<f32>,
+  reserved_source_extension_3: vec4<f32>,
+  reserved_source_extension_4: vec4<f32>,
+  artistic_motion_controls: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -1181,20 +2224,37 @@ struct ExternalEmitterInfluence {
   velocity: vec4<f32>,
 };
 
+struct NonRidgeOpticalCaptureHeader {
+  rowCount: atomic<u32>,
+  capacity: u32,
+  mode: u32,
+  overflowCount: atomic<u32>,
+};
+
+struct NonRidgeOpticalCaptureRow {
+  worldPositionSupport: vec4<f32>,
+  currentSidecar: vec4<f32>,
+  currentMaterial: vec4<f32>,
+  currentFire: vec4<f32>,
+  currentMicro: vec4<f32>,
+  sourceVelocity: vec4<f32>,
+  sourceSupports: vec4<f32>,
+  sourceTopology: vec4<f32>,
+  nonRidgeEmissionExtinction: vec4<f32>,
+  completeEmissionExtinction: vec4<f32>,
+};
+
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var<storage, read> fluidSrc: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> fluidDst: array<vec4<f32>>;
-@group(0) @binding(3) var<storage, read> majorantField: array<vec4<f32>>;
-@group(0) @binding(4) var historyTexture: texture_2d<f32>;
-@group(0) @binding(5) var historySampler: sampler;
 @group(0) @binding(6) var<storage, read> externalEmitters: array<ExternalEmitter>;
 @group(0) @binding(7) var<storage, read> frontSrc: array<f32>;
 @group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
 @group(0) @binding(9) var<storage, read> oracleActivityCue: array<f32>;
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
-@group(0) @binding(11) var<storage, read> quenchSrc: array<u32>;
-@group(0) @binding(12) var<storage, read_write> quenchDst: array<u32>;
-@group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
+@group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
+@group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
 @group(3) @binding(0) var<storage, read_write> boundarySidecarDst: array<vec4<f32>>;
@@ -1226,180 +2286,6 @@ fn hash31(p: vec3<f32>) -> f32 {
   return fract((r.x + r.y) * r.z);
 }
 
-fn sampleHistoryColor(uv: vec2<f32>) -> vec3<f32> {
-  return textureSampleLevel(historyTexture, historySampler, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0).rgb;
-}
-
-fn temporalReprojectionUv(worldPos: vec3<f32>, velocity: vec3<f32>, confidence: f32) -> vec3<f32> {
-  let historyLag = mix(0.012, 0.042, clamp(confidence, 0.0, 1.0));
-  let previousWorld = worldPos - velocity * historyLag;
-  let clip = u.previousViewProj * vec4<f32>(previousWorld, 1.0);
-  let safeW = max(abs(clip.w), 0.0001);
-  let ndc = clip.xy / safeW;
-  let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5));
-  let validX = step(0.0, uv.x) * step(uv.x, 1.0);
-  let validY = step(0.0, uv.y) * step(uv.y, 1.0);
-  let validW = step(0.0001, clip.w);
-  return vec3<f32>(uv, validX * validY * validW);
-}
-
-fn temporalReprojectionConfidence(materialWeight: f32, majorantEdge: f32, reactiveSignal: f32) -> f32 {
-  let materialConfidence = smoothstep(0.012, 0.18, materialWeight);
-  let edgePenalty = 1.0 - smoothstep(0.05, 0.34, majorantEdge);
-  let reactivePenalty = 1.0 - smoothstep(0.18, 1.15, reactiveSignal);
-  return clamp(materialConfidence * edgePenalty * reactivePenalty, 0.0, 1.0);
-}
-
-fn temporalJitterOffset(uv: vec2<f32>, dtBase: f32) -> f32 {
-  let temporalJitter = clamp(u.temporal_controls.y, 0.0, 1.0);
-  let temporalFrame = u.temporal_controls.w;
-  let pixel = floor(uv * u.viewport_steps_density.xy);
-  let interleaved = hash31(vec3<f32>(pixel + vec2<f32>(temporalFrame * 17.0, temporalFrame * 29.0), temporalFrame));
-  let r2 = fract(temporalFrame * 0.754877666 + interleaved * 0.569840296);
-  return mix(0.5, r2, temporalJitter) * dtBase;
-}
-
-fn temporalHistoryClamp(history: vec3<f32>, current: vec3<f32>, clampStrength: f32) -> vec3<f32> {
-  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let energyDelta = abs(currentLuma - historyLuma);
-  let fireTighten = smoothstep(0.42, 0.92, max(current.r, current.g));
-  let radius = mix(vec3<f32>(0.26), vec3<f32>(0.045), clampStrength) + current * mix(0.10, 0.035, fireTighten) + vec3<f32>(energyDelta * 0.045);
-  return clamp(history, max(vec3<f32>(0.0), current - radius), current + radius);
-}
-
-fn cheapTemporalRamp(x: f32, lo: f32, hi: f32) -> f32 {
-  return clamp((x - lo) / max(hi - lo, 0.0001), 0.0, 1.0);
-}
-
-struct MaterialTemporalSignals {
-  lanes: vec4<f32>,
-  protectedDetail: f32,
-  sampleWeight: f32,
-  reactiveBoost: f32,
-};
-
-fn materialTemporalSignals(alpha: f32, smokeAlpha: f32, fireAlpha: f32, temp: f32, microTextureSignal: f32, interfaceShred: f32, fireLick: f32, majorantEdge: f32, interest: f32, trans: f32) -> MaterialTemporalSignals {
-  let fireHistoryProtect = clamp(
-    cheapTemporalRamp(fireAlpha, 0.010, 0.105)
-      + cheapTemporalRamp(temp, 0.40, 1.18) * 0.70
-      + cheapTemporalRamp(fireLick, 0.045, 0.36) * 0.36,
-    0.0,
-    1.0
-  );
-  let interfaceSignal = interfaceShred * 1.30 + fireLick * 0.34 + majorantEdge * 0.82;
-  let detailSignal = microTextureSignal + interest * 0.20;
-  let interfaceHistoryProtect = clamp(
-    cheapTemporalRamp(interfaceSignal, 0.035, 0.52)
-      + cheapTemporalRamp(detailSignal, 0.22, 1.20) * 0.30,
-    0.0,
-    1.0
-  );
-  let detailHistoryProtect = clamp(
-    cheapTemporalRamp(detailSignal, 0.24, 1.35) * 0.74
-      + interfaceHistoryProtect * 0.26,
-    0.0,
-    1.0
-  );
-  let smokeBody = cheapTemporalRamp(smokeAlpha, 0.012, 0.13) * (1.0 - cheapTemporalRamp(fireAlpha, 0.006, 0.075));
-  let smokeHistoryTrust = clamp(
-    smokeBody * (1.0 - fireHistoryProtect * 0.82) * (1.0 - interfaceHistoryProtect * 0.52)
-      + cheapTemporalRamp(smokeAlpha, 0.025, 0.22) * 0.12,
-    0.0,
-    1.0
-  );
-  let protectedDetail = max(fireHistoryProtect, max(interfaceHistoryProtect, detailHistoryProtect));
-  let smokeCarrier = smokeAlpha * (1.35 + smokeHistoryTrust * 0.68);
-  let hotCarrier = fireAlpha * (3.10 + protectedDetail * 1.20);
-  let edgeCarrier = interest * (0.030 + protectedDetail * 0.040);
-  let sampleWeight = clamp((alpha * 2.20 + smokeCarrier + hotCarrier + edgeCarrier) * trans, 0.0, 1.0);
-  let reactiveBoost = fireHistoryProtect * 0.36 + interfaceHistoryProtect * 0.22;
-  return MaterialTemporalSignals(vec4<f32>(smokeHistoryTrust, fireHistoryProtect, interfaceHistoryProtect, detailHistoryProtect), protectedDetail, sampleWeight, reactiveBoost);
-}
-
-fn materialTemporalClassificationFromSignals(signals: MaterialTemporalSignals) -> vec4<f32> {
-  return signals.lanes;
-}
-
-fn materialTemporalClassification(smokeAlpha: f32, fireAlpha: f32, temp: f32, microTextureSignal: f32, interfaceShred: f32, fireLick: f32, majorantEdge: f32, interest: f32) -> vec4<f32> {
-  return materialTemporalClassificationFromSignals(materialTemporalSignals(smokeAlpha + fireAlpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, 1.0));
-}
-
-fn materialAwareImportanceWeightFromSignals(signals: MaterialTemporalSignals) -> f32 {
-  return signals.sampleWeight;
-}
-
-fn materialAwareImportanceWeight(alpha: f32, smokeAlpha: f32, fireAlpha: f32, interest: f32, materialTemporal: vec4<f32>, trans: f32) -> f32 {
-  let protectedDetail = max(materialTemporal.y, max(materialTemporal.z, materialTemporal.w));
-  let smokeCarrier = smokeAlpha * (1.35 + materialTemporal.x * 0.68);
-  let hotCarrier = fireAlpha * (3.10 + protectedDetail * 1.20);
-  let edgeCarrier = interest * (0.030 + protectedDetail * 0.040);
-  return clamp((alpha * 2.20 + smokeCarrier + hotCarrier + edgeCarrier) * trans, 0.0, 1.0);
-}
-
-fn materialAwareTemporalWeights(smokeHistoryTrustSum: f32, fireHistoryProtectSum: f32, interfaceHistoryProtectSum: f32, detailHistoryProtectSum: f32, materialWeight: f32) -> vec4<f32> {
-  let inv = 1.0 / max(materialWeight, 0.0001);
-  let fireHistoryProtect = clamp(fireHistoryProtectSum * inv, 0.0, 1.0);
-  let interfaceHistoryProtect = clamp(interfaceHistoryProtectSum * inv, 0.0, 1.0);
-  let detailHistoryProtect = clamp(detailHistoryProtectSum * inv, 0.0, 1.0);
-  let smokeHistoryTrust = clamp(smokeHistoryTrustSum * inv * (1.0 - fireHistoryProtect * 0.58) * (1.0 - interfaceHistoryProtect * 0.40), 0.0, 1.0);
-  return vec4<f32>(smokeHistoryTrust, fireHistoryProtect, interfaceHistoryProtect, detailHistoryProtect);
-}
-
-fn temporalReactiveMask(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32, materialTemporalWeights: vec4<f32>) -> f32 {
-  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let currentHot = max(current.r, current.g);
-  let historyHot = max(history.r, history.g);
-  let smokeHistoryTrust = materialTemporalWeights.x;
-  let fireHistoryProtect = materialTemporalWeights.y;
-  let interfaceHistoryProtect = materialTemporalWeights.z;
-  let detailHistoryProtect = materialTemporalWeights.w;
-  let hotMismatch = smoothstep(0.055, 0.27, abs(historyHot - currentHot));
-  let colorMismatch = smoothstep(0.045, 0.24, length(history - current));
-  let fireReactive = smoothstep(0.22, 0.76, currentHot) * 0.78 + smoothstep(0.30, 1.10, reactiveSignal) * 0.82 + fireHistoryProtect * 0.76;
-  let smokeBodyLoss = smoothstep(0.025, 0.16, historyLuma - currentLuma) * (1.0 - smokeHistoryTrust * 0.42);
-  let edgeReactive = smoothstep(0.08, 0.34, majorantEdge) + interfaceHistoryProtect * 0.58 + detailHistoryProtect * 0.28;
-  let invalid = 1.0 - historyUvValid * step(0.03, confidence);
-  return clamp(max(max(hotMismatch, colorMismatch), max(fireReactive, max(smokeBodyLoss, edgeReactive))) + invalid, 0.0, 1.0);
-}
-
-fn temporalHistoryWeight(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveMask: f32, materialTemporalWeights: vec4<f32>) -> f32 {
-  let temporalAccum = clamp(u.temporal_controls.x, 0.0, 0.90);
-  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let currentHot = max(current.r, current.g);
-  let historyHot = max(history.r, history.g);
-  let smokeHistoryTrust = materialTemporalWeights.x;
-  let fireHistoryProtect = materialTemporalWeights.y;
-  let interfaceHistoryProtect = materialTemporalWeights.z;
-  let detailHistoryProtect = materialTemporalWeights.w;
-  let fireProtect = max(smoothstep(0.38, 0.82, currentHot), fireHistoryProtect);
-  let hotMismatch = smoothstep(0.08, 0.34, abs(historyHot - currentHot));
-  let colorMismatch = smoothstep(0.05, 0.28, length(history - current));
-  let currentSupport = max(smoothstep(0.035, 0.18, currentLuma), smokeHistoryTrust * 0.26);
-  let fadingTrailReject = 1.0 - smoothstep(0.018, 0.12, historyLuma - currentLuma);
-  let smokeHistoryGain = mix(0.34, 1.08, smokeHistoryTrust);
-  let materialProtection = (1.0 - fireProtect * 0.90) * (1.0 - interfaceHistoryProtect * 0.68) * (1.0 - detailHistoryProtect * 0.34);
-  return temporalAccum * confidence * currentSupport * smokeHistoryGain * fadingTrailReject * (1.0 - reactiveMask) * materialProtection * (1.0 - hotMismatch * 0.82) * (1.0 - colorMismatch * 0.70);
-}
-
-fn temporalResolveColor(current: vec3<f32>, sameScreenUv: vec2<f32>, reprojectedUv: vec2<f32>, reprojectionConfidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32, materialTemporalWeights: vec4<f32>) -> vec3<f32> {
-  let historyClampStrength = clamp(u.temporal_controls.z, 0.0, 1.0);
-  let uv = mix(sameScreenUv, reprojectedUv, smoothstep(0.04, 0.30, reprojectionConfidence) * historyUvValid);
-  let history = sampleHistoryColor(uv);
-  let clampedHistory = temporalHistoryClamp(history, current, historyClampStrength);
-  let reactiveMask = temporalReactiveMask(current, history, reprojectionConfidence, reactiveSignal, majorantEdge, historyUvValid, materialTemporalWeights);
-  let historyWeight = temporalHistoryWeight(current, history, reprojectionConfidence, reactiveMask, materialTemporalWeights);
-  return mix(current, clampedHistory, historyWeight);
-}
-
-fn rotate2(p: vec2<f32>, a: f32) -> vec2<f32> {
-  let c = cos(a);
-  let s = sin(a);
-  return vec2<f32>(c * p.x - s * p.y, s * p.x + c * p.y);
-}
-
 fn index3(c: vec3<u32>) -> u32 {
   return c.x + c.y * GRID + c.z * GRID * GRID;
 }
@@ -1418,10 +2304,6 @@ fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
 
 fn readFrontField(c: vec3<i32>) -> f32 {
   return frontSrc[index3(clampCell(c))];
-}
-
-fn readQuenchField(c: vec3<i32>) -> f32 {
-  return f32(quenchSrc[index3(clampCell(c))]) / 65536.0;
 }
 
 fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
@@ -1516,79 +2398,250 @@ fn sampleWorldBoundarySidecar(p: vec3<f32>) -> vec4<f32> {
   return mix(y0, y1, f.z);
 }
 
-fn majorantIndex(c: vec3<u32>) -> u32 {
-  return c.x + c.y * MAJORANT_GRID + c.z * MAJORANT_GRID * MAJORANT_GRID;
+fn writeNonRidgeOpticalCaptureRow(
+  rowIndex: u32,
+  worldPositionSupport: vec4<f32>,
+  currentSidecar: vec4<f32>,
+  currentMaterial: vec4<f32>,
+  currentFire: vec4<f32>,
+  currentMicro: vec4<f32>,
+  sourceVelocity: vec4<f32>,
+  sourceSupports: vec4<f32>,
+  sourceTopology: vec4<f32>,
+  nonRidgeEmissionExtinction: vec4<f32>,
+  completeEmissionExtinction: vec4<f32>,
+) {
+  let base = rowIndex * 40u;
+  nonRidgeOpticalCaptureRows[base] = worldPositionSupport.x;
+  nonRidgeOpticalCaptureRows[base + 1u] = worldPositionSupport.y;
+  nonRidgeOpticalCaptureRows[base + 2u] = worldPositionSupport.z;
+  nonRidgeOpticalCaptureRows[base + 3u] = worldPositionSupport.w;
+  nonRidgeOpticalCaptureRows[base + 4u] = currentSidecar.x;
+  nonRidgeOpticalCaptureRows[base + 5u] = currentSidecar.y;
+  nonRidgeOpticalCaptureRows[base + 6u] = currentSidecar.z;
+  nonRidgeOpticalCaptureRows[base + 7u] = currentSidecar.w;
+  nonRidgeOpticalCaptureRows[base + 8u] = currentMaterial.x;
+  nonRidgeOpticalCaptureRows[base + 9u] = currentMaterial.y;
+  nonRidgeOpticalCaptureRows[base + 10u] = currentMaterial.z;
+  nonRidgeOpticalCaptureRows[base + 11u] = currentMaterial.w;
+  nonRidgeOpticalCaptureRows[base + 12u] = currentFire.x;
+  nonRidgeOpticalCaptureRows[base + 13u] = currentFire.y;
+  nonRidgeOpticalCaptureRows[base + 14u] = currentFire.z;
+  nonRidgeOpticalCaptureRows[base + 15u] = currentFire.w;
+  nonRidgeOpticalCaptureRows[base + 16u] = currentMicro.x;
+  nonRidgeOpticalCaptureRows[base + 17u] = currentMicro.y;
+  nonRidgeOpticalCaptureRows[base + 18u] = currentMicro.z;
+  nonRidgeOpticalCaptureRows[base + 19u] = currentMicro.w;
+  nonRidgeOpticalCaptureRows[base + 20u] = sourceVelocity.x;
+  nonRidgeOpticalCaptureRows[base + 21u] = sourceVelocity.y;
+  nonRidgeOpticalCaptureRows[base + 22u] = sourceVelocity.z;
+  nonRidgeOpticalCaptureRows[base + 23u] = sourceVelocity.w;
+  nonRidgeOpticalCaptureRows[base + 24u] = sourceSupports.x;
+  nonRidgeOpticalCaptureRows[base + 25u] = sourceSupports.y;
+  nonRidgeOpticalCaptureRows[base + 26u] = sourceSupports.z;
+  nonRidgeOpticalCaptureRows[base + 27u] = sourceSupports.w;
+  nonRidgeOpticalCaptureRows[base + 28u] = sourceTopology.x;
+  nonRidgeOpticalCaptureRows[base + 29u] = sourceTopology.y;
+  nonRidgeOpticalCaptureRows[base + 30u] = sourceTopology.z;
+  nonRidgeOpticalCaptureRows[base + 31u] = sourceTopology.w;
+  nonRidgeOpticalCaptureRows[base + 32u] = nonRidgeEmissionExtinction.x;
+  nonRidgeOpticalCaptureRows[base + 33u] = nonRidgeEmissionExtinction.y;
+  nonRidgeOpticalCaptureRows[base + 34u] = nonRidgeEmissionExtinction.z;
+  nonRidgeOpticalCaptureRows[base + 35u] = nonRidgeEmissionExtinction.w;
+  nonRidgeOpticalCaptureRows[base + 36u] = completeEmissionExtinction.x;
+  nonRidgeOpticalCaptureRows[base + 37u] = completeEmissionExtinction.y;
+  nonRidgeOpticalCaptureRows[base + 38u] = completeEmissionExtinction.z;
+  nonRidgeOpticalCaptureRows[base + 39u] = completeEmissionExtinction.w;
 }
 
-fn materialMajorantFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, combustionFrontTopology: f32) -> vec4<f32> {
+fn writeNonRidgeSourceBasisCaptureRow(
+  cellIndex: u32,
+  currentSidecar: vec4<f32>,
+  currentMaterial: vec4<f32>,
+  currentFire: vec4<f32>,
+  currentMicro: vec4<f32>,
+  sourceBasisFrontVelocity: vec4<f32>,
+  sourceBasisReactionInterfaceCurlDivergence: vec4<f32>,
+  nonRidgeMembershipEmission: vec4<f32>,
+  nonRidgeExtinction: f32,
+) {
+  let base = cellIndex * 29u;
+  nonRidgeOpticalCaptureRows[base] = currentSidecar.x;
+  nonRidgeOpticalCaptureRows[base + 1u] = currentSidecar.y;
+  nonRidgeOpticalCaptureRows[base + 2u] = currentSidecar.z;
+  nonRidgeOpticalCaptureRows[base + 3u] = currentSidecar.w;
+  nonRidgeOpticalCaptureRows[base + 4u] = currentMaterial.x;
+  nonRidgeOpticalCaptureRows[base + 5u] = currentMaterial.y;
+  nonRidgeOpticalCaptureRows[base + 6u] = currentMaterial.z;
+  nonRidgeOpticalCaptureRows[base + 7u] = currentMaterial.w;
+  nonRidgeOpticalCaptureRows[base + 8u] = currentFire.x;
+  nonRidgeOpticalCaptureRows[base + 9u] = currentFire.y;
+  nonRidgeOpticalCaptureRows[base + 10u] = currentFire.z;
+  nonRidgeOpticalCaptureRows[base + 11u] = currentFire.w;
+  nonRidgeOpticalCaptureRows[base + 12u] = currentMicro.x;
+  nonRidgeOpticalCaptureRows[base + 13u] = currentMicro.y;
+  nonRidgeOpticalCaptureRows[base + 14u] = currentMicro.z;
+  nonRidgeOpticalCaptureRows[base + 15u] = currentMicro.w;
+  nonRidgeOpticalCaptureRows[base + 16u] = sourceBasisFrontVelocity.x;
+  nonRidgeOpticalCaptureRows[base + 17u] = sourceBasisFrontVelocity.y;
+  nonRidgeOpticalCaptureRows[base + 18u] = sourceBasisFrontVelocity.z;
+  nonRidgeOpticalCaptureRows[base + 19u] = sourceBasisFrontVelocity.w;
+  nonRidgeOpticalCaptureRows[base + 20u] = sourceBasisReactionInterfaceCurlDivergence.x;
+  nonRidgeOpticalCaptureRows[base + 21u] = sourceBasisReactionInterfaceCurlDivergence.y;
+  nonRidgeOpticalCaptureRows[base + 22u] = sourceBasisReactionInterfaceCurlDivergence.z;
+  nonRidgeOpticalCaptureRows[base + 23u] = sourceBasisReactionInterfaceCurlDivergence.w;
+  nonRidgeOpticalCaptureRows[base + 24u] = nonRidgeMembershipEmission.x;
+  nonRidgeOpticalCaptureRows[base + 25u] = nonRidgeMembershipEmission.y;
+  nonRidgeOpticalCaptureRows[base + 26u] = nonRidgeMembershipEmission.z;
+  nonRidgeOpticalCaptureRows[base + 27u] = nonRidgeMembershipEmission.w;
+  nonRidgeOpticalCaptureRows[base + 28u] = nonRidgeExtinction;
+}
+
+fn writeLiveCompleteFlameOpticalCoefficient(cellIndex: u32, coefficient: vec4<f32>) {
+  let base = cellIndex * 4u;
+  nonRidgeOpticalCaptureRows[base] = coefficient.x;
+  nonRidgeOpticalCaptureRows[base + 1u] = coefficient.y;
+  nonRidgeOpticalCaptureRows[base + 2u] = coefficient.z;
+  nonRidgeOpticalCaptureRows[base + 3u] = coefficient.w;
+}
+
+struct FlowReconstructionSample {
+  velocityDensity: vec4<f32>,
+  material: vec4<f32>,
+  fireLayer: vec4<f32>,
+  microLayer: vec4<f32>,
+  kernelTangentRadius: vec4<f32>,
+  frontTopology: f32,
+};
+
+fn sampleWorldFlowReconstructionRaw(p: vec3<f32>) -> FlowReconstructionSample {
+  var sample: FlowReconstructionSample;
+  sample.velocityDensity = sampleWorldVelocity(p);
+  sample.material = sampleWorldMaterial(p);
+  sample.fireLayer = sampleWorldFireLayer(p);
+  sample.microLayer = sampleWorldMicrodetail(p);
+  sample.kernelTangentRadius = vec4<f32>(0.0);
+  sample.frontTopology = sampleWorldFrontField(p);
+  return sample;
+}
+
+fn flowReconstructionStructure(p: vec3<f32>) -> f32 {
+  return sampleWorldFrontField(p) + sampleWorldBoundarySidecar(p).x * 0.35;
+}
+
+fn flowReconstructionNormal(p: vec3<f32>) -> vec3<f32> {
+  let cellWidthWorld = 2.0 / f32(GRID);
+  let dx = flowReconstructionStructure(p + vec3<f32>(cellWidthWorld, 0.0, 0.0))
+    - flowReconstructionStructure(p - vec3<f32>(cellWidthWorld, 0.0, 0.0));
+  let dy = flowReconstructionStructure(p + vec3<f32>(0.0, cellWidthWorld, 0.0))
+    - flowReconstructionStructure(p - vec3<f32>(0.0, cellWidthWorld, 0.0));
+  let dz = flowReconstructionStructure(p + vec3<f32>(0.0, 0.0, cellWidthWorld))
+    - flowReconstructionStructure(p - vec3<f32>(0.0, 0.0, cellWidthWorld));
+  let gradientWorld = vec3<f32>(dx, dy, dz) / max(2.0 * cellWidthWorld, 0.0001);
+  let gradientLength = length(gradientWorld);
+  return select(vec3<f32>(0.0, 1.0, 0.0), gradientWorld / max(gradientLength, 0.0001), gradientLength > 0.0001);
+}
+
+fn mixFlowReconstructionSample(
+  center: FlowReconstructionSample,
+  forward: FlowReconstructionSample,
+  backward: FlowReconstructionSample,
+  strength: f32,
+) -> FlowReconstructionSample {
+  let centerWeight = 0.5;
+  let neighborWeight = 0.25;
+  var filtered: FlowReconstructionSample;
+  filtered.velocityDensity = center.velocityDensity * centerWeight + (forward.velocityDensity + backward.velocityDensity) * neighborWeight;
+  filtered.material = center.material * centerWeight + (forward.material + backward.material) * neighborWeight;
+  filtered.fireLayer = center.fireLayer * centerWeight + (forward.fireLayer + backward.fireLayer) * neighborWeight;
+  filtered.microLayer = center.microLayer * centerWeight + (forward.microLayer + backward.microLayer) * neighborWeight;
+  filtered.kernelTangentRadius = vec4<f32>(0.0);
+  filtered.frontTopology = center.frontTopology * centerWeight + (forward.frontTopology + backward.frontTopology) * neighborWeight;
+  var result: FlowReconstructionSample;
+  result.velocityDensity = mix(center.velocityDensity, filtered.velocityDensity, strength);
+  result.material = max(vec4<f32>(0.0), mix(center.material, filtered.material, strength));
+  result.fireLayer = max(vec4<f32>(0.0), mix(center.fireLayer, filtered.fireLayer, strength));
+  result.microLayer = max(vec4<f32>(0.0), mix(center.microLayer, filtered.microLayer, strength));
+  result.kernelTangentRadius = vec4<f32>(0.0);
+  result.frontTopology = max(0.0, mix(center.frontTopology, filtered.frontTopology, strength));
+  return result;
+}
+
+fn sampleWorldFlowReconstruction(p: vec3<f32>) -> FlowReconstructionSample {
+  let center = sampleWorldFlowReconstructionRaw(p);
+  let strength = clamp(u.reconstruction_kernel_controls.x, 0.0, 1.0);
+  if (strength <= 0.0) { return center; }
+  let normal = flowReconstructionNormal(p);
+  let velocityTangent = center.velocityDensity.xyz - normal * dot(center.velocityDensity.xyz, normal);
+  let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+  let curlVector = curlAtCell(sampleCell);
+  let curlTangent = curlVector - normal * dot(curlVector, normal);
+  let fallbackAxis = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), abs(normal.x) > 0.75);
+  let geometricTangent = normalize(cross(normal, fallbackAxis));
+  let velocityLength = length(velocityTangent);
+  let curlLength = length(curlTangent);
+  let curlOrGeometric = select(geometricTangent, curlTangent / max(curlLength, 0.0001), curlLength > 0.0001);
+  let tangent = select(curlOrGeometric, velocityTangent / max(velocityLength, 0.0001), velocityLength > 0.0001);
+  let coherence = clamp(u.reconstruction_kernel_controls.z, 0.0, 2.0);
+  let kernelCurlActivity = smoothstep(0.015, 0.30, curlMagnitudeAtCell(sampleCell));
+  let radiusWorld = clamp(u.reconstruction_kernel_controls.y, 0.0025, 0.12) * mix(1.0, 1.0 + kernelCurlActivity, coherence * 0.5);
+  let forward = sampleWorldFlowReconstructionRaw(p + tangent * radiusWorld);
+  let backward = sampleWorldFlowReconstructionRaw(p - tangent * radiusWorld);
+  var result = mixFlowReconstructionSample(center, forward, backward, strength);
+  result.kernelTangentRadius = vec4<f32>(tangent, radiusWorld);
+  return result;
+}
+
+fn sampleWorldFlowReconstructedSidecar(p: vec3<f32>, reconstructed: FlowReconstructionSample) -> vec4<f32> {
+  let center = sampleWorldBoundarySidecar(p);
+  let strength = clamp(u.reconstruction_kernel_controls.x, 0.0, 1.0);
+  if (strength <= 0.0) { return center; }
+  let tangent = reconstructed.kernelTangentRadius.xyz;
+  let radiusWorld = reconstructed.kernelTangentRadius.w;
+  let forward = sampleWorldBoundarySidecar(p + tangent * radiusWorld);
+  let backward = sampleWorldBoundarySidecar(p - tangent * radiusWorld);
+  let centerWeight = 0.5;
+  let neighborWeight = 0.25;
+  let filtered = center * centerWeight + (forward + backward) * neighborWeight;
+  return max(vec4<f32>(0.0), mix(center, filtered, strength));
+}
+
+fn directCellOpticalSupportFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, combustionFrontTopology: f32) -> f32 {
   let velMag = length(velocityDensity.xyz);
   let smoke = material.x + microLayer.x * 0.52 + microLayer.y * 0.34;
   let fire = fireLayer.x * 1.25 + fireLayer.y * 0.42 + fireLayer.z * 0.55 + fireLayer.w * 0.72 + combustionFrontTopology * 0.35 + microLayer.z * 0.70 + material.y * 0.28;
   let density = max(velocityDensity.w, smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
   let extinction = smoke * 0.62 + microLayer.y * 0.36 + material.w * 0.16;
-  let importance = clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
-  return vec4<f32>(density, fire, extinction, importance);
+  return clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
 }
 
-fn sampleWorldMajorant(p: vec3<f32>) -> vec4<f32> {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
-  return majorantField[majorantIndex(vec3<u32>(floor(q)))];
+fn directCellOpticalSupportAtCell(c: vec3<i32>) -> f32 {
+  return directCellOpticalSupportFromSlots(
+    readSlot(c, 0u),
+    readSlot(c, 1u),
+    readSlot(c, 2u),
+    readSlot(c, 3u),
+    readFrontField(c)
+  );
 }
 
-fn sampleMajorantCell(c: vec3<i32>) -> vec4<f32> {
-  let cell = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(MAJORANT_GRID) - 1)));
-  return majorantField[majorantIndex(cell)];
-}
-
-fn sampleWorldMajorantLinear(p: vec3<f32>) -> vec4<f32> {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * (f32(MAJORANT_GRID) - 1.0), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 1.001));
-  let i0 = vec3<i32>(floor(q));
-  let f = fract(q);
-  let c000 = sampleMajorantCell(i0 + vec3<i32>(0, 0, 0));
-  let c100 = sampleMajorantCell(i0 + vec3<i32>(1, 0, 0));
-  let c010 = sampleMajorantCell(i0 + vec3<i32>(0, 1, 0));
-  let c110 = sampleMajorantCell(i0 + vec3<i32>(1, 1, 0));
-  let c001 = sampleMajorantCell(i0 + vec3<i32>(0, 0, 1));
-  let c101 = sampleMajorantCell(i0 + vec3<i32>(1, 0, 1));
-  let c011 = sampleMajorantCell(i0 + vec3<i32>(0, 1, 1));
-  let c111 = sampleMajorantCell(i0 + vec3<i32>(1, 1, 1));
-  let x00 = mix(c000, c100, f.x);
-  let x10 = mix(c010, c110, f.x);
-  let x01 = mix(c001, c101, f.x);
-  let x11 = mix(c011, c111, f.x);
-  let y0 = mix(x00, x10, f.y);
-  let y1 = mix(x01, x11, f.y);
-  return mix(y0, y1, f.z);
-}
-
-fn sampleWorldMajorantDilated(p: vec3<f32>) -> vec4<f32> {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
+fn directCellOpticalSupport(p: vec3<f32>) -> f32 {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
   let c = vec3<i32>(floor(q));
-  var m = sampleMajorantCell(c);
-  m = max(m, sampleMajorantCell(c + vec3<i32>(1, 0, 0)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(-1, 0, 0)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 1, 0)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(0, -1, 0)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 0, 1)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 0, -1)));
-  return m;
+  let z0 = max(
+    max(directCellOpticalSupportAtCell(c), directCellOpticalSupportAtCell(c + vec3<i32>(1, 0, 0))),
+    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 1, 0)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 1, 0)))
+  );
+  let z1 = max(
+    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 0, 1)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 0, 1))),
+    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 1, 1)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 1, 1)))
+  );
+  return max(z0, z1);
 }
 
-fn majorantGradientSignal(p: vec3<f32>) -> f32 {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
-  let c = vec3<i32>(floor(q));
-  let x0 = sampleMajorantCell(c + vec3<i32>(-1, 0, 0)).w;
-  let x1 = sampleMajorantCell(c + vec3<i32>(1, 0, 0)).w;
-  let y0 = sampleMajorantCell(c + vec3<i32>(0, -1, 0)).w;
-  let y1 = sampleMajorantCell(c + vec3<i32>(0, 1, 0)).w;
-  let z0 = sampleMajorantCell(c + vec3<i32>(0, 0, -1)).w;
-  let z1 = sampleMajorantCell(c + vec3<i32>(0, 0, 1)).w;
-  return clamp(abs(x1 - x0) + abs(y1 - y0) + abs(z1 - z0), 0.0, 1.5);
-}
-
-fn majorantCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
-  let dqdt = rd * (0.5 * f32(MAJORANT_GRID));
+fn directCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let dqdt = rd * (0.5 * f32(GRID));
   var best = 1.0e6;
   if (abs(dqdt.x) > 0.0001) {
     let bx = select(floor(q.x), floor(q.x) + 1.0, dqdt.x > 0.0);
@@ -1658,11 +2711,12 @@ fn truthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
   return rawTruthOracleActivityCueAtCell(c) * clamp(u.oracle_activity_controls.x, 0.0, 1.0);
 }
 
-fn oracleActivityCurlNoiseForce(c: vec3<i32>, p: vec3<f32>, time: f32, cue: f32, gain: f32) -> vec3<f32> {
+fn oracleActivityCurlForce(c: vec3<i32>, cue: f32, gain: f32) -> vec3<f32> {
   let amount = clamp(cue * gain, 0.0, 3.0);
-  let base = turbulentDetailForce(p * 2.05 + vec3<f32>(0.17, -0.23, 0.11), time * 1.37 + f32(c.x + c.y * 3 + c.z * 7) * 0.0009);
-  let crossA = cross(normalize(base + vec3<f32>(0.001)), normalize(vec3<f32>(p.z, -p.x, p.y) + vec3<f32>(0.001)));
-  return normalize(base + crossA * 0.55 + vec3<f32>(0.001)) * amount * 0.020;
+  let localVelocity = readSlot(c, 0u).xyz;
+  let localCurl = curlAtCell(c);
+  let fieldDirection = localCurl + cross(localVelocity, localCurl) * 0.55;
+  return fieldDirection / max(length(fieldDirection), 0.0001) * amount * 0.020;
 }
 
 fn oracleActivityVorticityConfinement(c: vec3<i32>, cue: f32, gain: f32) -> vec3<f32> {
@@ -1730,24 +2784,6 @@ fn pressureTierDebugOverlayColor(y: f32) -> vec4<f32> {
   let color = mix(bandColor, p3Color, inPressure3);
   let lineBoost = clamp(lowerBoundary * 0.34 + heroBoundary * 0.46, 0.0, 0.72);
   return vec4<f32>(mix(color, vec3<f32>(1.0, 0.92, 0.52), lineBoost), clamp(u.pressure_tier_controls.w, 0.0, 1.0) * (0.32 + inPressure3 * 0.24 + lineBoost * 0.70));
-}
-
-fn samplePyroMaterialMemoryCell(p: vec3<f32>) -> vec4<f32> {
-  let normalized = clamp(p * 0.5 + vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(0.999));
-  let lateral = clamp(normalized.x * 0.64 + normalized.z * 0.36, 0.0, 0.999);
-  let cellUv = vec2<f32>(lateral * 7.0, normalized.y * 2.0);
-  let col0 = u32(clamp(floor(cellUv.x), 0.0, 7.0));
-  let row0 = u32(clamp(floor(cellUv.y), 0.0, 2.0));
-  let col1 = min(col0 + 1u, 7u);
-  let row1 = min(row0 + 1u, 2u);
-  let blend = fract(cellUv);
-  let memoryIndex00 = row0 * 8u + col0;
-  let memoryIndex10 = row0 * 8u + col1;
-  let memoryIndex01 = row1 * 8u + col0;
-  let memoryIndex11 = row1 * 8u + col1;
-  let lower = mix(u.pyro_detail_cells[memoryIndex00], u.pyro_detail_cells[memoryIndex10], blend.x);
-  let upper = mix(u.pyro_detail_cells[memoryIndex01], u.pyro_detail_cells[memoryIndex11], blend.x);
-  return mix(lower, upper, blend.y);
 }
 
 fn pressureReadComposite(c: vec3<i32>) -> vec4<f32> {
@@ -1895,18 +2931,7 @@ fn vorticityConfinement(c: vec3<i32>, amount: f32) -> vec3<f32> {
   return cross(normal, curlAtCell(c)) * amount;
 }
 
-fn fineScaleBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, curl: f32, heat: f32, smoke: f32, source: f32) -> vec3<f32> {
-  let localCurl = curlAtCell(c);
-  let curlEnergy = length(localCurl);
-  let detailA = turbulentDetailForce(p * 1.63 + vec3<f32>(0.17, -0.11, 0.23), time * 1.37);
-  let detailB = turbulentDetailForce(p * 2.41 + vec3<f32>(-0.31, 0.19, -0.07), time * 1.91);
-  let shearAxis = normalize(localCurl + detailA * 0.19 + vec3<f32>(0.001));
-  let shear = normalize(cross(shearAxis, detailB) + detailA * 0.36 + vec3<f32>(0.001));
-  let activeFlow = source * 1.55 + heat * 0.52 + smoke * 0.18 + smoothstep(0.006, 0.095, curlEnergy) * 0.32;
-  return shear * activeFlow * (0.006 + curl * 0.010);
-}
-
-fn transportedDetailPhaseAnchor(material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, frontTopology: f32, velocity: vec3<f32>, p: vec3<f32>) -> vec3<f32> {
+fn transportedDetailDirection(material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, frontTopology: f32, velocity: vec3<f32>) -> vec3<f32> {
   let carrier = clamp(
     material.x * 0.34
       + material.w * 0.52
@@ -1917,13 +2942,22 @@ fn transportedDetailPhaseAnchor(material: vec4<f32>, fireLayer: vec4<f32>, micro
     0.0,
     2.4
   );
-  let scalarPhase = vec3<f32>(
+  let scalarAxis = vec3<f32>(
     material.w - microLayer.x * 0.45 + frontTopology * 0.32,
     fireLayer.z * 0.58 + microLayer.y * 0.28 - material.x * 0.22,
     microLayer.x * 0.46 + material.y * 0.18 - fireLayer.x * 0.16
   );
-  let flow = normalize(velocity + vec3<f32>(0.012, 0.019, -0.014));
-  return (scalarPhase * 0.075 + flow * carrier * 0.040 + p.yzx * carrier * 0.012) * carrier;
+  let direction = velocity * (0.58 + carrier * 0.18)
+    + cross(velocity, scalarAxis) * 0.46
+    + scalarAxis * (0.10 + frontTopology * 0.08);
+  return direction / max(length(direction), 0.0001);
+}
+
+fn transportedScalarSlip(velocity: vec3<f32>, heat: f32, smoke: f32, flame: f32) -> vec3<f32> {
+  let lateralFlow = vec3<f32>(velocity.z, velocity.y * 0.16, -velocity.x);
+  let scalarSkew = vec3<f32>(heat - smoke * 0.52, flame - heat * 0.38, smoke - flame * 0.34);
+  let direction = lateralFlow + cross(velocity, scalarSkew) * 0.34 + scalarSkew * 0.08;
+  return direction / max(length(direction), 0.0001);
 }
 
 fn tallPlumeTransitionBandStagger(contourBreakup: f32, materialDetail: f32, microSmoke: f32, interfaceShred: f32, flameDetail: f32, frontTopology: f32) -> f32 {
@@ -1938,21 +2972,6 @@ fn tallPlumeTransitionBandStagger(contourBreakup: f32, materialDetail: f32, micr
     0.44,
     1.24
   );
-}
-
-fn turbulentDetailForce(p: vec3<f32>, time: f32) -> vec3<f32> {
-  let q = p * vec3<f32>(9.0, 13.0, 11.0) + vec3<f32>(time * 1.7, -time * 2.1, time * 1.3);
-  let a = vec3<f32>(
-    sin(q.y + cos(q.z)),
-    sin(q.z + cos(q.x)),
-    sin(q.x + cos(q.y))
-  );
-  let b = vec3<f32>(
-    cos(q.z * 1.37 - q.y),
-    cos(q.x * 1.21 - q.z),
-    cos(q.y * 1.43 - q.x)
-  );
-  return normalize(a + b * 0.72 + vec3<f32>(0.001));
 }
 
 fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
@@ -2025,19 +3044,36 @@ fn bonfireReferenceConfinementForce(c: vec3<i32>, smoke: f32, heat: f32, flame: 
 
 fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32, microdetailRiseDirection: f32) -> vec4<f32> {
   let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055) * microdetailRiseDirection, 0.0);
-  let rawSlip = turbulentDetailForce(cell * 0.031 + vec3<f32>(0.11, -0.07, 0.17), u.cameraPos_time.w * 1.27) * (0.18 + heat * 0.12 + smoke * 0.06);
-  let slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
+  let proceduralTransportSlip = step(0.5, u.artistic_motion_controls.w);
+  var slip = vec3<f32>(0.0);
+  if (proceduralTransportSlip > 0.5) {
+    let rawSlip = transportedScalarSlip(velocity, heat, smoke, flame) * (0.18 + heat * 0.12 + smoke * 0.06);
+    slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
+  }
   let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);
   return sampleFluidSlot(backCell, 3u);
 }
 
-fn interfaceShreddingForce(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, smoke: f32, flame: f32, carriedShred: f32) -> vec3<f32> {
+fn interfaceShreddingForce(c: vec3<i32>, amount: f32, heat: f32, smoke: f32, flame: f32, carriedShred: f32) -> vec3<f32> {
   let interfaceGrad = materialInterfaceGradient(c);
   let interfaceEnergy = length(interfaceGrad);
   let localCurl = curlAtCell(c);
-  let crossCurl = cross(normalize(interfaceGrad + vec3<f32>(0.001)), normalize(localCurl + turbulentDetailForce(p * 2.2, time) * 0.24 + vec3<f32>(0.001)));
+  let crossCurl = cross(
+    interfaceGrad / max(interfaceEnergy, 0.0001),
+    localCurl / max(length(localCurl), 0.0001)
+  );
   let interfaceActive = smoothstep(0.018, 0.23, interfaceEnergy) * (0.28 + smoke * 0.34 + heat * 0.28 + flame * 0.20 + carriedShred * 0.30);
-  return normalize(crossCurl + turbulentDetailForce(p * 1.7 + vec3<f32>(0.23, -0.19, 0.13), time * 1.5) * 0.36 + vec3<f32>(0.001)) * interfaceActive * amount * 0.036;
+  let direction = crossCurl + localCurl * 0.20 + interfaceGrad * 0.14;
+  return direction / max(length(direction), 0.0001) * interfaceActive * amount * 0.036;
+}
+
+fn fieldDerivedFineScaleBreakup(c: vec3<i32>, curl: f32, heat: f32, smoke: f32, source: f32) -> vec3<f32> {
+  let localCurl = curlAtCell(c);
+  let curlEnergy = length(localCurl);
+  let scalarAxis = vec3<f32>(heat - smoke * 0.48, source - heat * 0.34, smoke - source * 0.28);
+  let direction = cross(localCurl, scalarAxis) + localCurl * 0.28 + scalarAxis * curlEnergy * 0.12;
+  let activeFlow = source * 1.55 + heat * 0.52 + smoke * 0.18 + smoothstep(0.006, 0.095, curlEnergy) * 0.32;
+  return direction / max(length(direction), 0.0001) * activeFlow * (0.006 + curl * 0.010);
 }
 
 fn smokeShredEnergy(c: vec3<i32>) -> f32 {
@@ -2052,175 +3088,150 @@ fn fireLickAshCarry(c: vec3<i32>, lick: f32, bonfireBlend: f32) -> f32 {
   return shred * (baseAsh + lick * lickAsh);
 }
 
-fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
-  let interfaceEnergy = length(materialInterfaceGradient(c));
-  let lickWarp = turbulentDetailForce(p * 2.64 + vec3<f32>(0.19, -0.23, 0.11), time * 0.91) * (0.046 + source * 0.040 + heat * 0.018 + flameDetail * 0.016);
-  let q = p + lickWarp;
-  let combA = sin(q.y * 23.0 + sin(q.x * 19.0 + q.z * 11.0 + time * 3.2) + source * 2.6);
-  let combB = cos(q.z * 27.0 - q.x * 13.0 + q.y * 7.0 - time * 4.1 + flameDetail * 1.7);
-  let combC = hash31(floor((q + vec3<f32>(1.0)) * 24.0) + vec3<f32>(floor(time * 3.0)));
-  let verticalComb = clamp(0.54 + 0.22 * combA + 0.18 * combB + 0.10 * (combC - 0.5), 0.12, 1.10);
+fn fireLickBreakup(c: vec3<i32>, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
+  let interfaceGradient = materialInterfaceGradient(c);
+  let interfaceEnergy = length(interfaceGradient);
+  let localCurl = curlAtCell(c);
+  let curlEnergy = smoothstep(0.006, 0.24, length(localCurl));
+  let fireState = readSlot(c, 2u);
+  let microState = readSlot(c, 3u);
+  let frontTopology = readFrontField(c);
+  let transportedStructure = clamp(
+    fireState.z * 0.22
+      + fireState.w * 0.34
+      + microState.y * 0.20
+      + microState.z * 0.08
+      + frontTopology * 0.38,
+    0.0,
+    1.4
+  );
+  let breakupGain = clamp(0.54 + transportedStructure * 0.22 + curlEnergy * 0.14, 0.30, 1.12);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
-  let lick = hotEdge * verticalComb * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
+  let lick = hotEdge * breakupGain * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
   let ash = fireLickAshCarry(c, lick, 0.0);
   return vec4<f32>(lick, lick * (0.42 + fuel * 0.24), lick * (0.58 + heat * 0.22), ash);
 }
 
-fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
-  let interfaceEnergy = length(materialInterfaceGradient(c));
-  let radial = length(p.xz);
-  let radialWarp = (hash31(vec3<f32>(floor(radial * 19.0), floor((p.y + 1.0) * 17.0), floor(time * 3.0))) - 0.5) * 0.085;
-  let qRadius = max(0.0, radial + radialWarp * (0.30 + source * 0.42 + heat * 0.18));
-  let combA = sin(p.y * 24.0 + qRadius * 31.0 + time * 3.0 + source * 2.4);
-  let combB = cos(p.y * 9.0 - qRadius * 23.0 - time * 4.0 + flameDetail * 1.6);
-  let combC = hash31(vec3<f32>(floor(qRadius * 26.0), floor((p.y + 1.0) * 22.0), floor(time * 3.0)));
-  let verticalComb = clamp(0.56 + 0.22 * combA + 0.16 * combB + 0.08 * (combC - 0.5), 0.14, 1.06);
+fn bonfireFireLickBreakup(c: vec3<i32>, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
+  let interfaceGradient = materialInterfaceGradient(c);
+  let interfaceEnergy = length(interfaceGradient);
+  let localCurl = curlAtCell(c);
+  let curlEnergy = smoothstep(0.006, 0.24, length(localCurl));
+  let fireState = readSlot(c, 2u);
+  let microState = readSlot(c, 3u);
+  let frontTopology = readFrontField(c);
+  let transportedStructure = clamp(
+    fireState.z * 0.20
+      + fireState.w * 0.36
+      + microState.y * 0.18
+      + microState.z * 0.10
+      + frontTopology * 0.40,
+    0.0,
+    1.4
+  );
+  let breakupGain = clamp(0.56 + transportedStructure * 0.22 + curlEnergy * 0.12, 0.32, 1.10);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
-  let lick = hotEdge * verticalComb * amount * (0.15 + fuel * 0.21 + flameDetail * 0.17 + source * 0.22);
+  let lick = hotEdge * breakupGain * amount * (0.15 + fuel * 0.21 + flameDetail * 0.17 + source * 0.22);
   let ash = fireLickAshCarry(c, lick, 1.0);
   return vec4<f32>(lick, lick * (0.40 + fuel * 0.22), lick * (0.54 + heat * 0.20), ash);
 }
 
-fn bonfireSymmetricCombustionPairOffset(pairIndex: f32, side: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec2<f32> {
-  let ringRadius = sourceRadius * (0.72 + detailFrequency * 0.045);
-  let angle = pairIndex * 2.0943951 + sin(time * (0.31 + pairIndex * 0.049)) * 0.18;
-  let spoke = vec2<f32>(cos(angle), sin(angle));
-  let tangent = vec2<f32>(-spoke.y, spoke.x);
-  let radialPulse = sin(time * 0.73 + pairIndex * 1.71) * sourceRadius * 0.045;
-  let tangentPulse = cos(time * 0.61 - pairIndex * 1.33) * sourceRadius * 0.035;
-  return (spoke * (ringRadius + radialPulse) + tangent * tangentPulse) * side;
-}
-
-fn bonfirePairStrength(pairIndex: f32, time: f32) -> f32 {
-  return 0.46 + 0.22 * sin(time * 1.23 + pairIndex * 1.37);
-}
-
-fn bonfirePairYOffset(pairIndex: f32, time: f32) -> f32 {
-  return sin(time * 0.82 + pairIndex * 1.31) * 0.045 + cos(time * 0.47 - pairIndex * 0.73) * 0.024;
-}
-
-fn bonfirePairRadius(pairIndex: f32, time: f32) -> f32 {
-  return 0.32 + 0.040 * sin(time + pairIndex * 1.17);
-}
-
-fn bonfireSymmetricEdgeBreakup(p: vec3<f32>, scaledDetailFrequency: f32, bonfireTongues: f32, time: f32) -> f32 {
+fn bonfireTransportedCombustionField(
+  p: vec3<f32>,
+  sourceY: f32,
+  sourceRadius: f32,
+  fireState: vec4<f32>,
+  microState: vec4<f32>,
+  frontTopology: f32,
+  interfaceEnergy: f32,
+  flowEnergy: f32
+) -> vec4<f32> {
   let radial = length(p.xz);
-  let radialWave = sin(radial * 43.0 * scaledDetailFrequency + p.y * 13.0 - time * 1.9);
-  let ringWave = cos(radial * 47.0 * scaledDetailFrequency - p.y * 9.0 + time * 1.4);
-  let quadrupoleWave = sin((p.x * p.x - p.z * p.z) * 31.0 * scaledDetailFrequency + time * 1.1);
-  return clamp(
-    0.58
-      + 0.18 * radialWave
-      + 0.16 * ringWave
-      + 0.10 * quadrupoleWave
-      + 0.20 * bonfireTongues,
-    0.18,
-    1.34
+  let vertical = (p.y - sourceY) / max(0.058, sourceRadius * 1.05);
+  let coreSupport = exp(-radial * radial / max(0.0024, sourceRadius * sourceRadius * 0.92) - vertical * vertical * 0.82);
+  let annularRadius = sourceRadius * 0.62;
+  let annularWidth = max(0.024, sourceRadius * 0.30);
+  let annularSupport = exp(-pow(abs(radial - annularRadius), 2.0) / max(0.0012, annularWidth * annularWidth) - vertical * vertical * 1.08);
+  let transportedStructure = clamp(
+    fireState.z * 0.22
+      + fireState.w * 0.34
+      + microState.y * 0.18
+      + microState.z * 0.12
+      + frontTopology * 0.42,
+    0.0,
+    1.5
   );
-}
-
-fn bonfireAzimuthalBreakup(p: vec3<f32>, scaledDetailFrequency: f32, time: f32, phaseOffset: f32) -> f32 {
-  let radial = max(length(p.xz), 0.001);
-  let dir = p.xz / radial;
-  let rotA = vec2<f32>(cos(time * 0.37 + phaseOffset), sin(time * 0.37 + phaseOffset));
-  let rotB = vec2<f32>(-rotA.y, rotA.x);
-  let angularA = sin(dot(dir, rotA) * (8.0 + scaledDetailFrequency * 1.4) + radial * (17.0 + scaledDetailFrequency * 2.3) + p.y * 5.2 + time * 1.21);
-  let angularB = cos(dot(dir, rotB) * (11.0 + scaledDetailFrequency * 1.1) - radial * (13.0 + scaledDetailFrequency * 1.9) + p.y * 3.7 - time * 0.94);
-  let quadrupole = sin((dir.x * dir.x - dir.y * dir.y) * (13.0 + scaledDetailFrequency * 2.0) + p.x * p.z * 18.0 + time * 0.73 + phaseOffset);
-  let cellular = hash31(floor(vec3<f32>(p.x * 17.0 + p.y * 5.0, p.z * 19.0 - p.y * 4.0, p.y * 11.0 + time * 1.6 + phaseOffset) * max(1.0, scaledDetailFrequency * 0.42)));
-  return clamp(0.72 + angularA * 0.14 + angularB * 0.12 + quadrupole * 0.10 + (cellular - 0.5) * 0.12, 0.34, 1.18);
-}
-
-fn bonfireMirrorBalancedBreakup(p: vec3<f32>, scaledDetailFrequency: f32, time: f32, phaseOffset: f32) -> f32 {
-  return (
-    bonfireAzimuthalBreakup(p, scaledDetailFrequency, time, phaseOffset) +
-    bonfireAzimuthalBreakup(vec3<f32>(-p.x, p.y, p.z), scaledDetailFrequency, time, phaseOffset) +
-    bonfireAzimuthalBreakup(vec3<f32>(p.x, p.y, -p.z), scaledDetailFrequency, time, phaseOffset) +
-    bonfireAzimuthalBreakup(vec3<f32>(-p.x, p.y, -p.z), scaledDetailFrequency, time, phaseOffset)
-  ) * 0.25;
-}
-
-fn bonfireCombustionPacketOffset(packetIndex: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec3<f32> {
-  let angle = packetIndex * 2.3999632 + sin(time * (0.27 + packetIndex * 0.037) + packetIndex * 1.31) * 0.18;
-  let spoke = vec2<f32>(cos(angle), sin(angle));
-  let tangent = vec2<f32>(-spoke.y, spoke.x);
-  let radial = sourceRadius * (0.52 + 0.24 * sin(time * 0.41 + packetIndex * 1.17) + detailFrequency * 0.030);
-  let orbital = spoke * radial + tangent * sourceRadius * 0.12 * cos(time * 0.52 - packetIndex * 0.91);
-  let riseStagger = -sourceRadius * (0.18 + 0.11 * (packetIndex - floor(packetIndex * 0.25) * 4.0));
-  let breathing = sin(time * 0.69 + packetIndex * 0.83) * sourceRadius * 0.055;
-  return vec3<f32>(orbital.x, riseStagger + breathing, orbital.y);
-}
-
-fn bonfireCombustionPacketField(p: vec3<f32>, sourceY: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec4<f32> {
-  var field = 0.0;
-  var peak = 0.0;
-  var combustionInterface = 0.0;
-  var lift = 0.0;
-  var activePackets = 0.0;
-  for (var i = 0; i < 9; i = i + 1) {
-    let fi = f32(i);
-    let packetOffset = bonfireCombustionPacketOffset(fi, sourceRadius, detailFrequency, time);
-    let packetRadius = sourceRadius * (0.30 + 0.055 * sin(time * 0.77 + fi * 1.43));
-    let packetVerticalSpan = max(0.034, sourceRadius * (0.48 + 0.05 * cos(time * 0.62 - fi * 0.79)));
-    let localY = (p.y - sourceY - packetOffset.y) / packetVerticalSpan;
-    let localXZ = p.xz - packetOffset.xz;
-    let lobe = exp(-dot(localXZ, localXZ) / max(0.0014, packetRadius * packetRadius) - localY * localY);
-    let packetPulse = 0.64 + 0.22 * sin(time * (1.04 + fi * 0.031) + fi * 1.77) + 0.14 * cos(time * 0.83 - fi * 1.13);
-    let weighted = lobe * packetPulse;
-    field = field + weighted;
-    peak = max(peak, weighted);
-    combustionInterface = combustionInterface + smoothstep(0.10, 0.42, lobe) * (1.0 - smoothstep(0.62, 0.92, lobe));
-    lift = lift + weighted * smoothstep(-0.12, 0.62, -localY);
-    activePackets = activePackets + step(0.10, weighted);
-  }
-  let normalized = clamp(field * 0.98, 0.0, 1.70);
-  let packetedness = clamp(peak / max(field, 0.001) * 3.10 + combustionInterface * 0.085 + activePackets * 0.025, 0.0, 1.75);
-  return vec4<f32>(
-    normalized,
-    packetedness,
-    clamp(combustionInterface * 0.23, 0.0, 1.55),
-    clamp(lift * 0.34, 0.0, 1.45)
+  let fixedSourceDephase = step(0.5, u.reserved_source_extension_0.x);
+  let staticDephase = hash31(floor(vec3<f32>(abs(p.x) * 29.0, (p.y + 1.0) * 23.0, abs(p.z) * 29.0))) - 0.5;
+  let startupAuthority = 1.0 - smoothstep(0.025, 0.30, transportedStructure + interfaceEnergy * 0.80);
+  let startupDephase = staticDephase * startupAuthority * fixedSourceDephase;
+  let occupancy = clamp(
+    coreSupport * (0.76 + transportedStructure * 0.20 + startupDephase * 0.035)
+      + annularSupport * (0.20 + interfaceEnergy * 0.62 + frontTopology * 0.18),
+    0.0,
+    1.70
   );
-}
-
-fn bonfireCombustionCellField(p: vec3<f32>, sourceY: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec4<f32> {
-  var field = 0.0;
-  var peak = 0.0;
-  var combustionInterface = 0.0;
-  var lift = 0.0;
-  let verticalSpan = max(0.058, sourceRadius * 1.05);
-  for (var i = 0; i < 7; i = i + 1) {
-    let fi = f32(i);
-    let isCore = 1.0 - step(0.5, fi);
-    let pairSlot = max(fi - 1.0, 0.0);
-    let pairIndex = floor(pairSlot * 0.5);
-    let pairSide = 1.0 - (pairSlot - pairIndex * 2.0) * 2.0;
-    let offset = bonfireSymmetricCombustionPairOffset(pairIndex, pairSide, sourceRadius, detailFrequency, time) * (1.0 - isCore);
-    let yOffset = bonfirePairYOffset(pairIndex, time) * (1.0 - isCore);
-    let cellRadius = sourceRadius * mix(0.72, bonfirePairRadius(pairIndex, time), 1.0 - isCore);
-    let vertical = (p.y - sourceY - yOffset) / verticalSpan;
-    let delta = p.xz - offset;
-    let lobe = exp(-dot(delta, delta) / max(0.0024, cellRadius * cellRadius) - vertical * vertical * mix(0.70, 1.28, 1.0 - isCore));
-    let strength = mix(0.42, bonfirePairStrength(pairIndex, time), 1.0 - isCore);
-    let weighted = lobe * strength;
-    field = field + weighted;
-    peak = max(peak, weighted);
-    combustionInterface = combustionInterface + smoothstep(0.18, 0.64, lobe) * (1.0 - smoothstep(0.70, 0.96, lobe)) * mix(0.56, 1.0, 1.0 - isCore);
-    lift = lift + weighted * smoothstep(-0.18, 0.42, -vertical) * mix(0.74, 1.0, 1.0 - isCore);
-  }
-  let normalized = clamp(field * 0.82, 0.0, 1.55);
-  let clusteredness = clamp(peak / max(field, 0.001) * 2.80 + combustionInterface * 0.075, 0.0, 1.55);
-  return vec4<f32>(
-    normalized,
-    clusteredness,
-    clamp(combustionInterface * 0.28, 0.0, 1.40),
-    clamp(lift * 0.36, 0.0, 1.30)
+  let topology = clamp(
+    transportedStructure * 0.78
+      + flowEnergy * 0.22
+      + annularSupport * 0.24
+      + occupancy * 0.12
+      + startupDephase * 0.035,
+    0.0,
+    1.55
   );
+  let interfaceShell = clamp(
+    interfaceEnergy * 2.20
+      + frontTopology * 0.46
+      + annularSupport * (1.0 - smoothstep(0.68, 1.12, occupancy)) * 0.32
+      + microState.z * 0.16,
+    0.0,
+    1.45
+  );
+  let lift = clamp(
+    occupancy * smoothstep(-0.18, 0.58, -vertical) * (0.54 + topology * 0.24 + flowEnergy * 0.12),
+    0.0,
+    1.35
+  );
+  return vec4<f32>(occupancy, topology, interfaceShell, lift);
 }
 
-fn bonfireFlameTongues(combustion: vec4<f32>, fireLickAmount: f32, detailFrequency: f32) -> f32 {
+fn bonfireTransportedSourceBreakup(
+  p: vec3<f32>,
+  sourceY: f32,
+  sourceRadius: f32,
+  fireState: vec4<f32>,
+  microState: vec4<f32>,
+  frontTopology: f32,
+  interfaceEnergy: f32,
+  flowEnergy: f32
+) -> vec4<f32> {
+  let radial = length(p.xz);
+  let vertical = (p.y - sourceY) / max(0.058, sourceRadius * 1.12);
+  let continuousSupport = exp(-radial * radial / max(0.0028, sourceRadius * sourceRadius * 1.18) - vertical * vertical * 0.72);
+  let transportedStructure = clamp(
+    fireState.z * 0.18
+      + fireState.w * 0.32
+      + microState.y * 0.22
+      + microState.z * 0.14
+      + frontTopology * 0.44,
+    0.0,
+    1.5
+  );
+  let fixedSourceDephase = step(0.5, u.reserved_source_extension_0.x);
+  let staticDephase = hash31(floor(vec3<f32>(abs(p.x) * 31.0, (p.y + 1.0) * 27.0, abs(p.z) * 31.0))) - 0.5;
+  let startupAuthority = 1.0 - smoothstep(0.025, 0.28, transportedStructure + interfaceEnergy * 0.75);
+  let startupDephase = staticDephase * startupAuthority * fixedSourceDephase;
+  let sourceBreakup = clamp(0.72 + transportedStructure * 0.20 + flowEnergy * 0.12 + startupDephase * 0.055, 0.42, 1.18);
+  let detailBreakup = clamp(0.68 + transportedStructure * 0.24 + microState.y * 0.12 + flowEnergy * 0.12 + startupDephase * 0.050, 0.38, 1.22);
+  let edgeBreakup = clamp(0.62 + interfaceEnergy * 1.75 + frontTopology * 0.24 + flowEnergy * 0.12 + startupDephase * 0.040, 0.34, 1.30);
+  let layeredBreakup = clamp(0.66 + transportedStructure * 0.20 + microState.z * 0.16 + frontTopology * 0.18 + continuousSupport * 0.06 + startupDephase * 0.045, 0.36, 1.28);
+  return vec4<f32>(sourceBreakup, detailBreakup, edgeBreakup, layeredBreakup);
+}
+
+fn bonfireFlameTongues(combustion: vec4<f32>, fireLickAmount: f32) -> f32 {
   let operatorGain = clamp(fireLickAmount * 0.13, 0.0, 1.0);
-  return clamp(combustion.y * (0.46 + operatorGain * 0.78) + combustion.z * 0.16 + detailFrequency * 0.018, 0.0, 1.6);
+  return clamp(combustion.y * (0.46 + operatorGain * 0.78) + combustion.z * 0.16, 0.0, 1.6);
 }
 
 fn bonfireInterfaceCombustion(combustion: vec4<f32>, smoke: f32, heat: f32, flame: f32) -> f32 {
@@ -2229,69 +3240,12 @@ fn bonfireInterfaceCombustion(combustion: vec4<f32>, smoke: f32, heat: f32, flam
   return clamp(combustion.z * hotBoundary * smokeCarrier + combustion.y * combustion.x * 0.10, 0.0, 1.35);
 }
 
-fn bonfireZeroMeanLateralFlow(p: vec3<f32>, sourceY: f32, combustion: vec4<f32>, time: f32, strength: f32) -> vec3<f32> {
-  let radial = max(length(p.xz), 0.025);
-  let dir = p.xz / radial;
-  let tangent = vec2<f32>(-dir.y, dir.x);
-  let ring = smoothstep(0.045, 0.42, radial) * (1.0 - smoothstep(0.86, 1.16, radial));
-  let sourceBand = smoothstep(sourceY - 0.44, sourceY - 0.08, p.y) * (1.0 - smoothstep(sourceY + 0.08, sourceY + 0.42, p.y));
-  let quadrupole = sin((p.x * p.x - p.z * p.z) * 38.0 + time * 1.7) * cos(p.x * p.z * 44.0 - time * 1.1);
-  let eddy = tangent * quadrupole * ring * sourceBand * combustion.y * clamp(strength, 0.0, 1.0) * 0.018;
-  return vec3<f32>(eddy.x, 0.0, eddy.y);
-}
-
-fn bonfireSymmetricLateralForce(p: vec3<f32>, time: f32, carrier: f32, strength: f32, phaseOffset: f32) -> vec2<f32> {
-  let radial = max(length(p.xz), 0.025);
-  let dir = p.xz / radial;
-  let tangent = vec2<f32>(-dir.y, dir.x);
-  let ring = smoothstep(0.035, 0.26, radial) * (1.0 - smoothstep(0.68, 1.04, radial));
-  let q = sin((p.x * p.x - p.z * p.z) * (26.0 + phaseOffset * 1.7) + p.y * (6.0 + phaseOffset) + time * (1.1 + phaseOffset * 0.13));
-  let r = cos(radial * (21.0 + phaseOffset * 2.3) - p.y * (5.0 + phaseOffset * 0.7) - time * (0.9 + phaseOffset * 0.11));
-  return (tangent * q * 0.72 + dir * r * 0.38) * ring * clamp(carrier, 0.0, 2.0) * strength;
-}
-
-fn bonfireZeroMeanPlumeRoll(p: vec3<f32>, sourceY: f32, smoke: f32, heat: f32, flame: f32, source: f32, time: f32, strength: f32) -> vec3<f32> {
-  let radial = max(length(p.xz), 0.025);
-  let dir = p.xz / radial;
-  let tangent = vec2<f32>(-dir.y, dir.x);
-  let visualAboveSource = sourceY - p.y;
-  let riseBand = smoothstep(-0.04, 0.18, visualAboveSource) * (1.0 - smoothstep(1.30, 1.70, visualAboveSource));
-  let ring = smoothstep(0.035, 0.30, radial) * (1.0 - smoothstep(0.64, 1.03, radial));
-  let coreRoll = 1.0 - smoothstep(0.05, 0.38, radial);
-  let carrier = clamp(smoke * 0.70 + heat * 0.22 + flame * 0.15 + source * 0.20, 0.0, 1.6);
-  let rollPhase = visualAboveSource * 10.5 + radial * 15.0 + time * 1.35;
-  let quadrupole = sin((p.x * p.x - p.z * p.z) * 29.0 + visualAboveSource * 5.0 + time * 0.95);
-  let radialRoll = sin(rollPhase) * 0.66 + quadrupole * 0.22;
-  let verticalRoll = cos(rollPhase) * (0.40 + coreRoll * 0.58);
-  let horizontal = (dir * radialRoll + tangent * quadrupole * 0.34) * ring * riseBand * carrier * clamp(strength, 0.0, 1.0) * 0.058;
-  let vertical = -verticalRoll * ring * riseBand * carrier * clamp(strength, 0.0, 1.0) * 0.024;
-  return vec3<f32>(horizontal.x, vertical, horizontal.y);
-}
-
-fn bonfireConvectiveCellRoll(p: vec3<f32>, sourceY: f32, smoke: f32, heat: f32, flame: f32, source: f32, time: f32, strength: f32) -> vec3<f32> {
-  let radial = max(length(p.xz), 0.025);
-  let dir = p.xz / radial;
-  let tangent = vec2<f32>(-dir.y, dir.x);
-  let visualAboveSource = sourceY - p.y;
-  let lowerPlume = smoothstep(0.16, 0.34, visualAboveSource) * (1.0 - smoothstep(1.04, 1.58, visualAboveSource));
-  let ringBand = smoothstep(0.055, 0.22, radial) * (1.0 - smoothstep(0.56, 0.92, radial));
-  let coreBand = 1.0 - smoothstep(0.02, 0.46, radial);
-  let bodyBand = clamp(ringBand + coreBand * 0.58, 0.0, 1.0);
-  let cellA = sin((p.x * p.x - p.z * p.z) * 37.0 + visualAboveSource * 7.0 + time * 1.18);
-  let cellB = cos(p.x * p.z * 52.0 - visualAboveSource * 6.0 + time * 0.87);
-  let overturn = sin(visualAboveSource * 16.0 + radial * 11.0 + time * 1.62);
-  let carrier = clamp(smoke * 0.62 + heat * 0.28 + flame * 0.13 + source * 0.18, 0.0, 1.7);
-  let lateral = (dir * (cellA * 0.58 + overturn * 0.34) + tangent * (cellB * 0.54)) * bodyBand * lowerPlume * carrier * clamp(strength, 0.0, 1.0) * 0.084;
-  let vertical = (cellB * 0.38 - overturn * 0.34) * bodyBand * lowerPlume * carrier * clamp(strength, 0.0, 1.0) * 0.026;
-  return vec3<f32>(lateral.x, vertical, lateral.y);
-}
-
 fn bonfireEntrainedLift(smoke: f32, heat: f32, flame: f32, source: f32, combustion: vec4<f32>, plumeRiseScale: f32, speed: f32) -> f32 {
   let carrier = clamp(source * 0.46 + smoke * 0.24 + heat * 0.28 + flame * 0.12 + combustion.w * 0.62, 0.0, 1.8);
   return carrier * plumeRiseScale * (0.021 + speed * 0.0062);
 }
 
-fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence {
+fn externalEmitterInfluence(p: vec3<f32>) -> ExternalEmitterInfluence {
   var result: ExternalEmitterInfluence;
   result.material = vec4<f32>(0.0);
   result.fire = vec4<f32>(0.0);
@@ -2314,8 +3268,7 @@ fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence
     let isActiveEmitter = step(0.5, emitter.detail_lifetime.w);
     let ageFade = 1.0 - smoothstep(lifetime * 0.68, lifetime, age);
     let falloff = exp(-dist2 / max(0.00001, radius * radius)) * strength * ageFade * isActiveEmitter;
-    let flicker = 0.82 + 0.18 * hash31(vec3<f32>(f32(i) * 13.7, time * 4.1, t * 9.3));
-    let w = falloff * flicker;
+    let w = falloff;
     result.material.x = max(result.material.x, emitter.material.x * w);
     result.material.y = max(result.material.y, emitter.material.y * w);
     result.material.z = max(result.material.z, emitter.material.z * w);
@@ -2336,15 +3289,9 @@ fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> Externa
   return influence;
 }
 
-fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, lateralSlipScale: f32, thermalAdvectionRiseDirection: f32) -> vec4<f32> {
+fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, thermalAdvectionRiseDirection: f32) -> vec4<f32> {
   let thermalLift = vec3<f32>(0.0, clamp(localHeat, 0.0, 1.7) * (0.24 + speed * 0.055) * thermalAdvectionRiseDirection, 0.0);
-  let rawThermalSlip = vec3<f32>(
-    sin(cell.z * 0.41 + localHeat * 2.7),
-    0.0,
-    cos(cell.x * 0.37 - localHeat * 2.1)
-  ) * localHeat * 0.032;
-  let thermalSlip = vec3<f32>(rawThermalSlip.x * lateralSlipScale, rawThermalSlip.y, rawThermalSlip.z * lateralSlipScale);
-  let backCell = cell - (velocity + thermalLift + thermalSlip) * (2.30 + speed * 0.46);
+  let backCell = cell - (velocity + thermalLift) * (2.30 + speed * 0.46);
   return sampleFluidSlot(backCell, 1u);
 }
 
@@ -2377,15 +3324,9 @@ fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
   return coolingBand * upperAir * 0.064 + fuelSmoke;
 }
 
-fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, lateralSlipScale: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
+fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
   let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13) * fireLayerRiseDirection, 0.0);
-  let rawLick = vec3<f32>(
-    sin(cell.y * 0.44 + cell.z * 0.19 + heat * 3.8),
-    0.0,
-    cos(cell.y * 0.38 - cell.x * 0.21 - heat * 3.1)
-  ) * heat * 0.070;
-  let lick = vec3<f32>(rawLick.x * lateralSlipScale, rawLick.y, rawLick.z * lateralSlipScale);
-  let backCell = cell - (velocity + fastLift + lick) * (1.82 + speed * 0.34);
+  let backCell = cell - (velocity + fastLift) * (1.82 + speed * 0.34);
   return sampleFluidSlot(backCell, 2u);
 }
 
@@ -2516,8 +3457,12 @@ fn raymarchInterest(
 
 fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
   let fine = smoothstep(0.035, 0.92, interest);
-  let adaptiveScale = mix(2.65, 0.68, fine);
+  let adaptiveScale = mix(2.65, 1.0, fine);
   return mix(1.0, adaptiveScale, clamp(adaptiveRays, 0.0, 1.0));
+}
+
+fn segmentOpacity(opticalDepth: f32, maxOpacity: f32) -> f32 {
+  return min(1.0 - exp(-max(0.0, opticalDepth)), maxOpacity);
 }
 
 fn raymarchOccupancySignal(
@@ -2544,34 +3489,6 @@ fn occupancySkipStepScale(occupancy: f32, occupancySkipStrength: f32, adaptiveRa
 
 fn raymarchEarlyTermination(transmittance: f32) -> bool {
   return transmittance < 0.012;
-}
-
-fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f32>, material: vec4<f32>, velocity: vec3<f32>, time: f32, detailCoherenceGain: f32) -> vec3<f32> {
-  let carrier = clamp(
-    microLayer.x * 0.62
-      + microLayer.y * 1.08
-      + microLayer.z * 0.78
-      + microLayer.w * 0.30
-      + fireLayer.z * 0.28
-      + material.w * 0.18,
-    0.0,
-    2.6
-  );
-  let detailPhaseAnchor = transportedDetailPhaseAnchor(material, fireLayer, microLayer, 0.0, velocity, p) * clamp(detailCoherenceGain, 0.0, 1.0);
-  let coherentP = p + detailPhaseAnchor * 0.65;
-  let coherentTime = mix(time, time * 0.72 + dot(detailPhaseAnchor, vec3<f32>(1.1, -0.7, 0.9)), clamp(detailCoherenceGain, 0.0, 1.0));
-  let flow = normalize(velocity + turbulentDetailForce(coherentP * 1.31 + vec3<f32>(0.17, -0.11, 0.23), coherentTime * 0.47) * 0.16 + vec3<f32>(0.012, 0.019, -0.014));
-  let foldA = turbulentDetailForce(coherentP * 2.17 + flow * (0.42 + carrier * 0.34), coherentTime * 0.83);
-  let foldB = turbulentDetailForce(coherentP.yzx * 2.91 + vec3<f32>(carrier * 0.19, -carrier * 0.13, carrier * 0.17), coherentTime * 1.19);
-  return (foldA * 0.70 + foldB * 0.36 + flow * 0.24) * carrier * 0.038;
-}
-
-fn microFilamentNoise(p: vec3<f32>, warp: vec3<f32>, carrier: f32, velocity: vec3<f32>, time: f32) -> f32 {
-  let q = p + warp + velocity * 0.31;
-  let phaseA = dot(q, vec3<f32>(29.0, 17.0, -23.0)) + sin(dot(q.yzx, vec3<f32>(11.0, -19.0, 31.0)) + carrier * 2.7 + time * 2.3);
-  let phaseB = dot(q.zxy, vec3<f32>(-13.0, 37.0, 19.0)) + cos(dot(q, vec3<f32>(23.0, -7.0, 13.0)) - carrier * 1.9 - time * 3.1);
-  let cellNoise = hash31(floor((q + vec3<f32>(1.0)) * 28.0) + vec3<f32>(floor(time * 2.0)));
-  return clamp(0.50 + 0.25 * sin(phaseA) + 0.18 * sin(phaseB) + 0.14 * (cellNoise - 0.5), 0.12, 1.12);
 }
 
 fn boundarySupportAtCell(c: vec3<i32>, supportWeights: vec4<f32>) -> f32 {
@@ -2631,25 +3548,6 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 
 @compute @workgroup_size(4, 4, 4)
-fn csMajorant(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(MAJORANT_GRID))) {
-    return;
-  }
-  let brickStart = vec3<u32>(floor(vec3<f32>(gid) * f32(GRID) / f32(MAJORANT_GRID)));
-  let brickEnd = max(brickStart + vec3<u32>(1), vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1)) * f32(GRID) / f32(MAJORANT_GRID))));
-  var majorant = vec4<f32>(0.0);
-  for (var z = brickStart.z; z < min(brickEnd.z, GRID); z = z + 1u) {
-    for (var y = brickStart.y; y < min(brickEnd.y, GRID); y = y + 1u) {
-      for (var x = brickStart.x; x < min(brickEnd.x, GRID); x = x + 1u) {
-        let c = vec3<i32>(vec3<u32>(x, y, z));
-        let candidate = materialMajorantFromSlots(readSlot(c, 0u), readSlot(c, 1u), readSlot(c, 2u), readSlot(c, 3u), readFrontField(c));
-        majorant = max(majorant, candidate);
-      }
-    }
-  }
-  majorantDst[majorantIndex(gid)] = majorant;
-}
-
 // Fire irradiance light field: a compact world-space RGB lattice seeded from
 // the same advancing fluid state and emission law as the visible raymarch
 // flame. Identity: fire-irradiance-lattice-32-same-state-rgb-v0. The lattice
@@ -2743,16 +3641,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let idx = index3(gid);
-  let sourceWetnessIndex = GRID * GRID * GRID;
-  let sourceTemperatureIndex = sourceWetnessIndex + 1u;
-  let sourceCombustionIndex = sourceWetnessIndex + 2u;
-  let sourceIgnitedIndex = sourceWetnessIndex + 3u;
-  let sourceLastContactTickIndex = sourceWetnessIndex + 4u;
-  let sourceWetness = clamp(f32(quenchSrc[sourceWetnessIndex]) / 65536.0, 0.0, 1.0);
-  let sourceTemperature = clamp(f32(quenchSrc[sourceTemperatureIndex]) / 65536.0, 0.0, 1.0);
-  let sourceCombustion = clamp(f32(quenchSrc[sourceCombustionIndex]) / 65536.0, 0.0, 1.0);
-  let sourceIgnited = clamp(f32(quenchSrc[sourceIgnitedIndex]) / 65536.0, 0.0, 1.0);
-  let sourceLastContactTick = quenchSrc[sourceLastContactTickIndex];
   let base = idx * SLOTS_PER_CELL;
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
@@ -2761,10 +3649,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let speed = u.fire_smoke_curl_speed.w;
   let curl = u.fire_smoke_curl_speed.z;
   let inputRadius = max(0.04, u.source_controls.x);
-  let rawInputFlow = max(0.0, u.source_controls.y);
-  let sourcePilot = clamp(u.source_controls.w, 0.0, 1.0);
-  let sourceFlowEnvelope = sqrt(sourceCombustion);
-  let inputFlow = rawInputFlow * sourceFlowEnvelope;
+  let inputFlow = max(0.0, u.source_controls.y);
   let projection = clamp(u.source_controls.z, 0.0, 1.5);
   let fireScale = clamp(u.scale_controls.x, 0.35, 1.30);
   let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
@@ -2786,7 +3671,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let shredOperatorGain = shredAmount * (0.80 + shredAmount * 0.080);
   let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
   let detailDomain = vec3<f32>(tallPlumeTransportedDetailFrequency, mix(1.0, 1.18, plumeHeight01), tallPlumeTransportedDetailFrequency);
-  let time = u.cameraPos_time.w;
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let windAngle = u.scene_controls.z;
   let windHeight = clamp(u.scene_controls.w, -0.8, 0.8);
@@ -2799,7 +3683,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalBuoyancyLift = clamp(u.canonical_source_controls.z, 0.0, 1.5);
   let reactionFuelScale = clamp(u.canonical_source_controls.w, 0.0, 1.5);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
-  let canonicalMotionMode = clamp(u.canonical_render_motion_controls.y, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
@@ -2807,14 +3690,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalPlumeScene = step(2.5, sceneMode);
   let canonicalSmokeContent = 1.0 - canonicalPlumeScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = canonicalPlumeScene * step(0.5, canonicalContentMode);
-  let canonicalFrozenMotion = canonicalPlumeScene * step(0.5, canonicalMotionMode);
-  let canonicalPhaseTime = mix(time, 0.0, canonicalFrozenMotion);
   let canonicalPassiveBottomProof = canonicalPlumeScene * step(0.5, canonicalSourceMode) * (1.0 - step(1.5, canonicalSourceMode));
   let canonicalBuoyantBottomProof = canonicalPlumeScene * step(2.5, canonicalSourceMode);
   let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
   let bonfireRecenterAblation = mix(1.0, clamp(u.bonfire_ablation_controls.x, 0.0, 1.5), bonfireScene);
   let bonfireLateralDampingAblation = mix(1.0, clamp(u.bonfire_ablation_controls.y, 0.0, 1.5), bonfireScene);
-  let bonfireShearAblation = mix(1.0, clamp(u.bonfire_ablation_controls.z, 0.0, 1.5), bonfireScene);
   let bonfireDetailForcesAblation = mix(1.0, clamp(u.bonfire_ablation_controls.w, 0.0, 1.5), bonfireScene);
   let bonfireDepinchAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.x, 0.0, 1.5), bonfireScene);
   let bonfireProjectionAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.y, 0.0, 1.5), bonfireScene);
@@ -2826,15 +3706,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let microdetailRiseDirection = bonfireThermalRiseDirection;
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
-  let bonfireZeroMeanScalarSlipGain = bonfireScene * (1.0 - explicitWindAuthority) * 0.58;
-  let bonfireLocalLateralSlipGain = mix(1.0, max(explicitWindAuthority, bonfireZeroMeanScalarSlipGain), bonfireScene);
+  let bonfireZeroMeanMicrodetailSlipGain = bonfireScene * (1.0 - explicitWindAuthority) * 0.58;
+  let bonfireLocalMicrodetailSlipGain = mix(1.0, max(explicitWindAuthority, bonfireZeroMeanMicrodetailSlipGain), bonfireScene);
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
   let localMaterial = readSlot(cellI, 1u);
-  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireLocalLateralSlipGain, thermalAdvectionRiseDirection);
-  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireLocalLateralSlipGain, fireLayerRiseDirection);
-  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireLocalLateralSlipGain, microdetailRiseDirection);
+  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
+  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayerRiseDirection);
+  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireLocalMicrodetailSlipGain, microdetailRiseDirection);
   var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
@@ -2907,51 +3787,53 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceRadial = length(sourceCenter.xz);
   let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.92, 1.32, sourceCenter.y));
   let canonicalSourceY = canonicalSourceYControl;
-  // Square by multiplication, never pow: WGSL pow(x, 2.0) is exp2(2*log2(x)),
-  // which is NaN for the negative bases every cell below the source line
-  // produces. Chrome 152's Tint stopped strength-reducing pow(x, 2.0) to x*x,
-  // so the old form injected NaN into the birth chains and the scene-gate
-  // mixes (NaN * 0 = NaN) spread it through every scene's combustion-front
-  // carriers within seconds.
-  let canonicalSourceBandT = (p.y - canonicalSourceY) / 0.070;
-  let canonicalSourceBand = exp(-canonicalSourceBandT * canonicalSourceBandT);
+  let canonicalSourceBand = exp(-pow((p.y - canonicalSourceY) / 0.070, 2.0));
+  let transportedSourceStructure = clamp(
+    material.w * 0.24
+      + fireLayer.z * 0.20
+      + fireLayer.w * 0.36
+      + microLayer.x * 0.08
+      + microLayer.y * 0.24
+      + microLayer.z * 0.12
+      + combustionFrontTopology * 0.32,
+    0.0,
+    1.6
+  );
+  let sourceSpatialDephase = hash31(vec3<f32>(
+    f32(cellI.x) * 0.173 + f32(cellI.y) * 0.071,
+    f32(cellI.y) * 0.193 + f32(cellI.z) * 0.059,
+    f32(cellI.z) * 0.157 + f32(cellI.x) * 0.083
+  )) - 0.5;
+  let sourceSpatialDephaseB = hash31(vec3<f32>(
+    f32(cellI.z) * 0.211 + 17.0,
+    f32(cellI.x) * 0.137 + 31.0,
+    f32(cellI.y) * 0.181 + 47.0
+  )) - 0.5;
+  let sourceStartupAuthority = 1.0 - smoothstep(0.025, 0.30, transportedSourceStructure);
+  let fixedSourceDephase = step(0.5, u.reserved_source_extension_0.x);
+  let sourceStartupDephase = sourceSpatialDephase * sourceStartupAuthority * fixedSourceDephase;
+  let sourceStartupDephaseB = sourceSpatialDephaseB * sourceStartupAuthority * fixedSourceDephase;
   let breakup = clamp(
-    0.64
-      + 0.24 * sin(p.x * 19.0 * tallPlumeTransportedDetailFrequency + p.z * 7.0 * tallPlumeTransportedDetailFrequency + time * 1.7)
-      + 0.20 * cos(p.z * 23.0 * tallPlumeTransportedDetailFrequency - p.x * 5.0 * tallPlumeTransportedDetailFrequency - time * 1.3)
-      + 0.16 * hash31(vec3<f32>(gid) * 0.061 * tallPlumeTransportedDetailFrequency + vec3<f32>(floor(time * 2.0))),
-    0.16,
-    1.22
+    0.82 + transportedSourceStructure * 0.16 + sourceStartupDephase * 0.12,
+    0.62,
+    1.14
   );
   var bonfireSourceBreakup = 0.0;
   var bonfireDetailBreakup = breakup;
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
-  let tallPlumeSmokeDebandAngle = atan2(sourceCenter.z, sourceCenter.x);
-  let tallPlumeSmokeDebandWarp = sourceCenter.xz
-    + vec2<f32>(
-      sin(sourceCenter.z * 8.7 + sourceCenter.y * 4.9 + time * 0.23),
-      cos(sourceCenter.x * 7.9 - sourceCenter.y * 4.3 - time * 0.19)
-    ) * scaledSmokeSourceRadius * 0.28;
-  let tallPlumeSmokeDebandBasis = clamp(
-    0.78
-      + 0.11 * sin(length(tallPlumeSmokeDebandWarp) * 22.0 - sourceCenter.y * 6.4 + time * 0.42)
-      + 0.08 * cos(tallPlumeSmokeDebandAngle * 5.0 + sourceCenter.y * 7.2 - time * 0.31)
-      + 0.07 * (hash31(floor(vec3<f32>(
-        tallPlumeSmokeDebandWarp.x * 11.0,
-        sourceCenter.y * 9.0,
-        tallPlumeSmokeDebandWarp.y * 11.0
-      ))) - 0.5),
-    0.46,
-    1.16
+  let tallPlumeSmokeSourceBreakup = clamp(
+    0.86
+      + transportedSourceStructure * 0.10
+      + sourceStartupDephase * 0.08
+      + sourceStartupDephaseB * 0.06,
+    0.68,
+    1.10
   );
-  let tallPlumeSmokeSourceBreakup = tallPlumeSmokeDebandBasis;
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * mix(breakup, tallPlumeSmokeSourceBreakup, tallPlumeScene) * inputFlow;
   let tallPlumeEmitterBand = smoothstep(-0.25, -0.10, sourceCenter.y) * (1.0 - smoothstep(0.12, 0.40, sourceCenter.y));
   let tallPlumeSourceWidthGate = tallPlumeScene * smoothstep(0.095, 0.180, scaledSourceRadius);
   let tallPlumeSourceRadial01 = clamp(sourceRadial / max(scaledSourceRadius, 0.001), 0.0, 3.0);
-  let tallPlumeFrontPacketDensity = mix(1.0, 2.25, tallPlumeSourceWidthGate);
-  let tallPlumeSourceAngle = tallPlumeSmokeDebandAngle;
   let tallPlumeAnnularFrontRadius = mix(0.70, 0.86, tallPlumeSourceWidthGate);
   let tallPlumeAnnularFrontWidth = 0.18 - tallPlumeSourceWidthGate * 0.035;
   let tallPlumeAnnularFrontBand = exp(
@@ -2959,12 +3841,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       / max(0.0025, tallPlumeAnnularFrontWidth * tallPlumeAnnularFrontWidth)
   );
   let tallPlumeFrontPacketBreakup = clamp(
-    0.72
-      + (breakup - 0.64) * 0.38
-      + 0.16 * sin(tallPlumeSourceAngle * (4.0 + tallPlumeFrontPacketDensity * 2.0) + sourceRadial * (23.0 + tallPlumeFrontPacketDensity * 7.0) - time * 1.45)
-      + 0.12 * cos(tallPlumeSourceAngle * (7.0 + tallPlumeFrontPacketDensity) - p.y * 13.0 + time * 1.10),
-    0.36,
-    1.34
+    0.84
+      + (breakup - 0.82) * 0.38
+      + fireLayer.w * 0.12
+      + combustionFrontTopology * 0.14
+      + sourceStartupDephaseB * 0.08,
+    0.62,
+    1.16
   );
   let tallPlumeInteriorFireRelief = mix(
     1.0,
@@ -2972,12 +3855,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     tallPlumeSourceWidthGate
   );
   let tallPlumeEmitterBreakup = clamp(
-    0.70
-      + (breakup - 0.64) * 0.62
-      + 0.14 * sin(p.y * 18.0 + sourceRadial * 21.0 - time * 1.55)
-      + 0.10 * cos(p.x * 16.0 - p.z * 13.0 + time * 1.10),
-    0.28,
-    1.18
+    0.82
+      + (breakup - 0.82) * 0.62
+      + fireLayer.z * 0.10
+      + microLayer.y * 0.12
+      + sourceStartupDephase * 0.07,
+    0.60,
+    1.14
   );
   let tallPlumeAnnularFrontBirth = tallPlumeSourceWidthGate
     * tallPlumeEmitterBand
@@ -2990,18 +3874,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * inputFlow
     * tallPlumeInteriorFireRelief
     + tallPlumeAnnularFrontBirth * 0.34;
-  let canonicalSourceCell = vec2<f32>(
-    sin(p.x * 8.1 + p.z * 2.7 + canonicalPhaseTime * 0.43),
-    cos(p.z * 7.6 - p.x * 3.2 - canonicalPhaseTime * 0.39)
-  );
-  let canonicalSourceWarp = sourceCenter.xz + canonicalSourceCell * scaledSmokeSourceRadius * 0.16;
+  let canonicalSourceWarp = sourceCenter.xz;
   let canonicalSourceBreakup = clamp(
-    0.78
-      + 0.16 * sin(atan2(p.z, p.x) * 3.0 + canonicalPhaseTime * 0.33)
-      + 0.12 * cos(sourceRadial * 22.0 - canonicalPhaseTime * 0.46)
-      + 0.08 * hash31(vec3<f32>(p.x * 5.0, p.y * 2.0, p.z * 5.0) + vec3<f32>(floor(canonicalPhaseTime * 0.75))),
-    0.48,
-    1.18
+    0.86
+      + transportedSourceStructure * 0.14
+      + sourceStartupDephaseB * 0.10,
+    0.68,
+    1.12
   );
   let canonicalSource = exp(-dot(canonicalSourceWarp, canonicalSourceWarp) / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius * 1.20))
     * canonicalSourceBand
@@ -3011,36 +3890,43 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireVertical = (p.y - bonfireSourceY) / 0.23;
   let bonfireCoreRadius = max(0.090, scaledSourceRadius * 1.72);
   let bonfireSmokeRadius = max(0.125, scaledSmokeSourceRadius * 1.38);
-  var bonfireSmoothCombustion = vec4<f32>(0.0);
-  var bonfirePacketCombustion = vec4<f32>(0.0);
-  if (bonfireScene > 0.5) {
-    bonfireSmoothCombustion = bonfireCombustionCellField(p, bonfireSourceY, bonfireCoreRadius, scaledDetailFrequency, time);
-    bonfirePacketCombustion = bonfireCombustionPacketField(p, bonfireSourceY, bonfireCoreRadius, scaledDetailFrequency, time);
-  }
-  let bonfireCombustion = mix(bonfireSmoothCombustion, bonfirePacketCombustion, bonfireScene);
-  let bonfireTongues = bonfireFlameTongues(bonfireCombustion, fireLickOperatorGain, scaledDetailFrequency);
-  let bonfireInterfaceBirth = bonfireInterfaceCombustion(bonfireCombustion, smoke, heat, flame);
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
+  var bonfireCombustion = vec4<f32>(0.0);
+  var bonfireSourceStructure = vec4<f32>(0.0);
+  if (bonfireScene > 0.5) {
+    let bonfireSourceFlowEnergy = smoothstep(0.004, 0.18, length(prev.xyz - advected.xyz));
+    bonfireCombustion = bonfireTransportedCombustionField(
+      p,
+      bonfireSourceY,
+      bonfireCoreRadius,
+      fireLayer,
+      microLayer,
+      combustionFrontTopology,
+      interfaceEnergy,
+      bonfireSourceFlowEnergy
+    );
+    bonfireSourceStructure = bonfireTransportedSourceBreakup(
+      p,
+      bonfireSourceY,
+      bonfireCoreRadius,
+      fireLayer,
+      microLayer,
+      combustionFrontTopology,
+      interfaceEnergy,
+      bonfireSourceFlowEnergy
+    );
+  }
+  let bonfireTongues = bonfireFlameTongues(bonfireCombustion, fireLickOperatorGain);
+  let bonfireInterfaceBirth = bonfireInterfaceCombustion(bonfireCombustion, smoke, heat, flame);
   let smoothBonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
   let bonfireVisualAboveSource = bonfireSourceY - p.y;
   var bonfireEdgeBreakup = 1.0;
   var bonfireLayeredBreakup = 1.0;
   if (bonfireScene > 0.5) {
-    bonfireSourceBreakup = bonfireMirrorBalancedBreakup(p, scaledDetailFrequency, time, 0.0);
-    bonfireDetailBreakup = bonfireMirrorBalancedBreakup(p, scaledDetailFrequency, time * 1.07, 1.4);
-    bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup(p, scaledDetailFrequency, bonfireTongues, time);
-    bonfireLayeredBreakup = clamp(
-      0.68
-        + (bonfireMirrorBalancedBreakup(vec3<f32>(
-          p.x * 0.94 + sin(bonfireVisualAboveSource * 7.0 + time * 0.81) * 0.025,
-          p.y * 1.31 + sourceRadial * 0.28,
-          p.z * 1.08 + cos(bonfireVisualAboveSource * 6.0 - time * 0.67) * 0.025
-        ), scaledDetailFrequency * 1.18, time * 1.19, 6.4) - 0.72) * 0.58
-        + sin(bonfireVisualAboveSource * 18.0 + sourceRadial * 13.0 - time * 1.33) * 0.16
-        + cos(bonfireVisualAboveSource * 11.0 - sourceRadial * 17.0 + time * 1.06) * 0.12,
-      0.30,
-      1.34
-    );
+    bonfireSourceBreakup = bonfireSourceStructure.x;
+    bonfireDetailBreakup = bonfireSourceStructure.y;
+    bonfireEdgeBreakup = bonfireSourceStructure.z;
+    bonfireLayeredBreakup = bonfireSourceStructure.w;
   }
   let bonfireSourcePlugSuppressor = mix(0.14, 1.0, smoothstep(0.018, bonfireCoreRadius * 0.82, sourceRadial));
   let bonfireCentralFireRelief = bonfireSourcePlugSuppressor;
@@ -3048,17 +3934,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireFuelInjectionMask = smoothstep(bonfireSourceY - 0.34, bonfireSourceY - 0.04, p.y);
   let bonfireLiftedFireBand = smoothstep(0.04, 0.18, bonfireVisualAboveSource) * (1.0 - smoothstep(0.54, 0.88, bonfireVisualAboveSource));
   let bonfireLiftedFireRadius = mix(bonfireCoreRadius * 0.82, bonfireSmokeRadius * 1.12, smoothstep(0.10, 0.58, bonfireVisualAboveSource));
-  let bonfirePacketRisingFireGate = mix(0.24, 1.0, smoothstep(0.055, 0.35, bonfireVisualAboveSource));
+  let bonfireRisingFireGate = mix(0.24, 1.0, smoothstep(0.055, 0.35, bonfireVisualAboveSource));
   let bonfireInjectedFuel = clamp(
     (
       smoothBonfireFireball * 0.32
-        + bonfirePacketCombustion.x * 0.38
-        + bonfirePacketCombustion.w * 0.16
+        + bonfireCombustion.x * 0.38
+        + bonfireCombustion.w * 0.16
     ) * bonfireFuelInjectionMask * inputFlow * sourceScaleCompensation,
     0.0,
     2.2
   );
-  let bonfireLiftedFireLobes = exp(-sourceRadial * sourceRadial / max(0.0068, bonfireLiftedFireRadius * bonfireLiftedFireRadius))
+  let bonfireLiftedFireStructure = exp(-sourceRadial * sourceRadial / max(0.0068, bonfireLiftedFireRadius * bonfireLiftedFireRadius))
     * bonfireLiftedFireBand
     * (0.20 + bonfireInterfaceBirth * 0.52 + bonfireCombustion.z * 0.20 + bonfireTongues * 0.16)
     * bonfireEdgeBreakup;
@@ -3072,11 +3958,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * (0.46 + bonfireLayeredBreakup * 0.28 + bonfireTongues * 0.18 + bonfireEdgeBreakup * 0.16);
   let bonfireFuelHeatContact = clamp(
     bonfireInjectedFuel
-      * (bonfireSupportHeat + heat * 0.30 + bonfirePacketCombustion.x * 0.18)
+      * (bonfireSupportHeat + heat * 0.30 + bonfireCombustion.x * 0.18)
       * (
         bonfireInterfaceBirth * 0.55
           + bonfireCombustion.z * 0.38
-          + bonfirePacketCombustion.y * 0.30
+          + bonfireCombustion.y * 0.30
           + bonfireOffAxisReactionRing * 0.42
           + interfaceEnergy * 1.35
       ),
@@ -3085,9 +3971,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let bonfireReactionProgress = clamp(
     bonfireFuelHeatContact * (1.10 + bonfireTongues * 0.16)
-      + bonfireOffAxisReactionRing * (0.46 + bonfirePacketCombustion.z * 0.24)
-      + bonfireLiftedFireLobes * (0.48 + bonfireInterfaceBirth * 0.20)
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.20,
+      + bonfireOffAxisReactionRing * (0.46 + bonfireCombustion.z * 0.24)
+      + bonfireLiftedFireStructure * (0.48 + bonfireInterfaceBirth * 0.20)
+      + bonfireCombustion.w * bonfireFrontLiftGate * 0.20,
     0.0,
     2.8
   );
@@ -3101,7 +3987,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let bonfireReferenceSourceModel = vec4<f32>(bonfireSupportHeat, bonfireInjectedFuel, bonfireReactionProgress, bonfireSootFromReaction);
   let bonfireFireball = bonfireReactionProgress;
-  let bonfireSourceCarrier = bonfireReactionProgress * 0.38 + bonfirePacketCombustion.x * 0.18 + bonfireLiftedFireLobes * 0.24 + bonfireOffAxisReactionRing * 0.18;
+  let bonfireSourceCarrier = bonfireReactionProgress * 0.38 + bonfireCombustion.x * 0.18 + bonfireLiftedFireStructure * 0.24 + bonfireOffAxisReactionRing * 0.18;
   let bonfireInterfaceSmokeBand = smoothstep(-0.04, 0.06, bonfireVisualAboveSource) * (1.0 - smoothstep(0.28, 0.52, bonfireVisualAboveSource));
   let bonfireInterfaceSmokeRadius = bonfireSmokeRadius * mix(1.18, 0.86, smoothstep(0.02, 0.42, bonfireVisualAboveSource));
   let bonfireNarrowInterfaceSmokeSource = (
@@ -3115,9 +4001,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let source = mix(mix(columnSource, canonicalSource, canonicalPlumeScene), max(bonfireSmokeSource, bonfireSourceCarrier * inputFlow * 0.72), bonfireScene);
   let emberRingRadius = scaledSourceRadius * 0.94;
   let emberRingWidth = max(0.026, scaledSourceRadius * 0.22);
-  let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
+  let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth))
+    * sourceBand
+    * inputFlow
+    * clamp(0.22 + transportedSourceStructure * 0.10 + sourceStartupDephase * 0.06, 0.16, 0.42);
   let bonfireEmberRing = (
-    exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireInterfaceSmokeBand * (0.24 + 0.18 * sin(time * 2.4 + sourceRadial * 19.0 * scaledDetailFrequency))
+    exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8))
+      * bonfireInterfaceSmokeBand
+      * clamp(0.22 + bonfireSourceStructure.y * 0.12 + bonfireSourceStructure.z * 0.10, 0.18, 0.48)
       + bonfireCombustion.z * 0.18
   ) * inputFlow;
   let emberRing = mix(columnEmberRing * (1.0 - canonicalPlumeScene), bonfireEmberRing, bonfireScene);
@@ -3133,7 +4024,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireCoreHeat = clamp(
     bonfireReferenceSourceModel.x * 0.92
       + bonfireReactionProgress * 0.18
-      + bonfirePacketCombustion.x * 0.28
+      + bonfireCombustion.x * 0.28
       + bonfireEmberRing * 0.18,
     0.0,
     2.2
@@ -3141,18 +4032,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireReactionCoreRelief = mix(0.14, 1.0, smoothstep(bonfireCoreRadius * 0.40, bonfireCoreRadius * 1.08, sourceRadial));
   let bonfireReactionRiseBias = mix(0.45, 1.32, smoothstep(0.06, 0.52, bonfireVisualAboveSource));
   let bonfireLiftedReactionFront = (
-    bonfireOffAxisReactionRing * (0.54 + bonfirePacketCombustion.y * 0.34 + bonfirePacketCombustion.z * 0.26 + bonfireInterfaceBirth * 0.20)
-      + bonfireLiftedFireLobes * bonfireFrontLiftGate * (0.74 + bonfireTongues * 0.18)
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.28
+    bonfireOffAxisReactionRing * (0.54 + bonfireCombustion.y * 0.34 + bonfireCombustion.z * 0.26 + bonfireInterfaceBirth * 0.20)
+      + bonfireLiftedFireStructure * bonfireFrontLiftGate * (0.74 + bonfireTongues * 0.18)
+      + bonfireCombustion.w * bonfireFrontLiftGate * 0.28
   ) * (0.76 + bonfireEdgeBreakup * 0.22);
   let bonfireReactionFront = clamp(
     bonfireReactionProgress * 0.72
       + bonfireFuelHeatContact * 0.46
       + bonfireInterfaceBirth * 0.38
       + bonfireCombustion.z * 0.24
-      + bonfirePacketCombustion.y * 0.22
-      + bonfirePacketCombustion.z * 0.18
-      + bonfireLiftedFireLobes * 0.38
+      + bonfireCombustion.y * 0.22
+      + bonfireCombustion.z * 0.18
+      + bonfireLiftedFireStructure * 0.38
       + bonfireLiftedReactionFront * 1.18
       + bonfireEmberRing * 0.12,
     0.0,
@@ -3167,14 +4058,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     2.0
   );
-  let bonfirePacketFireBirth = bonfirePacketCombustion.x * bonfirePacketRisingFireGate * (0.56 + 0.48 * bonfireTongues + bonfireLayeredBreakup * 0.18)
-    + bonfirePacketCombustion.w * (0.48 + 0.24 * bonfireTongues)
-    + bonfireLiftedFireLobes * (2.28 + 0.92 * bonfireTongues + bonfireLayeredBreakup * 0.56);
+  let bonfireTopologyFireBirth = bonfireCombustion.x * bonfireRisingFireGate * (0.56 + 0.48 * bonfireTongues + bonfireLayeredBreakup * 0.18)
+    + bonfireCombustion.w * (0.48 + 0.24 * bonfireTongues)
+    + bonfireLiftedFireStructure * (2.28 + 0.92 * bonfireTongues + bonfireLayeredBreakup * 0.56);
   let bonfireFireBirth = (
     bonfireReactionProgress * (0.28 + 0.10 * bonfireSourceBreakup + 0.12 * bonfireTongues)
       + bonfireReactionFront * (1.32 + 0.44 * bonfireTongues)
       + bonfireLiftedReactionFront * (0.58 + 0.24 * bonfireTongues)
-      + bonfirePacketFireBirth * 0.92
+      + bonfireTopologyFireBirth * 0.92
       + bonfireEmberRing * 0.26
   ) * inputFlow * sourceScaleCompensation * bonfireEdgeBreakup * (0.82 + bonfireLayeredBreakup * 0.26);
   let bonfireFireSourceBinRelief = mix(
@@ -3189,7 +4080,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireFireBirth * bonfireFireSourceBinRelief * 0.52
       + bonfireReactionFront * bonfireFrontLiftGate * (0.92 + bonfireTongues * 0.24)
       + bonfireLiftedReactionFront * (1.16 + bonfireTongues * 0.30)
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * 0.34,
+      + bonfireTopologyFireBirth * bonfireRisingFireGate * 0.34,
     0.0,
     3.0
   ) * (0.86 + bonfireLayeredBreakup * 0.18);
@@ -3197,26 +4088,26 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireLiftedFlameBirth * 0.72
       + bonfireReactionFront * bonfireFrontLiftGate * 0.42
       + bonfireLiftedReactionFront * 0.34
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * 0.22,
+      + bonfireTopologyFireBirth * bonfireRisingFireGate * 0.22,
     0.0,
     3.0
   );
   let bonfireInteriorEmissionBridge = exp(-sourceRadial * sourceRadial / max(0.0058, bonfireLiftedFireRadius * bonfireLiftedFireRadius * 0.42))
     * bonfireFrontLiftGate
     * smoothstep(0.030, 0.92, bonfireReactionProgress)
-    * (0.10 + bonfireFuelHeatContact * 0.20 + bonfireInterfaceBirth * 0.24 + bonfirePacketCombustion.y * 0.18 + bonfirePacketCombustion.z * 0.16)
+    * (0.10 + bonfireFuelHeatContact * 0.20 + bonfireInterfaceBirth * 0.24 + bonfireCombustion.y * 0.18 + bonfireCombustion.z * 0.16)
     * (0.58 + bonfireLayeredBreakup * 0.26 + bonfireTongues * 0.18);
   let bonfireCombustionFrontLiftCarrier = (
     bonfireLiftedReactionFront * 0.72
-      + bonfireOffAxisReactionRing * (0.40 + bonfirePacketCombustion.y * 0.20 + bonfirePacketCombustion.z * 0.18)
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.20
+      + bonfireOffAxisReactionRing * (0.40 + bonfireCombustion.y * 0.20 + bonfireCombustion.z * 0.18)
+      + bonfireCombustion.w * bonfireFrontLiftGate * 0.20
   ) * (0.82 + bonfireLayeredBreakup * 0.18);
   let bonfireFrontTopologyBirth = bonfireScene * clamp(
     bonfireCombustionFrontLiftCarrier * 1.24
       + bonfireLiftedReactionFront * 0.42
-      + bonfireOffAxisReactionRing * (0.36 + bonfirePacketCombustion.z * 0.18)
-      + bonfireLiftedFireLobes * bonfireFrontLiftGate * 0.24
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.22,
+      + bonfireOffAxisReactionRing * (0.36 + bonfireCombustion.z * 0.18)
+      + bonfireLiftedFireStructure * bonfireFrontLiftGate * 0.24
+      + bonfireCombustion.w * bonfireFrontLiftGate * 0.22,
     0.0,
     2.4
   ) * (0.76 + bonfireLayeredBreakup * 0.20 + bonfireTongues * 0.12);
@@ -3226,7 +4117,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + (bonfireEdgeBreakup - 0.70) * 0.58
       + (bonfireLayeredBreakup - 0.68) * 0.42
       + bonfireTongues * 0.20
-      + bonfirePacketCombustion.z * 0.18,
+      + bonfireCombustion.z * 0.18,
     0.22,
     1.12
   );
@@ -3245,7 +4136,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireCombustionFrontLiftCarrier * 0.46
       + combustionFrontTopology * 0.12
       + bonfireInteriorEmissionBridge * 0.78
-      + bonfirePacketCombustion.z * bonfireFrontLiftGate * 0.24,
+      + bonfireCombustion.z * bonfireFrontLiftGate * 0.24,
     0.0,
     2.6
   );
@@ -3256,14 +4147,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     2.4
   );
-  let bonfireTopologyPacketTransfer = clamp(
+  let bonfireTopologyTransfer = clamp(
     combustionFrontTopology
       * bonfireFrontLiftGate
       * (
         0.22
-          + bonfirePacketCombustion.y * 0.28
-          + bonfirePacketCombustion.z * 0.42
-          + bonfirePacketCombustion.w * 0.20
+          + bonfireCombustion.y * 0.28
+          + bonfireCombustion.z * 0.42
+          + bonfireCombustion.w * 0.20
           + (bonfireLayeredBreakup - 0.68) * 0.34
           + bonfireTongues * 0.24
       )
@@ -3277,18 +4168,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireCombustion.z * 0.18
       + bonfireReactionFront * 0.28
       + combustionFrontTopology * 0.12
-      + bonfirePacketCombustion.y * 0.16
-      + bonfirePacketCombustion.z * 0.14
-      + bonfireLiftedFireLobes * 0.24
+      + bonfireCombustion.y * 0.16
+      + bonfireCombustion.z * 0.14
+      + bonfireLiftedFireStructure * 0.24
       + bonfireCombustionFrontLiftCarrier * 1.16
       + interfaceEnergy * (bonfireSmokeSource + bonfireFireBirth) * 0.20,
     0.0,
     1.85
   );
-  let bonfireVisibleFlamePacketGate = clamp(
-    bonfireTopologyPacketTransfer * (0.74 + bonfireRadianceBreakup * 0.18)
+  let bonfireVisibleFlameTopologyGate = clamp(
+    bonfireTopologyTransfer * (0.74 + bonfireRadianceBreakup * 0.18)
       + bonfireFrontContactRadiance * bonfireFrontLiftGate * 0.18
-      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.14,
+      + bonfireCombustionFrontBirth * bonfireRisingFireGate * 0.14,
     0.0,
     2.4
   );
@@ -3298,7 +4189,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       smoothstep(bonfireCoreRadius * 0.56, bonfireCoreRadius * 1.22, sourceRadial)
     )
       + bonfireFrontLiftGate * 0.18
-      + bonfireTopologyPacketTransfer * 0.08,
+      + bonfireTopologyTransfer * 0.08,
     0.10,
     1.0
   );
@@ -3308,15 +4199,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       smoothstep(bonfireCoreRadius * 0.72, bonfireCoreRadius * 1.34, sourceRadial)
     )
       + bonfireFrontLiftGate * 0.10
-      + bonfireTopologyPacketTransfer * 0.04,
+      + bonfireTopologyTransfer * 0.04,
     0.08,
     1.0
   );
   let bonfirePrimaryVisibleFrontEmission = clamp(
-    bonfireTopologyPacketTransfer * (1.34 + bonfireRadianceBreakup * 0.32)
+    bonfireTopologyTransfer * (1.34 + bonfireRadianceBreakup * 0.32)
       + bonfireTopologyRadianceCarrier * (0.64 + bonfireRadianceBreakup * 0.18)
-      + bonfireVisibleFlamePacketGate * (0.42 + bonfireRadianceBreakup * 0.10)
-      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.32
+      + bonfireVisibleFlameTopologyGate * (0.42 + bonfireRadianceBreakup * 0.10)
+      + bonfireCombustionFrontBirth * bonfireRisingFireGate * 0.32
       + bonfireFrontContactRadiance * bonfireFrontLiftGate * 0.24,
     0.0,
     3.0
@@ -3329,7 +4220,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireFuelHeatContact * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.06
       + bonfireLiftedReactionFront * bonfireRadianceBreakup * 0.18
       + bonfireInteriorEmissionBridge * bonfireVisibleSourcePlugRelief * 0.18
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * bonfireRadianceSourceGate * 0.12
+      + bonfireTopologyFireBirth * bonfireRisingFireGate * bonfireRadianceSourceGate * 0.12
       + bonfireEmberRing * bonfireRadianceSourceGate * 0.04,
     0.0,
     2.4
@@ -3340,7 +4231,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireLayeredBreakup * 0.26
       + bonfireDetailBreakup * 0.22
       + bonfireTongues * 0.18
-      + bonfirePacketCombustion.z * 0.22
+      + bonfireCombustion.z * 0.22
       + fireLick * 0.08,
     0.36,
     1.55
@@ -3348,7 +4239,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireEmissionDetailBirth = clamp(
     bonfireRadianceBirth * (0.34 + bonfireRadianceBreakup * 0.24)
       + bonfireLiftedReactionFront * bonfireFrontLiftGate * bonfireRadianceBreakup * (0.14 + bonfireEmissionDetailCurlFold * 0.16)
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * (0.12 + bonfireTongues * 0.06 + bonfireEmissionDetailCurlFold * 0.08)
+      + bonfireTopologyFireBirth * bonfireRisingFireGate * (0.12 + bonfireTongues * 0.06 + bonfireEmissionDetailCurlFold * 0.08)
       + bonfireInteriorEmissionBridge * (0.14 + bonfireEmissionDetailCurlFold * 0.10)
       + fireLick * 0.12,
     0.0,
@@ -3370,14 +4261,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * (1.0 - smoothstep(0.36, 0.90, p.y));
   let canonicalMinimalFireHeat = canonicalMinimalFireBirth * (0.80 + canonicalBuoyancyLift * 0.30);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
-  let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
+  let artisticSwirl = step(0.5, u.artistic_motion_controls.x);
+  let transportedLateralExcitationEnabled = step(0.5, u.artistic_motion_controls.y);
+  let proceduralDetailForces = step(0.5, u.artistic_motion_controls.z);
   let tallPlumeFireLickSource = mix(source, tallPlumeCombustionSource, tallPlumeScene);
-  let fireLickBreakupEnabled = fireLickOperatorGain > 0.0005;
+  let fireLickBreakupEnabled = fireLickOperatorGain > ${FIRE_LICK_BREAKUP_BYPASS_THRESHOLD};
   var columnLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 0.0));
   var bonfireLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 1.0));
   if (fireLickBreakupEnabled) {
-    columnLickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);
-    bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+    columnLickBirth = fireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);
+    bonfireLickBirth = bonfireFireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   }
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
   let tallPlumeAnnularFrontContribution = tallPlumeAnnularFrontBirth * (0.34 + fireLickOperatorGain * 0.025);
@@ -3390,8 +4283,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let combustionFrontBirth = mix(columnCombustionFrontBirth, bonfireCombustionFrontBirth, bonfireScene);
   let columnFrontTopologyBirth = max(columnCombustionFrontBirth * 0.32, tallPlumeAnnularFrontBirth * 0.42);
   combustionFrontTopology = max(combustionFrontTopology, mix(columnFrontTopologyBirth, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
-  let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
+  let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p));
   let oracleActivityCue = truthOracleActivityCueAtCell(cellI);
+  let oracleActivityCurlGain = clamp(u.oracle_activity_controls.y, 0.0, 3.0);
+  var oracleActivityCurl = vec3<f32>(0.0);
+  if (oracleActivityCue > 0.0005 && oracleActivityCurlGain > 0.0005) {
+    oracleActivityCurl = oracleActivityCurlForce(cellI, oracleActivityCue, oracleActivityCurlGain);
+  }
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let bonfireReferenceFrontContact = clamp(
     bonfireFrontContactRadiance * 0.42
@@ -3416,40 +4314,36 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireDetailLateralDamping = bonfireLocalLateralForceGain;
   let rawDetailCarrier = source + smoke * 0.26 + heat * 0.18;
   let rawMicroCarrier = microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22);
-  let detailForceArtifactGain = 1.0 - detailScaleArtifactQuarantine;
-  let tallPlumeDetailPhaseAnchor = transportedDetailPhaseAnchor(material, fireLayer, microLayer, combustionFrontTopology, prev.xyz, p) * tallPlumeScene;
-  let tallPlumeDetailTime = mix(time, time * 0.72 + dot(tallPlumeDetailPhaseAnchor, vec3<f32>(1.7, -1.1, 1.3)), tallPlumeScene);
-  let tallPlumeDetailP = p + tallPlumeDetailPhaseAnchor;
-  let oracleActivityCurlNoise = oracleActivityCurlNoiseForce(cellI, tallPlumeDetailP, tallPlumeDetailTime, oracleActivityCue, clamp(u.oracle_activity_controls.y, 0.0, 3.0));
   let oracleActivityConfinement = oracleActivityVorticityConfinement(cellI, oracleActivityCue, clamp(u.oracle_activity_controls.z, 0.0, 3.0));
-  let rawDetailForce = turbulentDetailForce(tallPlumeDetailP * (0.82 + physicalDetailScale * 0.30), tallPlumeDetailTime) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
-  let rawMicroForce = turbulentDetailForce(tallPlumeDetailP * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), tallPlumeDetailTime * 2.4) * rawMicroCarrier * 0.026;
-  let rawShredForce = interfaceShreddingForce(cellI, (p + tallPlumeDetailPhaseAnchor * 0.35) * detailDomain, tallPlumeDetailTime, shredOperatorGain, heat, smoke, flame, interfaceShred);
-  let rawFineBreakup = fineScaleBreakup(cellI, tallPlumeDetailP, tallPlumeDetailTime, curl, heat, smoke, source);
-  var symmetricDetailForce = vec2<f32>(0.0);
-  var symmetricMicroForce = vec2<f32>(0.0);
-  var symmetricShredForce = vec2<f32>(0.0);
-  var symmetricFineBreakup = vec2<f32>(0.0);
-  if (bonfireScene > 0.5) {
-    symmetricDetailForce = bonfireSymmetricLateralForce(p, time, rawDetailCarrier, 0.018 + curl * 0.010, 0.0);
-    symmetricMicroForce = bonfireSymmetricLateralForce(p, time * 1.31, rawMicroCarrier, 0.026, 1.7);
-    symmetricShredForce = bonfireSymmetricLateralForce(p, time * 1.13, length(rawShredForce.xz), 1.0, 3.2);
-    symmetricFineBreakup = bonfireSymmetricLateralForce(p, time * 0.91, length(rawFineBreakup.xz), 1.0, 4.6);
+  var detailForce = vec3<f32>(0.0);
+  var microForce = vec3<f32>(0.0);
+  var shredForce = vec3<f32>(0.0);
+  var fineBreakup = vec3<f32>(0.0);
+  if (proceduralDetailForces > 0.5) {
+    let rawDetailForce = transportedDetailDirection(material, fireLayer, microLayer, combustionFrontTopology, prev.xyz)
+      * rawDetailCarrier
+      * (0.018 + curl * 0.010)
+      * (1.0 - detailScaleArtifactQuarantine);
+    let rawMicroForce = transportedDetailDirection(microLayer, fireLayer, material, combustionFrontTopology, prev.xyz)
+      * rawMicroCarrier
+      * 0.026;
+    let rawShredForce = interfaceShreddingForce(cellI, shredOperatorGain, heat, smoke, flame, interfaceShred);
+    let rawFineBreakup = fieldDerivedFineScaleBreakup(cellI, curl, heat, smoke, source);
+    let detailLateral = vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping;
+    let microLateral = vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping;
+    let shredLateral = vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping;
+    let fineBreakupLateral = vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping;
+    detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation;
+    microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation;
+    shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation;
+    fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
   }
-  let detailLateral = mix(vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping, symmetricDetailForce, bonfireNonWindAuthority);
-  let microLateral = mix(vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping, symmetricMicroForce, bonfireNonWindAuthority);
-  let shredLateral = mix(vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping, symmetricShredForce, bonfireNonWindAuthority);
-  let detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation;
-  let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation;
-  let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation;
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
-  let fineBreakupLateral = mix(vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping, symmetricFineBreakup, bonfireNonWindAuthority);
-  let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
-  vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
+  vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
-  vel = vel + oracleActivityCurlNoise;
+  vel = vel + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
   vel = vel + detailForce;
@@ -3462,21 +4356,24 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalLiftGate = canonicalPlumeScene * (1.0 - smoothstep(0.52, 0.94, p.y));
   vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift);
   let canonicalRadial = max(length(p.xz), 0.025);
-  let canonicalEntrainmentCell = vec3<f32>(
-    sin(p.y * 5.2 + p.z * 3.1 + canonicalPhaseTime * 0.37),
-    sin(p.x * 4.7 - p.z * 2.9 - canonicalPhaseTime * 0.31) * 0.35,
-    cos(p.y * 4.8 - p.x * 3.4 + canonicalPhaseTime * 0.41)
-  );
   let canonicalEntrainmentBand = canonicalPlumeScene
     * smoothstep(-0.64, -0.28, p.y)
     * (1.0 - smoothstep(0.50, 0.86, p.y));
   let canonicalTangent = vec3<f32>(-p.z / canonicalRadial, 0.0, p.x / canonicalRadial);
   let canonicalInward = vec3<f32>(-p.x / canonicalRadial, 0.0, -p.z / canonicalRadial);
-  let canonicalEntrainmentVelocity = (
-    canonicalTangent * canonicalEntrainmentCell.x * 0.030
-      + canonicalInward * max(canonicalEntrainmentCell.z, -0.25) * 0.018
-      + vec3<f32>(0.0, canonicalEntrainmentCell.y * 0.009, 0.0)
-  ) * smoke * canonicalEntrainmentBand * (0.75 + speed * 0.12);
+  var canonicalEntrainmentVelocity = vec3<f32>(0.0);
+  if (canonicalPlumeScene > 0.5 && canonicalEntrainmentBand > 0.0005) {
+    let canonicalTransportDelta = prev.xyz - advected.xyz;
+    let canonicalDensityDelta = prev.w - advected.w;
+    let canonicalTangentTransport = clamp(dot(canonicalTransportDelta, canonicalTangent), -0.05, 0.05);
+    let canonicalInwardTransport = clamp(dot(canonicalTransportDelta, canonicalInward) + canonicalDensityDelta * 0.035, -0.035, 0.035);
+    let canonicalVerticalTransport = clamp(canonicalTransportDelta.y + canonicalDensityDelta * 0.020, -0.025, 0.025);
+    canonicalEntrainmentVelocity = (
+      canonicalTangent * canonicalTangentTransport * 0.42
+        + canonicalInward * canonicalInwardTransport * 0.30
+        + vec3<f32>(0.0, canonicalVerticalTransport * 0.14, 0.0)
+    ) * smoke * canonicalEntrainmentBand * (0.75 + speed * 0.12);
+  }
   vel = vel + canonicalEntrainmentVelocity;
   let canonicalRadialSpreadBand = canonicalPlumeScene * smoothstep(-0.66, -0.20, p.y) * (1.0 - smoothstep(0.42, 0.82, p.y));
   let canonicalRadialSpread = vec3<f32>(p.x / canonicalRadial, 0.0, p.z / canonicalRadial)
@@ -3485,7 +4382,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * (0.018 + speed * 0.004);
   vel = vel + canonicalRadialSpread;
   let bonfireLiftImpulse = bonfireEntrainedLift(smoke, heat, flame, source, bonfireCombustion, plumeRiseScale, speed);
-  let bonfirePacketLiftImpulse = bonfirePacketCombustion.w * plumeRiseScale * (0.014 + speed * 0.0048 + fireLickAmount * 0.0012);
+  let bonfireTopologyLiftImpulse = bonfireCombustion.w * plumeRiseScale * (0.014 + speed * 0.0048 + fireLickAmount * 0.0012);
   let bonfireBroadSupportLiftImpulse = bonfireBroadSupportSmokeSource * plumeRiseScale * (0.012 + speed * 0.0028);
   let bonfireLiftedSootBuoyancy = (
     bonfireSootBirth * 0.38
@@ -3493,9 +4390,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireLiftedReactionFront * 0.22
   ) * bonfireFrontLiftGate * plumeRiseScale * (0.011 + speed * 0.0026 + curl * 0.0012);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
-  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfirePacketLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
-  vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
-  vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
+  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
+  if (transportedLateralExcitationEnabled > 0.5) {
+    let transportedLateralDelta = prev.xz - advected.xz;
+    let transportedLateralGain = clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24);
+    let transportedLateralExcitation = clamp(
+      transportedLateralDelta * transportedLateralGain,
+      vec2<f32>(-0.006),
+      vec2<f32>(0.006)
+    );
+    vel = vel + vec3<f32>(transportedLateralExcitation.x, 0.0, transportedLateralExcitation.y);
+  }
   let bonfireNonWindLateralDampingTarget = mix(1.0, max(explicitWindAuthority, 0.82), bonfireScene);
   let bonfireNonWindLateralDamping = mix(1.0, bonfireNonWindLateralDampingTarget, bonfireLateralDampingAblation);
   vel.x = vel.x * bonfireNonWindLateralDamping;
@@ -3519,37 +4424,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * bonfireNonWindAuthority
     * bonfireCenteringCarrier
     * (0.076 + speed * 0.0120);
-  var bonfireZeroMeanFlow = vec3<f32>(0.0);
-  var bonfirePlumeRoll = vec3<f32>(0.0);
-  var bonfireCellRoll = vec3<f32>(0.0);
-  var bonfireLayeredPlumeShear = vec3<f32>(0.0);
-  if (bonfireScene > 0.5) {
-    bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow(p, bonfireSourceY, bonfireCombustion, time, curl * 0.23 + microAmount * 0.15 + shredAmount * 0.070 + fireLickAmount * 0.060);
-    bonfirePlumeRoll = bonfireZeroMeanPlumeRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.24 + microAmount * 0.13 + shredAmount * 0.080 + fireLickAmount * 0.060);
-    bonfireCellRoll = bonfireConvectiveCellRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.22 + microAmount * 0.12 + shredAmount * 0.085 + fireLickAmount * 0.055);
-    let bonfireLayerShearRadial = max(length(p.xz), 0.025);
-    let bonfireLayerShearDir = p.xz / bonfireLayerShearRadial;
-    let bonfireLayerShearTangent = vec2<f32>(-bonfireLayerShearDir.y, bonfireLayerShearDir.x);
-    let bonfireLayerShearBand = smoothstep(0.12, 0.32, bonfireVisualAboveSource) * (1.0 - smoothstep(1.02, 1.52, bonfireVisualAboveSource));
-    let bonfireLayerShearPhase = bonfireVisualAboveSource * 19.0 + bonfireLayerShearRadial * 12.0 + time * 1.18;
-    let bonfireLayeredPlumeShear2 = (bonfireLayerShearDir * sin(bonfireLayerShearPhase) * 0.64 + bonfireLayerShearTangent * cos(bonfireLayerShearPhase * 0.73 + bonfireLayeredBreakup * 2.0) * 0.52)
-      * bonfireLayerShearBand
-      * bonfireCenteringCarrier
-      * (0.026 + curl * 0.007 + microAmount * 0.004)
-      * (0.62 + bonfireLayeredBreakup * 0.48);
-    bonfireLayeredPlumeShear = vec3<f32>(
-      bonfireLayeredPlumeShear2.x,
-      -sin(bonfireLayerShearPhase * 0.81) * bonfireLayerShearBand * bonfireCenteringCarrier * 0.010,
-      bonfireLayeredPlumeShear2.y
-    );
-  }
-  vel = vel + bonfireZeroMeanFlow * bonfireNonWindAuthority;
-  vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority;
-  vel = vel + bonfireCellRoll * bonfireNonWindAuthority;
-  vel = vel + bonfireLayeredPlumeShear * bonfireNonWindAuthority * bonfireShearAblation;
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireInstabilityProbe * 1.6;
-  vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority * bonfireInstabilityProbe * 1.4;
-  vel = vel + bonfireCellRoll * bonfireNonWindAuthority * bonfireInstabilityProbe * 1.2;
   vel = vel + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
   vel = vel + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
@@ -3649,8 +4524,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
       + interfaceEnergy * 1.55
-      + length(bonfireLayeredPlumeShear.xz) * 8.0
-      + abs(bonfireLayeredPlumeShear.y) * 14.0
       + bonfireLayeredSmokeBreakup * 0.22
       + bonfireDetailBreakup * 0.18
       + bonfireTongues * 0.12,
@@ -3672,24 +4545,26 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.28 + microSmoke * 0.13 + interfaceSourceTerm) * 1.72);
   interfaceShred = max(interfaceShred, oracleMaterialBirth * 0.26);
   interfaceShred = max(interfaceShred, externalInjection.micro.y);
-  let bonfirePacketLickBirth = bonfireScene * (
-    bonfirePacketCombustion.y * (0.46 + fireLickOperatorGain * 0.22 + bonfireLayeredBreakup * 0.18)
-      + bonfirePacketCombustion.z * (0.24 + bonfireTongues * 0.16)
-      + bonfirePacketCombustion.w * 0.11
+  let bonfireTopologyLickBirth = bonfireScene * (
+    bonfireCombustion.y * (0.46 + fireLickOperatorGain * 0.22 + bonfireLayeredBreakup * 0.18)
+      + bonfireCombustion.z * (0.24 + bonfireTongues * 0.16)
+      + bonfireCombustion.w * 0.11
   );
   fireLick = fireLick * mix(1.0, max(0.18, bonfireVisibleSourcePlugRelief), bonfireScene);
-  let bonfireFireLickSourceBirth = clamp((bonfireFrontContactRadiance * 0.42 + bonfireRadianceBirth * 0.34 + bonfireCombustionFrontBirth * 0.14 + bonfireTopologyPacketTransfer * 0.62) * bonfireVisibleSourcePlugRelief, 0.0, 2.6);
+  let bonfireFireLickSourceBirth = clamp((bonfireFrontContactRadiance * 0.42 + bonfireRadianceBirth * 0.34 + bonfireCombustionFrontBirth * 0.14 + bonfireTopologyTransfer * 0.62) * bonfireVisibleSourcePlugRelief, 0.0, 2.6);
   let fireLickSourceBirth = mix(fireBirth, bonfireFireLickSourceBirth, bonfireScene);
-  fireLick = max(fireLick, lickBirth.x + fireLickSourceBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.28 + bonfireLiftedFireLobes * bonfireScene * 0.10 + bonfireBroadSupportSmokeSource * bonfireScene * 0.008 + bonfirePacketLickBirth);
+  fireLick = max(fireLick, lickBirth.x + fireLickSourceBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.28 + bonfireLiftedFireStructure * bonfireScene * 0.10 + bonfireBroadSupportSmokeSource * bonfireScene * 0.008 + bonfireTopologyLickBirth);
   fireLick = max(fireLick, oracleMaterialBirth * 0.16);
   let tallPlumeAboveSource = smoothstep(-0.72, 0.34, p.y);
   let tallPlumeRadialContour = smoothstep(scaledSourceRadius * 0.22, scaledSourceRadius * 1.10, sourceRadial)
     * (1.0 - smoothstep(scaledSmokeSourceRadius * 1.55, scaledSmokeSourceRadius * 3.00, sourceRadial));
   let tallPlumeFireContourBreakup = clamp(
     0.72
-      + 0.20 * sin(p.y * 17.0 + sourceRadial * 29.0 - time * 2.4)
-      + 0.16 * cos(p.x * 23.0 - p.z * 19.0 + p.y * 7.0 + time * 1.6)
-      + 0.14 * (hash31(floor(vec3<f32>(p.x * 18.0, p.y * 24.0, p.z * 18.0) + vec3<f32>(floor(time * 3.0)))) - 0.5),
+      + transportedSourceStructure * 0.20
+      + fireLayer.w * 0.10
+      + microLayer.y * 0.08
+      + sourceStartupDephase * 0.10
+      + sourceStartupDephaseB * 0.08,
     0.30,
     1.20
   );
@@ -3723,16 +4598,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   ) * tallPlumeFuelReactionGate;
   let columnReactionBoundFlameStorageBirth = mix(columnFlameStorageBirth, tallPlumeReactionBoundFlameStorageBirth, tallPlumeScene);
   let bonfireFrontStorageOccupancy = clamp(
-    bonfireVisibleFlamePacketGate * 1.08
+    bonfireVisibleFlameTopologyGate * 1.08
       + bonfireFlameOccupancy * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.12
       + bonfireFrontContactRadiance * bonfireFrontLiftGate * 0.22
-      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.20
+      + bonfireCombustionFrontBirth * bonfireRisingFireGate * 0.20
       + bonfireTransportedEmissionDetail * 0.18,
     0.0,
     3.0
   );
   let bonfireFlameStorageBirth = bonfireFrontStorageOccupancy * (0.42 + bonfireTongues * 0.08) * bonfireFlameStorageSourceRelief
-    + bonfireVisibleFlamePacketGate * 0.28 * max(0.44, bonfireFlameStorageSourceRelief)
+    + bonfireVisibleFlameTopologyGate * 0.28 * max(0.44, bonfireFlameStorageSourceRelief)
     + bonfireRadianceBirth * 0.06 * bonfireFlameStorageSourceRelief
     + bonfireFuelHeatContact * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.004
     + fireLick * 0.14 * bonfireFlameStorageSourceRelief;
@@ -3741,10 +4616,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let columnEmberBirth = mix(fireBirth * 0.78 + flame * 0.22, tallPlumeFuelHeatReaction * 0.62 + flame * 0.18 + fireLick * 0.08, tallPlumeScene);
   ember = max(ember, mix(columnEmberBirth, bonfireRadianceBirth * 0.54 + flame * 0.16, bonfireScene) + emberFleck * 0.18);
   ember = max(ember, externalInjection.fire.y);
-  let bonfirePacketVisibleCarrierBirth = bonfireScene * (
-    bonfirePacketCombustion.z * (0.72 + bonfireLayeredBreakup * 0.28)
-      + bonfirePacketCombustion.y * 0.34
-      + bonfirePacketCombustion.w * 0.18
+  let bonfireTopologyVisibleCarrierBirth = bonfireScene * (
+    bonfireCombustion.z * (0.72 + bonfireLayeredBreakup * 0.28)
+      + bonfireCombustion.y * 0.34
+      + bonfireCombustion.w * 0.18
   ) * (0.52 + bonfireTongues * 0.34 + fireLickOperatorGain * 0.12);
   let columnFlameDetailBirth = (fireBirth * 1.02 + heatExpansion.y * 4.0) * (0.42 + 0.42 * bonfireDetailBreakup) + lickBirth.z + fireLick * 0.34;
   let tallPlumeSourceSlabRelief = mix(1.0, tallPlumeRawSourceFireRelief * tallPlumeFireContourBreakup, tallPlumeScene);
@@ -3763,23 +4638,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       bonfireFrontLiftGate,
       smoothstep(0.13, 0.42, bonfireVisualAboveSource) * (1.0 - smoothstep(0.96, 1.28, bonfireVisualAboveSource))
     )
-      + bonfireTopologyPacketTransfer * 0.06,
+      + bonfireTopologyTransfer * 0.06,
     0.0,
     1.0
   );
   let bonfireFrontAuthoredVisibleFireBirth = clamp(
-    bonfireVisibleFlamePacketGate * (0.72 + bonfireRadianceBreakup * 0.16)
-      + bonfireTopologyPacketTransfer * (1.06 + bonfireRadianceBreakup * 0.26)
-      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.36
+    bonfireVisibleFlameTopologyGate * (0.72 + bonfireRadianceBreakup * 0.16)
+      + bonfireTopologyTransfer * (1.06 + bonfireRadianceBreakup * 0.26)
+      + bonfireCombustionFrontBirth * bonfireRisingFireGate * 0.36
       + bonfireFrontContactRadiance * bonfireVisibleFireFrontGate * 0.24
-      + bonfirePacketVisibleCarrierBirth * 0.46,
+      + bonfireTopologyVisibleCarrierBirth * 0.46,
     0.0,
     3.0
   );
   let bonfireVisibleFireCarrierBirth = bonfirePrimaryVisibleFrontEmission * (0.72 + bonfireRadianceBreakup * 0.18)
     + bonfireTransportedEmissionDetail * (0.34 + bonfireRadianceBreakup * 0.08) * max(0.30, bonfireVisibleFireFrontGate)
     + bonfireFrontAuthoredVisibleFireBirth
-    + bonfireTopologyPacketTransfer * bonfireVisibleFireFrontGate * 0.10
+    + bonfireTopologyTransfer * bonfireVisibleFireFrontGate * 0.10
     + bonfireRadianceBirth * 0.08 * bonfireVisibleSourcePlugRelief
     + bonfireInteriorEmissionBridge * bonfireVisibleFireFrontGate * 0.14
     + heatExpansion.y * 0.92 * bonfireVisibleFireFrontGate
@@ -3957,56 +4832,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = interfaceShred * canonicalProofCarrierMask;
   fireLick = fireLick * canonicalProofCarrierMask;
   emberFleck = emberFleck * canonicalProofCarrierMask;
-  let quenchNeighborMax = max(
-    max(readQuenchField(cellI + vec3<i32>(-1, 0, 0)), readQuenchField(cellI + vec3<i32>(1, 0, 0))),
-    max(
-      max(readQuenchField(cellI + vec3<i32>(0, -1, 0)), readQuenchField(cellI + vec3<i32>(0, 1, 0))),
-      max(readQuenchField(cellI + vec3<i32>(0, 0, -1)), readQuenchField(cellI + vec3<i32>(0, 0, 1)))
-    )
-  );
-  let transportedQuench = max(clamp(f32(quenchSrc[idx]) / 65536.0, 0.0, 1.0) * 0.996, quenchNeighborMax * 0.92);
-  let persistentQuench = max(0.0, transportedQuench - 0.0003);
-  quenchDst[idx] = u32(clamp(persistentQuench, 0.0, 1.0) * 65536.0 + 0.5);
-  if (idx == 0u) {
-    let nextSourceWetness = clamp(
-      sourceWetness * 0.997 - (0.0012 + sourceTemperature * 0.0018),
-      0.0,
-      1.0
-    );
-    let sourceHeating = sourceCombustion * 0.006 + sourcePilot * 0.005;
-    let sourceCooling = nextSourceWetness * (0.024 + sourceTemperature * 0.014);
-    let nextSourceTemperature = clamp(sourceTemperature + sourceHeating - sourceCooling - 0.0008, 0.0, 1.0);
-    let sourceWetSuppression = smoothstep(0.18, 0.68, nextSourceWetness);
-    let sourceThermalSupport = smoothstep(0.24, 0.62, nextSourceTemperature);
-    let sourceIgnitionAuthority = max(sourceIgnited, sourcePilot);
-    let sourceCombustionTarget = sourceThermalSupport * (1.0 - sourceWetSuppression) * sourceIgnitionAuthority;
-    let sourceCombustionResponse = select(0.028, 0.020, sourceCombustionTarget < sourceCombustion);
-    let nextSourceCombustion = clamp(
-      sourceCombustion + (sourceCombustionTarget - sourceCombustion) * sourceCombustionResponse,
-      0.0,
-      1.0
-    );
-    let sourceExtinguished = nextSourceCombustion < 0.035 && nextSourceTemperature < 0.34;
-    let sourcePilotCanIgnite = sourcePilot > 0.5 && nextSourceWetness < 0.16 && nextSourceTemperature > 0.30;
-    let unpilotedSourceIgnited = select(0.0, 1.0, sourceIgnited > 0.5 && !sourceExtinguished);
-    let pilotedSourceIgnited = select(sourceIgnited, 1.0, sourcePilotCanIgnite);
-    let nextSourceIgnited = select(unpilotedSourceIgnited, pilotedSourceIgnited, sourcePilot > 0.5);
-    quenchDst[sourceWetnessIndex] = u32(nextSourceWetness * 65536.0 + 0.5);
-    quenchDst[sourceTemperatureIndex] = u32(nextSourceTemperature * 65536.0 + 0.5);
-    quenchDst[sourceCombustionIndex] = u32(nextSourceCombustion * 65536.0 + 0.5);
-    quenchDst[sourceIgnitedIndex] = u32(nextSourceIgnited * 65536.0 + 0.5);
-    quenchDst[sourceLastContactTickIndex] = sourceLastContactTick;
-  }
-  let localQuenchSuppression = smoothstep(0.08, 0.55, persistentQuench);
-  heat = heat * (1.0 - localQuenchSuppression * 0.025);
-  fuel = fuel * (1.0 - localQuenchSuppression * 0.030);
-  flame = flame * (1.0 - localQuenchSuppression * 0.025);
-  ember = ember * (1.0 - localQuenchSuppression * 0.025);
-  flameDetail = flameDetail * (1.0 - localQuenchSuppression * 0.035);
-  combustionFront = combustionFront * (1.0 - localQuenchSuppression * 0.032);
-  combustionFrontTopology = combustionFrontTopology * (1.0 - localQuenchSuppression * 0.028);
-  fireLick = fireLick * (1.0 - localQuenchSuppression * 0.035);
-  emberFleck = emberFleck * (1.0 - localQuenchSuppression * 0.020);
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
@@ -4019,7 +4844,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 struct RaymarchResult {
   color: vec4<f32>,
+  transmittance: f32,
   residualFeature: vec4<f32>,
+  sharedRidgeContribution: vec4<f32>,
+  sharedNonRidgeContribution: vec4<f32>,
+  sharedCompleteContribution: vec4<f32>,
 };
 
 struct ResidualSourceOutput {
@@ -4027,14 +4856,45 @@ struct ResidualSourceOutput {
   @location(1) residualFeature: vec4<f32>,
 };
 
-fn makeRaymarchResult(color: vec4<f32>, residualFeature: vec4<f32>) -> RaymarchResult {
+struct OpticalTransportContributionOutput {
+  @location(0) sharedRidge: vec4<f32>,
+  @location(1) sharedNonRidge: vec4<f32>,
+  @location(2) sharedComplete: vec4<f32>,
+};
+
+fn makeRaymarchResult(
+  color: vec4<f32>,
+  transmittance: f32,
+  residualFeature: vec4<f32>,
+  sharedRidgeContribution: vec4<f32>,
+  sharedNonRidgeContribution: vec4<f32>,
+  sharedCompleteContribution: vec4<f32>,
+) -> RaymarchResult {
   var result: RaymarchResult;
   result.color = color;
+  result.transmittance = transmittance;
   result.residualFeature = residualFeature;
+  result.sharedRidgeContribution = sharedRidgeContribution;
+  result.sharedNonRidgeContribution = sharedNonRidgeContribution;
+  result.sharedCompleteContribution = sharedCompleteContribution;
   return result;
 }
 
-fn raymarchVolume(in: VSOut) -> RaymarchResult {
+fn productSceneDepthEndT(in: VSOut, ro: vec3<f32>, rd: vec3<f32>) -> f32 {
+  let dimensions = vec2<i32>(textureDimensions(productSceneDepth));
+  let pixel = clamp(vec2<i32>(in.pos.xy), vec2<i32>(0), dimensions - vec2<i32>(1));
+  let sceneDepth = textureLoad(productSceneDepth, pixel, 0);
+  if (sceneDepth >= 0.999999) {
+    return 1.0e6;
+  }
+  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
+  let depthWorldRaw = u.invViewProj * vec4<f32>(ndc, sceneDepth, 1.0);
+  let depthWorld = depthWorldRaw.xyz / max(abs(depthWorldRaw.w), 1.0e-6);
+  return max(0.0, dot(depthWorld - ro, rd));
+}
+
+fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
+  let fullGridCapture = !LEAN_STOCK_RAYMARCH && nonRidgeOpticalCaptureHeader.mode >= 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
@@ -4045,36 +4905,36 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
-  if (hit.y <= max(hit.x, 0.0)) {
+  if (!fullGridCapture && hit.y <= max(hit.x, 0.0)) {
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
-    return makeRaymarchResult(vec4<f32>(vec3<f32>(0.004, 0.005, 0.006) * missAlpha, missAlpha), vec4<f32>(0.0));
+    return makeRaymarchResult(
+      vec4<f32>(vec3<f32>(0.004, 0.005, 0.006) * missAlpha, missAlpha),
+      1.0,
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+      vec4<f32>(0.0),
+    );
   }
 
-  let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
-  let fireScale = clamp(u.scale_controls.x, 0.35, 1.30);
-  let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
-  let plumeHeight = clamp(u.scale_controls.z, 0.70, 2.20);
+  let steps = select(clamp(u.viewport_steps_density.z, 24.0, 192.0), f32(GRID), fullGridCapture);
   let renderSceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
   let minimalPlumeRenderScene = step(2.5, renderSceneMode);
   let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
   let tallPlumeRenderScene = step(0.5, renderSceneMode) * (1.0 - step(1.5, renderSceneMode));
   let detailScaleArtifactQuarantine = tallPlumeRenderScene;
   let visibleDetailOverlayGain = mix(1.0, 0.35, detailScaleArtifactQuarantine);
-  let physicalDetailScale = mix(detailScale, 1.0, detailScaleArtifactQuarantine);
-  let scaledDetailFrequency = clamp(physicalDetailScale / max(fireScale, 0.45), 0.55, 5.40);
-  let tallPlumeRenderDetailFrequency = mix(scaledDetailFrequency, 1.0, tallPlumeRenderScene);
-  let scaleDomain = vec3<f32>(tallPlumeRenderDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), tallPlumeRenderDetailFrequency);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let quenchVaporStrength = clamp(u.canonical_render_motion_controls.w, 0.0, 2.0);
-  let pyroMaterialGain = clamp(u.pyro_detail_controls.x, 0.0, 1.5);
-  let pyroMaterialEnergy = clamp(u.pyro_detail_controls.y, 0.0, 1.0);
+  let pyroMaterialGain = select(clamp(u.pyro_detail_controls.x, 0.0, 1.5), 0.0, LEAN_STOCK_RAYMARCH);
+  let pyroTransportEnergy = clamp(u.pyro_detail_controls.y, 0.0, 1.0);
   let pyroLiveAuthority = clamp(u.pyro_detail_controls.z, 0.0, 1.0);
   let pyroSmokeAuthority = clamp(u.pyro_detail_controls.w, 0.0, 1.0);
   let pyroInterfaceFocus = clamp(u.pyro_carrier_controls.x, 0.0, 1.0);
   let pyroEdgeBite = clamp(u.pyro_carrier_controls.y, 0.0, 1.0);
   let pyroSmokeFold = clamp(u.pyro_carrier_controls.z, 0.0, 1.0);
-  let pyroDiagnosticPaint = clamp(u.pyro_carrier_controls.w, 0.0, 1.0);
+  let pyroDiagnosticPaint = select(clamp(u.pyro_carrier_controls.w, 0.0, 1.0), 0.0, LEAN_STOCK_RAYMARCH);
   let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 7.0);
   let pyroCarrierOverdrive = clamp(u.pyro_diagnostic_controls.y, 1.0, 8.0);
   let pyroBiteBorderFocus = clamp(u.pyro_diagnostic_controls.z, 0.0, 1.0);
@@ -4082,8 +4942,8 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let pyroBiteTeeth = clamp(u.pyro_shape_controls.x, 0.0, 1.0);
   let pyroBiteWake = clamp(u.pyro_shape_controls.y, 0.0, 1.0);
   let pyroFoldWake = clamp(u.pyro_shape_controls.z, 0.0, 1.0);
-  let pyroFireMode = clamp(u.pyro_shape_controls.w, 0.0, 2.0);
-  let pyroContrastRadiance = clamp(u.pyro_light_controls.x, 0.0, 10.0);
+  let pyroFireMode = select(clamp(u.pyro_shape_controls.w, 0.0, 2.0), 0.0, LEAN_STOCK_RAYMARCH);
+  let pyroContrastRadiance = select(clamp(u.pyro_light_controls.x, 0.0, 10.0), 0.0, LEAN_STOCK_RAYMARCH);
   let pyroRadianceGate = clamp(u.pyro_light_controls.y, 0.0, 1.0);
   let pyroRadianceSpill = clamp(u.pyro_light_controls.z, 0.0, 1.0);
   let pyroRadianceWarmth = clamp(u.pyro_light_controls.w, 0.0, 1.0);
@@ -4099,9 +4959,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let pyroRadianceHeight = clamp(u.pyro_radiance_route_controls.y, 0.0, 1.0);
   let pyroRadianceBorder = clamp(u.pyro_radiance_route_controls.z, 0.0, 1.0);
   let pyroRadianceTeeth = clamp(u.pyro_radiance_route_controls.w, 0.0, 1.0);
-  let pyroFlamePaint = clamp(u.pyro_luma_controls.x, 0.0, 3.0);
-  let pyroFlameLuma = clamp(u.pyro_luma_controls.y, 0.0, 3.0);
-  let pyroStockMix = clamp(u.pyro_luma_controls.z, 0.0, 1.0);
+  let pyroFlamePaint = select(clamp(u.pyro_luma_controls.x, 0.0, 3.0), 0.0, LEAN_STOCK_RAYMARCH);
+  let pyroFlameLuma = select(clamp(u.pyro_luma_controls.y, 0.0, 3.0), 1.0, LEAN_STOCK_RAYMARCH);
+  let pyroStockMix = select(clamp(u.pyro_luma_controls.z, 0.0, 1.0), 1.0, LEAN_STOCK_RAYMARCH);
   let pyroBiteLuma = clamp(u.pyro_luma_controls.w, 0.0, 3.0);
   let pyroWakeLuma = clamp(u.pyro_luma_controls2.x, 0.0, 3.0);
   let pyroRadianceLuma = clamp(u.pyro_luma_controls2.y, 0.0, 3.0);
@@ -4113,7 +4973,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let pyroBiteRimCut = clamp(u.pyro_bite_stack_controls.w, 0.0, 1.0);
   let pyroBiteAfter = clamp(u.pyro_bite_stack_controls2.x, 0.0, 1.0);
   let pyroBiteAfterCut = clamp(u.pyro_bite_stack_controls2.y, 0.0, 1.0);
-  let pyroFlowBite = clamp(u.pyro_flow_controls.x, 0.0, 3.0);
+  let pyroFlowBite = select(clamp(u.pyro_flow_controls.x, 0.0, 3.0), 0.0, LEAN_STOCK_RAYMARCH);
   let pyroFlowBorder = clamp(u.pyro_flow_controls.y, 0.0, 1.0);
   let pyroFlowTeeth = clamp(u.pyro_flow_controls.z, 0.0, 1.0);
   let pyroFlowRise = clamp(u.pyro_flow_controls.w, 0.0, 1.0);
@@ -4131,7 +4991,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let pyroRadianceWarmEndpoint = u.pyro_palette_radiance_warm.rgb;
   let pyroFlowCoolEndpoint = u.pyro_palette_flow.rgb;
   let pyroFlowHotEndpoint = u.pyro_palette_flow_hot.rgb;
-  let fireRenderMode = clamp(u.topology_shell_controls.x, 0.0, 3.0);
+  let fireRenderMode = select(clamp(u.topology_shell_controls.x, 0.0, 3.0), 3.0, LEAN_STOCK_RAYMARCH);
   let shellInspectMode = clamp(u.topology_shell_controls.y, 0.0, 9.0);
   let shellAmount = clamp(u.topology_shell_controls.z, 0.0, 2.0);
   let shellWidth = clamp(u.topology_shell_controls.w, 0.05, 2.0);
@@ -4152,34 +5012,58 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let shellExposure = clamp(u.topology_shell_light.y, 0.0, 4.0);
   let shellSoftClip = clamp(u.topology_shell_light.z, 0.2, 4.0);
   let shellHeatGain = clamp(u.topology_shell_light.w, 0.0, 4.0);
-  let boundaryContrast = clamp(u.topology_shell_light.x, 0.25, 5.0);
+  let boundaryContrast = clamp(u.topology_shell_light.x, 0.25, 1.5);
   let boundaryGamma = clamp(u.topology_shell_light.y, 0.35, 3.0);
   let boundaryFireRidgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0);
   let boundaryFireRidgeCut = clamp(u.boundary_fire_structure.y, 0.0, 0.55);
   let boundaryFireTipBreakup = clamp(u.boundary_fire_structure.z, 0.0, 2.0);
   let boundaryFireTopologyErosion = clamp(u.boundary_fire_structure.w, 0.0, 1.0);
-  let boundaryFireCleanBlue = clamp(u.boundary_fire_color.x, 0.0, 2.0);
+  let boundaryFireCleanBlue = clamp(u.boundary_fire_color.x, 0.0, 1.0);
   let boundaryFireSootYield = clamp(u.boundary_fire_color.y, 0.0, 2.0);
-  let boundaryFireSootYellowing = clamp(u.boundary_fire_color.z, 0.0, 2.0);
-  let boundaryFireThermalWarmth = clamp(u.boundary_fire_color.w, 0.0, 2.0);
-  let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 5.0);
+  let boundaryFireSootYellowing = clamp(u.boundary_fire_color.z, 0.0, 0.4);
+  let boundaryFireThermalWarmth = clamp(u.boundary_fire_color.w, 0.0, 0.4);
+  let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 15.0);
+  let boundaryFireCleanEndpoint = u.boundary_fire_palette_clean.rgb;
+  let boundaryFireSootEndpoint = u.boundary_fire_palette_soot.rgb;
+  let volumeExposure = clamp(u.volume_presentation_controls.x, 0.0, 3.0);
   let selectiveRaymarchSmokeOnlyPartition = clamp(u.selective_live_render_controls.x, 0.0, 1.0);
   let selectiveRaymarchFireAuthority = 1.0 - selectiveRaymarchSmokeOnlyPartition;
+  let supervisionFireOnlyTarget = select(clamp(u.boundary_fire_display.y, 0.0, 1.0), 0.0, LEAN_STOCK_RAYMARCH);
+  let raymarchSmokeSuppressed = clamp(u.boundary_fire_display.z, 0.0, 1.0);
+  let appearanceDecompositionMode = select(u.boundary_fire_display.w, 0.0, LEAN_STOCK_RAYMARCH);
+  let appearanceAssayActive = step(0.5, appearanceDecompositionMode);
+  let effectiveRaymarchSmokeSuppressed = max(raymarchSmokeSuppressed, appearanceAssayActive);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
-  let startT = max(hit.x, 0.0);
-  let endT = hit.y;
+  let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
+  let endT = select(min(hit.y, sceneDepthEndT), 2.0, fullGridCapture);
   let dtBase = (endT - startT) / steps;
-  let jitter = temporalJitterOffset(in.uv, dtBase);
-  let bonfireSpatialRayDephase = (hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), 37.0)) - 0.5) * dtBase * 0.90 * bonfireRenderScene;
-  var t = startT + jitter + bonfireSpatialRayDephase;
+  let jitter = dtBase * 0.5;
+  var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
-  // Fire-chain diagnostic probe accumulator (FIRE_PROBE pipeline constant;
-  // route volume_fire_probe). Max-projects a chosen intermediate along the ray.
-  var fireProbeAccum = vec3<f32>(0.0);
+  var structuralATransmittance = 1.0;
+  var structuralAColor = vec3<f32>(0.004, 0.005, 0.006);
+  var controlTransmittance = 1.0;
+  var controlColor = vec3<f32>(0.004, 0.005, 0.006);
+  var recomposedTransmittance = 1.0;
+  var recomposedColor = vec3<f32>(0.004, 0.005, 0.006);
+  var broadCarrierCoefficientColor = vec3<f32>(0.0);
+  var positiveRecomposedTransmittance = 1.0;
+  var positiveRecomposedColor = vec3<f32>(0.004, 0.005, 0.006);
+  var ridgeOnlyTransmittance = 1.0;
+  var ridgeOnlyContribution = vec3<f32>(0.0);
+  var sharedTotalTransmittance = 1.0;
+  var sharedRidgeContribution = vec3<f32>(0.0);
+  var sharedNonRidgeContribution = vec3<f32>(0.0);
+  var completeFlameEmissionColor = vec3<f32>(0.0);
+  var completeFlameExtinctionColor = vec3<f32>(0.0);
+  var ridgeOwnedEmissionColor = vec3<f32>(0.0);
+  var ridgeOwnedExtinctionColor = vec3<f32>(0.0);
+  var nonRidgeEmissionColor = vec3<f32>(0.0);
+  var nonRidgeExtinctionColor = vec3<f32>(0.0);
   var residualRadianceAuthority = 0.0;
   var residualFireAuthority = 0.0;
   var residualInterfaceAuthority = 0.0;
@@ -4187,44 +5071,38 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let entryP = ro + rd * startT;
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
-  var temporalMaterialWeight = 0.0;
-  var temporalWorldSum = vec3<f32>(0.0);
-  var temporalVelocitySum = vec3<f32>(0.0);
-  var temporalReactiveSignal = 0.0;
-  var temporalMajorantEdge = 0.0;
-  var temporalSmokeHistoryTrustSum = 0.0;
-  var temporalFireHistoryProtectSum = 0.0;
-  var temporalInterfaceHistoryProtectSum = 0.0;
-  var temporalDetailHistoryProtectSum = 0.0;
-
-  for (var i = 0; i < 192; i = i + 1) {
-    if (f32(i) >= steps || raymarchEarlyTermination(trans) || t > endT) { break; }
-    let p = ro + rd * t;
-    let majorantNearest = sampleWorldMajorant(p);
-    let majorantLinear = sampleWorldMajorantLinear(p);
-    let majorantDilated = sampleWorldMajorantDilated(p);
-    let majorantSkipStrength = clamp(u.occupancy_controls.y, 0.0, 1.0);
-    let majorantSmooth = clamp(u.occupancy_controls.z, 0.0, 1.0);
-    let majorantEdgeGuard = clamp(u.occupancy_controls.w, 0.0, 1.0);
-    let majorant = mix(majorantNearest, mix(majorantLinear, majorantDilated, 0.28 + majorantEdgeGuard * 0.42), majorantSmooth);
-    let majorantEdge = majorantGradientSignal(p);
-    let guardedImportance = max(majorant.w, majorantDilated.w * majorantEdgeGuard * (0.55 + majorantSmooth * 0.25));
-    let guardedThreshold = mix(0.050, 0.100, majorantEdgeGuard);
-    let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
-    let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
-    let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping;
-    temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
-    if (majorantSkipGate > 0.42) {
-      let cellExit = majorantCellExitDistance(p, rd);
-      let skipDt = min(cellExit + dtBase * 0.20, dtBase * (1.0 + majorantSkipGate * 6.0));
-      t = t + min(skipDt, max(0.0001, endT - t));
+  let expensiveSampleBudget = u32(ceil(steps));
+  let maxTraversalSteps = GRID * 3u + expensiveSampleBudget + 3u;
+  var expensiveSamples = 0u;
+  var traversalSteps = 0u;
+  loop {
+    if (expensiveSamples >= expensiveSampleBudget || traversalSteps >= maxTraversalSteps) { break; }
+    if (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT)) { break; }
+    traversalSteps = traversalSteps + 1u;
+    let sampleIndex = expensiveSamples;
+    let fullGridX = min(u32(floor(in.uv.x * f32(GRID))), GRID - 1u);
+    let fullGridY = min(u32(floor(in.uv.y * f32(GRID))), GRID - 1u);
+    let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
+    let p = select(ro + rd * t, fullGridP, fullGridCapture);
+    let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
+    let directSupport = directCellOpticalSupport(p);
+    if (!fullGridCapture && directSupport <= 0.0001) {
+      let cellExit = directCellExitDistance(p, rd);
+      t = t + min(cellExit + 0.0001, max(0.0001, endT - t));
       continue;
     }
-    let state = sampleWorldVelocity(p);
-    let material = sampleWorldMaterial(p);
-    let fireLayer = sampleWorldFireLayer(p);
-    let microLayer = sampleWorldMicrodetail(p);
-    let combustionFrontTopology = sampleWorldFrontField(p);
+    var reconstructed: FlowReconstructionSample;
+    if (flowKernelReconstructionActive) {
+      reconstructed = sampleWorldFlowReconstruction(p);
+    } else {
+      reconstructed = sampleWorldFlowReconstructionRaw(p);
+    }
+    expensiveSamples = expensiveSamples + 1u;
+    let state = reconstructed.velocityDensity;
+    let material = reconstructed.material;
+    let fireLayer = reconstructed.fireLayer;
+    let microLayer = reconstructed.microLayer;
+    let combustionFrontTopology = reconstructed.frontTopology;
     let velMag = length(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
@@ -4238,7 +5116,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let interfaceShred = microLayer.y;
     let fireLick = microLayer.z;
     let emberFleck = microLayer.w;
-    let flowDebug = clamp(u.boundary_fire_display.y, 0.0, 1.0);
+    let flowDebug = clamp(u.source_controls.w, 0.0, 1.0);
     let radianceGain = max(0.0, u.radiance_controls.x);
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
@@ -4289,36 +5167,36 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
     let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction) + tallPlumeTransitionWisps;
     let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
-    if (emptySpanScale > 1.08) {
+    if (!fullGridCapture && emptySpanScale > 1.08) {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
       continue;
     }
-    let detailP = p * scaleDomain;
-    let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w, tallPlumeRenderScene);
-    let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
-    let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
-    let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
-    let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
-    let curtainNoise = microFilamentNoise(
-      detailP.xzy + vec3<f32>(0.31, -0.17, 0.23),
-      microWarp.zxy + state.yzx * 0.38,
-      detailCarrier + smoke * 0.12,
-      state.yzx,
-      u.cameraPos_time.w * 0.73 + 2.9
+    let transportedCurtainStructure = clamp(
+      0.86
+        + smoothstep(0.012, 0.52, microSmoke + interfaceShred * 0.72 + materialDetail * 0.34) * 0.16,
+      0.72,
+      1.18
     );
-    let verticalPhaseBreak = sin(p.y * 43.0 + (p.x * p.x - p.z * p.z) * 19.0 + u.cameraPos_time.w * 1.4);
-    let verticalPuffBreak = cos(p.y * 27.0 + length(p.xz) * 23.0 - p.x * p.z * 31.0 - u.cameraPos_time.w * 0.92);
+    let transportedFireStructure = clamp(
+      0.72
+        + fireLick * 0.22
+        + flameDetail * 0.18
+        + interfaceShred * 0.10
+        + combustionFront * 0.08,
+      0.58,
+      1.32
+    );
     let bonfireCurtainBreakup = mix(
       1.0,
-      clamp(0.91 + curtainNoise * 0.10 + verticalPhaseBreak * 0.15 + verticalPuffBreak * 0.17, 0.64, 1.18),
+      transportedCurtainStructure,
       bonfireRenderScene * smoothstep(0.05, 0.62, smoke)
     );
     let bonfireFireRenderBreakup = mix(
       1.0,
-      clamp(0.78 + fireNoise * 0.22 + verticalPuffBreak * 0.14 + fireLick * 0.20 + flameDetail * 0.16 + interfaceShred * 0.10, 0.58, 1.32),
+      transportedFireStructure,
       bonfireRenderScene * smoothstep(0.035, 0.92, flame + flameDetail + fireLick)
     );
     let bonfireTransportedFireLumaShaper = mix(
@@ -4327,8 +5205,8 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       bonfireRenderScene * smoothstep(0.030, 0.84, flame + flameDetail + fireLick)
     );
     var smokeAlpha = mix(
-      clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.0, 0.16),
-      clamp(canonicalDebugSmokeDensity * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16),
+      segmentOpacity((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.16),
+      segmentOpacity(canonicalDebugSmokeDensity * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.16),
       canonicalSmokeOnlyRender
     );
     let fireAlphaMax = mix(0.20, 0.145, bonfireRenderScene);
@@ -4352,7 +5230,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       quenchVaporStrength
         * smoothstep(0.003, 0.24, flame + flameDetail * 0.74 + fireLick * 0.45 + heat * 0.55 + smokeDensity * 0.24 + microSmoke * 0.18)
         * smoothstep(0.02, 0.70, y)
-        * (0.84 + curtainNoise * 0.22 + verticalPuffBreak * 0.16),
+        * (0.84 + transportedCurtainStructure * 0.22),
       0.0,
       1.85
     );
@@ -4370,7 +5248,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       quenchVaporStrength
         * smoothstep(0.10, 1.08, quenchCoreHeatSignal)
         * smoothstep(0.0, 0.22, y)
-        * clamp(0.88 + fireNoise * 0.10 + verticalPuffBreak * 0.08, 0.68, 1.18),
+        * clamp(0.88 + transportedFireStructure * 0.10, 0.68, 1.18),
       0.0,
       1.0
     );
@@ -4379,11 +5257,13 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let quenchedFlameDetail = flameDetail * (1.0 - quenchCoreCollapse * 0.66);
     let quenchedFireLick = fireLick * (1.0 - quenchCoreCollapse * 0.54);
     let quenchedEmberFleck = emberFleck * (1.0 - quenchCoreCollapse * 0.32);
-    let vaporAlpha = clamp((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
+    let vaporAlpha = segmentOpacity((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.22);
     smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
+    let visibleSmokeAuthority = 1.0 - max(supervisionFireOnlyTarget, effectiveRaymarchSmokeSuppressed);
+    let visibleSmokeAlpha = smokeAlpha * (1.0 - raymarchSmokeSuppressed) * (1.0 - supervisionFireOnlyTarget) * (1.0 - appearanceAssayActive);
     let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
     let stockFireAlpha = mix(
-      clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority, 0.0, fireAlphaMax),
+      segmentOpacity(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority, fireAlphaMax),
       0.0,
       canonicalSmokeOnlyRender
     );
@@ -4413,14 +5293,13 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     ) * (1.0 - clamp(frontSupport * 0.54 + edgeSupport * 0.30 + curlActivity * 0.12, 0.0, 0.86));
     let shellMask = clamp(shellCarrier * mix(1.0, 1.0 - shellCoreBody * 0.82, shellCoreSuppress), 0.0, 1.35);
     let shellWrinkle = clamp(1.0 + shellBiteGain * (frontSupport * 0.26 + edgeSupport * 0.24 + curlActivity * 0.20), 0.0, 2.4);
-    let shellAlpha = clamp(
+    let shellAlpha = segmentOpacity(
       shellMask
         * fireVisualAuthority
         * rayStepOpacity
         * (0.050 + shellWidth * 0.070)
         * shellWrinkle
         * fireSnuffDamping,
-      0.0,
       fireAlphaMax
     );
     let inspectShellMask = 1.0 - step(0.5, abs(shellInspectMode - 0.0));
@@ -4446,14 +5325,14 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 5.0);
       var boundarySidecarDebugSample = vec4<f32>(0.0);
       if (boundarySidecarView > 0.5) {
-        boundarySidecarDebugSample = sampleWorldBoundarySidecar(p);
+        boundarySidecarDebugSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
       }
       var boundarySupportEffective = 0.0;
       var boundaryGradientEffective = 0.0;
       var boundaryFireRidgeEffective = 0.0;
       var boundarySidecarStepFootprintWidth = 0.0;
       if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
-        let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+        let boundarySidecarSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
         boundarySidecarDebugSample = boundarySidecarSample;
         let boundarySidecarCoverage = boundarySidecarSample.y;
         let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
@@ -4481,7 +5360,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         boundaryGradientEffective = boundaryGradient;
         boundaryFireRidgeEffective = boundaryFireRidge;
         if (boundarySidecarSource > 1.5) {
-          let boundarySidecarSample = sampleWorldBoundarySidecar(p);
+          let boundarySidecarSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
           boundarySidecarDebugSample = boundarySidecarSample;
           let boundarySidecarCoverage = boundarySidecarSample.y;
           let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
@@ -4513,9 +5392,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       boundaryCandidate = mix(boundaryScalar, boundaryScalar * mix(1.0, clamp(boundaryFireRidgeEffective + boundaryFireTipGate * boundaryFireTipBreakup, 0.0, 1.0), 0.62) * (1.0 - boundaryFireErosion), inspectBoundaryFireMask);
       let cleanBurnGate = smoothstep(0.006, 0.34, reactionSupport + frontSupport * 0.38) * (1.0 - smoothstep(0.20, 0.86, sootSupport * boundaryFireSootYield));
       let sootMaturity = clamp((sootSupport * 0.56 + fuelDepletionProxy * 0.30 + boundaryFireTipGate * 0.30) * boundaryFireSootYield, 0.0, 1.0);
-      let cleanFuelColor = vec3<f32>(0.12, 0.42, 1.75) * boundaryFireCleanBlue * cleanBurnGate;
+      let cleanFuelColor = boundaryFireCleanEndpoint * 1.75 * boundaryFireCleanBlue * cleanBurnGate;
       let sootThermalBase = fireColor((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) * max(0.18, boundaryFireThermalWarmth));
-      let sootThermalColor = mix(sootThermalBase, vec3<f32>(1.55, 0.86, 0.18), clamp(sootMaturity * boundaryFireSootYellowing, 0.0, 1.0));
+      let sootThermalColor = mix(sootThermalBase, boundaryFireSootEndpoint * 1.55, clamp(sootMaturity * boundaryFireSootYellowing, 0.0, 1.0));
       boundaryFireColor = mix(cleanFuelColor, sootThermalColor, sootMaturity) * boundaryFireLuma;
       if (boundarySidecarView > 0.5) {
         let boundarySidecarCoverage = boundarySidecarDebugSample.y;
@@ -4551,30 +5430,26 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       + divSupport * inspectDivMask
       + boundaryCandidate * inspectBoundaryMask
       + boundaryCandidate * inspectBoundaryFireMask;
-    let inspectAlpha = clamp(inspectSignal * rayStepOpacity * 0.55, 0.0, 0.28);
+    let inspectAlpha = segmentOpacity(inspectSignal * rayStepOpacity * 0.55, 0.28);
     var fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
     fireAlpha = fireAlpha * selectiveRaymarchFireAuthority;
-    var alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
-    let materialSignals = materialTemporalSignals(alpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, trans);
-    let materialTemporal = materialTemporalClassificationFromSignals(materialSignals);
-    let temporalSampleWeight = materialAwareImportanceWeightFromSignals(materialSignals);
-    temporalMaterialWeight = temporalMaterialWeight + temporalSampleWeight;
-    temporalWorldSum = temporalWorldSum + p * temporalSampleWeight;
-    temporalVelocitySum = temporalVelocitySum + state.xyz * temporalSampleWeight;
-    temporalSmokeHistoryTrustSum = temporalSmokeHistoryTrustSum + materialTemporal.x * temporalSampleWeight;
-    temporalFireHistoryProtectSum = temporalFireHistoryProtectSum + materialTemporal.y * temporalSampleWeight;
-    temporalInterfaceHistoryProtectSum = temporalInterfaceHistoryProtectSum + materialTemporal.z * temporalSampleWeight;
-    temporalDetailHistoryProtectSum = temporalDetailHistoryProtectSum + materialTemporal.w * temporalSampleWeight;
-    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + renderTemp * 0.075 + quenchedFlameDetail * 0.45 + quenchedFireLick * 0.38 + interfaceShred * 0.16 + materialSignals.reactiveBoost, 0.0, 2.2));
-    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise * visibleDetailOverlayGain;
-    let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise * visibleDetailOverlayGain;
-    let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise * visibleDetailOverlayGain;
-    let pyroMemoryCell = samplePyroMaterialMemoryCell(p);
-    let pyroSpatialEnergy = clamp(pyroMemoryCell.x * pyroMemoryCell.y * pyroMemoryCell.z, 0.0, 1.0);
+    var alpha = clamp(visibleSmokeAlpha + fireAlpha, 0.0, 0.18);
+    let materialStructure = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * visibleDetailOverlayGain;
+    let shredStructure = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * visibleDetailOverlayGain;
+    let fireStructure = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * visibleDetailOverlayGain;
+    let transportedPyroStructure = clamp(
+      materialStructure * 0.16
+        + shredStructure * 0.20
+        + fireStructure * 0.28
+        + transportedFireStructure * 0.22
+        + transportedCurtainStructure * 0.14,
+      0.0,
+      1.0
+    );
     let pyroBaseCarrier = pyroMaterialGain
-      * pyroMaterialEnergy
+      * pyroTransportEnergy
       * pyroLiveAuthority
-      * (0.22 + pyroSpatialEnergy * 0.78)
+      * (0.22 + transportedPyroStructure * 0.78)
       * smoothstep(0.018, 0.36, temp + flameDetail * 0.75 + fireLick * 0.42 + heat * 0.16)
       * smoothstep(0.012, 0.34, density + smoke * 0.18 + microTextureSignal * 0.20);
     let pyroInterfaceSignal = clamp(
@@ -4601,60 +5476,36 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let pyroWakeMask = clamp(pyroNormalView + pyroWakeView + pyroAllView, 0.0, 1.0);
     let pyroRadianceMask = clamp(pyroNormalView + pyroRadianceView + pyroAllView, 0.0, 1.0);
     let pyroFlowMask = clamp(pyroNormalView + pyroFlowView + pyroAllView, 0.0, 1.0);
-    let pyroMemoryPattern = 0.5 + 0.5 * sin(
-      p.y * 31.0
-        + p.x * 17.0
-        - p.z * 13.0
-        + pyroMemoryCell.x * 1.4
-        + pyroMemoryCell.w * 0.7
-        + u.cameraPos_time.w * (0.38 + pyroSmokeAuthority * 0.18)
-        + filamentNoise * 1.2
-        + fireNoise * 0.8
-    );
-    let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
+    let fineShadow = 0.48 + 0.64 * materialStructure - 0.20 * shredStructure;
     let smokeCol = mix(
-      vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26),
+      vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredStructure * 0.26),
       vec3<f32>(0.28, 0.38, 0.42) * 0.62,
       canonicalSmokeOnlyRender
     );
-    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
+    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireStructure * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredStructure * 0.10) * bonfireTransportedFireLumaShaper;
     let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
       * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
       * flameBodyAuthority;
-    if (FIRE_PROBE > 0.5) {
-      var fireProbeValue = vec3<f32>(0.0);
-      if (FIRE_PROBE < 1.5) {
-        fireProbeValue = vec3<f32>(rawTemp, temp, 0.0);
-      } else if (FIRE_PROBE < 2.5) {
-        fireProbeValue = vec3<f32>(renderTemp, quenchCoreCollapse, 0.0);
-      } else if (FIRE_PROBE < 3.5) {
-        fireProbeValue = baseRadianceEmission;
-      } else if (FIRE_PROBE < 4.5) {
-        fireProbeValue = vec3<f32>(stockFireAlpha * 8.0, visibleFlameAlphaCarrier * 2.0, 0.0);
-      } else if (FIRE_PROBE < 5.5) {
-        fireProbeValue = vec3<f32>(flameBodyAuthority, fireGain, fireSnuffDamping);
-      } else if (FIRE_PROBE < 6.5) {
-        fireProbeValue = flameCol * 0.25;
-      } else if (FIRE_PROBE > 8.5 && FIRE_PROBE < 9.5) {
-        fireProbeValue = vec3<f32>(shellMask, frontSupport, thermalSupport);
-      } else if (FIRE_PROBE > 9.5) {
-        let probeSlot0 = readSlot(sampleCell, 0u);
-        let probeSlot1 = readSlot(sampleCell, 1u);
-        let probeSlot2 = readSlot(sampleCell, 2u);
-        let probeSlot3 = readSlot(sampleCell, 3u);
-        let probeNaN0 = select(0.0, 1.0, any(probeSlot0 != probeSlot0));
-        let probeNaN1 = select(0.0, 1.0, any(probeSlot1 != probeSlot1));
-        let probeNaN2xyz = select(0.0, 1.0, any(probeSlot2.xyz != probeSlot2.xyz));
-        let probeNaN2w = select(0.0, 1.0, probeSlot2.w != probeSlot2.w);
-        let probeNaN3 = select(0.0, 1.0, any(probeSlot3 != probeSlot3));
-        fireProbeValue = vec3<f32>(
-          max(probeNaN0, probeNaN1),
-          max(probeNaN2xyz, probeNaN3),
-          probeNaN2w
-        );
-      }
-      fireProbeAccum = max(fireProbeAccum, fireProbeValue);
+    let directFlameUnitEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, 1.0, 0.0)
+      * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
+      * flameBodyAuthority;
+    var directFlameCandidateSidecar = vec4<f32>(0.0);
+    var directFlameCandidateFireSignal = 0.0;
+    var directFlameCandidateStructuralSignal = 0.0;
+    var directFlameCandidateSupport = 0.0;
+    if (supervisionFireOnlyTarget > 0.5 || appearanceAssayActive > 0.5) {
+      directFlameCandidateSidecar = sampleWorldBoundarySidecar(p);
+      directFlameCandidateFireSignal = flame * 1.25
+        + flameDetail * 0.52
+        + combustionFront * 0.86
+        + fireLick * 0.72
+        + heat * 0.24;
+      directFlameCandidateStructuralSignal = directFlameCandidateSidecar.z
+        * smoothstep(0.055, 0.32, directFlameCandidateSidecar.y)
+        * smoothstep(0.018, 0.16, directFlameCandidateFireSignal);
+      directFlameCandidateSupport = directFlameCandidateStructuralSignal * step(0.11, directFlameCandidateStructuralSignal);
     }
+    let directFlameCandidateAlpha = segmentOpacity(directFlameCandidateSupport * rayStepOpacity * 0.55, 0.28);
     let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
     let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
     let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
@@ -4675,8 +5526,8 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       + boundaryFireColor * inspectBoundaryFireMask
     ) * (0.24 + inspectSignal * 1.85);
     let radianceEmission = baseRadianceEmission * stockRenderMode;
-    let smokeBacklight = fireColor(renderTemp * 0.72) * smokeAlpha * glowGain * stockRenderMode * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
-    let shellSmokeBacklight = shellColor * shellRenderMode * smokeAlpha * shellSmokeCoupling * shellAlpha * 0.26;
+    let smokeBacklight = fireColor(renderTemp * 0.72) * visibleSmokeAlpha * glowGain * stockRenderMode * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireStructure * 0.10 * flameBodyAuthority);
+    let shellSmokeBacklight = shellColor * shellRenderMode * visibleSmokeAlpha * shellSmokeCoupling * shellAlpha * 0.26;
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
     let pyroOwnedFireMode = step(1.5, pyroFireMode);
     let pyroHybridFireMode = step(0.5, pyroFireMode) * (1.0 - pyroOwnedFireMode);
@@ -4766,7 +5617,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       * pyroEdgeBite
       * pyroBiteMask
       * pyroCarrierOverdrive
-      * (0.40 + pyroMemoryPattern * 0.60)
+      * (0.40 + transportedPyroStructure * 0.60)
       * pyroStackedBiteEvent;
     let pyroFlowTopology = smoothstep(
       mix(0.0006, 0.006, pyroFlowTeeth),
@@ -4785,9 +5636,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     );
     let pyroFlowFront = mix(pyroRawCurrentFire, max(pyroRawCurrentFire * 0.28, pyroInterfaceSignal), pyroFlowBorder);
     let pyroFlowLiveCarrier = pyroMaterialGain
-      * pyroMaterialEnergy
+      * pyroTransportEnergy
       * pyroLiveAuthority
-      * (0.18 + pyroSpatialEnergy * 0.58 + pyroSmokeAuthority * 0.24)
+      * (0.18 + transportedPyroStructure * 0.58 + pyroSmokeAuthority * 0.24)
       * smoothstep(0.006, 0.22, density + smoke * 0.28 + rawExtinction * 0.24 + microSmoke * 0.28)
       * smoothstep(0.001, 0.045, combustionFrontTopology * 0.58 + fireLick * 0.34 + interfaceShred * 0.22 + curlDebug * 0.72 + divDebug * 0.28);
     let pyroFlowHeightGate = 1.0 - smoothstep(
@@ -4809,7 +5660,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         * pyroFlowHeightGate
         * pyroFlowCarrierShape
         * max(pyroFlowTopology, pyroFlowShear * (0.18 + pyroFlowTeeth * 0.22))
-        * (0.22 + pyroMemoryPattern * 0.16 + pyroFlowShear * 0.30 + combustionFrontTopology * 0.06 + fireLick * 0.05),
+        * (0.22 + transportedPyroStructure * 0.16 + pyroFlowShear * 0.30 + combustionFrontTopology * 0.06 + fireLick * 0.05),
       0.0,
       4.0
     );
@@ -4818,7 +5669,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       mix(0.92, 0.52, pyroFlowSpikes),
       pyroFlowTopology * (0.64 + pyroFlowSpikes * 0.52)
         + pyroFlowShear * (0.18 + pyroFlowSpikes * 0.36)
-        + pyroMemoryPattern * (0.10 + pyroFlowSpikes * 0.28)
+        + transportedPyroStructure * (0.10 + pyroFlowSpikes * 0.28)
         + fireLick * (0.10 + pyroFlowSpikes * 0.20)
     );
     let pyroFlowSpikeSignal = clamp(
@@ -4852,7 +5703,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       * pyroSmokeFold
       * pyroFoldMask
       * pyroCarrierOverdrive
-      * (0.34 + pyroSpatialEnergy * 0.66)
+      * (0.34 + transportedPyroStructure * 0.66)
       * pyroFoldWakeSignal;
     let pyroWakeHeightGate = 1.0 - smoothstep(
       mix(0.48, 0.92, pyroWakeLift),
@@ -4869,7 +5720,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let pyroWakeSignal = pyroBaseCarrier
       * pyroWakeMask
       * pyroCarrierOverdrive
-      * (0.20 + pyroSpatialEnergy * 0.62 + pyroSmokeAuthority * 0.18)
+      * (0.20 + transportedPyroStructure * 0.62 + pyroSmokeAuthority * 0.18)
       * pyroWakeEvent;
     let pyroRadianceFreshFireGate = smoothstep(
       0.018,
@@ -4888,7 +5739,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       pyroInterfaceSignal
         * smoothstep(0.014, 0.54, pyroFireEventCarrier + flameDetail * 0.40 + fireLick * 0.30 + combustionFront * 0.22)
         * (1.0 - smoothstep(0.64, 1.06, pyroFireEventCarrier + pyroRawCombustionSignal * 0.34))
-        * (0.70 + pyroMemoryPattern * 0.22 + fireLick * 0.14),
+        * (0.70 + transportedPyroStructure * 0.22 + fireLick * 0.14),
       0.0,
       1.25
     );
@@ -4900,7 +5751,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let pyroRadianceBorderEvent = mix(pyroRadianceFireBodyEvent, max(pyroRadianceFireEdgeEvent, pyroRadianceFireBodyEvent * 0.24), pyroRadianceBorder);
     let pyroRadianceToothedEvent = mix(
       pyroRadianceBorderEvent,
-      pyroRadianceFireEdgeEvent * (0.72 + pyroMemoryPattern * 0.48 + fireLick * 0.20),
+      pyroRadianceFireEdgeEvent * (0.72 + transportedPyroStructure * 0.48 + fireLick * 0.20),
       pyroRadianceTeeth
     );
     let pyroFireRadianceEvent = clamp(
@@ -4927,9 +5778,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     );
     let pyroRadianceBody = max(smoke + rawExtinction + microSmoke * 0.32, pyroRawCurrentFire * (0.26 + (1.0 - pyroRadianceSpill) * 0.42));
     let pyroRadianceFireCarrier = pyroMaterialGain
-      * pyroMaterialEnergy
+      * pyroTransportEnergy
       * pyroLiveAuthority
-      * (0.24 + pyroSpatialEnergy * 0.76)
+      * (0.24 + transportedPyroStructure * 0.76)
       * smoothstep(0.012, 0.38, rawTemp + heat * 0.26 + flameDetail * 0.58 + fireLick * 0.40 + combustionFront * 0.26)
       * smoothstep(0.010, 0.48, pyroRadianceFreshFireGate + pyroFireRadianceEvent * 0.84 + pyroRawCurrentFire * 0.22);
     let pyroRadianceCarrier = mix(pyroBaseCarrier, max(pyroBaseCarrier * 0.36, pyroRadianceFireCarrier), pyroRadianceFireSourceWeight);
@@ -4950,7 +5801,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         * pyroContrastRadiance
         * pyroRadianceMask
         * pyroCarrierOverdrive
-        * (0.36 + pyroSpatialEnergy * 0.64)
+        * (0.36 + transportedPyroStructure * 0.64)
         * pyroRadianceSparsity
         * pyroRadianceSpillSignal
         * pyroRadianceHeightGate
@@ -4964,7 +5815,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
           0.78 + pyroRadianceFreshFireGate * 0.62 + pyroRadianceFireEdgeEvent * 0.44 + pyroRawFireMix * 0.30,
           mix(
             0.16 + renderTemp * 0.12,
-            0.18 + smoke * 0.42 + renderTemp * 0.14 + pyroMemoryPattern * 0.08,
+            0.18 + smoke * 0.42 + renderTemp * 0.14 + transportedPyroStructure * 0.08,
             pyroRadianceSpill
           ),
           1.0 - pyroRadianceFireSourceWeight
@@ -4986,11 +5837,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       2.8
     ) * selectiveRaymarchFireAuthority;
     let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4) * selectiveRaymarchFireAuthority;
-    let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8);
-    let pyroWakeAlphaBoost = clamp(pyroWakeSignal * (0.22 + smoke * 0.62 + rawExtinction * 0.36), 0.0, 2.1);
+    let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8) * visibleSmokeAuthority;
+    let pyroWakeAlphaBoost = clamp(pyroWakeSignal * (0.22 + smoke * 0.62 + rawExtinction * 0.36), 0.0, 2.1) * visibleSmokeAuthority;
     let pyroOwnedFireAlphaBoost = clamp(
       pyroOwnedFireMode * pyroBaseCarrier * pyroLiveAuthority * pyroFlamePaint * pyroRawCurrentFire
-        * (0.32 + pyroSpatialEnergy * 0.44 + flameDetail * 0.18 + fireLick * 0.14),
+        * (0.32 + transportedPyroStructure * 0.44 + flameDetail * 0.18 + fireLick * 0.14),
       0.0,
       2.4
     ) * selectiveRaymarchFireAuthority;
@@ -5006,29 +5857,26 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       0.0,
       0.28
     );
-    var local = smokeCol;
+    var local = smokeCol * visibleSmokeAuthority;
     local = mix(local, flameCol * 0.30 + radianceEmission * 0.70, stockRenderMode * fireMix * pyroStockFireVisibility);
     // Shell visibility weight is step-invariant: alpha already carries the
     // per-step rayStepOpacity scaling, so gating on rayStepOpacity-scaled
     // shellAlpha double-scaled by step length and collapsed as raySteps grew.
     let shellVisibilityBody = clamp(shellMask * fireVisualAuthority * shellWrinkle * fireSnuffDamping, 0.0, 2.4);
     local = local + shellColor * shellRenderMode * smoothstep(0.020, 0.520, shellVisibilityBody) * 0.92;
-    if (FIRE_PROBE > 10.5) {
-      fireProbeAccum = max(fireProbeAccum, shellColor * smoothstep(0.002, 0.060, shellAlpha) * 8.0);
-    }
     local = mix(local, inspectColor, inspectRenderMode * smoothstep(0.002, 0.060, inspectAlpha));
     let pyroFlamePaintSignal = clamp(
       pyroBaseCarrier
         * pyroLiveAuthority
         * pyroFlamePaint
         * pyroRawFireMix
-        * (0.34 + pyroSpatialEnergy * 0.46 + flameDetail * 0.16 + quenchedFireLick * 0.12),
+        * (0.34 + transportedPyroStructure * 0.46 + flameDetail * 0.16 + quenchedFireLick * 0.12),
       0.0,
       3.0
     );
     let pyroFlamePaintChroma = mix(
-      pyroFlameEdgeColor * (0.54 + renderTemp * 0.20 + fireFilament * 0.10),
-      pyroFlameCoreColor * (0.84 + rawTemp * 0.42 + fireFilament * 0.18),
+      pyroFlameEdgeColor * (0.54 + renderTemp * 0.20 + fireStructure * 0.10),
+      pyroFlameCoreColor * (0.84 + rawTemp * 0.42 + fireStructure * 0.18),
       smoothstep(0.22, 0.92, pyroRawFireMix + rawTemp * 0.20 + flameDetail * 0.22)
     );
     let pyroLocalLuma = max(dot(local, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.001);
@@ -5075,7 +5923,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       clamp(pyroFoldExtinctionBoost, 0.0, 0.78)
     );
     let pyroWakeNeutralColor = pyroWakeShadowEndpoint * (0.70 + smoke * 0.16);
-    let pyroWakeAmberColor = pyroWakeEmberEndpoint * (0.24 + smoke * 0.18 + pyroMemoryPattern * 0.10 + pyroRawFireMix * 0.08);
+    let pyroWakeAmberColor = pyroWakeEmberEndpoint * (0.24 + smoke * 0.18 + transportedPyroStructure * 0.10 + pyroRawFireMix * 0.08);
     let pyroWakeColor = mix(pyroWakeNeutralColor, pyroWakeAmberColor, pyroWakeWarmth);
     local = mix(
       local,
@@ -5116,8 +5964,8 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let pyroDiagnosticPaintAlpha = clamp(pyroDiagnosticPaint * pyroDiagnosticSignal * (0.72 + pyroCarrierOverdrive * 0.055), 0.0, 1.0);
     alpha = clamp(alpha + pyroDiagnosticPaintAlpha * rayStepOpacity * 0.16, 0.0, 0.42);
     local = mix(local, pyroDiagnosticColor * (0.96 + pyroCarrierOverdrive * 0.045), clamp(pyroDiagnosticPaintAlpha * 1.28, 0.0, 1.0));
-    let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + filament * 0.18 + shredFilament * 0.12);
-    local = mix(local, vaporCol, clamp(max(vaporCarrier * 0.92, quenchCoreCollapse * 0.62), 0.0, 0.96));
+    let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + materialStructure * 0.18 + shredStructure * 0.12);
+    local = mix(local, vaporCol, clamp(max(vaporCarrier * 0.92, quenchCoreCollapse * 0.62), 0.0, 0.96) * visibleSmokeAuthority);
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
     let oracleDisplay = clamp(u.oracle_activity_controls2.x, 0.0, 1.0);
@@ -5126,65 +5974,377 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    if (FIRE_PROBE > 7.5) {
-      fireProbeAccum = max(fireProbeAccum, vec3<f32>(pyroStockFireVisibility, selectiveRaymarchFireAuthority, stockRenderMode));
-    }
-    color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority + shellSmokeBacklight * selectiveRaymarchFireAuthority + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
+    let standardRadianceContribution = alpha * local
+      + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene)
+      + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority
+      + shellSmokeBacklight * selectiveRaymarchFireAuthority
+      + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight);
+    let directFlameSupervisionContribution = stockRenderMode * directFlameCandidateAlpha * directFlameUnitEmission;
+    color = color + trans * mix(standardRadianceContribution, directFlameSupervisionContribution, supervisionFireOnlyTarget);
     let residualFeatureWeight = trans * rayStepOpacity;
     let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
     residualRadianceAuthority = residualRadianceAuthority + residualFeatureWeight * clamp(residualRadianceLuma * 0.30 + pyroRadianceBoost * 0.75 + pyroFireRadianceEvent * 0.40, 0.0, 4.0);
     residualFireAuthority = residualFireAuthority + residualFeatureWeight * clamp(pyroRawCurrentFire * 1.05 + fireMix * 0.90 + pyroFireEventCarrier * 0.55, 0.0, 3.5);
     residualInterfaceAuthority = residualInterfaceAuthority + residualFeatureWeight * clamp(pyroInterfaceSignal * 0.85 + pyroBiteAlphaBoost * 0.36 + flameDetail * 0.18 + fireLick * 0.16, 0.0, 3.5);
     residualSmokeAuthority = residualSmokeAuthority + residualFeatureWeight * clamp(smoke * 0.55 + rawExtinction * 0.38 + microSmoke * 0.32 + pyroFoldExtinctionBoost * 0.18, 0.0, 3.0);
-    let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    let standardExtinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    let directFlameSupervisionExtinction = clamp(directFlameCandidateAlpha * 0.54, 0.0, 0.34);
+    let structuralAEmissionCoefficient = directFlameCandidateAlpha * directFlameUnitEmission;
+    let structuralAExtinctionCoefficient = clamp(directFlameCandidateAlpha * 0.54, 0.0, 0.34);
+    let smokeOffBeautyEmissionCoefficient = standardRadianceContribution;
+    let smokeOffBeautyExtinctionCoefficient = standardExtinctionStep;
+    let broadCarrierEmissionCoefficient = smokeOffBeautyEmissionCoefficient - structuralAEmissionCoefficient;
+    let broadCarrierExtinctionCoefficient = smokeOffBeautyExtinctionCoefficient - structuralAExtinctionCoefficient;
+    let recomposedEmissionCoefficient = structuralAEmissionCoefficient + broadCarrierEmissionCoefficient;
+    let recomposedExtinctionCoefficient = structuralAExtinctionCoefficient + broadCarrierExtinctionCoefficient;
+    let completeFlameEmissionCoefficient = max(standardRadianceContribution, vec3<f32>(0.0));
+    let completeFlameExtinctionCoefficient = max(standardExtinctionStep, 0.0);
+    let ridgeOwnershipWeight = clamp(directFlameCandidateSupport, 0.0, 1.0);
+    let ridgeOwnedEmissionCoefficient = completeFlameEmissionCoefficient * ridgeOwnershipWeight;
+    let ridgeOwnedExtinctionCoefficient = completeFlameExtinctionCoefficient * ridgeOwnershipWeight;
+    let nonRidgeEmissionCoefficient = completeFlameEmissionCoefficient - ridgeOwnedEmissionCoefficient;
+    let nonRidgeExtinctionCoefficient = completeFlameExtinctionCoefficient - ridgeOwnedExtinctionCoefficient;
+    let positiveRecomposedEmissionCoefficient = ridgeOwnedEmissionCoefficient + nonRidgeEmissionCoefficient;
+    let positiveRecomposedExtinctionCoefficient = ridgeOwnedExtinctionCoefficient + nonRidgeExtinctionCoefficient;
+    let nonRidgeOpticalCaptureSignal = max(
+      directFlameCandidateSupport,
+      max(max(completeFlameEmissionCoefficient.r, completeFlameEmissionCoefficient.g), max(completeFlameEmissionCoefficient.b, completeFlameExtinctionCoefficient))
+    );
+    if (fullGridCapture) {
+      let cellIndex = fullGridX + fullGridY * GRID + sampleIndex * GRID * GRID;
+      let sourceBasisReaction = reactionSupport;
+      let sourceBasisInterface = edgeSupport;
+      let sourceBasisCurl = curlDebug;
+      let sourceBasisDivergence = divergenceAtCell(sampleCell);
+      let nonRidgeOpticalSignal = max(
+        max(nonRidgeEmissionCoefficient.r, nonRidgeEmissionCoefficient.g),
+        max(nonRidgeEmissionCoefficient.b, nonRidgeExtinctionCoefficient)
+      );
+      let nonRidgeMembership = (1.0 - ridgeOwnershipWeight) * step(0.000001, nonRidgeOpticalSignal);
+      if (cellIndex < nonRidgeOpticalCaptureHeader.capacity) {
+        if (nonRidgeOpticalCaptureHeader.mode == 4u) {
+          writeLiveCompleteFlameOpticalCoefficient(
+            cellIndex,
+            vec4<f32>(completeFlameEmissionCoefficient, completeFlameExtinctionCoefficient),
+          );
+        } else {
+          writeNonRidgeSourceBasisCaptureRow(
+            cellIndex,
+            directFlameCandidateSidecar,
+            material,
+            fireLayer,
+            microLayer,
+            vec4<f32>(combustionFrontTopology, state.xyz),
+            vec4<f32>(sourceBasisReaction, sourceBasisInterface, sourceBasisCurl, sourceBasisDivergence),
+            vec4<f32>(nonRidgeMembership, nonRidgeEmissionCoefficient),
+            nonRidgeExtinctionCoefficient,
+          );
+        }
+        atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
+      } else {
+        atomicAdd(&nonRidgeOpticalCaptureHeader.overflowCount, 1u);
+      }
+    } else if (nonRidgeOpticalCaptureHeader.mode > 0u && nonRidgeOpticalCaptureSignal > 0.000001) {
+      let captureRowIndex = atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
+      if (nonRidgeOpticalCaptureHeader.mode > 1u) {
+        if (captureRowIndex < nonRidgeOpticalCaptureHeader.capacity) {
+          writeNonRidgeOpticalCaptureRow(
+            captureRowIndex,
+            vec4<f32>(p, directFlameCandidateSupport),
+            directFlameCandidateSidecar,
+            material,
+            fireLayer,
+            microLayer,
+            vec4<f32>(state.xyz, velMag),
+            vec4<f32>(thermalSupport, reactionSupport, frontSupport, edgeSupport),
+            vec4<f32>(combustionFrontTopology, shellCoreBody, curlActivity, divSupport),
+            vec4<f32>(nonRidgeEmissionCoefficient, nonRidgeExtinctionCoefficient),
+            vec4<f32>(completeFlameEmissionCoefficient, completeFlameExtinctionCoefficient),
+          );
+        } else {
+          atomicAdd(&nonRidgeOpticalCaptureHeader.overflowCount, 1u);
+        }
+      }
+    }
+    if (appearanceAssayActive > 0.5) {
+      structuralAColor = structuralAColor + structuralATransmittance * structuralAEmissionCoefficient;
+      structuralATransmittance = structuralATransmittance * exp(-structuralAExtinctionCoefficient);
+      controlColor = controlColor + controlTransmittance * smokeOffBeautyEmissionCoefficient;
+      controlTransmittance = controlTransmittance * exp(-smokeOffBeautyExtinctionCoefficient);
+      recomposedColor = recomposedColor + recomposedTransmittance * recomposedEmissionCoefficient;
+      recomposedTransmittance = recomposedTransmittance * exp(-recomposedExtinctionCoefficient);
+      broadCarrierCoefficientColor = broadCarrierCoefficientColor
+        + broadCarrierEmissionCoefficient
+        + vec3<f32>(broadCarrierExtinctionCoefficient * 0.12);
+      positiveRecomposedColor = positiveRecomposedColor + positiveRecomposedTransmittance * positiveRecomposedEmissionCoefficient;
+      positiveRecomposedTransmittance = positiveRecomposedTransmittance * exp(-positiveRecomposedExtinctionCoefficient);
+      ridgeOnlyContribution = ridgeOnlyContribution + ridgeOnlyTransmittance * ridgeOwnedEmissionCoefficient;
+      ridgeOnlyTransmittance = ridgeOnlyTransmittance * exp(-ridgeOwnedExtinctionCoefficient);
+      let sharedTotalExtinctionCoefficient = ridgeOwnedExtinctionCoefficient + nonRidgeExtinctionCoefficient;
+      sharedRidgeContribution = sharedRidgeContribution + sharedTotalTransmittance * ridgeOwnedEmissionCoefficient;
+      sharedNonRidgeContribution = sharedNonRidgeContribution + sharedTotalTransmittance * nonRidgeEmissionCoefficient;
+      sharedTotalTransmittance = sharedTotalTransmittance * exp(-sharedTotalExtinctionCoefficient);
+      completeFlameEmissionColor = completeFlameEmissionColor + completeFlameEmissionCoefficient;
+      completeFlameExtinctionColor = completeFlameExtinctionColor + vec3<f32>(completeFlameExtinctionCoefficient * 2.8);
+      ridgeOwnedEmissionColor = ridgeOwnedEmissionColor + ridgeOwnedEmissionCoefficient;
+      ridgeOwnedExtinctionColor = ridgeOwnedExtinctionColor + vec3<f32>(ridgeOwnedExtinctionCoefficient * 2.8);
+      nonRidgeEmissionColor = nonRidgeEmissionColor + nonRidgeEmissionCoefficient;
+      nonRidgeExtinctionColor = nonRidgeExtinctionColor + vec3<f32>(nonRidgeExtinctionCoefficient * 2.8);
+    }
+    let extinctionStep = mix(standardExtinctionStep, directFlameSupervisionExtinction, supervisionFireOnlyTarget);
     trans = trans * exp(-extinctionStep);
+    if (appearanceAssayActive > 0.5) {
+      if (appearanceDecompositionMode > 12.5 && appearanceDecompositionMode < 13.5) {
+        trans = ridgeOnlyTransmittance;
+      } else if (appearanceDecompositionMode > 13.5) {
+        trans = sharedTotalTransmittance;
+      } else {
+        trans = select(controlTransmittance, structuralATransmittance, appearanceDecompositionMode < 1.5);
+      }
+    }
     t = t + localDt;
   }
 
-  if (FIRE_PROBE > 0.5) {
-    return makeRaymarchResult(vec4<f32>(clamp(fireProbeAccum, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0), vec4<f32>(0.0));
+  let bAppliedToFixedAColor = recomposedColor - structuralAColor;
+  if (appearanceDecompositionMode > 0.5 && appearanceDecompositionMode < 1.5) {
+    color = structuralAColor;
+  } else if (appearanceDecompositionMode > 1.5 && appearanceDecompositionMode < 2.5) {
+    let bPositive = max(broadCarrierCoefficientColor, vec3<f32>(0.0));
+    let bNegative = max(-broadCarrierCoefficientColor, vec3<f32>(0.0));
+    color = bPositive + vec3<f32>(0.18, 0.52, 1.0) * dot(bNegative, vec3<f32>(0.2126, 0.7152, 0.0722));
+  } else if (appearanceDecompositionMode > 2.5 && appearanceDecompositionMode < 3.5) {
+    let bPositive = max(bAppliedToFixedAColor, vec3<f32>(0.0));
+    let bNegative = max(-bAppliedToFixedAColor, vec3<f32>(0.0));
+    color = bPositive + vec3<f32>(0.18, 0.52, 1.0) * dot(bNegative, vec3<f32>(0.2126, 0.7152, 0.0722));
+  } else if (appearanceDecompositionMode > 3.5 && appearanceDecompositionMode < 4.5) {
+    color = recomposedColor;
+  } else if (appearanceDecompositionMode > 4.5 && appearanceDecompositionMode < 5.5) {
+    color = controlColor;
+  } else if (appearanceDecompositionMode > 5.5 && appearanceDecompositionMode < 6.5) {
+    color = completeFlameEmissionColor;
+  } else if (appearanceDecompositionMode > 6.5 && appearanceDecompositionMode < 7.5) {
+    color = completeFlameExtinctionColor;
+  } else if (appearanceDecompositionMode > 7.5 && appearanceDecompositionMode < 8.5) {
+    color = ridgeOwnedEmissionColor;
+  } else if (appearanceDecompositionMode > 8.5 && appearanceDecompositionMode < 9.5) {
+    color = ridgeOwnedExtinctionColor;
+  } else if (appearanceDecompositionMode > 9.5 && appearanceDecompositionMode < 10.5) {
+    color = nonRidgeEmissionColor;
+  } else if (appearanceDecompositionMode > 10.5 && appearanceDecompositionMode < 11.5) {
+    color = nonRidgeExtinctionColor;
+  } else if (appearanceDecompositionMode > 11.5 && appearanceDecompositionMode < 12.5) {
+    color = positiveRecomposedColor;
+  } else if (appearanceDecompositionMode > 12.5 && appearanceDecompositionMode < 13.5) {
+    color = ridgeOnlyContribution;
+  } else if (appearanceDecompositionMode > 13.5 && appearanceDecompositionMode < 14.5) {
+    color = sharedRidgeContribution;
+  } else if (appearanceDecompositionMode > 14.5 && appearanceDecompositionMode < 15.5) {
+    color = sharedNonRidgeContribution;
+  } else if (appearanceDecompositionMode > 15.5) {
+    color = sharedRidgeContribution + sharedNonRidgeContribution;
   }
+
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
-  let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
+  let exposed = vec3<f32>(1.0) - exp(-color * (0.96 * volumeExposure));
   var grade = exposed * (0.80 + 0.18 * vignette);
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
-  if (FIRE_PROBE > 6.5 && FIRE_PROBE < 7.5) {
-    return makeRaymarchResult(vec4<f32>(clamp(current, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0), vec4<f32>(0.0));
-  }
-  let temporalInvWeight = 1.0 / max(temporalMaterialWeight, 0.0001);
-  let temporalWorld = temporalWorldSum * temporalInvWeight;
-  let temporalVelocity = temporalVelocitySum * temporalInvWeight;
-  let temporalConfidence = temporalReprojectionConfidence(temporalMaterialWeight, temporalMajorantEdge, temporalReactiveSignal);
-  let temporalUv = temporalReprojectionUv(temporalWorld, temporalVelocity, temporalConfidence);
-  let materialTemporalWeights = materialAwareTemporalWeights(temporalSmokeHistoryTrustSum, temporalFireHistoryProtectSum, temporalInterfaceHistoryProtectSum, temporalDetailHistoryProtectSum, temporalMaterialWeight);
-  let resolvedColor = temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z, materialTemporalWeights);
-  let composedAlpha = clamp(1.0 - trans + max(max(resolvedColor.r, resolvedColor.g), resolvedColor.b) * 0.08, 0.0, 1.0);
-  let outputAlpha = mix(1.0, composedAlpha, TRANSPARENT_CANVAS);
-  let outputColor = mix(resolvedColor, resolvedColor * outputAlpha, TRANSPARENT_CANVAS);
+
   let residualFeature = vec4<f32>(
     clamp(1.0 - exp(-residualRadianceAuthority * 0.72), 0.0, 1.0),
     clamp(1.0 - exp(-residualFireAuthority * 0.82), 0.0, 1.0),
     clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
-  return makeRaymarchResult(vec4<f32>(outputColor, outputAlpha), residualFeature);
+  let composedAlpha = clamp(1.0 - trans + max(max(current.r, current.g), current.b) * 0.08, 0.0, 1.0);
+  let outputAlpha = mix(1.0, composedAlpha, TRANSPARENT_CANVAS);
+  return makeRaymarchResult(
+    vec4<f32>(current * outputAlpha, outputAlpha),
+    trans,
+    residualFeature,
+    vec4<f32>(sharedRidgeContribution, 0.0),
+    vec4<f32>(sharedNonRidgeContribution, 0.0),
+    vec4<f32>(sharedRidgeContribution + sharedNonRidgeContribution, 0.0),
+  );
 }
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let result = raymarchVolume(in);
+  let result = raymarchVolume(in, 1.0e6);
   return result.color;
 }
 
 @fragment
+fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
+  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
+  let nearWorldRaw = u.invViewProj * vec4<f32>(ndc, -1.0, 1.0);
+  let farWorldRaw = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
+  let ro = u.cameraPos_time.xyz;
+  let rd = normalize(farWorldRaw.xyz / farWorldRaw.w - nearWorldRaw.xyz / nearWorldRaw.w);
+  let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd));
+  let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
+  let premultipliedRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
+  return vec4<f32>(premultipliedRadiance, alpha);
+}
+
+@fragment
 fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
-  let result = raymarchVolume(in);
+  let result = raymarchVolume(in, 1.0e6);
   var out: ResidualSourceOutput;
   out.color = result.color;
   out.residualFeature = result.residualFeature;
   return out;
+}
+
+@fragment
+fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOutput {
+  let result = raymarchVolume(in, 1.0e6);
+  var out: OpticalTransportContributionOutput;
+  out.sharedRidge = result.sharedRidgeContribution;
+  out.sharedNonRidge = result.sharedNonRidgeContribution;
+  out.sharedComplete = result.sharedCompleteContribution;
+  return out;
+}
+`;
+
+const ANALYTIC_EMITTER_INJECTION_WGSL = /* wgsl */`
+override GRID: u32 = 64u;
+const SLOTS_PER_CELL: u32 = 4u;
+
+struct AnalyticEmitterInjectionUniforms {
+  origin_mode: vec4<f32>,
+  axis_strength: vec4<f32>,
+  support_radius: vec4<f32>,
+  geometry: vec4<f32>,
+  chemistry: vec4<f32>,
+  transport: vec4<f32>,
+  cell_min_grid: vec4<u32>,
+  cell_extent: vec4<u32>,
+};
+
+@group(0) @binding(0) var<uniform> emitter: AnalyticEmitterInjectionUniforms;
+@group(0) @binding(1) var<storage, read_write> fluid: array<vec4<f32>>;
+
+fn cellIndex(c: vec3<u32>) -> u32 {
+  return c.x + c.y * GRID + c.z * GRID * GRID;
+}
+
+fn capsuleSignedDistance(p: vec3<f32>, start: vec3<f32>, end: vec3<f32>, radius: f32) -> f32 {
+  let segment = end - start;
+  let segmentLength2 = max(dot(segment, segment), 0.000001);
+  let t = clamp(dot(p - start, segment) / segmentLength2, 0.0, 1.0);
+  return length(p - (start + segment * t)) - radius;
+}
+
+fn cylinderSignedDistance(p: vec3<f32>, origin: vec3<f32>, axis: vec3<f32>, radius: f32, extent: f32) -> f32 {
+  let centered = p - (origin + axis * extent * 0.5);
+  let axial = dot(centered, axis);
+  let radial = length(centered - axis * axial);
+  let d = vec2<f32>(radial - radius, abs(axial) - extent * 0.5);
+  return min(max(d.x, d.y), 0.0) + length(max(d, vec2<f32>(0.0)));
+}
+
+fn ribbonSignedDistance(p: vec3<f32>, origin: vec3<f32>, axis: vec3<f32>, supportAxis: vec3<f32>, radius: f32, extent: f32) -> f32 {
+  let secondaryAxis = cross(axis, supportAxis);
+  let relative = p - origin;
+  let local = abs(vec3<f32>(
+    dot(relative, supportAxis),
+    dot(relative, axis),
+    dot(relative, secondaryAxis)
+  ));
+  let d = local - vec3<f32>(extent * 0.5, radius * 0.42, radius);
+  return length(max(d, vec3<f32>(0.0))) + min(max(d.x, max(d.y, d.z)), 0.0);
+}
+
+fn torusSignedDistance(p: vec3<f32>, origin: vec3<f32>, axis: vec3<f32>, ringRadius: f32, tubeRadius: f32) -> f32 {
+  let q = p - origin;
+  let axial = dot(q, axis);
+  let planar = q - axis * axial;
+  let radialError = length(planar) - ringRadius;
+  return length(vec2<f32>(radialError, axial)) - tubeRadius;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
+  if (any(localId >= emitter.cell_extent.xyz)) { return; }
+  let cell = emitter.cell_min_grid.xyz + localId;
+  if (any(cell >= vec3<u32>(GRID))) { return; }
+  let p = (vec3<f32>(cell) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
+  let familyMode = u32(max(0.0, floor(emitter.origin_mode.w + 0.5)));
+  if (familyMode == 0u) { return; }
+  let origin = emitter.origin_mode.xyz;
+  let axis = emitter.axis_strength.xyz;
+  let supportAxis = emitter.support_radius.xyz;
+  let radius = max(0.006, emitter.support_radius.w);
+  let extent = max(0.012, emitter.geometry.x);
+  var signedDistance = 1.0;
+  if (familyMode == 1u) {
+    let halfSpan = axis * extent * 0.5;
+    signedDistance = capsuleSignedDistance(p, origin - halfSpan, origin + halfSpan, radius);
+  } else if (familyMode == 2u) {
+    signedDistance = cylinderSignedDistance(p, origin, axis, radius, extent);
+  } else if (familyMode == 3u) {
+    signedDistance = ribbonSignedDistance(p, origin, axis, supportAxis, radius, extent);
+  } else if (familyMode == 4u) {
+    signedDistance = torusSignedDistance(p, origin, axis, extent, radius);
+  }
+  let cellWidth = 2.0 / f32(GRID);
+  let sourceLaw = emitter.transport.y;
+  let sourceDepth = max(0.006, emitter.transport.z);
+  if (sourceLaw >= 0.5) {
+    let axialFromOrigin = dot(p - origin, axis);
+    var inletSignedDistance = abs(axialFromOrigin) - sourceDepth * 0.5;
+    if (familyMode == 2u) {
+      inletSignedDistance = max(-axialFromOrigin, axialFromOrigin - sourceDepth);
+    }
+    signedDistance = max(signedDistance, inletSignedDistance);
+  }
+  let support = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, signedDistance);
+  if (support <= 0.0) { return; }
+  let weight = support * max(0.0, emitter.axis_strength.w);
+  let chemistry = emitter.chemistry;
+  let detail = max(0.0, emitter.geometry.z);
+  let base = cellIndex(cell) * SLOTS_PER_CELL;
+  var velocityDensity = fluid[base];
+  var material = fluid[base + 1u];
+  var fireLayer = fluid[base + 2u];
+  var microLayer = fluid[base + 3u];
+  let velocity = axis * emitter.geometry.y * weight;
+  let injectedVelocity = clamp(
+    velocityDensity.xyz + velocity * (0.18 + emitter.transport.x * 0.036),
+    vec3<f32>(-0.34),
+    vec3<f32>(0.52)
+  );
+  material.x = max(material.x, chemistry.x * weight * 0.76);
+  material.y = max(material.y, chemistry.y * weight * 0.92);
+  material.z = max(material.z, chemistry.z * weight * 0.72);
+  if (sourceLaw < 0.5) {
+    material.w = max(material.w, detail * weight * 0.90);
+    fireLayer.x = max(fireLayer.x, chemistry.w * weight);
+    fireLayer.y = max(fireLayer.y, chemistry.w * weight * 0.42);
+    fireLayer.z = max(fireLayer.z, detail * weight * 0.82);
+    microLayer.x = max(microLayer.x, detail * weight * 0.72);
+    microLayer.y = max(microLayer.y, detail * weight * 0.42 + chemistry.w * weight * 0.12);
+    microLayer.z = max(microLayer.z, chemistry.w * weight * 0.60);
+    microLayer.w = max(microLayer.w, chemistry.w * weight * 0.22);
+  }
+  material = clamp(material, vec4<f32>(0.0), vec4<f32>(2.2, 2.4, 1.8, 1.8));
+  fireLayer = clamp(fireLayer, vec4<f32>(0.0), vec4<f32>(2.4, 2.0, 1.8, 1.8));
+  microLayer = clamp(microLayer, vec4<f32>(0.0), vec4<f32>(1.8, 1.8, 1.8, 1.4));
+  let legacyInjectedDensity = clamp(max(
+    material.x * 1.08 + microLayer.x * 0.08,
+    material.y * 0.42
+      + material.w * 0.18
+      + microLayer.y * 0.20
+      + microLayer.z * 0.05
+      + material.z * 0.10
+  ), 0.0, 2.2);
+  let injectedDensity = select(velocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
+  fluid[base] = vec4<f32>(injectedVelocity, injectedDensity);
+  fluid[base + 1u] = material;
+  fluid[base + 2u] = fireLayer;
+  fluid[base + 3u] = microLayer;
 }
 `;
 
@@ -5311,6 +6471,9 @@ struct BoundarySplat {
   positionSupport: vec4<f32>,
   colorOpacity: vec4<f32>,
   shape: vec4<f32>,
+  worldNormalAreaOpacity: vec4<f32>,
+  ridgeNonRidgeOptical: vec4<f32>,
+  nativeCellMembership: vec4<f32>,
 };
 
 struct BoundarySplatDraw {
@@ -5322,6 +6485,25 @@ struct BoundarySplatDraw {
   overflowCount: atomic<u32>,
   capacity: u32,
   _pad1: u32,
+  ridgeOnlyCount: atomic<u32>,
+  nonRidgeOnlyCount: atomic<u32>,
+  overlapCount: atomic<u32>,
+  unionCount: atomic<u32>,
+  zeroGradientAdmissionCount: atomic<u32>,
+  sourceCandidateCount: u32,
+  selectedTarget6Count: atomic<u32>,
+  selectedTarget9Count: atomic<u32>,
+  selectedTarget24Count: atomic<u32>,
+  requestedInstanceCount: u32,
+  effectiveInstanceCount: u32,
+  compactionCount: u32,
+};
+
+struct BoundarySplatDepositionDraw {
+  vertexCount: u32,
+  instanceCount: atomic<u32>,
+  firstVertex: u32,
+  firstInstance: u32,
 };
 
 struct BoundarySplatCamera {
@@ -5329,12 +6511,40 @@ struct BoundarySplatCamera {
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   controls: vec4<f32>,
+  appearance: vec4<f32>,
+  reconstructionControls: vec4<f32>,
+  unionControls: vec4<f32>,
+  depositionControls: vec4<f32>,
+  instanceInfo: vec4<f32>,
+  cameraPosition: vec4<f32>,
+  productTransform: vec4<f32>,
+};
+
+struct BoundarySplatInstanceDescriptor {
+  transform: vec4<f32>,
+  phase: vec4<f32>,
+};
+
+struct BoundarySplatInstanceTierGroup {
+  vertexCount: u32,
+  instanceCount: u32,
+  firstVertex: u32,
+  firstInstance: u32,
+  descriptorStart: u32,
+  descriptorCount: u32,
+  targetPixels: u32,
+  selectedCandidateCount: u32,
 };
 
 struct BoundarySplatVertexOut {
   @builtin(position) position: vec4<f32>,
   @location(0) colorOpacity: vec4<f32>,
   @location(1) local: vec2<f32>,
+  @location(2) ridgeOptical: vec4<f32>,
+  @location(3) nonRidgeOptical: vec4<f32>,
+  @location(4) unionEnabled: f32,
+  @location(5) depositionWeight: f32,
+  @interpolate(flat) @location(6) depthBin: u32,
 };
 
 struct BoundarySplatAttributeHookOutput {
@@ -5349,6 +6559,51 @@ struct BoundarySplatFeatureRow {
   micro: vec4<f32>,
 };
 
+fn boundarySplatOctahedralEncode(direction: vec3<f32>) -> vec2<f32> {
+  let unit = normalize(direction);
+  let projected = unit / max(abs(unit.x) + abs(unit.y) + abs(unit.z), 1e-8);
+  if (projected.z >= 0.0) { return projected.xy; }
+  let signs = select(vec2<f32>(-1.0), vec2<f32>(1.0), projected.xy >= vec2<f32>(0.0));
+  return (vec2<f32>(1.0) - abs(projected.yx)) * signs;
+}
+
+fn boundarySplatOctahedralDecode(encoded: vec2<f32>) -> vec3<f32> {
+  var direction = vec3<f32>(encoded, 1.0 - abs(encoded.x) - abs(encoded.y));
+  if (direction.z < 0.0) {
+    let signs = select(vec2<f32>(-1.0), vec2<f32>(1.0), direction.xy >= vec2<f32>(0.0));
+    direction = vec3<f32>((vec2<f32>(1.0) - abs(direction.yx)) * signs, direction.z);
+  }
+  return normalize(direction);
+}
+
+struct FlowKernelDescriptorRow {
+  positionCell: vec4<f32>,
+  massFirstMoment: vec4<f32>,
+  covarianceA: vec4<f32>,
+  covarianceB: vec4<f32>,
+  structureNormal: vec4<f32>,
+  tangentCoherence: vec4<f32>,
+  curlMagnitude: vec4<f32>,
+  validity: vec4<f32>,
+  opticalSupport: vec4<f32>,
+  sidecar: vec4<f32>,
+  material: vec4<f32>,
+  fire: vec4<f32>,
+  micro: vec4<f32>,
+  sidecarGradientX: vec4<f32>,
+  sidecarGradientY: vec4<f32>,
+  sidecarGradientZ: vec4<f32>,
+  materialGradientX: vec4<f32>,
+  materialGradientY: vec4<f32>,
+  materialGradientZ: vec4<f32>,
+  fireGradientX: vec4<f32>,
+  fireGradientY: vec4<f32>,
+  fireGradientZ: vec4<f32>,
+  microGradientX: vec4<f32>,
+  microGradientY: vec4<f32>,
+  microGradientZ: vec4<f32>,
+};
+
 ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 
 @group(0) @binding(0) var<storage, read> boundarySidecar: array<vec4<f32>>;
@@ -5358,9 +6613,321 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(4) var<uniform> boundarySplatCamera: BoundarySplatCamera;
 @group(0) @binding(5) var<storage, read> boundarySplatsForRender: array<BoundarySplat>;
 @group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;
+@group(0) @binding(8) var<storage, read_write> flowKernelDescriptorRows: array<FlowKernelDescriptorRow>;
+@group(0) @binding(9) var<storage, read> flowKernelDescriptorRowsForRender: array<FlowKernelDescriptorRow>;
+@group(0) @binding(10) var<storage, read> boundarySplatLiveUnionCoefficients: array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read> boundarySplatLiveUnionLookup: array<u32>;
+@group(0) @binding(12) var<storage, read_write> boundarySplatDepositionDraw: BoundarySplatDepositionDraw;
+@group(0) @binding(13) var<storage, read> boundarySplatInstanceDescriptors: array<BoundarySplatInstanceDescriptor>;
+@group(0) @binding(14) var<storage, read_write> boundarySplatInstanceSelectionIndices: array<u32>;
+@group(0) @binding(16) var<storage, read_write> boundarySplatInstanceTierGroups: array<BoundarySplatInstanceTierGroup>;
+@group(0) @binding(17) var<storage, read> boundarySplatInstanceSelectionIndicesForRender: array<u32>;
+@group(0) @binding(18) var<storage, read> boundarySplatInstanceTierGroupsForRender: array<BoundarySplatInstanceTierGroup>;
+
+const BOUNDARY_SPLAT_TARGET_6_INDEX: u32 = 0u;
+const BOUNDARY_SPLAT_TARGET_9_INDEX: u32 = 1u;
+const BOUNDARY_SPLAT_TARGET_24_INDEX: u32 = 2u;
+
+fn boundarySplatDeterministicHash(value: u32) -> u32 {
+  var x = value + 0x9e3779b9u;
+  x = (x ^ (x >> 16u)) * 0x7feb352du;
+  x = (x ^ (x >> 15u)) * 0x846ca68bu;
+  return x ^ (x >> 16u);
+}
+
+fn boundarySplatHash01(value: u32) -> f32 {
+  return f32(boundarySplatDeterministicHash(value) & 0x00ffffffu) / 16777216.0;
+}
+
+fn boundarySplatProjectedFootprintPixels(world: vec3<f32>, majorRadius: f32, minorRadius: f32) -> f32 {
+  let viewport = max(boundarySplatCamera.depositionControls.yz, vec2<f32>(1.0));
+  let center = boundarySplatCamera.viewProj * vec4<f32>(world, 1.0);
+  if (center.w <= 0.0) { return 0.0; }
+  let centerNdc = center.xy / center.w;
+  let majorClip = boundarySplatCamera.viewProj * vec4<f32>(world + boundarySplatCamera.cameraRight.xyz * majorRadius, 1.0);
+  let minorClip = boundarySplatCamera.viewProj * vec4<f32>(world + boundarySplatCamera.cameraUp.xyz * minorRadius, 1.0);
+  if (majorClip.w <= 0.0 || minorClip.w <= 0.0) { return 0.0; }
+  let majorPixels = length(((majorClip.xy / majorClip.w) - centerNdc) * viewport * 0.5);
+  let minorPixels = length(((minorClip.xy / minorClip.w) - centerNdc) * viewport * 0.5);
+  return max(0.0, 3.141592653589793 * majorPixels * minorPixels);
+}
+
+fn boundarySplatProjectedWorkSelectorKeeps(
+  nativeCellIndex: u32,
+  projectedFootprintPixels: f32,
+  targetPixels: f32,
+  ridgeAdmitted: bool,
+  structuralSignal: f32,
+  fireSignal: f32,
+) -> bool {
+  if (ridgeAdmitted || projectedFootprintPixels <= targetPixels) { return true; }
+  let raw = targetPixels / max(projectedFootprintPixels, 1.0);
+  let structureBias = mix(0.70, 1.15, clamp(structuralSignal, 0.0, 1.0));
+  let fireBias = mix(0.80, 1.20, smoothstep(0.08, 1.25, fireSignal));
+  let probability = clamp(raw * structureBias * fireBias, 0.015, 1.0);
+  return boundarySplatHash01(nativeCellIndex) < probability;
+}
+
+fn boundarySplatWriteNestedSelectionCohorts(
+  candidateIndex: u32,
+  nativeCellIndex: u32,
+  projectedFootprintPixels: f32,
+  ridgeAdmitted: bool,
+  structuralSignal: f32,
+  fireSignal: f32,
+) {
+  if (boundarySplatCamera.instanceInfo.x < 0.5) { return; }
+  if (boundarySplatProjectedWorkSelectorKeeps(nativeCellIndex, projectedFootprintPixels, 6.0, ridgeAdmitted, structuralSignal, fireSignal)) {
+    let selectedIndex = atomicAdd(&boundarySplatDraw.selectedTarget6Count, 1u);
+    if (selectedIndex < boundarySplatDraw.capacity) {
+      boundarySplatInstanceSelectionIndices[BOUNDARY_SPLAT_TARGET_6_INDEX * boundarySplatDraw.capacity + selectedIndex] = candidateIndex;
+    }
+  }
+  if (boundarySplatProjectedWorkSelectorKeeps(nativeCellIndex, projectedFootprintPixels, 9.0, ridgeAdmitted, structuralSignal, fireSignal)) {
+    let selectedIndex = atomicAdd(&boundarySplatDraw.selectedTarget9Count, 1u);
+    if (selectedIndex < boundarySplatDraw.capacity) {
+      boundarySplatInstanceSelectionIndices[BOUNDARY_SPLAT_TARGET_9_INDEX * boundarySplatDraw.capacity + selectedIndex] = candidateIndex;
+    }
+  }
+  if (boundarySplatProjectedWorkSelectorKeeps(nativeCellIndex, projectedFootprintPixels, 24.0, ridgeAdmitted, structuralSignal, fireSignal)) {
+    let selectedIndex = atomicAdd(&boundarySplatDraw.selectedTarget24Count, 1u);
+    if (selectedIndex < boundarySplatDraw.capacity) {
+      boundarySplatInstanceSelectionIndices[BOUNDARY_SPLAT_TARGET_24_INDEX * boundarySplatDraw.capacity + selectedIndex] = candidateIndex;
+    }
+  }
+}
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
+}
+
+fn boundarySplatSupportAt(cell: vec3<i32>) -> f32 {
+  let bounded = clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1));
+  return boundarySidecar[boundarySplatCellIndex(vec3<u32>(bounded))].x;
+}
+
+fn boundarySplatSupportGradient(cell: vec3<u32>) -> vec3<f32> {
+  let c = vec3<i32>(cell);
+  let gradient = vec3<f32>(
+    boundarySplatSupportAt(c + vec3<i32>(1, 0, 0)) - boundarySplatSupportAt(c - vec3<i32>(1, 0, 0)),
+    boundarySplatSupportAt(c + vec3<i32>(0, 1, 0)) - boundarySplatSupportAt(c - vec3<i32>(0, 1, 0)),
+    boundarySplatSupportAt(c + vec3<i32>(0, 0, 1)) - boundarySplatSupportAt(c - vec3<i32>(0, 0, 1)),
+  );
+  if (dot(gradient, gradient) < 1e-8) { return vec3<f32>(0.0, 1.0, 0.0); }
+  return normalize(gradient);
+}
+
+fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
+  return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
+}
+
+fn boundarySplatReadSlot(cell: vec3<i32>, slot: u32) -> vec4<f32> {
+  return fluid[boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL + slot];
+}
+
+fn boundarySplatReadSidecar(cell: vec3<i32>) -> vec4<f32> {
+  return boundarySidecar[boundarySplatCellIndex(boundarySplatClampCell(cell))];
+}
+
+fn boundarySplatSampleSlot(world: vec3<f32>, slot: u32) -> vec4<f32> {
+  let q = clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  let x00 = mix(boundarySplatReadSlot(i0, slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 0, 0), slot), f.x);
+  let x10 = mix(boundarySplatReadSlot(i0 + vec3<i32>(0, 1, 0), slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 1, 0), slot), f.x);
+  let x01 = mix(boundarySplatReadSlot(i0 + vec3<i32>(0, 0, 1), slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 0, 1), slot), f.x);
+  let x11 = mix(boundarySplatReadSlot(i0 + vec3<i32>(0, 1, 1), slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 1, 1), slot), f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+
+fn boundarySplatSampleSidecar(world: vec3<f32>) -> vec4<f32> {
+  let q = clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  let x00 = mix(boundarySplatReadSidecar(i0), boundarySplatReadSidecar(i0 + vec3<i32>(1, 0, 0)), f.x);
+  let x10 = mix(boundarySplatReadSidecar(i0 + vec3<i32>(0, 1, 0)), boundarySplatReadSidecar(i0 + vec3<i32>(1, 1, 0)), f.x);
+  let x01 = mix(boundarySplatReadSidecar(i0 + vec3<i32>(0, 0, 1)), boundarySplatReadSidecar(i0 + vec3<i32>(1, 0, 1)), f.x);
+  let x11 = mix(boundarySplatReadSidecar(i0 + vec3<i32>(0, 1, 1)), boundarySplatReadSidecar(i0 + vec3<i32>(1, 1, 1)), f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+
+struct BoundarySplatReconstructionSample {
+  velocityDensity: vec4<f32>,
+  sidecar: vec4<f32>,
+  material: vec4<f32>,
+  fire: vec4<f32>,
+  micro: vec4<f32>,
+};
+
+fn boundarySplatFlowReconstructionRaw(world: vec3<f32>) -> BoundarySplatReconstructionSample {
+  var sample: BoundarySplatReconstructionSample;
+  sample.velocityDensity = boundarySplatSampleSlot(world, 0u);
+  sample.sidecar = boundarySplatSampleSidecar(world);
+  sample.material = boundarySplatSampleSlot(world, 1u);
+  sample.fire = boundarySplatSampleSlot(world, 2u);
+  sample.micro = boundarySplatSampleSlot(world, 3u);
+  return sample;
+}
+
+fn boundarySplatCurl(cell: vec3<i32>) -> vec3<f32> {
+  let vx0 = boundarySplatReadSlot(cell + vec3<i32>(-1, 0, 0), 0u).xyz;
+  let vx1 = boundarySplatReadSlot(cell + vec3<i32>(1, 0, 0), 0u).xyz;
+  let vy0 = boundarySplatReadSlot(cell + vec3<i32>(0, -1, 0), 0u).xyz;
+  let vy1 = boundarySplatReadSlot(cell + vec3<i32>(0, 1, 0), 0u).xyz;
+  let vz0 = boundarySplatReadSlot(cell + vec3<i32>(0, 0, -1), 0u).xyz;
+  let vz1 = boundarySplatReadSlot(cell + vec3<i32>(0, 0, 1), 0u).xyz;
+  return vec3<f32>((vy1.z - vy0.z) - (vz1.y - vz0.y), (vz1.x - vz0.x) - (vx1.z - vx0.z), (vx1.y - vx0.y) - (vy1.x - vy0.x)) * 0.5;
+}
+
+fn boundarySplatDivergence(cell: vec3<i32>) -> f32 {
+  let vx0 = boundarySplatReadSlot(cell + vec3<i32>(-1, 0, 0), 0u).x;
+  let vx1 = boundarySplatReadSlot(cell + vec3<i32>(1, 0, 0), 0u).x;
+  let vy0 = boundarySplatReadSlot(cell + vec3<i32>(0, -1, 0), 0u).y;
+  let vy1 = boundarySplatReadSlot(cell + vec3<i32>(0, 1, 0), 0u).y;
+  let vz0 = boundarySplatReadSlot(cell + vec3<i32>(0, 0, -1), 0u).z;
+  let vz1 = boundarySplatReadSlot(cell + vec3<i32>(0, 0, 1), 0u).z;
+  return ((vx1 - vx0) + (vy1 - vy0) + (vz1 - vz0)) * 0.5;
+}
+
+fn boundarySplatStructure(world: vec3<f32>) -> f32 {
+  let sidecar = boundarySplatSampleSidecar(world);
+  return sidecar.x + sidecar.z * 0.25;
+}
+
+fn boundarySplatStructureNormal(world: vec3<f32>) -> vec4<f32> {
+  let cellWidthWorld = 2.0 / f32(GRID);
+  let dx = boundarySplatStructure(world + vec3<f32>(cellWidthWorld, 0.0, 0.0)) - boundarySplatStructure(world - vec3<f32>(cellWidthWorld, 0.0, 0.0));
+  let dy = boundarySplatStructure(world + vec3<f32>(0.0, cellWidthWorld, 0.0)) - boundarySplatStructure(world - vec3<f32>(0.0, cellWidthWorld, 0.0));
+  let dz = boundarySplatStructure(world + vec3<f32>(0.0, 0.0, cellWidthWorld)) - boundarySplatStructure(world - vec3<f32>(0.0, 0.0, cellWidthWorld));
+  let gradientWorld = vec3<f32>(dx, dy, dz) / max(2.0 * cellWidthWorld, 0.0001);
+  let gradientLength = length(gradientWorld);
+  let normal = select(vec3<f32>(0.0, 1.0, 0.0), gradientWorld / max(gradientLength, 0.0001), gradientLength > 0.0001);
+  return vec4<f32>(normal, select(0.0, 1.0, gradientLength > 0.0001));
+}
+
+struct BoundarySplatFlowFrame {
+  normalValid: vec4<f32>,
+  tangentRadius: vec4<f32>,
+  curlMagnitude: vec4<f32>,
+  divergenceActivity: vec4<f32>,
+};
+
+fn boundarySplatFlowFrame(world: vec3<f32>) -> BoundarySplatFlowFrame {
+  let center = boundarySplatFlowReconstructionRaw(world);
+  let normalValid = boundarySplatStructureNormal(world);
+  let normal = normalValid.xyz;
+  let velocityTangent = center.velocityDensity.xyz - normal * dot(center.velocityDensity.xyz, normal);
+  let cell = vec3<i32>(floor(clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+  let curlVector = boundarySplatCurl(cell);
+  let curlTangent = curlVector - normal * dot(curlVector, normal);
+  let fallbackAxis = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), abs(normal.x) > 0.75);
+  let geometricTangent = normalize(cross(normal, fallbackAxis));
+  let curlLength = length(curlTangent);
+  let velocityLength = length(velocityTangent);
+  let curlOrGeometric = select(geometricTangent, curlTangent / max(curlLength, 0.0001), curlLength > 0.0001);
+  let tangent = select(curlOrGeometric, velocityTangent / max(velocityLength, 0.0001), velocityLength > 0.0001);
+  let coherence = clamp(boundarySplatCamera.reconstructionControls.z, 0.0, 2.0);
+  let curlMagnitude = length(curlVector);
+  let kernelCurlActivity = smoothstep(0.015, 0.30, curlMagnitude);
+  let radiusWorld = clamp(boundarySplatCamera.reconstructionControls.y, 0.0025, 0.12) * mix(1.0, 1.0 + kernelCurlActivity, coherence * 0.5);
+  var frame: BoundarySplatFlowFrame;
+  frame.normalValid = normalValid;
+  frame.tangentRadius = vec4<f32>(tangent, radiusWorld);
+  frame.curlMagnitude = vec4<f32>(curlVector, curlMagnitude);
+  frame.divergenceActivity = vec4<f32>(boundarySplatDivergence(cell), kernelCurlActivity, coherence, 0.0);
+  return frame;
+}
+
+fn boundarySplatFlowReconstructionWithFrame(
+  world: vec3<f32>,
+  frame: BoundarySplatFlowFrame,
+  centerWeight: f32,
+  neighborWeight: f32,
+) -> BoundarySplatReconstructionSample {
+  let center = boundarySplatFlowReconstructionRaw(world);
+  let strength = clamp(boundarySplatCamera.reconstructionControls.x, 0.0, 1.0);
+  if (strength <= 0.0) { return center; }
+  let tangent = frame.tangentRadius.xyz;
+  let radiusWorld = frame.tangentRadius.w;
+  let forward = boundarySplatFlowReconstructionRaw(world + tangent * radiusWorld);
+  let backward = boundarySplatFlowReconstructionRaw(world - tangent * radiusWorld);
+  var result: BoundarySplatReconstructionSample;
+  result.velocityDensity = mix(center.velocityDensity, center.velocityDensity * centerWeight + (forward.velocityDensity + backward.velocityDensity) * neighborWeight, strength);
+  result.sidecar = max(vec4<f32>(0.0), mix(center.sidecar, center.sidecar * centerWeight + (forward.sidecar + backward.sidecar) * neighborWeight, strength));
+  result.material = max(vec4<f32>(0.0), mix(center.material, center.material * centerWeight + (forward.material + backward.material) * neighborWeight, strength));
+  result.fire = max(vec4<f32>(0.0), mix(center.fire, center.fire * centerWeight + (forward.fire + backward.fire) * neighborWeight, strength));
+  result.micro = max(vec4<f32>(0.0), mix(center.micro, center.micro * centerWeight + (forward.micro + backward.micro) * neighborWeight, strength));
+  return result;
+}
+
+fn boundarySplatFlowReconstruction(world: vec3<f32>) -> BoundarySplatReconstructionSample {
+  let center = boundarySplatFlowReconstructionRaw(world);
+  let strength = clamp(boundarySplatCamera.reconstructionControls.x, 0.0, 1.0);
+  if (strength <= 0.0) { return center; }
+  let centerWeight = 0.5;
+  let neighborWeight = 0.25;
+  return boundarySplatFlowReconstructionWithFrame(world, boundarySplatFlowFrame(world), centerWeight, neighborWeight);
+}
+
+fn boundarySplatOpticalSupport(reconstructed: BoundarySplatReconstructionSample) -> vec4<f32> {
+  let density = max(reconstructed.velocityDensity.w, reconstructed.material.x);
+  let fire = reconstructed.fire.x * 1.25
+    + reconstructed.fire.z * 0.52
+    + reconstructed.fire.w * 0.86
+    + reconstructed.micro.z * 0.72
+    + reconstructed.material.y * 0.24;
+  let extinction = reconstructed.material.x * 0.62
+    + reconstructed.micro.y * 0.36
+    + reconstructed.material.w * 0.16;
+  let importance = density * 0.50 + extinction * 0.40 + fire * 0.44;
+  return max(vec4<f32>(density, fire, extinction, importance), vec4<f32>(0.0));
+}
+
+fn writeFlowKernelDescriptor(
+  candidateIndex: u32,
+  cellIndex: u32,
+  world: vec3<f32>,
+  frame: BoundarySplatFlowFrame,
+  reconstructed: BoundarySplatReconstructionSample,
+) {
+  let strength = clamp(boundarySplatCamera.reconstructionControls.x, 0.0, 1.0);
+  let strengthZero = select(0.0, 1.0, strength <= 0.0);
+  let radiusWorld = select(frame.tangentRadius.w, 0.0, strength <= 0.0);
+  let variance = 0.5 * strength * frame.tangentRadius.w * frame.tangentRadius.w;
+  let tangent = frame.tangentRadius.xyz;
+  let cellWidthWorld = 2.0 / f32(GRID);
+  let gradientDenominator = max(2.0 * cellWidthWorld, 0.0001);
+  let plusX = boundarySplatFlowReconstruction(world + vec3<f32>(cellWidthWorld, 0.0, 0.0));
+  let minusX = boundarySplatFlowReconstruction(world - vec3<f32>(cellWidthWorld, 0.0, 0.0));
+  let plusY = boundarySplatFlowReconstruction(world + vec3<f32>(0.0, cellWidthWorld, 0.0));
+  let minusY = boundarySplatFlowReconstruction(world - vec3<f32>(0.0, cellWidthWorld, 0.0));
+  let plusZ = boundarySplatFlowReconstruction(world + vec3<f32>(0.0, 0.0, cellWidthWorld));
+  let minusZ = boundarySplatFlowReconstruction(world - vec3<f32>(0.0, 0.0, cellWidthWorld));
+  flowKernelDescriptorRows[candidateIndex].positionCell = vec4<f32>(world, f32(cellIndex));
+  flowKernelDescriptorRows[candidateIndex].massFirstMoment = vec4<f32>(1.0, 0.0, 0.0, 0.0);
+  flowKernelDescriptorRows[candidateIndex].covarianceA = variance * vec4<f32>(tangent.x * tangent.x, tangent.x * tangent.y, tangent.x * tangent.z, tangent.y * tangent.y);
+  flowKernelDescriptorRows[candidateIndex].covarianceB = vec4<f32>(variance * tangent.y * tangent.z, variance * tangent.z * tangent.z, radiusWorld, frame.divergenceActivity.z);
+  flowKernelDescriptorRows[candidateIndex].structureNormal = frame.normalValid;
+  flowKernelDescriptorRows[candidateIndex].tangentCoherence = vec4<f32>(tangent, frame.divergenceActivity.z);
+  flowKernelDescriptorRows[candidateIndex].curlMagnitude = frame.curlMagnitude;
+  flowKernelDescriptorRows[candidateIndex].validity = vec4<f32>(frame.divergenceActivity.x, frame.divergenceActivity.y, strengthZero, boundarySplatCamera.appearance.z);
+  flowKernelDescriptorRows[candidateIndex].opticalSupport = boundarySplatOpticalSupport(reconstructed);
+  flowKernelDescriptorRows[candidateIndex].sidecar = reconstructed.sidecar;
+  flowKernelDescriptorRows[candidateIndex].material = reconstructed.material;
+  flowKernelDescriptorRows[candidateIndex].fire = reconstructed.fire;
+  flowKernelDescriptorRows[candidateIndex].micro = reconstructed.micro;
+  flowKernelDescriptorRows[candidateIndex].sidecarGradientX = (plusX.sidecar - minusX.sidecar) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].sidecarGradientY = (plusY.sidecar - minusY.sidecar) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].sidecarGradientZ = (plusZ.sidecar - minusZ.sidecar) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].materialGradientX = (plusX.material - minusX.material) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].materialGradientY = (plusY.material - minusY.material) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].materialGradientZ = (plusZ.material - minusZ.material) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].fireGradientX = (plusX.fire - minusX.fire) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].fireGradientY = (plusY.fire - minusY.fire) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].fireGradientZ = (plusZ.fire - minusZ.fire) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].microGradientX = (plusX.micro - minusX.micro) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].microGradientY = (plusY.micro - minusY.micro) / gradientDenominator;
+  flowKernelDescriptorRows[candidateIndex].microGradientZ = (plusZ.micro - minusZ.micro) / gradientDenominator;
 }
 
 fn boundarySplatAttributeFeatures(
@@ -5406,23 +6973,69 @@ fn applyBoundarySplatAttributeHook(
   return result;
 }
 
+fn boundarySplatKernelIntegral(sharpness: f32) -> f32 {
+  return 3.14159265 * (1.0 - exp(-sharpness)) / sharpness;
+}
+
+fn boundarySplatEnergyCompensation(footprintRadius: f32, sharpness: f32) -> f32 {
+  let energyRatio = (sharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
+  return clamp(sqrt(energyRatio), 0.5, 2.5);
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) { return; }
   let cellIndex = boundarySplatCellIndex(gid);
-  let sidecar = boundarySidecar[cellIndex];
-  let material = fluid[cellIndex * SLOTS_PER_CELL + 1u];
-  let fire = fluid[cellIndex * SLOTS_PER_CELL + 2u];
-  let micro = fluid[cellIndex * SLOTS_PER_CELL + 3u];
-  let fireSignal = fire.x * 1.25 + fire.z * 0.52 + fire.w * 0.86 + micro.z * 0.72 + material.y * 0.24;
-  let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y) * smoothstep(0.018, 0.16, fireSignal);
-  if (structuralSignal < 0.11) { return; }
+  let admissionSidecar = boundarySidecar[cellIndex];
+  let admissionMaterial = fluid[cellIndex * SLOTS_PER_CELL + 1u];
+  let admissionFire = fluid[cellIndex * SLOTS_PER_CELL + 2u];
+  let admissionMicro = fluid[cellIndex * SLOTS_PER_CELL + 3u];
+  let admissionFireSignal = admissionFire.x * 1.25 + admissionFire.z * 0.52 + admissionFire.w * 0.86 + admissionMicro.z * 0.72 + admissionMaterial.y * 0.24;
+  let structuralSignal = admissionSidecar.z * smoothstep(0.055, 0.32, admissionSidecar.y) * smoothstep(0.018, 0.16, admissionFireSignal);
+  let unionEnabled = boundarySplatCamera.unionControls.x > 0.5;
+  let gradientGate = step(0.000001, boundarySplatCamera.unionControls.y);
+  let boundedFireSignal = gradientGate * clamp(admissionFireSignal / 1.5, 0.0, 1.0);
+  let nonRidgeScore = smoothstep(0.00392156862745098, 0.011764705882352941, boundedFireSignal);
+  let ridgeAdmitted = structuralSignal >= 0.11;
+  let nonRidgeAdmitted = unionEnabled && nonRidgeScore >= 0.5;
+  if (!ridgeAdmitted && !nonRidgeAdmitted) { return; }
+  if (ridgeAdmitted && nonRidgeAdmitted) {
+    atomicAdd(&boundarySplatDraw.overlapCount, 1u);
+  } else if (ridgeAdmitted) {
+    atomicAdd(&boundarySplatDraw.ridgeOnlyCount, 1u);
+  } else {
+    atomicAdd(&boundarySplatDraw.nonRidgeOnlyCount, 1u);
+  }
+  atomicAdd(&boundarySplatDraw.unionCount, 1u);
+  if (boundarySplatCamera.unionControls.y < 0.000001 && nonRidgeAdmitted) {
+    atomicAdd(&boundarySplatDraw.zeroGradientAdmissionCount, 1u);
+  }
   let candidateIndex = atomicAdd(&boundarySplatDraw.candidateCount, 1u);
   if (candidateIndex >= boundarySplatDraw.capacity) {
     atomicAdd(&boundarySplatDraw.overflowCount, 1u);
     return;
   }
   let world = ((vec3<f32>(gid) + vec3<f32>(0.5)) / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  var sidecar = admissionSidecar;
+  var material = admissionMaterial;
+  var fire = admissionFire;
+  var micro = admissionMicro;
+  let reconstructionStrength = clamp(boundarySplatCamera.reconstructionControls.x, 0.0, 1.0);
+  if (reconstructionStrength > 0.0) {
+    let reconstructed = boundarySplatFlowReconstruction(world);
+    sidecar = reconstructed.sidecar;
+    material = reconstructed.material;
+    fire = reconstructed.fire;
+    micro = reconstructed.micro;
+    if (boundarySplatCamera.reconstructionControls.w > 0.5) {
+      let flowFrame = boundarySplatFlowFrame(world);
+      writeFlowKernelDescriptor(candidateIndex, cellIndex, world, flowFrame, reconstructed);
+    }
+  } else if (boundarySplatCamera.reconstructionControls.w > 0.5) {
+    let flowFrame = boundarySplatFlowFrame(world);
+    writeFlowKernelDescriptor(candidateIndex, cellIndex, world, flowFrame, boundarySplatFlowReconstructionRaw(world));
+  }
+  let fireSignal = fire.x * 1.25 + fire.z * 0.52 + fire.w * 0.86 + micro.z * 0.72 + material.y * 0.24;
   let thermal = smoothstep(0.025, 0.78, material.y + fire.x * 0.28);
   let whiteHot = smoothstep(0.42, 1.25, fireSignal);
   let cool = vec3<f32>(0.05, 0.16, 0.72);
@@ -5437,6 +7050,41 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
     vec2<f32>(0.72 + sidecar.z * 0.36, 1.0 + sidecar.w * 0.42),
     attributeFeatures,
   );
+  let globalRadius = max(boundarySplatCamera.controls.x, 1e-4);
+  let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
+  let conserveAreaOpacity = boundarySplatCamera.cameraUp.w > 0.5;
+  let baseMajorRadius = radius * attributeOutput.radiusScale.x;
+  let baseMinorRadius = radius * attributeOutput.radiusScale.y;
+  let kernelMomentCovariance = boundarySplatCamera.cameraRight.w > 1.5;
+  var effectiveMajorRadius = baseMajorRadius;
+  let effectiveMinorRadius = baseMinorRadius;
+  var packedKernelTangent = vec2<f32>(0.0);
+  if (kernelMomentCovariance) {
+    let flowFrame = boundarySplatFlowFrame(world);
+    let kernelMomentVariance = 0.5 * reconstructionStrength * flowFrame.tangentRadius.w * flowFrame.tangentRadius.w;
+    let kernelMajorRadius = sqrt(baseMajorRadius * baseMajorRadius + kernelMomentVariance);
+    let kernelMinorRadius = baseMinorRadius;
+    effectiveMajorRadius = max(kernelMajorRadius, kernelMinorRadius);
+    packedKernelTangent = boundarySplatOctahedralEncode(flowFrame.tangentRadius.xyz);
+  }
+  let effectiveAxisAreaScale = max(
+    effectiveMajorRadius * effectiveMinorRadius * globalRadius * globalRadius / max(radius * radius, 1e-8),
+    1e-4,
+  );
+  let kernelIntegral = boundarySplatKernelIntegral(kernelSharpness);
+  let referenceKernelIntegral = boundarySplatKernelIntegral(3.4);
+  let energyCompensation = boundarySplatEnergyCompensation(globalRadius, kernelSharpness);
+  let renderedEnergyScale = max(effectiveAxisAreaScale * energyCompensation * kernelIntegral / referenceKernelIntegral, 1e-4);
+  let effectiveOpacity = select(attributeOutput.colorOpacity.a, attributeOutput.colorOpacity.a / renderedEnergyScale, conserveAreaOpacity);
+  let baseIntegratedAlpha = radius * radius * attributeOutput.colorOpacity.a * referenceKernelIntegral;
+  let ridgeOwnershipWeight = clamp(structuralSignal, 0.0, 1.0);
+  let completeEmissionCoefficient = effectiveOpacity * boundarySplatCamera.appearance.x;
+  let completeExtinctionCoefficient = effectiveOpacity * boundarySplatCamera.appearance.y;
+  let ridgeEmissionCoefficient = completeEmissionCoefficient * ridgeOwnershipWeight;
+  let ridgeExtinctionCoefficient = completeExtinctionCoefficient * ridgeOwnershipWeight;
+  let nonRidgeEmissionCoefficient = completeEmissionCoefficient - ridgeEmissionCoefficient;
+  let nonRidgeExtinctionCoefficient = completeExtinctionCoefficient - ridgeExtinctionCoefficient;
+  let worldNormal = boundarySplatSupportGradient(gid);
   if (boundarySplatCamera.controls.z > 0.5) {
     boundarySplatFeatureRows[candidateIndex].sidecar = sidecar;
     boundarySplatFeatureRows[candidateIndex].material = material;
@@ -5445,12 +7093,71 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   boundarySplats[candidateIndex].positionSupport = vec4<f32>(world, structuralSignal);
   boundarySplats[candidateIndex].colorOpacity = attributeOutput.colorOpacity;
-  boundarySplats[candidateIndex].shape = vec4<f32>(radius * attributeOutput.radiusScale.x, radius * attributeOutput.radiusScale.y, sidecar.z, fireSignal);
+  if (conserveAreaOpacity) {
+    boundarySplats[candidateIndex].colorOpacity.a = effectiveOpacity;
+  }
+  boundarySplats[candidateIndex].shape = vec4<f32>(effectiveMajorRadius, effectiveMinorRadius, packedKernelTangent);
+  boundarySplats[candidateIndex].worldNormalAreaOpacity = vec4<f32>(worldNormal, baseIntegratedAlpha);
+  boundarySplats[candidateIndex].ridgeNonRidgeOptical = vec4<f32>(
+    ridgeEmissionCoefficient,
+    ridgeExtinctionCoefficient,
+    nonRidgeEmissionCoefficient,
+    nonRidgeExtinctionCoefficient,
+  );
+  boundarySplats[candidateIndex].nativeCellMembership = vec4<f32>(
+    f32(cellIndex),
+    select(0.0, 1.0, ridgeAdmitted),
+    select(0.0, 1.0, nonRidgeAdmitted),
+    nonRidgeScore,
+  );
+  let projectedFootprintPixels = boundarySplatProjectedFootprintPixels(
+    world,
+    effectiveMajorRadius * globalRadius,
+    effectiveMinorRadius * globalRadius,
+  );
+  boundarySplatWriteNestedSelectionCohorts(
+    candidateIndex,
+    cellIndex,
+    projectedFootprintPixels,
+    ridgeAdmitted,
+    structuralSignal,
+    fireSignal,
+  );
 }
 
 @compute @workgroup_size(1)
 fn finalizeBoundarySplats() {
-  atomicStore(&boundarySplatDraw.instanceCount, min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity));
+  let candidateCount = min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity);
+  boundarySplatDraw.sourceCandidateCount = candidateCount;
+  boundarySplatDraw.compactionCount = 1u;
+  if (boundarySplatCamera.instanceInfo.x < 0.5) {
+    boundarySplatDraw.effectiveInstanceCount = 1u;
+    atomicStore(&boundarySplatDraw.instanceCount, candidateCount);
+    atomicStore(&boundarySplatDepositionDraw.instanceCount, candidateCount * 20u);
+    return;
+  }
+  let selectedCounts = array<u32, 3>(
+    min(atomicLoad(&boundarySplatDraw.selectedTarget6Count), boundarySplatDraw.capacity),
+    min(atomicLoad(&boundarySplatDraw.selectedTarget9Count), boundarySplatDraw.capacity),
+    min(atomicLoad(&boundarySplatDraw.selectedTarget24Count), boundarySplatDraw.capacity),
+  );
+  var firstInstance = 0u;
+  var descriptorCountTotal = 0u;
+  for (var groupIndex = 0u; groupIndex < 3u; groupIndex += 1u) {
+    let descriptorCount = boundarySplatInstanceTierGroups[groupIndex].descriptorCount;
+    let selectedCandidateCount = selectedCounts[groupIndex];
+    let renderedInstanceCount = descriptorCount * selectedCandidateCount;
+    boundarySplatInstanceTierGroups[groupIndex].vertexCount = 6u;
+    boundarySplatInstanceTierGroups[groupIndex].instanceCount = renderedInstanceCount;
+    boundarySplatInstanceTierGroups[groupIndex].firstVertex = 0u;
+    boundarySplatInstanceTierGroups[groupIndex].firstInstance = firstInstance;
+    boundarySplatInstanceTierGroups[groupIndex].selectedCandidateCount = selectedCandidateCount;
+    firstInstance += renderedInstanceCount;
+    descriptorCountTotal += descriptorCount;
+  }
+  boundarySplatDraw.effectiveInstanceCount = descriptorCountTotal;
+  atomicStore(&boundarySplatDraw.instanceCount, firstInstance);
+  atomicStore(&boundarySplatDepositionDraw.instanceCount, 0u);
 }
 
 fn boundarySplatQuadCorner(vertexIndex: u32) -> vec2<f32> {
@@ -5463,16 +7170,268 @@ fn boundarySplatQuadCorner(vertexIndex: u32) -> vec2<f32> {
   return vec2<f32>(1.0, 1.0);
 }
 
+fn boundarySplatCameraLinearDepthBin(worldPosition: vec3<f32>) -> u32 {
+  let cameraBackward = normalize(cross(boundarySplatCamera.cameraRight.xyz, boundarySplatCamera.cameraUp.xyz));
+  let cameraForward = -cameraBackward;
+  let cameraPosition = boundarySplatCamera.cameraPosition.xyz;
+  let centerDepth = dot(-cameraPosition, cameraForward);
+  let projectedHalfExtent = max(dot(abs(cameraForward), vec3<f32>(1.0)), 1e-6);
+  let nearDepth = centerDepth - projectedHalfExtent;
+  let linearDepth = dot(worldPosition - cameraPosition, cameraForward);
+  let normalizedDepth = clamp(
+    (linearDepth - nearDepth) / (2.0 * projectedHalfExtent),
+    0.0,
+    0.999999,
+  );
+  return u32(floor(normalizedDepth * f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS})));
+}
+
 @vertex
 fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> BoundarySplatVertexOut {
-  let splat = boundarySplatsForRender[instanceIndex];
   let corner = boundarySplatQuadCorner(vertexIndex);
-  let offset = boundarySplatCamera.cameraRight.xyz * corner.x * splat.shape.x * boundarySplatCamera.controls.x
-    + boundarySplatCamera.cameraUp.xyz * corner.y * splat.shape.y * boundarySplatCamera.controls.x;
+  var sourceCandidateIndex = instanceIndex;
+  var descriptorIndex = 0u;
+  var descriptorFound = boundarySplatCamera.instanceInfo.x < 0.5;
+  if (boundarySplatCamera.instanceInfo.x > 0.5) {
+    for (var groupIndex = 0u; groupIndex < 3u; groupIndex += 1u) {
+      let group = boundarySplatInstanceTierGroupsForRender[groupIndex];
+      if (instanceIndex >= group.firstInstance && instanceIndex < group.firstInstance + group.instanceCount) {
+        let localInstanceIndex = instanceIndex - group.firstInstance;
+        let descriptorCount = max(1u, group.descriptorCount);
+        let selectedRank = localInstanceIndex / descriptorCount;
+        let selectionCapacity = max(1u, u32(boundarySplatCamera.instanceInfo.z));
+        sourceCandidateIndex = boundarySplatInstanceSelectionIndicesForRender[groupIndex * selectionCapacity + selectedRank];
+        descriptorIndex = group.descriptorStart + (localInstanceIndex % descriptorCount);
+        descriptorFound = true;
+        break;
+      }
+    }
+  }
   var out: BoundarySplatVertexOut;
-  out.position = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + offset, 1.0);
-  out.colorOpacity = splat.colorOpacity;
   out.local = corner;
+  if (!descriptorFound) {
+    out.position = vec4<f32>(2.0, 2.0, 1.0, 1.0);
+    out.colorOpacity = vec4<f32>(0.0);
+    out.ridgeOptical = vec4<f32>(0.0);
+    out.nonRidgeOptical = vec4<f32>(0.0);
+    out.unionEnabled = 0.0;
+    out.depositionWeight = 0.0;
+    out.depthBin = 0u;
+    return out;
+  }
+  let splat = boundarySplatsForRender[sourceCandidateIndex];
+  var instanceScale = 1.0;
+  var transformedPosition = splat.positionSupport.xyz;
+  if (boundarySplatCamera.instanceInfo.x > 0.5) {
+    let descriptor = boundarySplatInstanceDescriptors[descriptorIndex];
+    instanceScale = descriptor.transform.w;
+    transformedPosition = splat.positionSupport.xyz * instanceScale + descriptor.transform.xyz;
+  }
+  transformedPosition = transformedPosition * boundarySplatCamera.productTransform.w
+    + boundarySplatCamera.productTransform.xyz;
+  let normal = normalize(splat.worldNormalAreaOpacity.xyz);
+  let tangentReference = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(normal.y) > 0.92);
+  let tangent = normalize(cross(tangentReference, normal));
+  let bitangent = normalize(cross(normal, tangent));
+  let worldCovariance = boundarySplatCamera.cameraRight.w > 0.5;
+  let kernelMomentCovariance = boundarySplatCamera.cameraRight.w > 1.5;
+  var kernelTangent = tangent;
+  var kernelBitangent = bitangent;
+  if (kernelMomentCovariance) {
+    kernelTangent = boundarySplatOctahedralDecode(splat.shape.zw);
+    kernelBitangent = normalize(cross(normal, kernelTangent));
+  }
+  let covarianceAxisX = select(tangent, kernelTangent, kernelMomentCovariance);
+  let covarianceAxisY = select(bitangent, kernelBitangent, kernelMomentCovariance);
+  let axisX = select(boundarySplatCamera.cameraRight.xyz, covarianceAxisX, worldCovariance);
+  let axisY = select(boundarySplatCamera.cameraUp.xyz, covarianceAxisY, worldCovariance);
+  let offset = axisX * corner.x * splat.shape.x * boundarySplatCamera.controls.x * instanceScale
+    + axisY * corner.y * splat.shape.y * boundarySplatCamera.controls.x * instanceScale;
+  let centerClip = boundarySplatCamera.viewProj * vec4<f32>(transformedPosition, 1.0);
+  out.position = boundarySplatCamera.viewProj * vec4<f32>(transformedPosition + offset, 1.0);
+  out.colorOpacity = splat.colorOpacity;
+  var ridgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.x, splat.ridgeNonRidgeOptical.y);
+  var nonRidgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.z, splat.ridgeNonRidgeOptical.w);
+  if (boundarySplatCamera.unionControls.z > 1.5) {
+    let nativeCellIndex = u32(splat.nativeCellMembership.x);
+    let completeOptical = boundarySplatLiveUnionCoefficients[nativeCellIndex];
+    let ridgeWeight = clamp(splat.positionSupport.w, 0.0, 1.0);
+    ridgeOptical = completeOptical * ridgeWeight;
+    nonRidgeOptical = completeOptical - ridgeOptical;
+  } else if (boundarySplatCamera.unionControls.z > 0.5) {
+    let nativeCellIndex = u32(splat.nativeCellMembership.x);
+    let rowPlusOne = boundarySplatLiveUnionLookup[nativeCellIndex];
+    if (rowPlusOne > 0u) {
+      let coefficientOffset = (rowPlusOne - 1u) * 2u;
+      ridgeOptical = boundarySplatLiveUnionCoefficients[coefficientOffset];
+      nonRidgeOptical = boundarySplatLiveUnionCoefficients[coefficientOffset + 1u];
+    }
+  }
+  out.ridgeOptical = ridgeOptical;
+  out.nonRidgeOptical = nonRidgeOptical;
+  out.unionEnabled = boundarySplatCamera.unionControls.x;
+  out.depositionWeight = 1.0;
+  out.depthBin = boundarySplatCameraLinearDepthBin(transformedPosition);
+  return out;
+}
+
+fn boundarySplatBilinearTapOffset(tapIndex: u32) -> f32 {
+  if (tapIndex == 0u) { return -1.0; }
+  if (tapIndex == 1u) { return -0.5; }
+  if (tapIndex == 3u) { return 0.5; }
+  if (tapIndex == 4u) { return 1.0; }
+  return 0.0;
+}
+
+fn boundarySplatBilinearTapWeight(tapIndex: u32) -> f32 {
+  if (tapIndex == 0u || tapIndex == 4u) { return 0.075; }
+  if (tapIndex == 1u || tapIndex == 3u) { return 0.225; }
+  return 0.4;
+}
+
+fn boundarySplatBilinearNeighbor(neighborIndex: u32) -> vec2<f32> {
+  if (neighborIndex == 1u) { return vec2<f32>(1.0, 0.0); }
+  if (neighborIndex == 2u) { return vec2<f32>(0.0, 1.0); }
+  if (neighborIndex == 3u) { return vec2<f32>(1.0, 1.0); }
+  return vec2<f32>(0.0, 0.0);
+}
+
+fn persistentCohortDroppedBilinearNeighbor(weights: vec4<f32>) -> u32 {
+  var dropped = 0u;
+  var minimumWeight = weights.x;
+  for (var neighborIndex = 1u; neighborIndex < 4u; neighborIndex += 1u) {
+    if (weights[neighborIndex] <= minimumWeight) {
+      minimumWeight = weights[neighborIndex];
+      dropped = neighborIndex;
+    }
+  }
+  return dropped;
+}
+
+fn persistentCohortTopThreeNeighborIndex(rank: u32, dropped: u32) -> u32 {
+  var retainedRank = 0u;
+  for (var neighborIndex = 0u; neighborIndex < 4u; neighborIndex += 1u) {
+    if (neighborIndex == dropped) { continue; }
+    if (retainedRank == rank) { return neighborIndex; }
+    retainedRank += 1u;
+  }
+  return 0u;
+}
+
+fn persistentCohortTopThreeBilinearWeight(neighborIndex: u32, weights: vec4<f32>, dropped: u32) -> f32 {
+  if (neighborIndex == dropped) { return 0.0; }
+  let retainedWeight = max(1.0 - weights[dropped], 1e-8);
+  return weights[neighborIndex] / retainedWeight;
+}
+
+@vertex
+fn boundarySplatBilinearVs(
+  @builtin(vertex_index) vertexIndex: u32,
+  @builtin(instance_index) depositionInstanceIndex: u32,
+) -> BoundarySplatVertexOut {
+  let persistentCohort = boundarySplatCamera.instanceInfo.w > 0.5;
+  let depositsPerCandidate = select(20u, 15u, persistentCohort);
+  let neighborsPerTap = select(4u, 3u, persistentCohort);
+  let candidateIndex = depositionInstanceIndex / depositsPerCandidate;
+  let depositIndex = depositionInstanceIndex % depositsPerCandidate;
+  let tapIndex = depositIndex / neighborsPerTap;
+  let neighborRank = depositIndex % neighborsPerTap;
+  let splat = boundarySplatsForRender[candidateIndex];
+  let viewportSize = max(boundarySplatCamera.depositionControls.yz, vec2<f32>(1.0));
+  let centerClip = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz, 1.0);
+  let tangent = normalize(select(boundarySplatOctahedralDecode(splat.shape.zw), splat.worldNormalAreaOpacity.xyz, persistentCohort));
+  let bitangent = normalize(cross(splat.worldNormalAreaOpacity.xyz, tangent));
+  let tangentClip = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + tangent * 0.03, 1.0);
+  let bitangentClip = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + bitangent * 0.03, 1.0);
+  let centerNdc = centerClip.xy / max(centerClip.w, 0.00001);
+  let tangentNdc = tangentClip.xy / max(tangentClip.w, 0.00001);
+  let bitangentNdc = bitangentClip.xy / max(bitangentClip.w, 0.00001);
+  let tangentPixels = vec2<f32>(
+    (tangentNdc.x - centerNdc.x) * 0.5 * viewportSize.x,
+    -(tangentNdc.y - centerNdc.y) * 0.5 * viewportSize.y,
+  );
+  let bitangentPixels = vec2<f32>(
+    (bitangentNdc.x - centerNdc.x) * 0.5 * viewportSize.x,
+    -(bitangentNdc.y - centerNdc.y) * 0.5 * viewportSize.y,
+  );
+  let tangentPixelLength = max(length(tangentPixels), 0.00001);
+  let tangentPixelDirection = tangentPixels / tangentPixelLength;
+  let baseRadiusWorld = splat.shape.x;
+  let pixelWorldScale = max(tangentPixelLength / 0.03, 1.0);
+  let bitangentPixelWorldScale = max(length(bitangentPixels) / 0.03, 1.0);
+  let majorRadiusPixels = clamp(
+    sqrt(baseRadiusWorld * baseRadiusWorld + 0.5 * 0.03 * 0.03) * pixelWorldScale,
+    0.75,
+    5.0,
+  );
+  let minorRadiusPixels = max(splat.shape.y * bitangentPixelWorldScale, 0.5);
+  let projectedFootprintJacobian = max(
+    majorRadiusPixels * minorRadiusPixels * boundarySplatKernelIntegral(3.4),
+    1.0,
+  );
+  let centerPixel = vec2<f32>(
+    (centerNdc.x * 0.5 + 0.5) * viewportSize.x,
+    (1.0 - (centerNdc.y * 0.5 + 0.5)) * viewportSize.y,
+  );
+  let samplePixel = centerPixel
+    + tangentPixelDirection * majorRadiusPixels * boundarySplatBilinearTapOffset(tapIndex)
+      * select(1.0, splat.shape.y, persistentCohort);
+  let sampleFloor = floor(samplePixel);
+  let sampleFraction = fract(samplePixel);
+  let bilinearWeights = vec4<f32>(
+    (1.0 - sampleFraction.x) * (1.0 - sampleFraction.y),
+    sampleFraction.x * (1.0 - sampleFraction.y),
+    (1.0 - sampleFraction.x) * sampleFraction.y,
+    sampleFraction.x * sampleFraction.y,
+  );
+  let droppedNeighbor = persistentCohortDroppedBilinearNeighbor(bilinearWeights);
+  let neighborIndex = select(
+    neighborRank,
+    persistentCohortTopThreeNeighborIndex(neighborRank, droppedNeighbor),
+    persistentCohort,
+  );
+  let neighbor = boundarySplatBilinearNeighbor(neighborIndex);
+  let ordinaryBilinearWeight = bilinearWeights[neighborIndex];
+  let bilinearWeight = select(
+    ordinaryBilinearWeight,
+    persistentCohortTopThreeBilinearWeight(neighborIndex, bilinearWeights, droppedNeighbor),
+    persistentCohort,
+  );
+  let targetPixel = sampleFloor + neighbor;
+  let targetNdc = vec2<f32>(
+    ((targetPixel.x + 0.5) / viewportSize.x) * 2.0 - 1.0,
+    1.0 - ((targetPixel.y + 0.5) / viewportSize.y) * 2.0,
+  );
+  var ridgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.x, splat.ridgeNonRidgeOptical.y);
+  var nonRidgeOptical = vec4<f32>(splat.colorOpacity.rgb * splat.ridgeNonRidgeOptical.z, splat.ridgeNonRidgeOptical.w);
+  if (persistentCohort) {
+    ridgeOptical = splat.colorOpacity;
+    nonRidgeOptical = splat.ridgeNonRidgeOptical;
+  } else if (boundarySplatCamera.unionControls.z > 1.5) {
+    let nativeCellIndex = u32(splat.nativeCellMembership.x);
+    let completeOptical = boundarySplatLiveUnionCoefficients[nativeCellIndex];
+    let ridgeWeight = clamp(splat.positionSupport.w, 0.0, 1.0);
+    ridgeOptical = completeOptical * ridgeWeight;
+    nonRidgeOptical = completeOptical - ridgeOptical;
+  } else if (boundarySplatCamera.unionControls.z > 0.5) {
+    let nativeCellIndex = u32(splat.nativeCellMembership.x);
+    let rowPlusOne = boundarySplatLiveUnionLookup[nativeCellIndex];
+    if (rowPlusOne > 0u) {
+      let coefficientOffset = (rowPlusOne - 1u) * 2u;
+      ridgeOptical = boundarySplatLiveUnionCoefficients[coefficientOffset];
+      nonRidgeOptical = boundarySplatLiveUnionCoefficients[coefficientOffset + 1u];
+    }
+  }
+  var out: BoundarySplatVertexOut;
+  out.position = vec4<f32>(targetNdc * centerClip.w, centerClip.z, centerClip.w);
+  out.colorOpacity = splat.colorOpacity;
+  out.local = vec2<f32>(0.0);
+  out.ridgeOptical = ridgeOptical;
+  out.nonRidgeOptical = nonRidgeOptical;
+  out.unionEnabled = select(boundarySplatCamera.unionControls.x, 1.0, persistentCohort);
+  out.depositionWeight = boundarySplatBilinearTapWeight(tapIndex) * bilinearWeight
+    * select(1.0, projectedFootprintJacobian, boundarySplatCamera.unionControls.z > 1.5);
+  out.depthBin = boundarySplatCameraLinearDepthBin(splat.positionSupport.xyz);
   return out;
 }
 
@@ -5485,25 +7444,334 @@ fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
   let gaussian = exp(-radius2 * kernelSharpness);
   let energyRatio = (kernelSharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
   let energyCompensation = clamp(sqrt(energyRatio), 0.5, 2.5);
+  if (in.unionEnabled > 0.5) {
+    let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
+    let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
+    let opticalKernel = gaussian * energyCompensation;
+    let alpha = 1.0 - exp(-sharedTotalExtinctionCoefficient * opticalKernel);
+    let sourceColor = sharedEmissionCoefficient / max(sharedTotalExtinctionCoefficient, 0.000001);
+    return vec4<f32>(sourceColor, alpha);
+  }
   let alpha = in.colorOpacity.a * gaussian * energyCompensation;
   return vec4<f32>(in.colorOpacity.rgb, alpha);
 }
+
+@fragment
+fn boundarySplatBilinearFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
+  let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
+  let weightedExtinction = sharedTotalExtinctionCoefficient * in.depositionWeight;
+  let alpha = 1.0 - exp(-weightedExtinction);
+  let sourceColor = sharedEmissionCoefficient / max(sharedTotalExtinctionCoefficient, 0.000001);
+  return vec4<f32>(sourceColor, alpha);
+}
+
+override OPTICAL_BIN: u32 = 0u;
+
+@fragment
+fn boundarySplatOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  if (in.depthBin != OPTICAL_BIN) { discard; }
+  let radius2 = dot(in.local, in.local);
+  if (radius2 > 1.0) { discard; }
+  let footprintRadius = clamp(boundarySplatCamera.controls.x, 0.35, 1.5);
+  let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
+  let gaussian = exp(-radius2 * kernelSharpness);
+  let energyCompensation = boundarySplatEnergyCompensation(footprintRadius, kernelSharpness);
+  if (in.unionEnabled > 0.5) {
+    let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
+    let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
+    return vec4<f32>(
+      sharedEmissionCoefficient * gaussian,
+      sharedTotalExtinctionCoefficient * gaussian,
+    );
+  }
+  let alpha = max(in.colorOpacity.a * gaussian * energyCompensation, 0.0);
+  return vec4<f32>(in.colorOpacity.rgb * alpha, alpha);
+}
+
+@fragment
+fn boundarySplatBilinearOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  if (in.depthBin != OPTICAL_BIN) { discard; }
+  let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
+  let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
+  let depositionWeight = max(in.depositionWeight, 0.0);
+  return vec4<f32>(
+    sharedEmissionCoefficient * depositionWeight,
+    sharedTotalExtinctionCoefficient * depositionWeight,
+  );
+}
 `;
 
-export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus, sharedGpuContext = null, transparentCanvas = false }) {
+const BOUNDARY_SPLAT_PRESENTATION_WGSL = `
+struct VolumePresentationControls {
+  exposure: vec4<f32>,
+};
+
+struct BoundarySplatPresentationVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@group(0) @binding(0) var boundarySplatHdr: texture_2d<f32>;
+@group(0) @binding(1) var<uniform> presentationControls: VolumePresentationControls;
+
+@vertex
+fn boundarySplatPresentationVs(@builtin(vertex_index) vertexIndex: u32) -> BoundarySplatPresentationVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0),
+  );
+  let position = positions[vertexIndex];
+  var out: BoundarySplatPresentationVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+@fragment
+fn boundarySplatPresentationFs(in: BoundarySplatPresentationVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(boundarySplatHdr));
+  let sampleUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(sampleUv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
+  let color = max(textureLoad(boundarySplatHdr, pixel, 0).rgb, vec3<f32>(0.0));
+  let ndc = in.uv * 2.0 - vec2<f32>(1.0);
+  let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
+  let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 3.0);
+  let exposed = vec3<f32>(1.0) - exp(-color * (0.96 * volumeExposure));
+  let grade = exposed * (0.80 + 0.18 * vignette);
+  let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  return vec4<f32>(current, 1.0);
+}
+`;
+
+const BOUNDARY_SPLAT_OPTICAL_PRESENTATION_WGSL = `
+struct VolumePresentationControls {
+  exposure: vec4<f32>,
+};
+
+struct BoundarySplatOpticalPresentationVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@group(0) @binding(0) var boundarySplatOpticalBins: texture_2d_array<f32>;
+@group(0) @binding(1) var<uniform> presentationControls: VolumePresentationControls;
+
+@vertex
+fn boundarySplatOpticalPresentationVs(@builtin(vertex_index) vertexIndex: u32) -> BoundarySplatOpticalPresentationVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0),
+  );
+  let position = positions[vertexIndex];
+  var out: BoundarySplatOpticalPresentationVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+@fragment
+fn boundarySplatOpticalPresentationFs(in: BoundarySplatOpticalPresentationVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(boundarySplatOpticalBins));
+  let sampleUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(sampleUv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
+  var color = vec3<f32>(0.0);
+  for (var binIndex = ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1}; binIndex >= 0; binIndex -= 1) {
+    let accumulated = max(textureLoad(boundarySplatOpticalBins, pixel, binIndex, 0), vec4<f32>(0.0));
+    let opticalDepth = accumulated.a;
+    let binAlpha = 1.0 - exp(-opticalDepth);
+    let binColor = select(vec3<f32>(0.0), accumulated.rgb / max(opticalDepth, 1e-6), opticalDepth > 1e-6);
+    color = binColor * binAlpha + color * (1.0 - binAlpha);
+  }
+  let ndc = in.uv * 2.0 - vec2<f32>(1.0);
+  let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
+  let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 3.0);
+  let exposed = vec3<f32>(1.0) - exp(-color * (0.96 * volumeExposure));
+  let grade = exposed * (0.80 + 0.18 * vignette);
+  let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  return vec4<f32>(current, 1.0);
+}
+
+@fragment
+fn boundarySplatOpticalDepthOrderDiagnosticFs(in: BoundarySplatOpticalPresentationVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(boundarySplatOpticalBins));
+  let sampleUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(sampleUv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
+  var color = vec3<f32>(0.0);
+  // near-bin-zero is green; far-bin-fifteen is magenta.
+  for (var binIndex = ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1}; binIndex >= 0; binIndex -= 1) {
+    let accumulated = max(textureLoad(boundarySplatOpticalBins, pixel, binIndex, 0), vec4<f32>(0.0));
+    let binAlpha = 1.0 - exp(-accumulated.a);
+    let depthFraction = f32(binIndex) / f32(${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1});
+    let depthColor = mix(vec3<f32>(0.08, 1.0, 0.18), vec3<f32>(1.0, 0.05, 1.0), depthFraction);
+    color = depthColor * binAlpha + color * (1.0 - binAlpha);
+  }
+  return vec4<f32>(color, 1.0);
+}
+`;
+
+const FOUR_ARM_HELD_STATE_LINEAR_RESOLVE_WGSL = `
+struct FourArmHeldStateResolveVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@group(0) @binding(0) var opticalBins: texture_2d_array<f32>;
+
+@vertex
+fn fourArmHeldStateResolveVs(@builtin(vertex_index) vertexIndex: u32) -> FourArmHeldStateResolveVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0),
+  );
+  let position = positions[vertexIndex];
+  var out: FourArmHeldStateResolveVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+@fragment
+fn fourArmHeldStateResolveFs(in: FourArmHeldStateResolveVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec2<i32>(textureDimensions(opticalBins));
+  let sampleUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(sampleUv * vec2<f32>(dimensions)), vec2<i32>(0), dimensions - vec2<i32>(1));
+  var color = vec3<f32>(0.0);
+  var totalOpticalDepth = 0.0;
+  for (var binIndex = ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1}; binIndex >= 0; binIndex -= 1) {
+    let accumulated = max(textureLoad(opticalBins, pixel, binIndex, 0), vec4<f32>(0.0));
+    let opticalDepth = accumulated.a;
+    let binAlpha = 1.0 - exp(-opticalDepth);
+    let binColor = select(vec3<f32>(0.0), accumulated.rgb / max(opticalDepth, 1e-6), opticalDepth > 1e-6);
+    color = binColor * binAlpha + color * (1.0 - binAlpha);
+    totalOpticalDepth += opticalDepth;
+  }
+  return vec4<f32>(color, totalOpticalDepth);
+}
+`;
+
+const FOUR_ARM_HELD_STATE_RESIDUAL_MARCH_WGSL = `
+override OPTICAL_BIN: u32 = 0u;
+const OPTICAL_BIN_COUNT: u32 = ${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS}u;
+const STEPS_PER_BIN: u32 = 4u;
+
+struct FourArmResidualParams {
+  invViewProj: mat4x4<f32>,
+  gridAndSteps: vec4<f32>,
+};
+
+struct FourArmResidualVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@group(0) @binding(0) var<uniform> params: FourArmResidualParams;
+@group(0) @binding(1) var residualGrid: texture_3d<f32>;
+
+@vertex
+fn fourArmResidualVs(@builtin(vertex_index) vertexIndex: u32) -> FourArmResidualVertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0),
+  );
+  let position = positions[vertexIndex];
+  var out: FourArmResidualVertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+@fragment
+fn fourArmResidualFs(in: FourArmResidualVertexOut) -> @location(0) vec4<f32> {
+  let dimensions = vec3<i32>(textureDimensions(residualGrid));
+  let ndcXY = vec2<f32>(in.uv.x * 2.0 - 1.0, (1.0 - in.uv.y) * 2.0 - 1.0);
+  var integrated = vec4<f32>(0.0);
+  for (var localStep = 0u; localStep < STEPS_PER_BIN; localStep += 1u) {
+    let depth = (f32(OPTICAL_BIN) + (f32(localStep) + 0.5) / f32(STEPS_PER_BIN)) / f32(OPTICAL_BIN_COUNT);
+    let homogeneous = params.invViewProj * vec4<f32>(ndcXY, depth, 1.0);
+    let world = homogeneous.xyz / max(abs(homogeneous.w), 1e-6);
+    let coordinate = world * 0.5 + vec3<f32>(0.5);
+    if (all(coordinate >= vec3<f32>(0.0)) && all(coordinate <= vec3<f32>(1.0))) {
+      let texel = clamp(vec3<i32>(coordinate * vec3<f32>(dimensions)), vec3<i32>(0), dimensions - vec3<i32>(1));
+      integrated += max(textureLoad(residualGrid, texel, 0), vec4<f32>(0.0));
+    }
+  }
+  let stepLength = 2.0 / max(params.gridAndSteps.y, 1.0);
+  return integrated * stepLength;
+}
+`;
+
+const FOUR_ARM_HELD_STATE_TIMESTAMP_MARKER_WGSL = `
+@compute @workgroup_size(1)
+fn fourArmHeldStateTimestampMarker() {}
+`;
+
+export function createKaminosVolumePrototype({
+  THREE,
+  viewport,
+  camera,
+  controls,
+  getControls,
+  onStatus,
+  productFrameOwner = 'prototype',
+  externalDevice = null,
+  externalAdapterInfo = null,
+  externalColorFormat = null,
+  externalDepthFormat = 'depth24plus',
+  externalProductTransform = { translate: [0, 0, 0], scale: 1 },
+  sharedGpuContext = null,
+  transparentCanvas = false,
+}) {
+  if (productFrameOwner !== 'prototype' && productFrameOwner !== 'caller') {
+    throw new Error(`unsupported-product-frame-owner:${productFrameOwner}`);
+  }
+  if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
+    throw new Error('caller-product-frame-requires-external-device-and-color-format');
+  }
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
   canvas.dataset.routeIdentity = ROUTE_IDENTITY;
-  viewport.appendChild(canvas);
+  if (productFrameOwner !== 'caller') viewport.appendChild(canvas);
+  const productTransform = {
+    translate: Array.isArray(externalProductTransform?.translate)
+      ? externalProductTransform.translate.slice(0, 3).map(value => Number(value) || 0)
+      : [0, 0, 0],
+    scale: Math.max(0.001, Number(externalProductTransform?.scale) || 1),
+  };
 
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
-  const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(344);
-  let controlsSnapshot = applyRuntimeQualityControls(getControls());
+  const productModelMatrix = new THREE.Matrix4();
+  const productViewProj = new THREE.Matrix4();
+  const productLocalCameraPosition = new THREE.Vector3();
+  const uniforms = new Float32Array(384);
+  const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
+  const initialControlRetirement = stripRetiredRaymarchControls(getControls());
+  let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
+  let volumePresentationModeRequestedRaw = 'beauty';
+  let volumePresentationModeRequested = 'beauty';
+  let volumePresentationModeEffective = 'beauty';
+  let volumePresentationModeFallbackReason = null;
+  let raymarchSmokePresentationModeRequestedRaw = 'on';
+  let raymarchSmokePresentationModeRequested = 'on';
+  let raymarchSmokePresentationModeFallbackReason = null;
+  let appearanceDecompositionModeRequestedRaw = 'off';
+  let appearanceDecompositionModeRequested = 'off';
+  let appearanceDecompositionModeEffective = 'off';
+  let appearanceDecompositionModeFallbackReason = null;
+  let boundarySplatPresentationModeRequestedRaw = 'current-additive-v0';
+  let boundarySplatPresentationModeRequested = 'current-additive-v0';
+  let boundarySplatPresentationModeEffective = 'current-additive-v0';
+  let boundarySplatPresentationModeFallbackReason = null;
+  let persistentSparseCohortGpuState = null;
+  let fourArmHeldStateRuntimeState = null;
+  let fourArmHeldStateResidualGrid = null;
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
-  let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
   let oracleActivityCueBuffer = null;
   let oracleActivityCueSourceValues = null;
@@ -5522,6 +7790,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     routeIdentity: ROUTE_IDENTITY,
     requestedRoute: 'kaminos_volume_smoke=1',
     effectiveRoute: ROUTE_IDENTITY,
+    productFrameOwner,
+    productFrameIdentity: productFrameOwner === 'caller'
+      ? 'product-frame-smoke-raymarch-under-splats-v0'
+      : null,
+    productFrameDepthFormat: productFrameOwner === 'caller' ? externalDepthFormat : null,
+    productFrameReceipt: null,
+    volumePresentationModeRequestedRaw,
+    volumePresentationModeRequested,
+    volumePresentationModeEffective,
+    volumePresentationModeFallbackReason,
+    volumePresentationTargetIdentity: BEAUTY_PRESENTATION_TARGET_IDENTITY,
+    volumePresentationReceipt: null,
+    raymarchSmokePresentationModeRequestedRaw,
+    raymarchSmokePresentationModeRequested,
+    raymarchSmokePresentationModeEffective: 'on',
+    raymarchSmokePresentationModeFallbackReason,
+    raymarchSmokePresentationTargetIdentity: RAYMARCH_SMOKE_PRESENTATION_ON_IDENTITY,
+    raymarchSmokePresentationReceipt: null,
+    appearanceDecompositionModeRequestedRaw,
+    appearanceDecompositionModeRequested,
+    appearanceDecompositionModeEffective,
+    appearanceDecompositionModeFallbackReason,
+    appearanceDecompositionTargetIdentity: APPEARANCE_DECOMPOSITION_MODES.off.targetIdentity,
+    appearanceDecompositionReceipt: null,
+    boundarySplatPresentationModeRequestedRaw,
+    boundarySplatPresentationModeRequested,
+    boundarySplatPresentationModeEffective,
+    boundarySplatPresentationModeFallbackReason,
+    boundarySplatPresentationReceipt: null,
     selectiveHeadLiveRole: normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole),
     selectiveHeadLiveEffectiveRole: 'off',
     selectiveHeadLiveRoleAuthority: SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES.off,
@@ -5541,8 +7838,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     selectiveHeadLiveFallbackReason: null,
     selectiveHeadLiveReplayAnchor: null,
     selectiveHeadLiveCapturePaused: false,
+    selectiveHeadLiveExactPause: null,
     selectiveHeadLive: null,
     backend: 'inactive',
+    retiredRaymarchControls: initialControlRetirement.retiredRaymarchControls,
+    retiredRaymarchControlReceiptLifetime: RETIRED_RAYMARCH_CONTROL_RECEIPT_LIFETIME,
     active: false,
     width: 0,
     height: 0,
@@ -5595,9 +7895,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       authority: 'off',
     },
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
+    volumeSceneAuthority: volumeSceneReceipt(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
-    simulationPaused: false,
     lookFreeze: normalizeLookFreeze(controlsSnapshot.lookFreeze),
     lookFreezeFrame: null,
     lookFreezeTimeSeconds: null,
@@ -5614,12 +7914,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
     occupancySkip: 0.35,
-    majorantSkip: 0.70,
-    majorantSmooth: 0.85,
-    majorantGuard: 0.75,
-    temporalAccum: 0.25,
-    temporalJitter: 0.85,
-    historyClamp: 0.70,
     fireScale: 0.86,
     detailScale: 1.75,
     detailScaleArtifactQuarantine: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene),
@@ -5657,43 +7951,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterCount: 0,
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
-    liquidFireContactConsumerSchema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
-    liquidFireContactAccumulationLayout: LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
-    liquidFireSourceStateModel: LIQUID_FIRE_SOURCE_STATE_MODEL,
-    liquidFireSourceReignitionPolicy: LIQUID_FIRE_SOURCE_REIGNITION_POLICY,
-    liquidFireSourcePilotEnabled: false,
-    liquidFireContactStatus: 'unbound',
-    liquidFireContactDispatchCount: 0,
-    liquidFireContactTransferEnabled: true,
-    liquidFireContactTransferGateReason: 'default-enabled',
-    liquidFireContactSuppressedFrameCount: 0,
-    liquidFireContactTransferEnabledAtMs: null,
-    liquidFireContactFirstDispatchAtMs: null,
-    liquidFireContactSourceGeneration: null,
-    liquidFireContactSourceEpoch: null,
-    liquidFireContactSourceFrameHash: null,
+    coreEmitterSourceMode: 'cluster',
+    coreEmitterSourceReceipt: null,
+    analyticEmitterMode: 'off',
+    analyticEmitterFamily: 'cluster',
+    analyticEmitterRequestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
+    analyticEmitterRequestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
+    analyticEmitterSourceLaw: 'inactive',
+    analyticEmitterSourceDepth: null,
+    fixedSourceDephase: controlsSnapshot.fixedSourceDephase !== false,
+    analyticEmitterCoordinateSpace: 'none',
+    analyticEmitterCount: 0,
+    analyticEmitterFrameId: null,
+    analyticEmitterDispatchActive: false,
+    analyticEmitterDispatchCellMin: [0, 0, 0],
+    analyticEmitterDispatchCellExtent: [0, 0, 0],
+    analyticEmitterDispatchWorkgroups: [0, 0, 0],
+    analyticEmitterCellVisitsThisFrame: 0,
+    analyticEmitterFullGridEquivalentPasses: 0,
     scalarActivityReceiver: null,
-    temporalAccumEffective: 0,
-    temporalReprojectionConfidence: 0,
-    temporalHistoryWeight: 0,
-    temporalRejectedHistory: 1,
-    temporalSmokeHistoryTrust: 0,
-    temporalFireHistoryProtect: 0,
-    temporalInterfaceHistoryProtect: 0,
-    temporalEvidenceSource: 'cpu-estimate-control-proxy',
-    temporalHistoryFrames: 0,
-    temporalHistoryResetCount: 0,
-    temporalHistoryResetReason: 'initial',
-    temporalHistoryValid: false,
     fluidStateResetCount: 0,
     fluidStateResetReason: 'initial',
-    majorantGrid: majorantGridSize,
-    majorantBuilt: false,
-    majorantFrameCount: 0,
-    majorantCadence: normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence),
-    majorantBuiltThisFrame: false,
-    majorantLastBuiltFrame: -1,
-    majorantSkippedFrameCount: 0,
     boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
     boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
     boundarySidecarBytes: boundarySidecarBufferBytes(gridSize),
@@ -5706,21 +7984,78 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
     boundarySidecarDebug: null,
     boundarySidecarOverrideReceipt: null,
+    boundarySplatExecutionPlan: resolveBoundarySplatExecutionPlan({
+      boundarySplatMode: controlsSnapshot.boundarySplatMode,
+      renderComposition: controlsSnapshot.selectiveHeadLiveRenderComposition,
+      boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
+      boundarySidecarView: controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view,
+      boundarySplatFeatureCapture: controlsSnapshot.boundarySplatFeatureCapture,
+      flowKernelDescriptorCapture: controlsSnapshot.flowKernelDescriptorCapture,
+      boundarySplatInstanceConsumer: controlsSnapshot.boundarySplatInstanceConsumer,
+    }),
     boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
     boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
     boundarySplatRendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
+    boundarySplatRuntimeCotangentAuthority: BOUNDARY_SPLAT_RUNTIME_COTANGENT_AUTHORITY,
     boundarySplatAttributeModelIdentity: boundarySplatEffectiveAttributeModelIdentity(controlsSnapshot.boundarySplatMode),
     boundarySplatFeatureCaptureRequested: normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture),
     boundarySplatFeatureCaptureEffective: false,
     boundarySplatFeatureCaptureIdentity: BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
     boundarySplatFeatureCapture: null,
+    boundarySplatLiveUnionOverlayRequestedIdentity: null,
+    boundarySplatLiveUnionOverlayEffectiveIdentity: null,
+    boundarySplatLiveUnionOverlayFallbackReason: null,
+    boundarySplatLiveUnionOverlayStatus: 'off',
+    boundarySplatLiveUnionOverlayReceipt: null,
+    liveCompleteFlameOpticalCoefficientReceipt: null,
+    liveCompleteFlameOpticalFrameReceipt: null,
+    liveCompleteFlameOpticalCoefficientsEnabled: false,
+    flowKernelDescriptorCaptureRequested: normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture),
+    flowKernelDescriptorCaptureEffective: false,
+    flowKernelDescriptorCaptureIdentity: FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
+    flowKernelDescriptorCapture: null,
     boundarySplatSourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
+    flowKernelIdentity: FLOW_RECONSTRUCTION_KERNEL_IDENTITY,
+    flowKernelRequested: flowKernelRequestedControls(controlsSnapshot),
+    flowKernelEffective: flowKernelEffectiveControls(controlsSnapshot),
+    flowKernelCandidateAdmissionAuthority: 'structural-splat-candidates-v0',
     boundarySplatCapacity: boundarySplatCapacity,
     boundarySplatCapacityGrowthCount: 0,
     boundarySplatCapacityGrowth: null,
+    boundarySplatCapacityLimitReceipt: null,
+    boundarySplatInstanceConsumerRequested: normalizeSimProfileFlag(controlsSnapshot.boundarySplatInstanceConsumer),
+    boundarySplatInstanceConsumerEffective: false,
+    boundarySplatInstanceConsumerFallbackReason: null,
+    boundarySplatInstanceDescriptorIdentity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
+    boundarySplatInstanceAllocationIdentity: BOUNDARY_SPLAT_INSTANCE_ALLOCATION_IDENTITY,
+    boundarySplatSelectorPolicyIdentity: BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_IDENTITY,
+    boundarySplatRequestedInstanceCount: normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances),
+    boundarySplatEffectiveInstanceCount: 1,
+    boundarySplatRequestedTierGroups: [],
+    boundarySplatEffectiveTierGroups: [],
+    boundarySplatInstanceDescriptors: [],
+    boundarySplatProjectedDiameterSummary: [],
+    boundarySplatStableNativeCellResidency: null,
+    boundarySplatHistoryDepth: BOUNDARY_SPLAT_INSTANCE_HISTORY_DEPTH,
+    boundarySplatPhaseSourceIdentity: 'shared-current-control',
+    boundarySplatInstanceCostReceipt: null,
+    boundarySplatCompactionCount: null,
     boundarySplatCandidateCount: null,
     boundarySplatOverflowCount: null,
+    boundarySplatRidgeOnlyCount: null,
+    boundarySplatNonRidgeOnlyCount: null,
+    boundarySplatOverlapCount: null,
+    boundarySplatUnionCount: null,
+    boundarySplatZeroGradientAdmissionCount: null,
+    boundarySplatUnionReceipt: null,
+    fullSupportDepositionRequested: FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY,
+    fullSupportDepositionEffective: FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY,
+    fullSupportDepositionFallbackReason: null,
+    fullSupportDepositionReceipt: null,
+    fullSupportTransportIdentity: FULL_SUPPORT_STAGE_A_TRANSPORT_IDENTITY,
+    fullSupportSourceCandidateCount: null,
+    fullSupportRasterDepositCount: null,
     boundarySplatCountAuthority: 'gpu-indirect-async-readback',
     boundarySplatInstanceCount: null,
     boundarySplatFallbackReason: null,
@@ -5734,6 +8069,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }),
     boundarySplatCopyBytesThisFrame: 0,
     boundarySplatCopyDisposition: makeBoundarySplatCopyDisposition(0, boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode)),
+    persistentSparseCohortGpuReceipt: null,
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
@@ -5749,17 +8085,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureTierEffectiveBounds: null,
     pressureTierOverlayOpacity: DEFAULT_PRESSURE_TIER_OVERLAY,
     pyroMaterialRendererCoupling: {
-      identity: 'pyro-material-memory-spatial-coupling-v0',
+      identity: 'pyro-transported-field-coupling-v0',
       lineage: 'pyro-material-memory-render-coupling-v0',
-      visualRole: 'opt-in-renderer-diagnostic-not-main-fire-authority',
+      visualRole: 'opt-in-transported-field-coupling-no-synthetic-atlas',
       requestedGain: 0,
       effectiveGain: 0,
-      materialShaderReadiness: 'blocked-reset',
+      materialShaderReadiness: 'retired-synthetic-atlas',
       energy: 0,
       liveFireAuthority: 0,
       smokeAuthority: 0,
       spatialMemory: {
-        identity: 'pyro-material-memory-spatial-coupling-v0',
+        identity: 'retired-pyro-material-memory-spatial-coupling-v0',
         textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
         uploadedCells: 0,
       },
@@ -5790,8 +8126,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       identity: PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY,
       authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
       resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
-      updateRule: 'pyro-cellular-detail-memory-deterministic-ca-v0',
-      visualRole: 'debug-atlas-only-not-main-fire',
+      updateRule: 'retired-synthetic-atlas-uniform-energy-envelope-v0',
+      visualRole: 'retired-synthetic-atlas-debug-history-not-renderer-authority',
       enabled: normalizePyroDynamicDetailEnabled(controlsSnapshot.pyroDynamicDetail),
       confidence: 0,
       liveFireAuthority: 0,
@@ -5807,9 +8143,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         identity: PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT,
         authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
         resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
-        visualRole: 'renderer-adjacent-detail-memory-not-main-fire',
+        visualRole: 'retired-synthetic-atlas-not-renderer-authority',
         textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
-        shaderReadiness: 'blocked-reset',
+        shaderReadiness: 'retired-synthetic-atlas',
         sampleVector4: new Array(24).fill(0).map(() => [0, 0, 0, 0]),
         energyMean: 0,
       },
@@ -5834,7 +8170,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   let pyroDynamicDetailEnergy = 0;
   let pyroDynamicDetailConfidence = 0;
-  let pyroDynamicDetailPhase = 0;
   let pyroDynamicDetailAtlasCells = new Array(24).fill(0);
   let pyroDynamicDetailLastInputMs = -Infinity;
   let pyroDynamicDetailLastReadbackFrame = -1;
@@ -5859,32 +8194,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function buildPyroDynamicDetailMaterialMemory({
-    atlasCells,
     resetGate,
-    confidence,
-    liveFireAuthority,
-    smokeAuthority,
     stateEnergy,
   }) {
     const usable = !resetGate;
     const sampleVector4 = new Array(PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT.width * PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT.height)
       .fill(0)
-      .map((_, index) => {
-        const energy = usable ? clampFinite(atlasCells[index], 0, 1, 0) : 0;
-        return [
-          energy,
-          usable ? clampFinite(confidence, 0, 1, 0) : 0,
-          usable ? clampFinite(liveFireAuthority, 0, 1, 0) : 0,
-          usable ? clampFinite(smokeAuthority, 0, 1, 0) : 0,
-        ];
-      });
+      .map(() => [0, 0, 0, 0]);
     return {
       identity: PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT,
       authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
       resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
-      visualRole: 'renderer-adjacent-detail-memory-not-main-fire',
+      visualRole: 'retired-synthetic-atlas-not-renderer-authority',
       textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
-      shaderReadiness: resetGate ? 'blocked-reset' : 'sampleable-debug-only',
+      shaderReadiness: 'retired-synthetic-atlas',
       sampleVector4,
       energyMean: usable ? clampFinite(stateEnergy, 0, 1, 0) : 0,
     };
@@ -5955,19 +8278,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pyroDynamicDetailEnergy = clampFinite(pyroDynamicDetailEnergy * 0.68, 0, 1, 0);
       pyroDynamicDetailConfidence = clampFinite(pyroDynamicDetailConfidence * 0.62, 0, 1, 0);
     }
-    pyroDynamicDetailPhase = (
-      pyroDynamicDetailPhase
-      + PYRO_DYNAMIC_DETAIL_PHASE_BASE_STEP
-      + liveFireAuthority * PYRO_DYNAMIC_DETAIL_PHASE_FIRE_STEP
-      + smokeAuthority * PYRO_DYNAMIC_DETAIL_PHASE_SMOKE_STEP
-    ) % 1024;
-    const targetAtlasCells = new Array(24).fill(0).map((_, index) => {
-      const x = index % 8;
-      const y = Math.floor(index / 8);
-      const wave = 0.5 + 0.5 * Math.sin(pyroDynamicDetailPhase * 6.283 + x * 1.73 + y * 2.11);
-      const neighbor = 0.5 + 0.5 * Math.sin(pyroDynamicDetailPhase * 3.71 + x * 0.79 - y * 1.39);
-      return clampFinite(pyroDynamicDetailEnergy * (0.28 + wave * 0.54 + neighbor * 0.18), 0, 1, 0);
-    });
+    const targetAtlasCells = new Array(24).fill(resetGate ? 0 : pyroDynamicDetailEnergy);
     pyroDynamicDetailAtlasCells = targetAtlasCells.map((target, index) => {
       const previous = resetGate ? 0 : clampFinite(pyroDynamicDetailAtlasCells[index], 0, 1, 0);
       return clampFinite(previous * (1 - PYRO_DYNAMIC_DETAIL_CELL_BLEND) + target * PYRO_DYNAMIC_DETAIL_CELL_BLEND, 0, 1, 0);
@@ -5977,14 +8288,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       identity: PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY,
       authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
       resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
-      updateRule: 'pyro-cellular-detail-memory-deterministic-ca-v0',
+      updateRule: 'pyro-transported-authority-scalar-debug-v0',
       visualRole: 'debug-atlas-only-not-main-fire',
       enabled,
       confidence: pyroDynamicDetailConfidence,
       liveFireAuthority,
       smokeAuthority,
       stateEnergy: pyroDynamicDetailEnergy,
-      statePhase: pyroDynamicDetailPhase,
+      statePhase: 0,
       resetGate,
       resetReasons,
       lastUpdateFrame: state.frameCount,
@@ -6012,6 +8323,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
+  let leanStockPipeline = null;
+  let leanStockReadbackPipeline = null;
+  let productRaymarchPipeline = null;
+  let leanStockProductRaymarchPipeline = null;
+  let debugRaymarchShaderSpecialization = 'auto';
+  let opticalTransportContributionPipeline = null;
   let browserResidualPipeline = null;
   let browserResidualSourcePipeline = null;
   let browserResidualBindGroupLayout = null;
@@ -6026,20 +8343,52 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let browserResidualModelUrl = '';
   let browserResidualLoadPromise = null;
   let computePipeline = null;
+  let analyticEmitterInjectionPipeline = null;
   let pressureDivergencePipeline = null;
   let pressureJacobiPipeline = null;
   let pressureJacobiTieredLowerPipeline = null;
   let pressureJacobiTieredHeroPipeline = null;
   let pressureProjectPipeline = null;
   let pressureProjectTieredPipeline = null;
-  let majorantComputePipeline = null;
   let boundarySidecarBuildPipeline = null;
   let boundarySplatCompactPipeline = null;
   let boundarySplatFinalizePipeline = null;
   let boundarySplatRenderPipeline = null;
+  let productBoundarySplatRenderPipeline = null;
   let boundarySplatReadbackPipeline = null;
+  let boundarySplatBilinearRenderPipeline = null;
+  let boundarySplatBilinearReadbackPipeline = null;
+  let boundarySplatBilinearHdrPipeline = null;
+  let boundarySplatHdrPipeline = null;
+  let boundarySplatOpticalPipelines = [];
+  let boundarySplatBilinearOpticalPipelines = [];
+  let boundarySplatPresentationShader = null;
+  let boundarySplatOpticalPresentationShader = null;
+  let fourArmHeldStateLinearResolveShader = null;
+  let fourArmHeldStateResidualMarchShader = null;
+  let fourArmHeldStateTimestampMarkerShader = null;
+  let boundarySplatPresentationRenderPipeline = null;
+  let boundarySplatPresentationReadbackPipeline = null;
+  let boundarySplatOpticalPresentationRenderPipeline = null;
+  let boundarySplatOpticalPresentationReadbackPipeline = null;
+  let boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline = null;
+  let fourArmHeldStateLinearResolvePipeline = null;
+  let fourArmHeldStateResidualBindGroupLayout = null;
+  let fourArmHeldStateResidualPipelineLayout = null;
+  let fourArmHeldStateResidualMarchPipelines = [];
+  let fourArmHeldStateTimestampMarkerPipeline = null;
+  let boundarySplatHdrTexture = null;
+  let boundarySplatHdrTextureSize = '';
+  let boundarySplatOpticalTexture = null;
+  let boundarySplatOpticalTextureSize = '';
+  let fourArmHeldStateLinearTexture = null;
+  let fourArmHeldStateLinearTextureSize = '';
+  let fourArmHeldStateResidualTexture = null;
+  let fourArmHeldStateResidualParamsBuffer = null;
+  let fourArmHeldStateResidualBindGroup = null;
   let bindGroups = [];
-  let majorantFrontBindGroups = [];
+  let analyticEmitterInjectionBindGroups = [];
+  let fluidFrontReadBindGroups = [];
   let boundarySidecarReadBindGroups = [];
   let irradianceLatticeBuffers = null;
   let irradianceAtlasTexture = null;
@@ -6055,15 +8404,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
-  let majorantWriteBindGroup = null;
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
   let selectiveHeadLiveRuntime = null;
   let selectiveHeadLiveBindGroups = null;
   let bindGroupLayout = null;
-  let majorantFluidBindGroupLayout = null;
-  let majorantWriteBindGroupLayout = null;
+  let analyticEmitterInjectionBindGroupLayout = null;
+  let fluidFrontReadBindGroupLayout = null;
   let boundarySidecarReadBindGroupLayout = null;
   let boundarySidecarWriteBindGroupLayout = null;
   let boundarySplatComputeBindGroupLayout = null;
@@ -6073,7 +8421,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureReadBindGroupLayout = null;
   let emptyBindGroupLayout = null;
   let pipelineLayout = null;
-  let majorantPipelineLayout = null;
+  let analyticEmitterInjectionPipelineLayout = null;
+  let productRaymarchDepthBindGroupLayout = null;
+  let productRaymarchPipelineLayout = null;
   let boundarySidecarPipelineLayout = null;
   let boundarySplatComputePipelineLayout = null;
   let boundarySplatRenderPipelineLayout = null;
@@ -6083,61 +8433,71 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectPipelineLayout = null;
   let pressureProjectTieredPipelineLayout = null;
   let shader = null;
+  let analyticEmitterInjectionShader = null;
   let boundarySplatShader = null;
   let uniformBuffer = null;
+  let analyticEmitterInjectionUniformBuffer = null;
+  const analyticEmitterInjectionUniformData = new ArrayBuffer(32 * Float32Array.BYTES_PER_ELEMENT);
+  const analyticEmitterInjectionUniformFloats = new Float32Array(analyticEmitterInjectionUniformData);
+  const analyticEmitterInjectionUniformWords = new Uint32Array(analyticEmitterInjectionUniformData);
+  let volumePresentationControlsBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
-  let liquidFireContactDescriptor = null;
-  let liquidFireContactShader = null;
-  let liquidFireContactBindGroupLayout = null;
-  let liquidFireContactPipelineLayout = null;
-  let liquidFireContactClearPipeline = null;
-  let liquidFireContactScatterPipeline = null;
-  let liquidFireContactApplyPipeline = null;
-  let liquidFireContactFinalizePipeline = null;
-  let liquidFireContactAccumulationBuffer = null;
-  let liquidFireContactStatsBuffer = null;
-  let liquidFireContactParamsBuffer = null;
-  let liquidFireContactBindGroups = [];
-  let liquidFireContactTransferEnabled = true;
-  let sourcePilotEnabled = false;
-  let liquidFireContactSuppressedFrameCount = 0;
+  let analyticEmitterDescriptor = null;
+  let analyticEmitterDescriptorSignature = '';
+  let analyticEmitterDispatch = analyticEmitterInjectionDispatch(null, gridSize);
   let volumePrimitives = [];
-  let majorantBuffer = null;
   let boundarySidecarBuffer = null;
   let boundarySidecarOverrideUpload = null;
   let debugFullFieldImportUpload = null;
   let boundarySplatBuffer = null;
   let boundarySplatDrawBuffer = null;
   let boundarySplatIndirectBuffer = null;
+  let boundarySplatBilinearIndirectBuffer = null;
   let boundarySplatCameraBuffer = null;
+  let boundarySplatInstanceDescriptorBuffer = null;
+  let boundarySplatInstanceSelectionBuffer = null;
+  let boundarySplatInstanceTierGroupBuffer = null;
   let boundarySplatReadbackBuffer = null;
   let boundarySplatFeatureBuffer = null;
   let boundarySplatFeatureBufferCapacity = 0;
+  let boundarySplatLiveUnionOverlay = null;
+  let boundarySplatLiveUnionOverlayGpuResources = null;
+  let boundarySplatLiveCompleteFlameCoefficientBuffer = null;
+  let liveCompleteFlameCoefficientUniformBuffer = null;
+  let liveCompleteFlameCoefficientWriteBindGroups = [];
+  let liveCompleteFlameCoefficientDispatchTexture = null;
+  let liveCompleteFlameOpticalCoefficientsEnabled = false;
+  let boundarySplatLiveUnionCoefficientDummyBuffer = null;
+  let boundarySplatLiveUnionLookupDummyBuffer = null;
+  let nonRidgeOpticalCaptureHeaderBuffer = null;
+  let nonRidgeOpticalCaptureRowBuffer = null;
+  let nonRidgeOpticalCaptureSession = null;
+  let nonRidgeSourceBasisCaptureSession = null;
+  let nonRidgeSourceBasisControlsActive = false;
+  let nonRidgeSourceBasisControlApplication = null;
+  let flowKernelDescriptorBuffer = null;
+  let flowKernelDescriptorBufferCapacity = 0;
+  let flowKernelDescriptorExportSession = null;
+  let boundarySplatCapacityAdmissionFailureReason = null;
+  let boundarySplatDescriptorSource = null;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
+  let boundarySplatControlGeneration = 0;
+  let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
   let frontBuffers = [];
-  let quenchBuffers = [];
   let pressureBuffers = [];
   let currentFluid = 0;
   let currentFront = 0;
-  let currentQuench = 0;
-  let simulationPaused = false;
   let frameTexture = null;
   let frameTextureSize = '';
   let browserResidualFeatureTexture = null;
   let browserResidualFeatureTextureSize = '';
-  let historyTexture = null;
-  let historyTextureSize = '';
-  let historySampler = null;
-  let historyValid = false;
-  let previousViewProjReady = false;
-  let lastTemporalCameraSignature = '';
-  let lastTemporalControlSignature = '';
   let format = null;
   let raf = 0;
   let selectiveHeadLiveCapturePaused = false;
+  let selectiveHeadLiveExactPause = null;
   const timingSamples = {
     rafDelta: [],
     cpuFrame: [],
@@ -6293,6 +8653,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.externalEmitterAgeMs = externalEmitterState.count > 0 ? Math.max(0, nowMs - externalEmitterState.timestampMs) : null;
   }
 
+  function analyticEmitterReceipt() {
+    return {
+      mode: analyticEmitterDescriptor ? 'analytic-fixed' : 'off',
+      family: analyticEmitterDescriptor?.family || 'cluster',
+      requestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
+      requestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
+      sourceLaw: analyticEmitterDescriptor ? analyticEmitterDescriptor.sourceLaw : 'inactive',
+      sourceDepth: analyticEmitterDescriptor ? analyticEmitterDescriptor.sourceDepth : null,
+      coordinateSpace: analyticEmitterDescriptor ? 'volume-local' : 'none',
+      count: analyticEmitterDescriptor ? 1 : 0,
+      frameId: analyticEmitterDescriptor?.frameId || null,
+    };
+  }
+
+  function updateAnalyticEmitterDebug() {
+    const receipt = analyticEmitterReceipt();
+    analyticEmitterDispatch = analyticEmitterInjectionDispatch(analyticEmitterDescriptor, gridSize);
+    state.analyticEmitterMode = receipt.mode;
+    state.analyticEmitterFamily = receipt.family;
+    state.analyticEmitterRequestedSourceLaw = receipt.requestedSourceLaw;
+    state.analyticEmitterRequestedSourceDepth = receipt.requestedSourceDepth;
+    state.analyticEmitterSourceLaw = receipt.sourceLaw;
+    state.analyticEmitterSourceDepth = receipt.sourceDepth;
+    state.analyticEmitterCoordinateSpace = receipt.coordinateSpace;
+    state.analyticEmitterCount = receipt.count;
+    state.analyticEmitterFrameId = receipt.frameId;
+    state.analyticEmitterDispatchActive = analyticEmitterDispatch.active;
+    state.analyticEmitterDispatchCellMin = [...analyticEmitterDispatch.cellMin];
+    state.analyticEmitterDispatchCellExtent = [...analyticEmitterDispatch.cellExtent];
+    state.analyticEmitterDispatchWorkgroups = [...analyticEmitterDispatch.workgroups];
+    state.analyticEmitterCellVisitsThisFrame = analyticEmitterDispatch.cellCount;
+    state.analyticEmitterFullGridEquivalentPasses = analyticEmitterDispatch.cellCount / gridCellCount(gridSize);
+  }
+
   function resampleScalarActivityCue(values, sourceGrid, targetGrid) {
     const srcGrid = normalizeScalarActivityCueGridSize(sourceGrid);
     const dstGrid = normalizeGridSize(targetGrid);
@@ -6397,6 +8791,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
   }
 
+  function ensureNonRidgeOpticalCaptureBuffers() {
+    if (!nonRidgeOpticalCaptureHeaderBuffer) {
+      nonRidgeOpticalCaptureHeaderBuffer = device.createBuffer({
+        label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} header`,
+        size: 16,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+    }
+    if (!nonRidgeOpticalCaptureRowBuffer) {
+      nonRidgeOpticalCaptureRowBuffer = device.createBuffer({
+        label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} dummy rows`,
+        size: NONRIDGE_OPTICAL_ROW_STRIDE_BYTES,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+    }
+  }
+
   function writeOracleActivityCueBuffer(values) {
     if (!device) return;
     ensureOracleActivityCueBuffer();
@@ -6460,21 +8872,36 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }));
   }
 
-  function getPrimitiveSource() {
+  function getPrimitiveSource(coreEmitterSourceMode = state.coreEmitterSourceMode) {
     const primitive = volumePrimitives[0];
-    if (!primitive) {
-      const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
-      return {
-        position: [0, scene === 'bonfire_plume' ? 0.62 : -0.74, 0],
-        radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
-        flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
-      };
-    }
+    const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    const coreEmitterSourceReceipt = resolveVolumeCoreEmitterSource({
+      mode: coreEmitterSourceMode,
+      controlFlowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
+      primitiveFlowRate: primitive ? Math.max(0, primitive.simulation.flowRate) : null,
+      primitiveId: primitive?.id || null,
+    });
+    state.coreEmitterSourceReceipt = coreEmitterSourceReceipt;
     return {
-      position: primitive.transform.position,
-      radius: Math.max(0.04, primitive.simulation.sourceRadius),
-      flowRate: Math.max(0, primitive.simulation.flowRate),
+      position: primitive?.transform.position || [0, scene === 'bonfire_plume' ? 0.62 : -0.74, 0],
+      radius: primitive
+        ? Math.max(0.04, primitive.simulation.sourceRadius)
+        : Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
+      flowRate: coreEmitterSourceReceipt.effectiveFlowRate,
+      coreEmitterSourceReceipt,
     };
+  }
+
+  function deterministicInitialSeedUnit(x, y, z, salt) {
+    let h = Math.imul((x | 0) ^ (salt | 0), 0x45d9f3b);
+    h = Math.imul(h ^ (y | 0), 0x119de1f3);
+    h = Math.imul(h ^ (z | 0), 0x3449f5d);
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x45d9f3b);
+    h ^= h >>> 15;
+    h = Math.imul(h, 0x119de1f3);
+    h ^= h >>> 16;
+    return (h >>> 0) / 0xffffffff;
   }
 
   function makeInitialFluid(nextGridSize) {
@@ -6495,30 +8922,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const dy = fy - sourcePrimitive.position[1];
           const dz = fz - sourcePrimitive.position[2];
           const radial = Math.hypot(dx, dz);
-          const fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
-          const detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
           const plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
           const plumeHeight01 = Math.max(0, Math.min(1, (plumeHeight - 0.7) / 1.5));
-          const scaledDetailFrequency = Math.max(0.55, Math.min(5.4, detailScale / Math.max(fireScale, 0.45)));
-          const seedDetailFrequency = isTallInitialScene ? 1 : scaledDetailFrequency;
           const inputRadius = sourcePrimitive.radius * (0.92 + (1.08 - 0.92) * plumeHeight01);
           const inputFlow = sourcePrimitive.flowRate;
           const seedBonfireSourceY = isBonfireInitialScene ? 0.62 : -0.74;
           const seedSourceY = volumePrimitives.length > 0 ? sourcePrimitive.position[1] : seedBonfireSourceY;
           const seedSourceDistance = fy - seedSourceY;
           const source = Math.exp(-(radial * radial) / Math.max(0.0036, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(seedSourceDistance) * 4.2) * inputFlow;
-          const angle = Math.atan2(dz, dx);
-          const azimuthalSeedA = 0.5 + 0.5 * Math.sin(angle * 5 + radial * 19 * seedDetailFrequency + fy * 6);
-          const azimuthalSeedB = 0.5 + 0.5 * Math.cos(angle * 7 - radial * 13 * seedDetailFrequency + fy * 4);
-          const azimuthalSeedC = 0.5 + 0.5 * Math.sin(angle * 3 + fx * fz * 31 * seedDetailFrequency - fy * 8);
-          const radialSeedDetail = 0.34 + 0.66 * Math.sin((radial * 29 * seedDetailFrequency) + (fy * 5)) ** 2;
+          const seedKeyX = isBonfireInitialScene ? Math.round(Math.abs(dx) * nextGridSize * 0.5) : x;
+          const seedKeyY = y;
+          const seedKeyZ = isBonfireInitialScene ? Math.round(Math.abs(dz) * nextGridSize * 0.5) : z;
+          const seedNoiseA = deterministicInitialSeedUnit(seedKeyX, seedKeyY, seedKeyZ, 0x1f123bb5);
+          const seedNoiseB = deterministicInitialSeedUnit(seedKeyX, seedKeyY, seedKeyZ, 0x5f356495);
+          const seedNoiseC = deterministicInitialSeedUnit(seedKeyX, seedKeyY, seedKeyZ, 0x3c6ef372);
+          const seedNoiseACentered = seedNoiseA - 0.5;
+          const seedNoiseBCentered = seedNoiseB - 0.5;
+          const seedNoiseCCentered = seedNoiseC - 0.5;
           const seedMaterialDetail = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.26 + 0.36 * radialSeedDetail + 0.24 * azimuthalSeedA + 0.14 * azimuthalSeedB
+              ? 0.58 + seedNoiseACentered * 0.18 + seedNoiseBCentered * 0.12
               : isTallInitialScene
                 ? 0
-                : 0.35 + 0.65 * Math.sin((fx * 18 * seedDetailFrequency) + (fz * 11 * seedDetailFrequency)) ** 2;
+                : 0.50 + seedNoiseACentered * 0.22;
           const seedVisibleAboveSource = isBonfireInitialScene ? seedBonfireSourceY - fy : fy + 0.74;
           const seedVisibleHeightRelief = Math.max(0, Math.min(1, (seedVisibleAboveSource - 0.012) / 0.25));
           const seedVisibleRadialRelief = Math.max(0, Math.min(1, (radial - inputRadius * 0.28) / Math.max(0.001, inputRadius * 0.86)));
@@ -6531,28 +8958,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           const seedBonfireFlame = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? (0.22 + 0.28 * radialSeedDetail + 0.22 * azimuthalSeedA + 0.18 * azimuthalSeedC) * seedBonfireFlameSourceRelief
+              ? (0.58 + seedNoiseACentered * 0.14 + seedNoiseCCentered * 0.10) * seedBonfireFlameSourceRelief
               : 0.90;
           const seedVisibleFireCarrier = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? (0.28 + 0.32 * Math.cos((radial * 23 * seedDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC) * seedVisibleFireCarrierRelief
-              : 0.30 + 0.70 * Math.cos((fx * 13 * seedDetailFrequency) - (fz * 17 * seedDetailFrequency)) ** 2;
+              ? (0.60 + seedNoiseBCentered * 0.16 + seedNoiseCCentered * 0.10) * seedVisibleFireCarrierRelief
+              : 0.60 + seedNoiseBCentered * 0.20;
           const seedMicroSmoke = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.20 + 0.30 * Math.sin((radial * 31 * seedDetailFrequency) + (fy * 4)) ** 2 + 0.30 * azimuthalSeedA + 0.20 * azimuthalSeedC
-              : 0.22 + 0.78 * Math.sin((fx * 31 * seedDetailFrequency) - (fz * 19 * seedDetailFrequency)) ** 2;
+              ? 0.56 + seedNoiseACentered * 0.18 + seedNoiseCCentered * 0.12
+              : 0.52 + seedNoiseACentered * 0.22 + seedNoiseCCentered * 0.12;
           const seedInterfaceShred = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.12 + 0.18 * Math.cos((radial * 27 * seedDetailFrequency) + (fy * 17)) ** 2 + 0.22 * azimuthalSeedB + 0.10 * azimuthalSeedC
-              : 0.12 + 0.50 * Math.cos((fx * 23 * seedDetailFrequency) + (fy * 17) - (fz * 29 * seedDetailFrequency)) ** 2;
+              ? 0.34 + seedNoiseBCentered * 0.16 + seedNoiseCCentered * 0.10
+              : 0.34 + seedNoiseBCentered * 0.18;
           const seedFireLick = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.18 + 0.36 * Math.sin((fy * 27) + (radial * 21 * seedDetailFrequency)) ** 2 + 0.28 * azimuthalSeedA + 0.18 * azimuthalSeedB
-              : 0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21 * seedDetailFrequency)) ** 2;
+              ? 0.54 + seedNoiseACentered * 0.18 + seedNoiseBCentered * 0.12
+              : 0.52 + seedNoiseCCentered * 0.22;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -dz * source * seedLateralVelocity;
           data[i + 1] = source * 0.22;
@@ -6582,31 +9009,66 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     selectiveHeadLiveBindGroups = null;
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
-    for (const buffer of quenchBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
     boundarySidecarBuffer?.destroy();
     boundarySplatBuffer?.destroy();
     boundarySplatDrawBuffer?.destroy();
     boundarySplatIndirectBuffer?.destroy();
+    boundarySplatBilinearIndirectBuffer?.destroy();
+    boundarySplatInstanceDescriptorBuffer?.destroy();
+    boundarySplatInstanceSelectionBuffer?.destroy();
+    boundarySplatInstanceTierGroupBuffer?.destroy();
     boundarySplatReadbackBuffer?.destroy();
     boundarySplatFeatureBuffer?.destroy();
+    boundarySplatLiveUnionCoefficientDummyBuffer?.destroy();
+    boundarySplatLiveUnionLookupDummyBuffer?.destroy();
+    boundarySplatLiveCompleteFlameCoefficientBuffer?.destroy();
+    liveCompleteFlameCoefficientUniformBuffer?.destroy();
+    liveCompleteFlameCoefficientDispatchTexture?.destroy();
+    nonRidgeOpticalCaptureHeaderBuffer?.destroy();
+    nonRidgeOpticalCaptureRowBuffer?.destroy();
+    flowKernelDescriptorBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     destroyFireIrradianceResources();
     boundarySidecarBuffer = null;
     boundarySplatBuffer = null;
     boundarySplatDrawBuffer = null;
     boundarySplatIndirectBuffer = null;
+    boundarySplatBilinearIndirectBuffer = null;
+    boundarySplatInstanceDescriptorBuffer = null;
+    boundarySplatInstanceSelectionBuffer = null;
+    boundarySplatInstanceTierGroupBuffer = null;
     boundarySplatReadbackBuffer = null;
     boundarySplatFeatureBuffer = null;
     boundarySplatFeatureBufferCapacity = 0;
+    boundarySplatLiveUnionCoefficientDummyBuffer = null;
+    boundarySplatLiveUnionLookupDummyBuffer = null;
+    boundarySplatLiveCompleteFlameCoefficientBuffer = null;
+    liveCompleteFlameCoefficientUniformBuffer = null;
+    liveCompleteFlameCoefficientDispatchTexture = null;
+    liveCompleteFlameCoefficientWriteBindGroups = [];
+    liveCompleteFlameOpticalCoefficientsEnabled = false;
+    state.liveCompleteFlameOpticalCoefficientReceipt = null;
+    state.liveCompleteFlameOpticalFrameReceipt = null;
+    state.liveCompleteFlameOpticalCoefficientsEnabled = false;
+    nonRidgeOpticalCaptureHeaderBuffer = null;
+    nonRidgeOpticalCaptureRowBuffer = null;
+    nonRidgeOpticalCaptureSession = null;
+    nonRidgeSourceBasisCaptureSession = null;
+    nonRidgeSourceBasisControlsActive = false;
+    nonRidgeSourceBasisControlApplication = null;
+    flowKernelDescriptorBuffer = null;
+    flowKernelDescriptorBufferCapacity = 0;
+    flowKernelDescriptorExportSession = null;
+    boundarySplatDescriptorSource = null;
     boundarySplatTelemetryCopyPending = false;
     oracleActivityCueBuffer = null;
     fluidBuffers = [];
     frontBuffers = [];
-    quenchBuffers = [];
     pressureBuffers = [];
     bindGroups = [];
-    majorantFrontBindGroups = [];
+    analyticEmitterInjectionBindGroups = [];
+    fluidFrontReadBindGroups = [];
     boundarySidecarReadBindGroups = [];
     boundarySidecarWriteBindGroup = null;
     boundarySplatComputeBindGroups = [];
@@ -6616,60 +9078,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureReadBindGroups = [];
   }
 
-  function destroyMajorantState() {
-    majorantBuffer?.destroy();
-    majorantBuffer = null;
-    majorantWriteBindGroup = null;
+  function effectiveControlsSignature(snapshot = controlsSnapshot) {
+    return JSON.stringify(Object.fromEntries(
+      Object.entries(snapshot).sort(([left], [right]) => left.localeCompare(right)),
+    ));
   }
 
-  function resetTemporalHistory(reason = 'reset') {
-    historyValid = false;
-    previousViewProjReady = false;
-    state.temporalHistoryValid = false;
-    state.temporalHistoryFrames = 0;
-    state.temporalReprojectionConfidence = 0;
-    state.temporalHistoryWeight = 0;
-    state.temporalRejectedHistory = 1;
-    state.temporalSmokeHistoryTrust = 0;
-    state.temporalFireHistoryProtect = 0;
-    state.temporalInterfaceHistoryProtect = 0;
-    state.temporalEvidenceSource = 'cpu-estimate-control-proxy';
-    state.temporalHistoryResetCount += 1;
-    state.temporalHistoryResetReason = reason;
-  }
-
-  function commitPreviousViewProjection() {
-    previousViewProj.copy(viewProj);
-    previousViewProjReady = true;
-  }
-
-  function destroyTemporalHistory() {
-    historyTexture?.destroy();
-    historyTexture = null;
-    historyTextureSize = '';
-    resetTemporalHistory('history-destroyed');
-  }
-
-  function ensureTemporalHistoryTexture() {
-    if (!device || !format) return;
-    const width = Math.max(1, state.width || 1);
-    const height = Math.max(1, state.height || 1);
-    const key = `${width}x${height}:${format}`;
-    if (historyTexture && historyTextureSize === key) return;
-    historyTexture?.destroy();
-    historyTexture = device.createTexture({
-      label: `kaminos temporal history texture ${width}x${height}`,
-      size: { width, height, depthOrArrayLayers: 1 },
-      format,
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    historyTextureSize = key;
-    resetTemporalHistory('history-resized');
-    rebuildFluidBindGroups();
-    rebuildSelectiveHeadLiveBindGroups();
-  }
-
-  function temporalCameraSignature() {
+  function cameraSignature() {
     return [
       camera.position.x.toFixed(4),
       camera.position.y.toFixed(4),
@@ -6682,166 +9097,129 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ].join('|');
   }
 
-  function temporalControlSignature(snapshot = controlsSnapshot) {
-    return [
-      snapshot.density,
-      snapshot.fire,
-      snapshot.radiance,
-      snapshot.absorption,
-      snapshot.glow,
-      snapshot.smoke,
-      snapshot.curl,
-      snapshot.microdetail,
-      snapshot.interfaceShred,
-      snapshot.fireLicks,
-      snapshot.projection,
-      snapshot.speed,
-      snapshot.raySteps,
-      snapshot.adaptiveRays,
-      snapshot.occupancySkip,
-      snapshot.majorantSkip,
-      snapshot.majorantSmooth,
-      snapshot.majorantGuard,
-      snapshot.renderScale,
-      snapshot.fireScale,
-      snapshot.detailScale,
-      snapshot.plumeHeight,
-      snapshot.windStrength,
-      snapshot.windAngle,
-      snapshot.windHeight,
-      snapshot.bonfireRecenter,
-      snapshot.bonfireLateralDamping,
-      snapshot.bonfireShear,
-      snapshot.bonfireDetailForces,
-      snapshot.bonfireDepinch,
-      snapshot.bonfireProjection,
-      snapshot.bonfireTemporal,
-      snapshot.bonfireInstabilityProbe,
-      normalizeLifecycleEffect(snapshot.lifecycleEffect),
-      snapshot.lifecycleT,
-      snapshot.quenchVapor,
-      snapshot.inputRadius,
-      snapshot.flowRate,
-      snapshot.resolution,
-      snapshot.majorantGrid,
-      snapshot.gridOverlay,
-      snapshot.flowDebug,
-      snapshot.oracleActivityCue,
-      snapshot.oracleActivityDisplay,
-      snapshot.oracleActivityCurlNoise,
-      snapshot.oracleActivityVorticity,
-      snapshot.oracleActivityMaterial,
-      normalizeLookFreeze(snapshot.lookFreeze),
-      normalizePyroCompareMode(snapshot.pyroCompareMode),
-      snapshot.pressureStrategy,
-      snapshot.pressureTierLowerMax,
-      snapshot.pressureTierHeroMin,
-      snapshot.pressureTierHeroMax,
-      normalizeVolumeScene(snapshot.volumeScene),
-      snapshot.rayBudgetPreset || '',
-    ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
-  }
-
-  function canonicalSourceControlSignature(snapshot = controlsSnapshot) {
-    return [
-      normalizeVolumeScene(snapshot.volumeScene),
-      snapshot.inputRadius,
-      snapshot.flowRate,
-      normalizeCanonicalSourceMode(snapshot.canonicalSourceMode),
-      normalizeCanonicalMotionMode(snapshot.canonicalMotionMode),
-      normalizeCanonicalContentMode(snapshot.canonicalContentMode),
-      snapshot.canonicalSourceY,
-      snapshot.canonicalSourceInjection,
-      snapshot.canonicalBuoyancy,
-    ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
-  }
-
-  function maybeResetTemporalHistoryForCamera() {
-    const signature = temporalCameraSignature();
-    if (lastTemporalCameraSignature && lastTemporalCameraSignature !== signature) {
-      resetTemporalHistory('camera-change');
-    }
-    lastTemporalCameraSignature = signature;
+  function createFluidRenderBindGroup({
+    label,
+    fluidRead,
+    fluidWrite,
+    frontRead,
+    frontWrite,
+    captureRows,
+    uniformsBuffer = uniformBuffer,
+  }) {
+    return device.createBindGroup({
+      label,
+      layout: bindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: uniformsBuffer } },
+        { binding: 1, resource: { buffer: fluidRead } },
+        { binding: 2, resource: { buffer: fluidWrite } },
+        { binding: 6, resource: { buffer: externalEmitterBuffer } },
+        { binding: 7, resource: { buffer: frontRead } },
+        { binding: 8, resource: { buffer: frontWrite } },
+        { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
+        { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+        { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
+        { binding: 12, resource: { buffer: captureRows } },
+      ],
+    });
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || quenchBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
-    bindGroups = [];
-    for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
-      for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {
-        bindGroups[fluidIndex * 2 + quenchIndex] = device.createBindGroup({
-          label: `kaminos fluid bind group ${gridSize}^3 fluid ${fluidIndex} quench ${quenchIndex}`,
-          layout: bindGroupLayout,
-          entries: [
-            { binding: 0, resource: { buffer: uniformBuffer } },
-            { binding: 1, resource: { buffer: fluidBuffers[fluidIndex] } },
-            { binding: 2, resource: { buffer: fluidBuffers[1 - fluidIndex] } },
-            { binding: 3, resource: { buffer: majorantBuffer } },
-            { binding: 4, resource: historyTexture.createView() },
-            { binding: 5, resource: historySampler },
-            { binding: 6, resource: { buffer: externalEmitterBuffer } },
-            { binding: 7, resource: { buffer: frontBuffers[fluidIndex] } },
-            { binding: 8, resource: { buffer: frontBuffers[1 - fluidIndex] } },
-            { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
-            { binding: 10, resource: { buffer: boundarySidecarBuffer } },
-            { binding: 11, resource: { buffer: quenchBuffers[quenchIndex] } },
-            { binding: 12, resource: { buffer: quenchBuffers[1 - quenchIndex] } },
-          ],
-        });
-      }
-    }
-  }
-
-  function fluidBindGroup(fluidIndex = currentFluid, quenchIndex = currentQuench) {
-    return bindGroups[fluidIndex * 2 + quenchIndex];
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !boundarySidecarBuffer) return;
+    bindGroups = [
+      createFluidRenderBindGroup({
+        label: `kaminos fluid bind group ${gridSize}^3 A to B`,
+        fluidRead: fluidBuffers[0],
+        fluidWrite: fluidBuffers[1],
+        frontRead: frontBuffers[0],
+        frontWrite: frontBuffers[1],
+        captureRows: nonRidgeOpticalCaptureRowBuffer,
+      }),
+      createFluidRenderBindGroup({
+        label: `kaminos fluid bind group ${gridSize}^3 B to A`,
+        fluidRead: fluidBuffers[1],
+        fluidWrite: fluidBuffers[0],
+        frontRead: frontBuffers[1],
+        frontWrite: frontBuffers[0],
+        captureRows: nonRidgeOpticalCaptureRowBuffer,
+      }),
+    ];
+    liveCompleteFlameCoefficientWriteBindGroups = boundarySplatLiveCompleteFlameCoefficientBuffer
+      && liveCompleteFlameCoefficientUniformBuffer
+      ? [
+          createFluidRenderBindGroup({
+            label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3 A`,
+            fluidRead: fluidBuffers[0],
+            fluidWrite: fluidBuffers[1],
+            frontRead: frontBuffers[0],
+            frontWrite: frontBuffers[1],
+            captureRows: boundarySplatLiveCompleteFlameCoefficientBuffer,
+            uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
+          }),
+          createFluidRenderBindGroup({
+            label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3 B`,
+            fluidRead: fluidBuffers[1],
+            fluidWrite: fluidBuffers[0],
+            frontRead: frontBuffers[1],
+            frontWrite: frontBuffers[0],
+            captureRows: boundarySplatLiveCompleteFlameCoefficientBuffer,
+            uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
+          }),
+        ]
+      : [];
   }
 
   function rebuildSelectiveHeadLiveBindGroups() {
     if (
       !selectiveHeadLiveRuntime
       || !bindGroupLayout
-      || !majorantFluidBindGroupLayout
+      || !fluidFrontReadBindGroupLayout
       || !boundarySidecarReadBindGroupLayout
       || !boundarySplatComputeBindGroupLayout
       || !uniformBuffer
-      || !majorantBuffer
-      || !historyTexture
-      || !historySampler
       || !externalEmitterBuffer
       || !oracleActivityCueBuffer
+      || !nonRidgeOpticalCaptureHeaderBuffer
+      || !nonRidgeOpticalCaptureRowBuffer
       || !boundarySidecarBuffer
       || !boundarySplatBuffer
       || !boundarySplatDrawBuffer
+      || !boundarySplatBilinearIndirectBuffer
+      || !boundarySplatInstanceDescriptorBuffer
+      || !boundarySplatInstanceSelectionBuffer
+      || !boundarySplatInstanceTierGroupBuffer
       || !boundarySplatCameraBuffer
       || !boundarySplatFeatureBuffer
-      || quenchBuffers.length !== 2
+      || !flowKernelDescriptorBuffer
     ) {
       selectiveHeadLiveBindGroups = null;
       return;
     }
     const makeRole = (role, fluid, front) => ({
-      render: device.createBindGroup({
+      descriptorSource: { role, fluid, front },
+      render: createFluidRenderBindGroup({
         label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} render`,
-        layout: bindGroupLayout,
-        entries: [
-          { binding: 0, resource: { buffer: uniformBuffer } },
-          { binding: 1, resource: { buffer: fluid } },
-          { binding: 2, resource: { buffer: fluidBuffers[0] } },
-          { binding: 3, resource: { buffer: majorantBuffer } },
-          { binding: 4, resource: historyTexture.createView() },
-          { binding: 5, resource: historySampler },
-          { binding: 6, resource: { buffer: externalEmitterBuffer } },
-          { binding: 7, resource: { buffer: front } },
-          { binding: 8, resource: { buffer: frontBuffers[0] } },
-          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
-          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
-          { binding: 11, resource: { buffer: quenchBuffers[0] } },
-          { binding: 12, resource: { buffer: quenchBuffers[1] } },
-        ],
+        fluidRead: fluid,
+        fluidWrite: fluidBuffers[0],
+        frontRead: front,
+        frontWrite: frontBuffers[0],
+        captureRows: nonRidgeOpticalCaptureRowBuffer,
       }),
-      majorant: device.createBindGroup({
-        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} majorant`,
-        layout: majorantFluidBindGroupLayout,
+      coefficientRender: boundarySplatLiveCompleteFlameCoefficientBuffer
+        && liveCompleteFlameCoefficientUniformBuffer
+        ? createFluidRenderBindGroup({
+            label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} live complete-flame coefficients`,
+            fluidRead: fluid,
+            fluidWrite: fluidBuffers[0],
+            frontRead: front,
+            frontWrite: frontBuffers[0],
+            captureRows: boundarySplatLiveCompleteFlameCoefficientBuffer,
+            uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
+          })
+        : null,
+      fluidFrontRead: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} fluid/front read`,
+        layout: fluidFrontReadBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
@@ -6866,6 +9244,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
           { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
           { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
+          { binding: 8, resource: { buffer: flowKernelDescriptorBuffer } },
+          { binding: 12, resource: { buffer: boundarySplatBilinearIndirectBuffer } },
+          { binding: 14, resource: { buffer: boundarySplatInstanceSelectionBuffer } },
+          { binding: 16, resource: { buffer: boundarySplatInstanceTierGroupBuffer } },
         ],
       }),
     });
@@ -6890,6 +9272,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function selectiveHeadLiveRoleGroups(kind) {
     const role = state.selectiveHeadLiveEffectiveRole;
     return selectiveHeadLiveBindGroups?.[role]?.[kind] || null;
+  }
+
+  function selectiveHeadLiveRoleDescriptorSource() {
+    const role = state.selectiveHeadLiveEffectiveRole;
+    return selectiveHeadLiveBindGroups?.[role]?.descriptorSource || null;
   }
 
   function encodeSelectiveHeadLiveFields(encoder) {
@@ -6959,7 +9346,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (effectiveFluidSha256 !== fluidSha256 || effectiveFrontSha256 !== frontSha256) {
       throw new Error(`selective-head replay anchor checksum mismatch: fluid=${effectiveFluidSha256} front=${effectiveFrontSha256}`);
     }
-    rebuildFluidState(gridSize, majorantGridSize, 'selective-head-live-replay-anchor');
+    rebuildFluidState(gridSize, 'selective-head-live-replay-anchor');
     const uploadInChunks = (buffer, bytes) => {
       const source = new Uint8Array(bytes);
       const chunkBytes = 8 * 1024 * 1024;
@@ -6996,23 +9383,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ...state.selectiveHeadLiveReplayAnchor };
   }
 
-  function ensureMajorantBuffer() {
-    if (majorantBuffer) return;
-    majorantBuffer = device.createBuffer({
-      label: `kaminos coarse majorant field ${majorantGridSize}^3`,
-      size: majorantBufferBytes(majorantGridSize),
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-    });
-    device.queue.writeBuffer(majorantBuffer, 0, new Float32Array(majorantGridSize * majorantGridSize * majorantGridSize * 4));
-    majorantWriteBindGroup = device.createBindGroup({
-      label: `kaminos coarse majorant write bind group ${majorantGridSize}^3`,
-      layout: majorantWriteBindGroupLayout,
-      entries: [
-        { binding: 0, resource: { buffer: majorantBuffer } },
-      ],
-    });
-  }
-
   function ensureBoundarySidecarBuffer() {
     if (boundarySidecarBuffer) return;
     boundarySidecarBuffer = device.createBuffer({
@@ -7030,241 +9400,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
-  function destroyLiquidFireContactConsumer() {
-    liquidFireContactAccumulationBuffer?.destroy();
-    liquidFireContactStatsBuffer?.destroy();
-    liquidFireContactParamsBuffer?.destroy();
-    liquidFireContactAccumulationBuffer = null;
-    liquidFireContactStatsBuffer = null;
-    liquidFireContactParamsBuffer = null;
-    liquidFireContactShader = null;
-    liquidFireContactBindGroupLayout = null;
-    liquidFireContactPipelineLayout = null;
-    liquidFireContactClearPipeline = null;
-    liquidFireContactScatterPipeline = null;
-    liquidFireContactApplyPipeline = null;
-    liquidFireContactFinalizePipeline = null;
-    liquidFireContactBindGroups = [];
-  }
-
-  function rebuildLiquidFireContactConsumer() {
-    destroyLiquidFireContactConsumer();
-    if (!device || !liquidFireContactDescriptor || fluidBuffers.length !== 2 || quenchBuffers.length !== 2) {
-      state.liquidFireContactStatus = liquidFireContactDescriptor ? 'waiting-for-pyro-state' : 'unbound';
-      return;
-    }
-    const descriptor = validateLiquidFireContactSourceDescriptor(liquidFireContactDescriptor, {
-      device,
-      expectedGeneration: liquidFireContactDescriptor.allocationGeneration,
-      expectedEpoch: liquidFireContactDescriptor.epoch,
-    });
-    const cellCount = gridCellCount(gridSize);
-    liquidFireContactAccumulationBuffer = device.createBuffer({
-      label: `kaminos liquid-fire transient contact accumulation ${gridSize}^3`,
-      size: cellCount * 16,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    liquidFireContactStatsBuffer = device.createBuffer({
-      label: 'kaminos liquid-fire contact consumer stats',
-      size: LIQUID_FIRE_CONTACT_STATS_WORDS * 4,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-    });
-    liquidFireContactParamsBuffer = device.createBuffer({
-      label: 'kaminos liquid-fire contact consumer params',
-      size: 80,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    device.queue.writeBuffer(liquidFireContactAccumulationBuffer, 0, new Uint32Array(cellCount * 4));
-    device.queue.writeBuffer(liquidFireContactStatsBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_STATS_WORDS));
-    writeLiquidFireContactParams();
-    liquidFireContactShader = device.createShaderModule({
-      label: `kaminos liquid-fire contact consumer ${gridSize}^3`,
-      code: createLiquidFireContactConsumerShaderWGSL(gridSize),
-    });
-    liquidFireContactBindGroupLayout = device.createBindGroupLayout({
-      label: 'kaminos liquid-fire contact consumer bind group layout',
-      entries: [
-        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-        { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
-        { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-        { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      ],
-    });
-    liquidFireContactPipelineLayout = device.createPipelineLayout({
-      label: 'kaminos liquid-fire contact consumer pipeline layout',
-      bindGroupLayouts: [liquidFireContactBindGroupLayout],
-    });
-    const makePipeline = (entryPoint, label) => device.createComputePipeline({
-      label,
-      layout: liquidFireContactPipelineLayout,
-      compute: { module: liquidFireContactShader, entryPoint },
-    });
-    liquidFireContactClearPipeline = makePipeline(
-      'clear_liquid_fire_contact_consumer_stats',
-      'kaminos clear liquid-fire contact consumer stats',
-    );
-    liquidFireContactScatterPipeline = makePipeline(
-      'scatter_liquid_fire_contacts',
-      'kaminos scatter sparse liquid contacts into Pyro near field',
-    );
-    liquidFireContactApplyPipeline = makePipeline(
-      'apply_liquid_fire_contact_transfer',
-      'kaminos apply local liquid quench and vapor transfer',
-    );
-    liquidFireContactFinalizePipeline = makePipeline(
-      'finalize_liquid_fire_contact_transfer',
-      'kaminos finalize liquid-fire contact transfer evidence',
-    );
-    liquidFireContactBindGroups = [];
-    for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
-      for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {
-        liquidFireContactBindGroups[fluidIndex * 2 + quenchIndex] = device.createBindGroup({
-          label: `kaminos liquid-fire contact consumer bind group ${gridSize}^3 fluid ${fluidIndex} quench ${quenchIndex}`,
-          layout: liquidFireContactBindGroupLayout,
-          entries: [
-            { binding: 0, resource: { buffer: descriptor.headerBuffer } },
-            { binding: 1, resource: { buffer: descriptor.recordsBuffer } },
-            { binding: 2, resource: { buffer: liquidFireContactAccumulationBuffer } },
-            { binding: 3, resource: { buffer: liquidFireContactStatsBuffer } },
-            { binding: 4, resource: { buffer: liquidFireContactParamsBuffer } },
-            { binding: 5, resource: { buffer: fluidBuffers[fluidIndex] } },
-            { binding: 6, resource: { buffer: quenchBuffers[quenchIndex] } },
-          ],
-        });
-      }
-    }
-    state.liquidFireContactStatus = liquidFireContactTransferEnabled
-      ? 'bound-gpu-sparse-source'
-      : 'staged-awaiting-contact-window';
-    state.liquidFireContactSourceGeneration = descriptor.allocationGeneration;
-    state.liquidFireContactSourceEpoch = descriptor.epoch;
-    state.liquidFireContactSourceFrameHash = descriptor.sourceFrameHash;
-  }
-
-  function writeLiquidFireContactParams() {
-    if (!device || !liquidFireContactDescriptor || !liquidFireContactParamsBuffer) return false;
-    const sourcePrimitive = getPrimitiveSource();
-    const sourceContactRadius = Math.max(0.12, sourcePrimitive.radius * 1.5);
-    device.queue.writeBuffer(liquidFireContactParamsBuffer, 0, liquidFireContactConsumerParams({
-      allocationGeneration: liquidFireContactDescriptor.allocationGeneration,
-      epoch: liquidFireContactDescriptor.epoch,
-      sourceFrameHash: liquidFireContactDescriptor.sourceFrameHash,
-      sourceQuenchCenter: sourcePrimitive.position.map(value => value * 0.5 + 0.5),
-      sourceQuenchRadius: sourceContactRadius,
-    }));
-    state.liquidFireSourceContactRadius = sourceContactRadius;
-    return true;
-  }
-
-  function encodeLiquidFireContactTransfer(encoder) {
-    if (
-      !liquidFireContactDescriptor ||
-      !liquidFireContactClearPipeline ||
-      !liquidFireContactScatterPipeline ||
-      !liquidFireContactApplyPipeline ||
-      !liquidFireContactFinalizePipeline ||
-      liquidFireContactBindGroups.length !== 4
-    ) return;
-    if (!liquidFireContactTransferEnabled) {
-      liquidFireContactSuppressedFrameCount += 1;
-      state.liquidFireContactSuppressedFrameCount = liquidFireContactSuppressedFrameCount;
-      state.liquidFireContactStatus = 'staged-awaiting-contact-window';
-      return;
-    }
-    const bindGroup = liquidFireContactBindGroups[currentFluid * 2 + currentQuench];
-    const pass = encoder.beginComputePass({ label: 'kaminos liquid-fire contact transfer pass' });
-    pass.setBindGroup(0, bindGroup);
-    pass.setPipeline(liquidFireContactClearPipeline);
-    pass.dispatchWorkgroups(1);
-    pass.setPipeline(liquidFireContactScatterPipeline);
-    pass.dispatchWorkgroups(Math.ceil(liquidFireContactDescriptor.capacity / 64));
-    pass.setPipeline(liquidFireContactApplyPipeline);
-    pass.dispatchWorkgroups(Math.ceil(gridCellCount(gridSize) / 64));
-    pass.setPipeline(liquidFireContactFinalizePipeline);
-    pass.dispatchWorkgroups(1);
-    pass.end();
-    state.liquidFireContactDispatchCount += 1;
-    if (state.liquidFireContactFirstDispatchAtMs === null) {
-      state.liquidFireContactFirstDispatchAtMs = performance.now();
-    }
-    state.liquidFireContactStatus = 'gpu-dispatched-awaiting-header-gate';
-  }
-
-  async function sampleLiquidFireContactConsumer() {
-    if (!device || !liquidFireContactStatsBuffer) {
-      return { ok: false, status: state.liquidFireContactStatus, reason: 'liquid-fire-contact-consumer-unavailable' };
-    }
-    const readback = device.createBuffer({
-      label: 'kaminos liquid-fire contact consumer stats readback',
-      size: LIQUID_FIRE_CONTACT_STATS_WORDS * 4,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-    });
-    const encoder = device.createCommandEncoder({ label: 'kaminos liquid-fire contact consumer witness readback' });
-    encoder.copyBufferToBuffer(liquidFireContactStatsBuffer, 0, readback, 0, LIQUID_FIRE_CONTACT_STATS_WORDS * 4);
-    device.queue.submit([encoder.finish()]);
-    await readback.mapAsync(GPUMapMode.READ);
-    const words = new Uint32Array(readback.getMappedRange()).slice();
-    readback.unmap();
-    readback.destroy();
-    const statusLabels = ['unset', 'applied', 'invalid-source-header', 'stale-source-tick', 'fresh-source-tick', 'fresh-no-exchange'];
-    return {
-      ok: words[1] === 1,
-      schema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
-      accumulationLayout: LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
-      lastConsumedTick: words[0],
-      statusCode: words[1],
-      status: statusLabels[words[1]] || `unknown-${words[1]}`,
-      acceptedContacts: words[2],
-      rejectedContacts: words[3],
-      touchedCells: words[4],
-      removedHeat: words[5] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      removedFuel: words[6] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      removedFlame: words[7] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      addedVapor: words[8] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      sourceGeneration: words[9],
-      sourceEpoch: words[10],
-      sourceFrameHash: words[11],
-      quenchDeposited: words[12] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      quenchedCells: words[13],
-      sourceContactWetness: words[14] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      sourceWetness: words[15] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      sourceTemperature: words[16] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      sourceCombustion: words[17] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      sourceIgnited: words[18] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      sourceNearestContactDistance: words[19] === 0xffffffff
-        ? null
-        : words[19] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
-      sourceLastContactTick: words[20],
-      sourceContactRadius: state.liquidFireSourceContactRadius,
-      sourceStateModel: LIQUID_FIRE_SOURCE_STATE_MODEL,
-      sourceReignitionPolicy: LIQUID_FIRE_SOURCE_REIGNITION_POLICY,
-      sourcePilotEnabled,
-      sourceFrameId: liquidFireContactDescriptor?.sourceFrameId || null,
-      receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
-      receiverScale: [0.5, 0.5, 0.5],
-      receiverOffset: [0.5, 0.5, 0.5],
-      dispatchCount: state.liquidFireContactDispatchCount,
-      transferEnabled: liquidFireContactTransferEnabled,
-      transferGateReason: state.liquidFireContactTransferGateReason,
-      suppressedFrameCount: liquidFireContactSuppressedFrameCount,
-      transferEnabledAtMs: state.liquidFireContactTransferEnabledAtMs,
-      firstDispatchAtMs: state.liquidFireContactFirstDispatchAtMs,
-    };
-  }
-
   function ensureBoundarySplatBuffers() {
-    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer) return;
+    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatBilinearIndirectBuffer && boundarySplatCameraBuffer && boundarySplatInstanceDescriptorBuffer && boundarySplatInstanceSelectionBuffer && boundarySplatInstanceTierGroupBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer && boundarySplatLiveUnionCoefficientDummyBuffer && boundarySplatLiveUnionLookupDummyBuffer && flowKernelDescriptorBuffer) return;
     boundarySplatBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates`,
       size: boundarySplatCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     boundarySplatDrawBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} indirect draw state`,
-      size: 32,
+      size: BOUNDARY_SPLAT_DRAW_STATE_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     boundarySplatIndirectBuffer = device.createBuffer({
@@ -7272,14 +9417,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: 16,
       usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
     });
+    boundarySplatBilinearIndirectBuffer = device.createBuffer({
+      label: `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} indirect arguments`,
+      size: 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
+    });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 112,
+      size: 224,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatInstanceDescriptorBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY}`,
+      size: BOUNDARY_SPLAT_MAX_INSTANCES * BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatInstanceSelectionBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_IDENTITY} nested cohorts`,
+      size: BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT * boundarySplatCapacity * Uint32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    boundarySplatInstanceTierGroupBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_INSTANCE_ALLOCATION_IDENTITY} groups`,
+      size: BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT * BOUNDARY_SPLAT_INSTANCE_TIER_GROUP_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     boundarySplatReadbackBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} asynchronous count readback`,
-      size: 32,
+      size: BOUNDARY_SPLAT_DRAW_STATE_BYTES,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     const featureCaptureRequested = normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
@@ -7291,6 +9456,31 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     state.boundarySplatFeatureCaptureRequested = featureCaptureRequested;
     state.boundarySplatFeatureCaptureEffective = featureCaptureRequested && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
+    boundarySplatLiveUnionCoefficientDummyBuffer = device.createBuffer({
+      label: 'kaminos live-union coefficient overlay dummy',
+      size: 2 * 4 * Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatLiveUnionLookupDummyBuffer = device.createBuffer({
+      label: 'kaminos live-union coefficient lookup dummy',
+      size: Uint32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(boundarySplatLiveUnionCoefficientDummyBuffer, 0, new Float32Array(8));
+    device.queue.writeBuffer(boundarySplatLiveUnionLookupDummyBuffer, 0, new Uint32Array([0]));
+    const descriptorCaptureRequested = normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture);
+    const descriptorMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+    const descriptorRowsRequested = descriptorCaptureRequested
+      || descriptorMode === 'kernel_moment_covariance'
+      || descriptorMode === 'kernel_moment_full_flame_union';
+    flowKernelDescriptorBufferCapacity = descriptorRowsRequested ? boundarySplatCapacity : 1;
+    flowKernelDescriptorBuffer = device.createBuffer({
+      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} ${descriptorCaptureRequested ? 'full' : 'dummy'}`,
+      size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    state.flowKernelDescriptorCaptureRequested = descriptorCaptureRequested;
+    state.flowKernelDescriptorCaptureEffective = descriptorCaptureRequested && flowKernelDescriptorBufferCapacity === boundarySplatCapacity;
     state.boundarySplatCapacity = boundarySplatCapacity;
   }
 
@@ -7302,7 +9492,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatBuffer
       || !boundarySplatDrawBuffer
       || !boundarySplatCameraBuffer
+      || !boundarySplatInstanceDescriptorBuffer
+      || !boundarySplatInstanceSelectionBuffer
+      || !boundarySplatInstanceTierGroupBuffer
       || !boundarySplatFeatureBuffer
+      || !boundarySplatLiveUnionCoefficientDummyBuffer
+      || !boundarySplatLiveUnionLookupDummyBuffer
+      || !flowKernelDescriptorBuffer
       || fluidBuffers.length !== 2
     ) return;
     boundarySplatComputeBindGroups = fluidBuffers.map((fluidBuffer, index) => device.createBindGroup({
@@ -7315,6 +9511,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
         { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
         { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
+        { binding: 8, resource: { buffer: flowKernelDescriptorBuffer } },
+        { binding: 12, resource: { buffer: boundarySplatBilinearIndirectBuffer } },
+        { binding: 14, resource: { buffer: boundarySplatInstanceSelectionBuffer } },
+        { binding: 16, resource: { buffer: boundarySplatInstanceTierGroupBuffer } },
       ],
     }));
     boundarySplatRenderBindGroup = device.createBindGroup({
@@ -7323,22 +9523,157 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       entries: [
         { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
         { binding: 5, resource: { buffer: boundarySplatBuffer } },
+        { binding: 9, resource: { buffer: flowKernelDescriptorBuffer } },
+        {
+          binding: 10,
+          resource: {
+            buffer: boundarySplatLiveCompleteFlameCoefficientBuffer
+              || boundarySplatLiveUnionOverlayGpuResources?.coefficientBuffer
+              || boundarySplatLiveUnionCoefficientDummyBuffer,
+          },
+        },
+        {
+          binding: 11,
+          resource: {
+            buffer: boundarySplatLiveUnionOverlayGpuResources?.lookupBuffer
+              || boundarySplatLiveUnionLookupDummyBuffer,
+          },
+        },
+        { binding: 13, resource: { buffer: boundarySplatInstanceDescriptorBuffer } },
+        { binding: 17, resource: { buffer: boundarySplatInstanceSelectionBuffer } },
+        { binding: 18, resource: { buffer: boundarySplatInstanceTierGroupBuffer } },
       ],
     });
     rebuildSelectiveHeadLiveBindGroups();
   }
 
-  function growBoundarySplatCapacity(candidateCount) {
+  function configureBoundarySplatFeatureCaptureBuffer(requested) {
+    if (!device || !boundarySplatBuffer) return;
+    const normalizedRequested = normalizeBoundarySplatFeatureCapture(requested);
+    const nextCapacity = normalizedRequested ? boundarySplatCapacity : 1;
+    if (boundarySplatFeatureBuffer && boundarySplatFeatureBufferCapacity === nextCapacity) {
+      state.boundarySplatFeatureCaptureRequested = normalizedRequested;
+      state.boundarySplatFeatureCaptureEffective = normalizedRequested && nextCapacity === boundarySplatCapacity;
+      return;
+    }
+    const previousFeatureBuffer = boundarySplatFeatureBuffer;
+    boundarySplatFeatureBufferCapacity = nextCapacity;
+    boundarySplatFeatureBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY} ${normalizedRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
+      size: nextCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    rebuildBoundarySplatBindGroups();
+    previousFeatureBuffer?.destroy();
+    state.boundarySplatFeatureCaptureRequested = normalizedRequested;
+    state.boundarySplatFeatureCaptureEffective = normalizedRequested && nextCapacity === boundarySplatCapacity;
+  }
+
+  function syncFlowKernelDescriptorCaptureBuffer() {
+    const captureRequested = flowKernelDescriptorCaptureRequested();
+    const rowsRequested = flowKernelDescriptorRowsRequested();
+    state.flowKernelDescriptorCaptureRequested = captureRequested;
+    if (!rowsRequested) {
+      if (flowKernelDescriptorBuffer && flowKernelDescriptorBufferCapacity !== 1) {
+        const previousDescriptorBuffer = flowKernelDescriptorBuffer;
+        flowKernelDescriptorBufferCapacity = 1;
+        flowKernelDescriptorBuffer = device.createBuffer({
+          label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} dummy`,
+          size: FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        rebuildBoundarySplatBindGroups();
+        previousDescriptorBuffer?.destroy();
+      }
+      const previousAdmissionFailureReason = boundarySplatCapacityAdmissionFailureReason;
+      const limitReceipt = boundarySplatCapacityLimitReceipt({
+        capacity: boundarySplatCapacity,
+        descriptorRowsRequested: false,
+        featureCaptureRequested: boundarySplatFeatureCaptureRequested(),
+        limits: device?.limits,
+      });
+      state.boundarySplatCapacityLimitReceipt = limitReceipt;
+      boundarySplatCapacityAdmissionFailureReason = limitReceipt.failureReason;
+      if (limitReceipt.supported && state.boundarySplatFallbackReason === previousAdmissionFailureReason) {
+        state.boundarySplatFallbackReason = null;
+      }
+      state.flowKernelDescriptorCaptureEffective = false;
+      return;
+    }
+    if (flowKernelDescriptorBuffer && flowKernelDescriptorBufferCapacity === boundarySplatCapacity) {
+      state.flowKernelDescriptorCaptureEffective = captureRequested;
+      return;
+    }
+    const limitReceipt = boundarySplatCapacityLimitReceipt({
+      capacity: boundarySplatCapacity,
+      descriptorRowsRequested: rowsRequested,
+      featureCaptureRequested: boundarySplatFeatureCaptureRequested(),
+      limits: device?.limits,
+    });
+    state.boundarySplatCapacityLimitReceipt = limitReceipt;
+    if (!limitReceipt.supported) {
+      boundarySplatCapacityAdmissionFailureReason = limitReceipt.failureReason;
+      state.boundarySplatFallbackReason = boundarySplatCapacityAdmissionFailureReason;
+      state.flowKernelDescriptorCaptureEffective = false;
+      return;
+    }
+    const previousDescriptorBuffer = flowKernelDescriptorBuffer;
+    flowKernelDescriptorBufferCapacity = boundarySplatCapacity;
+    flowKernelDescriptorBuffer = device.createBuffer({
+      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} runtime capacity ${boundarySplatCapacity}`,
+      size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    rebuildBoundarySplatBindGroups();
+    previousDescriptorBuffer?.destroy();
+    boundarySplatCapacityAdmissionFailureReason = null;
+    state.flowKernelDescriptorCaptureEffective = captureRequested;
+  }
+
+  function growBoundarySplatCapacity(candidateCount, options = {}) {
     const nextCapacity = nextBoundarySplatCapacity(boundarySplatCapacity, candidateCount, gridSize);
     if (nextCapacity <= boundarySplatCapacity) return false;
+    const descriptorRowsRequestedForGrowth = options.descriptorRowsRequested ?? flowKernelDescriptorRowsRequested();
+    const featureCaptureRequestedForGrowth = options.featureCaptureRequested ?? boundarySplatFeatureCaptureRequested();
+    const limitReceipt = boundarySplatCapacityLimitReceipt({
+      capacity: nextCapacity,
+      descriptorRowsRequested: descriptorRowsRequestedForGrowth,
+      featureCaptureRequested: featureCaptureRequestedForGrowth,
+      limits: device?.limits,
+    });
+    state.boundarySplatCapacityLimitReceipt = limitReceipt;
+    if (!limitReceipt.supported) {
+      boundarySplatCapacityAdmissionFailureReason = limitReceipt.failureReason;
+      state.boundarySplatFallbackReason = boundarySplatCapacityAdmissionFailureReason;
+      state.boundarySplatCapacityGrowth = {
+        identity: 'boundary-splat-capacity-growth-v0',
+        status: 'rejected',
+        from: boundarySplatCapacity,
+        to: nextCapacity,
+        observedCandidateCount: candidateCount,
+        physicalGridCellLimit: gridCellCount(gridSize),
+        reason: boundarySplatCapacityAdmissionFailureReason,
+        limitReceipt,
+      };
+      return false;
+    }
     const previousCapacity = boundarySplatCapacity;
     const previousSplatBuffer = boundarySplatBuffer;
+    const previousInstanceSelectionBuffer = boundarySplatInstanceSelectionBuffer;
     const previousFeatureBuffer = boundarySplatFeatureBuffer;
-    const featureCaptureRequested = boundarySplatFeatureCaptureRequested();
+    const previousDescriptorBuffer = flowKernelDescriptorBuffer;
+    const featureCaptureRequested = featureCaptureRequestedForGrowth;
+    const descriptorRowsRequested = descriptorRowsRequestedForGrowth;
+    const descriptorCaptureRequested = descriptorRowsRequested && flowKernelDescriptorCaptureRequested();
     boundarySplatCapacity = nextCapacity;
     boundarySplatBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates capacity ${nextCapacity}`,
       size: nextCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatInstanceSelectionBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_IDENTITY} nested cohorts capacity ${nextCapacity}`,
+      size: BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT * nextCapacity * Uint32Array.BYTES_PER_ELEMENT,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });
     boundarySplatFeatureBufferCapacity = featureCaptureRequested ? nextCapacity : 1;
@@ -7347,9 +9682,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: boundarySplatFeatureBufferCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });
+    flowKernelDescriptorBufferCapacity = descriptorRowsRequested ? nextCapacity : 1;
+    flowKernelDescriptorBuffer = device.createBuffer({
+      label: `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} ${descriptorCaptureRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
+      size: flowKernelDescriptorBufferCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
     rebuildBoundarySplatBindGroups();
     previousSplatBuffer?.destroy();
+    previousInstanceSelectionBuffer?.destroy();
     previousFeatureBuffer?.destroy();
+    previousDescriptorBuffer?.destroy();
+    boundarySplatCapacityAdmissionFailureReason = null;
     state.boundarySplatCapacity = nextCapacity;
     state.boundarySplatCapacityGrowthCount += 1;
     state.boundarySplatCapacityGrowth = {
@@ -7362,18 +9706,45 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     state.boundarySplatFeatureCaptureEffective = featureCaptureRequested
       && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
+    state.flowKernelDescriptorCaptureEffective = descriptorCaptureRequested
+      && flowKernelDescriptorBufferCapacity === boundarySplatCapacity;
     return true;
   }
 
-  function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
+  function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
-    majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
+    updateAnalyticEmitterDebug();
+    if (boundarySplatLiveUnionOverlay) {
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = `fluid-state-rebuilt:${reason}`;
+      state.boundarySplatLiveUnionOverlayStatus = 'awaiting-population-audit';
+    }
     destroyFluidState();
     boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
+    boundarySplatCapacityAdmissionFailureReason = null;
+    state.boundarySplatCapacityLimitReceipt = null;
+    if (persistentSparseCohortGpuState) {
+      const rowCount = persistentSparseCohortGpuState.rowCount;
+      const nextCapacity = nextBoundarySplatCapacity(boundarySplatCapacity, rowCount, gridSize);
+      const limitReceipt = boundarySplatCapacityLimitReceipt({
+        capacity: nextCapacity,
+        descriptorRowsRequested: false,
+        featureCaptureRequested: false,
+        limits: device?.limits,
+      });
+      state.boundarySplatCapacityLimitReceipt = limitReceipt;
+      if (rowCount > gridCellCount(gridSize) || nextCapacity < rowCount || !limitReceipt.supported) {
+        persistentSparseCohortGpuState.invalidatedReason = rowCount > gridCellCount(gridSize)
+          ? `persistent-cohort-grid-rebuild-row-overflow:${rowCount}:${gridCellCount(gridSize)}`
+          : limitReceipt.failureReason || `persistent-cohort-grid-rebuild-capacity:${nextCapacity}:${rowCount}`;
+        boundarySplatCapacityAdmissionFailureReason = `persistent-cohort-source-substitution:${persistentSparseCohortGpuState.invalidatedReason}`;
+      } else {
+        boundarySplatCapacity = nextCapacity;
+        persistentSparseCohortGpuState.invalidatedReason = null;
+      }
+    }
     state.boundarySplatCapacity = boundarySplatCapacity;
     state.boundarySplatCapacityGrowth = null;
-    destroyMajorantState();
-    ensureMajorantBuffer();
     ensureBoundarySidecarBuffer();
     const nextBufferBytes = fluidBufferBytes(gridSize);
     const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
@@ -7398,20 +9769,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
       return buffer;
     });
-    quenchBuffers = [0, 1].map(i => {
-      const buffer = device.createBuffer({
-        label: `kaminos recoverable liquid quench and source state ${gridSize}^3 ${i}`,
-        size: quenchFieldBufferBytes(gridSize),
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
-      });
-      const initialQuenchState = new Uint32Array(gridCellCount(gridSize) + LIQUID_FIRE_SOURCE_STATE_WORDS);
-      const sourceStateOffset = gridCellCount(gridSize);
-      initialQuenchState[sourceStateOffset + 1] = LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE;
-      initialQuenchState[sourceStateOffset + 2] = LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE;
-      initialQuenchState[sourceStateOffset + 3] = LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE;
-      device.queue.writeBuffer(buffer, 0, initialQuenchState);
-      return buffer;
-    });
     pressureBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos pressure/divergence field ${gridSize}^3 ${i}`,
@@ -7433,23 +9790,72 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = {
-      GRID: gridSize,
-      MAJORANT_GRID: majorantGridSize,
-      TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0,
-      FIRE_PROBE: Number(controlsSnapshot.fireProbe) || 0,
-    };
+    const renderPipelineConstants = { GRID: gridSize, LEAN_STOCK_RAYMARCH: false };
+    const leanStockRenderPipelineConstants = { GRID: gridSize, LEAN_STOCK_RAYMARCH: true };
     const computePipelineConstants = { GRID: gridSize };
-    const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
-    const makePipeline = (targetFormat, label) => device.createRenderPipeline({
+    const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
       label,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
-      fragment: { module: shader, entryPoint: 'fs', constants: renderPipelineConstants, targets: [{ format: targetFormat }] },
+      fragment: { module: shader, entryPoint: 'fs', constants, targets: [{ format: targetFormat }] },
       primitive: { topology: 'triangle-list' },
     });
     pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
     readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+    leanStockPipeline = makePipeline(
+      format,
+      `kaminos volume canvas lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+      leanStockRenderPipelineConstants,
+    );
+    leanStockReadbackPipeline = makePipeline(
+      'rgba8unorm',
+      `kaminos volume readback lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+      leanStockRenderPipelineConstants,
+    );
+    if (productFrameOwner === 'caller') {
+      const makeProductRaymarchPipeline = (label, constants) => device.createRenderPipeline({
+        label,
+        layout: productRaymarchPipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: {
+          module: shader,
+          entryPoint: 'fsProduct',
+          constants,
+          targets: [{
+            format,
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+      productRaymarchPipeline = makeProductRaymarchPipeline(
+        `kaminos product caller-depth broad-smoke raymarch ${gridSize}^3`,
+        renderPipelineConstants,
+      );
+      leanStockProductRaymarchPipeline = makeProductRaymarchPipeline(
+        `kaminos product caller-depth lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+        leanStockRenderPipelineConstants,
+      );
+    }
+    opticalTransportContributionPipeline = device.createRenderPipeline({
+      label: `kaminos shared-transmittance pre-tone-map contribution readback ${gridSize}^3`,
+      layout: pipelineLayout,
+      vertex: { module: shader, entryPoint: 'vs' },
+      fragment: {
+        module: shader,
+        entryPoint: 'fsOpticalTransportContributions',
+        constants: renderPipelineConstants,
+        targets: [
+          { format: 'rgba16float' },
+          { format: 'rgba16float' },
+          { format: 'rgba16float' },
+        ],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
     browserResidualSourcePipeline = device.createRenderPipeline({
       label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
       layout: pipelineLayout,
@@ -7473,6 +9879,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
       compute: { module: shader, entryPoint: 'cs', constants: computePipelineConstants },
+    });
+    analyticEmitterInjectionPipeline = device.createComputePipeline({
+      label: `kaminos bounded analytic emitter injection ${gridSize}^3`,
+      layout: analyticEmitterInjectionPipelineLayout,
+      compute: {
+        module: analyticEmitterInjectionShader,
+        entryPoint: 'injectAnalyticEmitter',
+        constants: { GRID: gridSize },
+      },
     });
     pressureDivergencePipeline = device.createComputePipeline({
       label: `kaminos divergence pressure compute pipeline ${gridSize}^3`,
@@ -7504,11 +9919,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       layout: pressureProjectTieredPipelineLayout,
       compute: { module: shader, entryPoint: 'csProjectPressureTiered', constants: computePipelineConstants },
     });
-    majorantComputePipeline = device.createComputePipeline({
-      label: `kaminos coarse majorant compute pipeline ${gridSize}^3 to ${majorantGridSize}^3`,
-      layout: majorantPipelineLayout,
-      compute: { module: shader, entryPoint: 'csMajorant', constants: majorantPipelineConstants },
-    });
     boundarySidecarBuildPipeline = device.createComputePipeline({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} compute pipeline ${gridSize}^3`,
       layout: boundarySidecarPipelineLayout,
@@ -7524,13 +9934,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       layout: boundarySplatComputePipelineLayout,
       compute: { module: boundarySplatShader, entryPoint: 'finalizeBoundarySplats', constants: computePipelineConstants },
     });
-    const makeBoundarySplatRenderPipeline = (targetFormat, label) => device.createRenderPipeline({
+    const makeBoundarySplatRenderPipeline = (
+      targetFormat,
+      label,
+      vertexEntryPoint = 'boundarySplatVs',
+      fragmentEntryPoint = 'boundarySplatFs',
+      topology = 'triangle-list',
+    ) => device.createRenderPipeline({
       label,
       layout: boundarySplatRenderPipelineLayout,
-      vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+      vertex: { module: boundarySplatShader, entryPoint: vertexEntryPoint },
       fragment: {
         module: boundarySplatShader,
-        entryPoint: 'boundarySplatFs',
+        entryPoint: fragmentEntryPoint,
         targets: [{
           format: targetFormat,
           blend: {
@@ -7539,25 +9955,224 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           },
         }],
       },
-      primitive: { topology: 'triangle-list' },
+      primitive: { topology },
     });
     boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
+    if (productFrameOwner === 'caller') {
+      productBoundarySplatRenderPipeline = device.createRenderPipeline({
+        label: `kaminos product shared-depth ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`,
+        layout: boundarySplatRenderPipelineLayout,
+        vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+        fragment: {
+          module: boundarySplatShader,
+          entryPoint: 'boundarySplatFs',
+          targets: [{
+            format,
+            blend: {
+              color: { srcFactor: 'src-alpha', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+        depthStencil: {
+          format: externalDepthFormat,
+          depthWriteEnabled: false,
+          depthCompare: 'less-equal',
+        },
+      });
+    }
     boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
+    boundarySplatBilinearRenderPipeline = makeBoundarySplatRenderPipeline(
+      format,
+      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} raster ${gridSize}^3`,
+      'boundarySplatBilinearVs',
+      'boundarySplatBilinearFs',
+      'point-list',
+    );
+    boundarySplatBilinearReadbackPipeline = makeBoundarySplatRenderPipeline(
+      'rgba8unorm',
+      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} witness readback ${gridSize}^3`,
+      'boundarySplatBilinearVs',
+      'boundarySplatBilinearFs',
+      'point-list',
+    );
+    boundarySplatHdrPipeline = makeBoundarySplatRenderPipeline(BOUNDARY_SPLAT_HDR_TARGET_FORMAT, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} hdr accumulation ${gridSize}^3`);
+    boundarySplatBilinearHdrPipeline = makeBoundarySplatRenderPipeline(
+      BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} hdr accumulation ${gridSize}^3`,
+      'boundarySplatBilinearVs',
+      'boundarySplatBilinearFs',
+      'point-list',
+    );
+    const makeBoundarySplatOpticalPipelines = (
+      vertexEntryPoint,
+      fragmentEntryPoint,
+      topology,
+      labelSuffix,
+    ) => Array.from({ length: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS }, (_, binIndex) => device.createRenderPipeline({
+      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY} ${labelSuffix} bin ${binIndex}`,
+      layout: boundarySplatRenderPipelineLayout,
+      vertex: { module: boundarySplatShader, entryPoint: vertexEntryPoint },
+      fragment: {
+        module: boundarySplatShader,
+        entryPoint: fragmentEntryPoint,
+        constants: { OPTICAL_BIN: binIndex },
+        targets: [{
+          format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+          blend: {
+            color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+          },
+        }],
+      },
+      primitive: { topology },
+    }));
+    boundarySplatOpticalPipelines = makeBoundarySplatOpticalPipelines(
+      'boundarySplatVs',
+      'boundarySplatOpticalFs',
+      'triangle-list',
+      'gaussian',
+    );
+    boundarySplatBilinearOpticalPipelines = makeBoundarySplatOpticalPipelines(
+      'boundarySplatBilinearVs',
+      'boundarySplatBilinearOpticalFs',
+      'point-list',
+      FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY,
+    );
+    const makeBoundarySplatPresentationPipeline = (targetFormat, label) => device.createRenderPipeline({
+      label,
+      layout: 'auto',
+      vertex: { module: boundarySplatPresentationShader, entryPoint: 'boundarySplatPresentationVs' },
+      fragment: {
+        module: boundarySplatPresentationShader,
+        entryPoint: 'boundarySplatPresentationFs',
+        targets: [{ format: targetFormat }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    boundarySplatPresentationRenderPipeline = makeBoundarySplatPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} canvas resolve`);
+    boundarySplatPresentationReadbackPipeline = makeBoundarySplatPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} witness resolve`);
+    const makeBoundarySplatOpticalPresentationPipeline = (
+      targetFormat,
+      label,
+      entryPoint = 'boundarySplatOpticalPresentationFs',
+    ) => device.createRenderPipeline({
+      label,
+      layout: 'auto',
+      vertex: { module: boundarySplatOpticalPresentationShader, entryPoint: 'boundarySplatOpticalPresentationVs' },
+      fragment: {
+        module: boundarySplatOpticalPresentationShader,
+        entryPoint,
+        targets: [{ format: targetFormat }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    boundarySplatOpticalPresentationRenderPipeline = makeBoundarySplatOpticalPresentationPipeline(format, `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} canvas resolve`);
+    boundarySplatOpticalPresentationReadbackPipeline = makeBoundarySplatOpticalPresentationPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} witness resolve`);
+    boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline = makeBoundarySplatOpticalPresentationPipeline(
+      'rgba8unorm',
+      `kaminos ${BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY} witness resolve`,
+      'boundarySplatOpticalDepthOrderDiagnosticFs',
+    );
+    fourArmHeldStateLinearResolvePipeline = device.createRenderPipeline({
+      label: 'kaminos four-arm held-state linear HDR resolve',
+      layout: 'auto',
+      vertex: { module: fourArmHeldStateLinearResolveShader, entryPoint: 'fourArmHeldStateResolveVs' },
+      fragment: {
+        module: fourArmHeldStateLinearResolveShader,
+        entryPoint: 'fourArmHeldStateResolveFs',
+        targets: [{ format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    fourArmHeldStateTimestampMarkerPipeline = device.createComputePipeline({
+      label: 'kaminos four-arm held-state timestamp marker',
+      layout: 'auto',
+      compute: {
+        module: fourArmHeldStateTimestampMarkerShader,
+        entryPoint: 'fourArmHeldStateTimestampMarker',
+      },
+    });
+    fourArmHeldStateResidualBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos four-arm positive-complement residual march bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'uniform' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'unfilterable-float', viewDimension: '3d' },
+        },
+      ],
+    });
+    fourArmHeldStateResidualPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos four-arm positive-complement residual march pipeline layout',
+      bindGroupLayouts: [fourArmHeldStateResidualBindGroupLayout],
+    });
+    fourArmHeldStateResidualMarchPipelines = Array.from(
+      { length: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
+      (_, binIndex) => device.createRenderPipeline({
+        label: `kaminos four-arm positive-complement residual march bin ${binIndex}`,
+        layout: fourArmHeldStateResidualPipelineLayout,
+        vertex: { module: fourArmHeldStateResidualMarchShader, entryPoint: 'fourArmResidualVs' },
+        fragment: {
+          module: fourArmHeldStateResidualMarchShader,
+          entryPoint: 'fourArmResidualFs',
+          constants: { OPTICAL_BIN: binIndex },
+          targets: [{
+            format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list' },
+      }),
+    );
+    fourArmHeldStateResidualParamsBuffer?.destroy();
+    fourArmHeldStateResidualParamsBuffer = device.createBuffer({
+      label: 'kaminos four-arm positive-complement residual march params',
+      size: 80,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    if (fourArmHeldStateResidualGrid) uploadFourArmHeldStateResidualGrid(fourArmHeldStateResidualGrid);
     ensureBoundarySplatBuffers();
-    ensureTemporalHistoryTexture();
+    if (persistentSparseCohortGpuState && !persistentSparseCohortGpuState.invalidatedReason) {
+      uploadPersistentSparseCohortGpuRows(persistentSparseCohortGpuState.rows);
+      persistentSparseCohortGpuState.receipt = {
+        ...persistentSparseCohortGpuState.receipt,
+        gpuUploadComplete: true,
+        restoredAfterFluidRebuild: true,
+        restoredAfterFluidRebuildReason: reason,
+      };
+    }
+    ensureNonRidgeOpticalCaptureBuffers();
     rebuildFluidBindGroups();
-    majorantFrontBindGroups = [
+    analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
+      label: `kaminos bounded analytic emitter injection ${gridSize}^3 ${index}`,
+      layout: analyticEmitterInjectionBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: analyticEmitterInjectionUniformBuffer } },
+        { binding: 1, resource: { buffer } },
+      ],
+    }));
+    fluidFrontReadBindGroups = [
       device.createBindGroup({
-        label: `kaminos majorant fluid-front read bind group ${gridSize}^3 A`,
-        layout: majorantFluidBindGroupLayout,
+        label: `kaminos fluid-front read bind group ${gridSize}^3 A`,
+        layout: fluidFrontReadBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
         ],
       }),
       device.createBindGroup({
-        label: `kaminos majorant fluid-front read bind group ${gridSize}^3 B`,
-        layout: majorantFluidBindGroupLayout,
+        label: `kaminos fluid-front read bind group ${gridSize}^3 B`,
+        layout: fluidFrontReadBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
@@ -7626,10 +10241,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ],
       }),
     ];
-    rebuildLiquidFireContactConsumer();
     currentFluid = 0;
     currentFront = 0;
-    currentQuench = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
@@ -7638,13 +10251,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
-    state.majorantGrid = majorantGridSize;
-    state.majorantBuilt = false;
-    state.majorantFrameCount = 0;
-    state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
-    state.majorantBuiltThisFrame = false;
-    state.majorantLastBuiltFrame = -1;
-    state.majorantSkippedFrameCount = 0;
     state.boundarySidecarIdentity = BOUNDARY_SIDECAR_IDENTITY;
     state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
     state.boundarySidecarBytes = nextBoundarySidecarBufferBytes;
@@ -7664,7 +10270,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     state.fluidStateResetCount += 1;
     state.fluidStateResetReason = reason;
-    resetTemporalHistory(reason);
     updateSimCostLedger();
     emitStatus({ phase: reason });
   }
@@ -7681,24 +10286,67 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         throw new Error('Shared Pyro GPU context queue does not belong to the supplied GPUDevice');
       }
     } else {
-      adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      adapter = productFrameOwner === 'caller'
+        ? {
+          limits: externalDevice.limits,
+          features: externalDevice.features,
+          info: externalAdapterInfo || { vendor: 'caller-device' },
+        }
+        : await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
       if (!adapter) throw new Error('WebGPU adapter unavailable');
-      const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+      const maxRequestedGridSize = productFrameOwner === 'caller'
+        ? gridSize
+        : Math.max(...SUPPORTED_GRID_SIZES);
+      const maxRequestedCellCapacity = productFrameOwner === 'caller'
+        ? boundarySplatCapacity
+        : gridCellCount(maxRequestedGridSize);
+      const maxRequestedFluidBufferBytes = fluidBufferBytes(maxRequestedGridSize);
+      const maxRequestedFlowKernelDescriptorBytes = maxRequestedCellCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
+      const maxRequestedBoundarySplatBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+      const maxRequestedBoundaryFeatureBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+      const maxRequestedStorageBufferBytes = Math.max(
+        maxRequestedFluidBufferBytes,
+        maxRequestedFlowKernelDescriptorBytes,
+        maxRequestedBoundarySplatBytes,
+        maxRequestedBoundaryFeatureBytes,
+      );
       const requiredLimits = {};
-      if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
-        requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+      const maxSupportedStorageBufferBytes = Math.min(
+        adapter.limits?.maxBufferSize ?? 0,
+        adapter.limits?.maxStorageBufferBindingSize ?? 0,
+      );
+      if (maxSupportedStorageBufferBytes > 0) {
+        const requestedStorageBufferBytes = Math.min(maxSupportedStorageBufferBytes, maxRequestedStorageBufferBytes);
+        requiredLimits.maxBufferSize = requestedStorageBufferBytes;
+        requiredLimits.maxStorageBufferBindingSize = requestedStorageBufferBytes;
       }
-      if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
-        // Grant the adapter's own capacity: the fluid pipeline layouts declare
-        // 10 compute-visible storage buffers and newer Chrome validates layout
-        // counts strictly, so the old hardcoded 9 broke pipeline creation.
-        requiredLimits.maxStorageBuffersPerShaderStage = adapter.limits.maxStorageBuffersPerShaderStage;
+      const maxStorageBuffersPerShaderStage = adapter.limits?.maxStorageBuffersPerShaderStage ?? 0;
+      if (maxStorageBuffersPerShaderStage < BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT) {
+        throw new Error(
+          `boundary-splat-compute-layout-storage-buffer-limit:`
+          + `required=${BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT}:supported=${maxStorageBuffersPerShaderStage}`,
+        );
       }
-      const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
-      const deviceDescriptor = {};
-      if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
-      if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
-      device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
+      requiredLimits.maxStorageBuffersPerShaderStage = BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT;
+      if (productFrameOwner === 'caller') {
+        device = externalDevice;
+        const supportedStorageBufferBytes = Math.min(
+          device.limits?.maxBufferSize ?? 0,
+          device.limits?.maxStorageBufferBindingSize ?? 0,
+        );
+        if (supportedStorageBufferBytes < maxRequestedStorageBufferBytes) {
+          throw new Error(
+            `caller-device-storage-buffer-limit:required=${maxRequestedStorageBufferBytes}:supported=${supportedStorageBufferBytes}`,
+          );
+        }
+      } else {
+        const requiredFeatures = [];
+        if (adapter.features?.has?.('timestamp-query')) requiredFeatures.push('timestamp-query');
+        const deviceDescriptor = {};
+        if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
+        if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
+        device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
+      }
     }
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
@@ -7706,14 +10354,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       candidateCopyBytes: 0,
       rendererIdentity: state.boundarySplatRendererIdentity,
     }));
-    context = canvas.getContext('webgpu');
-    format = navigator.gpu.getPreferredCanvasFormat();
-    context.configure({
-      device,
-      format,
-      alphaMode: transparentCanvas ? 'premultiplied' : 'opaque',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-    });
+    format = productFrameOwner === 'caller' ? externalColorFormat : navigator.gpu.getPreferredCanvasFormat();
+    if (productFrameOwner !== 'caller') {
+      context = canvas.getContext('webgpu');
+      context.configure({
+        device,
+        format,
+        alphaMode: transparentCanvas ? 'premultiplied' : 'opaque',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+    }
     device.addEventListener('uncapturederror', event => {
       state.error = event.error?.message || String(event.error || 'WebGPU uncaptured error');
       emitStatus({ phase: 'gpu-error', error: state.error });
@@ -7723,15 +10373,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: uniforms.byteLength,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
+    analyticEmitterInjectionUniformBuffer = device.createBuffer({
+      label: 'kaminos bounded analytic emitter injection uniforms',
+      size: analyticEmitterInjectionUniformData.byteLength,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    volumePresentationControlsBuffer = device.createBuffer({
+      label: 'kaminos shared volume presentation controls',
+      size: volumePresentationControls.byteLength,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
     ensureExternalEmitterBuffer();
     ensureOracleActivityCueBuffer();
-    historySampler = device.createSampler({
-      label: 'kaminos temporal history sampler',
-      magFilter: 'linear',
-      minFilter: 'linear',
-      addressModeU: 'clamp-to-edge',
-      addressModeV: 'clamp-to-edge',
-    });
     browserResidualSampler = device.createSampler({
       label: 'kaminos browser direct residual source sampler',
       magFilter: 'linear',
@@ -7747,6 +10400,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
         .join('\n');
       throw new Error(`WGSL compilation failed:\n${detail}`);
+    }
+    analyticEmitterInjectionShader = device.createShaderModule({
+      label: 'kaminos bounded analytic emitter injection wgsl',
+      code: ANALYTIC_EMITTER_INJECTION_WGSL,
+    });
+    const analyticEmitterInjectionCompilationInfo = await analyticEmitterInjectionShader.getCompilationInfo();
+    const analyticEmitterInjectionCompilationErrors = analyticEmitterInjectionCompilationInfo.messages.filter(message => message.type === 'error');
+    if (analyticEmitterInjectionCompilationErrors.length > 0) {
+      const detail = analyticEmitterInjectionCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Analytic emitter injection WGSL compilation failed:\n${detail}`);
     }
     browserResidualShader = device.createShaderModule({ label: 'kaminos browser direct residual wgsl', code: BROWSER_RESIDUAL_WGSL });
     const residualCompilationInfo = await browserResidualShader.getCompilationInfo();
@@ -7766,6 +10431,66 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .join('\n');
       throw new Error(`Boundary splat WGSL compilation failed:\n${detail}`);
     }
+    boundarySplatPresentationShader = device.createShaderModule({
+      label: `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} wgsl`,
+      code: BOUNDARY_SPLAT_PRESENTATION_WGSL,
+    });
+    const boundarySplatPresentationCompilationInfo = await boundarySplatPresentationShader.getCompilationInfo();
+    const boundarySplatPresentationCompilationErrors = boundarySplatPresentationCompilationInfo.messages.filter(message => message.type === 'error');
+    if (boundarySplatPresentationCompilationErrors.length > 0) {
+      const detail = boundarySplatPresentationCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Boundary splat presentation WGSL compilation failed:\n${detail}`);
+    }
+    boundarySplatOpticalPresentationShader = device.createShaderModule({
+      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} presentation wgsl`,
+      code: BOUNDARY_SPLAT_OPTICAL_PRESENTATION_WGSL,
+    });
+    const boundarySplatOpticalCompilationInfo = await boundarySplatOpticalPresentationShader.getCompilationInfo();
+    const boundarySplatOpticalCompilationErrors = boundarySplatOpticalCompilationInfo.messages.filter(message => message.type === 'error');
+    if (boundarySplatOpticalCompilationErrors.length > 0) {
+      const detail = boundarySplatOpticalCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Boundary splat optical presentation WGSL compilation failed:\n${detail}`);
+    }
+    fourArmHeldStateLinearResolveShader = device.createShaderModule({
+      label: 'kaminos four-arm held-state linear HDR resolve wgsl',
+      code: FOUR_ARM_HELD_STATE_LINEAR_RESOLVE_WGSL,
+    });
+    const fourArmResolveCompilationInfo = await fourArmHeldStateLinearResolveShader.getCompilationInfo();
+    const fourArmResolveCompilationErrors = fourArmResolveCompilationInfo.messages.filter(message => message.type === 'error');
+    if (fourArmResolveCompilationErrors.length > 0) {
+      const detail = fourArmResolveCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Four-arm held-state linear resolve WGSL compilation failed:\n${detail}`);
+    }
+    fourArmHeldStateResidualMarchShader = device.createShaderModule({
+      label: 'kaminos four-arm positive-complement residual march wgsl',
+      code: FOUR_ARM_HELD_STATE_RESIDUAL_MARCH_WGSL,
+    });
+    const fourArmResidualCompilationInfo = await fourArmHeldStateResidualMarchShader.getCompilationInfo();
+    const fourArmResidualCompilationErrors = fourArmResidualCompilationInfo.messages.filter(message => message.type === 'error');
+    if (fourArmResidualCompilationErrors.length > 0) {
+      const detail = fourArmResidualCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Four-arm positive-complement residual march WGSL compilation failed:\n${detail}`);
+    }
+    fourArmHeldStateTimestampMarkerShader = device.createShaderModule({
+      label: 'kaminos four-arm held-state timestamp marker wgsl',
+      code: FOUR_ARM_HELD_STATE_TIMESTAMP_MARKER_WGSL,
+    });
+    const fourArmTimestampCompilationInfo = await fourArmHeldStateTimestampMarkerShader.getCompilationInfo();
+    const fourArmTimestampCompilationErrors = fourArmTimestampCompilationInfo.messages.filter(message => message.type === 'error');
+    if (fourArmTimestampCompilationErrors.length > 0) {
+      const detail = fourArmTimestampCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Four-arm held-state timestamp marker WGSL compilation failed:\n${detail}`);
+    }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
       entries: [
@@ -7783,21 +10508,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           binding: 2,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'storage' },
-        },
-        {
-          binding: 3,
-          visibility: GPUShaderStage.FRAGMENT,
-          buffer: { type: 'read-only-storage' },
-        },
-        {
-          binding: 4,
-          visibility: GPUShaderStage.FRAGMENT,
-          texture: { sampleType: 'float' },
-        },
-        {
-          binding: 5,
-          visibility: GPUShaderStage.FRAGMENT,
-          sampler: { type: 'filtering' },
         },
         {
           binding: 6,
@@ -7826,15 +10536,38 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
         {
           binding: 11,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: 'read-only-storage' },
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' },
         },
         {
           binding: 12,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' },
+        },
+      ],
+    });
+    analyticEmitterInjectionBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos bounded analytic emitter injection bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'uniform' },
+        },
+        {
+          binding: 1,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'storage' },
         },
       ],
+    });
+    productRaymarchDepthBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos product smoke scene-depth bind group layout',
+      entries: [{
+        binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'depth' },
+      }],
     });
     boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} fluid-front read bind group layout`,
@@ -7856,8 +10589,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
-    majorantFluidBindGroupLayout = device.createBindGroupLayout({
-      label: 'kaminos majorant fluid-front read bind group layout',
+    fluidFrontReadBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos fluid-front read bind group layout',
       entries: [
         {
           binding: 1,
@@ -7868,16 +10601,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           binding: 7,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
-        },
-      ],
-    });
-    majorantWriteBindGroupLayout = device.createBindGroupLayout({
-      label: 'kaminos majorant write bind group layout',
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: 'storage' },
         },
       ],
     });
@@ -7900,6 +10623,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
         { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 12, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 16, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       ],
     });
     boundarySplatRenderBindGroupLayout = device.createBindGroupLayout({
@@ -7907,6 +10634,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       entries: [
         { binding: 4, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
         { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 9, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 10, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 11, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 13, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 17, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+        { binding: 18, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
       ],
     });
     pressureWriteBindGroupLayout = device.createBindGroupLayout({
@@ -7977,13 +10710,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
     });
+    analyticEmitterInjectionPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos bounded analytic emitter injection pipeline layout',
+      bindGroupLayouts: [analyticEmitterInjectionBindGroupLayout],
+    });
+    productRaymarchPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos product smoke raymarch pipeline layout',
+      bindGroupLayouts: [bindGroupLayout, productRaymarchDepthBindGroupLayout],
+    });
     browserResidualPipelineLayout = device.createPipelineLayout({
       label: 'kaminos browser direct residual pipeline layout',
       bindGroupLayouts: [browserResidualBindGroupLayout],
-    });
-    majorantPipelineLayout = device.createPipelineLayout({
-      label: 'kaminos coarse majorant pipeline layout',
-      bindGroupLayouts: [majorantFluidBindGroupLayout, majorantWriteBindGroupLayout],
     });
     boundarySidecarPipelineLayout = device.createPipelineLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} pipeline layout`,
@@ -7999,11 +10736,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pressureWritePipelineLayout = device.createPipelineLayout({
       label: 'kaminos divergence pressure pipeline layout',
-      bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, pressureWriteBindGroupLayout],
+      bindGroupLayouts: [fluidFrontReadBindGroupLayout, emptyBindGroupLayout, pressureWriteBindGroupLayout],
     });
     pressureJacobiPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure jacobi pipeline layout',
-      bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+      bindGroupLayouts: [fluidFrontReadBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     pressureJacobiTieredPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure tiered jacobi pipeline layout',
@@ -8018,7 +10755,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     device.pushErrorScope('validation');
-    rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
+    rebuildFluidState(controlsSnapshot.resolution);
     if (gridSize === 160) {
       selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
         device,
@@ -8053,9 +10790,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     const renderWidth = Math.max(1, Math.floor(displayWidth * renderScale));
     const renderHeight = Math.max(1, Math.floor(displayHeight * renderScale));
-    if (state.renderScale !== renderScale) {
-      resetTemporalHistory('render-scale-change');
-    }
     if (canvas.width !== renderWidth || canvas.height !== renderHeight || state.displayWidth !== displayWidth || state.displayHeight !== displayHeight) {
       canvas.width = renderWidth;
       canvas.height = renderHeight;
@@ -8096,6 +10830,49 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameTextureSize = key;
     browserResidualBindGroup = null;
     browserResidualTextureKey = '';
+  }
+
+  function ensureBoundarySplatHdrTexture() {
+    const key = `${state.width}x${state.height}`;
+    if (boundarySplatHdrTexture && boundarySplatHdrTextureSize === key) return;
+    boundarySplatHdrTexture?.destroy();
+    boundarySplatHdrTexture = device.createTexture({
+      label: `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} accumulation`,
+      size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+    });
+    boundarySplatHdrTextureSize = key;
+  }
+
+  function ensureBoundarySplatOpticalTexture() {
+    const key = `${state.width}x${state.height}x${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS}`;
+    if (boundarySplatOpticalTexture && boundarySplatOpticalTextureSize === key) return;
+    boundarySplatOpticalTexture?.destroy();
+    boundarySplatOpticalTexture = device.createTexture({
+      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY}`,
+      size: {
+        width: state.width,
+        height: state.height,
+        depthOrArrayLayers: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      },
+      format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+    });
+    boundarySplatOpticalTextureSize = key;
+  }
+
+  function ensureFourArmHeldStateLinearTexture() {
+    const key = `${state.width}x${state.height}`;
+    if (fourArmHeldStateLinearTexture && fourArmHeldStateLinearTextureSize === key) return;
+    fourArmHeldStateLinearTexture?.destroy();
+    fourArmHeldStateLinearTexture = device.createTexture({
+      label: 'kaminos four-arm held-state linear HDR and optical-depth capture',
+      size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      format: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    });
+    fourArmHeldStateLinearTextureSize = key;
   }
 
   function ensureBrowserResidualFeatureTexture() {
@@ -8240,8 +11017,400 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(browserResidualBuffer, 0, data);
   }
 
+  function effectiveVolumePresentationRayQuality() {
+    return {
+      raySteps: controlsSnapshot.raySteps,
+      adaptiveRays: controlsSnapshot.adaptiveRays,
+      renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
+    };
+  }
+
+  function appearanceDecompositionActive() {
+    return appearanceDecompositionModeEffective !== 'off';
+  }
+
+  function effectiveSelectiveHeadRaymarchFireSuppression() {
+    if (volumePresentationModeEffective === 'intrinsic' || appearanceDecompositionActive()) return 0;
+    const definition = selectiveHeadLiveRenderCompositionRequest(
+      controlsSnapshot.selectiveHeadLiveRenderComposition,
+    ).definition;
+    return boundarySplatFallbackRaymarchFireSuppression({
+      requestedRaymarchFireAuthority: definition.raymarchFireAuthority,
+      splatRequested: definition.splat,
+      splatAvailable: boundarySplatRequested()
+        && !boundarySplatCapacityAdmissionFailureReason
+        && !state.boundarySplatFallbackReason,
+    });
+  }
+
+  function appearanceDecompositionUniformMode() {
+    return APPEARANCE_DECOMPOSITION_MODES[appearanceDecompositionModeEffective]?.uniform ?? 0;
+  }
+
+  function cloneOpticalLayerMask(mask) {
+    return mask ? { ridge: Boolean(mask.ridge), nonRidge: Boolean(mask.nonRidge) } : null;
+  }
+
+  function appearanceTransportRuntimeContext(captureContext = null) {
+    return {
+      sourceState: {
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        sameStateCaptureId: captureContext?.sameStateCaptureId || null,
+        baseFrameCount: captureContext?.baseFrameCount ?? state.frameCount,
+        baseSimStepCount: captureContext?.baseSimStepCount ?? state.simStepCount,
+        sampleNowMs: captureContext?.sampleNow ?? null,
+      },
+      camera: {
+        signature: cameraSignature(),
+        position: [camera.position.x, camera.position.y, camera.position.z],
+        quaternion: [camera.quaternion.x, camera.quaternion.y, camera.quaternion.z, camera.quaternion.w],
+        projectionMatrix: Array.from(camera.projectionMatrix.elements),
+        viewProjectionMatrix: Array.from(viewProj.elements),
+      },
+      route: {
+        requested: state.requestedRoute,
+        effective: state.effectiveRoute,
+        locationHref: String(globalThis.location?.href || ''),
+      },
+      backend: state.backend || null,
+      quality: {
+        raySteps: controlsSnapshot.raySteps,
+        adaptiveRays: controlsSnapshot.adaptiveRays,
+        renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
+      },
+      postprocess: {
+        sumDomain: 'pre-tone-map-linear-radiance',
+        toneMap: 'shared-contribution-sum-then-global-exponential-v0',
+        displayTransfer: 'global-exposure-vignette-gamma-temporal-resolve-v0',
+        independentlyToneMappedAddition: false,
+      },
+    };
+  }
+
+  function setBoundarySplatPresentationMode(value) {
+    const request = normalizeBoundarySplatPresentationMode(value);
+    boundarySplatPresentationModeRequestedRaw = request.requestedRaw;
+    boundarySplatPresentationModeRequested = request.requested;
+    boundarySplatPresentationModeEffective = request.requested;
+    boundarySplatPresentationModeFallbackReason = request.fallbackReason;
+    const receipt = makeBoundarySplatPresentationReceipt({
+      requestedRaw: request.requestedRaw,
+      requested: request.requested,
+      effective: request.requested,
+      fallbackReason: request.fallbackReason,
+    });
+    state.boundarySplatPresentationModeRequestedRaw = boundarySplatPresentationModeRequestedRaw;
+    state.boundarySplatPresentationModeRequested = boundarySplatPresentationModeRequested;
+    state.boundarySplatPresentationModeEffective = boundarySplatPresentationModeEffective;
+    state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
+    state.boundarySplatPresentationReceipt = receipt;
+    return { ...receipt, curve: receipt.curve ? { ...receipt.curve } : null };
+  }
+
+  function setAppearanceDecompositionMode(value) {
+    const request = normalizeAppearanceDecompositionMode(value);
+    appearanceDecompositionModeRequestedRaw = request.requestedRaw;
+    appearanceDecompositionModeRequested = request.requested;
+    appearanceDecompositionModeEffective = request.requested;
+    appearanceDecompositionModeFallbackReason = request.fallbackReason;
+    const requestedDefinition = APPEARANCE_DECOMPOSITION_MODES[appearanceDecompositionModeRequestedRaw] || null;
+    const effectiveDefinition = APPEARANCE_DECOMPOSITION_MODES[appearanceDecompositionModeEffective];
+    const targetIdentity = effectiveDefinition.targetIdentity;
+    const receipt = {
+      identity: 'appearance-decomposition-receipt-v0',
+      requestedMode: appearanceDecompositionModeRequestedRaw,
+      normalizedRequestedMode: appearanceDecompositionModeRequested,
+      effectiveMode: appearanceDecompositionModeEffective,
+      fallbackReason: appearanceDecompositionModeFallbackReason,
+      targetIdentity,
+      coefficientBoundary: 'per-sample-pre-tone-map-emission-extinction-v0',
+      structuralAIdentity: INTRINSIC_PRESENTATION_TARGET_IDENTITY,
+      broadCarrierIdentity: 'signed-control-minus-structural-a-local-coefficients-v0',
+      completeFlameIdentity: 'smoke-off-complete-flame-local-emission-extinction-v0',
+      positivePartitionIdentity: 'nonnegative-ridge-owned-plus-non-ridge-complete-flame-v0',
+      ridgeOwnershipIdentity: 'state-derived-direct-flame-candidate-support-allocation-v0',
+      opticalTransportIdentity: effectiveDefinition.emissionMask
+        ? 'separate-authored-optical-layers-one-shared-total-transmittance-v0'
+        : null,
+      requestedEmissionMask: cloneOpticalLayerMask(requestedDefinition?.emissionMask),
+      effectiveEmissionMask: cloneOpticalLayerMask(effectiveDefinition.emissionMask),
+      requestedExtinctionMask: cloneOpticalLayerMask(requestedDefinition?.extinctionMask),
+      effectiveExtinctionMask: cloneOpticalLayerMask(effectiveDefinition.extinctionMask),
+      contributionChannels: effectiveDefinition.emissionMask
+        ? {
+            ridge: 'sharedRidgeContribution',
+            nonRidge: 'sharedNonRidgeContribution',
+            complete: 'sharedRidgeContribution+sharedNonRidgeContribution',
+          }
+        : null,
+      numericPrecision: effectiveDefinition.emissionMask
+        ? 'wgsl-f32-same-invocation-componentwise-v0'
+        : null,
+      postprocess: {
+        sumDomain: 'pre-tone-map-linear-radiance',
+        toneMap: 'shared-contribution-sum-then-global-exponential-v0',
+        independentlyToneMappedAddition: false,
+      },
+      coefficientSigns: {
+        completeFlame: 'nonnegative',
+        ridgeOwned: 'nonnegative',
+        nonRidge: 'nonnegative',
+        signedClosureComparator: 'signed',
+      },
+      opticalRecurrence: 'front-to-back-emission-with-exponential-transmittance-v0',
+      simulationAdvanced: false,
+      simulationReset: false,
+      cameraMutated: false,
+      controlsMutated: false,
+      requestedPasses: {
+        raymarchApplied: appearanceDecompositionModeEffective !== 'off',
+        splatsApplied: false,
+        residualApplied: false,
+        featureCaptureApplied: false,
+        smokeApplied: false,
+      },
+      passes: {
+        raymarchApplied: appearanceDecompositionModeEffective !== 'off',
+        splatsApplied: false,
+        residualApplied: false,
+        featureCaptureApplied: false,
+        smokeApplied: false,
+      },
+      application: null,
+      couplingTerms: [
+        'b-emission-transported-through-a-plus-b-transmittance',
+        'b-extinction-modulates-downstream-a-and-b-emission',
+        'signed-b-coefficients-are-not-an-independent-positive-radiance-field',
+        'shared-ridge-and-nonridge-contributions-sum-before-tone-map',
+      ],
+    };
+    state.appearanceDecompositionModeRequestedRaw = appearanceDecompositionModeRequestedRaw;
+    state.appearanceDecompositionModeRequested = appearanceDecompositionModeRequested;
+    state.appearanceDecompositionModeEffective = appearanceDecompositionModeEffective;
+    state.appearanceDecompositionModeFallbackReason = appearanceDecompositionModeFallbackReason;
+    state.appearanceDecompositionTargetIdentity = targetIdentity;
+    state.appearanceDecompositionReceipt = receipt;
+    return {
+      ...receipt,
+      requestedPasses: { ...receipt.requestedPasses },
+      passes: { ...receipt.passes },
+      coefficientSigns: { ...receipt.coefficientSigns },
+      requestedEmissionMask: cloneOpticalLayerMask(receipt.requestedEmissionMask),
+      effectiveEmissionMask: cloneOpticalLayerMask(receipt.effectiveEmissionMask),
+      requestedExtinctionMask: cloneOpticalLayerMask(receipt.requestedExtinctionMask),
+      effectiveExtinctionMask: cloneOpticalLayerMask(receipt.effectiveExtinctionMask),
+      contributionChannels: receipt.contributionChannels ? { ...receipt.contributionChannels } : null,
+      postprocess: { ...receipt.postprocess },
+      couplingTerms: [...receipt.couplingTerms],
+    };
+  }
+
+  function recordAppearanceDecompositionApplication({
+    raymarchEncoded = false,
+    raymarchApplied = false,
+    splatsEncoded = false,
+    splatsApplied = false,
+    residualEncoded = false,
+    residualApplied = false,
+    featureCaptureEncoded = false,
+    featureCaptureApplied = false,
+    fallbackReason = null,
+    captureContext = null,
+  } = {}) {
+    const transportContext = appearanceTransportRuntimeContext(captureContext);
+    if (!appearanceDecompositionActive() || !state.appearanceDecompositionReceipt) return null;
+    const application = {
+      identity: 'appearance-decomposition-applied-pass-receipt-v0',
+      effectiveMode: appearanceDecompositionModeEffective,
+      targetIdentity: APPEARANCE_DECOMPOSITION_MODES[appearanceDecompositionModeEffective].targetIdentity,
+      raymarchEncoded: Boolean(raymarchEncoded),
+      raymarchApplied: Boolean(raymarchApplied),
+      splatsEncoded: Boolean(splatsEncoded),
+      splatsApplied: Boolean(splatsApplied),
+      residualEncoded: Boolean(residualEncoded),
+      residualApplied: Boolean(residualApplied),
+      featureCaptureEncoded: Boolean(featureCaptureEncoded),
+      featureCaptureApplied: Boolean(featureCaptureApplied),
+      smokeApplied: false,
+      fallbackReason: fallbackReason || null,
+      sourceState: transportContext.sourceState,
+      camera: transportContext.camera,
+      route: transportContext.route,
+      backend: transportContext.backend,
+      quality: transportContext.quality,
+      postprocess: transportContext.postprocess,
+    };
+    state.appearanceDecompositionReceipt = {
+      ...state.appearanceDecompositionReceipt,
+      application,
+    };
+    return application;
+  }
+
+  function raymarchSmokePresentationEffectiveMode() {
+    return volumePresentationModeEffective === 'intrinsic' || appearanceDecompositionActive()
+      ? 'off'
+      : raymarchSmokePresentationModeRequested;
+  }
+
+  function setRaymarchSmokePresentationMode(value) {
+    const request = normalizeRaymarchSmokePresentationMode(value);
+    raymarchSmokePresentationModeRequestedRaw = request.requestedRaw;
+    raymarchSmokePresentationModeRequested = request.requested;
+    raymarchSmokePresentationModeFallbackReason = request.fallbackReason;
+    const effectiveMode = raymarchSmokePresentationEffectiveMode();
+    const targetIdentity = effectiveMode === 'off'
+      ? RAYMARCH_SMOKE_PRESENTATION_OFF_IDENTITY
+      : RAYMARCH_SMOKE_PRESENTATION_ON_IDENTITY;
+    const receipt = {
+      identity: 'raymarch-smoke-presentation-receipt-v0',
+      requestedMode: raymarchSmokePresentationModeRequestedRaw,
+      normalizedRequestedMode: raymarchSmokePresentationModeRequested,
+      effectiveMode,
+      effectiveReason: volumePresentationModeEffective === 'intrinsic'
+        ? 'intrinsic-presentation-suppresses-smoke'
+        : 'requested-raymarch-smoke-presentation',
+      fallbackReason: raymarchSmokePresentationModeFallbackReason,
+      targetIdentity,
+      authoredSmokeControl: controlsSnapshot.smoke,
+      authoredSmokeControlMutated: false,
+      smokeProducingDynamicsMutated: false,
+      simulationAdvanced: false,
+      simulationReset: false,
+      cameraMutated: false,
+      contributions: {
+        radiance: effectiveMode === 'off' ? 'suppressed' : 'authored-control',
+        extinction: effectiveMode === 'off' ? 'suppressed' : 'authored-control',
+        dynamics: 'preserved',
+      },
+    };
+    state.raymarchSmokePresentationModeRequestedRaw = raymarchSmokePresentationModeRequestedRaw;
+    state.raymarchSmokePresentationModeRequested = raymarchSmokePresentationModeRequested;
+    state.raymarchSmokePresentationModeEffective = effectiveMode;
+    state.raymarchSmokePresentationModeFallbackReason = raymarchSmokePresentationModeFallbackReason;
+    state.raymarchSmokePresentationTargetIdentity = targetIdentity;
+    state.raymarchSmokePresentationReceipt = receipt;
+    if (state.volumePresentationReceipt) {
+      state.volumePresentationReceipt = {
+        ...state.volumePresentationReceipt,
+        passes: {
+          ...state.volumePresentationReceipt.passes,
+          smoke: effectiveMode === 'off' ? 'suppressed' : 'authored-control',
+        },
+      };
+    }
+    return { ...receipt, contributions: { ...receipt.contributions } };
+  }
+
+  function setVolumePresentationMode(value) {
+    const request = normalizeVolumePresentationMode(value);
+    volumePresentationModeRequestedRaw = request.requestedRaw;
+    volumePresentationModeRequested = request.requested;
+    volumePresentationModeEffective = request.requested;
+    volumePresentationModeFallbackReason = request.fallbackReason;
+    const targetIdentity = volumePresentationModeEffective === 'intrinsic'
+      ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
+      : BEAUTY_PRESENTATION_TARGET_IDENTITY;
+    const effectiveRayQuality = effectiveVolumePresentationRayQuality();
+    const receipt = {
+      identity: 'volume-presentation-mode-receipt-v0',
+      requestedMode: volumePresentationModeRequestedRaw,
+      effectiveMode: volumePresentationModeEffective,
+      fallbackReason: volumePresentationModeFallbackReason,
+      targetIdentity,
+      effectiveRayQuality,
+      authoredControlsMutated: false,
+      simulationAdvanced: false,
+      simulationReset: false,
+      cameraMutated: false,
+      passes: volumePresentationModeEffective === 'intrinsic'
+        ? {
+            raymarch: INTRINSIC_PRESENTATION_TARGET_IDENTITY,
+            splats: 'off',
+            residual: 'off',
+            featureCapture: 'off',
+            smoke: 'suppressed',
+          }
+        : {
+            raymarch: BEAUTY_PRESENTATION_TARGET_IDENTITY,
+            splats: 'authored-control',
+            residual: 'authored-control',
+            featureCapture: 'authored-control',
+            smoke: raymarchSmokePresentationEffectiveMode() === 'off' ? 'suppressed' : 'authored-control',
+          },
+    };
+    state.volumePresentationModeRequestedRaw = volumePresentationModeRequestedRaw;
+    state.volumePresentationModeRequested = volumePresentationModeRequested;
+    state.volumePresentationModeEffective = volumePresentationModeEffective;
+    state.volumePresentationModeFallbackReason = volumePresentationModeFallbackReason;
+    state.volumePresentationTargetIdentity = targetIdentity;
+    state.volumePresentationReceipt = receipt;
+    setRaymarchSmokePresentationMode(raymarchSmokePresentationModeRequestedRaw);
+    return {
+      ...state.volumePresentationReceipt,
+      effectiveRayQuality: { ...state.volumePresentationReceipt.effectiveRayQuality },
+      passes: { ...state.volumePresentationReceipt.passes },
+    };
+  }
+
+  function recordVolumePresentationApplication({
+    raymarchEncoded = false,
+    raymarchApplied = false,
+    splatsEncoded = false,
+    splatsApplied = false,
+    residualEncoded = false,
+    residualApplied = false,
+    featureCaptureEncoded = false,
+    featureCaptureApplied = false,
+    compositionEffective = 'raymarch-only-v0',
+    fallbackReason = null,
+    captureContext = null,
+  } = {}) {
+    const application = {
+      identity: 'volume-presentation-applied-pass-receipt-v0',
+      effectiveMode: volumePresentationModeEffective,
+      targetIdentity: volumePresentationModeEffective === 'intrinsic'
+        ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
+        : BEAUTY_PRESENTATION_TARGET_IDENTITY,
+      compositionEffective,
+      raymarchEncoded: Boolean(raymarchEncoded),
+      raymarchApplied: Boolean(raymarchApplied),
+      splatsEncoded: Boolean(splatsEncoded),
+      splatsApplied: Boolean(splatsApplied),
+      residualEncoded: Boolean(residualEncoded),
+      residualApplied: Boolean(residualApplied),
+      featureCaptureEncoded: Boolean(featureCaptureEncoded),
+      featureCaptureApplied: Boolean(featureCaptureApplied),
+      smokeContribution: raymarchSmokePresentationEffectiveMode() === 'off' ? 'suppressed' : 'authored-control',
+      raymarchSmokePresentationRequestedMode: raymarchSmokePresentationModeRequestedRaw,
+      raymarchSmokePresentationEffectiveMode: raymarchSmokePresentationEffectiveMode(),
+      raymarchSmokePresentationTargetIdentity: state.raymarchSmokePresentationTargetIdentity,
+      fallbackReason: fallbackReason || null,
+    };
+    state.volumePresentationReceipt = {
+      ...state.volumePresentationReceipt,
+      application,
+    };
+    recordAppearanceDecompositionApplication({
+      raymarchEncoded,
+      raymarchApplied,
+      splatsEncoded,
+      splatsApplied,
+      residualEncoded,
+      residualApplied,
+      featureCaptureEncoded,
+      featureCaptureApplied,
+      fallbackReason,
+      captureContext,
+    });
+    return application;
+  }
+
   function browserResidualCanApply() {
-    return browserResidualRequested()
+    return volumePresentationModeEffective !== 'intrinsic'
+      && !appearanceDecompositionActive()
+      && browserResidualRequested()
       && browserResidualModel
       && browserResidualPipeline
       && browserResidualSourcePipeline
@@ -8272,8 +11441,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function updateUniforms(now) {
     resize();
     camera.updateMatrixWorld();
-    maybeResetTemporalHistoryForCamera();
-    ensureTemporalHistoryTexture();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (lookFreeze) {
       if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
@@ -8281,26 +11448,109 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.lookFreezeTimeSeconds = null;
     }
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    invViewProj.copy(viewProj).invert();
-    if (!previousViewProjReady) {
-      previousViewProj.copy(viewProj);
-      previousViewProjReady = true;
+    if (productFrameOwner === 'caller') {
+      productModelMatrix.makeScale(productTransform.scale, productTransform.scale, productTransform.scale);
+      productModelMatrix.setPosition(...productTransform.translate);
+      productViewProj.multiplyMatrices(viewProj, productModelMatrix);
+      invViewProj.copy(productViewProj).invert();
+      productLocalCameraPosition.copy(camera.position);
+      productLocalCameraPosition.x = (productLocalCameraPosition.x - productTransform.translate[0]) / productTransform.scale;
+      productLocalCameraPosition.y = (productLocalCameraPosition.y - productTransform.translate[1]) / productTransform.scale;
+      productLocalCameraPosition.z = (productLocalCameraPosition.z - productTransform.translate[2]) / productTransform.scale;
+    } else {
+      invViewProj.copy(viewProj).invert();
+      productLocalCameraPosition.copy(camera.position);
     }
+    const boundarySplatInstanceAllocation = writeBoundarySplatInstanceConsumerState();
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(28);
+      const splatCamera = new Float32Array(56);
       splatCamera.set(viewProj.elements, 0);
-      splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
-      splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
+      const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+      const covarianceMode = boundarySplatMode === 'kernel_moment_covariance' || boundarySplatMode === 'kernel_moment_full_flame_union'
+        ? 2
+        : (boundarySplatMode === 'world_covariance' ? 1 : 0);
+      splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], covarianceMode], 16);
+      splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], boundarySplatAreaOpacityConserved(boundarySplatMode) ? 1 : 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
+      splatCamera.set([
+        normalizeBoundarySplatRadianceGain(controlsSnapshot.boundarySplatRadianceGain),
+        normalizeBoundarySplatOpacityGain(controlsSnapshot.boundarySplatOpacityGain),
+        state.flowKernelDescriptorCaptureEffective ? 1 : 0,
+        0,
+      ], 28);
+      const effectiveFlowKernel = flowKernelEffectiveControls(controlsSnapshot);
+      splatCamera.set([
+        effectiveFlowKernel.strength,
+        effectiveFlowKernel.radiusWorld,
+        effectiveFlowKernel.coherence,
+        flowKernelDescriptorRowsRequested() && flowKernelDescriptorBufferCapacity === boundarySplatCapacity ? 1 : 0,
+      ], 32);
+      splatCamera.set([
+        boundarySplatMode === 'kernel_moment_full_flame_union' ? 1 : 0,
+        Math.max(0, Math.min(4, Number(controlsSnapshot.reactionBoundaryGradient ?? 2.60))),
+        boundarySplatLiveCompleteFlameCoefficientBuffer
+          && state.liveCompleteFlameOpticalCoefficientReceipt?.status === 'effective'
+          ? 2
+          : (state.boundarySplatLiveUnionOverlayEffectiveIdentity ? 1 : 0),
+        0.011764705882352941,
+      ], 36);
+      const bilinearRequested = state.fullSupportDepositionRequested === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
+      const persistentCohortRequested = Boolean(persistentSparseCohortGpuState);
+      const bilinearAvailable = persistentCohortRequested
+        ? Boolean(boundarySplatBilinearRenderPipeline) && Boolean(boundarySplatBilinearIndirectBuffer)
+        : boundarySplatMode === 'kernel_moment_full_flame_union'
+          && !state.boundarySplatInstanceConsumerEffective
+          && Boolean(boundarySplatBilinearRenderPipeline)
+          && Boolean(boundarySplatBilinearIndirectBuffer);
+      state.fullSupportDepositionEffective = bilinearRequested && bilinearAvailable
+        ? FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY
+        : FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY;
+      state.fullSupportDepositionFallbackReason = bilinearRequested && !bilinearAvailable
+        ? (state.boundarySplatInstanceConsumerEffective
+            ? 'bilinear-deposition-not-admitted-for-full-support-instance-consumer'
+            : 'bilinear-requires-full-union-compact-cotangent-and-pipeline')
+        : null;
+      splatCamera.set([
+        state.fullSupportDepositionEffective === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY ? 1 : 0,
+        state.width,
+        state.height,
+        persistentCohortRequested
+          ? PERSISTENT_COHORT_CHARGED_DEPOSITS_PER_CANDIDATE
+          : FULL_SUPPORT_BILINEAR_DEPOSITS_PER_CANDIDATE,
+      ], 40);
+      splatCamera.set([
+        state.boundarySplatInstanceConsumerEffective ? 1 : 0,
+        boundarySplatInstanceAllocation?.descriptors.length || 1,
+        boundarySplatCapacity,
+        persistentCohortRequested ? 1 : 0,
+      ], 44);
+      splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
+      splatCamera.set([...productTransform.translate, productTransform.scale], 52);
+      state.fullSupportDepositionReceipt = {
+        identity: 'full-support-deposition-runtime-receipt-v0',
+        requested: state.fullSupportDepositionRequested,
+        effective: state.fullSupportDepositionEffective,
+        fallbackReason: state.fullSupportDepositionFallbackReason,
+        sourceCandidateCount: state.boundarySplatSourceCandidateCount,
+        rasterDepositCount: state.fullSupportDepositionEffective === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY
+          && Number.isInteger(state.boundarySplatInstanceCount)
+          ? state.boundarySplatInstanceCount * (persistentCohortRequested
+              ? PERSISTENT_COHORT_CHARGED_DEPOSITS_PER_CANDIDATE
+              : FULL_SUPPORT_BILINEAR_DEPOSITS_PER_CANDIDATE)
+          : state.boundarySplatInstanceCount,
+        transportIdentity: FULL_SUPPORT_STAGE_A_TRANSPORT_IDENTITY,
+        blendIdentity: 'src-alpha-dst-one-add-v0',
+        attenuatesBehindColor: false,
+      };
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
-    const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
+    const { renderPhaseTimeMs } = updateRenderPhaseState(now, state, lookFreeze);
     uniforms.set(invViewProj.elements, 0);
-    uniforms[16] = camera.position.x;
-    uniforms[17] = camera.position.y;
-    uniforms[18] = camera.position.z;
-    uniforms[19] = renderPhaseTimeMs * 0.001;
+    uniforms[16] = productLocalCameraPosition.x;
+    uniforms[17] = productLocalCameraPosition.y;
+    uniforms[18] = productLocalCameraPosition.z;
+    uniforms[19] = 0;
     uniforms[20] = state.width;
     uniforms[21] = state.height;
     uniforms[22] = controlsSnapshot.raySteps;
@@ -8317,27 +11567,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[32] = sourcePrimitive.radius;
     uniforms[33] = sourcePrimitive.flowRate;
     uniforms[34] = controlsSnapshot.projection ?? 0.65;
-    uniforms[35] = sourcePilotEnabled ? 1 : 0;
+    uniforms[35] = controlsSnapshot.flowDebug || 0;
     uniforms[36] = controlsSnapshot.radiance ?? 1.65;
     uniforms[37] = controlsSnapshot.absorption ?? 0.85;
     uniforms[38] = controlsSnapshot.glow ?? 1.15;
     uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
-    uniforms[41] = controlsSnapshot.majorantSkip ?? 0.70;
-    uniforms[42] = controlsSnapshot.majorantSmooth ?? 0.85;
-    uniforms[43] = controlsSnapshot.majorantGuard ?? 0.75;
+    uniforms.fill(0, 41, 47);
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
-    const baseTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
-    const requestedTemporalAccum = Math.max(0, Math.min(0.85, baseTemporalAccum * bonfireAblation.temporal));
-    uniforms[44] = lookFreeze ? 0 : (historyValid ? requestedTemporalAccum : 0);
-    uniforms[45] = lookFreeze ? 0 : (controlsSnapshot.temporalJitter ?? 0.85);
-    uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
-    uniforms[47] = renderPhaseFrame % 4096;
+    uniforms[47] = 0;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
     updateExternalEmitterDebug(now);
-    uniforms[51] = state.externalEmitterCount;
+    uniforms[51] = state.coreEmitterSourceMode === 'analytic-only' ? 0 : state.externalEmitterCount;
     uniforms[52] = volumeSceneMode(controlsSnapshot.volumeScene);
     uniforms[53] = normalizeWindStrength(controlsSnapshot.windStrength);
     uniforms[54] = normalizeWindAngle(controlsSnapshot.windAngle) * Math.PI / 180;
@@ -8359,7 +11602,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[70] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalBuoyancy ?? 1));
     uniforms[71] = normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale);
     uniforms[72] = canonicalRenderModeValue(controlsSnapshot.canonicalRenderMode);
-    uniforms[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);
+    const canonicalMotionReceipt = canonicalMotionCompatibilityReceipt(controlsSnapshot.canonicalMotionMode);
+    uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;
     uniforms[74] = canonicalContentModeValue(controlsSnapshot.canonicalContentMode);
     const quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
     uniforms[75] = quenchVaporStrength;
@@ -8383,29 +11627,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         lastInputKind: 'look-lab-frozen',
       };
     }
-    const materialMemory = pyroDetailForRender.materialMemory || {};
     const pyroMaterialRequestedGain = Math.max(0, Math.min(1.5, controlsSnapshot.pyroMaterialGain ?? 0));
-    const pyroMaterialSampleable = pyroMaterialRequestedGain > 0 && materialMemory.shaderReadiness === 'sampleable-debug-only';
     const pyroCompareMuted = pyroCompareMode === 'base';
-    const pyroMaterialGain = pyroMaterialSampleable && !pyroCompareMuted ? pyroMaterialRequestedGain : 0;
-    const pyroMaterialEnergy = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, materialMemory.energyMean ?? pyroDetailForRender.stateEnergy ?? 0)) : 0;
-    const pyroMaterialLiveAuthority = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, pyroDetailForRender.liveFireAuthority ?? 0)) : 0;
-    const pyroMaterialSmokeAuthority = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, pyroDetailForRender.smokeAuthority ?? 0)) : 0;
+    const pyroMaterialActive = pyroMaterialRequestedGain > 0 && !pyroCompareMuted && !pyroDetailForRender.resetGate;
+    const pyroMaterialGain = pyroMaterialActive ? pyroMaterialRequestedGain : 0;
+    const pyroMaterialEnergy = pyroMaterialActive ? Math.max(0, Math.min(1, pyroDetailForRender.stateEnergy ?? 0)) : 0;
+    const pyroMaterialLiveAuthority = pyroMaterialActive ? Math.max(0, Math.min(1, pyroDetailForRender.liveFireAuthority ?? 0)) : 0;
+    const pyroMaterialSmokeAuthority = pyroMaterialActive ? Math.max(0, Math.min(1, pyroDetailForRender.smokeAuthority ?? 0)) : 0;
     uniforms[84] = pyroMaterialGain;
     uniforms[85] = pyroMaterialEnergy;
     uniforms[86] = pyroMaterialLiveAuthority;
     uniforms[87] = pyroMaterialSmokeAuthority;
-    const materialSamples = Array.isArray(materialMemory.sampleVector4) ? materialMemory.sampleVector4 : [];
-    let uploadedPyroMaterialCells = 0;
     for (let memoryIndex = 0; memoryIndex < 24; memoryIndex += 1) {
-      const sample = pyroMaterialSampleable && !pyroCompareMuted && Array.isArray(materialSamples[memoryIndex])
-        ? materialSamples[memoryIndex]
-        : [0, 0, 0, 0];
-      uniforms[88 + memoryIndex * 4] = sample[0] ?? 0;
-      uniforms[89 + memoryIndex * 4] = sample[1] ?? 0;
-      uniforms[90 + memoryIndex * 4] = sample[2] ?? 0;
-      uniforms[91 + memoryIndex * 4] = sample[3] ?? 0;
-      if (pyroMaterialSampleable && !pyroCompareMuted) uploadedPyroMaterialCells += 1;
+      uniforms[88 + memoryIndex * 4] = 0;
+      uniforms[89 + memoryIndex * 4] = 0;
+      uniforms[90 + memoryIndex * 4] = 0;
+      uniforms[91 + memoryIndex * 4] = 0;
     }
     const pyroInterfaceFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroInterfaceFocus ?? 0.75));
     const pyroEdgeBite = Math.max(0, Math.min(1, controlsSnapshot.pyroEdgeBite ?? 0.35));
@@ -8520,13 +11757,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     writePyroPaletteUniform(uniforms, 264, controlsSnapshot.pyroRadianceWarmColor, '#d18438');
     writePyroPaletteUniform(uniforms, 268, controlsSnapshot.pyroFlowCoolColor, '#2aa7b8');
     writePyroPaletteUniform(uniforms, 272, controlsSnapshot.pyroFlowHotColor, '#ff7a36');
-    const fireRenderModeName = normalizeFireRenderMode(controlsSnapshot.fireRenderMode);
-    const shellInspectModeName = normalizeShellInspectMode(controlsSnapshot.shellInspectMode);
+    const presentationControls = volumePresentationModeEffective === 'intrinsic'
+      ? boundarySplatIntrinsicPresentationOverrides(controlsSnapshot)
+      : controlsSnapshot;
+    const fireRenderModeName = normalizeFireRenderMode(presentationControls.fireRenderMode);
+    const shellInspectModeName = normalizeShellInspectMode(presentationControls.shellInspectMode);
     const boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const boundarySidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     const boundarySidecarControls = controlsSnapshot.boundarySidecarControls || {};
     const boundaryFireInspectActive = shellInspectModeName === 'boundary_fire';
     const boundaryInspectActive = shellInspectModeName === 'boundary' || boundaryFireInspectActive;
+    const boundaryControlUniformsActive = boundaryInspectActive || nonRidgeSourceBasisControlsActive;
+    const boundaryControlUniformAuthority = nonRidgeSourceBasisControlsActive
+      ? 'nonridge-source-basis-capture-controls-v0'
+      : (boundaryInspectActive ? 'boundary-inspect-controls-v0' : 'ordinary-shell-controls-v0');
     const boundaryControls = controlsSnapshot.reactionBoundaryControls || {};
     const boundaryFireControls = controlsSnapshot.reactionBoundaryFireControls || {};
     const boundaryUniforms = {
@@ -8542,7 +11786,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       topologyGain: Math.max(0, Math.min(2.5, boundaryControls.topologyGain ?? controlsSnapshot.reactionBoundaryTopology ?? 0.90)),
       curlGain: Math.max(0, Math.min(2, boundaryControls.curlGain ?? controlsSnapshot.reactionBoundaryCurl ?? 0.70)),
       divergenceGain: Math.max(0, Math.min(1, boundaryControls.divergenceGain ?? controlsSnapshot.reactionBoundaryDivergence ?? 0.05)),
-      displayContrast: Math.max(0.25, Math.min(5, boundaryControls.displayContrast ?? controlsSnapshot.reactionBoundaryContrast ?? 1.35)),
+      displayContrast: Math.max(0.25, Math.min(1.5, boundaryControls.displayContrast ?? controlsSnapshot.reactionBoundaryContrast ?? 1.35)),
       displayGamma: Math.max(0.35, Math.min(3, boundaryControls.displayGamma ?? controlsSnapshot.reactionBoundaryGamma ?? 1.05)),
       displayOpacity: Math.max(0, Math.min(3, boundaryControls.displayOpacity ?? controlsSnapshot.reactionBoundaryOpacity ?? 0.70)),
     };
@@ -8552,30 +11796,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ridgeCut: Math.max(0, Math.min(0.55, boundaryFireControls.ridgeCut ?? controlsSnapshot.reactionBoundaryFireRidgeCut ?? 0.040)),
       tipBreakup: Math.max(0, Math.min(2, boundaryFireControls.tipBreakup ?? controlsSnapshot.reactionBoundaryFireTip ?? 1.80)),
       topologyErosion: Math.max(0, Math.min(1, boundaryFireControls.topologyErosion ?? controlsSnapshot.reactionBoundaryFireErosion ?? 0.55)),
-      cleanBlue: Math.max(0, Math.min(2, boundaryFireControls.cleanBlue ?? controlsSnapshot.reactionBoundaryFireCleanBlue ?? 0.90)),
+      cleanBlue: Math.max(0, Math.min(1, boundaryFireControls.cleanBlue ?? controlsSnapshot.reactionBoundaryFireCleanBlue ?? 0.90)),
       sootYield: Math.max(0, Math.min(2, boundaryFireControls.sootYield ?? controlsSnapshot.reactionBoundaryFireSoot ?? 0.72)),
-      sootYellowing: Math.max(0, Math.min(2, boundaryFireControls.sootYellowing ?? controlsSnapshot.reactionBoundaryFireYellow ?? 0.86)),
-      thermalWarmth: Math.max(0, Math.min(2, boundaryFireControls.thermalWarmth ?? controlsSnapshot.reactionBoundaryFireWarmth ?? 0.92)),
-      fireLuma: Math.max(0, Math.min(5, boundaryFireControls.fireLuma ?? controlsSnapshot.reactionBoundaryFireLuma ?? 1.05)),
+      sootYellowing: Math.max(0, Math.min(0.4, boundaryFireControls.sootYellowing ?? controlsSnapshot.reactionBoundaryFireYellow ?? 0.28)),
+      thermalWarmth: Math.max(0, Math.min(0.4, boundaryFireControls.thermalWarmth ?? controlsSnapshot.reactionBoundaryFireWarmth ?? 0.30)),
+      fireLuma: Math.max(0, Math.min(15, boundaryFireControls.fireLuma ?? controlsSnapshot.reactionBoundaryFireLuma ?? 1.05)),
+      cleanColor: boundaryFireControls.cleanColor ?? controlsSnapshot.reactionBoundaryFireCleanColor ?? DEFAULT_BOUNDARY_FIRE_CLEAN_COLOR,
+      sootColor: boundaryFireControls.sootColor ?? controlsSnapshot.reactionBoundaryFireSootColor ?? DEFAULT_BOUNDARY_FIRE_SOOT_COLOR,
     };
     uniforms[276] = fireRenderModeValue(fireRenderModeName);
     uniforms[277] = shellInspectModeValue(shellInspectModeName);
     uniforms[278] = Math.max(0, Math.min(2, controlsSnapshot.shellAmount ?? 1.10));
     uniforms[279] = Math.max(0.05, Math.min(2, controlsSnapshot.shellWidth ?? 0.90));
-    uniforms[280] = boundaryInspectActive ? boundaryUniforms.supportThermal : Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 0.85));
-    uniforms[281] = boundaryInspectActive ? boundaryUniforms.supportReaction : Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.10));
-    uniforms[282] = boundaryInspectActive ? boundaryUniforms.supportFront : Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.25));
-    uniforms[283] = boundaryInspectActive ? boundaryUniforms.supportInterface : Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 0.85));
-    uniforms[284] = boundaryInspectActive ? boundaryUniforms.coreReject : Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.55));
-    uniforms[285] = boundaryInspectActive ? boundaryUniforms.topologyGain : Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 0.80));
-    uniforms[286] = boundaryInspectActive ? boundaryUniforms.curlGain : Math.max(0, Math.min(2, controlsSnapshot.shellCurl ?? 0.25));
-    uniforms[287] = boundaryInspectActive ? boundaryUniforms.divergenceGain : Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.00));
-    uniforms[288] = boundaryInspectActive ? boundaryUniforms.gradientGain : Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.25));
-    uniforms[289] = boundaryInspectActive ? boundaryUniforms.cut : 0;
-    uniforms[290] = boundaryInspectActive ? boundaryUniforms.softness : 0;
-    uniforms[291] = boundaryInspectActive ? boundaryUniforms.displayOpacity : 0;
-    uniforms[292] = boundaryInspectActive ? boundaryUniforms.displayContrast : Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 1.35));
-    uniforms[293] = boundaryInspectActive ? boundaryUniforms.displayGamma : Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 1.15));
+    uniforms[280] = boundaryControlUniformsActive ? boundaryUniforms.supportThermal : Math.max(0, Math.min(2, controlsSnapshot.shellThermal ?? 0.85));
+    uniforms[281] = boundaryControlUniformsActive ? boundaryUniforms.supportReaction : Math.max(0, Math.min(2, controlsSnapshot.shellReaction ?? 1.10));
+    uniforms[282] = boundaryControlUniformsActive ? boundaryUniforms.supportFront : Math.max(0, Math.min(2, controlsSnapshot.shellFront ?? 1.25));
+    uniforms[283] = boundaryControlUniformsActive ? boundaryUniforms.supportInterface : Math.max(0, Math.min(2, controlsSnapshot.shellEdge ?? 0.85));
+    uniforms[284] = boundaryControlUniformsActive ? boundaryUniforms.coreReject : Math.max(0, Math.min(1, controlsSnapshot.shellCoreSuppress ?? 0.55));
+    uniforms[285] = boundaryControlUniformsActive ? boundaryUniforms.topologyGain : Math.max(0, Math.min(2, controlsSnapshot.shellBite ?? 0.80));
+    uniforms[286] = boundaryControlUniformsActive ? boundaryUniforms.curlGain : Math.max(0, Math.min(2, controlsSnapshot.shellCurl ?? 0.25));
+    uniforms[287] = boundaryControlUniformsActive ? boundaryUniforms.divergenceGain : Math.max(0, Math.min(1, controlsSnapshot.shellDivergence ?? 0.00));
+    uniforms[288] = boundaryControlUniformsActive ? boundaryUniforms.gradientGain : Math.max(0, Math.min(2, controlsSnapshot.shellSmoke ?? 0.25));
+    uniforms[289] = boundaryControlUniformsActive ? boundaryUniforms.cut : 0;
+    uniforms[290] = boundaryControlUniformsActive ? boundaryUniforms.softness : 0;
+    uniforms[291] = boundaryControlUniformsActive ? boundaryUniforms.displayOpacity : 0;
+    uniforms[292] = boundaryControlUniformsActive ? boundaryUniforms.displayContrast : Math.max(0, Math.min(5, controlsSnapshot.shellLuma ?? 1.35));
+    uniforms[293] = boundaryControlUniformsActive ? boundaryUniforms.displayGamma : Math.max(0, Math.min(4, controlsSnapshot.shellExposure ?? 1.15));
     uniforms[294] = Math.max(0.2, Math.min(4, controlsSnapshot.shellSoftClip ?? 1.60));
     uniforms[295] = Math.max(0, Math.min(4, controlsSnapshot.shellHeat ?? 1.65));
     uniforms[296] = boundaryFireUniforms.ridgeGain;
@@ -8587,9 +11833,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[302] = boundaryFireUniforms.sootYellowing;
     uniforms[303] = boundaryFireUniforms.thermalWarmth;
     uniforms[304] = boundaryFireUniforms.fireLuma;
-    uniforms[305] = controlsSnapshot.flowDebug || 0;
-    uniforms[306] = 0;
-    uniforms[307] = 0;
+    uniforms[305] = volumePresentationModeEffective === 'intrinsic' ? 1 : 0;
+    uniforms[306] = raymarchSmokePresentationEffectiveMode() === 'off' ? 1 : 0;
+    uniforms[307] = appearanceDecompositionUniformMode();
     uniforms[308] = boundarySidecarSourceValue(boundarySidecarSourceName);
     uniforms[309] = clampFinite(boundarySidecarControls.blur ?? controlsSnapshot.boundarySidecarBlur, 0, 1, 0.45);
     uniforms[310] = clampFinite(boundarySidecarControls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75);
@@ -8600,12 +11846,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[313] = 0;
     uniforms[314] = 0;
     uniforms[315] = 0;
-    // False-authority guard: the smoke-only partition may only strip raymarch
-    // fire authority when the selective-head splat layer is actually seated.
-    // The raw composition request defaults to smoke-raymarch-under-splats-v0,
-    // and packing it unconditionally let an inactive splat layer own fire,
-    // leaving plain routes with no fire renderer at all.
-    uniforms[316] = state.selectiveHeadLiveEffectiveRole === 'off' ? 0 : (1 - selectiveCompositionDefinition.raymarchFireAuthority);
+    uniforms[316] = effectiveSelectiveHeadRaymarchFireSuppression();
     uniforms[317] = selectiveCompositionDefinition.raymarch ? 1 : 0;
     uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;
     uniforms[319] = 0;
@@ -8619,7 +11860,51 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[325] = externalCueActive ? 1 : 0;
     uniforms[326] = oracleActivityCueUpload.grid || 0;
     uniforms[327] = oracleActivityCueUpload.externalCueCellCount || 0;
-    uniforms.set(previousViewProj.elements, 328);
+    const effectiveFlowKernel = flowKernelEffectiveControls(controlsSnapshot);
+    uniforms[328] = effectiveFlowKernel.strength;
+    uniforms[329] = effectiveFlowKernel.radiusWorld;
+    uniforms[330] = effectiveFlowKernel.coherence;
+    const volumeExposure = clampFinite(controlsSnapshot.volumeExposure, 0, 3, 1);
+    uniforms[331] = 0;
+    uniforms[332] = volumeExposure;
+    uniforms[333] = 0;
+    uniforms[334] = 0;
+    uniforms[335] = 0;
+    writeBoundaryFirePaletteUniform(
+      uniforms,
+      336,
+      boundaryFireUniforms.cleanColor,
+      DEFAULT_BOUNDARY_FIRE_CLEAN_COLOR,
+      LEGACY_BOUNDARY_FIRE_CLEAN_ENDPOINT,
+    );
+    writeBoundaryFirePaletteUniform(
+      uniforms,
+      340,
+      boundaryFireUniforms.sootColor,
+      DEFAULT_BOUNDARY_FIRE_SOOT_COLOR,
+      LEGACY_BOUNDARY_FIRE_SOOT_ENDPOINT,
+    );
+    uniforms.fill(0, 344, 364);
+    uniforms[344] = controlsSnapshot.fixedSourceDephase === false ? 0 : 1;
+    writeAnalyticEmitterInjectionUniform(
+      analyticEmitterInjectionUniformFloats,
+      analyticEmitterInjectionUniformWords,
+      analyticEmitterDescriptor,
+      analyticEmitterDispatch,
+      renderPhaseTimeMs * 0.001,
+      controlsSnapshot.speed,
+    );
+    device.queue.writeBuffer(
+      analyticEmitterInjectionUniformBuffer,
+      0,
+      analyticEmitterInjectionUniformData,
+    );
+    uniforms[364] = controlsSnapshot.artisticSwirl === false ? 0 : 1;
+    uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
+    uniforms[366] = controlsSnapshot.proceduralDetailForces === false ? 0 : 1;
+    uniforms[367] = controlsSnapshot.proceduralTransportSlip === false ? 0 : 1;
+    volumePresentationControls[0] = volumeExposure;
+    device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -8628,6 +11913,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.legacyPyroBackedOff = controlsSnapshot.legacyPyroBackedOff === true;
     state.fireRenderMode = fireRenderModeName;
     state.shellInspectMode = shellInspectModeName;
+    state.boundaryControlUniformAuthority = boundaryControlUniformAuthority;
     state.topologyShellControls = {
       amount: uniforms[278],
       width: uniforms[279],
@@ -8647,27 +11933,42 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     state.reactionBoundaryControls = {
       ...boundaryUniforms,
-      active: boundaryInspectActive,
+      active: boundaryControlUniformsActive,
     };
     state.reactionBoundaryFireControls = {
       ...boundaryFireUniforms,
-      active: boundaryFireInspectActive,
+      active: boundaryFireInspectActive || nonRidgeSourceBasisControlsActive,
     };
+    state.volumeExposure = volumeExposure;
     state.boundarySidecarSource = boundarySidecarSourceName;
     state.boundaryStructureSource = boundarySidecarSourceName;
     state.boundarySidecarView = boundarySidecarViewName;
+    state.flowKernelIdentity = FLOW_RECONSTRUCTION_KERNEL_IDENTITY;
+    state.flowKernelRequested = flowKernelRequestedControls(controlsSnapshot);
+    state.flowKernelEffective = {
+      strength: uniforms[328],
+      radiusWorld: uniforms[329],
+      coherence: uniforms[330],
+    };
+    state.flowKernelCandidateAdmissionAuthority = 'structural-splat-candidates-v0';
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
+    if (state.volumePresentationReceipt) {
+      state.volumePresentationReceipt = {
+        ...state.volumePresentationReceipt,
+        effectiveRayQuality: effectiveVolumePresentationRayQuality(),
+      };
+    }
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    state.artisticSwirl = uniforms[364] >= 0.5;
+    state.phasedSway = uniforms[365] >= 0.5;
+    state.proceduralDetailForces = uniforms[366] >= 0.5;
+    state.proceduralTransportSlip = uniforms[367] >= 0.5;
+    state.fixedSourceDephase = uniforms[344] >= 0.5;
+    state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
     state.adaptiveRaymarch = uniforms[39];
     state.occupancySkip = uniforms[40];
-    state.majorantSkip = uniforms[41];
-    state.majorantSmooth = uniforms[42];
-    state.majorantGuard = uniforms[43];
-    state.temporalAccum = requestedTemporalAccum;
-    state.temporalJitter = uniforms[45];
-    state.historyClamp = uniforms[46];
     state.fireScale = Math.max(0.35, Math.min(1.3, uniforms[48]));
     state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
     state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
@@ -8681,14 +11982,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
     state.flameQuenchModel = quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
     state.pyroMaterialRendererCoupling = {
-      identity: 'pyro-material-memory-spatial-coupling-v0',
+      identity: 'pyro-transported-field-coupling-v0',
       lineage: 'pyro-material-memory-render-coupling-v0',
-      visualRole: 'opt-in-renderer-diagnostic-not-main-fire-authority',
+      visualRole: 'opt-in-transported-field-coupling-no-synthetic-atlas',
       compareMode: pyroCompareMode,
       compareMuted: pyroCompareMuted,
       requestedGain: pyroMaterialRequestedGain,
       effectiveGain: pyroMaterialGain,
-      materialShaderReadiness: materialMemory.shaderReadiness || 'blocked-reset',
+      materialShaderReadiness: 'retired-synthetic-atlas',
       energy: pyroMaterialEnergy,
       liveFireAuthority: pyroMaterialLiveAuthority,
       smokeAuthority: pyroMaterialSmokeAuthority,
@@ -8785,9 +12086,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         paletteShape: `${controlsSnapshot.pyroFlameCoreColor || '#fff4b8'}/${controlsSnapshot.pyroFlameEdgeColor || '#ff8a24'}/${controlsSnapshot.pyroBiteEmberColor || '#e65a1a'}/${controlsSnapshot.pyroRadianceWarmColor || '#d18438'}/${controlsSnapshot.pyroFlowHotColor || '#ff7a36'}`,
       },
       spatialMemory: {
-        identity: 'pyro-material-memory-spatial-coupling-v0',
-        textureLayout: { ...(materialMemory.textureLayout || PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT) },
-        uploadedCells: uploadedPyroMaterialCells,
+        identity: 'retired-pyro-material-memory-spatial-coupling-v0',
+        textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
+        uploadedCells: 0,
       },
     };
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
@@ -8817,8 +12118,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       buoyancyLift: uniforms[70],
       renderMode: normalizeCanonicalRenderMode(controlsSnapshot.canonicalRenderMode),
       renderModeValue: uniforms[72],
-      motionMode: normalizeCanonicalMotionMode(controlsSnapshot.canonicalMotionMode),
-      motionModeValue: uniforms[73],
+      motionStrategy: canonicalMotionReceipt.effective,
+      motionRetirementIdentity: canonicalMotionReceipt.identity,
+      requestedRetiredMotionMode: canonicalMotionReceipt.requested,
+      reservedMotionUniformValue: uniforms[73],
       contentMode: normalizeCanonicalContentMode(controlsSnapshot.canonicalContentMode),
       contentModeValue: uniforms[74],
     };
@@ -8831,44 +12134,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
-    state.temporalAccumEffective = uniforms[44];
-    const temporalSettled = historyValid ? Math.min(1, Math.max(0, state.temporalHistoryFrames / 12)) : 0;
-    const temporalMotionTrust = previousViewProjReady ? 1 : 0;
-    const temporalReactiveEstimate = Math.min(0.82,
-      0.18 * Math.max(0, Math.min(1, controlsSnapshot.majorantSkip ?? 0.70)) +
-      0.12 * Math.max(0, Math.min(1, controlsSnapshot.adaptiveRays ?? 0.65)) +
-      0.08 * Math.max(0, Math.min(1, (controlsSnapshot.fire ?? 1.4) / 2.2)) +
-      0.06 * Math.max(0, Math.min(1, (controlsSnapshot.fireLicks ?? 1.65) / 5))
-    );
-    const smokeHistoryTrust = Math.max(0, Math.min(1,
-      ((controlsSnapshot.smoke ?? 2.8) / 3.2) *
-      (1 - Math.max(0, Math.min(1, (controlsSnapshot.fire ?? 1.4) / 2.4)) * 0.42) *
-      (1 - Math.max(0, Math.min(1, (controlsSnapshot.interfaceShred ?? 2.5) / 5)) * 0.28)
-    ));
-    const fireHistoryProtect = Math.max(0, Math.min(1,
-      (controlsSnapshot.fire ?? 1.4) / 2.2 * 0.48 +
-      (controlsSnapshot.radiance ?? 1.65) / 3.0 * 0.26 +
-      (controlsSnapshot.fireLicks ?? 1.65) / 5.0 * 0.26
-    ));
-    const interfaceHistoryProtect = Math.max(0, Math.min(1,
-      (controlsSnapshot.interfaceShred ?? 2.5) / 5.0 * 0.52 +
-      (controlsSnapshot.fireLicks ?? 1.65) / 5.0 * 0.24 +
-      (controlsSnapshot.majorantGuard ?? 0.75) * 0.24
-    ));
-    const materialTemporalProtection = fireHistoryProtect * 0.46 + interfaceHistoryProtect * 0.34;
-    state.temporalSmokeHistoryTrust = smokeHistoryTrust;
-    state.temporalFireHistoryProtect = fireHistoryProtect;
-    state.temporalInterfaceHistoryProtect = interfaceHistoryProtect;
-    state.temporalEvidenceSource = 'cpu-estimate-control-proxy';
-    state.temporalReprojectionConfidence = temporalSettled * temporalMotionTrust * Math.max(0, 1 - temporalReactiveEstimate - materialTemporalProtection * 0.18);
-    state.temporalHistoryWeight = uniforms[44] * state.temporalReprojectionConfidence * (0.34 + smokeHistoryTrust * 0.66) * (1 - fireHistoryProtect * 0.55) * (1 - interfaceHistoryProtect * 0.36);
-    state.temporalRejectedHistory = Math.max(0, Math.min(1, 1 - (state.temporalHistoryWeight / Math.max(0.0001, uniforms[44]))));
-    state.temporalHistoryValid = historyValid;
   }
 
   function updateSimCostLedger(options = {}) {
     const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
-    const majorantBuildCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
     const pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, scene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, scene);
     const pressureTierControls = normalizePressureTierControls(controlsSnapshot);
@@ -8895,25 +12164,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const mainFluidBonfireCombustionFieldStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS;
-    const bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldActive ? 2 : 0;
+    const bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldActive ? 1 : 0;
     const mainFluidBonfireProceduralBreakupStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS;
-    const bonfireProceduralBreakupEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
-    const mainFluidBonfireSymmetricForceStrategy = bonfireCombustionFieldActive
-      ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
-      : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
-    const bonfireSymmetricForceEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
-    const mainFluidBonfireNonWindForceStrategy = bonfireCombustionFieldActive
-      ? MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE
-      : MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
-    const bonfireNonWindForceEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
+    const bonfireProceduralBreakupEvaluationsPerCell = bonfireCombustionFieldActive ? 1 : 0;
+    const mainFluidBonfireSymmetricForceStrategy = MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED;
+    const bonfireSymmetricForceEvaluationsPerCell = 0;
+    const mainFluidBonfireNonWindForceStrategy = MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED;
+    const bonfireNonWindForceEvaluationsPerCell = 0;
+    const mainFluidScalarAdvectionPeriodicSlipStrategy = MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED;
+    const scalarAdvectionPeriodicSlipEvaluationsPerCell = 0;
+    const mainFluidPeriodicDetailForceStrategy = MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED;
+    const periodicDetailForceEvaluationsPerCell = 0;
+    const mainFluidPeriodicEntrainmentSwayStrategy = MAIN_FLUID_PERIODIC_ENTRAINMENT_SWAY_STRATEGY_RETIRED;
+    const periodicEntrainmentSwayEvaluationsPerCell = 0;
+    const mainFluidExternalCarrierHiddenFlickerStrategy = MAIN_FLUID_EXTERNAL_CARRIER_HIDDEN_FLICKER_STRATEGY_RETIRED;
+    const externalCarrierHiddenFlickerEvaluationsPerEmitterCell = 0;
     const mainFluidBonfireScalarNeighborhoodStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireScalarNeighborhoodReadsPerCell = bonfireCombustionFieldActive ? 36 : 0;
+    const bonfireSourceTopologyExtraReadsPerCell = 0;
     const tallPlumeDetailCoherenceStrategy = scene === 'tall_plume'
-      ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
+      ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_FIELDS
       : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
     const tallPlumeDetailCoherenceExtraReadsPerCell = 0;
     const tallPlumeTransitionBandStrategy = scene === 'tall_plume'
@@ -8943,17 +12217,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       total: fullGridPassesPerFrame,
     };
     const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
-    const majorantWorkgroupsPerPass = Math.ceil(majorantGridSize / 4) ** 3;
-    const majorantBuiltThisFrame = options.majorantBuiltThisFrame ?? state.majorantBuiltThisFrame;
     const boundarySidecarBuiltThisFrame = options.boundarySidecarBuiltThisFrame ?? state.boundarySidecarBuiltThisFrame;
     const fullGridCells = gridCellCount(gridSize);
-    const majorantCells = majorantGridSize * majorantGridSize * majorantGridSize;
+    const analyticEmitterCellVisitsThisFrame = analyticEmitterDispatch.active
+      ? analyticEmitterDispatch.cellCount
+      : 0;
+    const analyticEmitterFullGridEquivalentPasses = analyticEmitterCellVisitsThisFrame / fullGridCells;
     const fluidBytes = fluidBufferBytes(gridSize);
     const frontBytes = frontFieldBufferBytes(gridSize);
     const pressureBytes = pressureBufferBytes(gridSize);
-    const majorantBytes = majorantBufferBytes(majorantGridSize);
     const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
-    state.majorantCadence = majorantBuildCadence;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
     state.pressureSourceStrategy = pressureSourceStrategy;
@@ -8982,8 +12255,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.bonfireSymmetricForceEvaluationsPerCell = bonfireSymmetricForceEvaluationsPerCell;
     state.mainFluidBonfireNonWindForceStrategy = mainFluidBonfireNonWindForceStrategy;
     state.bonfireNonWindForceEvaluationsPerCell = bonfireNonWindForceEvaluationsPerCell;
+    state.mainFluidScalarAdvectionPeriodicSlipStrategy = mainFluidScalarAdvectionPeriodicSlipStrategy;
+    state.scalarAdvectionPeriodicSlipEvaluationsPerCell = scalarAdvectionPeriodicSlipEvaluationsPerCell;
+    state.mainFluidPeriodicDetailForceStrategy = mainFluidPeriodicDetailForceStrategy;
+    state.periodicDetailForceEvaluationsPerCell = periodicDetailForceEvaluationsPerCell;
+    state.mainFluidPeriodicEntrainmentSwayStrategy = mainFluidPeriodicEntrainmentSwayStrategy;
+    state.periodicEntrainmentSwayEvaluationsPerCell = periodicEntrainmentSwayEvaluationsPerCell;
+    state.mainFluidExternalCarrierHiddenFlickerStrategy = mainFluidExternalCarrierHiddenFlickerStrategy;
+    state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell = externalCarrierHiddenFlickerEvaluationsPerEmitterCell;
     state.mainFluidBonfireScalarNeighborhoodStrategy = mainFluidBonfireScalarNeighborhoodStrategy;
     state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
+    state.bonfireSourceTopologyExtraReadsPerCell = bonfireSourceTopologyExtraReadsPerCell;
     state.tallPlumeDetailCoherenceStrategy = tallPlumeDetailCoherenceStrategy;
     state.tallPlumeDetailCoherenceExtraReadsPerCell = tallPlumeDetailCoherenceExtraReadsPerCell;
     state.tallPlumeTransitionBandStrategy = tallPlumeTransitionBandStrategy;
@@ -8994,6 +12276,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureDivergencePasses = pressureDivergencePasses;
     state.pressureJacobiInlineDivergencePasses = pressureJacobiInlineDivergencePasses;
     state.fullGridPassBreakdown = fullGridPassBreakdown;
+    state.analyticEmitterDispatchActive = analyticEmitterDispatch.active;
+    state.analyticEmitterCellVisitsThisFrame = analyticEmitterCellVisitsThisFrame;
+    state.analyticEmitterFullGridEquivalentPasses = analyticEmitterFullGridEquivalentPasses;
     state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
     state.simCostLedger = {
       identity: SIM_COST_LEDGER_IDENTITY,
@@ -9003,10 +12288,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveRoute: state.effectiveRoute,
       volumeScene: scene,
       grid: gridSize,
-      majorantGrid: majorantGridSize,
       workgroupSize: '4x4x4',
       fullGridWorkgroupsPerPass,
-      majorantWorkgroupsPerPass,
       simPassesPerFrame,
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
@@ -9034,8 +12317,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireSymmetricForceEvaluationsPerCell,
       mainFluidBonfireNonWindForceStrategy,
       bonfireNonWindForceEvaluationsPerCell,
+      mainFluidScalarAdvectionPeriodicSlipStrategy,
+      scalarAdvectionPeriodicSlipEvaluationsPerCell,
+      mainFluidPeriodicDetailForceStrategy,
+      periodicDetailForceEvaluationsPerCell,
+      mainFluidPeriodicEntrainmentSwayStrategy,
+      periodicEntrainmentSwayEvaluationsPerCell,
+      mainFluidExternalCarrierHiddenFlickerStrategy,
+      externalCarrierHiddenFlickerEvaluationsPerEmitterCell,
       mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell,
+      bonfireSourceTopologyExtraReadsPerCell,
       tallPlumeDetailCoherenceStrategy,
       tallPlumeDetailCoherenceExtraReadsPerCell,
       tallPlumeTransitionBandStrategy,
@@ -9050,12 +12342,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fullGridPassesPerFrame,
       fullGridPassBreakdown,
       fullGridCellVisitsPerFrame: fullGridCells * fullGridPassesPerFrame,
-      majorantBuildCadence,
-      majorantBuiltThisFrame,
-      majorantCellVisitsThisFrame: majorantBuiltThisFrame ? majorantCells : 0,
-      majorantEstimatedCellVisitsPerFrame: majorantCells / majorantBuildCadence,
-      majorantLastBuiltFrame: state.majorantLastBuiltFrame,
-      majorantSkippedFrameCount: state.majorantSkippedFrameCount,
+      analyticEmitterDispatchActive: analyticEmitterDispatch.active,
+      analyticEmitterFamily: analyticEmitterDispatch.family,
+      analyticEmitterCellMin: [...analyticEmitterDispatch.cellMin],
+      analyticEmitterCellExtent: [...analyticEmitterDispatch.cellExtent],
+      analyticEmitterWorkgroups: [...analyticEmitterDispatch.workgroups],
+      analyticEmitterCellVisitsThisFrame,
+      analyticEmitterFullGridEquivalentPasses,
       boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
       boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
       boundarySidecarSource: state.boundarySidecarSource,
@@ -9069,13 +12362,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fluidBufferBytes: fluidBytes,
       frontFieldBufferBytes: frontBytes,
       pressureBufferBytes: pressureBytes,
-      majorantBufferBytes: majorantBytes,
       boundarySidecarBufferBytes: boundarySidecarBytes,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
+      analyticEmitterUniformBufferBytes: analyticEmitterInjectionUniformData.byteLength,
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength,
       timing: { ...state.timing },
     };
     return state.simCostLedger;
+  }
+
+  function encodeAnalyticEmitterInjection(encoder) {
+    const dispatch = analyticEmitterDispatch;
+    if (!dispatch.active) {
+      state.analyticEmitterCellVisitsThisFrame = 0;
+      state.analyticEmitterFullGridEquivalentPasses = 0;
+      return false;
+    }
+    if (!analyticEmitterInjectionPipeline || analyticEmitterInjectionBindGroups.length !== 2) {
+      throw new Error('bounded analytic emitter injection pipeline unavailable');
+    }
+    const pass = encoder.beginComputePass({
+      label: `kaminos bounded ${dispatch.family} emitter injection`,
+    });
+    pass.setPipeline(analyticEmitterInjectionPipeline);
+    pass.setBindGroup(0, analyticEmitterInjectionBindGroups[currentFluid]);
+    pass.dispatchWorkgroups(...dispatch.workgroups);
+    pass.end();
+    state.analyticEmitterCellVisitsThisFrame = dispatch.cellCount;
+    state.analyticEmitterFullGridEquivalentPasses = dispatch.cellCount / gridCellCount(gridSize);
+    return true;
   }
 
   function encodeSim(encoder, options = {}) {
@@ -9084,22 +12399,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
     });
     pass.setPipeline(computePipeline);
-    pass.setBindGroup(0, fluidBindGroup());
+    pass.setBindGroup(0, bindGroups[currentFluid]);
     const workgroups = Math.ceil(gridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     pass.end();
     currentFluid = 1 - currentFluid;
     currentFront = 1 - currentFront;
-    currentQuench = 1 - currentQuench;
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
-    encodePressureProjection(encoder);
+    encodeAnalyticEmitterInjection(encoder);
+    const finalTimestampWritten = encodePressureProjection(encoder, {
+      timestampWrites: options.finalTimestampWrites,
+    });
     state.simStepCount += 1;
     updateSimCostLedger();
+    return finalTimestampWritten;
   }
 
-  function encodePressureProjection(encoder) {
+  function encodePressureProjection(encoder, options = {}) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot));
@@ -9109,12 +12427,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       (tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY && (!pressureJacobiTieredLowerPipeline || !pressureJacobiTieredHeroPipeline || !pressureProjectTieredPipeline)) ||
       pressureJacobiBindGroups.length !== 2 ||
       pressureReadBindGroups.length !== 2 ||
-      majorantFrontBindGroups.length !== 2
+      fluidFrontReadBindGroups.length !== 2
     ) {
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
       updateSimCostLedger();
-      return;
+      return false;
     }
     const bonfireProjectionAblation = normalizeVolumeScene(controlsSnapshot.volumeScene) === 'bonfire_plume'
       ? normalizeBonfireAblationValue(controlsSnapshot.bonfireProjection)
@@ -9124,10 +12442,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
       updateSimCostLedger();
-      return;
+      return false;
     }
     const workgroups = Math.ceil(gridSize / 4);
-    const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = majorantFrontBindGroups[currentFluid]) => {
+    const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = fluidFrontReadBindGroups[currentFluid]) => {
       const pass = encoder.beginComputePass({ label });
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, readBindGroup);
@@ -9147,19 +12465,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureJacobiBindGroups[1],
         tierPlan.dispatches[1].workgroupsY,
         'kaminos pressure spatial tier pass 2 lower-plume pressure2',
-        fluidBindGroup()
+        bindGroups[currentFluid]
       );
       dispatchPressureTierPass(
         pressureJacobiTieredHeroPipeline,
         pressureJacobiBindGroups[0],
         tierPlan.dispatches[2].workgroupsY,
         'kaminos pressure spatial tier pass 3 hero-fire-band pressure3',
-        fluidBindGroup()
+        bindGroups[currentFluid]
       );
       {
-        const pass = encoder.beginComputePass({ label: 'kaminos tiered pressure projection pass' });
+        const pass = encoder.beginComputePass({
+          label: 'kaminos tiered pressure projection pass',
+          ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+        });
         pass.setPipeline(pressureProjectTieredPipeline);
-        pass.setBindGroup(0, fluidBindGroup());
+        pass.setBindGroup(0, bindGroups[currentFluid]);
         pass.setBindGroup(2, pressureJacobiBindGroups[1]);
         pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
         pass.end();
@@ -9172,22 +12493,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.frontFieldWriteIndex = 1 - currentFront;
       state.frontFieldProjectionPassthrough = true;
       updateSimCostLedger();
-      return;
+      return true;
     }
     let pressureReadIndex = 0;
     for (let i = 0; i < pressureIterationCount; i += 1) {
       const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi inline-divergence pass ${i + 1}` });
       pass.setPipeline(pressureJacobiPipeline);
-      pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
+      pass.setBindGroup(0, fluidFrontReadBindGroups[currentFluid]);
       pass.setBindGroup(2, pressureJacobiBindGroups[pressureReadIndex]);
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
       pressureReadIndex = 1 - pressureReadIndex;
     }
     {
-      const pass = encoder.beginComputePass({ label: 'kaminos pressure projection pass' });
+      const pass = encoder.beginComputePass({
+        label: 'kaminos pressure projection pass',
+        ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+      });
       pass.setPipeline(pressureProjectPipeline);
-      pass.setBindGroup(0, fluidBindGroup());
+      pass.setBindGroup(0, bindGroups[currentFluid]);
       pass.setBindGroup(2, pressureReadBindGroups[pressureReadIndex]);
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
@@ -9200,31 +12524,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = true;
     updateSimCostLedger();
+    return true;
   }
 
-  function encodeMajorant(encoder, options = {}) {
-    const majorantBuildCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
-    state.majorantCadence = majorantBuildCadence;
-    const force = options.force === true;
-    const shouldBuild = force || !state.majorantBuilt || majorantBuildCadence <= 1 || state.frameCount % majorantBuildCadence === 0;
-    if (!shouldBuild) {
-      state.majorantBuiltThisFrame = false;
-      state.majorantSkippedFrameCount += 1;
-      updateSimCostLedger({ majorantBuiltThisFrame: false });
-      return;
-    }
-    const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
-    pass.setPipeline(majorantComputePipeline);
-    pass.setBindGroup(0, options.readBindGroup || majorantFrontBindGroups[currentFluid]);
-    pass.setBindGroup(1, majorantWriteBindGroup);
-    const workgroups = Math.ceil(majorantGridSize / 4);
-    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
-    pass.end();
-    state.majorantBuilt = true;
-    state.majorantBuiltThisFrame = true;
-    state.majorantLastBuiltFrame = state.frameCount;
-    state.majorantFrameCount += 1;
-    updateSimCostLedger({ majorantBuiltThisFrame: true });
+  function boundarySplatExecutionPlan(options = {}) {
+    const plan = resolveBoundarySplatExecutionPlan({
+      boundarySplatMode: controlsSnapshot.boundarySplatMode,
+      renderComposition: controlsSnapshot.selectiveHeadLiveRenderComposition,
+      boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
+      boundarySidecarView: controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view,
+      volumePresentationMode: volumePresentationModeEffective,
+      appearanceDecompositionMode: appearanceDecompositionModeEffective,
+      boundarySplatFeatureCapture: controlsSnapshot.boundarySplatFeatureCapture,
+      flowKernelDescriptorCapture: controlsSnapshot.flowKernelDescriptorCapture,
+      boundarySplatInstanceConsumer: controlsSnapshot.boundarySplatInstanceConsumer,
+      explicitSplatConsumer: options.explicitSplatConsumer,
+      explicitSidecarConsumer: options.explicitSidecarConsumer,
+    });
+    state.boundarySplatExecutionPlan = plan;
+    return plan;
   }
 
   function fireLightFieldRequested() {
@@ -9491,6 +12809,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function encodeBoundarySidecar(encoder, options = {}) {
     const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
+    const executionPlan = boundarySplatExecutionPlan(options);
     state.boundarySidecarSource = sourceName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
@@ -9506,7 +12825,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return;
     }
     state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
-    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off' || boundarySplatRequested();
+    const shouldBakeBoundarySidecar = executionPlan.sidecarDispatch;
     if (
       !shouldBakeBoundarySidecar ||
       !boundarySidecarBuildPipeline ||
@@ -9536,16 +12855,83 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateSimCostLedger({ boundarySidecarBuiltThisFrame: true });
   }
 
-  function boundarySplatRequested() {
-    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) !== 'off';
+  function boundarySplatRequested(options = {}) {
+    return boundarySplatExecutionPlan(options).splatDispatch;
+  }
+
+  function boundarySplatInstanceConsumerRequested() {
+    return normalizeSimProfileFlag(controlsSnapshot.boundarySplatInstanceConsumer);
   }
 
   function boundarySplatLearnedAttributesRequested() {
-    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'learned';
+    const mode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+    return volumePresentationModeEffective !== 'intrinsic'
+      && !appearanceDecompositionActive()
+      && (mode === 'learned' || mode === 'learned_conserved' || mode === 'world_covariance' || mode === 'kernel_moment_covariance' || mode === 'kernel_moment_full_flame_union');
   }
 
   function boundarySplatFeatureCaptureRequested() {
-    return normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
+    return volumePresentationModeEffective !== 'intrinsic'
+      && !appearanceDecompositionActive()
+      && normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
+  }
+
+  function flowKernelDescriptorCaptureRequested() {
+    return normalizeFlowKernelDescriptorCapture(controlsSnapshot.flowKernelDescriptorCapture);
+  }
+
+  function flowKernelDescriptorRowsRequested() {
+    return flowKernelDescriptorCaptureRequested();
+  }
+
+  function boundarySplatUnionReceipt(counts = {}) {
+    const requested = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'kernel_moment_full_flame_union';
+    return {
+      requestedMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
+      effectiveMode: requested && !state.boundarySplatFallbackReason ? 'kernel_moment_full_flame_union' : (requested ? 'unavailable' : 'off'),
+      selectorAuthorityRequested: requested ? NONRIDGE_LIVE_SELECTOR_AUTHORITY : 'off',
+      selectorAuthorityEffective: requested && !state.boundarySplatFallbackReason ? NONRIDGE_LIVE_SELECTOR_AUTHORITY : 'off',
+      selectorRecipeSha256: requested ? NONRIDGE_LIVE_SELECTOR_RECIPE_SHA256 : null,
+      compositionIdentity: requested ? BOUNDARY_SPLAT_LIVE_UNION_COMPOSITION_IDENTITY : 'off',
+      ridgeLayerIdentity: requested ? BOUNDARY_SPLAT_RIDGE_LAYER_IDENTITY : 'off',
+      nonRidgeLayerIdentity: requested ? BOUNDARY_SPLAT_NONRIDGE_LAYER_IDENTITY : 'off',
+      compositionLaw: requested ? 'sigma_total=sigma_ridge+sigma_nonridge' : 'off',
+      gradientGain: Number(controlsSnapshot.reactionBoundaryGradient ?? 2.60),
+      counts: {
+        ridgeOnly: counts.ridgeOnlyCount ?? state.boundarySplatRidgeOnlyCount,
+        nonRidgeOnly: counts.nonRidgeOnlyCount ?? state.boundarySplatNonRidgeOnlyCount,
+        overlap: counts.overlapCount ?? state.boundarySplatOverlapCount,
+        union: counts.unionCount ?? state.boundarySplatUnionCount,
+      },
+      zeroGradientAdmissionCount: counts.zeroGradientAdmissionCount ?? state.boundarySplatZeroGradientAdmissionCount,
+      stableNativeCellIdSource: requested ? 'boundary-splat-candidate-native-cell-membership-v0:nativeCellIndex' : 'off',
+      fallbackReason: state.boundarySplatFallbackReason,
+      backend: state.backend,
+    };
+  }
+
+  function boundarySplatInstanceConsumerReceipt() {
+    return {
+      identity: 'boundary-splat-full-support-instance-consumer-v0',
+      requested: state.boundarySplatInstanceConsumerRequested,
+      effective: state.boundarySplatInstanceConsumerEffective,
+      descriptorIdentity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
+      allocationIdentity: BOUNDARY_SPLAT_INSTANCE_ALLOCATION_IDENTITY,
+      selectorIdentity: BOUNDARY_SPLAT_PROJECTED_WORK_SELECTOR_IDENTITY,
+      requestedInstanceCount: state.boundarySplatRequestedInstanceCount,
+      effectiveInstanceCount: state.boundarySplatEffectiveInstanceCount,
+      historyDepth: state.boundarySplatHistoryDepth,
+      phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
+      requestedTierGroups: state.boundarySplatRequestedTierGroups,
+      effectiveTierGroups: state.boundarySplatEffectiveTierGroups,
+      projectedDiameterSummary: state.boundarySplatProjectedDiameterSummary,
+      stableNativeCellResidency: state.boundarySplatStableNativeCellResidency,
+      sourceCandidateCount: state.boundarySplatSourceCandidateCount,
+      sourceCompactionCount: state.boundarySplatCompactionCount,
+      renderedInstanceCount: state.boundarySplatInstanceCount,
+      cost: state.boundarySplatInstanceCostReceipt,
+      fallbackReason: state.boundarySplatInstanceConsumerFallbackReason,
+    };
   }
 
   function makeBoundarySplatCopyDisposition(candidateCopyBytes = 0, rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY) {
@@ -9559,6 +12945,108 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveCandidateCopyBytes: candidateCopyBytes,
       renderStorageStrategy: 'single-candidate-storage-buffer-read-after-compute-pass',
     };
+  }
+
+  function writeBoundarySplatInstanceConsumerState() {
+    const requested = boundarySplatInstanceConsumerRequested();
+    const requestedInstanceCount = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances);
+    state.boundarySplatInstanceConsumerRequested = requested;
+    state.boundarySplatRequestedInstanceCount = requestedInstanceCount;
+    const routeRequested = boundarySplatRequested();
+    const buffersAvailable = Boolean(device && boundarySplatInstanceDescriptorBuffer && boundarySplatInstanceTierGroupBuffer);
+    if (!requested || !routeRequested || !buffersAvailable) {
+      state.boundarySplatInstanceConsumerEffective = false;
+      state.boundarySplatInstanceConsumerFallbackReason = !requested
+        ? null
+        : (!routeRequested
+            ? 'boundary-splat-instance-consumer-splat-route-inactive'
+            : 'boundary-splat-instance-consumer-gpu-resources-unavailable');
+      state.boundarySplatEffectiveInstanceCount = 1;
+      state.boundarySplatRequestedTierGroups = [];
+      state.boundarySplatInstanceDescriptors = [];
+      return null;
+    }
+    const descriptors = boundarySplatInstanceLayout(requestedInstanceCount).map((entry, index) => {
+      const transform = { translate: entry.slice(0, 3), scale: entry[3] };
+      return {
+        identity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
+        index,
+        transform,
+        projectedDiameterPx: boundarySplatProjectedInstanceDiameterPx(transform, viewProj.elements, state.width, state.height),
+        phaseSourceIdentity: 'shared-current-control',
+        phaseHistorySlot: 0,
+        historyDepth: BOUNDARY_SPLAT_INSTANCE_HISTORY_DEPTH,
+        historyOffsetFrames: 0,
+      };
+    });
+    const allocation = boundarySplatAllocateInstanceTiers(descriptors);
+    const packedDescriptors = new Float32Array(BOUNDARY_SPLAT_MAX_INSTANCES * 8);
+    for (const descriptor of allocation.descriptors) {
+      const offset = descriptor.renderDescriptorIndex * 8;
+      packedDescriptors.set([
+        ...descriptor.transform.translate,
+        descriptor.transform.scale,
+        descriptor.phaseHistorySlot,
+        BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS.indexOf(descriptor.targetPixels),
+        descriptor.projectedDiameterPx,
+        1,
+      ], offset);
+    }
+    const packedGroups = new Uint32Array(BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT * 8);
+    for (let targetIndex = 0; targetIndex < BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT; targetIndex += 1) {
+      const targetPixels = BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS[targetIndex];
+      const group = allocation.groups.find(entry => entry.targetIndex === targetIndex);
+      packedGroups.set([
+        6, 0, 0, 0,
+        group?.descriptorStart ?? 0,
+        group?.descriptorCount ?? 0,
+        targetPixels,
+        0,
+      ], targetIndex * 8);
+    }
+    device.queue.writeBuffer(boundarySplatInstanceDescriptorBuffer, 0, packedDescriptors);
+    device.queue.writeBuffer(boundarySplatInstanceTierGroupBuffer, 0, packedGroups);
+    state.boundarySplatInstanceConsumerEffective = true;
+    state.boundarySplatInstanceConsumerFallbackReason = null;
+    state.boundarySplatEffectiveInstanceCount = allocation.descriptors.length;
+    state.boundarySplatRequestedTierGroups = allocation.groups.map(group => ({
+      ...group,
+      selectedCandidateCount: null,
+      renderedInstanceCount: null,
+      countAuthority: 'awaiting-gpu-finalize-readback',
+    }));
+    state.boundarySplatInstanceDescriptors = allocation.descriptors;
+    state.boundarySplatProjectedDiameterSummary = allocation.groups.map(group => {
+      const values = allocation.descriptors
+        .filter(descriptor => descriptor.targetPixels === group.targetPixels)
+        .map(descriptor => descriptor.projectedDiameterPx);
+      return {
+        targetPixels: group.targetPixels,
+        descriptorCount: values.length,
+        min: Math.min(...values),
+        max: Math.max(...values),
+      };
+    });
+    state.boundarySplatStableNativeCellResidency = {
+      authority: BOUNDARY_SPLAT_INSTANCE_RESIDENCY_IDENTITY,
+      stableOrderIdentity: BOUNDARY_SPLAT_INSTANCE_STABLE_ORDER_IDENTITY,
+      targetPixels: [...BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS],
+      nestedSetValidated: null,
+      populationStateId: null,
+      status: 'awaiting-gpu-residency-audit',
+    };
+    state.boundarySplatInstanceCostReceipt = {
+      identity: 'boundary-splat-full-support-instance-consumer-cost-v0',
+      simulatorCount: 1,
+      sourceCompactionCount: 1,
+      addedSimulationPasses: 0,
+      addedCompactionPasses: 0,
+      candidateCopyBytes: 0,
+      tierSetupAuthority: 'cpu-descriptor-pack-plus-gpu-finalize-v0',
+      requestedInstanceCount,
+      requestedTargetPixels: [...BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS],
+    };
+    return allocation;
   }
 
   function makeBoundarySplatStage(status, ms = null, extra = {}) {
@@ -9608,20 +13096,412 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return profile;
   }
 
+  function isFloat32ArrayView(value) {
+    return ArrayBuffer.isView(value)
+      && value.BYTES_PER_ELEMENT === Float32Array.BYTES_PER_ELEMENT
+      && Object.prototype.toString.call(value) === '[object Float32Array]';
+  }
+
+  function uploadPersistentSparseCohortGpuRows(rows) {
+    if (!boundarySplatBuffer || !isFloat32ArrayView(rows)) {
+      throw new Error('persistent-cohort-source-substitution:upload-buffer-or-rows-unavailable');
+    }
+    const uploadBytes = new Uint8Array(rows.buffer, rows.byteOffset, rows.byteLength);
+    const chunkBytes = 8 * 1024 * 1024;
+    for (let offset = 0; offset < uploadBytes.byteLength; offset += chunkBytes) {
+      const length = Math.min(chunkBytes, uploadBytes.byteLength - offset);
+      device.queue.writeBuffer(boundarySplatBuffer, offset, uploadBytes, offset, length);
+    }
+  }
+
+  function uploadFourArmHeldStateResidualGrid(residualGrid) {
+    if (!device || !fourArmHeldStateResidualMarchPipelines[0] || !fourArmHeldStateResidualParamsBuffer) {
+      throw new Error('four-arm-held-state:residual-march-admission:gpu-route-unavailable');
+    }
+    const gridSize = Number(residualGrid?.gridSize);
+    const raySteps = Number(residualGrid?.raySteps);
+    const data = residualGrid?.data;
+    if (!Number.isInteger(gridSize) || gridSize !== 16 || raySteps !== 64) {
+      throw new Error(`four-arm-held-state:residual-march-admission:grid-config-drift:${gridSize}:${raySteps}`);
+    }
+    if (!isFloat32ArrayView(data) || data.length !== gridSize ** 3 * 4) {
+      throw new Error(`four-arm-held-state:residual-march-admission:grid-payload-drift:${data?.length || 0}:${gridSize ** 3 * 4}`);
+    }
+    fourArmHeldStateResidualTexture?.destroy();
+    fourArmHeldStateResidualTexture = device.createTexture({
+      label: 'kaminos four-arm positive-complement coarse volume',
+      size: { width: gridSize, height: gridSize, depthOrArrayLayers: gridSize },
+      dimension: '3d',
+      format: 'rgba32float',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture(
+      { texture: fourArmHeldStateResidualTexture },
+      data,
+      { bytesPerRow: gridSize * 16, rowsPerImage: gridSize },
+      { width: gridSize, height: gridSize, depthOrArrayLayers: gridSize },
+    );
+    fourArmHeldStateResidualBindGroup = device.createBindGroup({
+      label: 'kaminos four-arm positive-complement residual march bind group',
+      layout: fourArmHeldStateResidualBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: fourArmHeldStateResidualParamsBuffer } },
+        { binding: 1, resource: fourArmHeldStateResidualTexture.createView({ dimension: '3d' }) },
+      ],
+    });
+    fourArmHeldStateResidualGrid = {
+      ...residualGrid,
+      data,
+      gpuUploadComplete: true,
+    };
+  }
+
+  function encodeFourArmHeldStateResidualMarch(encoder, options = {}) {
+    if (!fourArmHeldStateResidualGrid || !fourArmHeldStateResidualTexture || !fourArmHeldStateResidualBindGroup) return false;
+    const params = new Float32Array(20);
+    params.set(invViewProj.elements, 0);
+    params[16] = fourArmHeldStateResidualGrid.gridSize;
+    params[17] = fourArmHeldStateResidualGrid.raySteps;
+    device.queue.writeBuffer(fourArmHeldStateResidualParamsBuffer, 0, params);
+    for (let binIndex = 0; binIndex < BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS; binIndex += 1) {
+      const timestampWrites = { querySet: options.querySet };
+      if (binIndex === 0 && Number.isInteger(options.beginningOfPassWriteIndex)) {
+        timestampWrites.beginningOfPassWriteIndex = options.beginningOfPassWriteIndex;
+      }
+      if (binIndex === BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1
+        && Number.isInteger(options.endOfPassWriteIndex)) {
+        timestampWrites.endOfPassWriteIndex = options.endOfPassWriteIndex;
+      }
+      const hasTimestampWrites = Number.isInteger(timestampWrites.beginningOfPassWriteIndex)
+        || Number.isInteger(timestampWrites.endOfPassWriteIndex);
+      const pass = encoder.beginRenderPass({
+        label: `kaminos four-arm positive-complement residual march bin ${binIndex}`,
+        ...(hasTimestampWrites ? { timestampWrites } : {}),
+        colorAttachments: [{
+          view: boundarySplatOpticalTexture.createView({
+            dimension: '2d',
+            baseArrayLayer: binIndex,
+            arrayLayerCount: 1,
+          }),
+          loadOp: 'load',
+          storeOp: 'store',
+        }],
+      });
+      pass.setPipeline(fourArmHeldStateResidualMarchPipelines[binIndex]);
+      pass.setBindGroup(0, fourArmHeldStateResidualBindGroup);
+      pass.draw(3);
+      pass.end();
+    }
+    return true;
+  }
+
+  async function applyPersistentSparseCohortGpuState(loadedState = {}) {
+    await ensureGpu();
+    const packed = packPersistentSparseCohortGpuRows(loadedState);
+    const rowCount = packed.receipt.encodedRowCount;
+    if (rowCount > gridCellCount(gridSize)) {
+      throw new Error(`persistent sparse cohort GPU consumer row count exceeds native grid:${rowCount}:${gridCellCount(gridSize)}`);
+    }
+    if (rowCount > boundarySplatCapacity) {
+      growBoundarySplatCapacity(rowCount, {
+        descriptorRowsRequested: false,
+        featureCaptureRequested: false,
+      });
+    }
+    if (!boundarySplatBuffer || boundarySplatCapacity < rowCount) {
+      const reason = boundarySplatCapacityAdmissionFailureReason || `capacity=${boundarySplatCapacity}:rows=${rowCount}`;
+      throw new Error(`persistent-cohort-source-substitution:${reason}`);
+    }
+    uploadPersistentSparseCohortGpuRows(packed.rows);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    persistentSparseCohortGpuState = {
+      rows: packed.rows,
+      rowCount,
+      stateId: packed.receipt.stateId,
+      steps: packed.receipt.steps,
+      manifestUrl: packed.receipt.manifestUrl,
+      manifestSha256: packed.receipt.manifestSha256,
+      uploadBytes: packed.receipt.uploadBytes,
+      receipt: { ...packed.receipt },
+      invalidatedReason: null,
+    };
+    state.fullSupportDepositionRequested = FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
+    setBoundarySplatPresentationMode(BOUNDARY_SPLAT_OPTICAL_MODE);
+    state.boundarySplatSourceAuthority = PERSISTENT_COHORT_GPU_SOURCE_AUTHORITY;
+    state.boundarySplatSourceCandidateCount = rowCount;
+    state.boundarySplatCandidateCount = rowCount;
+    state.boundarySplatInstanceCount = rowCount;
+    state.boundarySplatOverflowCount = 0;
+    state.boundarySplatCountAuthority = 'authenticated-persistent-cohort-upload-v0';
+    state.persistentSparseCohortGpuReceipt = {
+      ...packed.receipt,
+      gpuUploadComplete: true,
+      rendererRequested: true,
+      rendererEncoded: false,
+      rendererApplied: false,
+      fallbackReason: null,
+    };
+    return { ...state.persistentSparseCohortGpuReceipt };
+  }
+
+  async function applyFourArmHeldStateApplication({ application, gpuRows, residualGrid = application?.residual?.grid } = {}) {
+    await ensureGpu();
+    if (application?.schema !== 'kaminos.integration.four-arm-held-state-application.v0'
+      || application?.status !== 'admitted') {
+      throw new Error('four-arm-held-state:runtime-admission:application-not-admitted');
+    }
+    if (application.requestedStateId !== application.effectiveStateId) {
+      throw new Error('four-arm-held-state:runtime-admission:state-substitution');
+    }
+    if (application.requestedArmId !== application.effectiveArmId) {
+      throw new Error('four-arm-held-state:runtime-admission:arm-substitution');
+    }
+    if (application.requestedRoute !== ROUTE_IDENTITY
+      || application.effectiveRoute !== ROUTE_IDENTITY
+      || application.fallbackReason !== null) {
+      throw new Error('four-arm-held-state:runtime-admission:route-substitution');
+    }
+    if (application.selectionRerun !== false || application.residualAwareRetargeting !== false) {
+      throw new Error('four-arm-held-state:runtime-admission:selector-or-residual-retargeting');
+    }
+    if (application.recurrenceIdentity !== 'ordered-emission-extinction-shared-transmittance-v0'
+      || application.recurrenceCount !== 1
+      || application.targetFormat !== BOUNDARY_SPLAT_HDR_TARGET_FORMAT) {
+      throw new Error('four-arm-held-state:runtime-admission:optical-recurrence-drift');
+    }
+    if (!isFloat32ArrayView(gpuRows)) {
+      throw new Error('four-arm-held-state:runtime-admission:gpu-rows-missing');
+    }
+    const rowCount = application.splatCandidateCount;
+    if (gpuRows.length !== rowCount * 24) {
+      throw new Error(`four-arm-held-state:runtime-admission:gpu-row-count-drift:${gpuRows.length}:${rowCount * 24}`);
+    }
+    if (application.residual?.enabled) uploadFourArmHeldStateResidualGrid(residualGrid);
+    else {
+      fourArmHeldStateResidualGrid = null;
+      fourArmHeldStateResidualBindGroup = null;
+      fourArmHeldStateResidualTexture?.destroy();
+      fourArmHeldStateResidualTexture = null;
+    }
+    if (rowCount > gridCellCount(gridSize)) {
+      throw new Error(`four-arm-held-state:runtime-admission:row-count-exceeds-native-grid:${rowCount}:${gridCellCount(gridSize)}`);
+    }
+    if (rowCount > boundarySplatCapacity) {
+      growBoundarySplatCapacity(rowCount, {
+        descriptorRowsRequested: false,
+        featureCaptureRequested: false,
+      });
+    }
+    if (!boundarySplatBuffer || boundarySplatCapacity < rowCount) {
+      throw new Error(`four-arm-held-state:runtime-admission:gpu-capacity-unavailable:${boundarySplatCapacity}:${rowCount}`);
+    }
+    uploadPersistentSparseCohortGpuRows(gpuRows);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const receipt = {
+      identity: 'four-arm-held-state-gpu-upload-v0',
+      status: 'complete',
+      stateId: application.effectiveStateId,
+      steps: application.sourceSimStepCount,
+      armId: application.effectiveArmId,
+      encodedRowCount: rowCount,
+      rowStrideFloats: 24,
+      uploadBytes: gpuRows.byteLength,
+      rowCap: null,
+      droppedRowCount: 0,
+      selectorRerun: false,
+      residualAwareRetargeting: false,
+      rendererRequested: true,
+      rendererEncoded: false,
+      rendererApplied: false,
+      fallbackReason: null,
+    };
+    persistentSparseCohortGpuState = {
+      rows: gpuRows,
+      rowCount,
+      stateId: application.effectiveStateId,
+      steps: application.sourceSimStepCount,
+      manifestUrl: null,
+      manifestSha256: null,
+      uploadBytes: gpuRows.byteLength,
+      receipt: { ...receipt },
+      invalidatedReason: null,
+    };
+    fourArmHeldStateRuntimeState = {
+      application: structuredClone(application),
+      uploadReceipt: { ...receipt },
+      appliedAtFrameCount: state.frameCount,
+      appliedAtSimStepCount: state.simStepCount,
+      residualGrid: application.residual?.enabled ? {
+        schema: residualGrid.schema,
+        status: residualGrid.status,
+        stateId: residualGrid.stateId,
+        sourceRowCount: residualGrid.sourceRowCount,
+        gridSize: residualGrid.gridSize,
+        gridScale: residualGrid.gridScale,
+        raySteps: residualGrid.raySteps,
+        dataSha256: residualGrid.dataSha256,
+        depositionIdentity: residualGrid.depositionIdentity,
+        gpuUploadComplete: true,
+      } : null,
+    };
+    state.fullSupportDepositionRequested = FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
+    setBoundarySplatPresentationMode(BOUNDARY_SPLAT_OPTICAL_MODE);
+    state.boundarySplatSourceAuthority = 'authenticated-four-arm-held-state-gpu-source-v0';
+    state.boundarySplatSourceCandidateCount = rowCount;
+    state.boundarySplatCandidateCount = rowCount;
+    state.boundarySplatInstanceCount = rowCount;
+    state.boundarySplatOverflowCount = 0;
+    state.boundarySplatCountAuthority = 'authenticated-four-arm-held-state-upload-v0';
+    state.persistentSparseCohortGpuReceipt = { ...receipt };
+    state.fourArmHeldStateRuntimeReceipt = {
+      schema: 'kaminos.integration.four-arm-held-state-runtime.v0',
+      status: 'applied',
+      requestedStateId: application.requestedStateId,
+      effectiveStateId: application.effectiveStateId,
+      requestedArmId: application.requestedArmId,
+      effectiveArmId: application.effectiveArmId,
+      requestedRoute: application.requestedRoute,
+      effectiveRoute: application.effectiveRoute,
+      recurrenceIdentity: application.recurrenceIdentity,
+      recurrenceCount: application.recurrenceCount,
+      selectionRerun: false,
+      residualAwareRetargeting: false,
+      rowCap: null,
+      fallbackReason: null,
+      uploadReceipt: { ...receipt },
+      residual: application.residual?.enabled ? {
+        enabled: true,
+        mode: application.residual.mode,
+        gridSize: residualGrid.gridSize,
+        raySteps: residualGrid.raySteps,
+        dataSha256: residualGrid.dataSha256,
+        gpuUploadComplete: true,
+      } : { enabled: false, mode: 'disabled-by-arm-policy-v0' },
+    };
+    return structuredClone(state.fourArmHeldStateRuntimeReceipt);
+  }
+
+  function clearPersistentSparseCohortGpuState(reason = 'operator-cleared') {
+    const previous = persistentSparseCohortGpuState;
+    persistentSparseCohortGpuState = null;
+    fourArmHeldStateRuntimeState = null;
+    fourArmHeldStateResidualGrid = null;
+    fourArmHeldStateResidualBindGroup = null;
+    fourArmHeldStateResidualTexture?.destroy();
+    fourArmHeldStateResidualTexture = null;
+    state.boundarySplatSourceAuthority = BOUNDARY_SPLAT_SOURCE_AUTHORITY;
+    state.fullSupportDepositionRequested = FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY;
+      state.persistentSparseCohortGpuReceipt = previous ? {
+      ...previous.receipt,
+      status: 'cleared',
+      gpuUploadComplete: true,
+      rendererRequested: false,
+      rendererEncoded: false,
+      rendererApplied: false,
+      fallbackReason: reason,
+    } : null;
+    return state.persistentSparseCohortGpuReceipt ? { ...state.persistentSparseCohortGpuReceipt } : null;
+  }
+
   function encodeBoundarySplats(encoder, hooks = {}) {
     state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
     state.boundarySplatRendererIdentity = boundarySplatEffectiveRendererIdentity(state.boundarySplatMode);
     state.boundarySplatAttributeModelIdentity = boundarySplatEffectiveAttributeModelIdentity(state.boundarySplatMode);
+    state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
     state.boundarySplatFeatureCaptureRequested = boundarySplatFeatureCaptureRequested();
-    state.boundarySplatSourceAuthority = state.boundarySidecarSource === 'override'
-      && state.boundarySidecarOverrideReceipt?.status === 'applied'
-      ? EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY
-      : BOUNDARY_SPLAT_SOURCE_AUTHORITY;
+    state.flowKernelDescriptorCaptureRequested = flowKernelDescriptorCaptureRequested();
+    state.boundarySplatSourceAuthority = persistentSparseCohortGpuState
+      ? PERSISTENT_COHORT_GPU_SOURCE_AUTHORITY
+      : state.boundarySidecarSource === 'override'
+        && state.boundarySidecarOverrideReceipt?.status === 'applied'
+        ? EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY
+        : BOUNDARY_SPLAT_SOURCE_AUTHORITY;
     state.boundarySplatFeatureCaptureEffective = state.boundarySplatFeatureCaptureRequested
       && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
-    if (!boundarySplatRequested()) {
-      state.boundarySplatFallbackReason = null;
+    state.flowKernelDescriptorCaptureEffective = state.flowKernelDescriptorCaptureRequested
+      && flowKernelDescriptorBufferCapacity === boundarySplatCapacity;
+    const defaultDescriptorSource = {
+      role: 'truthHigh',
+      fluid: fluidBuffers[currentFluid],
+      front: frontBuffers[currentFront],
+    };
+    boundarySplatDescriptorSource = hooks.descriptorSource || (hooks.computeBindGroup ? null : defaultDescriptorSource);
+    if (!boundarySplatRequested({ explicitSplatConsumer: hooks.explicitSplatConsumer })) {
+      if (normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'off') {
+        boundarySplatCapacityAdmissionFailureReason = null;
+        state.boundarySplatFallbackReason = null;
+      }
+      state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
       return false;
+    }
+    if (boundarySplatCapacityAdmissionFailureReason) {
+      state.boundarySplatFallbackReason = boundarySplatCapacityAdmissionFailureReason;
+      state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
+      return false;
+    }
+    if (persistentSparseCohortGpuState) {
+      const rowCount = persistentSparseCohortGpuState.rowCount;
+      if (persistentSparseCohortGpuState.invalidatedReason) {
+        state.boundarySplatFallbackReason = `persistent-cohort-source-substitution:${persistentSparseCohortGpuState.invalidatedReason}`;
+        state.persistentSparseCohortGpuReceipt = {
+          ...persistentSparseCohortGpuState.receipt,
+          rendererRequested: true,
+          rendererEncoded: false,
+          rendererApplied: false,
+          fallbackReason: state.boundarySplatFallbackReason,
+        };
+        return false;
+      }
+      if (
+        !boundarySplatRenderPipeline
+        || !boundarySplatDrawBuffer
+        || !boundarySplatIndirectBuffer
+        || !boundarySplatBilinearIndirectBuffer
+        || !boundarySplatRenderBindGroup
+        || boundarySplatCapacity < rowCount
+      ) {
+        state.boundarySplatFallbackReason = 'persistent-cohort-source-substitution:gpu-route-unavailable';
+        state.persistentSparseCohortGpuReceipt = {
+          ...persistentSparseCohortGpuState.receipt,
+          rendererRequested: true,
+          rendererEncoded: false,
+          rendererApplied: false,
+          fallbackReason: state.boundarySplatFallbackReason,
+        };
+        return false;
+      }
+      device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([
+        6, rowCount, 0, 0, rowCount, 0, boundarySplatCapacity, 0,
+        0, 0, 0, rowCount, 0, rowCount, 0, 0,
+        0, 1, 1, 0,
+      ]));
+      device.queue.writeBuffer(boundarySplatIndirectBuffer, 0, new Uint32Array([6, rowCount, 0, 0]));
+      device.queue.writeBuffer(boundarySplatBilinearIndirectBuffer, 0, new Uint32Array([
+        1,
+        rowCount * PERSISTENT_COHORT_CHARGED_DEPOSITS_PER_CANDIDATE,
+        0,
+        0,
+      ]));
+      state.boundarySplatSourceCandidateCount = rowCount;
+      state.boundarySplatCandidateCount = rowCount;
+      state.boundarySplatInstanceCount = rowCount;
+      state.boundarySplatOverflowCount = 0;
+      state.boundarySplatCompactionCount = 0;
+      state.boundarySplatCopyBytesThisFrame = 0;
+      state.boundarySplatFallbackReason = null;
+      state.persistentSparseCohortGpuReceipt = {
+        ...persistentSparseCohortGpuState.receipt,
+        gpuUploadComplete: true,
+        rendererRequested: true,
+        rendererEncoded: true,
+        rendererApplied: false,
+        encodedPasses: ['persistent-cohort-indirect-setup-v0'],
+        fallbackReason: null,
+      };
+      hooks.afterCompaction?.();
+      hooks.afterCandidateCopy?.();
+      hooks.afterIndirectSetup?.();
+      return true;
     }
     if (
       !state.boundarySidecarBuiltThisFrame
@@ -9630,16 +13510,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatRenderPipeline
       || !boundarySplatDrawBuffer
       || !boundarySplatIndirectBuffer
+      || !boundarySplatBilinearIndirectBuffer
       || boundarySplatComputeBindGroups.length !== 2
       || !boundarySplatRenderBindGroup
     ) {
       state.boundarySplatFallbackReason = !state.boundarySidecarBuiltThisFrame
         ? 'sidecar-not-built-this-frame'
         : 'boundary-splat-gpu-route-unavailable';
+      state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
       return false;
     }
-    device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([6, 0, 0, 0, 0, 0, boundarySplatCapacity, 0]));
-    const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
+    const requestedInstanceCount = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances);
+    device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([
+      6, 0, 0, 0, 0, 0, boundarySplatCapacity, 0,
+      0, 0, 0, 0, 0, 0, 0, 0,
+      0, state.boundarySplatInstanceConsumerEffective ? requestedInstanceCount : 1, 0, 0,
+    ]));
+    device.queue.writeBuffer(boundarySplatBilinearIndirectBuffer, 0, new Uint32Array([1, 0, 0, 0]));
+    const compactPass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass`,
+      ...(hooks.compactTimestampWrites ? { timestampWrites: hooks.compactTimestampWrites } : {}),
+    });
     compactPass.setPipeline(boundarySplatCompactPipeline);
     const computeBindGroup = hooks.computeBindGroup || boundarySplatComputeBindGroups[currentFluid];
     compactPass.setBindGroup(0, computeBindGroup);
@@ -9661,34 +13552,309 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatIndirectBuffer, 0, 16);
     hooks.afterIndirectSetup?.();
     state.boundarySplatFallbackReason = null;
+    state.boundarySplatUnionReceipt = boundarySplatUnionReceipt();
     return true;
+  }
+
+  function resolveBoundarySplatBilinearPipeline(targetPipeline) {
+    if (targetPipeline === boundarySplatRenderPipeline) return boundarySplatBilinearRenderPipeline;
+    if (targetPipeline === boundarySplatReadbackPipeline) return boundarySplatBilinearReadbackPipeline;
+    if (targetPipeline === boundarySplatHdrPipeline) return boundarySplatBilinearHdrPipeline;
+    const opticalIndex = boundarySplatOpticalPipelines.indexOf(targetPipeline);
+    if (opticalIndex >= 0) return boundarySplatBilinearOpticalPipelines[opticalIndex] || null;
+    return null;
+  }
+
+  function appendPersistentCohortPassIdentity(passIdentities, identity) {
+    const next = Array.isArray(passIdentities) ? [...passIdentities] : [];
+    if (identity && !next.includes(identity)) next.push(identity);
+    return next;
   }
 
   function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline, options = {}) {
     if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
+    const bilinear = state.fullSupportDepositionEffective === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY;
+    const effectivePipeline = bilinear ? resolveBoundarySplatBilinearPipeline(targetPipeline) : targetPipeline;
+    const indirectBuffer = bilinear ? boundarySplatBilinearIndirectBuffer : boundarySplatIndirectBuffer;
+    if (!effectivePipeline || !indirectBuffer) return false;
     const loadOp = options.loadOp === 'load' ? 'load' : 'clear';
+    const clearValue = options.clearValue || { r: 0.004, g: 0.005, b: 0.006, a: 1 };
     const pass = encoder.beginRenderPass({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} canvas pass`,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
       colorAttachments: [{
         view,
-        clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+        clearValue,
         loadOp,
         storeOp: 'store',
       }],
+      ...(options.depthView ? {
+        depthStencilAttachment: {
+          view: options.depthView,
+          depthLoadOp: 'load',
+          depthStoreOp: 'store',
+        },
+      } : {}),
     });
-    pass.setPipeline(targetPipeline);
+    pass.setPipeline(effectivePipeline);
     pass.setBindGroup(0, boundarySplatRenderBindGroup);
-    pass.drawIndirect(boundarySplatIndirectBuffer, 0);
+    pass.drawIndirect(indirectBuffer, 0);
     pass.end();
-    state.boundarySplatFrameCount += 1;
-    state.volumeReconstructionStyle = state.boundarySplatRendererIdentity;
+    const depositsPerCandidate = persistentSparseCohortGpuState
+      ? PERSISTENT_COHORT_CHARGED_DEPOSITS_PER_CANDIDATE
+      : FULL_SUPPORT_BILINEAR_DEPOSITS_PER_CANDIDATE;
+    if (persistentSparseCohortGpuState) {
+      const renderPassIdentity = String(effectivePipeline?.label || 'boundary-splat-render-pass');
+      let encodedPasses = state.persistentSparseCohortGpuReceipt?.encodedPasses || ['persistent-cohort-indirect-setup-v0'];
+      encodedPasses = appendPersistentCohortPassIdentity(encodedPasses, renderPassIdentity);
+      let appliedPasses = state.persistentSparseCohortGpuReceipt?.appliedPasses || [];
+      appliedPasses = appendPersistentCohortPassIdentity(appliedPasses, 'persistent-cohort-indirect-setup-v0');
+      appliedPasses = appendPersistentCohortPassIdentity(appliedPasses, 'persistent-cohort-top-three-charged-deposition-v0');
+      appliedPasses = appendPersistentCohortPassIdentity(appliedPasses, renderPassIdentity);
+      state.persistentSparseCohortGpuReceipt = {
+        ...persistentSparseCohortGpuState.receipt,
+        gpuUploadComplete: true,
+        rendererRequested: true,
+        rendererEncoded: true,
+        rendererApplied: true,
+        encodedPasses,
+        appliedPasses,
+        appliedCandidateCount: persistentSparseCohortGpuState.rowCount,
+        appliedDepositCount: persistentSparseCohortGpuState.rowCount * depositsPerCandidate,
+        fallbackReason: null,
+      };
+      persistentSparseCohortGpuState.receipt = { ...state.persistentSparseCohortGpuReceipt };
+    }
+    if (options.recordFrame !== false) {
+      state.boundarySplatFrameCount += 1;
+      state.fullSupportSourceCandidateCount = state.boundarySplatInstanceCount;
+      state.fullSupportRasterDepositCount = bilinear && Number.isInteger(state.boundarySplatInstanceCount)
+        ? state.boundarySplatInstanceCount * depositsPerCandidate
+        : state.boundarySplatInstanceCount;
+      state.volumeReconstructionStyle = state.boundarySplatRendererIdentity;
+    }
     return true;
   }
 
-  function encodeBoundarySplatTelemetry(encoder, force = false) {
+  function encodeBoundarySplatMatchedPresentation(encoder, targetView, targetPipeline, options = {}) {
+    if (options.loadOp === 'load') {
+      boundarySplatPresentationModeFallbackReason = 'matched-presentation-requires-splat-only-target';
+      state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
+      state.boundarySplatPresentationReceipt = makeBoundarySplatPresentationReceipt({
+        requestedRaw: boundarySplatPresentationModeRequestedRaw,
+        requested: boundarySplatPresentationModeRequested,
+        effective: boundarySplatPresentationModeEffective,
+        fallbackReason: boundarySplatPresentationModeFallbackReason,
+      });
+      return false;
+    }
+    if (!boundarySplatHdrPipeline || !targetPipeline) {
+      boundarySplatPresentationModeFallbackReason = 'boundary-splat-hdr-presentation-route-unavailable';
+      state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
+      return false;
+    }
+    ensureBoundarySplatHdrTexture();
+    const accumulated = encodeBoundarySplatDraw(
+      encoder,
+      boundarySplatHdrTexture.createView(),
+      boundarySplatHdrPipeline,
+      {
+        loadOp: 'clear',
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        ...(options.timestampWrites?.querySet ? {
+          timestampWrites: {
+            querySet: options.timestampWrites.querySet,
+            beginningOfPassWriteIndex: options.timestampWrites.beginningOfPassWriteIndex,
+          },
+        } : {}),
+      },
+    );
+    if (!accumulated) return false;
+    const resolveBindGroup = device.createBindGroup({
+      label: `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} bind group`,
+      layout: targetPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: boundarySplatHdrTexture.createView() },
+        { binding: 1, resource: { buffer: volumePresentationControlsBuffer } },
+      ],
+    });
+    const resolvePass = encoder.beginRenderPass({
+      label: `kaminos ${BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY} pass`,
+      ...(options.timestampWrites?.querySet ? {
+        timestampWrites: {
+          querySet: options.timestampWrites.querySet,
+          endOfPassWriteIndex: options.timestampWrites.endOfPassWriteIndex,
+        },
+      } : {}),
+      colorAttachments: [{
+        view: targetView,
+        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    resolvePass.setPipeline(targetPipeline);
+    resolvePass.setBindGroup(0, resolveBindGroup);
+    resolvePass.draw(3);
+    resolvePass.end();
+    boundarySplatPresentationModeFallbackReason = null;
+    state.boundarySplatPresentationModeFallbackReason = null;
+    state.boundarySplatPresentationReceipt = makeBoundarySplatPresentationReceipt({
+      requestedRaw: boundarySplatPresentationModeRequestedRaw,
+      requested: boundarySplatPresentationModeRequested,
+      effective: boundarySplatPresentationModeEffective,
+    });
+    return true;
+  }
+
+  function encodeBoundarySplatOpticalAccumulation(encoder, options = {}) {
+    if (boundarySplatOpticalPipelines.length !== BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS) return false;
+    ensureBoundarySplatOpticalTexture();
+    for (let binIndex = 0; binIndex < BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS; binIndex += 1) {
+      const timestampWrites = {};
+      if (binIndex === 0 && Number.isInteger(options.beginningOfPassWriteIndex)) {
+        timestampWrites.querySet = options.querySet;
+        timestampWrites.beginningOfPassWriteIndex = options.beginningOfPassWriteIndex;
+      }
+      if (binIndex === BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS - 1 && Number.isInteger(options.endOfPassWriteIndex)) {
+        timestampWrites.querySet = options.querySet;
+        timestampWrites.endOfPassWriteIndex = options.endOfPassWriteIndex;
+      }
+      const accumulated = encodeBoundarySplatDraw(
+        encoder,
+        boundarySplatOpticalTexture.createView({
+          dimension: '2d',
+          baseArrayLayer: binIndex,
+          arrayLayerCount: 1,
+        }),
+        boundarySplatOpticalPipelines[binIndex],
+        {
+          loadOp: 'clear',
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          recordFrame: false,
+          ...(timestampWrites.querySet ? { timestampWrites } : {}),
+        },
+      );
+      if (!accumulated) return false;
+    }
+    return true;
+  }
+
+  function encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline, options = {}) {
+    if (!targetPipeline || !boundarySplatOpticalTexture) return false;
+    const resolveEntries = [{
+      binding: 0,
+      resource: boundarySplatOpticalTexture.createView({
+        dimension: '2d-array',
+        baseArrayLayer: 0,
+        arrayLayerCount: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      }),
+    }];
+    if (options.includePresentationControls === true) {
+      resolveEntries.push({
+        binding: 1,
+        resource: { buffer: volumePresentationControlsBuffer },
+      });
+    }
+    const resolveBindGroup = device.createBindGroup({
+      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} bind group`,
+      layout: targetPipeline.getBindGroupLayout(0),
+      entries: resolveEntries,
+    });
+    const resolvePass = encoder.beginRenderPass({
+      label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} pass`,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+      colorAttachments: [{
+        view: targetView,
+        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    resolvePass.setPipeline(targetPipeline);
+    resolvePass.setBindGroup(0, resolveBindGroup);
+    resolvePass.draw(3);
+    resolvePass.end();
+    return true;
+  }
+
+  function encodeBoundarySplatOpticalRecurrence(encoder, targetView, targetPipeline, options = {}) {
+    if (options.loadOp === 'load') {
+      boundarySplatPresentationModeFallbackReason = 'matched-optical-recurrence-requires-splat-only-target';
+      state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
+      state.boundarySplatPresentationReceipt = makeBoundarySplatPresentationReceipt({
+        requestedRaw: boundarySplatPresentationModeRequestedRaw,
+        requested: boundarySplatPresentationModeRequested,
+        effective: boundarySplatPresentationModeEffective,
+        fallbackReason: boundarySplatPresentationModeFallbackReason,
+      });
+      return false;
+    }
+    if (boundarySplatOpticalPipelines.length !== BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS || !targetPipeline) {
+      boundarySplatPresentationModeFallbackReason = 'boundary-splat-optical-recurrence-route-unavailable';
+      state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
+      return false;
+    }
+    if (!encodeBoundarySplatOpticalAccumulation(encoder, options.timestampWrites?.querySet ? {
+      querySet: options.timestampWrites.querySet,
+      beginningOfPassWriteIndex: options.timestampWrites.beginningOfPassWriteIndex,
+    } : {})) return false;
+    if (fourArmHeldStateRuntimeState?.application?.residual?.enabled
+      && !encodeFourArmHeldStateResidualMarch(encoder)) {
+      boundarySplatPresentationModeFallbackReason = 'four-arm-positive-complement-residual-march-unavailable';
+      state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
+      return false;
+    }
+    if (!encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline, {
+      includePresentationControls: options.opticalDepthOrderDiagnostic !== true,
+      ...(options.timestampWrites?.querySet ? {
+        timestampWrites: {
+          querySet: options.timestampWrites.querySet,
+          endOfPassWriteIndex: options.timestampWrites.endOfPassWriteIndex,
+        },
+      } : {}),
+    })) return false;
+    state.boundarySplatFrameCount += 1;
+    state.volumeReconstructionStyle = `${state.boundarySplatRendererIdentity}+${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY}`;
+    boundarySplatPresentationModeFallbackReason = null;
+    state.boundarySplatPresentationModeFallbackReason = null;
+    state.boundarySplatPresentationReceipt = makeBoundarySplatPresentationReceipt({
+      requestedRaw: boundarySplatPresentationModeRequestedRaw,
+      requested: boundarySplatPresentationModeRequested,
+      effective: boundarySplatPresentationModeEffective,
+    });
+    return true;
+  }
+
+  function encodeBoundarySplatPresentation(encoder, targetView, additivePipeline, resolvePipeline, options = {}) {
+    if (boundarySplatPresentationModeEffective === BOUNDARY_SPLAT_OPTICAL_MODE) {
+      const opticalResolvePipeline = options.opticalDepthOrderDiagnostic === true
+        ? boundarySplatOpticalDepthOrderDiagnosticReadbackPipeline
+        : (resolvePipeline === boundarySplatPresentationReadbackPipeline
+          ? boundarySplatOpticalPresentationReadbackPipeline
+          : boundarySplatOpticalPresentationRenderPipeline);
+      return encodeBoundarySplatOpticalRecurrence(encoder, targetView, opticalResolvePipeline, options);
+    }
+    if (boundarySplatPresentationModeEffective === 'matched-presentation-v0') {
+      return encodeBoundarySplatMatchedPresentation(encoder, targetView, resolvePipeline, options);
+    }
+    boundarySplatPresentationModeFallbackReason = null;
+    state.boundarySplatPresentationModeFallbackReason = null;
+    state.boundarySplatPresentationReceipt = makeBoundarySplatPresentationReceipt({
+      requestedRaw: boundarySplatPresentationModeRequestedRaw,
+      requested: boundarySplatPresentationModeRequested,
+      effective: boundarySplatPresentationModeEffective,
+    });
+    return encodeBoundarySplatDraw(encoder, targetView, additivePipeline, options);
+  }
+
+  function encodeBoundarySplatTelemetry(encoder, forceOrOptions = false) {
+    const options = typeof forceOrOptions === 'object' && forceOrOptions !== null
+      ? forceOrOptions
+      : { force: forceOrOptions };
+    const force = options.force === true;
     if (
-      !boundarySplatRequested()
+      !boundarySplatRequested({ explicitSplatConsumer: options.explicitSplatConsumer })
       || state.boundarySplatFallbackReason
       || (!force && state.frameCount % 12 !== 0)
       || boundarySplatTelemetryCopyPending
@@ -9696,8 +13862,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatDrawBuffer
       || !boundarySplatReadbackBuffer
     ) return;
-    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatReadbackBuffer, 0, 32);
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatReadbackBuffer, 0, BOUNDARY_SPLAT_DRAW_STATE_BYTES);
     boundarySplatTelemetryCopyPending = true;
+    boundarySplatTelemetryCopyGeneration = boundarySplatControlGeneration;
   }
 
   function timestampQueriesAvailable() {
@@ -9707,19 +13874,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return typeof probeEncoder.beginComputePass === 'function' && typeof probeEncoder.resolveQuerySet === 'function';
   }
 
-  function encodeBoundarySplatTimestampMarker(encoder, querySet, index, label) {
+  function encodeBoundarySplatTimestampMarker(encoder, querySet, beginningIndex, endIndexOrLabel, optionalLabel = null) {
+    const paired = Number.isInteger(endIndexOrLabel);
+    const label = paired ? optionalLabel : endIndexOrLabel;
+    const timestampWrites = paired
+      ? { querySet, beginningOfPassWriteIndex: beginningIndex, endOfPassWriteIndex: endIndexOrLabel }
+      : { querySet, endOfPassWriteIndex: beginningIndex };
     const pass = encoder.beginComputePass({
       label,
-      timestampWrites: {
-        querySet,
-        endOfPassWriteIndex: index,
-      },
+      timestampWrites,
     });
+    pass.setPipeline(fourArmHeldStateTimestampMarkerPipeline);
+    pass.dispatchWorkgroups(1);
     pass.end();
   }
 
   async function sampleBoundarySplatGpuProfile() {
-    if (!boundarySplatRequested()) {
+    if (!boundarySplatRequested({ explicitSplatConsumer: BOUNDARY_SPLAT_GPU_PROFILE_CONSUMER })) {
       return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
         timestampStatus: 'unsupported',
         reason: 'boundary-splat-route-not-requested',
@@ -9756,24 +13927,31 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ensureFrameTexture();
       device.pushErrorScope('validation');
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
-      const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
-      encodeSim(encoder, {
-        timestampWrites: {
-          querySet,
-          beginningOfPassWriteIndex: 0,
-        },
+      const warmupEndpointWritten = encodeSim(encoder, {
+        finalTimestampWrites: { querySet, endOfPassWriteIndex: 0 },
       });
-      writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
+      const measuredEndpointWritten = encodeSim(encoder, {
+        finalTimestampWrites: { querySet, endOfPassWriteIndex: 1 },
+      });
+      if (!warmupEndpointWritten || !measuredEndpointWritten) {
+        throw new Error('simulation-final-timestamp-unavailable');
+      }
       encodeBoundarySidecar(encoder, {
+        explicitSidecarConsumer: BOUNDARY_SPLAT_GPU_PROFILE_CONSUMER,
         timestampWrites: {
           querySet,
           endOfPassWriteIndex: 2,
         },
       });
       const splatsEncoded = encodeBoundarySplats(encoder, {
-        finalizeTimestampWrites: {
+        explicitSplatConsumer: BOUNDARY_SPLAT_GPU_PROFILE_CONSUMER,
+        compactTimestampWrites: {
           querySet,
           endOfPassWriteIndex: 3,
+        },
+        finalizeTimestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 4,
         },
       });
       if (!splatsEncoded) {
@@ -9782,7 +13960,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
         timestampWrites: {
           querySet,
-          beginningOfPassWriteIndex: 4,
           endOfPassWriteIndex: 5,
         },
       });
@@ -9860,20 +14037,61 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!boundarySplatTelemetryCopyPending || boundarySplatTelemetryMapPending || !boundarySplatReadbackBuffer) return;
     boundarySplatTelemetryCopyPending = false;
     boundarySplatTelemetryMapPending = true;
+    const telemetryGeneration = boundarySplatTelemetryCopyGeneration;
     try {
       await boundarySplatReadbackBuffer.mapAsync(GPUMapMode.READ);
+      if (!boundarySplatTelemetryReceiptApplies({
+        receiptGeneration: telemetryGeneration,
+        currentGeneration: boundarySplatControlGeneration,
+      })) {
+        boundarySplatReadbackBuffer.unmap();
+        return;
+      }
       const drawState = new Uint32Array(boundarySplatReadbackBuffer.getMappedRange());
       state.boundarySplatInstanceCount = drawState[1];
       const candidateCount = drawState[4];
       const overflowCount = drawState[5];
       state.boundarySplatCandidateCount = candidateCount;
       state.boundarySplatOverflowCount = overflowCount;
+      state.boundarySplatRidgeOnlyCount = drawState[8];
+      state.boundarySplatNonRidgeOnlyCount = drawState[9];
+      state.boundarySplatOverlapCount = drawState[10];
+      state.boundarySplatUnionCount = drawState[11];
+      state.boundarySplatZeroGradientAdmissionCount = drawState[12];
+      state.boundarySplatSourceCandidateCount = drawState[13];
+      state.boundarySplatEffectiveTierGroups = BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS.map((targetPixels, targetIndex) => {
+        const selectedCandidateCount = drawState[14 + targetIndex];
+        const requested = state.boundarySplatRequestedTierGroups.find(group => group.targetIndex === targetIndex);
+        return {
+          targetIndex,
+          targetPixels,
+          descriptorStart: requested?.descriptorStart ?? 0,
+          descriptorCount: requested?.descriptorCount ?? 0,
+          selectedCandidateCount,
+          renderedInstanceCount: selectedCandidateCount * (requested?.descriptorCount ?? 0),
+          countAuthority: 'gpu-finalize-async-readback',
+        };
+      });
+      state.boundarySplatEffectiveInstanceCount = drawState[18];
+      state.boundarySplatCompactionCount = drawState[19];
+      state.boundarySplatUnionReceipt = boundarySplatUnionReceipt({
+        ridgeOnlyCount: drawState[8],
+        nonRidgeOnlyCount: drawState[9],
+        overlapCount: drawState[10],
+        unionCount: drawState[11],
+        zeroGradientAdmissionCount: drawState[12],
+      });
       boundarySplatReadbackBuffer.unmap();
       if (overflowCount > 0) growBoundarySplatCapacity(candidateCount);
     } catch (error) {
-      state.boundarySplatCandidateCount = null;
-      state.boundarySplatOverflowCount = null;
-      state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
+      if (boundarySplatTelemetryReceiptApplies({
+        receiptGeneration: telemetryGeneration,
+        currentGeneration: boundarySplatControlGeneration,
+      })) {
+        state.boundarySplatCandidateCount = null;
+        state.boundarySplatOverflowCount = null;
+        state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
+      }
     } finally {
       boundarySplatTelemetryMapPending = false;
     }
@@ -9884,26 +14102,195 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     const readback = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness draw-state readback`,
-      size: 32,
+      size: BOUNDARY_SPLAT_DRAW_STATE_BYTES,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
+    const tierReadback = state.boundarySplatInstanceConsumerEffective && boundarySplatInstanceTierGroupBuffer
+      ? device.createBuffer({
+          label: `kaminos ${BOUNDARY_SPLAT_INSTANCE_ALLOCATION_IDENTITY} witness readback`,
+          size: BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT * BOUNDARY_SPLAT_INSTANCE_TIER_GROUP_STRIDE_BYTES,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        })
+      : null;
     const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness draw-state encoder` });
-    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, readback, 0, 32);
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, readback, 0, BOUNDARY_SPLAT_DRAW_STATE_BYTES);
+    if (tierReadback) {
+      encoder.copyBufferToBuffer(
+        boundarySplatInstanceTierGroupBuffer,
+        0,
+        tierReadback,
+        0,
+        BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT * BOUNDARY_SPLAT_INSTANCE_TIER_GROUP_STRIDE_BYTES,
+      );
+    }
     device.queue.submit([encoder.finish()]);
     await readback.mapAsync(GPUMapMode.READ);
+    if (tierReadback) await tierReadback.mapAsync(GPUMapMode.READ);
     const drawState = new Uint32Array(readback.getMappedRange());
+    const tierState = tierReadback ? new Uint32Array(tierReadback.getMappedRange()) : null;
+    const tierGroups = BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS.map((targetPixels, targetIndex) => {
+      const offset = targetIndex * 8;
+      const descriptorCount = tierState?.[offset + 5] ?? 0;
+      const selectedCandidateCount = tierState?.[offset + 7] ?? 0;
+      return {
+        targetIndex,
+        targetPixels,
+        descriptorStart: tierState?.[offset + 4] ?? 0,
+        descriptorCount,
+        selectedCandidateCount,
+        renderedInstanceCount: tierState?.[offset + 1] ?? 0,
+        firstInstance: tierState?.[offset + 3] ?? 0,
+        countAuthority: tierState ? 'gpu-finalize-post-submit-witness-readback' : 'inactive',
+      };
+    });
     const result = {
       instanceCount: drawState[1],
       candidateCount: drawState[4],
       overflowCount: drawState[5],
+      ridgeOnlyCount: drawState[8],
+      nonRidgeOnlyCount: drawState[9],
+      overlapCount: drawState[10],
+      unionCount: drawState[11],
+      zeroGradientAdmissionCount: drawState[12],
+      sourceCandidateCount: drawState[13],
+      selectedCandidateCountByTarget: {
+        6: drawState[14],
+        9: drawState[15],
+        24: drawState[16],
+      },
+      requestedInstanceCount: drawState[17],
+      effectiveInstanceCount: drawState[18],
+      compactionCount: drawState[19],
+      tierGroups,
       authority: 'gpu-indirect-post-submit-witness-readback',
     };
     readback.unmap();
     readback.destroy();
+    tierReadback?.unmap();
+    tierReadback?.destroy();
     state.boundarySplatInstanceCount = result.instanceCount;
     state.boundarySplatCandidateCount = result.candidateCount;
     state.boundarySplatOverflowCount = result.overflowCount;
+    state.boundarySplatRidgeOnlyCount = result.ridgeOnlyCount;
+    state.boundarySplatNonRidgeOnlyCount = result.nonRidgeOnlyCount;
+    state.boundarySplatOverlapCount = result.overlapCount;
+    state.boundarySplatUnionCount = result.unionCount;
+    state.boundarySplatZeroGradientAdmissionCount = result.zeroGradientAdmissionCount;
+    state.boundarySplatSourceCandidateCount = result.sourceCandidateCount;
+    state.boundarySplatEffectiveInstanceCount = result.effectiveInstanceCount;
+    state.boundarySplatCompactionCount = result.compactionCount;
+    state.boundarySplatEffectiveTierGroups = result.tierGroups;
+    state.boundarySplatUnionReceipt = boundarySplatUnionReceipt(result);
     return result;
+  }
+
+  async function sampleBoundarySplatInstanceResidency(options = {}) {
+    if (!state.boundarySplatInstanceConsumerEffective
+      || !boundarySplatBuffer
+      || !boundarySplatInstanceSelectionBuffer) {
+      throw new Error('boundary-splat-instance-residency-audit-unavailable');
+    }
+    const draw = await sampleBoundarySplatDrawState();
+    if (!draw || draw.sourceCandidateCount <= 0 || draw.overflowCount !== 0) {
+      throw new Error(`boundary-splat-instance-residency-source-invalid:${draw?.sourceCandidateCount ?? 'missing'}:${draw?.overflowCount ?? 'missing'}`);
+    }
+    if (!state.lookFreeze) {
+      throw new Error('boundary-splat-instance-residency-requires-look-freeze');
+    }
+    const expectedLookFreezeFrame = Number(options.expectedLookFreezeFrame);
+    const expectedSimStepCount = Number(options.expectedSimStepCount);
+    if (!Number.isInteger(expectedLookFreezeFrame) || !Number.isInteger(expectedSimStepCount)) {
+      throw new Error('boundary-splat-instance-residency-requires-expected-freeze-frame-and-sim-step');
+    }
+    if (expectedLookFreezeFrame !== state.lookFreezeFrame || expectedSimStepCount !== state.simStepCount) {
+      throw new Error(
+        `boundary-splat-instance-residency-state-mismatch:`
+        + `expected=lf${expectedLookFreezeFrame}-s${expectedSimStepCount}:`
+        + `effective=lf${state.lookFreezeFrame}-s${state.simStepCount}`,
+      );
+    }
+    const candidateBytes = await readStorageBufferBytes(
+      boundarySplatBuffer,
+      draw.sourceCandidateCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
+      'kaminos boundary splat instance residency candidate readback',
+    );
+    const selectionBytes = await readStorageBufferBytes(
+      boundarySplatInstanceSelectionBuffer,
+      BOUNDARY_SPLAT_INSTANCE_TARGET_COUNT * boundarySplatCapacity * Uint32Array.BYTES_PER_ELEMENT,
+      'kaminos boundary splat instance residency selection readback',
+    );
+    const candidateValues = new Float32Array(
+      candidateBytes.buffer,
+      candidateBytes.byteOffset,
+      candidateBytes.byteLength / Float32Array.BYTES_PER_ELEMENT,
+    );
+    const candidateStrideFloats = BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT;
+    const candidateNativeCellIds = new Uint32Array(draw.sourceCandidateCount);
+    for (let index = 0; index < draw.sourceCandidateCount; index += 1) {
+      const nativeCellId = candidateValues[index * candidateStrideFloats + 20];
+      if (!Number.isInteger(nativeCellId) || nativeCellId < 0 || nativeCellId >= gridSize ** 3) {
+        throw new Error(`boundary-splat-instance-residency-invalid-native-cell-id:${nativeCellId}:${index}`);
+      }
+      candidateNativeCellIds[index] = nativeCellId;
+    }
+    const candidatePayloadSha256 = await sha256Bytes(candidateBytes);
+    const selectionValues = new Uint32Array(
+      selectionBytes.buffer,
+      selectionBytes.byteOffset,
+      selectionBytes.byteLength / Uint32Array.BYTES_PER_ELEMENT,
+    );
+    const selectedCandidateIndicesByTarget = {};
+    for (const targetPixels of BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS) {
+      const targetIndex = BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS.indexOf(targetPixels);
+      const selectedCount = draw.selectedCandidateCountByTarget[targetPixels];
+      if (!Number.isInteger(selectedCount) || selectedCount < 0 || selectedCount > boundarySplatCapacity) {
+        throw new Error(`boundary-splat-instance-residency-invalid-selected-count:${targetPixels}:${selectedCount}:${boundarySplatCapacity}`);
+      }
+      const start = targetIndex * boundarySplatCapacity;
+      selectedCandidateIndicesByTarget[targetPixels] = selectionValues.slice(start, start + selectedCount);
+    }
+    const audit = auditBoundarySplatNestedResidency({
+      candidateNativeCellIds,
+      selectedCandidateIndicesByTarget,
+    });
+    const cohorts = {};
+    for (const targetPixels of BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS) {
+      const nativeCellIds = Uint32Array.from(audit.nativeCellIdsByTarget[targetPixels]);
+      cohorts[targetPixels] = {
+        targetPixels,
+        count: nativeCellIds.length,
+        stableNativeCellIdSha256: await sha256Bytes(new Uint8Array(nativeCellIds.buffer)),
+      };
+    }
+    const populationStateSha256 = await sha256Bytes(new TextEncoder().encode(JSON.stringify({
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      lookFreezeFrame: state.lookFreezeFrame,
+      sourceCandidateCount: draw.sourceCandidateCount,
+      candidatePayloadSha256,
+    })));
+    const receipt = {
+      authority: BOUNDARY_SPLAT_INSTANCE_RESIDENCY_IDENTITY,
+      stableOrderIdentity: BOUNDARY_SPLAT_INSTANCE_STABLE_ORDER_IDENTITY,
+      targetPixels: [...BOUNDARY_SPLAT_INSTANCE_TARGET_PIXELS],
+      nestedSetValidated: audit.nestedSetValidated,
+      populationStateId: `sha256:${populationStateSha256}`,
+      populationStateSha256,
+      candidatePayloadSha256,
+      sameStateCorrelationId: typeof options.sameStateCaptureId === 'string'
+        ? options.sameStateCaptureId
+        : null,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      lookFreezeFrame: state.lookFreezeFrame,
+      sourceCandidateCount: draw.sourceCandidateCount,
+      cohorts,
+      diagnosticReadbackBytes: candidateBytes.byteLength + selectionBytes.byteLength,
+      runtimeCandidateCopyBytes: 0,
+      status: 'validated',
+    };
+    state.boundarySplatStableNativeCellResidency = receipt;
+    return receipt;
   }
 
   async function sampleBoundarySplatFeatureCapture(instanceCount) {
@@ -9944,6 +14331,909 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  async function sampleBoundarySplatSupervisionCapture(instanceCount) {
+    if (!state.boundarySplatFeatureCaptureRequested) return null;
+    if (!state.boundarySplatFeatureCaptureEffective || !boundarySplatFeatureBuffer || !boundarySplatBuffer) {
+      throw new Error('boundary-splat-supervision-capture-requested-but-unavailable');
+    }
+    if (!Number.isInteger(instanceCount) || instanceCount <= 0) {
+      throw new Error(`boundary-splat-supervision-capture-blank-instance-count:${instanceCount}`);
+    }
+    if (instanceCount > boundarySplatCapacity) {
+      throw new Error(`boundary-splat-supervision-capture-instance-count-exceeds-capacity:${instanceCount}`);
+    }
+    const candidateBytes = instanceCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+    const featureBytes = instanceCount * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+    const candidateReadback = device.createBuffer({
+      label: 'kaminos boundary splat supervision candidate readback',
+      size: candidateBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const featureReadback = device.createBuffer({
+      label: 'kaminos boundary splat supervision feature readback',
+      size: featureBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat supervision readback encoder' });
+      encoder.copyBufferToBuffer(boundarySplatBuffer, 0, candidateReadback, 0, candidateBytes);
+      encoder.copyBufferToBuffer(boundarySplatFeatureBuffer, 0, featureReadback, 0, featureBytes);
+      device.queue.submit([encoder.finish()]);
+      await Promise.all([
+        candidateReadback.mapAsync(GPUMapMode.READ),
+        featureReadback.mapAsync(GPUMapMode.READ),
+      ]);
+      const candidateValues = new Float32Array(candidateReadback.getMappedRange()).slice();
+      const featureValues = new Float32Array(featureReadback.getMappedRange()).slice();
+      candidateReadback.unmap();
+      featureReadback.unmap();
+      return {
+        ...packBoundarySplatSupervisionCandidates(
+          candidateValues,
+          featureValues,
+          instanceCount,
+          boundarySplatCapacity,
+          BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT,
+        ),
+        status: 'captured',
+        requested: true,
+        effective: true,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+        sourceAuthority: state.boundarySplatSourceAuthority,
+        modelIdentity: state.boundarySplatAttributeModelIdentity,
+        countAuthority: 'gpu-indirect-post-submit-witness-readback',
+      };
+    } finally {
+      candidateReadback.destroy();
+      featureReadback.destroy();
+    }
+  }
+
+  async function sampleBoundarySplatFootprintAudit(options = {}) {
+    if (
+      !boundarySplatRequested({ explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER })
+      || !boundarySplatBuffer
+    ) {
+      return { ok: false, reason: 'boundary-splat-footprint-audit-unavailable' };
+    }
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    updateUniforms(fixedNow);
+    const materializeEncoder = device.createCommandEncoder({
+      label: 'kaminos boundary splat footprint audit materialization',
+    });
+    encodeBoundarySidecar(materializeEncoder, {
+      explicitSidecarConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+    });
+    const materialized = encodeBoundarySplats(materializeEncoder, {
+      explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+    });
+    if (!materialized) {
+      throw new Error(`boundary-splat-footprint-audit-materialization-failed:${state.boundarySplatFallbackReason || 'unknown'}`);
+    }
+    encodeBoundarySplatTelemetry(materializeEncoder, {
+      force: true,
+      explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+    });
+    device.queue.submit([materializeEncoder.finish()]);
+    if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    let draw = await sampleBoundarySplatDrawState();
+    if (!draw || draw.candidateCount <= 0 || draw.sourceCandidateCount <= 0 || draw.instanceCount <= 0) {
+      throw new Error('boundary-splat-footprint-audit-blank-candidate-population');
+    }
+    const initialDraw = {
+      ...draw,
+      capacityBeforeRetry: boundarySplatCapacity,
+    };
+    if (draw.overflowCount !== 0 || draw.candidateCount !== draw.sourceCandidateCount) {
+      if (draw.overflowCount <= 0) {
+        throw new Error(`boundary-splat-footprint-audit-partial-source-candidates:${draw.candidateCount}:${draw.sourceCandidateCount}:${draw.overflowCount}`);
+      }
+      if (boundarySplatCapacity < draw.candidateCount
+        && !growBoundarySplatCapacity(draw.candidateCount)) {
+        throw new Error(`boundary-splat-footprint-audit-capacity-growth-failed:${draw.candidateCount}:${draw.sourceCandidateCount}:${draw.overflowCount}:${boundarySplatCapacity}`);
+      }
+      updateUniforms(fixedNow);
+      const retryEncoder = device.createCommandEncoder({
+        label: 'kaminos boundary splat footprint audit capacity retry',
+      });
+      encodeBoundarySidecar(retryEncoder, {
+        explicitSidecarConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+      });
+      encodeBoundarySplats(retryEncoder, {
+        explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+      });
+      encodeBoundarySplatTelemetry(retryEncoder, {
+        force: true,
+        explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+      });
+      device.queue.submit([retryEncoder.finish()]);
+      if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      draw = await sampleBoundarySplatDrawState();
+      if (!draw || draw.overflowCount !== 0 || draw.candidateCount !== draw.sourceCandidateCount) {
+        throw new Error(`boundary-splat-footprint-audit-partial-source-candidates:${draw?.candidateCount ?? 'missing'}:${draw?.sourceCandidateCount ?? 'missing'}:${draw?.overflowCount ?? 'missing'}`);
+      }
+    }
+    const byteLength = draw.sourceCandidateCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+    const readback = device.createBuffer({
+      label: 'kaminos boundary splat footprint audit readback',
+      size: byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat footprint audit encoder' });
+      encoder.copyBufferToBuffer(boundarySplatBuffer, 0, readback, 0, byteLength);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const values = new Float32Array(readback.getMappedRange()).slice();
+      readback.unmap();
+      const strideFloats = BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT;
+      const { positionSupport: identity, attributes } = canonicalizeBoundarySplatAuditRows(
+        values,
+        draw.sourceCandidateCount,
+        strideFloats,
+      );
+      const globalRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
+      const kernelSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
+      const kernelIntegral = Math.PI * (1 - Math.exp(-kernelSharpness)) / kernelSharpness;
+      const energyRatio = (kernelSharpness / 3.4) / Math.max(globalRadius * globalRadius, 0.1225);
+      const energyCompensation = Math.min(2.5, Math.max(0.5, Math.sqrt(energyRatio)));
+      let baseIntegratedAlphaSum = 0;
+      let effectiveIntegratedAlphaSum = 0;
+      const channelMax = {
+        color: [0, 0, 0],
+        opacity: 0,
+        radius: [0, 0],
+        ridgeEmission: 0,
+        ridgeExtinction: 0,
+        nonRidgeEmission: 0,
+        nonRidgeExtinction: 0,
+      };
+      for (let index = 0; index < draw.sourceCandidateCount; index += 1) {
+        const offset = index * strideFloats;
+        const opacity = values[offset + 7];
+        const radiusX = values[offset + 8] * globalRadius;
+        const radiusY = values[offset + 9] * globalRadius;
+        channelMax.color[0] = Math.max(channelMax.color[0], values[offset + 4]);
+        channelMax.color[1] = Math.max(channelMax.color[1], values[offset + 5]);
+        channelMax.color[2] = Math.max(channelMax.color[2], values[offset + 6]);
+        channelMax.opacity = Math.max(channelMax.opacity, opacity);
+        channelMax.radius[0] = Math.max(channelMax.radius[0], radiusX);
+        channelMax.radius[1] = Math.max(channelMax.radius[1], radiusY);
+        channelMax.ridgeEmission = Math.max(channelMax.ridgeEmission, values[offset + 16]);
+        channelMax.ridgeExtinction = Math.max(channelMax.ridgeExtinction, values[offset + 17]);
+        channelMax.nonRidgeEmission = Math.max(channelMax.nonRidgeEmission, values[offset + 18]);
+        channelMax.nonRidgeExtinction = Math.max(channelMax.nonRidgeExtinction, values[offset + 19]);
+        baseIntegratedAlphaSum += values[offset + 15];
+        effectiveIntegratedAlphaSum += radiusX * radiusY * opacity * kernelIntegral * energyCompensation;
+      }
+      const digest = await crypto.subtle.digest('SHA-256', identity);
+      const candidatePayloadSha256 = Array.from(
+        new Uint8Array(digest),
+        value => value.toString(16).padStart(2, '0'),
+      ).join('');
+      const attributeDigest = await crypto.subtle.digest('SHA-256', attributes);
+      const attributePayloadSha256 = Array.from(
+        new Uint8Array(attributeDigest),
+        value => value.toString(16).padStart(2, '0'),
+      ).join('');
+      const unionRequested = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'kernel_moment_full_flame_union';
+      let stableNativeCellIds = null;
+      let stableNativeCellIdRanges = null;
+      let stableNativeCellIdSha256 = null;
+      let decodedMembershipCounts = null;
+      let descriptorFrameMetrics = null;
+      let projectionMetrics = null;
+      if (unionRequested) {
+        const nativeCellIds = new Uint32Array(draw.sourceCandidateCount);
+        const seenNativeCellIds = new Set();
+        let ridgeOnly = 0;
+        let nonRidgeOnly = 0;
+        let overlap = 0;
+        for (let index = 0; index < draw.sourceCandidateCount; index += 1) {
+          const offset = index * strideFloats + 20;
+          const nativeCellId = values[offset];
+          const ridgeAdmitted = values[offset + 1] > 0.5;
+          const nonRidgeAdmitted = values[offset + 2] > 0.5;
+          if (!Number.isInteger(nativeCellId) || nativeCellId < 0 || nativeCellId >= gridSize * gridSize * gridSize) {
+            throw new Error(`boundary-splat-union-invalid-native-cell-id:${nativeCellId}:${index}`);
+          }
+          if (seenNativeCellIds.has(nativeCellId)) {
+            throw new Error(`boundary-splat-union-duplicate-native-cell-id:${nativeCellId}`);
+          }
+          if (!ridgeAdmitted && !nonRidgeAdmitted) {
+            throw new Error(`boundary-splat-union-unadmitted-candidate:${nativeCellId}`);
+          }
+          nativeCellIds[index] = nativeCellId;
+          seenNativeCellIds.add(nativeCellId);
+          if (ridgeAdmitted && nonRidgeAdmitted) overlap += 1;
+          else if (ridgeAdmitted) ridgeOnly += 1;
+          else nonRidgeOnly += 1;
+        }
+        nativeCellIds.sort();
+        stableNativeCellIdSha256 = await sha256Bytes(new Uint8Array(nativeCellIds.buffer));
+        stableNativeCellIds = Array.from(nativeCellIds);
+        stableNativeCellIdRanges = [];
+        for (const nativeCellId of nativeCellIds) {
+          const priorRange = stableNativeCellIdRanges.at(-1);
+          if (priorRange && nativeCellId === priorRange[1] + 1) priorRange[1] = nativeCellId;
+          else stableNativeCellIdRanges.push([nativeCellId, nativeCellId]);
+        }
+        decodedMembershipCounts = { ridgeOnly, nonRidgeOnly, overlap, union: draw.sourceCandidateCount };
+        const descriptorBytes = draw.sourceCandidateCount * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
+        const descriptorData = await readStorageBufferBytes(
+          flowKernelDescriptorBuffer,
+          descriptorBytes,
+          'kaminos live union descriptor-frame audit readback',
+        );
+        const descriptorValues = new Float32Array(
+          descriptorData.buffer,
+          descriptorData.byteOffset,
+          descriptorData.byteLength / Float32Array.BYTES_PER_ELEMENT,
+        );
+        const descriptorStrideFloats = FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT;
+        let finiteFrameCount = 0;
+        let positiveClipWCount = 0;
+        let centerInFrustumCount = 0;
+        let tangentLengthMin = Infinity;
+        let tangentLengthMax = 0;
+        let tangentNormalCrossLengthMin = Infinity;
+        let tangentNormalCrossLengthMax = 0;
+        const matrix = viewProj.elements;
+        for (let index = 0; index < draw.sourceCandidateCount; index += 1) {
+          const candidateOffset = index * strideFloats;
+          const descriptorOffset = index * descriptorStrideFloats;
+          const tangentX = descriptorValues[descriptorOffset + 20];
+          const tangentY = descriptorValues[descriptorOffset + 21];
+          const tangentZ = descriptorValues[descriptorOffset + 22];
+          const normalX = values[candidateOffset + 12];
+          const normalY = values[candidateOffset + 13];
+          const normalZ = values[candidateOffset + 14];
+          const tangentLength = Math.hypot(tangentX, tangentY, tangentZ);
+          const crossLength = Math.hypot(
+            normalY * tangentZ - normalZ * tangentY,
+            normalZ * tangentX - normalX * tangentZ,
+            normalX * tangentY - normalY * tangentX,
+          );
+          if (Number.isFinite(tangentLength) && Number.isFinite(crossLength)) finiteFrameCount += 1;
+          tangentLengthMin = Math.min(tangentLengthMin, tangentLength);
+          tangentLengthMax = Math.max(tangentLengthMax, tangentLength);
+          tangentNormalCrossLengthMin = Math.min(tangentNormalCrossLengthMin, crossLength);
+          tangentNormalCrossLengthMax = Math.max(tangentNormalCrossLengthMax, crossLength);
+          const x = values[candidateOffset];
+          const y = values[candidateOffset + 1];
+          const z = values[candidateOffset + 2];
+          const clipX = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
+          const clipY = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
+          const clipZ = matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14];
+          const clipW = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
+          if (clipW > 0) positiveClipWCount += 1;
+          if (clipW > 0 && Math.abs(clipX) <= clipW && Math.abs(clipY) <= clipW && clipZ >= 0 && clipZ <= clipW) {
+            centerInFrustumCount += 1;
+          }
+        }
+        descriptorFrameMetrics = {
+          authority: 'gpu-flow-kernel-descriptor-plus-compacted-candidate-readback-v0',
+          finiteFrameCount,
+          tangentLengthMin,
+          tangentLengthMax,
+          tangentNormalCrossLengthMin,
+          tangentNormalCrossLengthMax,
+        };
+        projectionMetrics = {
+          authority: 'cpu-view-projection-of-gpu-compacted-candidate-centers-v0',
+          positiveClipWCount,
+          centerInFrustumCount,
+          candidateCount: draw.sourceCandidateCount,
+        };
+      }
+      const controlPayload = Object.fromEntries(
+        Object.entries(controlsSnapshot).sort(([left], [right]) => left.localeCompare(right)),
+      );
+      const controlSha256 = await sha256Bytes(new TextEncoder().encode(JSON.stringify(controlPayload)));
+      const stateWitnessSha256 = await sha256Bytes(new TextEncoder().encode(JSON.stringify({
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        candidatePayloadSha256,
+        attributePayloadSha256,
+        stableNativeCellIdSha256,
+      })));
+      const relativeError = Math.abs(effectiveIntegratedAlphaSum - baseIntegratedAlphaSum)
+        / Math.max(Math.abs(baseIntegratedAlphaSum), 1e-12);
+      return {
+        ok: true,
+        authority: state.boundarySplatAreaOpacityConservationAuthority,
+        footprintAuthority: state.boundarySplatFootprintAuthority,
+        attributeSetId: state.boundarySplatAttributeSetId,
+        candidatePayloadAuthority: 'gpu-compacted-boundary-splat-position-support-frozen-state-v0',
+        candidatePayloadSha256,
+        attributePayloadAuthority: 'gpu-compacted-boundary-splat-effective-attributes-v0',
+        attributePayloadSha256,
+        stateWitnessAuthority: 'live-frame-step-plus-canonical-compacted-candidate-payload-sha256-v0',
+        stateWitnessSha256,
+        controlAuthority: 'effective-runtime-controls-canonical-json-sha256-v0',
+        controlSha256,
+        stableNativeCellIdAuthority: unionRequested ? 'gpu-compacted-native-grid-linear-index-v0' : null,
+        stableNativeCellIdSha256,
+        stableNativeCellIds,
+        stableNativeCellIdRanges,
+        decodedMembershipCounts,
+        channelMax,
+        descriptorFrameMetrics,
+        projectionMetrics,
+        unionReceipt: unionRequested ? boundarySplatUnionReceipt(draw) : null,
+        candidateCount: draw.candidateCount,
+        instanceCount: draw.instanceCount,
+        overflowCount: draw.overflowCount,
+        initialDraw,
+        capacityRetryCount: initialDraw.overflowCount > 0 ? 1 : 0,
+        capacityAfterRetry: boundarySplatCapacity,
+        strideFloats,
+        baseIntegratedAlphaSum,
+        effectiveIntegratedAlphaSum,
+        relativeError,
+      };
+    } finally {
+      readback.destroy();
+    }
+  }
+
+  function boundarySplatLiveUnionOverlayRuntimeReceipt(overrides = {}) {
+    return {
+      identity: 'boundary-splat-live-union-coefficient-overlay-runtime-receipt-v0',
+      status: state.boundarySplatLiveUnionOverlayStatus,
+      authority: 'checksum-and-exact-native-cell-population-gated-live-union-overlay-v0',
+      requestedOverlayIdentity: state.boundarySplatLiveUnionOverlayRequestedIdentity,
+      effectiveOverlayIdentity: state.boundarySplatLiveUnionOverlayEffectiveIdentity,
+      fallbackReason: state.boundarySplatLiveUnionOverlayFallbackReason,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      grid: gridSize,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      ...overrides,
+    };
+  }
+
+  function setFullSupportDepositionMode(requested = FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY) {
+    const normalized = requested === FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY
+      ? FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY
+      : FULL_SUPPORT_GAUSSIAN_DEPOSITION_IDENTITY;
+    state.fullSupportDepositionRequested = normalized;
+    state.fullSupportDepositionFallbackReason = requested === normalized
+      ? null
+      : `unsupported-deposition:${String(requested)}`;
+    return {
+      identity: 'full-support-deposition-request-receipt-v0',
+      requested,
+      normalized,
+      effective: state.fullSupportDepositionEffective,
+      fallbackReason: state.fullSupportDepositionFallbackReason,
+      transportIdentity: FULL_SUPPORT_STAGE_A_TRANSPORT_IDENTITY,
+      attenuatesBehindColor: false,
+    };
+  }
+
+  function destroyBoundarySplatLiveUnionOverlayResources() {
+    boundarySplatLiveUnionOverlayGpuResources?.coefficientBuffer?.destroy();
+    boundarySplatLiveUnionOverlayGpuResources?.lookupBuffer?.destroy();
+    boundarySplatLiveUnionOverlayGpuResources = null;
+    boundarySplatLiveUnionOverlay = null;
+  }
+
+  function clearBoundarySplatLiveUnionCoefficientOverlay(options = {}) {
+    destroyBoundarySplatLiveUnionOverlayResources();
+    state.boundarySplatLiveUnionOverlayRequestedIdentity = null;
+    state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+    state.boundarySplatLiveUnionOverlayFallbackReason = options.reason || null;
+    state.boundarySplatLiveUnionOverlayStatus = 'off';
+    state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+      status: 'off',
+      failurePhase: null,
+    });
+    if (!options.skipBindGroupRebuild) rebuildBoundarySplatBindGroups();
+    if (!options.silent) emitStatus({ phase: 'boundary-splat-live-union-overlay-cleared' });
+    return { ...state.boundarySplatLiveUnionOverlayReceipt };
+  }
+
+  async function loadBoundarySplatLiveUnionCoefficientOverlay(payload = {}) {
+    const manifestUrl = String(payload.manifestUrl || '');
+    const requestedIdentity = String(payload.overlayIdentity || manifestUrl || 'missing-manifest-url');
+    clearBoundarySplatLiveUnionCoefficientOverlay({ reason: 'replacement-requested', silent: true });
+    state.boundarySplatLiveUnionOverlayRequestedIdentity = requestedIdentity;
+    state.boundarySplatLiveUnionOverlayStatus = 'loading';
+    state.boundarySplatLiveUnionOverlayFallbackReason = null;
+    state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+      status: 'loading',
+      manifestUrl,
+      failurePhase: null,
+    });
+    let failurePhase = 'ensure-gpu';
+    let loadedOverlay = null;
+    let loadedGpuResources = null;
+    try {
+      await ensureGpu();
+      failurePhase = 'load-and-validate-overlay';
+      loadedOverlay = await loadLayerCoefficientLiveUnionOverlay({
+        manifestUrl,
+        fetchImpl: payload.fetchImpl || globalThis.fetch,
+        expectedSource: payload.expectedSource,
+      });
+      if (loadedOverlay.receipt.overlayIdentity !== requestedIdentity) {
+        throw new Error(`live-union-overlay-manifest-identity-substitution:${requestedIdentity}:${loadedOverlay.receipt.overlayIdentity}`);
+      }
+      if (loadedOverlay.receipt.grid !== gridSize) {
+        throw new Error(`live-union-overlay-runtime-grid-mismatch:${loadedOverlay.receipt.grid}:${gridSize}`);
+      }
+      failurePhase = 'create-gpu-resources';
+      loadedGpuResources = createLayerCoefficientLiveUnionGpuResources({ device, overlay: loadedOverlay });
+      boundarySplatLiveUnionOverlay = loadedOverlay;
+      boundarySplatLiveUnionOverlayGpuResources = loadedGpuResources;
+      state.boundarySplatLiveUnionOverlayRequestedIdentity = loadedOverlay.receipt.overlayIdentity;
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = 'awaiting-exact-live-population-audit';
+      state.boundarySplatLiveUnionOverlayStatus = 'awaiting-population-audit';
+      rebuildBoundarySplatBindGroups();
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'awaiting-population-audit',
+        manifestUrl,
+        failurePhase: null,
+        admissionIndexSha256: loadedOverlay.manifest.source.state.admissionIndexSha256,
+        sourceHashes: { ...loadedOverlay.manifest.source.state.sourceHashes },
+        admittedRowCount: loadedOverlay.receipt.admittedRowCount,
+        loadReceipt: { ...loadedOverlay.receipt },
+        gpuResourceReceipt: { ...loadedGpuResources.receipt },
+      });
+      emitStatus({ phase: 'boundary-splat-live-union-overlay-loaded-awaiting-audit' });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    } catch (error) {
+      loadedGpuResources?.coefficientBuffer?.destroy();
+      loadedGpuResources?.lookupBuffer?.destroy();
+      boundarySplatLiveUnionOverlay = null;
+      boundarySplatLiveUnionOverlayGpuResources = null;
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = error?.message || String(error);
+      state.boundarySplatLiveUnionOverlayStatus = 'failed';
+      rebuildBoundarySplatBindGroups();
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'failed',
+        manifestUrl,
+        failurePhase,
+        error: state.boundarySplatLiveUnionOverlayFallbackReason,
+      });
+      emitStatus({ phase: 'boundary-splat-live-union-overlay-load-failed' });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    }
+  }
+
+  function activateBoundarySplatLiveUnionCoefficientOverlayForOperatorExploration(payload = {}) {
+    const exactPauseReceipt = payload.exactPauseReceipt || null;
+    const requiredSimStepCount = Number(payload.requiredSimStepCount);
+    const fail = reason => {
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = reason;
+      state.boundarySplatLiveUnionOverlayStatus = 'failed';
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'failed',
+        failurePhase: 'operator-exploration-live-state-admission',
+        authority: 'operator-exploration-only-live-state-route-admission-v0',
+        reason,
+      });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    };
+    if (!boundarySplatLiveUnionOverlay || !boundarySplatLiveUnionOverlayGpuResources) {
+      return fail('overlay-not-loaded');
+    }
+    if (!Number.isInteger(requiredSimStepCount) || requiredSimStepCount < 0) {
+      return fail('invalid-required-live-sim-step');
+    }
+    if (exactPauseReceipt?.ok !== true
+      || exactPauseReceipt.authority !== 'renderer-internal-exact-sim-step-pause-gpu-complete-v0'
+      || exactPauseReceipt.gpuComplete !== true
+      || exactPauseReceipt.paused !== true) {
+      return fail('exact-live-pause-receipt-required');
+    }
+    if (exactPauseReceipt.requestedSimStepCount !== requiredSimStepCount
+      || exactPauseReceipt.effectiveSimStepCount !== requiredSimStepCount
+      || state.simStepCount !== requiredSimStepCount) {
+      return fail(`exact-live-step-substitution:${requiredSimStepCount}:${exactPauseReceipt.effectiveSimStepCount}:${state.simStepCount}`);
+    }
+    if (exactPauseReceipt.effectiveRoute !== ROUTE_IDENTITY || state.effectiveRoute !== ROUTE_IDENTITY) {
+      return fail(`exact-live-route-substitution:${exactPauseReceipt.effectiveRoute}:${state.effectiveRoute}`);
+    }
+    if (boundarySplatLiveUnionOverlay.receipt.grid !== gridSize) {
+      return fail(`exact-live-grid-substitution:${boundarySplatLiveUnionOverlay.receipt.grid}:${gridSize}`);
+    }
+    state.boundarySplatLiveUnionOverlayEffectiveIdentity = boundarySplatLiveUnionOverlay.receipt.overlayIdentity;
+    state.boundarySplatLiveUnionOverlayFallbackReason = null;
+    state.boundarySplatLiveUnionOverlayStatus = 'operator-exploration-effective';
+    state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+      status: 'operator-exploration-effective',
+      failurePhase: null,
+      authority: 'operator-exploration-only-live-state-route-admission-v0',
+      decisionBearing: false,
+      populationAuditApplied: false,
+      sourceHashReadbackApplied: false,
+      exactPauseReceipt: { ...exactPauseReceipt },
+      admittedRowCount: boundarySplatLiveUnionOverlay.receipt.admittedRowCount,
+      sourceOverlayIdentity: boundarySplatLiveUnionOverlay.receipt.sourceOverlayIdentity,
+      admissionIndexSha256: boundarySplatLiveUnionOverlay.manifest.source.state.admissionIndexSha256,
+      sampleCap: null,
+      droppedRowCount: 0,
+    });
+    rebuildBoundarySplatBindGroups();
+    emitStatus({ phase: 'boundary-splat-live-union-overlay-operator-exploration-effective' });
+    return { ...state.boundarySplatLiveUnionOverlayReceipt };
+  }
+
+  async function auditBoundarySplatLiveUnionCoefficientOverlayPopulation(options = {}) {
+    if (!boundarySplatLiveUnionOverlay || !boundarySplatLiveUnionOverlayGpuResources) {
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = 'overlay-not-loaded';
+      state.boundarySplatLiveUnionOverlayStatus = 'failed';
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'failed',
+        failurePhase: 'population-audit-precondition',
+      });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    }
+    const overlay = boundarySplatLiveUnionOverlay;
+    let audit = null;
+    try {
+      audit = await sampleBoundarySplatFootprintAudit(options);
+      const populationAudit = auditLayerCoefficientLiveUnionPopulation({
+        overlay,
+        audit,
+        exactUnionModeEffective: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'kernel_moment_full_flame_union',
+      });
+      const effective = populationAudit.status === 'effective';
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = effective ? overlay.receipt.overlayIdentity : null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = effective ? null : populationAudit.failures.join('|');
+      state.boundarySplatLiveUnionOverlayStatus = effective ? 'effective' : 'failed';
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: state.boundarySplatLiveUnionOverlayStatus,
+        failurePhase: effective ? null : 'population-audit',
+        stableNativeCellIdSha256: populationAudit.stableNativeCellIdSha256,
+        admissionIndexSha256: populationAudit.admissionIndexSha256,
+        candidateCount: populationAudit.candidateCount,
+        instanceCount: populationAudit.instanceCount,
+        overflowCount: populationAudit.overflowCount,
+        admittedRowCount: populationAudit.admittedRowCount,
+        sourceOverlayIdentity: overlay.receipt.sourceOverlayIdentity,
+        sampleCap: overlay.receipt.sampleCap,
+        droppedRowCount: overlay.receipt.droppedRowCount,
+        lookupPopulation: populationAudit.lookupPopulation,
+        lookupMissCount: populationAudit.lookupMissCount,
+        lookupExtraCount: populationAudit.lookupExtraCount,
+        populationAudit: { ...populationAudit },
+        sourceHashes: { ...overlay.manifest.source.state.sourceHashes },
+        footprintAuditAuthority: audit.stableNativeCellIdAuthority,
+        unionReceipt: audit.unionReceipt,
+      });
+      emitStatus({ phase: effective
+        ? 'boundary-splat-live-union-overlay-effective'
+        : 'boundary-splat-live-union-overlay-population-audit-failed' });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    } catch (error) {
+      state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
+      state.boundarySplatLiveUnionOverlayFallbackReason = error?.message || String(error);
+      state.boundarySplatLiveUnionOverlayStatus = 'failed';
+      state.boundarySplatLiveUnionOverlayReceipt = boundarySplatLiveUnionOverlayRuntimeReceipt({
+        status: 'failed',
+        failurePhase: 'population-audit',
+        error: state.boundarySplatLiveUnionOverlayFallbackReason,
+        stableNativeCellIdSha256: audit?.stableNativeCellIdSha256 ?? null,
+        admissionIndexSha256: overlay.manifest.source.state.admissionIndexSha256,
+        lookupMissCount: null,
+        lookupExtraCount: null,
+      });
+      emitStatus({ phase: 'boundary-splat-live-union-overlay-population-audit-failed' });
+      return { ...state.boundarySplatLiveUnionOverlayReceipt };
+    }
+  }
+
+  async function readStorageBufferBytes(sourceBuffer, byteLength, label) {
+    const readback = device.createBuffer({
+      label,
+      size: byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: `${label} encoder` });
+      encoder.copyBufferToBuffer(sourceBuffer, 0, readback, 0, byteLength);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const bytes = new Uint8Array(readback.getMappedRange()).slice();
+      readback.unmap();
+      return bytes;
+    } finally {
+      readback.destroy();
+    }
+  }
+
+  async function sha256Bytes(bytes) {
+    return Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes)))
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function auditBoundarySplatLiveUnionSourceHashes(options = {}) {
+    const importReceipt = state.fullFieldImportReceipt;
+    if (importReceipt?.status !== 'applied'
+      || typeof importReceipt.fluidSha256 !== 'string'
+      || typeof importReceipt.frontSha256 !== 'string') {
+      throw new Error('source-hash-audit-requires-checksum-validated-imported-fields');
+    }
+    if (!state.boundarySidecarBuilt) {
+      throw new Error('source-hash-audit-requires-current-boundary-sidecar');
+    }
+    const expectedSourceHashes = options.expectedSourceHashes
+      || boundarySplatLiveUnionOverlay?.manifest?.source?.state?.sourceHashes
+      || null;
+    if (!expectedSourceHashes) {
+      throw new Error('source-hash-audit-missing-expected-source-hashes');
+    }
+    const descriptorSourceFluidBuffer = boundarySplatDescriptorSource?.fluid || null;
+    const descriptorSourceFrontBuffer = boundarySplatDescriptorSource?.front || null;
+    if (!descriptorSourceFluidBuffer || !descriptorSourceFrontBuffer) {
+      throw new Error('source-hash-audit-missing-effective-source-buffers');
+    }
+    const sourceHashes = {};
+    sourceHashes.fluidSha256 = await sha256Bytes(await readStorageBufferBytes(
+      descriptorSourceFluidBuffer,
+      fluidBufferBytes(gridSize),
+      'kaminos live union source-hash effective-fluid readback',
+    ));
+    sourceHashes.frontSha256 = await sha256Bytes(await readStorageBufferBytes(
+      descriptorSourceFrontBuffer,
+      frontFieldBufferBytes(gridSize),
+      'kaminos live union source-hash effective-front readback',
+    ));
+    sourceHashes.boundarySidecarSha256 = await sha256Bytes(await readStorageBufferBytes(
+      boundarySidecarBuffer,
+      boundarySidecarBufferBytes(gridSize),
+      'kaminos live union source-hash boundary-sidecar readback',
+    ));
+    const mismatch = Object.keys(sourceHashes).find(
+      key => sourceHashes[key] !== String(expectedSourceHashes[key] || '').toLowerCase(),
+    ) || null;
+    const receipt = {
+      ok: mismatch === null,
+      identity: 'boundary-splat-live-union-source-hash-audit-v0',
+      authority: 'effective-imported-fluid-front-plus-derived-sidecar-sha256-v1',
+      status: mismatch === null ? 'matched' : 'failed',
+      failurePhase: mismatch === null ? null : 'source-hash-comparison',
+      reason: mismatch === null ? null : `source-hash-audit-mismatch:${mismatch}`,
+      expectedSourceHashes: { ...expectedSourceHashes },
+      effectiveSourceHashes: sourceHashes,
+      sourceManifestSha256: importReceipt.sourceManifestSha256 || null,
+      fullFieldImportSessionId: importReceipt.sessionId || null,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      grid: gridSize,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+    };
+    if (mismatch !== null) {
+      const error = new Error(receipt.reason);
+      error.receipt = receipt;
+      throw error;
+    }
+    return receipt;
+  }
+
+  async function sampleBoundarySplatKernelDescriptorCapture(sourceCandidateCount) {
+    if (!state.flowKernelDescriptorCaptureRequested) return null;
+    if (!state.flowKernelDescriptorCaptureEffective || !flowKernelDescriptorBuffer) {
+      throw new Error('flow-kernel-descriptor-capture-requested-but-unavailable');
+    }
+    if (!Number.isInteger(sourceCandidateCount) || sourceCandidateCount <= 0) {
+      throw new Error(`flow-kernel-descriptor-capture-blank-source-candidate-count:${sourceCandidateCount}`);
+    }
+    if (sourceCandidateCount > boundarySplatCapacity) {
+      throw new Error(`flow-kernel-descriptor-capture-source-candidate-count-exceeds-capacity:${sourceCandidateCount}`);
+    }
+    const importReceipt = state.fullFieldImportReceipt;
+    if (importReceipt?.status !== 'applied'
+      || typeof importReceipt.fluidSha256 !== 'string'
+      || typeof importReceipt.frontSha256 !== 'string') {
+      throw new Error('flow-kernel-descriptor-capture-requires-checksum-validated-imported-fields');
+    }
+    if (!state.boundarySidecarBuilt) {
+      throw new Error('flow-kernel-descriptor-capture-requires-current-boundary-sidecar');
+    }
+    const descriptorBytes = sourceCandidateCount * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
+    const boundaryBytes = boundarySidecarBufferBytes(gridSize);
+    const descriptorSourceFluidBuffer = boundarySplatDescriptorSource?.fluid || null;
+    const descriptorSourceFrontBuffer = boundarySplatDescriptorSource?.front || null;
+    if (!descriptorSourceFluidBuffer || !descriptorSourceFrontBuffer) {
+      throw new Error('flow-kernel-descriptor-capture-missing-effective-source-buffers');
+    }
+    const fluidSha256 = await sha256Bytes(await readStorageBufferBytes(
+      descriptorSourceFluidBuffer,
+      fluidBufferBytes(gridSize),
+      `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} effective-fluid readback`,
+    ));
+    const frontSha256 = await sha256Bytes(await readStorageBufferBytes(
+      descriptorSourceFrontBuffer,
+      frontFieldBufferBytes(gridSize),
+      `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} effective-front readback`,
+    ));
+    const [descriptorData, boundaryData] = await Promise.all([
+      readStorageBufferBytes(flowKernelDescriptorBuffer, descriptorBytes, `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} descriptor readback`),
+      readStorageBufferBytes(boundarySidecarBuffer, boundaryBytes, `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} boundary-sidecar readback`),
+    ]);
+    const [descriptorSha256, boundarySidecarSha256] = await Promise.all([
+      sha256Bytes(descriptorData),
+      sha256Bytes(boundaryData),
+    ]);
+    const sourceHashes = {
+      fluidSha256,
+      frontSha256,
+      boundarySidecarSha256,
+    };
+    const descriptorValues = new Float32Array(
+      descriptorData.buffer,
+      descriptorData.byteOffset,
+      descriptorData.byteLength / Float32Array.BYTES_PER_ELEMENT,
+    );
+    const decoded = decodeFlowKernelDescriptorCapture(
+      descriptorValues,
+      sourceCandidateCount,
+      boundarySplatCapacity,
+      {
+        kernelIdentity: FLOW_RECONSTRUCTION_KERNEL_IDENTITY,
+        requestedControls: flowKernelRequestedControls(controlsSnapshot),
+        effectiveControls: flowKernelEffectiveControls(controlsSnapshot),
+        sourceHashes,
+      },
+      { includeRows: false },
+    );
+    const sessionId = `flow-kernel-descriptor-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    flowKernelDescriptorExportSession = {
+      sessionId,
+      values: descriptorValues,
+      descriptorSha256,
+    };
+    return {
+      ...decoded,
+      status: 'captured',
+      requested: true,
+      effective: true,
+      descriptorSha256,
+      exportSession: {
+        identity: 'session-bound-float32-chunk-export-v0',
+        sessionId,
+        floatCount: descriptorValues.length,
+        byteLength: descriptorData.byteLength,
+        chunkApi: 'readFlowKernelDescriptorCaptureChunk',
+        releaseApi: 'releaseFlowKernelDescriptorCapture',
+      },
+      rendererIdentity: state.boundarySplatRendererIdentity,
+      sourceAuthority: state.boundarySplatSourceAuthority,
+      sourceFieldState: {
+        identity: 'effective-gpu-buffer-sha256-v0',
+        role: boundarySplatDescriptorSource.role,
+        importManifestSha256: typeof importReceipt.sourceManifestSha256 === 'string'
+          ? importReceipt.sourceManifestSha256
+          : null,
+      },
+      candidateAdmissionAuthority: state.flowKernelCandidateAdmissionAuthority,
+      countAuthority: 'gpu-indirect-post-submit-witness-readback',
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      grid: gridSize,
+      directOpticalSupport: {
+        identity: 'native-cell-fluid-front-derived-optical-support-v1',
+        sourceFields: ['fluid', 'front'],
+        conservativeValidity: false,
+      },
+      boundarySidecarState: {
+        identity: state.boundarySidecarIdentity,
+        authority: state.boundarySidecarAuthority,
+        source: state.boundarySidecarSource,
+        built: state.boundarySidecarBuilt,
+        builtThisFrame: state.boundarySidecarBuiltThisFrame,
+        lastBuiltFrame: state.boundarySidecarLastBuiltFrame,
+      },
+      fullFieldImportReceipt: { ...importReceipt },
+    };
+  }
+
+  function readFlowKernelDescriptorCaptureChunk(payload = {}) {
+    const session = flowKernelDescriptorExportSession;
+    if (!session || payload.sessionId !== session.sessionId) {
+      return { ok: false, reason: 'flow-kernel-descriptor-session-mismatch' };
+    }
+    const startFloat = Math.floor(Number(payload.startFloat));
+    const floatCount = Math.floor(Number(payload.floatCount));
+    if (!Number.isInteger(startFloat) || startFloat < 0 || !Number.isInteger(floatCount) || floatCount <= 0) {
+      return { ok: false, reason: 'flow-kernel-descriptor-invalid-chunk-range', startFloat, floatCount };
+    }
+    if (startFloat + floatCount > session.values.length) {
+      return {
+        ok: false,
+        reason: 'flow-kernel-descriptor-chunk-overflow',
+        startFloat,
+        floatCount,
+        totalFloats: session.values.length,
+      };
+    }
+    return {
+      ok: true,
+      identity: 'session-bound-float32-chunk-export-v0',
+      sessionId: session.sessionId,
+      startFloat,
+      floatCount,
+      totalFloats: session.values.length,
+      base64: encodeFloat32ChunkBase64(session.values, startFloat, floatCount),
+      isFinal: startFloat + floatCount === session.values.length,
+    };
+  }
+
+  function releaseFlowKernelDescriptorCapture(payload = {}) {
+    const session = flowKernelDescriptorExportSession;
+    if (!session || payload.sessionId !== session.sessionId) {
+      return { ok: false, reason: 'flow-kernel-descriptor-session-mismatch' };
+    }
+    const released = {
+      ok: true,
+      identity: 'session-bound-float32-chunk-export-v0',
+      sessionId: session.sessionId,
+      descriptorSha256: session.descriptorSha256,
+      releasedFloatCount: session.values.length,
+    };
+    flowKernelDescriptorExportSession = null;
+    return released;
+  }
+
+  function raymarchShaderSpecializationReceipt({ admission, effective }) {
+    const debugForcedFull = debugRaymarchShaderSpecialization === 'force-full';
+    return {
+      identity: 'raymarch-shader-specialization-receipt-v0',
+      requested: controlsSnapshot.legacyPyroBackedOff === true
+        ? 'lean-stock-direct-cell-raymarch-v0'
+        : 'full-authored-raymarch-v0',
+      effective,
+      eligible: admission.eligible,
+      refusalReasons: admission.refusalReasons,
+      debugOverride: debugRaymarchShaderSpecialization,
+      fallbackReason: debugForcedFull && admission.eligible
+        ? 'debug-force-full'
+        : (controlsSnapshot.legacyPyroBackedOff === true && !admission.eligible
+          ? admission.refusalReasons[0]
+          : null),
+    };
+  }
+
+  function selectRaymarchPipeline(targetPipeline) {
+    const admission = leanStockRaymarchAdmission({
+      legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff,
+      fireRenderMode: controlsSnapshot.fireRenderMode,
+      pyroFireMode: controlsSnapshot.pyroFireMode,
+      pyroCompareMode: controlsSnapshot.pyroCompareMode,
+      presentationMode: volumePresentationModeEffective,
+      smokePresentationMode: raymarchSmokePresentationEffectiveMode(),
+      appearanceDecompositionActive: appearanceDecompositionActive(),
+      nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
+      nonRidgeSourceBasisCaptureActive: Boolean(nonRidgeSourceBasisCaptureSession),
+      liveCompleteFlameOpticalCoefficientsEnabled,
+    });
+    const leanStockEligible = admission.eligible;
+    let effectivePipeline = targetPipeline;
+    const selectLean = leanStockEligible && debugRaymarchShaderSpecialization !== 'force-full';
+    if (selectLean && targetPipeline === pipeline) effectivePipeline = leanStockPipeline;
+    if (selectLean && targetPipeline === readbackPipeline) effectivePipeline = leanStockReadbackPipeline;
+    const effective = effectivePipeline === leanStockPipeline || effectivePipeline === leanStockReadbackPipeline
+      ? 'lean-stock-direct-cell-raymarch-v0'
+      : 'full-authored-raymarch-v0';
+    state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
+    return effectivePipeline;
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     const pass = encoder.beginRenderPass({
       label,
@@ -9957,10 +15247,55 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(targetPipeline);
-    pass.setBindGroup(0, options.bindGroup || fluidBindGroup());
+    pass.setPipeline(selectRaymarchPipeline(targetPipeline));
+    pass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
+  }
+
+  function encodeProductSmokeRaymarch(encoder, colorView, sceneDepthView, bindGroup) {
+    if (!productRaymarchPipeline || !productRaymarchDepthBindGroupLayout) {
+      throw new Error('product-smoke-raymarch-pipeline-unavailable');
+    }
+    const depthBindGroup = device.createBindGroup({
+      label: 'kaminos product smoke caller-depth bind group',
+      layout: productRaymarchDepthBindGroupLayout,
+      entries: [{ binding: 1, resource: sceneDepthView }],
+    });
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos product caller-depth broad-smoke raymarch pass',
+      colorAttachments: [{
+        view: colorView,
+        loadOp: 'load',
+        storeOp: 'store',
+      }],
+    });
+    const admission = leanStockRaymarchAdmission({
+      legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff,
+      fireRenderMode: controlsSnapshot.fireRenderMode,
+      pyroFireMode: controlsSnapshot.pyroFireMode,
+      pyroCompareMode: controlsSnapshot.pyroCompareMode,
+      presentationMode: volumePresentationModeEffective,
+      smokePresentationMode: raymarchSmokePresentationEffectiveMode(),
+      appearanceDecompositionActive: appearanceDecompositionActive(),
+      nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
+      nonRidgeSourceBasisCaptureActive: Boolean(nonRidgeSourceBasisCaptureSession),
+      liveCompleteFlameOpticalCoefficientsEnabled,
+    });
+    const selectLean = admission.eligible && debugRaymarchShaderSpecialization !== 'force-full';
+    const effectiveProductPipeline = selectLean && leanStockProductRaymarchPipeline
+      ? leanStockProductRaymarchPipeline
+      : productRaymarchPipeline;
+    const effective = effectiveProductPipeline === leanStockProductRaymarchPipeline
+      ? 'lean-stock-direct-cell-raymarch-v0'
+      : 'full-authored-raymarch-v0';
+    state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
+    pass.setPipeline(effectiveProductPipeline);
+    pass.setBindGroup(0, bindGroup || bindGroups[currentFluid]);
+    pass.setBindGroup(1, depthBindGroup);
+    pass.draw(3);
+    pass.end();
+    return true;
   }
 
   function encodeBrowserResidualSourcePass(encoder, colorView, featureView) {
@@ -9982,7 +15317,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ],
     });
     pass.setPipeline(browserResidualSourcePipeline);
-    pass.setBindGroup(0, fluidBindGroup());
+    pass.setBindGroup(0, bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
   }
@@ -10009,7 +15344,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function updateSelectiveHeadLiveCompositionState() {
     const request = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
-    const effective = state.selectiveHeadLiveEffectiveRole === 'off' ? 'off' : request.requested;
+    const effective = state.selectiveHeadLiveEffectiveRole === 'off'
+      ? (boundarySplatRequested() ? request.requested : 'off')
+      : request.requested;
     state.selectiveHeadLiveCompositionRequestedRaw = request.raw;
     state.selectiveHeadLiveCompositionRequested = request.requested;
     state.selectiveHeadLiveCompositionEffective = effective;
@@ -10034,58 +15371,55 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.selectiveHeadLivePassReceipt;
   }
 
-  function encodeHistoryCopy(encoder, sourceTexture) {
-    if (!historyTexture || state.width < 1 || state.height < 1) return;
-    encoder.copyTextureToTexture(
-      { texture: sourceTexture },
-      { texture: historyTexture },
-      { width: state.width, height: state.height, depthOrArrayLayers: 1 }
-    );
-    historyValid = true;
-    state.temporalHistoryValid = true;
-    state.temporalHistoryFrames += 1;
-  }
-
   function render(now) {
+    if (productFrameOwner === 'caller') {
+      throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
+    }
     if (!state.active) return;
     if (selectiveHeadLiveCapturePaused) {
       raf = 0;
       return;
     }
-    raf = requestAnimationFrame(render);
+    raf = 0;
     try {
       const cpuStart = performance.now();
       controls?.update?.();
       updateUniforms(now);
       const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
+      let liveCoefficientEncoded = false;
       const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
       state.lookFreeze = lookFreeze;
-      state.simulationPaused = simulationPaused;
       if (lookFreeze) {
         if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
         state.lookFreezeSkippedFrames += 1;
       } else {
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
-      }
-      if (lookFreeze || simulationPaused) {
-        state.majorantBuiltThisFrame = false;
-      } else {
         encodeSim(encoder);
-        encodeLiquidFireContactTransfer(encoder);
-        encodeSelectiveHeadLiveFields(encoder);
-        const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
-        encodeMajorant(encoder, {
-          readBindGroup: selectiveMajorant,
-          force: state.selectiveHeadLiveEffectiveRole !== 'off',
-        });
         encodeFireIrradianceLightField(encoder);
+        encodeSelectiveHeadLiveFields(encoder);
+      }
+      if (liveCompleteFlameOpticalCoefficientsEnabled) {
+        liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
+        if (!liveCoefficientEncoded
+          || state.liveCompleteFlameOpticalCoefficientReceipt?.producedSimStepCount !== state.simStepCount) {
+          throw new Error(
+            `live-optical-frame-step-mismatch:producer=${state.liveCompleteFlameOpticalCoefficientReceipt?.producedSimStepCount ?? 'none'}:consumer=${state.simStepCount}`,
+          );
+        }
       }
       const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
       const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
       const selectiveRender = selectiveHeadLiveRoleGroups('render');
       encodeBoundarySidecar(encoder, { readBindGroup: selectiveSidecar });
-      encodeBoundarySplats(encoder, { computeBindGroup: selectiveSplat });
+      if (selectiveSplat) {
+        encodeBoundarySplats(encoder, {
+          computeBindGroup: selectiveSplat,
+          descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
+        });
+      } else {
+        encodeBoundarySplats(encoder);
+      }
       const currentTexture = context.getCurrentTexture();
       if (boundarySplatRequested()) {
         const composition = updateSelectiveHeadLiveCompositionState();
@@ -10105,15 +15439,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           raymarchApplied = true;
         }
         if (composition.definition.splat) {
-          splatEncoded = encodeBoundarySplatDraw(
+          splatEncoded = encodeBoundarySplatPresentation(
             encoder,
             currentTexture.createView(),
             boundarySplatRenderPipeline,
+            boundarySplatPresentationRenderPipeline,
             { loadOp: raymarchApplied ? 'load' : 'clear' },
           );
           splatApplied = splatEncoded;
         }
-        if (composition.definition.splat && !splatApplied) {
+        if (composition.definition.splat && !splatApplied && !liveCompleteFlameOpticalCoefficientsEnabled) {
           encodeDraw(
             encoder,
             currentTexture.createView(),
@@ -10127,13 +15462,57 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           state.volumeReconstructionStyle = 'selective-head-live-fallback-raymarch';
           emitStatus({ phase: 'selective-head-live-composition-fallback', reason: state.selectiveHeadLiveCompositionFallbackReason });
         }
-        recordSelectiveHeadLivePassReceipt({
+        if (liveCompleteFlameOpticalCoefficientsEnabled) {
+          const producedSimStepCount = state.liveCompleteFlameOpticalCoefficientReceipt?.producedSimStepCount ?? null;
+          const consumedSimStepCount = splatEncoded ? state.simStepCount : null;
+          const presentedSimStepCount = splatApplied ? state.simStepCount : null;
+          const stepMismatch = !liveCoefficientEncoded
+            || producedSimStepCount !== state.simStepCount
+            || consumedSimStepCount !== state.simStepCount
+            || presentedSimStepCount !== state.simStepCount;
+          state.liveCompleteFlameOpticalFrameReceipt = {
+            identity: 'live-complete-flame-same-command-buffer-frame-v0',
+            status: stepMismatch ? 'failed' : 'effective',
+            frameCount: state.frameCount,
+            producedSimStepCount,
+            consumedSimStepCount,
+            presentedSimStepCount,
+            coefficientEncoded: liveCoefficientEncoded,
+            splatEncoded,
+            splatApplied,
+            cpuCoefficientReadbackApplied: false,
+            fallbackReason: stepMismatch ? 'live-optical-frame-step-mismatch' : null,
+          };
+          state.liveCompleteFlameOpticalCoefficientReceipt = {
+            ...state.liveCompleteFlameOpticalCoefficientReceipt,
+            status: stepMismatch ? 'failed' : 'effective',
+            consumedSimStepCount,
+            presentedSimStepCount,
+            fallbackReason: stepMismatch ? 'live-optical-frame-step-mismatch' : null,
+          };
+          if (stepMismatch) {
+            throw new Error(
+              `live-optical-frame-step-mismatch:producer=${producedSimStepCount ?? 'none'}:consumer=${consumedSimStepCount ?? 'none'}:presentation=${presentedSimStepCount ?? 'none'}`,
+            );
+          }
+        }
+        const selectivePassReceipt = recordSelectiveHeadLivePassReceipt({
           composition: composition.effective === 'off' ? composition.requested : composition.effective,
           raymarchEncoded,
           raymarchApplied,
           splatEncoded,
           splatApplied,
           fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+        });
+        recordVolumePresentationApplication({
+          raymarchEncoded: selectivePassReceipt.raymarchEncoded,
+          raymarchApplied: selectivePassReceipt.raymarchApplied,
+          splatsEncoded: selectivePassReceipt.splatEncoded,
+          splatsApplied: selectivePassReceipt.splatApplied,
+          featureCaptureEncoded: state.boundarySplatFeatureCaptureEffective,
+          featureCaptureApplied: state.boundarySplatFeatureCaptureEffective,
+          compositionEffective: state.selectiveHeadLiveCompositionEffective,
+          fallbackReason: selectivePassReceipt.fallbackReason,
         });
         recordBrowserResidualCost({ applied: false });
       } else if (browserResidualCanApply()) {
@@ -10146,26 +15525,109 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
         const residualPassEncodeMs = performance.now() - residualEncodeStart;
         recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
+        recordVolumePresentationApplication({
+          raymarchEncoded: true,
+          raymarchApplied: true,
+          residualEncoded: residualApplied,
+          residualApplied,
+          compositionEffective: 'authored-raymarch-plus-browser-residual-v0',
+        });
       } else {
         encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
-        state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+        state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
+          ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
+          : (state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
         recordBrowserResidualCost({ applied: false });
+        recordVolumePresentationApplication({
+          raymarchEncoded: true,
+          raymarchApplied: true,
+          compositionEffective: 'raymarch-only-v0',
+        });
       }
-      encodeHistoryCopy(encoder, currentTexture);
+      if (!appearanceDecompositionActive()) {
+      }
       encodeBoundarySplatTelemetry(encoder);
       device.queue.submit([encoder.finish()]);
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
-      commitPreviousViewProjection();
       state.frameCount += 1;
+      if (selectiveHeadLiveExactPause) {
+        const exactPause = selectiveHeadLiveExactPause;
+        if (state.simStepCount >= exactPause.targetSimStepCount) {
+          selectiveHeadLiveExactPause = null;
+          selectiveHeadLiveCapturePaused = true;
+          state.selectiveHeadLiveCapturePaused = true;
+          state.selectiveHeadLiveExactPause = {
+            status: state.simStepCount === exactPause.targetSimStepCount ? 'gpu-pending' : 'failed',
+            targetSimStepCount: exactPause.targetSimStepCount,
+            effectiveSimStepCount: state.simStepCount,
+          };
+          const failureReason = state.simStepCount === exactPause.targetSimStepCount
+            ? null
+            : `exact-step-overshot:${exactPause.targetSimStepCount}:${state.simStepCount}`;
+          Promise.resolve(device.queue?.onSubmittedWorkDone?.()).then(() => {
+            const receipt = {
+              ok: failureReason === null,
+              reason: failureReason,
+              authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+              requestedSimStepCount: exactPause.targetSimStepCount,
+              effectiveSimStepCount: state.simStepCount,
+              frameCount: state.frameCount,
+              paused: true,
+              gpuComplete: true,
+              routeIdentity: ROUTE_IDENTITY,
+              effectiveRoute: state.effectiveRoute,
+              backend: state.backend,
+            };
+            state.selectiveHeadLiveExactPause = { ...receipt };
+            exactPause.resolve(receipt);
+          }, error => {
+            const receipt = {
+              ok: false,
+              reason: `exact-step-gpu-completion-failed:${error?.message || String(error)}`,
+              authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+              requestedSimStepCount: exactPause.targetSimStepCount,
+              effectiveSimStepCount: state.simStepCount,
+              frameCount: state.frameCount,
+              paused: true,
+              gpuComplete: false,
+              routeIdentity: ROUTE_IDENTITY,
+              effectiveRoute: state.effectiveRoute,
+              backend: state.backend,
+            };
+            state.selectiveHeadLiveExactPause = { ...receipt };
+            exactPause.resolve(receipt);
+          });
+        }
+      }
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
       recordVolumeFrameTiming(now, performance.now() - cpuStart);
       if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
     } catch (err) {
+      if (selectiveHeadLiveExactPause) {
+        selectiveHeadLiveExactPause.resolve({
+          ok: false,
+          reason: `exact-step-render-failed:${err?.message || String(err)}`,
+          authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+          requestedSimStepCount: selectiveHeadLiveExactPause.targetSimStepCount,
+          effectiveSimStepCount: state.simStepCount,
+          frameCount: state.frameCount,
+          paused: true,
+          gpuComplete: false,
+          routeIdentity: ROUTE_IDENTITY,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+        });
+        selectiveHeadLiveExactPause = null;
+        selectiveHeadLiveCapturePaused = true;
+        state.selectiveHeadLiveCapturePaused = true;
+      }
       state.active = false;
       state.error = err?.message || String(err);
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
       emitStatus({ phase: 'render-error', error: state.error });
+    } finally {
+      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     }
   }
 
@@ -10182,8 +15644,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   async function materializeFullFieldDerivedBuffersForDebugExport(nowMs = performance.now()) {
     updateUniforms(nowMs);
     const encoder = device.createCommandEncoder({ label: 'kaminos full-field derived-buffer materialization' });
-    encodeBoundarySidecar(encoder);
-    const boundarySplatsEncoded = encodeBoundarySplats(encoder);
+    encodeBoundarySidecar(encoder, {
+      explicitSidecarConsumer: FULL_FIELD_DEBUG_EXPORT_SIDECAR_CONSUMER,
+    });
+    const boundarySplatsEncoded = encodeBoundarySplats(encoder, {
+      explicitSplatConsumer: FULL_FIELD_DEBUG_EXPORT_SPLAT_CONSUMER,
+    });
     device.queue.submit([encoder.finish()]);
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     return {
@@ -10191,9 +15657,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       nowMs,
       boundarySidecarBuilt: state.boundarySidecarBuiltThisFrame,
       boundarySidecarAuthority: state.boundarySidecarAuthority,
+      boundarySidecarSource: state.boundarySidecarSource,
       boundarySplatsEncoded,
       boundarySplatMode: state.boundarySplatMode,
       boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+      boundarySplatPresentationReceipt: state.boundarySplatPresentationReceipt ? {
+        ...state.boundarySplatPresentationReceipt,
+        curve: state.boundarySplatPresentationReceipt.curve ? { ...state.boundarySplatPresentationReceipt.curve } : null,
+        hdrTelemetry: state.boundarySplatPresentationReceipt.hdrTelemetry ? { ...state.boundarySplatPresentationReceipt.hdrTelemetry } : null,
+      } : null,
       boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySplatFallbackReason: state.boundarySplatFallbackReason,
@@ -10201,6 +15673,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function copyFullFieldBuffersForDebugExport(derivedBuffers) {
+    const materializationValidation = validateFullFieldDerivedBufferMaterialization(derivedBuffers);
+    if (!materializationValidation.ok) {
+      throw new Error(`${materializationValidation.failurePhase}:${materializationValidation.reason}`);
+    }
     const fluidBytes = fluidBufferBytes(gridSize);
     const frontBytes = frontFieldBufferBytes(gridSize);
     const boundaryBytes = boundarySidecarBufferBytes(gridSize);
@@ -10335,7 +15811,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySidecar: {
         schema: 'kaminos.volume.boundary-sidecar-export.v0',
         identity: BOUNDARY_SIDECAR_IDENTITY,
-        authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+        authority: session.derivedBuffers.boundarySidecarAuthority,
         routeIdentity: ROUTE_IDENTITY,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: PROTOTYPE_IDENTITY,
@@ -10343,7 +15819,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         grid: session.grid,
         cellCount: session.cellCount,
         channelOrder: ['support', 'coverage', 'ridge', 'footprint'],
-        boundarySidecarDebug: boundarySidecarDebug('baked'),
+        boundarySidecarDebug: boundarySidecarDebug(session.derivedBuffers.boundarySidecarSource),
         sidecars: {
           boundary: session.boundaryDescriptor,
         },
@@ -10445,7 +15921,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.active = false;
     canvas.classList.remove('active');
     cancelAnimationFrame(raf);
-    if (gridSize !== requestedGrid) rebuildFluidState(requestedGrid, majorantGridSize, 'full-field-import-grid-rebuild');
+    if (gridSize !== requestedGrid) rebuildFluidState(requestedGrid, 'full-field-import-grid-rebuild');
     debugFullFieldImportUpload = {
       sessionId: `full-field-import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
       status: 'receiving',
@@ -10567,21 +16043,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     currentFluid = 0;
     currentFront = 0;
-    currentQuench = 0;
     state.frameCount = upload.receiverInitialSimStepCount;
     state.simStepCount = upload.receiverInitialSimStepCount;
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
-    state.majorantBuilt = false;
-    state.majorantBuiltThisFrame = false;
-    state.majorantLastBuiltFrame = -1;
     state.boundarySidecarBuilt = false;
     state.boundarySidecarBuiltThisFrame = false;
     state.boundarySidecarLastBuiltFrame = -1;
     state.boundarySidecarOverrideReceipt = null;
     boundarySidecarOverrideUpload = null;
     state.deterministicReplay = null;
-    resetTemporalHistory('full-field-import');
     const receipt = {
       schema: FULL_FIELD_IMPORT_IDENTITY,
       identity: 'checksum-addressed-fluid-front-import-v0',
@@ -10604,7 +16075,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frontChunkCount: upload.front.chunkCount,
       pressureState: 'zeroed-before-first-receiver-step',
       pingPongState: 'both-read-write-buffers-identical',
-      temporalHistory: 'reset',
       renderLoopPaused: true,
       activeBeforeImport: upload.wasActive,
       routeIdentity: ROUTE_IDENTITY,
@@ -10681,7 +16151,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       updateUniforms(startTimeMs + step * timeStepMs);
       const encoder = device.createCommandEncoder({ label: `kaminos imported receiver step ${step + 1}/${requestedSteps}` });
       encodeSim(encoder);
-      if (step === requestedSteps - 1) encodeMajorant(encoder, { force: true });
       device.queue.submit([encoder.finish()]);
       state.frameCount += 1;
     }
@@ -10792,6 +16261,1016 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, ...liveReplay };
   }
 
+  function nonRidgeOpticalCapturePublicSession(session) {
+    if (!session) return null;
+    return {
+      schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+      identity: NONRIDGE_OPTICAL_ROW_IDENTITY,
+      status: session.status,
+      failurePhase: session.failurePhase || null,
+      reason: session.reason || null,
+      sessionId: session.sessionId || null,
+      createdAtMs: session.createdAtMs || null,
+      rowCount: session.rowCount ?? 0,
+      observedRowCount: session.observedRowCount ?? 0,
+      overflowCount: session.overflowCount ?? 0,
+      strideFloats: NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS,
+      byteLength: session.byteLength ?? 0,
+      allocationAuthority: session.allocationAuthority || null,
+      captureTimeMs: session.captureTimeMs ?? null,
+      cohortIdentity: session.cohortIdentity || null,
+      sourceIdentity: session.sourceIdentity || null,
+      rendererPassReceipt: session.rendererPassReceipt || null,
+      positiveRecomposition: session.positiveRecomposition || null,
+      requestedRoute: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+    };
+  }
+
+  async function readNonRidgeOpticalCaptureHeader(readback, encoder, label) {
+    encoder.copyBufferToBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, readback, 0, 16);
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const header = new Uint32Array(readback.getMappedRange().slice(0));
+    readback.unmap();
+    return {
+      label,
+      rowCount: header[0],
+      capacity: header[1],
+      mode: header[2],
+      overflowCount: header[3],
+    };
+  }
+
+  function rebuildNonRidgeOpticalCaptureBindGroups() {
+    rebuildFluidBindGroups();
+    rebuildSelectiveHeadLiveBindGroups();
+  }
+
+  async function runNonRidgeOpticalCapturePass({ mode, capacity, captureTimeMs, label }) {
+    device.queue.writeBuffer(
+      nonRidgeOpticalCaptureHeaderBuffer,
+      0,
+      new Uint32Array([0, capacity, mode, 0]),
+    );
+    updateUniforms(captureTimeMs);
+    let fullGridDispatchTexture = null;
+    if (mode < 3) ensureFrameTexture();
+    else {
+      fullGridDispatchTexture = device.createTexture({
+        label: `kaminos ${NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY} ${gridSize}x${gridSize} dispatch`,
+        size: [gridSize, gridSize, 1],
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+    }
+    const readback = device.createBuffer({
+      label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} ${label} header readback`,
+      size: 16,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    device.pushErrorScope('validation');
+    const encoder = device.createCommandEncoder({ label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} ${label}` });
+    encodeBoundarySidecar(encoder, {
+      readBindGroup: selectiveHeadLiveRoleGroups('sidecar') || null,
+      explicitSidecarConsumer: NONRIDGE_OPTICAL_CAPTURE_SIDECAR_CONSUMER,
+    });
+    encodeDraw(
+      encoder,
+      (fullGridDispatchTexture || frameTexture).createView(),
+      `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} ${label} raymarch`,
+      readbackPipeline,
+      { bindGroup: selectiveHeadLiveRoleGroups('render') || null },
+    );
+    let header;
+    try {
+      header = await readNonRidgeOpticalCaptureHeader(readback, encoder, label);
+      const validationError = await device.popErrorScope();
+      if (validationError) throw new Error(validationError.message || String(validationError));
+      return header;
+    } catch (error) {
+      try { await device.popErrorScope(); } catch {}
+      throw error;
+    } finally {
+      readback.destroy();
+      fullGridDispatchTexture?.destroy();
+    }
+  }
+
+  function enableLiveCompleteFlameOpticalCoefficients() {
+    const failed = (failurePhase, reason) => {
+      liveCompleteFlameOpticalCoefficientsEnabled = false;
+      state.liveCompleteFlameOpticalCoefficientsEnabled = false;
+      state.liveCompleteFlameOpticalCoefficientReceipt = {
+        ok: false,
+        status: 'failed',
+        authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+        failurePhase,
+        reason,
+      };
+      return { ...state.liveCompleteFlameOpticalCoefficientReceipt };
+    };
+    if (!device || !state.active) return failed('admission', 'inactive');
+    if (!selectiveHeadLiveCapturePaused) {
+      return failed('admission', 'live-complete-flame-enable-requires-paused-transition');
+    }
+    const rowCount = gridCellCount(gridSize);
+    const byteLength = rowCount * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES;
+    const maxBufferSize = Number(device.limits?.maxBufferSize || 0);
+    const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
+    if (byteLength > maxBufferSize || byteLength > maxBindingBytes) {
+      return failed('allocation', `live-complete-flame-coefficient-buffer-limit:${byteLength}:${maxBufferSize}:${maxBindingBytes}`);
+    }
+    boundarySplatLiveCompleteFlameCoefficientBuffer?.destroy();
+    liveCompleteFlameCoefficientUniformBuffer?.destroy();
+    liveCompleteFlameCoefficientDispatchTexture?.destroy();
+    boundarySplatLiveCompleteFlameCoefficientBuffer = device.createBuffer({
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} persistent ${gridSize}^3`,
+      size: byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    liveCompleteFlameCoefficientUniformBuffer = device.createBuffer({
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} isolated uniforms`,
+      size: uniforms.byteLength,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    liveCompleteFlameCoefficientDispatchTexture = device.createTexture({
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} persistent dispatch`,
+      size: [gridSize, gridSize, 1],
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    liveCompleteFlameOpticalCoefficientsEnabled = true;
+    state.liveCompleteFlameOpticalCoefficientsEnabled = true;
+    state.liveCompleteFlameOpticalCoefficientReceipt = {
+      ok: true,
+      status: 'enabled-awaiting-first-frame',
+      authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+      evidenceAuthority: 'operator-exploration-only',
+      decisionBearing: false,
+      rowCount,
+      byteLength,
+      grid: gridSize,
+      producerPass: 'ordinary-frame-full-grid-complete-flame-coefficient-write-v0',
+      consumerAddressing: 'candidate-native-cell-membership-direct-index-v0',
+      coefficientProjection: LIVE_COMPLETE_FLAME_PROJECTED_FOOTPRINT_AUTHORITY,
+      allocation: 'persistent-one-buffer-one-dispatch-target-v0',
+      cpuCoefficientReadbackApplied: false,
+      fallbackReason: null,
+    };
+    rebuildFluidBindGroups();
+    rebuildBoundarySplatBindGroups();
+    return { ...state.liveCompleteFlameOpticalCoefficientReceipt };
+  }
+
+  function encodeLiveCompleteFlameOpticalCoefficients(encoder) {
+    if (!liveCompleteFlameOpticalCoefficientsEnabled) return false;
+    const bindGroup = selectiveHeadLiveRoleGroups('coefficientRender')
+      || liveCompleteFlameCoefficientWriteBindGroups[currentFluid];
+    if (!encoder || !bindGroup || !liveCompleteFlameCoefficientUniformBuffer || !liveCompleteFlameCoefficientDispatchTexture || !readbackPipeline) {
+      state.liveCompleteFlameOpticalCoefficientReceipt = {
+        ...state.liveCompleteFlameOpticalCoefficientReceipt,
+        ok: false,
+        status: 'failed',
+        failurePhase: 'frame-encode',
+        reason: 'live-complete-flame-coefficient-producer-unavailable',
+      };
+      return false;
+    }
+    const rowCount = gridCellCount(gridSize);
+    const coefficientUniforms = uniforms.slice();
+    coefficientUniforms[307] = APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].uniform;
+    coefficientUniforms[316] = 0;
+    device.queue.writeBuffer(liveCompleteFlameCoefficientUniformBuffer, 0, coefficientUniforms);
+    device.queue.writeBuffer(
+      nonRidgeOpticalCaptureHeaderBuffer,
+      0,
+      new Uint32Array([0, rowCount, 4, 0]),
+    );
+    encodeDraw(
+      encoder,
+      liveCompleteFlameCoefficientDispatchTexture.createView(),
+      `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} live frame ${state.simStepCount}`,
+      readbackPipeline,
+      { bindGroup },
+    );
+    state.liveCompleteFlameOpticalCoefficientReceipt = {
+      ...state.liveCompleteFlameOpticalCoefficientReceipt,
+      ok: true,
+      status: 'encoded',
+      failurePhase: null,
+      reason: null,
+      producedFrameCount: state.frameCount,
+      producedSimStepCount: state.simStepCount,
+      sourceIdentity: {
+        routeIdentity: ROUTE_IDENTITY,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        role: state.selectiveHeadLiveEffectiveRole,
+        controlsSignature: effectiveControlsSignature(controlsSnapshot),
+        coefficientTarget: APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].targetIdentity,
+      },
+      cpuCoefficientReadbackApplied: false,
+      fallbackReason: null,
+    };
+    return true;
+  }
+
+  async function sampleLiveCompleteFlameOpticalCoefficientStats(options = {}) {
+    if (!liveCompleteFlameOpticalCoefficientsEnabled || !boundarySplatLiveCompleteFlameCoefficientBuffer) {
+      throw new Error('live-complete-flame-coefficient-sample-unavailable');
+    }
+    const rowCount = gridCellCount(gridSize);
+    const requestedSampleCount = Math.floor(Number(options.sampleCount) || 8192);
+    const sampleCount = Math.max(1, Math.min(rowCount, requestedSampleCount));
+    const headerByteLength = 4 * Uint32Array.BYTES_PER_ELEMENT;
+    const coefficientByteLength = sampleCount * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES;
+    const byteLength = headerByteLength + coefficientByteLength;
+    const readback = device.createBuffer({
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} sparse witness sample`,
+      size: byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const sampledFrameCount = state.frameCount;
+    const sampledSimStepCount = state.simStepCount;
+    try {
+      const encoder = device.createCommandEncoder({
+        label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} sparse witness sample encoder`,
+      });
+      encoder.copyBufferToBuffer(
+        nonRidgeOpticalCaptureHeaderBuffer,
+        0,
+        readback,
+        0,
+        headerByteLength,
+      );
+      for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+        const cellIndex = Math.floor(sampleIndex * rowCount / sampleCount);
+        encoder.copyBufferToBuffer(
+          boundarySplatLiveCompleteFlameCoefficientBuffer,
+          cellIndex * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES,
+          readback,
+          headerByteLength + sampleIndex * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES,
+          LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES,
+        );
+      }
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const mapped = readback.getMappedRange();
+      const header = new Uint32Array(mapped, 0, 4);
+      const values = new Float32Array(mapped, headerByteLength, coefficientByteLength / Float32Array.BYTES_PER_ELEMENT);
+      const producerHeader = {
+        rowCount: header[0],
+        capacity: header[1],
+        mode: header[2],
+        overflowCount: header[3],
+      };
+      let positiveCoefficientCount = 0;
+      let nonFiniteCoefficientCount = 0;
+      let maximumEmission = 0;
+      let maximumExtinction = 0;
+      let emissionSum = 0;
+      let extinctionSum = 0;
+      for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+        const offset = sampleIndex * 4;
+        const emission = Math.max(values[offset], values[offset + 1], values[offset + 2]);
+        const extinction = values[offset + 3];
+        if (![values[offset], values[offset + 1], values[offset + 2], extinction].every(Number.isFinite)) {
+          nonFiniteCoefficientCount += 1;
+          continue;
+        }
+        maximumEmission = Math.max(maximumEmission, emission);
+        maximumExtinction = Math.max(maximumExtinction, extinction);
+        emissionSum += Math.max(0, emission);
+        extinctionSum += Math.max(0, extinction);
+        if (emission > 1e-8 || extinction > 1e-8) positiveCoefficientCount += 1;
+      }
+      return {
+        identity: 'live-complete-flame-sparse-coefficient-witness-v0',
+        authority: 'diagnostic-even-stride-native-cell-gpu-buffer-sample-v0',
+        coefficientAuthority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+        rowCount,
+        sampleCount,
+        producerHeader,
+        sampledFrameCount,
+        sampledSimStepCount,
+        positiveCoefficientCount,
+        nonFiniteCoefficientCount,
+        maximumEmission,
+        maximumExtinction,
+        meanPositiveEmission: emissionSum / Math.max(1, positiveCoefficientCount),
+        meanPositiveExtinction: extinctionSum / Math.max(1, positiveCoefficientCount),
+      };
+    } finally {
+      readback.destroy();
+    }
+  }
+
+  async function materializeLiveCompleteFlameOpticalCoefficients(options = {}) {
+    const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
+      state.liveCompleteFlameOpticalCoefficientReceipt = {
+        ok: false,
+        status: 'failed',
+        authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+        failurePhase,
+        reason,
+        lastTrustworthyEvidence,
+      };
+      return { ...state.liveCompleteFlameOpticalCoefficientReceipt };
+    };
+    if (!device || !state.active) return failed('admission', 'inactive');
+    if (!selectiveHeadLiveCapturePaused) {
+      return failed('admission', 'live-complete-flame-coefficients-require-paused-simulator');
+    }
+    const rowCount = gridCellCount(gridSize);
+    const byteLength = rowCount * LIVE_COMPLETE_FLAME_COEFFICIENT_STRIDE_BYTES;
+    const maxBufferSize = Number(device.limits?.maxBufferSize || 0);
+    const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
+    if (byteLength > maxBufferSize || byteLength > maxBindingBytes) {
+      return failed('allocation', `live-complete-flame-coefficient-buffer-limit:${byteLength}:${maxBufferSize}:${maxBindingBytes}`, {
+        rowCount,
+        byteLength,
+        maxBufferSize,
+        maxStorageBufferBindingSize: maxBindingBytes,
+      });
+    }
+
+    const captureTimeMs = Number.isFinite(Number(options.captureTimeMs))
+      ? Number(options.captureTimeMs)
+      : performance.now();
+    const priorAppearanceMode = appearanceDecompositionModeRequestedRaw;
+    let idleRowsBuffer = null;
+    let exactCoefficientBuffer = null;
+    const priorCoefficientBuffer = boundarySplatLiveCompleteFlameCoefficientBuffer;
+    boundarySplatLiveCompleteFlameCoefficientBuffer = null;
+    state.liveCompleteFlameOpticalCoefficientReceipt = {
+      ok: false,
+      status: 'materializing',
+      authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+      rowCount,
+      byteLength,
+    };
+    rebuildBoundarySplatBindGroups();
+    try {
+      setAppearanceDecompositionMode('complete-flame-emission');
+      ensureNonRidgeOpticalCaptureBuffers();
+      idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
+      exactCoefficientBuffer = device.createBuffer({
+        label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3`,
+        size: byteLength,
+        usage: GPUBufferUsage.STORAGE,
+      });
+      nonRidgeOpticalCaptureRowBuffer = exactCoefficientBuffer;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      const writePass = await runNonRidgeOpticalCapturePass({
+        mode: 4,
+        capacity: rowCount,
+        captureTimeMs,
+        label: 'live-complete-flame-native-cell-write',
+      });
+      if (writePass.rowCount !== rowCount || writePass.overflowCount !== 0) {
+        throw new Error(`live-complete-flame-full-grid-count-drift-or-overflow:${rowCount}:${writePass.rowCount}:${writePass.overflowCount}`);
+      }
+      nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      boundarySplatLiveCompleteFlameCoefficientBuffer = exactCoefficientBuffer;
+      exactCoefficientBuffer = null;
+      const receipt = {
+        ok: true,
+        status: 'effective',
+        authority: LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY,
+        evidenceAuthority: 'operator-exploration-only',
+        decisionBearing: false,
+        rowCount,
+        byteLength,
+        observedRowCount: writePass.rowCount,
+        overflowCount: writePass.overflowCount,
+        grid: gridSize,
+        sourceIdentity: {
+          routeIdentity: ROUTE_IDENTITY,
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          controlsSignature: effectiveControlsSignature(controlsSnapshot),
+          coefficientTarget: APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].targetIdentity,
+        },
+        producerPass: 'full-grid-raymarch-complete-flame-coefficient-write-v0',
+        consumerAddressing: 'candidate-native-cell-membership-direct-index-v0',
+        coefficientProjection: LIVE_COMPLETE_FLAME_PROJECTED_FOOTPRINT_AUTHORITY,
+        cpuCoefficientReadbackApplied: false,
+        fallbackReason: null,
+      };
+      state.liveCompleteFlameOpticalCoefficientReceipt = receipt;
+      rebuildBoundarySplatBindGroups();
+      priorCoefficientBuffer?.destroy();
+      return { ...receipt, sourceIdentity: { ...receipt.sourceIdentity } };
+    } catch (error) {
+      boundarySplatLiveCompleteFlameCoefficientBuffer = null;
+      priorCoefficientBuffer?.destroy();
+      return failed('capture', error?.message || String(error));
+    } finally {
+      setAppearanceDecompositionMode(priorAppearanceMode);
+      if (nonRidgeOpticalCaptureRowBuffer !== idleRowsBuffer && idleRowsBuffer) {
+        nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+        rebuildNonRidgeOpticalCaptureBindGroups();
+      }
+      exactCoefficientBuffer?.destroy();
+      if (nonRidgeOpticalCaptureHeaderBuffer) {
+        device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+      }
+    }
+  }
+
+  async function readNonRidgeOpticalCaptureRows(byteLength) {
+    if (byteLength === 0) return new Float32Array();
+    const readback = device.createBuffer({
+      label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} exact rows readback`,
+      size: byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} exact rows copy` });
+      encoder.copyBufferToBuffer(nonRidgeOpticalCaptureRowBuffer, 0, readback, 0, byteLength);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const values = new Float32Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      return values;
+    } finally {
+      readback.destroy();
+    }
+  }
+
+  function positiveNonRidgeRecompositionReceipt(values, rowCount) {
+    let maxEmissionError = 0;
+    let maxExtinctionError = 0;
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const offset = rowIndex * NONRIDGE_OPTICAL_ROW_STRIDE_FLOATS;
+      const ridgeWeight = Math.max(0, Math.min(1, values[offset + 3]));
+      for (let channel = 0; channel < 3; channel += 1) {
+        const nonRidge = values[offset + 32 + channel];
+        const complete = values[offset + 36 + channel];
+        maxEmissionError = Math.max(maxEmissionError, Math.abs((complete * ridgeWeight) + nonRidge - complete));
+      }
+      const nonRidgeExtinction = values[offset + 35];
+      const completeExtinction = values[offset + 39];
+      maxExtinctionError = Math.max(
+        maxExtinctionError,
+        Math.abs((completeExtinction * ridgeWeight) + nonRidgeExtinction - completeExtinction),
+      );
+    }
+    return {
+      identity: 'positive-ridge-plus-nonridge-local-coefficient-recomposition-v0',
+      rowCount,
+      maxEmissionAbsoluteError: maxEmissionError,
+      maxExtinctionAbsoluteError: maxExtinctionError,
+      exactWithinFloat32: maxEmissionError <= 1e-6 && maxExtinctionError <= 1e-6,
+    };
+  }
+
+  async function beginDebugNonRidgeOpticalCapture(options = {}) {
+    const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
+      nonRidgeOpticalCaptureSession = {
+        status: 'failed',
+        failurePhase,
+        reason,
+        lastTrustworthyEvidence,
+      };
+      state.nonRidgeOpticalCapture = nonRidgeOpticalCapturePublicSession(nonRidgeOpticalCaptureSession);
+      return { ok: false, ...state.nonRidgeOpticalCapture, lastTrustworthyEvidence };
+    };
+    if (!device) return failed('inactive', 'inactive');
+    if (state.active && !selectiveHeadLiveCapturePaused) {
+      return failed('freeze-authority', 'nonridge-optical-capture-requires-frozen-renderer');
+    }
+    if (nonRidgeOpticalCaptureSession?.status === 'captured') {
+      return failed('session-custody', 'prior-nonridge-optical-capture-session-not-released', {
+        sessionId: nonRidgeOpticalCaptureSession.sessionId,
+      });
+    }
+    const captureTimeMs = Number.isFinite(Number(options.captureTimeMs))
+      ? Number(options.captureTimeMs)
+      : performance.now();
+    const priorAppearanceMode = appearanceDecompositionModeRequestedRaw;
+    let exactRowsBuffer = null;
+    let idleRowsBuffer = null;
+    try {
+      setAppearanceDecompositionMode('non-ridge-emission');
+      ensureNonRidgeOpticalCaptureBuffers();
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      const countOnly = await runNonRidgeOpticalCapturePass({
+        mode: 1,
+        capacity: 0,
+        captureTimeMs,
+        label: 'count-only',
+      });
+      if (countOnly.overflowCount !== 0) {
+        return failed('count-only', `count-only-pass-reported-overflow:${countOnly.overflowCount}`, countOnly);
+      }
+      const observedRowCount = countOnly.rowCount;
+      const byteLength = observedRowCount * NONRIDGE_OPTICAL_ROW_STRIDE_BYTES;
+      const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
+      if (byteLength > maxBindingBytes) {
+        return failed('exact-observed-row-allocation', `observed-row-bytes-exceed-device-binding-limit:${byteLength}>${maxBindingBytes}`, {
+          observedRowCount,
+          byteLength,
+          maxStorageBufferBindingSize: maxBindingBytes,
+        });
+      }
+      if (observedRowCount > 0) {
+        idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
+        exactRowsBuffer = device.createBuffer({
+          label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} exact-observed-row-allocation ${observedRowCount}`,
+          size: byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        nonRidgeOpticalCaptureRowBuffer = exactRowsBuffer;
+        rebuildNonRidgeOpticalCaptureBindGroups();
+      }
+      const writePass = await runNonRidgeOpticalCapturePass({
+        mode: 2,
+        capacity: observedRowCount,
+        captureTimeMs,
+        label: 'exact-observed-row-allocation-write',
+      });
+      if (writePass.rowCount !== observedRowCount || writePass.overflowCount !== 0) {
+        return failed('write-pass-verification', 'nonridge-optical-capture-count-drift-or-overflow', {
+          countOnly,
+          writePass,
+        });
+      }
+      const values = await readNonRidgeOpticalCaptureRows(byteLength);
+      const positiveRecomposition = positiveNonRidgeRecompositionReceipt(values, observedRowCount);
+      if (!positiveRecomposition.exactWithinFloat32) {
+        return failed('positive-recomposition', 'positive-nonridge-local-recomposition-failed', positiveRecomposition);
+      }
+      nonRidgeOpticalCaptureSession = {
+        status: observedRowCount === 0 ? 'captured-negative' : 'captured',
+        sessionId: `nonridge-optical-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        createdAtMs: performance.now(),
+        rowCount: observedRowCount,
+        observedRowCount,
+        overflowCount: writePass.overflowCount,
+        byteLength,
+        values,
+        allocationAuthority: 'count-only-then-exact-observed-row-allocation-v0',
+        captureTimeMs,
+        cohortIdentity: 'visible-ray-samples-with-positive-complete-or-ridge-support-v0',
+        sourceIdentity: {
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          grid: gridSize,
+          controlsSignature: effectiveControlsSignature(controlsSnapshot),
+          appearanceMode: 'non-ridge-emission',
+          boundarySidecar: boundarySidecarDebug(),
+        },
+        rendererPassReceipt: {
+          identity: 'frozen-nonridge-optical-ray-sample-capture-pass-v0',
+          raymarchEncoded: true,
+          raymarchApplied: true,
+          sidecarEncoded: true,
+          sidecarApplied: true,
+          splatsEncoded: false,
+          splatsApplied: false,
+          residualEncoded: false,
+          residualApplied: false,
+          smokeEncoded: false,
+          smokeApplied: false,
+          fallbackReason: null,
+        },
+        positiveRecomposition,
+      };
+      state.nonRidgeOpticalCapture = nonRidgeOpticalCapturePublicSession(nonRidgeOpticalCaptureSession);
+      return { ok: true, ...state.nonRidgeOpticalCapture };
+    } catch (error) {
+      return failed('capture', error?.message || String(error));
+    } finally {
+      setAppearanceDecompositionMode(priorAppearanceMode);
+      if (exactRowsBuffer) {
+        nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+        exactRowsBuffer.destroy();
+        rebuildNonRidgeOpticalCaptureBindGroups();
+      }
+      if (nonRidgeOpticalCaptureHeaderBuffer) {
+        device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+      }
+    }
+  }
+
+  function readDebugNonRidgeOpticalCaptureChunk(options = {}) {
+    const session = nonRidgeOpticalCaptureSession;
+    if (!session || !['captured', 'captured-negative'].includes(session.status) || !(session.values instanceof Float32Array)) {
+      return {
+        ok: false,
+        schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'no-active-nonridge-optical-capture-session',
+      };
+    }
+    const requestedSessionId = String(options.sessionId || '');
+    if (requestedSessionId && requestedSessionId !== session.sessionId) {
+      return {
+        ok: false,
+        schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'session-id-mismatch',
+        sessionId: session.sessionId,
+        requestedSessionId,
+      };
+    }
+    const startFloat = Math.max(0, Math.min(session.values.length, Math.floor(Number(options.startFloat) || 0)));
+    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, session.values.length - startFloat));
+    const floatCount = Math.max(0, Math.min(session.values.length - startFloat, requestedFloatCount));
+    return {
+      ok: true,
+      schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+      identity: NONRIDGE_OPTICAL_ROW_IDENTITY,
+      sessionId: session.sessionId,
+      dtype: 'float32',
+      startFloat,
+      floatCount,
+      byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
+      byteLength: floatCount * Float32Array.BYTES_PER_ELEMENT,
+      isFinal: startFloat + floatCount >= session.values.length,
+      base64: encodeFloat32ChunkBase64(session.values, startFloat, floatCount),
+    };
+  }
+
+  function releaseDebugNonRidgeOpticalCapture(options = {}) {
+    const session = nonRidgeOpticalCaptureSession;
+    const requestedSessionId = String(options.sessionId || '');
+    if (!session || (requestedSessionId && requestedSessionId !== session.sessionId)) {
+      return {
+        ok: false,
+        schema: NONRIDGE_OPTICAL_CAPTURE_IDENTITY,
+        status: 'failed',
+        failurePhase: 'release',
+        reason: session ? 'session-id-mismatch' : 'no-active-nonridge-optical-capture-session',
+      };
+    }
+    const released = { ...nonRidgeOpticalCapturePublicSession(session), status: 'released' };
+    nonRidgeOpticalCaptureSession = null;
+    state.nonRidgeOpticalCapture = released;
+    return { ok: true, ...released };
+  }
+
+  function sourceBasisControlReceipt(snapshot) {
+    return Object.fromEntries(CAUSAL_CONTROL_FIELDS.map(field => {
+      const nested = snapshot?.[field.nested[0]];
+      const value = nested && Number.isFinite(Number(nested[field.nested[1]]))
+        ? Number(nested[field.nested[1]])
+        : Number(snapshot?.[field.key]);
+      return [field.name, value];
+    }));
+  }
+
+  function sourceBasisGpuControlReceipt() {
+    return {
+      'support.thermal': uniforms[280],
+      'support.reaction': uniforms[281],
+      'support.front': uniforms[282],
+      'support.interface': uniforms[283],
+      'boundary.gradientGain': uniforms[288],
+      'boundary.cut': uniforms[289],
+      'boundary.softness': uniforms[290],
+      'boundary.coreRejection': uniforms[284],
+      'topology.gain': uniforms[285],
+      'curl.gain': uniforms[286],
+      'divergence.gain': uniforms[287],
+      'ridge.gain': uniforms[296],
+      'ridge.cut': uniforms[297],
+      'tip.breakup': uniforms[298],
+      'topology.erosion': uniforms[299],
+    };
+  }
+
+  function clearNonRidgeSourceBasisControlAuthority() {
+    nonRidgeSourceBasisControlsActive = false;
+    nonRidgeSourceBasisControlApplication = null;
+    if (!device) {
+      state.boundaryControlUniformAuthority = 'inactive';
+      return;
+    }
+    try {
+      updateUniforms(performance.now());
+    } catch {
+      state.boundaryControlUniformAuthority = 'ordinary-shell-controls-v0';
+    }
+  }
+
+  function applyDebugNonRidgeCausalControls(requested = {}) {
+    if (!device) throw new Error('nonridge-source-basis-controls-require-active-gpu');
+    if (state.active && !selectiveHeadLiveCapturePaused) {
+      throw new Error('nonridge-source-basis-controls-require-frozen-renderer');
+    }
+    const names = Object.keys(requested).sort();
+    const expectedNames = CAUSAL_CONTROL_FIELDS.map(field => field.name).sort();
+    if (names.length !== expectedNames.length || names.some((name, index) => name !== expectedNames[index])) {
+      throw new Error('nonridge-source-basis-controls-must-exactly-cover-authorized-causal-order');
+    }
+    const next = { ...controlsSnapshot };
+    const nestedCopies = new Map();
+    for (const field of CAUSAL_CONTROL_FIELDS) {
+      const value = Number(requested[field.name]);
+      if (!Number.isFinite(value) || value < field.min || value > field.max) {
+        throw new Error(`nonridge-source-basis-control-out-of-range:${field.name}:${requested[field.name]}`);
+      }
+      next[field.key] = value;
+      const [group, key] = field.nested;
+      if (!nestedCopies.has(group)) nestedCopies.set(group, { ...(next[group] || {}) });
+      nestedCopies.get(group)[key] = value;
+    }
+    for (const [group, values] of nestedCopies) next[group] = values;
+    controlsSnapshot = applyRuntimeQualityControls(next);
+    nonRidgeSourceBasisControlsActive = true;
+    try {
+      updateUniforms(performance.now());
+    } catch (error) {
+      clearNonRidgeSourceBasisControlAuthority();
+      throw error;
+    }
+    const effectiveControls = sourceBasisControlReceipt(controlsSnapshot);
+    const gpuEffectiveControls = sourceBasisGpuControlReceipt();
+    const controlSubstitutions = CAUSAL_CONTROL_FIELDS.flatMap(field => (
+      effectiveControls[field.name] === Number(requested[field.name])
+        ? []
+        : [{ name: field.name, requested: Number(requested[field.name]), effective: effectiveControls[field.name] }]
+    ));
+    const gpuControlSubstitutions = CAUSAL_CONTROL_FIELDS.flatMap(field => (
+      gpuEffectiveControls[field.name] === Math.fround(Number(requested[field.name]))
+        ? []
+        : [{ name: field.name, requested: Number(requested[field.name]), effective: gpuEffectiveControls[field.name] }]
+    ));
+    const applicationOk = controlSubstitutions.length === 0 && gpuControlSubstitutions.length === 0;
+    nonRidgeSourceBasisControlApplication = applicationOk ? {
+      identity: 'capture-owned-cpu-and-shader-control-application-v0',
+      effectiveControls: { ...effectiveControls },
+      gpuEffectiveControls: { ...gpuEffectiveControls },
+      boundaryControlUniformAuthority: state.boundaryControlUniformAuthority,
+    } : null;
+    if (!applicationOk) clearNonRidgeSourceBasisControlAuthority();
+    return {
+      ok: applicationOk,
+      schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+      identity: 'exact-continuous-renderer-causal-control-application-v0',
+      requestedControls: Object.fromEntries(CAUSAL_CONTROL_FIELDS.map(field => [field.name, Number(requested[field.name])])),
+      effectiveControls,
+      gpuEffectiveControls,
+      controlSubstitutions,
+      gpuControlSubstitutions,
+      boundaryControlUniformAuthority: state.boundaryControlUniformAuthority,
+      rendererPaused: true,
+      simulationAdvanced: false,
+      simulationReset: false,
+      fallbackReason: controlSubstitutions.length
+        ? 'renderer-control-substitution'
+        : (gpuControlSubstitutions.length ? 'shader-uniform-control-substitution' : null),
+    };
+  }
+
+  function nonRidgeSourceBasisPublicSession(session) {
+    if (!session) return null;
+    return {
+      schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+      identity: 'frozen-full-grid-nonridge-source-basis-rows-v0',
+      status: session.status,
+      failurePhase: session.failurePhase || null,
+      reason: session.reason || null,
+      sessionId: session.sessionId || null,
+      rowCount: session.rowCount || 0,
+      observedRowCount: session.observedRowCount || 0,
+      overflowCount: session.overflowCount || 0,
+      strideFloats: SOURCE_BASIS_GPU_ROW_FLOATS,
+      byteLength: session.byteLength || 0,
+      gridShape: session.gridShape || null,
+      gridOrigin: session.gridOrigin || null,
+      gridSpacing: session.gridSpacing || null,
+      gridAxisOrder: 'x-fastest-y-then-z-v0',
+      captureTimeMs: session.captureTimeMs ?? null,
+      sourceIdentity: session.sourceIdentity || null,
+      rendererPassReceipt: session.rendererPassReceipt || null,
+      controlApplicationReceipt: session.controlApplicationReceipt || null,
+      requestedRoute: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+    };
+  }
+
+  function sourceBasisControlApplicationVerification(captureTimeMs) {
+    if (!nonRidgeSourceBasisControlsActive || !nonRidgeSourceBasisControlApplication) {
+      return { ok: false, reason: 'nonridge-source-basis-capture-requires-control-application' };
+    }
+    try {
+      updateUniforms(captureTimeMs);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: 'nonridge-source-basis-capture-uniform-update-failed',
+        error: error?.message || String(error),
+      };
+    }
+    const effectiveControls = sourceBasisControlReceipt(controlsSnapshot);
+    const gpuEffectiveControls = sourceBasisGpuControlReceipt();
+    const cpuControlSubstitutions = CAUSAL_CONTROL_FIELDS.flatMap(field => (
+      effectiveControls[field.name] === nonRidgeSourceBasisControlApplication.effectiveControls[field.name]
+        ? []
+        : [{
+            name: field.name,
+            applied: nonRidgeSourceBasisControlApplication.effectiveControls[field.name],
+            captureEffective: effectiveControls[field.name],
+          }]
+    ));
+    const gpuControlSubstitutions = CAUSAL_CONTROL_FIELDS.flatMap(field => (
+      gpuEffectiveControls[field.name] === nonRidgeSourceBasisControlApplication.gpuEffectiveControls[field.name]
+        ? []
+        : [{
+            name: field.name,
+            applied: nonRidgeSourceBasisControlApplication.gpuEffectiveControls[field.name],
+            captureEffective: gpuEffectiveControls[field.name],
+          }]
+    ));
+    const boundaryControlUniformAuthority = state.boundaryControlUniformAuthority;
+    const ok = cpuControlSubstitutions.length === 0
+      && gpuControlSubstitutions.length === 0
+      && boundaryControlUniformAuthority === 'nonridge-source-basis-capture-controls-v0';
+    return {
+      ok,
+      identity: 'capture-time-cpu-and-shader-control-revalidation-v0',
+      reason: ok ? null : 'nonridge-source-basis-capture-control-authority-drift',
+      effectiveControls,
+      gpuEffectiveControls,
+      cpuControlSubstitutions,
+      gpuControlSubstitutions,
+      boundaryControlUniformAuthority,
+    };
+  }
+
+  async function beginDebugNonRidgeSourceBasisCapture(options = {}) {
+    const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
+      nonRidgeSourceBasisCaptureSession = { status: 'failed', failurePhase, reason, lastTrustworthyEvidence };
+      const receipt = { ok: false, ...nonRidgeSourceBasisPublicSession(nonRidgeSourceBasisCaptureSession), lastTrustworthyEvidence };
+      clearNonRidgeSourceBasisControlAuthority();
+      return receipt;
+    };
+    if (!device) return failed('inactive', 'inactive');
+    if (state.active && !selectiveHeadLiveCapturePaused) {
+      return failed('freeze-authority', 'nonridge-source-basis-capture-requires-frozen-renderer');
+    }
+    if (nonRidgeSourceBasisCaptureSession?.values instanceof Float32Array) {
+      return {
+        ok: false,
+        schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+        status: 'rejected',
+        failurePhase: 'session-custody',
+        reason: 'prior-nonridge-source-basis-session-not-released',
+        heldSession: nonRidgeSourceBasisPublicSession(nonRidgeSourceBasisCaptureSession),
+      };
+    }
+    const captureTimeMs = Number.isFinite(Number(options.captureTimeMs))
+      ? Number(options.captureTimeMs)
+      : performance.now();
+    if (!nonRidgeSourceBasisControlsActive || !nonRidgeSourceBasisControlApplication) {
+      return failed('control-authority', 'nonridge-source-basis-capture-requires-control-application');
+    }
+    const controlApplicationReceipt = sourceBasisControlApplicationVerification(captureTimeMs);
+    if (!controlApplicationReceipt.ok) {
+      return failed('control-authority', controlApplicationReceipt.reason, controlApplicationReceipt);
+    }
+    const rowCount = gridCellCount(gridSize);
+    const byteLength = rowCount * NONRIDGE_SOURCE_BASIS_ROW_STRIDE_BYTES;
+    const maxBindingBytes = Number(device.limits?.maxStorageBufferBindingSize || 0);
+    if (byteLength > maxBindingBytes) {
+      return failed('exact-full-grid-allocation', `full-grid-row-bytes-exceed-device-binding-limit:${byteLength}>${maxBindingBytes}`, {
+        rowCount,
+        byteLength,
+        maxStorageBufferBindingSize: maxBindingBytes,
+      });
+    }
+    const priorAppearanceMode = appearanceDecompositionModeRequestedRaw;
+    let exactRowsBuffer = null;
+    let idleRowsBuffer = null;
+    try {
+      setAppearanceDecompositionMode('non-ridge-emission');
+      ensureNonRidgeOpticalCaptureBuffers();
+      idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
+      exactRowsBuffer = device.createBuffer({
+        label: `kaminos ${NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY} exact full-grid ${rowCount}`,
+        size: byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+      });
+      nonRidgeOpticalCaptureRowBuffer = exactRowsBuffer;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      const writePass = await runNonRidgeOpticalCapturePass({
+        mode: 3,
+        capacity: rowCount,
+        captureTimeMs,
+        controlApplicationReceipt,
+        label: 'exact-full-grid-source-basis-write',
+      });
+      if (writePass.rowCount !== rowCount || writePass.overflowCount !== 0) {
+        return failed('write-pass-verification', 'nonridge-source-basis-full-grid-count-drift-or-overflow', {
+          expectedRowCount: rowCount,
+          writePass,
+        });
+      }
+      const values = await readNonRidgeOpticalCaptureRows(byteLength);
+      nonRidgeSourceBasisCaptureSession = {
+        status: 'captured',
+        sessionId: `nonridge-source-basis-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        createdAtMs: performance.now(),
+        rowCount,
+        observedRowCount: writePass.rowCount,
+        overflowCount: writePass.overflowCount,
+        byteLength,
+        values,
+        gridShape: [gridSize, gridSize, gridSize],
+        gridOrigin: [-1, -1, -1],
+        gridSpacing: [2 / gridSize, 2 / gridSize, 2 / gridSize],
+        captureTimeMs,
+        sourceIdentity: {
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          controlsSignature: effectiveControlsSignature(controlsSnapshot),
+          appearanceMode: 'non-ridge-emission',
+          boundarySidecar: boundarySidecarDebug(),
+        },
+        rendererPassReceipt: {
+          identity: 'frozen-full-grid-nonridge-source-basis-coefficient-pass-v0',
+          fullGridEncoded: true,
+          fullGridApplied: true,
+          expectedRows: rowCount,
+          observedRows: writePass.rowCount,
+          raymarchEncoded: false,
+          raymarchApplied: false,
+          splatsEncoded: false,
+          splatsApplied: false,
+          smokeEncoded: false,
+          smokeApplied: false,
+          fallbackReason: null,
+          boundaryControlUniformAuthority: controlApplicationReceipt.boundaryControlUniformAuthority,
+          effectiveControls: controlApplicationReceipt.effectiveControls,
+          gpuEffectiveControls: controlApplicationReceipt.gpuEffectiveControls,
+          cpuControlSubstitutions: controlApplicationReceipt.cpuControlSubstitutions,
+          gpuControlSubstitutions: controlApplicationReceipt.gpuControlSubstitutions,
+        },
+      };
+      return { ok: true, ...nonRidgeSourceBasisPublicSession(nonRidgeSourceBasisCaptureSession) };
+    } catch (error) {
+      return failed('capture', error?.message || String(error));
+    } finally {
+      setAppearanceDecompositionMode(priorAppearanceMode);
+      if (exactRowsBuffer) {
+        nonRidgeOpticalCaptureRowBuffer = idleRowsBuffer;
+        exactRowsBuffer.destroy();
+        rebuildNonRidgeOpticalCaptureBindGroups();
+      }
+      if (nonRidgeOpticalCaptureHeaderBuffer) {
+        device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
+      }
+    }
+  }
+
+  function readDebugNonRidgeSourceBasisCaptureChunk(options = {}) {
+    const session = nonRidgeSourceBasisCaptureSession;
+    if (!session || session.status !== 'captured' || !(session.values instanceof Float32Array)) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'no-active-nonridge-source-basis-session' };
+    }
+    const requestedSessionId = String(options.sessionId || '');
+    if (requestedSessionId && requestedSessionId !== session.sessionId) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'chunk-read', reason: 'session-id-mismatch', sessionId: session.sessionId, requestedSessionId };
+    }
+    const startFloat = Math.max(0, Math.min(session.values.length, Math.floor(Number(options.startFloat) || 0)));
+    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, session.values.length - startFloat));
+    const floatCount = Math.max(0, Math.min(session.values.length - startFloat, requestedFloatCount));
+    return {
+      ok: true,
+      schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY,
+      identity: 'frozen-full-grid-nonridge-source-basis-rows-v0',
+      sessionId: session.sessionId,
+      dtype: 'float32',
+      startFloat,
+      floatCount,
+      byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
+      byteLength: floatCount * Float32Array.BYTES_PER_ELEMENT,
+      isFinal: startFloat + floatCount >= session.values.length,
+      base64: encodeFloat32ChunkBase64(session.values, startFloat, floatCount),
+    };
+  }
+
+  function releaseDebugNonRidgeSourceBasisCapture(options = {}) {
+    const session = nonRidgeSourceBasisCaptureSession;
+    const requestedSessionId = String(options.sessionId || '');
+    if (!session || (requestedSessionId && requestedSessionId !== session.sessionId)) {
+      return { ok: false, schema: NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY, status: 'failed', failurePhase: 'release', reason: session ? 'session-id-mismatch' : 'no-active-nonridge-source-basis-session' };
+    }
+    const released = { ...nonRidgeSourceBasisPublicSession(session), status: 'released' };
+    nonRidgeSourceBasisCaptureSession = null;
+    clearNonRidgeSourceBasisControlAuthority();
+    return { ok: true, ...released };
+  }
+
   async function beginDebugFullFieldExport(options = {}) {
     if (!device) {
       const failed = {
@@ -10856,7 +17335,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frameCount: replaySample.frameCount,
       simStepCount: replaySample.simStepCount,
       grid: replaySample.grid,
-      majorantGrid: replaySample.majorantGrid,
       effectiveRoute: replaySample.effectiveRoute,
       prototypeIdentity: replaySample.prototypeIdentity,
       backend: replaySample.backend,
@@ -10864,6 +17342,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const derivedBuffers = await materializeFullFieldDerivedBuffersForDebugExport(
       deterministicReplay?.finalTimeMs ?? performance.now(),
     );
+    const materializationValidation = validateFullFieldDerivedBufferMaterialization(derivedBuffers);
+    if (!materializationValidation.ok) {
+      const failed = {
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+        status: 'failed',
+        failurePhase: materializationValidation.failurePhase,
+        reason: materializationValidation.reason,
+        lastTrustworthyEvidence: {
+          grid: gridSize,
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          derivedBuffers,
+        },
+        deterministicReplay,
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+      };
+      state.fullFieldExportSession = failed;
+      return { ok: false, ...failed };
+    }
     if (state.active) {
       state.active = false;
       canvas.classList.remove('active');
@@ -10879,6 +17380,36 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
       }
+    }
+    const capturedMaterialization = {
+      ...derivedBuffers,
+      boundarySplatDraw: captured.boundarySplatDraw,
+    };
+    const capturedMaterializationValidation = validateFullFieldDerivedBufferMaterialization(
+      capturedMaterialization,
+      { requireDrawState: true },
+    );
+    if (!capturedMaterializationValidation.ok) {
+      const failed = {
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+        status: 'failed',
+        failurePhase: capturedMaterializationValidation.failurePhase,
+        reason: capturedMaterializationValidation.reason,
+        lastTrustworthyEvidence: {
+          grid: gridSize,
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          derivedBuffers: capturedMaterialization,
+        },
+        deterministicReplay,
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+      };
+      state.fullFieldExportSession = failed;
+      return { ok: false, ...failed };
     }
     const session = {
       status: 'captured',
@@ -12082,63 +18613,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
-  async function sampleMajorantReadback() {
-    const readback = device.createBuffer({
-      label: 'kaminos coarse majorant readback',
-      size: majorantBufferBytes(majorantGridSize),
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-    });
-    const encoder = device.createCommandEncoder({ label: 'kaminos coarse majorant readback encoder' });
-    encoder.copyBufferToBuffer(majorantBuffer, 0, readback, 0, majorantBufferBytes(majorantGridSize));
-    device.queue.submit([encoder.finish()]);
-    await readback.mapAsync(GPUMapMode.READ);
-    const data = new Float32Array(readback.getMappedRange());
-    let densitySum = 0;
-    let radianceSum = 0;
-    let extinctionSum = 0;
-    let importanceSum = 0;
-    let densityMax = 0;
-    let radianceMax = 0;
-    let extinctionMax = 0;
-    let importanceMax = 0;
-    let occupiedBricks = 0;
-    const bricks = majorantGridSize * majorantGridSize * majorantGridSize;
-    for (let i = 0; i < bricks; i += 1) {
-      const offset = i * 4;
-      const density = data[offset];
-      const radiance = data[offset + 1];
-      const extinction = data[offset + 2];
-      const importance = data[offset + 3];
-      densitySum += density;
-      radianceSum += radiance;
-      extinctionSum += extinction;
-      importanceSum += importance;
-      densityMax = Math.max(densityMax, density);
-      radianceMax = Math.max(radianceMax, radiance);
-      extinctionMax = Math.max(extinctionMax, extinction);
-      importanceMax = Math.max(importanceMax, importance);
-      if (importance > 0.015 || density > 0.01 || radiance > 0.01 || extinction > 0.01) occupiedBricks += 1;
-    }
-    readback.unmap();
-    readback.destroy();
-    const result = {
-      grid: majorantGridSize,
-      bricks,
-      occupiedBricks,
-      densityMean: densitySum / bricks,
-      densityMax,
-      radianceMean: radianceSum / bricks,
-      radianceMax,
-      extinctionMean: extinctionSum / bricks,
-      extinctionMax,
-      importanceMean: importanceSum / bricks,
-      importanceMax,
-    };
-    state.majorantOccupiedBricks = occupiedBricks;
-    state.majorantImportanceMax = importanceMax;
-    return result;
-  }
-
   async function readTextureRgba8(texture, width, height, label = 'kaminos rgba8 texture readback') {
     const bytesPerPixel = 4;
     const unpaddedBytesPerRow = width * bytesPerPixel;
@@ -12174,6 +18648,809 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function readCanvasTextureRgba8(texture, width, height) {
+    const readback = await readTextureRgba8(texture, width, height, 'kaminos canvas presentation texture rgba8 readback');
+    const sourceFormat = String(format || 'unknown');
+    if (sourceFormat.startsWith('bgra')) {
+      for (let offset = 0; offset < readback.rgba.length; offset += 4) {
+        const blue = readback.rgba[offset];
+        readback.rgba[offset] = readback.rgba[offset + 2];
+        readback.rgba[offset + 2] = blue;
+      }
+    }
+    const rgbaBytes = Uint8Array.from(readback.rgba);
+    let binary = '';
+    for (let offset = 0; offset < rgbaBytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...rgbaBytes.subarray(offset, Math.min(rgbaBytes.length, offset + 0x8000)));
+    }
+    return {
+      width: readback.width,
+      height: readback.height,
+      bytesPerRow: readback.bytesPerRow,
+      unpaddedBytesPerRow: readback.unpaddedBytesPerRow,
+      byteLength: rgbaBytes.byteLength,
+      rgbaBase64: btoa(binary),
+      sourceFormat,
+      channelOrder: 'rgba',
+      channelSwizzle: sourceFormat.startsWith('bgra') ? 'bgra-to-rgba' : 'none',
+      authority: 'gpu-presentation-texture-rgba8-readback-frozen-sim-state',
+    };
+  }
+
+  function decodeFloat16(bits) {
+    const sign = (bits & 0x8000) === 0 ? 1 : -1;
+    const exponent = (bits >>> 10) & 0x1f;
+    const fraction = bits & 0x03ff;
+    if (exponent === 0) return sign * 2 ** -14 * (fraction / 1024);
+    if (exponent === 0x1f) return fraction === 0 ? sign * Infinity : NaN;
+    return sign * 2 ** (exponent - 15) * (1 + fraction / 1024);
+  }
+
+  async function readRgba16FloatTexture(buffer, width, height, bytesPerRow) {
+    await buffer.mapAsync(GPUMapMode.READ);
+    const bytes = new Uint8Array(buffer.getMappedRange());
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const rgb = new Float32Array(width * height * 3);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const source = y * bytesPerRow + x * 8;
+        const target = (y * width + x) * 3;
+        rgb[target] = decodeFloat16(view.getUint16(source, true));
+        rgb[target + 1] = decodeFloat16(view.getUint16(source + 2, true));
+        rgb[target + 2] = decodeFloat16(view.getUint16(source + 4, true));
+      }
+    }
+    buffer.unmap();
+    return rgb;
+  }
+
+  async function readFourArmHeldStateLinearTexture(buffer, width, height, bytesPerRow) {
+    await buffer.mapAsync(GPUMapMode.READ);
+    const bytes = new Uint8Array(buffer.getMappedRange());
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const linearHdr = new Float32Array(width * height * 4);
+    const opticalDepth = new Float32Array(width * height);
+    const transmittance = new Float32Array(width * height);
+    let finitePixelCount = 0;
+    let litPixels = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const source = y * bytesPerRow + x * 8;
+        const pixel = y * width + x;
+        const target = pixel * 4;
+        const red = decodeFloat16(view.getUint16(source, true));
+        const green = decodeFloat16(view.getUint16(source + 2, true));
+        const blue = decodeFloat16(view.getUint16(source + 4, true));
+        const tau = decodeFloat16(view.getUint16(source + 6, true));
+        linearHdr[target] = red;
+        linearHdr[target + 1] = green;
+        linearHdr[target + 2] = blue;
+        linearHdr[target + 3] = tau;
+        opticalDepth[pixel] = tau;
+        transmittance[pixel] = Math.exp(-Math.max(0, tau));
+        if ([red, green, blue, tau].every(Number.isFinite)) finitePixelCount += 1;
+        if (Math.max(red, green, blue) > 0) litPixels += 1;
+      }
+    }
+    buffer.unmap();
+    return { linearHdr, opticalDepth, transmittance, finitePixelCount, litPixels };
+  }
+
+  async function sampleFourArmHeldStateLedger(options = {}) {
+    const application = fourArmHeldStateRuntimeState?.application || null;
+    const failure = (failurePhase, reason, lastTrustworthyEvidence = null) => ({
+      schema: 'kaminos.integration.four-arm-held-state-capture.v0',
+      status: 'failed',
+      failurePhase,
+      reason,
+      lastTrustworthyEvidence,
+      requestedStateId: application?.requestedStateId || null,
+      effectiveStateId: application?.effectiveStateId || null,
+      requestedArmId: application?.requestedArmId || null,
+      effectiveArmId: application?.effectiveArmId || null,
+      route: {
+        requestedRoute: application?.requestedRoute || ROUTE_IDENTITY,
+        effectiveRoute: state.effectiveRoute || null,
+        backend: state.backend || null,
+        fallbackReason: state.boundarySplatFallbackReason || null,
+      },
+    });
+    if (!state.active || !device) return failure('runtime-admission', 'volume-runtime-inactive');
+    if (!application) return failure('runtime-admission', 'four-arm-application-missing');
+    if (application.residual?.enabled
+      && (!fourArmHeldStateResidualGrid || !fourArmHeldStateResidualBindGroup)) {
+      return failure('residual-march-admission', 'positive-complement-runtime-grid-not-installed', {
+        residualMode: application.residual.mode,
+        residualGrid: application.residual.grid,
+      });
+    }
+    if (state.simStepCount !== application.sourceSimStepCount) {
+      return failure('held-state-admission', `held-state-step-mismatch:${state.simStepCount}:${application.sourceSimStepCount}`);
+    }
+    if (!timestampQueriesAvailable()) {
+      return failure('timestamp-admission', device?.features?.has?.('timestamp-query')
+        ? 'timestamp-query-write-api-unavailable'
+        : 'timestamp-query-not-supported');
+    }
+    if (boundarySplatPresentationModeEffective !== BOUNDARY_SPLAT_OPTICAL_MODE) {
+      return failure('recurrence-admission', `optical-mode-not-effective:${boundarySplatPresentationModeEffective || 'missing'}`);
+    }
+    const sameStateCaptureId = String(options.sameStateCaptureId || '');
+    if (!sameStateCaptureId) return failure('capture-admission', 'same-state-capture-id-missing');
+    const captureNonce = String(options.captureNonce || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+    const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const queryCount = 14;
+    const querySet = device.createQuerySet({ type: 'timestamp', count: queryCount });
+    const queryResolve = device.createBuffer({
+      label: 'kaminos four-arm held-state timestamp resolve',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    const queryReadback = device.createBuffer({
+      label: 'kaminos four-arm held-state timestamp readback',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const bytesPerPixel = 8;
+    const bytesPerRow = Math.ceil(state.width * bytesPerPixel / 256) * 256;
+    const imageReadback = device.createBuffer({
+      label: 'kaminos four-arm held-state linear HDR readback',
+      size: bytesPerRow * state.height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    let errorScopeOpen = false;
+    try {
+      updateUniforms(sampleNow);
+      ensureBoundarySplatOpticalTexture();
+      ensureFourArmHeldStateLinearTexture();
+      device.pushErrorScope('validation');
+      errorScopeOpen = true;
+      const encoder = device.createCommandEncoder({ label: 'kaminos four-arm held-state frozen ledger encoder' });
+      encodeBoundarySplatTimestampMarker(encoder, querySet, 0, 1, 'kaminos held-state selection precomputed marker');
+      encodeBoundarySplatTimestampMarker(encoder, querySet, 2, 3, 'kaminos held-state compaction precomputed marker');
+      const splatsEncoded = encodeBoundarySplats(encoder, {
+        explicitSplatConsumer: FOUR_ARM_HELD_STATE_LEDGER_CONSUMER,
+      });
+      if (!splatsEncoded) {
+        throw new Error(`splat-application-failed:${state.boundarySplatFallbackReason || 'unknown'}`);
+      }
+      encodeBoundarySplatTimestampMarker(encoder, querySet, 4, 5, 'kaminos held-state preuploaded deposition marker');
+      const splatsApplied = encodeBoundarySplatOpticalAccumulation(encoder, {
+        querySet,
+        beginningOfPassWriteIndex: 6,
+        endOfPassWriteIndex: 7,
+      });
+      if (!splatsApplied) throw new Error(`splat-raster-failed:${state.boundarySplatFallbackReason || 'unknown'}`);
+      if (application.residual.enabled) {
+        const residualApplied = encodeFourArmHeldStateResidualMarch(encoder, {
+          querySet,
+          beginningOfPassWriteIndex: 8,
+          endOfPassWriteIndex: 9,
+        });
+        if (!residualApplied) throw new Error('positive-complement-residual-march-failed');
+      } else {
+        encodeBoundarySplatTimestampMarker(encoder, querySet, 8, 9, 'kaminos held-state residual march disabled by arm policy');
+      }
+      const reconstructed = encodeBoundarySplatOpticalResolve(
+        encoder,
+        fourArmHeldStateLinearTexture.createView(),
+        fourArmHeldStateLinearResolvePipeline,
+        { timestampWrites: { querySet, beginningOfPassWriteIndex: 10, endOfPassWriteIndex: 11 } },
+      );
+      if (!reconstructed) throw new Error('linear-hdr-reconstruction-failed');
+      encodeBoundarySplatTimestampMarker(encoder, querySet, 12, 13, 'kaminos held-state identity composition marker');
+      encoder.copyTextureToBuffer(
+        { texture: fourArmHeldStateLinearTexture },
+        { buffer: imageReadback, bytesPerRow, rowsPerImage: state.height },
+        { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      );
+      encoder.resolveQuerySet(querySet, 0, queryCount, queryResolve, 0);
+      encoder.copyBufferToBuffer(queryResolve, 0, queryReadback, 0, queryCount * 8);
+      device.queue.submit([encoder.finish()]);
+      await queryReadback.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(queryReadback.getMappedRange().slice(0));
+      queryReadback.unmap();
+      const validationError = await device.popErrorScope();
+      errorScopeOpen = false;
+      if (validationError) throw new Error(`gpu-validation:${validationError.message || String(validationError)}`);
+      if (timestamps.some(value => value === 0n)) {
+        throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
+      }
+      const pixels = await readFourArmHeldStateLinearTexture(imageReadback, state.width, state.height, bytesPerRow);
+      const stageRanges = {
+        selection: [0, 1],
+        compaction: [2, 3],
+        deposition: [4, 5],
+        splatRaster: [6, 7],
+        residualMarch: [8, 9],
+        reconstruction: [10, 11],
+        composition: [12, 13],
+      };
+      const stages = {};
+      let chargedTotal = 0;
+      for (const [name, [start, end]] of Object.entries(stageRanges)) {
+        if (timestamps[end] < timestamps[start]) {
+          throw new Error(`timestamp-stage-nonmonotonic:${name}:${timestamps[start]}:${timestamps[end]}`);
+        }
+        const ms = Number(timestamps[end] - timestamps[start]) / 1_000_000;
+        stages[name] = {
+          status: 'sampled',
+          ms,
+          ...(name === 'selection' ? { disposition: 'authenticated-preselected-membership-no-rerun-v0' } : {}),
+          ...(name === 'compaction' ? { disposition: 'authenticated-precompacted-payload-v0' } : {}),
+          ...(name === 'deposition' ? { disposition: 'authenticated-preuploaded-payload-indirect-setup-marker-v0' } : {}),
+          ...(name === 'residualMarch' ? {
+            disposition: application.residual.enabled
+              ? 'positive-complement-coarse-volume-raymarch-v0'
+              : 'disabled-by-arm-policy-v0',
+          } : {}),
+          ...(name === 'composition' ? { disposition: 'single-recurrence-identity-composition-v0' } : {}),
+        };
+        chargedTotal += ms;
+      }
+      stages.chargedTotal = { status: 'sampled', ms: chargedTotal };
+      const linearHdrBytes = new Uint8Array(pixels.linearHdr.buffer, pixels.linearHdr.byteOffset, pixels.linearHdr.byteLength);
+      const opticalDepthBytes = new Uint8Array(pixels.opticalDepth.buffer, pixels.opticalDepth.byteOffset, pixels.opticalDepth.byteLength);
+      const transmittanceBytes = new Uint8Array(pixels.transmittance.buffer, pixels.transmittance.byteOffset, pixels.transmittance.byteLength);
+      return {
+        schema: 'kaminos.integration.four-arm-held-state-capture.v0',
+        status: 'captured',
+        failurePhase: null,
+        requestedStateId: application.requestedStateId,
+        effectiveStateId: application.effectiveStateId,
+        requestedArmId: application.requestedArmId,
+        effectiveArmId: application.effectiveArmId,
+        route: {
+          requestedRoute: application.requestedRoute,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+          fallbackReason: null,
+        },
+        recurrenceIdentity: application.recurrenceIdentity,
+        recurrenceCount: 1,
+        sourceSimStepCount: application.sourceSimStepCount,
+        capturedSimStepCount: state.simStepCount,
+        baseFrameCount,
+        capturedFrameCount: state.frameCount,
+        baseSimStepCount,
+        selectorRerun: false,
+        residualAwareRetargeting: false,
+        sameStateCaptureId,
+        captureNonce,
+        freshnessStatus: 'live-controlled-capture',
+        captureAuthority: 'gpu-linear-hdr-readback-live-held-state-v0',
+        width: state.width,
+        height: state.height,
+        linearHdrFloatCount: pixels.linearHdr.length,
+        opticalDepthFloatCount: pixels.opticalDepth.length,
+        transmittanceFloatCount: pixels.transmittance.length,
+        finitePixelCount: pixels.finitePixelCount,
+        litPixels: pixels.litPixels,
+        hashes: {
+          linearHdrSha256: await sha256Bytes(linearHdrBytes),
+          opticalDepthSha256: await sha256Bytes(opticalDepthBytes),
+          transmittanceSha256: await sha256Bytes(transmittanceBytes),
+        },
+        timing: { timestampStatus: 'available', timeUnit: 'ms', stages },
+        payload: {
+          linearHdr: pixels.linearHdr,
+          opticalDepth: pixels.opticalDepth,
+          transmittance: pixels.transmittance,
+        },
+        fallbackUsed: false,
+        fallbackReason: null,
+      };
+    } catch (error) {
+      if (errorScopeOpen) await device.popErrorScope().catch(() => null);
+      return failure('gpu-capture', error?.message || String(error), {
+        sourceSimStepCount: application.sourceSimStepCount,
+        currentSimStepCount: state.simStepCount,
+        captureNonce,
+      });
+    } finally {
+      queryResolve.destroy();
+      queryReadback.destroy();
+      imageReadback.destroy();
+      querySet.destroy?.();
+    }
+  }
+
+  async function sampleSharedTransmittanceContributions(options = {}) {
+    const requiredMode = 'complete-flame-under-total-extinction';
+    if (!state.active || !device || !opticalTransportContributionPipeline) {
+      return { ok: false, status: 'failed', failurePhase: 'admission', reason: 'shared-transmittance-contribution-route-inactive' };
+    }
+    if (appearanceDecompositionModeEffective !== requiredMode
+      || state.appearanceDecompositionReceipt?.fallbackReason) {
+      return {
+        ok: false,
+        status: 'failed',
+        failurePhase: 'mode-admission',
+        reason: 'shared-transmittance-complete-mode-required',
+        requestedMode: appearanceDecompositionModeRequestedRaw,
+        effectiveMode: appearanceDecompositionModeEffective,
+        fallbackReason: state.appearanceDecompositionReceipt?.fallbackReason || null,
+      };
+    }
+
+    const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
+    const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
+    const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
+    const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const captureContext = { sameStateCaptureId, baseFrameCount, baseSimStepCount, sampleNow };
+    updateUniforms(sampleNow);
+
+    const width = state.width;
+    const height = state.height;
+    const bytesPerPixel = 8;
+    const bytesPerRow = Math.ceil(width * bytesPerPixel / 256) * 256;
+    const textureSize = { width, height, depthOrArrayLayers: 1 };
+    const labels = ['ridge', 'nonridge', 'complete'];
+    const textures = labels.map(label => device.createTexture({
+      label: `kaminos shared-transmittance ${label} pre-tone-map rgba16float`,
+      size: textureSize,
+      format: 'rgba16float',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+    }));
+    const buffers = labels.map(label => device.createBuffer({
+      label: `kaminos shared-transmittance ${label} pre-tone-map readback`,
+      size: bytesPerRow * height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    }));
+
+    device.pushErrorScope('validation');
+    let errorScopeOpen = true;
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos shared-transmittance contribution witness encoder' });
+      const pass = encoder.beginRenderPass({
+        label: 'kaminos shared-transmittance same-invocation contribution pass',
+        colorAttachments: textures.map(texture => ({
+          view: texture.createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        })),
+      });
+      pass.setPipeline(opticalTransportContributionPipeline);
+      pass.setBindGroup(0, bindGroups[currentFluid]);
+      pass.draw(3);
+      pass.end();
+      for (let index = 0; index < textures.length; index += 1) {
+        encoder.copyTextureToBuffer(
+          { texture: textures[index] },
+          { buffer: buffers[index], bytesPerRow, rowsPerImage: height },
+          textureSize,
+        );
+      }
+      device.queue.submit([encoder.finish()]);
+      const validationError = await device.popErrorScope();
+      errorScopeOpen = false;
+      if (validationError) {
+        return {
+          ok: false,
+          status: 'failed',
+          failurePhase: 'gpu-readback',
+          reason: 'shared-transmittance-contribution-validation-failed',
+          validationError: validationError.message || String(validationError),
+          lastTrustworthyEvidence: appearanceTransportRuntimeContext(captureContext),
+        };
+      }
+
+      const [ridge, nonRidge, complete] = await Promise.all(
+        buffers.map(buffer => readRgba16FloatTexture(buffer, width, height, bytesPerRow)),
+      );
+      const absoluteTolerance = 0.00390625;
+      const relativeTolerance = 0.00390625;
+      let maxAbsError = 0;
+      let meanAbsError = 0;
+      let violationCount = 0;
+      let ridgeMax = 0;
+      let nonRidgeMax = 0;
+      let completeMax = 0;
+      for (let index = 0; index < complete.length; index += 1) {
+        const expected = ridge[index] + nonRidge[index];
+        const observed = complete[index];
+        if (!Number.isFinite(expected) || !Number.isFinite(observed)) {
+          maxAbsError = Infinity;
+          meanAbsError = Infinity;
+          violationCount += 1;
+          continue;
+        }
+        const error = Math.abs(expected - observed);
+        const allowed = absoluteTolerance + relativeTolerance * Math.abs(observed);
+        maxAbsError = Math.max(maxAbsError, error);
+        if (Number.isFinite(meanAbsError)) meanAbsError += error;
+        violationCount += error > allowed ? 1 : 0;
+        ridgeMax = Math.max(ridgeMax, Math.abs(ridge[index]));
+        nonRidgeMax = Math.max(nonRidgeMax, Math.abs(nonRidge[index]));
+        completeMax = Math.max(completeMax, Math.abs(observed));
+      }
+      if (Number.isFinite(meanAbsError)) meanAbsError /= Math.max(1, complete.length);
+      const exactWithinDeclaredPrecision = violationCount === 0;
+      const channelsNonblank = ridgeMax > 0 && nonRidgeMax > 0 && completeMax > 0;
+      const accepted = exactWithinDeclaredPrecision && channelsNonblank;
+      const runtimeContext = appearanceTransportRuntimeContext(captureContext);
+      return {
+        ok: accepted,
+        status: accepted ? 'captured' : 'failed',
+        failurePhase: accepted ? null : 'recomposition-validation',
+        reason: accepted
+          ? null
+          : (exactWithinDeclaredPrecision ? 'shared-transmittance-contribution-channel-blank' : 'shared-transmittance-recomposition-outside-declared-precision'),
+        identity: 'shared-transmittance-pre-tone-map-contribution-readback-v0',
+        authority: 'same-fragment-invocation-rgba16float-render-target-readback-v0',
+        mode: appearanceDecompositionModeEffective,
+        requestedEmissionMask: cloneOpticalLayerMask(state.appearanceDecompositionReceipt.requestedEmissionMask),
+        effectiveEmissionMask: cloneOpticalLayerMask(state.appearanceDecompositionReceipt.effectiveEmissionMask),
+        requestedExtinctionMask: cloneOpticalLayerMask(state.appearanceDecompositionReceipt.requestedExtinctionMask),
+        effectiveExtinctionMask: cloneOpticalLayerMask(state.appearanceDecompositionReceipt.effectiveExtinctionMask),
+        numericPrecision: {
+          storage: 'rgba16float',
+          absoluteTolerance,
+          relativeTolerance,
+        },
+        sumDomain: 'pre-tone-map-linear-radiance',
+        independentlyToneMappedAddition: false,
+        width,
+        height,
+        componentCount: complete.length,
+        maxAbsError,
+        meanAbsError,
+        violationCount,
+        exactWithinDeclaredPrecision,
+        channelsNonblank,
+        channelMax: { ridge: ridgeMax, nonRidge: nonRidgeMax, complete: completeMax },
+        sourceState: runtimeContext.sourceState,
+        camera: runtimeContext.camera,
+        route: runtimeContext.route,
+        backend: runtimeContext.backend,
+        quality: runtimeContext.quality,
+        postprocess: runtimeContext.postprocess,
+        fallbackReason: null,
+      };
+    } catch (error) {
+      if (errorScopeOpen) await device.popErrorScope().catch(() => null);
+      return {
+        ok: false,
+        status: 'failed',
+        failurePhase: 'readback-exception',
+        reason: error?.message || String(error),
+        lastTrustworthyEvidence: appearanceTransportRuntimeContext(captureContext),
+      };
+    } finally {
+      for (const texture of textures) texture.destroy();
+      for (const buffer of buffers) buffer.destroy();
+    }
+  }
+
+  async function readBoundarySplatHdrTelemetry() {
+    if (!boundarySplatHdrTexture || boundarySplatHdrTextureSize !== `${state.width}x${state.height}`) {
+      return { status: 'missing', targetFormat: BOUNDARY_SPLAT_HDR_TARGET_FORMAT };
+    }
+    const bytesPerPixel = 8;
+    const unpaddedBytesPerRow = state.width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const readback = device.createBuffer({
+      label: 'kaminos boundary splat hdr telemetry readback',
+      size: bytesPerRow * state.height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat hdr telemetry encoder' });
+    encoder.copyTextureToBuffer(
+      { texture: boundarySplatHdrTexture },
+      { buffer: readback, bytesPerRow, rowsPerImage: state.height },
+      { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+    );
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const words = new Uint16Array(readback.getMappedRange());
+    const wordsPerRow = bytesPerRow / Uint16Array.BYTES_PER_ELEMENT;
+    let maxRgb = 0;
+    let sumRgb = 0;
+    let channelsAboveOne = 0;
+    let nonFiniteChannels = 0;
+    let alphaMax = 0;
+    const pixelCount = state.width * state.height;
+    for (let y = 0; y < state.height; y += 1) {
+      const row = y * wordsPerRow;
+      for (let x = 0; x < state.width; x += 1) {
+        const offset = row + x * 4;
+        for (let channel = 0; channel < 3; channel += 1) {
+          const value = decodeFloat16(words[offset + channel]);
+          if (!Number.isFinite(value)) nonFiniteChannels += 1;
+          else {
+            maxRgb = Math.max(maxRgb, value);
+            sumRgb += value;
+            if (value > 1) channelsAboveOne += 1;
+          }
+        }
+        const alpha = decodeFloat16(words[offset + 3]);
+        if (Number.isFinite(alpha)) alphaMax = Math.max(alphaMax, alpha);
+      }
+    }
+    readback.unmap();
+    readback.destroy();
+    return {
+      status: 'complete',
+      targetFormat: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      width: state.width,
+      height: state.height,
+      pixelCount,
+      maxRgb,
+      meanRgb: sumRgb / Math.max(1, pixelCount * 3),
+      channelsAboveOne,
+      nonFiniteChannels,
+      alphaMax,
+      intermediateClamped: false,
+    };
+  }
+
+  async function readBoundarySplatOpticalTelemetry() {
+    const expectedSize = `${state.width}x${state.height}x${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS}`;
+    if (!boundarySplatOpticalTexture || boundarySplatOpticalTextureSize !== expectedSize) {
+      return { status: 'missing', targetFormat: `${BOUNDARY_SPLAT_HDR_TARGET_FORMAT}-array` };
+    }
+    const bytesPerPixel = 8;
+    const unpaddedBytesPerRow = state.width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const layerBytes = bytesPerRow * state.height;
+    const readback = device.createBuffer({
+      label: 'kaminos boundary splat optical recurrence telemetry readback',
+      size: layerBytes * BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat optical recurrence telemetry encoder' });
+    encoder.copyTextureToBuffer(
+      { texture: boundarySplatOpticalTexture },
+      { buffer: readback, bytesPerRow, rowsPerImage: state.height },
+      { width: state.width, height: state.height, depthOrArrayLayers: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
+    );
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const words = new Uint16Array(readback.getMappedRange());
+    const wordsPerRow = bytesPerRow / Uint16Array.BYTES_PER_ELEMENT;
+    const wordsPerLayer = layerBytes / Uint16Array.BYTES_PER_ELEMENT;
+    let maxEmission = 0;
+    let maxOpticalDepth = 0;
+    let nonFiniteChannels = 0;
+    let activeDepthBins = 0;
+    for (let binIndex = 0; binIndex < BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS; binIndex += 1) {
+      let binActive = false;
+      const layer = binIndex * wordsPerLayer;
+      for (let y = 0; y < state.height; y += 1) {
+        const row = layer + y * wordsPerRow;
+        for (let x = 0; x < state.width; x += 1) {
+          const offset = row + x * 4;
+          for (let channel = 0; channel < 3; channel += 1) {
+            const value = decodeFloat16(words[offset + channel]);
+            if (!Number.isFinite(value)) nonFiniteChannels += 1;
+            else maxEmission = Math.max(maxEmission, value);
+          }
+          const opticalDepth = decodeFloat16(words[offset + 3]);
+          if (!Number.isFinite(opticalDepth)) nonFiniteChannels += 1;
+          else {
+            maxOpticalDepth = Math.max(maxOpticalDepth, opticalDepth);
+            if (opticalDepth > 0) binActive = true;
+          }
+        }
+      }
+      if (binActive) activeDepthBins += 1;
+    }
+    readback.unmap();
+    readback.destroy();
+    return {
+      status: 'complete',
+      targetFormat: `${BOUNDARY_SPLAT_HDR_TARGET_FORMAT}-array`,
+      layerFormat: BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
+      width: state.width,
+      height: state.height,
+      depthBins: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      activeDepthBins,
+      maxEmission,
+      maxOpticalDepth,
+      nonFiniteChannels,
+      capacity: state.boundarySplatCapacity,
+      overflowCount: state.boundarySplatOverflowCount ?? 0,
+      intermediateClamped: false,
+      timingAuthority: BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY,
+      timingStatus: state.boundarySplatTimestampStatus,
+    };
+  }
+
+  async function readBoundarySplatOpticalAdjudication({ gpuRgba, authority, sample }) {
+    validateStageBOpticalAuthority(authority);
+    const expectedSize = `${state.width}x${state.height}x${BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS}`;
+    if (!boundarySplatOpticalTexture || boundarySplatOpticalTextureSize !== expectedSize) {
+      throw new Error('stage-b-optical-adjudication-attachment-missing');
+    }
+    if (authority.candidateCount !== sample?.boundarySplatCandidateCount) {
+      throw new Error(`stage-b-optical-adjudication-candidate-drift:${authority.candidateCount}:${sample?.boundarySplatCandidateCount}`);
+    }
+    if (sample?.boundarySplatOverflowCount !== 0) throw new Error('stage-b-optical-adjudication-overflow');
+    if (sample?.boundarySplatFallbackReason) throw new Error(`stage-b-optical-adjudication-fallback:${sample.boundarySplatFallbackReason}`);
+    if (sample?.boundarySplatPresentationReceipt?.effectiveMode !== BOUNDARY_SPLAT_OPTICAL_MODE) {
+      throw new Error(`stage-b-optical-adjudication-mode-substitution:${sample?.boundarySplatPresentationReceipt?.effectiveMode || 'missing'}`);
+    }
+    if (sample?.selectiveHeadLivePassReceipt?.splatEncoded !== true || sample?.selectiveHeadLivePassReceipt?.splatApplied !== true) {
+      throw new Error('stage-b-optical-adjudication-pass-not-applied');
+    }
+
+    const bytesPerPixel = 8;
+    const unpaddedBytesPerRow = state.width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const layerBytes = bytesPerRow * state.height;
+    const readback = device.createBuffer({
+      label: 'kaminos Stage B exact optical adjudication readback',
+      size: layerBytes * BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos Stage B exact optical adjudication encoder' });
+    encoder.copyTextureToBuffer(
+      { texture: boundarySplatOpticalTexture },
+      { buffer: readback, bytesPerRow, rowsPerImage: state.height },
+      { width: state.width, height: state.height, depthOrArrayLayers: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
+    );
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const mapped = readback.getMappedRange();
+    const mappedBytes = new Uint8Array(mapped);
+    const words = new Uint16Array(mapped);
+    const wordsPerRow = bytesPerRow / Uint16Array.BYTES_PER_ELEMENT;
+    const wordsPerLayer = layerBytes / Uint16Array.BYTES_PER_ELEMENT;
+    const layerPayloadSha256 = await sha256Bytes(mappedBytes);
+    const output = gpuRgba instanceof Uint8Array ? gpuRgba : Uint8Array.from(gpuRgba || []);
+    const gpuOutputSha256 = await sha256Bytes(output);
+    const result = adjudicateStageBOpticalLayers({
+      width: state.width,
+      height: state.height,
+      readPixel(binIndex, x, y, target) {
+        const offset = binIndex * wordsPerLayer + y * wordsPerRow + x * 4;
+        target[0] = decodeFloat16(words[offset]);
+        target[1] = decodeFloat16(words[offset + 1]);
+        target[2] = decodeFloat16(words[offset + 2]);
+        target[3] = decodeFloat16(words[offset + 3]);
+        return target;
+      },
+      gpuRgba: output,
+      outputToleranceBytes: 2,
+      includeAnalyticalRgba: false,
+      authority,
+    });
+    readback.unmap();
+    readback.destroy();
+    const camera = sample?.volumePresentationApplication?.camera || null;
+    const cameraSha256 = await sha256Bytes(new TextEncoder().encode(JSON.stringify(camera)));
+    return {
+      ...result,
+      hashes: {
+        layerPayloadSha256,
+        gpuOutputSha256,
+        cameraSha256,
+        resources: {
+          sourceManifestSha256: authority.sourceManifestSha256,
+          manifestSha256: authority.manifestSha256,
+          fluidSha256: authority.fluidSha256,
+          frontSha256: authority.frontSha256,
+          supportSha256: authority.supportSha256,
+          coefficientSha256: authority.coefficientSha256,
+          covarianceSha256: authority.covarianceSha256,
+          candidatePayloadSha256: authority.candidatePayloadSha256,
+          controlsSha256: authority.controlsSha256,
+        },
+      },
+      attachments: {
+        accumulation: { requested: 'rgba16float-array', effective: `${BOUNDARY_SPLAT_HDR_TARGET_FORMAT}-array`, layers: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS },
+        layer: { requested: 'rgba16float', effective: BOUNDARY_SPLAT_HDR_TARGET_FORMAT },
+        presentation: { requested: 'rgba8unorm', effective: 'rgba8unorm' },
+      },
+      capture: {
+        sameStateCaptureId: sample?.sameStateCaptureId || null,
+        frameCount: sample?.frameCount ?? null,
+        simStepCount: sample?.simStepCount ?? null,
+        sampleAuthority: sample?.sampleAuthority || null,
+        camera,
+        route: {
+          effectiveRenderer: sample?.effectiveRoute || null,
+          backend: sample?.backend || null,
+        },
+      },
+      renderer: {
+        requestedMode: authority.requestedMode,
+        effectiveMode: sample?.boundarySplatPresentationReceipt?.effectiveMode || null,
+        accumulationIdentity: BOUNDARY_SPLAT_OPTICAL_ACCUMULATION_IDENTITY,
+        transportIdentity: BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY,
+        passReceipt: sample?.selectiveHeadLivePassReceipt || null,
+        fallbackUsed: false,
+        fallbackReason: null,
+      },
+    };
+  }
+
+  async function sampleBoundarySplatOpticalAdjudication(options = {}) {
+    const authority = structuredClone(options.authority || {});
+    validateStageBOpticalAuthority(authority);
+    if (boundarySplatPresentationModeEffective !== BOUNDARY_SPLAT_OPTICAL_MODE) {
+      throw new Error(`stage-b-optical-adjudication-not-effective:${boundarySplatPresentationModeEffective || 'missing'}`);
+    }
+    const sample = await sampleFrame({
+      advanceSim: false,
+      includeRgba: true,
+      sameStateCaptureId: authority.sameStateCaptureId,
+      baseFrameCount: state.frameCount,
+      baseSimStepCount: state.simStepCount,
+      now: Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now(),
+    });
+    if (!sample?.ok) throw new Error(`stage-b-optical-adjudication-sample-failed:${sample?.reason || 'unknown'}`);
+    if (!sample.image?.rgba) throw new Error('stage-b-optical-adjudication-gpu-output-missing');
+    return readBoundarySplatOpticalAdjudication({
+      gpuRgba: Uint8Array.from(sample.image.rgba),
+      authority,
+      sample,
+    });
+  }
+
+  async function sampleBoundarySplatOpticalDepthOrderDiagnostic(options = {}) {
+    if (!selectiveHeadLiveCapturePaused) {
+      throw new Error('optical-depth-order-diagnostic-requires-paused-simulator');
+    }
+    if (boundarySplatPresentationModeEffective !== BOUNDARY_SPLAT_OPTICAL_MODE) {
+      throw new Error(`optical-depth-order-diagnostic-not-effective:${boundarySplatPresentationModeEffective || 'missing'}`);
+    }
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const sameStateCaptureId = String(options.sameStateCaptureId || `optical-depth-order-f${baseFrameCount}-s${baseSimStepCount}`);
+    const sample = await sampleFrame({
+      advanceSim: false,
+      includeRgba: false,
+      opticalDepthOrderDiagnostic: true,
+      sameStateCaptureId,
+      baseFrameCount,
+      baseSimStepCount,
+      now: Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now(),
+    });
+    if (!sample?.ok) throw new Error(`optical-depth-order-diagnostic-sample-failed:${sample?.reason || 'unknown'}`);
+    if (!sample.preview?.rgba?.length) throw new Error('optical-depth-order-diagnostic-preview-missing');
+    if (sample.simStepCount !== baseSimStepCount) {
+      throw new Error(`optical-depth-order-diagnostic-state-drift:${baseSimStepCount}:${sample.simStepCount}`);
+    }
+    if (sample.boundarySplatOverflowCount !== 0) throw new Error('optical-depth-order-diagnostic-overflow');
+    const fallbackReason = sample.boundarySplatFallbackReason
+      || sample.boundarySplatPresentationModeFallbackReason
+      || sample.selectiveHeadLiveCompositionFallbackReason
+      || null;
+    if (fallbackReason) throw new Error(`optical-depth-order-diagnostic-fallback:${fallbackReason}`);
+    if (sample.selectiveHeadLivePassReceipt?.splatEncoded !== true
+      || sample.selectiveHeadLivePassReceipt?.splatApplied !== true) {
+      throw new Error('optical-depth-order-diagnostic-pass-not-applied');
+    }
+    return {
+      schema: 'kaminos.pyro.optical-depth-order-diagnostic.v0',
+      status: 'completed',
+      evidenceAuthority: 'operator-exploration-only',
+      decisionBearing: false,
+      sameStateCaptureId,
+      frameCount: sample.frameCount,
+      simStepCount: sample.simStepCount,
+      camera: sample.volumePresentationApplication?.camera || null,
+      cameraSignature: cameraSignature(),
+      requestedDiagnostic: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
+      effectiveDiagnostic: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
+      depthIntervalIdentity: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
+      orderingIdentity: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_ORDERING,
+      nearColor: 'green',
+      farColor: 'magenta',
+      depthBins: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      candidateCount: sample.boundarySplatCandidateCount,
+      overflowCount: sample.boundarySplatOverflowCount,
+      rendererEncoded: sample.selectiveHeadLivePassReceipt.splatEncoded,
+      rendererApplied: sample.selectiveHeadLivePassReceipt.splatApplied,
+      fallbackReason,
+      preview: sample.preview,
+    };
+  }
+
   async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const advanceSim = options.advanceSim !== false;
@@ -12195,33 +19472,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
     const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
-    state.simulationPaused = simulationPaused;
     let sampleSelectiveHeadLiveFields = null;
-    if (advanceSim && !sampleLookFreeze && !simulationPaused) {
+    if (advanceSim && !sampleLookFreeze) {
       encodeSim(encoder);
-      encodeLiquidFireContactTransfer(encoder);
       encodeSelectiveHeadLiveFields(encoder);
       sampleSelectiveHeadLiveFields = {
-        majorant: selectiveHeadLiveRoleGroups('majorant'),
         sidecar: selectiveHeadLiveRoleGroups('sidecar'),
         splat: selectiveHeadLiveRoleGroups('splat'),
         render: selectiveHeadLiveRoleGroups('render'),
+        descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
       };
-      encodeMajorant(encoder, { readBindGroup: sampleSelectiveHeadLiveFields.majorant, force: true });
-    } else if (!sampleLookFreeze && !simulationPaused) {
+    } else if (!sampleLookFreeze) {
       encodeSelectiveHeadLiveFields(encoder);
       sampleSelectiveHeadLiveFields = {
-        majorant: selectiveHeadLiveRoleGroups('majorant'),
         sidecar: selectiveHeadLiveRoleGroups('sidecar'),
         splat: selectiveHeadLiveRoleGroups('splat'),
         render: selectiveHeadLiveRoleGroups('render'),
+        descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
       };
-      encodeMajorant(encoder, { readBindGroup: sampleSelectiveHeadLiveFields.majorant, force: true });
-    } else {
-      state.majorantBuiltThisFrame = false;
     }
     encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
-    encodeBoundarySplats(encoder, { computeBindGroup: sampleSelectiveHeadLiveFields?.splat || null });
+    if (sampleSelectiveHeadLiveFields?.splat) {
+      encodeBoundarySplats(encoder, {
+        computeBindGroup: sampleSelectiveHeadLiveFields.splat,
+        descriptorSource: sampleSelectiveHeadLiveFields.descriptorSource,
+      });
+    } else {
+      encodeBoundarySplats(encoder);
+    }
+    let presentationApplication = null;
     if (boundarySplatRequested()) {
       const composition = updateSelectiveHeadLiveCompositionState();
       let raymarchEncoded = false;
@@ -12240,11 +19519,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         raymarchApplied = true;
       }
       if (composition.definition.splat) {
-        splatEncoded = encodeBoundarySplatDraw(
+        splatEncoded = encodeBoundarySplatPresentation(
           encoder,
           frameTexture.createView(),
           boundarySplatReadbackPipeline,
-          { loadOp: raymarchApplied ? 'load' : 'clear' },
+          boundarySplatPresentationReadbackPipeline,
+          {
+            loadOp: raymarchApplied ? 'load' : 'clear',
+            opticalDepthOrderDiagnostic: options.opticalDepthOrderDiagnostic === true,
+          },
         );
         splatApplied = splatEncoded;
       }
@@ -12277,7 +19560,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
         };
       }
-      recordSelectiveHeadLivePassReceipt({
+      const selectivePassReceipt = recordSelectiveHeadLivePassReceipt({
         composition: composition.effective === 'off' ? composition.requested : composition.effective,
         raymarchEncoded,
         raymarchApplied,
@@ -12285,9 +19568,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         splatApplied,
         fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
       });
+      presentationApplication = recordVolumePresentationApplication({
+        raymarchEncoded: selectivePassReceipt.raymarchEncoded,
+        raymarchApplied: selectivePassReceipt.raymarchApplied,
+        splatsEncoded: selectivePassReceipt.splatEncoded,
+        splatsApplied: selectivePassReceipt.splatApplied,
+        featureCaptureEncoded: state.boundarySplatFeatureCaptureEffective,
+        featureCaptureApplied: state.boundarySplatFeatureCaptureEffective,
+        compositionEffective: state.selectiveHeadLiveCompositionEffective,
+        fallbackReason: selectivePassReceipt.fallbackReason,
+        captureContext: { sameStateCaptureId, baseFrameCount, baseSimStepCount, sampleNow },
+      });
       encodeBoundarySplatTelemetry(encoder, true);
     } else {
       encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
+      state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
+        ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
+        : (state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
+      presentationApplication = recordVolumePresentationApplication({
+        raymarchEncoded: true,
+        raymarchApplied: true,
+        compositionEffective: 'raymarch-only-v0',
+        captureContext: { sameStateCaptureId, baseFrameCount, baseSimStepCount, sampleNow },
+      });
     }
     encoder.copyTextureToBuffer(
       { texture: frameTexture },
@@ -12296,6 +19599,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     );
     device.queue.submit([encoder.finish()]);
     if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    if (['matched-presentation-v0', BOUNDARY_SPLAT_OPTICAL_MODE].includes(state.boundarySplatPresentationReceipt?.effectiveMode)
+      && state.selectiveHeadLivePassReceipt?.splatApplied) {
+      const telemetry = state.boundarySplatPresentationReceipt.effectiveMode === BOUNDARY_SPLAT_OPTICAL_MODE
+        ? await readBoundarySplatOpticalTelemetry()
+        : await readBoundarySplatHdrTelemetry();
+      state.boundarySplatPresentationReceipt = makeBoundarySplatPresentationReceipt({
+        requestedRaw: boundarySplatPresentationModeRequestedRaw,
+        requested: boundarySplatPresentationModeRequested,
+        effective: boundarySplatPresentationModeEffective,
+        fallbackReason: boundarySplatPresentationModeFallbackReason,
+        telemetry,
+      });
+    }
     const validationError = await device.popErrorScope();
     if (validationError) {
       buffer.destroy();
@@ -12318,12 +19634,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         gridOverlay: state.gridOverlay,
         adaptiveRaymarch: state.adaptiveRaymarch,
         occupancySkip: state.occupancySkip,
-        majorantSkip: state.majorantSkip,
-        majorantSmooth: state.majorantSmooth,
-        majorantGuard: state.majorantGuard,
-        temporalAccum: state.temporalAccum,
-        temporalJitter: state.temporalJitter,
-        historyClamp: state.historyClamp,
         fireScale: state.fireScale,
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
@@ -12357,18 +19667,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         volumePrimitiveCount: state.volumePrimitiveCount,
         volumePrimitiveIds: state.volumePrimitiveIds,
         volumePrimitives: state.volumePrimitives,
-        temporalAccumEffective: state.temporalAccumEffective,
-        temporalReprojectionConfidence: state.temporalReprojectionConfidence,
-        temporalHistoryWeight: state.temporalHistoryWeight,
-        temporalRejectedHistory: state.temporalRejectedHistory,
-        temporalSmokeHistoryTrust: state.temporalSmokeHistoryTrust,
-        temporalFireHistoryProtect: state.temporalFireHistoryProtect,
-        temporalInterfaceHistoryProtect: state.temporalInterfaceHistoryProtect,
-        temporalEvidenceSource: state.temporalEvidenceSource,
-        temporalHistoryFrames: state.temporalHistoryFrames,
-        temporalHistoryResetCount: state.temporalHistoryResetCount,
-        temporalHistoryResetReason: state.temporalHistoryResetReason,
-        temporalHistoryValid: state.temporalHistoryValid,
         pressureProjectionEnabled: state.pressureProjectionEnabled,
         pressureEffectiveLabel: state.pressureEffectiveLabel,
         pressureProjectionIterations: state.pressureProjectionIterations,
@@ -12400,8 +19698,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
         mainFluidBonfireNonWindForceStrategy: state.mainFluidBonfireNonWindForceStrategy,
         bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
+        mainFluidScalarAdvectionPeriodicSlipStrategy: state.mainFluidScalarAdvectionPeriodicSlipStrategy,
+        scalarAdvectionPeriodicSlipEvaluationsPerCell: state.scalarAdvectionPeriodicSlipEvaluationsPerCell,
+        mainFluidPeriodicDetailForceStrategy: state.mainFluidPeriodicDetailForceStrategy,
+        periodicDetailForceEvaluationsPerCell: state.periodicDetailForceEvaluationsPerCell,
+        mainFluidPeriodicEntrainmentSwayStrategy: state.mainFluidPeriodicEntrainmentSwayStrategy,
+        periodicEntrainmentSwayEvaluationsPerCell: state.periodicEntrainmentSwayEvaluationsPerCell,
+        mainFluidExternalCarrierHiddenFlickerStrategy: state.mainFluidExternalCarrierHiddenFlickerStrategy,
+        externalCarrierHiddenFlickerEvaluationsPerEmitterCell: state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell,
         mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
         bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
+        bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
         tallPlumeDetailCoherenceStrategy: state.tallPlumeDetailCoherenceStrategy,
         tallPlumeDetailCoherenceExtraReadsPerCell: state.tallPlumeDetailCoherenceExtraReadsPerCell,
         tallPlumeTransitionBandStrategy: state.tallPlumeTransitionBandStrategy,
@@ -12412,12 +19719,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureDivergencePasses: state.pressureDivergencePasses,
         pressureJacobiInlineDivergencePasses: state.pressureJacobiInlineDivergencePasses,
         fullGridPassBreakdown: state.fullGridPassBreakdown ? { ...state.fullGridPassBreakdown } : null,
-        majorantGrid: state.majorantGrid,
-        majorantBuilt: state.majorantBuilt,
-        majorantCadence: state.majorantCadence,
-        majorantBuiltThisFrame: state.majorantBuiltThisFrame,
-        majorantLastBuiltFrame: state.majorantLastBuiltFrame,
-        majorantSkippedFrameCount: state.majorantSkippedFrameCount,
         simProfile: state.simProfile,
         simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
         timing: { ...state.timing },
@@ -12429,15 +19730,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySidecarSource: state.boundarySidecarSource,
         boundarySplatMode: state.boundarySplatMode,
         boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+        boundarySplatPresentationReceipt: state.boundarySplatPresentationReceipt ? {
+          ...state.boundarySplatPresentationReceipt,
+          curve: state.boundarySplatPresentationReceipt.curve ? { ...state.boundarySplatPresentationReceipt.curve } : null,
+          hdrTelemetry: state.boundarySplatPresentationReceipt.hdrTelemetry ? { ...state.boundarySplatPresentationReceipt.hdrTelemetry } : null,
+        } : null,
         boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
         boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
         boundarySplatFeatureCaptureEffective: state.boundarySplatFeatureCaptureEffective,
         boundarySplatFeatureCapture: state.boundarySplatFeatureCapture,
+        flowKernelDescriptorCaptureRequested: state.flowKernelDescriptorCaptureRequested,
+        flowKernelDescriptorCaptureEffective: state.flowKernelDescriptorCaptureEffective,
+        flowKernelDescriptorCapture: state.flowKernelDescriptorCapture,
         boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
         boundarySplatCapacity: state.boundarySplatCapacity,
+        boundarySplatCapacityLimitReceipt: state.boundarySplatCapacityLimitReceipt,
         boundarySplatInstanceCount: state.boundarySplatInstanceCount,
         boundarySplatCandidateCount: state.boundarySplatCandidateCount,
         boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+        boundarySplatRidgeOnlyCount: state.boundarySplatRidgeOnlyCount,
+        boundarySplatNonRidgeOnlyCount: state.boundarySplatNonRidgeOnlyCount,
+        boundarySplatOverlapCount: state.boundarySplatOverlapCount,
+        boundarySplatUnionCount: state.boundarySplatUnionCount,
+        boundarySplatZeroGradientAdmissionCount: state.boundarySplatZeroGradientAdmissionCount,
+        boundarySplatUnionReceipt: state.boundarySplatUnionReceipt,
         boundarySplatCountAuthority: state.boundarySplatCountAuthority,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
         boundarySplatFrameCount: state.boundarySplatFrameCount,
@@ -12449,10 +19765,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const boundarySplatSample = boundarySplatRequested() ? await sampleBoundarySplatDrawState() : null;
     const boundarySplatFeatureCapture = state.boundarySplatFeatureCaptureRequested && boundarySplatSample
-      ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.instanceCount)
+      ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.sourceCandidateCount || boundarySplatSample.candidateCount)
       : null;
     state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
-    const boundarySplatGpuProfile = boundarySplatRequested() ? await sampleBoundarySplatGpuProfile() : state.boundarySplatGpuProfile;
+    const flowKernelDescriptorCapture = state.flowKernelDescriptorCaptureRequested && boundarySplatSample
+      ? await sampleBoundarySplatKernelDescriptorCapture(boundarySplatSample.sourceCandidateCount)
+      : null;
+    state.flowKernelDescriptorCapture = flowKernelDescriptorCapture;
+    const boundarySplatGpuProfile = boundarySplatRequested()
+      ? (advanceSim
+          ? await sampleBoundarySplatGpuProfile()
+          : setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
+              timestampStatus: 'suppressed',
+              reason: 'frozen-sample-profile-suppressed-no-sim-advance',
+              candidateCopyBytes: state.boundarySplatCopyBytesThisFrame ?? 0,
+              rendererIdentity: state.boundarySplatRendererIdentity,
+            })))
+      : state.boundarySplatGpuProfile;
     await buffer.mapAsync(GPUMapMode.READ);
     const data = new Uint8Array(buffer.getMappedRange());
     let litPixels = 0;
@@ -12622,7 +19951,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     buffer.destroy();
     const simReadback = await sampleSimReadback();
     updatePyroDynamicDetailState({ simReadback, inputKind: 'sim-readback' });
-    const majorantReadback = await sampleMajorantReadback();
     const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
     const fireRoughnessMean = Math.sqrt(Math.max(0, fireLumaSqSum / Math.max(1, fireEdgeSamples) - fireLumaMean * fireLumaMean)) / 255;
     const fireEdgeEnergy = fireEdgeSum / Math.max(1, fireEdgeSamples * 255);
@@ -12665,6 +19993,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       renderPhaseAuthority: state.renderPhaseAuthority,
       lookFreezeRenderTimeMs: state.lookFreezeRenderTimeMs,
       lookFreezeRenderFrame: state.lookFreezeRenderFrame,
+      lookFreezeFrame: state.lookFreezeFrame,
       simGrid: state.simGrid,
       simGridLabel: state.simGridLabel,
       frontFieldIdentity: state.frontFieldIdentity,
@@ -12675,12 +20004,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       gridOverlay: state.gridOverlay,
       adaptiveRaymarch: state.adaptiveRaymarch,
       occupancySkip: state.occupancySkip,
-      majorantSkip: state.majorantSkip,
-      majorantSmooth: state.majorantSmooth,
-      majorantGuard: state.majorantGuard,
-      temporalAccum: state.temporalAccum,
-      temporalJitter: state.temporalJitter,
-      historyClamp: state.historyClamp,
+      ...retiredRaymarchControlReceiptPayload(state),
       fireScale: state.fireScale,
       detailScale: state.detailScale,
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
@@ -12727,18 +20051,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       volumePrimitiveCount: state.volumePrimitiveCount,
       volumePrimitiveIds: state.volumePrimitiveIds,
       volumePrimitives: state.volumePrimitives,
-      temporalAccumEffective: state.temporalAccumEffective,
-      temporalReprojectionConfidence: state.temporalReprojectionConfidence,
-      temporalHistoryWeight: state.temporalHistoryWeight,
-      temporalRejectedHistory: state.temporalRejectedHistory,
-      temporalSmokeHistoryTrust: state.temporalSmokeHistoryTrust,
-      temporalFireHistoryProtect: state.temporalFireHistoryProtect,
-      temporalInterfaceHistoryProtect: state.temporalInterfaceHistoryProtect,
-      temporalEvidenceSource: state.temporalEvidenceSource,
-      temporalHistoryFrames: state.temporalHistoryFrames,
-      temporalHistoryResetCount: state.temporalHistoryResetCount,
-      temporalHistoryResetReason: state.temporalHistoryResetReason,
-      temporalHistoryValid: state.temporalHistoryValid,
       pressureProjectionEnabled: state.pressureProjectionEnabled,
       pressureEffectiveLabel: state.pressureEffectiveLabel,
       pressureProjectionIterations: state.pressureProjectionIterations,
@@ -12770,8 +20082,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
       mainFluidBonfireNonWindForceStrategy: state.mainFluidBonfireNonWindForceStrategy,
       bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
+      mainFluidScalarAdvectionPeriodicSlipStrategy: state.mainFluidScalarAdvectionPeriodicSlipStrategy,
+      scalarAdvectionPeriodicSlipEvaluationsPerCell: state.scalarAdvectionPeriodicSlipEvaluationsPerCell,
+      mainFluidPeriodicDetailForceStrategy: state.mainFluidPeriodicDetailForceStrategy,
+      periodicDetailForceEvaluationsPerCell: state.periodicDetailForceEvaluationsPerCell,
+      mainFluidPeriodicEntrainmentSwayStrategy: state.mainFluidPeriodicEntrainmentSwayStrategy,
+      periodicEntrainmentSwayEvaluationsPerCell: state.periodicEntrainmentSwayEvaluationsPerCell,
+      mainFluidExternalCarrierHiddenFlickerStrategy: state.mainFluidExternalCarrierHiddenFlickerStrategy,
+      externalCarrierHiddenFlickerEvaluationsPerEmitterCell: state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell,
       mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
+      bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
       tallPlumeDetailCoherenceStrategy: state.tallPlumeDetailCoherenceStrategy,
       tallPlumeDetailCoherenceExtraReadsPerCell: state.tallPlumeDetailCoherenceExtraReadsPerCell,
       tallPlumeTransitionBandStrategy: state.tallPlumeTransitionBandStrategy,
@@ -12782,27 +20103,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureDivergencePasses: state.pressureDivergencePasses,
       pressureJacobiInlineDivergencePasses: state.pressureJacobiInlineDivergencePasses,
       fullGridPassBreakdown: state.fullGridPassBreakdown ? { ...state.fullGridPassBreakdown } : null,
-      majorantGrid: state.majorantGrid,
-      majorantBuilt: state.majorantBuilt,
-      majorantCadence: state.majorantCadence,
-      majorantBuiltThisFrame: state.majorantBuiltThisFrame,
-      majorantLastBuiltFrame: state.majorantLastBuiltFrame,
-      majorantSkippedFrameCount: state.majorantSkippedFrameCount,
       simProfile: state.simProfile,
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
       boundarySplatMode: state.boundarySplatMode,
       boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+      boundarySplatPresentationReceipt: state.boundarySplatPresentationReceipt ? {
+        ...state.boundarySplatPresentationReceipt,
+        curve: state.boundarySplatPresentationReceipt.curve ? { ...state.boundarySplatPresentationReceipt.curve } : null,
+        hdrTelemetry: state.boundarySplatPresentationReceipt.hdrTelemetry ? { ...state.boundarySplatPresentationReceipt.hdrTelemetry } : null,
+      } : null,
       boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
       boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
       boundarySplatFeatureCaptureEffective: state.boundarySplatFeatureCaptureEffective,
       boundarySplatFeatureCapture,
+      flowKernelDescriptorCaptureRequested: state.flowKernelDescriptorCaptureRequested,
+      flowKernelDescriptorCaptureEffective: state.flowKernelDescriptorCaptureEffective,
+      flowKernelDescriptorCapture,
+      flowKernelIdentity: state.flowKernelIdentity,
+      flowKernelRequested: state.flowKernelRequested ? { ...state.flowKernelRequested } : null,
+      flowKernelEffective: state.flowKernelEffective ? { ...state.flowKernelEffective } : null,
+      flowKernelCandidateAdmissionAuthority: state.flowKernelCandidateAdmissionAuthority,
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
       boundarySplatCapacity: state.boundarySplatCapacity,
+      boundarySplatCapacityLimitReceipt: state.boundarySplatCapacityLimitReceipt,
       boundarySplatInstanceCount: boundarySplatSample?.instanceCount ?? state.boundarySplatInstanceCount,
       boundarySplatCandidateCount: boundarySplatSample?.candidateCount ?? state.boundarySplatCandidateCount,
       boundarySplatOverflowCount: boundarySplatSample?.overflowCount ?? state.boundarySplatOverflowCount,
+      boundarySplatRidgeOnlyCount: boundarySplatSample?.ridgeOnlyCount ?? state.boundarySplatRidgeOnlyCount,
+      boundarySplatNonRidgeOnlyCount: boundarySplatSample?.nonRidgeOnlyCount ?? state.boundarySplatNonRidgeOnlyCount,
+      boundarySplatOverlapCount: boundarySplatSample?.overlapCount ?? state.boundarySplatOverlapCount,
+      boundarySplatUnionCount: boundarySplatSample?.unionCount ?? state.boundarySplatUnionCount,
+      boundarySplatZeroGradientAdmissionCount: boundarySplatSample?.zeroGradientAdmissionCount ?? state.boundarySplatZeroGradientAdmissionCount,
+      boundarySplatUnionReceipt: state.boundarySplatUnionReceipt,
       boundarySplatCountAuthority: boundarySplatSample?.authority ?? state.boundarySplatCountAuthority,
       boundarySplatFallbackReason: state.boundarySplatFallbackReason,
       boundarySplatFrameCount: state.boundarySplatFrameCount,
@@ -12810,8 +20144,49 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatGpuProfile,
       boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
       boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
+      volumePresentationReceipt: state.volumePresentationReceipt ? {
+        ...state.volumePresentationReceipt,
+        effectiveRayQuality: { ...state.volumePresentationReceipt.effectiveRayQuality },
+        passes: { ...state.volumePresentationReceipt.passes },
+      } : null,
+      raymarchSmokePresentationReceipt: state.raymarchSmokePresentationReceipt ? {
+        ...state.raymarchSmokePresentationReceipt,
+        contributions: { ...state.raymarchSmokePresentationReceipt.contributions },
+      } : null,
+      appearanceDecompositionReceipt: state.appearanceDecompositionReceipt ? {
+        ...state.appearanceDecompositionReceipt,
+        requestedPasses: { ...state.appearanceDecompositionReceipt.requestedPasses },
+        passes: { ...state.appearanceDecompositionReceipt.passes },
+        coefficientSigns: { ...state.appearanceDecompositionReceipt.coefficientSigns },
+        requestedEmissionMask: cloneOpticalLayerMask(state.appearanceDecompositionReceipt.requestedEmissionMask),
+        effectiveEmissionMask: cloneOpticalLayerMask(state.appearanceDecompositionReceipt.effectiveEmissionMask),
+        requestedExtinctionMask: cloneOpticalLayerMask(state.appearanceDecompositionReceipt.requestedExtinctionMask),
+        effectiveExtinctionMask: cloneOpticalLayerMask(state.appearanceDecompositionReceipt.effectiveExtinctionMask),
+        contributionChannels: state.appearanceDecompositionReceipt.contributionChannels
+          ? { ...state.appearanceDecompositionReceipt.contributionChannels }
+          : null,
+        postprocess: { ...state.appearanceDecompositionReceipt.postprocess },
+        application: state.appearanceDecompositionReceipt.application
+          ? {
+              ...state.appearanceDecompositionReceipt.application,
+              sourceState: { ...state.appearanceDecompositionReceipt.application.sourceState },
+              camera: {
+                ...state.appearanceDecompositionReceipt.application.camera,
+                position: [...state.appearanceDecompositionReceipt.application.camera.position],
+                quaternion: [...state.appearanceDecompositionReceipt.application.camera.quaternion],
+                projectionMatrix: [...state.appearanceDecompositionReceipt.application.camera.projectionMatrix],
+                viewProjectionMatrix: [...state.appearanceDecompositionReceipt.application.camera.viewProjectionMatrix],
+              },
+              route: { ...state.appearanceDecompositionReceipt.application.route },
+              quality: { ...state.appearanceDecompositionReceipt.application.quality },
+              postprocess: { ...state.appearanceDecompositionReceipt.application.postprocess },
+            }
+          : null,
+        couplingTerms: [...state.appearanceDecompositionReceipt.couplingTerms],
+      } : null,
+      volumePresentationApplication: presentationApplication ? { ...presentationApplication } : null,
+      selectiveHeadLivePassReceipt: state.selectiveHeadLivePassReceipt ? { ...state.selectiveHeadLivePassReceipt } : null,
       simReadback,
-      majorantReadback,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
@@ -12889,7 +20264,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       for (let index = 0; index < renderScales.length; index += 1) {
         const renderScale = renderScales[index];
         controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, renderScale });
-        resetTemporalHistory('same-state-render-scale-capture');
         const sample = await sampleFrame({
           advanceSim: false,
           includeRgba: options.includeRgba === true,
@@ -12907,7 +20281,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
     } finally {
       controlsSnapshot = controlsBefore;
-      resetTemporalHistory('same-state-render-scale-restore');
       if (options.resumeRenderLoop !== false && state.active) {
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
@@ -13014,6 +20387,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const frameIndex = Math.max(0, Math.floor(Number(options.frameIndex) || 0));
     const advanceSim = options.advanceSim !== false;
     const presentToCanvas = options.presentToCanvas === true;
+    const collectGpuTiming = options.collectGpuTiming === true;
     const startNow = Number.isFinite(Number(options.startNow)) ? Number(options.startNow) : performance.now();
     const stepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 1000 / 30);
     const sampleNow = startNow + frameIndex * stepDeltaMs;
@@ -13023,26 +20397,136 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const unpaddedBytesPerRow = state.width * bytesPerPixel;
     const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
     const readback = presentToCanvas ? null : device.createBuffer({
-      label: 'kaminos selective-head-live-lean-frame-readback-v0',
+      label: 'kaminos selective-head-live-raymarch-specialization-frame-readback-v0',
       size: bytesPerRow * state.height,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     const targetView = presentToCanvas ? context.getCurrentTexture().createView() : frameTexture.createView();
     const targetRaymarchPipeline = presentToCanvas ? pipeline : readbackPipeline;
     const targetSplatPipeline = presentToCanvas ? boundarySplatRenderPipeline : boundarySplatReadbackPipeline;
+    const targetSplatResolvePipeline = presentToCanvas ? boundarySplatPresentationRenderPipeline : boundarySplatPresentationReadbackPipeline;
+    const composition = updateSelectiveHeadLiveCompositionState();
+    const timingPairs = {};
+    let nextTimestampIndex = 0;
+    const allocateTimingPair = name => {
+      timingPairs[name] = { start: nextTimestampIndex, end: nextTimestampIndex + 1 };
+      nextTimestampIndex += 2;
+      return timingPairs[name];
+    };
+    if (collectGpuTiming) {
+      allocateTimingPair('sidecar');
+      if (composition.definition.splat) {
+        allocateTimingPair('compaction');
+        allocateTimingPair('finalize');
+        allocateTimingPair('indirectSetup');
+      }
+      if (composition.definition.raymarch) allocateTimingPair('matchedRaymarchRaster');
+      if (composition.definition.splat) allocateTimingPair('splatRaster');
+    }
+    const timingQuerySet = collectGpuTiming ? device.createQuerySet({
+      type: 'timestamp',
+      count: nextTimestampIndex,
+    }) : null;
+    const timingResolveBuffer = collectGpuTiming ? device.createBuffer({
+      label: 'kaminos selective-head live arm timestamp resolve',
+      size: nextTimestampIndex * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    }) : null;
+    const timingReadbackBuffer = collectGpuTiming ? device.createBuffer({
+      label: 'kaminos selective-head live arm timestamp readback',
+      size: nextTimestampIndex * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    }) : null;
+    const destroyTimingResources = () => {
+      timingResolveBuffer?.destroy();
+      timingReadbackBuffer?.destroy();
+      timingQuerySet?.destroy?.();
+    };
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: `kaminos selective-head live frame ${frameIndex}` });
     const beforeSimStepCount = state.simStepCount;
     if (advanceSim) encodeSim(encoder);
     encodeSelectiveHeadLiveFields(encoder);
-    const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
     const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
     const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
     const selectiveRender = selectiveHeadLiveRoleGroups('render');
-    encodeMajorant(encoder, { readBindGroup: selectiveMajorant, force: true });
-    encodeBoundarySidecar(encoder, { readBindGroup: selectiveSidecar });
-    encodeBoundarySplats(encoder, { computeBindGroup: selectiveSplat });
-    const composition = updateSelectiveHeadLiveCompositionState();
+    encodeBoundarySidecar(encoder, {
+      readBindGroup: selectiveSidecar,
+      ...(timingQuerySet ? {
+        timestampWrites: {
+          querySet: timingQuerySet,
+          beginningOfPassWriteIndex: timingPairs.sidecar.start,
+          endOfPassWriteIndex: timingPairs.sidecar.end,
+        },
+      } : {}),
+    });
+    if (composition.definition.splat && selectiveSplat) {
+      const encoded = encodeBoundarySplats(encoder, {
+        computeBindGroup: selectiveSplat,
+        descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
+        ...(timingQuerySet ? {
+          compactTimestampWrites: {
+            querySet: timingQuerySet,
+            beginningOfPassWriteIndex: timingPairs.compaction.start,
+            endOfPassWriteIndex: timingPairs.compaction.end,
+          },
+          finalizeTimestampWrites: {
+            querySet: timingQuerySet,
+            beginningOfPassWriteIndex: timingPairs.finalize.start,
+            endOfPassWriteIndex: timingPairs.finalize.end,
+          },
+          afterCandidateCopy: () => encodeBoundarySplatTimestampMarker(
+            encoder,
+            timingQuerySet,
+            timingPairs.indirectSetup.start,
+            'kaminos selective-head indirect setup start',
+          ),
+          afterIndirectSetup: () => encodeBoundarySplatTimestampMarker(
+            encoder,
+            timingQuerySet,
+            timingPairs.indirectSetup.end,
+            'kaminos selective-head indirect setup end',
+          ),
+        } : {}),
+      });
+      if (!encoded) {
+        readback?.destroy();
+        destroyTimingResources();
+        await device.popErrorScope();
+        return { ok: false, reason: state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable' };
+      }
+    } else if (composition.definition.splat) {
+      const encoded = encodeBoundarySplats(encoder, timingQuerySet ? {
+        compactTimestampWrites: {
+          querySet: timingQuerySet,
+          beginningOfPassWriteIndex: timingPairs.compaction.start,
+          endOfPassWriteIndex: timingPairs.compaction.end,
+        },
+        finalizeTimestampWrites: {
+          querySet: timingQuerySet,
+          beginningOfPassWriteIndex: timingPairs.finalize.start,
+          endOfPassWriteIndex: timingPairs.finalize.end,
+        },
+        afterCandidateCopy: () => encodeBoundarySplatTimestampMarker(
+          encoder,
+          timingQuerySet,
+          timingPairs.indirectSetup.start,
+          'kaminos selective-head indirect setup start',
+        ),
+        afterIndirectSetup: () => encodeBoundarySplatTimestampMarker(
+          encoder,
+          timingQuerySet,
+          timingPairs.indirectSetup.end,
+          'kaminos selective-head indirect setup end',
+        ),
+      } : {});
+      if (!encoded) {
+        readback?.destroy();
+        destroyTimingResources();
+        await device.popErrorScope();
+        return { ok: false, reason: state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable' };
+      }
+    }
     let raymarchEncoded = false;
     let raymarchApplied = false;
     let splatEncoded = false;
@@ -13053,22 +20537,42 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         targetView,
         `kaminos selective-head controlled ${presentToCanvas ? 'canvas' : 'readback'} ${composition.effective} raymarch`,
         targetRaymarchPipeline,
-        { bindGroup: selectiveRender },
+        {
+          bindGroup: selectiveRender,
+          ...(timingQuerySet ? {
+            timestampWrites: {
+              querySet: timingQuerySet,
+              beginningOfPassWriteIndex: timingPairs.matchedRaymarchRaster.start,
+              endOfPassWriteIndex: timingPairs.matchedRaymarchRaster.end,
+            },
+          } : {}),
+        },
       );
       raymarchEncoded = true;
       raymarchApplied = true;
     }
     if (composition.definition.splat) {
-      splatEncoded = encodeBoundarySplatDraw(
+      splatEncoded = encodeBoundarySplatPresentation(
         encoder,
         targetView,
         targetSplatPipeline,
-        { loadOp: raymarchApplied ? 'load' : 'clear' },
+        targetSplatResolvePipeline,
+        {
+          loadOp: raymarchApplied ? 'load' : 'clear',
+          ...(timingQuerySet ? {
+            timestampWrites: {
+              querySet: timingQuerySet,
+              beginningOfPassWriteIndex: timingPairs.splatRaster.start,
+              endOfPassWriteIndex: timingPairs.splatRaster.end,
+            },
+          } : {}),
+        },
       );
       splatApplied = splatEncoded;
     }
     if (composition.definition.splat && !splatApplied) {
       readback?.destroy();
+      destroyTimingResources();
       await device.popErrorScope();
       return {
         ok: false,
@@ -13102,11 +20606,69 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { width: state.width, height: state.height, depthOrArrayLayers: 1 },
       );
     }
+    if (timingQuerySet) {
+      encoder.resolveQuerySet(timingQuerySet, 0, nextTimestampIndex, timingResolveBuffer, 0);
+      encoder.copyBufferToBuffer(timingResolveBuffer, 0, timingReadbackBuffer, 0, nextTimestampIndex * 8);
+    }
     device.queue.submit([encoder.finish()]);
     const validationError = await device.popErrorScope();
     if (validationError) {
       readback?.destroy();
-      return { ok: false, reason: `lean-frame-readback-validation:${validationError.message || String(validationError)}` };
+      destroyTimingResources();
+      return { ok: false, reason: `raymarch-specialization-frame-readback-validation:${validationError.message || String(validationError)}` };
+    }
+    let gpuStageTiming = null;
+    if (timingReadbackBuffer) {
+      await timingReadbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(timingReadbackBuffer.getMappedRange().slice(0));
+      timingReadbackBuffer.unmap();
+      const incomplete = Array.from(timestamps).some(value => value === 0n);
+      const nonmonotonic = Object.values(timingPairs).some(pair => timestamps[pair.end] < timestamps[pair.start]);
+      if (incomplete || nonmonotonic) {
+        destroyTimingResources();
+        readback?.destroy();
+        return {
+          ok: false,
+          reason: `${incomplete ? 'timestamp-query-incomplete' : 'timestamp-query-nonmonotonic'}:${Array.from(timestamps, value => value.toString()).join(',')}`,
+        };
+      }
+      const elapsedMs = name => Number(timestamps[timingPairs[name].end] - timestamps[timingPairs[name].start]) / 1_000_000;
+      const sampled = name => ({ status: 'sampled', ms: elapsedMs(name) });
+      const notRequested = { status: 'not-requested-by-presentation', ms: 0 };
+      const firstPair = Object.values(timingPairs)[0];
+      const lastPair = Object.values(timingPairs).at(-1);
+      gpuStageTiming = {
+        identity: 'selective-head-live-arm-gpu-timestamp-profile-v0',
+        timestampStatus: 'available',
+        reason: 'timestamp-query-sampled',
+        sample: {
+          authority: 'same-state-selective-render-composition-gpu-timestamp-v0',
+          arm: options.presentationArm || null,
+          simStepCount: state.simStepCount,
+          advanceSim: false,
+          presentation: {
+            arm: options.presentationArm || null,
+            smoke: state.raymarchSmokePresentationModeEffective,
+            splats: composition.definition.splat ? 'on' : 'off',
+            composition: composition.effective,
+          },
+        },
+        stages: {
+          simulation: { status: 'not-run-frozen-state', ms: 0 },
+          sidecar: sampled('sidecar'),
+          compaction: timingPairs.compaction ? sampled('compaction') : notRequested,
+          finalize: timingPairs.finalize ? sampled('finalize') : notRequested,
+          candidateCopy: { status: 'removed', ms: 0 },
+          indirectSetup: timingPairs.indirectSetup ? sampled('indirectSetup') : notRequested,
+          splatRaster: timingPairs.splatRaster ? sampled('splatRaster') : notRequested,
+          matchedRaymarchRaster: timingPairs.matchedRaymarchRaster ? sampled('matchedRaymarchRaster') : notRequested,
+          total: {
+            status: 'sampled',
+            ms: Number(timestamps[lastPair.end] - timestamps[firstPair.start]) / 1_000_000,
+          },
+        },
+      };
+      destroyTimingResources();
     }
     let rgba = null;
     if (!presentToCanvas) {
@@ -13123,7 +20685,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       ok: true,
       sequenceAuthority: advanceSim ? 'frame-locked-consecutive-simulation-steps-v0' : 'same-state-selective-render-composition-v0',
-      imageAuthority: presentToCanvas ? 'selective-head-live-presented-canvas-composition-v0' : 'selective-head-live-lean-frame-readback-v0',
+      imageAuthority: presentToCanvas ? 'selective-head-live-presented-canvas-composition-v0' : 'selective-head-live-raymarch-specialization-frame-readback-v0',
       advanceSim,
       presentToCanvas,
       frameIndex,
@@ -13142,8 +20704,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       selectiveHeadLiveCompositionAuthority: state.selectiveHeadLiveCompositionAuthority,
       selectiveHeadLiveCompositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
       selectiveHeadLivePassReceipt,
+      gpuStageTiming,
+      raymarchShaderSpecialization: state.raymarchShaderSpecialization
+        ? { ...state.raymarchShaderSpecialization }
+        : null,
+      renderPhaseTimeMs: state.renderPhaseTimeMs,
+      renderPhaseFrame: state.renderPhaseFrame,
+      renderPhaseAuthority: state.renderPhaseAuthority,
       modelIdentity: state.selectiveHeadLiveModelIdentity,
       routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+      effectiveRoute: state.effectiveRoute,
       fallbackReason: state.selectiveHeadLiveFallbackReason,
       boundarySplatFallbackReason: state.boundarySplatFallbackReason,
       backend: state.backend,
@@ -13188,7 +20758,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
     } finally {
       controlsSnapshot = controlsBefore;
-      resetTemporalHistory('controlled-step-sequence-restore');
       if (options.resumeRenderLoop !== false && state.active) {
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
@@ -13257,13 +20826,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
     try {
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...controlOverrides, renderScale });
-      resetTemporalHistory('same-state-render-scale-canvas-capture');
+      syncFlowKernelDescriptorCaptureBuffer();
       updateUniforms(fixedNow);
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
-      encodeMajorant(encoder, { force: true });
       encodeBoundarySidecar(encoder);
       encodeBoundarySplats(encoder);
       const currentTexture = context.getCurrentTexture();
+      let finalPresentationTexture = currentTexture;
       let residualApplied = false;
       let raymarchEncoded = false;
       let splatEncoded = false;
@@ -13311,10 +20880,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           raymarchEncoded = true;
         }
         if (compositionDefinition.splat) {
-          splatEncoded = encodeBoundarySplatDraw(
+          splatEncoded = encodeBoundarySplatPresentation(
             encoder,
             currentTexture.createView(),
             boundarySplatRenderPipeline,
+            boundarySplatPresentationRenderPipeline,
             { loadOp: raymarchEncoded ? 'load' : 'clear' },
           );
         }
@@ -13395,6 +20965,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const retryEncoder = device.createCommandEncoder({ label: 'kaminos frozen-boundary-splat-capacity-retry' });
         encodeBoundarySplats(retryEncoder);
         const retryTexture = context.getCurrentTexture();
+        finalPresentationTexture = retryTexture;
         let retryRaymarchEncoded = false;
         if (compositionDefinition.raymarch) {
           encodeDraw(
@@ -13404,10 +20975,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           );
           retryRaymarchEncoded = true;
         }
-        const retrySplatEncoded = encodeBoundarySplatDraw(
+        const retrySplatEncoded = encodeBoundarySplatPresentation(
           retryEncoder,
           retryTexture.createView(),
           boundarySplatRenderPipeline,
+          boundarySplatPresentationRenderPipeline,
           { loadOp: retryRaymarchEncoded ? 'load' : 'clear' },
         );
         if (!retrySplatEncoded) {
@@ -13458,6 +21030,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           };
         }
       }
+      const canvasReadback = options.includeRgba === true
+        ? await readCanvasTextureRgba8(finalPresentationTexture, state.width, state.height)
+        : null;
+      const boundarySplatSample = compositionDefinition.splat
+        ? await sampleBoundarySplatDrawState()
+        : null;
+      const flowKernelDescriptorCapture = state.flowKernelDescriptorCaptureRequested && boundarySplatSample
+        ? await sampleBoundarySplatKernelDescriptorCapture(boundarySplatSample.sourceCandidateCount)
+        : null;
+      state.flowKernelDescriptorCapture = flowKernelDescriptorCapture;
       const featureCapture = featureCaptureSourcePassApplied && browserResidualFeatureTexture
         ? await readTextureRgba8(
           browserResidualFeatureTexture,
@@ -13470,7 +21052,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return {
         ok: true,
         sampleAuthority: 'render-only-frozen-sim-state',
-        imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        imageAuthority: canvasReadback?.authority || 'canvas-presentation-only-no-image-payload',
+        image: canvasReadback,
         controlOverrides,
         boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionRequested,
@@ -13523,22 +21106,50 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySidecarSource: state.boundarySidecarSource,
         boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
         boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+        boundarySplatPresentationReceipt: state.boundarySplatPresentationReceipt ? {
+          ...state.boundarySplatPresentationReceipt,
+          curve: state.boundarySplatPresentationReceipt.curve ? { ...state.boundarySplatPresentationReceipt.curve } : null,
+          hdrTelemetry: state.boundarySplatPresentationReceipt.hdrTelemetry ? { ...state.boundarySplatPresentationReceipt.hdrTelemetry } : null,
+        } : null,
         boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
         boundarySplatRadius: state.boundarySplatRadius,
         boundarySplatSharpness: state.boundarySplatSharpness,
         boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+        boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),
         boundarySplatInstanceCount: state.boundarySplatInstanceCount,
         boundarySplatCandidateCount: state.boundarySplatCandidateCount,
         boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+        boundarySplatRidgeOnlyCount: state.boundarySplatRidgeOnlyCount,
+        boundarySplatNonRidgeOnlyCount: state.boundarySplatNonRidgeOnlyCount,
+        boundarySplatOverlapCount: state.boundarySplatOverlapCount,
+        boundarySplatUnionCount: state.boundarySplatUnionCount,
+        boundarySplatZeroGradientAdmissionCount: state.boundarySplatZeroGradientAdmissionCount,
+        boundarySplatUnionReceipt: state.boundarySplatUnionReceipt,
         boundarySplatCapacity,
         boundarySplatInitialOverflowCount,
         boundarySplatCapacityRetryCount,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+        boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
+        fullSupportDepositionRequested: state.fullSupportDepositionRequested,
+        fullSupportDepositionEffective: state.fullSupportDepositionEffective,
+        fullSupportDepositionFallbackReason: state.fullSupportDepositionFallbackReason,
+        fullSupportSourceCandidateCount: state.fullSupportSourceCandidateCount,
+        fullSupportRasterDepositCount: state.fullSupportRasterDepositCount,
+        fullSupportTransportIdentity: state.fullSupportTransportIdentity,
+        flowKernelIdentity: state.flowKernelIdentity,
+        flowKernelRequested: state.flowKernelRequested,
+        flowKernelEffective: state.flowKernelEffective,
+        flowKernelCandidateAdmissionAuthority: state.flowKernelCandidateAdmissionAuthority,
+        flowKernelDescriptorCaptureRequested: state.flowKernelDescriptorCaptureRequested,
+        flowKernelDescriptorCaptureEffective: state.flowKernelDescriptorCaptureEffective,
+        flowKernelDescriptorCapture,
       };
     } finally {
       if (options.restoreControls !== false) {
         controlsSnapshot = controlsBefore;
-        resetTemporalHistory('same-state-render-scale-canvas-restore');
+        state.flowKernelDescriptorCaptureRequested = flowKernelDescriptorCaptureRequested();
+        state.flowKernelDescriptorCaptureEffective = state.flowKernelDescriptorCaptureRequested
+          && flowKernelDescriptorBufferCapacity === boundarySplatCapacity;
       }
       if (options.resumeRenderLoop === true && state.active) {
         cancelAnimationFrame(raf);
@@ -13562,10 +21173,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySidecarSource: 'live',
       boundarySplatMode: 'off',
       lookFreeze: 0,
-      temporalAccum: 0,
-      temporalJitter: 0,
     });
-    rebuildFluidState(gridSize, majorantGridSize, 'deterministic-replay-reset');
+    rebuildFluidState(gridSize, 'deterministic-replay-reset');
     state.frameCount = 0;
     state.lookFreezeFrame = null;
     state.lookFreezeRenderTimeMs = null;
@@ -13576,7 +21185,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       updateUniforms(now);
       const encoder = device.createCommandEncoder({ label: `kaminos deterministic replay step ${step + 1}/${steps}` });
       encodeSim(encoder);
-      if (step === steps - 1) encodeMajorant(encoder, { force: true });
       device.queue.submit([encoder.finish()]);
       state.frameCount += 1;
     }
@@ -13604,11 +21212,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       timeStepMs,
       startTimeMs,
       finalTimeMs: startTimeMs + Math.max(0, steps - 1) * timeStepMs,
-      controlsSignature: temporalControlSignature(controlsSnapshot),
+      controlsSignature: canonicalSourceControlSignature(controlsSnapshot),
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
       grid: gridSize,
-      majorantGrid: majorantGridSize,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
@@ -13755,55 +21362,200 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ok: true, ...state.boundarySidecarOverrideReceipt };
   }
 
+  async function initializeCallerProductFrame() {
+    if (productFrameOwner !== 'caller') {
+      throw new Error('initialize-product-frame-requires-caller-frame-owner');
+    }
+    await ensureGpu();
+    state.active = true;
+    state.error = null;
+    state.productFrameReceipt = {
+      identity: 'product-frame-smoke-raymarch-under-splats-v0',
+      status: 'initialized',
+      frameOwner: 'caller',
+      deviceOwner: 'caller',
+      encoderOwner: 'caller',
+      colorFormat: format,
+      depthFormat: externalDepthFormat,
+      privateSubmitApplied: false,
+      fallbackReason: null,
+    };
+    emitStatus({ phase: 'product-frame-initialized', receipt: state.productFrameReceipt });
+    return { ...state.productFrameReceipt };
+  }
+
+  function encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now = performance.now() }) {
+    if (productFrameOwner !== 'caller') throw new Error('encode-product-frame-requires-caller-frame-owner');
+    if (!device || !state.active) throw new Error('product-frame-not-initialized');
+    if (!commandEncoder || !colorView || !sceneDepthView || !depthView) {
+      throw new Error('product-frame-requires-command-encoder-color-view-scene-depth-view-and-depth-view');
+    }
+    updateUniforms(now);
+    encodeSim(commandEncoder);
+    encodeSelectiveHeadLiveFields(commandEncoder);
+    const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
+    const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
+    encodeBoundarySidecar(commandEncoder, { readBindGroup: selectiveSidecar });
+    if (selectiveSplat) {
+      encodeBoundarySplats(commandEncoder, {
+        computeBindGroup: selectiveSplat,
+        descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
+      });
+    } else {
+      encodeBoundarySplats(commandEncoder);
+    }
+
+    const composition = updateSelectiveHeadLiveCompositionState();
+    if (composition.effective !== 'smoke-raymarch-under-splats-v0') {
+      throw new Error(`product-frame-composition-mismatch:${composition.effective}`);
+    }
+    const selectiveRender = selectiveHeadLiveRoleGroups('render');
+    const smokeApplied = encodeProductSmokeRaymarch(
+      commandEncoder,
+      colorView,
+      sceneDepthView,
+      selectiveRender,
+    );
+    const splatApplied = encodeBoundarySplatPresentation(
+      commandEncoder,
+      colorView,
+      productBoundarySplatRenderPipeline,
+      boundarySplatPresentationRenderPipeline,
+      { loadOp: 'load', depthView },
+    );
+    if (!splatApplied) {
+      throw new Error(state.boundarySplatFallbackReason || 'product-frame-splat-fire-unavailable');
+    }
+    state.productFrameReceipt = {
+      identity: 'product-frame-smoke-raymarch-under-splats-v0',
+      status: 'effective',
+      frameOwner: 'caller',
+      deviceOwner: 'caller',
+      encoderOwner: 'caller',
+      requestedComposition: composition.requested,
+      effectiveComposition: composition.effective,
+      raymarchFireAuthority: composition.definition.raymarchFireAuthority,
+      smokeRaymarchEncoded: smokeApplied,
+      smokeDepthViewProvided: Boolean(sceneDepthView),
+      smokeDepthFarBoundEffective: smokeApplied,
+      splatFireEncoded: true,
+      splatSharedDepthEffective: true,
+      productTransform: {
+        translate: [...productTransform.translate],
+        scale: productTransform.scale,
+      },
+      privateSubmitApplied: false,
+      colorFormat: format,
+      depthFormat: externalDepthFormat,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      fallbackReason: null,
+    };
+    recordSelectiveHeadLivePassReceipt({
+      composition: composition.effective,
+      raymarchEncoded: smokeApplied,
+      raymarchApplied: smokeApplied,
+      splatEncoded: true,
+      splatApplied: true,
+      fallbackReason: state.productFrameReceipt.fallbackReason,
+    });
+    state.frameCount += 1;
+    emitStatus({ phase: 'product-frame-encoded', receipt: state.productFrameReceipt });
+    return { ...state.productFrameReceipt };
+  }
+
   return {
+    sampleSharedTransmittanceContributions,
+    setVolumePresentationMode,
+    setRaymarchSmokePresentationMode,
+    setAppearanceDecompositionMode,
+    setBoundarySplatPresentationMode,
+    setDebugRaymarchShaderSpecialization(mode = 'auto') {
+      const requested = String(mode || 'auto').toLowerCase();
+      if (!['auto', 'force-full'].includes(requested)) {
+        throw new Error(`unsupported-debug-raymarch-shader-specialization:${requested}`);
+      }
+      debugRaymarchShaderSpecialization = requested;
+      return {
+        identity: 'debug-raymarch-shader-specialization-override-v0',
+        effective: debugRaymarchShaderSpecialization,
+      };
+    },
+    applyPersistentSparseCohortGpuState,
+    applyFourArmHeldStateApplication,
+    clearPersistentSparseCohortGpuState,
+    async initializeProductFrame() {
+      return initializeCallerProductFrame();
+    },
+    encodeProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now }) {
+      return encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now });
+    },
     setControls(next) {
       const previousGrid = gridSize;
-      const previousMajorantGrid = majorantGridSize;
-      const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
+      const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
-      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
-      const nextControlSignature = temporalControlSignature(controlsSnapshot);
-      const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
-      if (previousControlSignature !== nextControlSignature) {
-        resetTemporalHistory('control-change');
+      const controlRetirement = stripRetiredRaymarchControls({ ...controlsSnapshot, ...next });
+      controlsSnapshot = applyRuntimeQualityControls(controlRetirement.controls);
+      state.retiredRaymarchControls = updateRetiredRaymarchControlReceipt(
+        state.retiredRaymarchControls,
+        controlRetirement.retiredRaymarchControls,
+      );
+      const nextBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
+      if (previousBoundarySplatTelemetryControlSignature !== nextBoundarySplatTelemetryControlSignature) {
+        boundarySplatControlGeneration += 1;
+        state.boundarySplatCandidateCount = null;
+        state.boundarySplatOverflowCount = null;
+        if (device) {
+          const previousAdmissionFailureReason = boundarySplatCapacityAdmissionFailureReason;
+          const retryReceipt = boundarySplatCapacityLimitReceipt({
+            capacity: boundarySplatCapacity,
+            descriptorRowsRequested: flowKernelDescriptorRowsRequested(),
+            featureCaptureRequested: boundarySplatFeatureCaptureRequested(),
+            limits: device.limits,
+          });
+          state.boundarySplatCapacityLimitReceipt = retryReceipt;
+          boundarySplatCapacityAdmissionFailureReason = retryReceipt.failureReason;
+          if (!retryReceipt.supported) {
+            state.boundarySplatFallbackReason = retryReceipt.failureReason;
+          } else if (state.boundarySplatFallbackReason === previousAdmissionFailureReason) {
+            state.boundarySplatFallbackReason = null;
+          }
+        }
       }
-      lastTemporalControlSignature = nextControlSignature;
+      const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
-      const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
       const sourceStateResetNeeded = device
         && requestedGrid === previousGrid
-        && requestedMajorantGrid === previousMajorantGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
-        rebuildFluidState(requestedGrid, requestedMajorantGrid);
+      if (device && requestedGrid !== previousGrid) {
+        rebuildFluidState(requestedGrid);
       } else if (sourceStateResetNeeded) {
-        rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
+        rebuildFluidState(requestedGrid, 'canonical-source-control-change');
       } else {
         gridSize = requestedGrid;
-        majorantGridSize = requestedMajorantGrid;
         state.simGrid = gridSize;
         state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
         state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
         state.frontFieldBytes = frontFieldBufferBytes(gridSize);
         state.frontFieldReadIndex = currentFront;
         state.frontFieldWriteIndex = 1 - currentFront;
-        state.majorantGrid = majorantGridSize;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
       state.lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze);
       state.pyroCompareMode = normalizePyroCompareMode(controlsSnapshot.pyroCompareMode);
       state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+      state.artisticSwirl = controlsSnapshot.artisticSwirl !== false;
+      state.phasedSway = controlsSnapshot.phasedSway !== false;
+      state.proceduralDetailForces = controlsSnapshot.proceduralDetailForces !== false;
+      state.proceduralTransportSlip = controlsSnapshot.proceduralTransportSlip !== false;
+      state.fixedSourceDephase = controlsSnapshot.fixedSourceDephase !== false;
+      state.analyticEmitterRequestedSourceLaw = String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume');
+      state.analyticEmitterRequestedSourceDepth = Number(controlsSnapshot.emitterSourceDepth ?? 0.04);
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
       state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
-      state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;
-      state.majorantSmooth = controlsSnapshot.majorantSmooth ?? 0.85;
-      state.majorantGuard = controlsSnapshot.majorantGuard ?? 0.75;
-      state.temporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
-      state.temporalJitter = controlsSnapshot.temporalJitter ?? 0.85;
-      state.historyClamp = controlsSnapshot.historyClamp ?? 0.70;
       state.fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
       state.detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
       state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
@@ -13858,15 +21610,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       state.boundarySplatRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       state.boundarySplatSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
+      state.boundarySplatRadianceGain = normalizeBoundarySplatRadianceGain(controlsSnapshot.boundarySplatRadianceGain);
+      state.boundarySplatOpacityGain = normalizeBoundarySplatOpacityGain(controlsSnapshot.boundarySplatOpacityGain);
+      state.boundarySplatRendererIdentity = boundarySplatEffectiveRendererIdentity(state.boundarySplatMode);
+      state.boundarySplatAttributeModelIdentity = boundarySplatEffectiveAttributeModelIdentity(state.boundarySplatMode);
+      state.boundarySplatAttributeSetId = boundarySplatAttributeSetId(state.boundarySplatMode);
+      state.boundarySplatFootprintAuthority = boundarySplatFootprintAuthority(state.boundarySplatMode);
+      state.boundarySplatAreaOpacityConservationAuthority = boundarySplatAreaOpacityConserved(state.boundarySplatMode)
+        ? BOUNDARY_SPLAT_AREA_OPACITY_CONSERVATION_AUTHORITY
+          : 'unconstrained-current-renderer-v0';
+      if (device) syncFlowKernelDescriptorCaptureBuffer();
       if (device) void ensureBrowserResidualModel();
-      state.majorantGrid = majorantGridSize;
-      state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
       state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
       state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
       state.pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
       state.pressureTierOverlayOpacity = normalizePressureTierControls(controlsSnapshot).overlay;
       state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
       state.scalarActivityReceiver = scalarActivityReceiverDebug();
+      getPrimitiveSource();
       updateSimCostLedger();
       pumpLookLabFrozenFrame();
     },
@@ -13874,7 +21635,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const incoming = Array.isArray(next) ? next : [];
       volumePrimitives = incoming.map(normalizePrimitiveRecord);
       publishVolumePrimitiveState();
-      if (device) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
+      getPrimitiveSource();
+      if (device) rebuildFluidState(gridSize, 'volume-primitive-change');
+    },
+    setCoreEmitterSourceMode(mode) {
+      const previousMode = state.coreEmitterSourceMode;
+      const requestedMode = String(mode || '');
+      const source = getPrimitiveSource(requestedMode);
+      state.coreEmitterSourceMode = requestedMode;
+      if (device && previousMode !== state.coreEmitterSourceMode) {
+        rebuildFluidState(gridSize, 'core-emitter-source-mode-change');
+      }
+      if (previousMode !== state.coreEmitterSourceMode) emitStatus({ phase: 'core-emitter-source' });
+      return { ...source.coreEmitterSourceReceipt };
+    },
+    setAnalyticEmitterDescriptor(descriptor = null) {
+      const normalized = normalizeAnalyticEmitterDescriptor(descriptor);
+      const signature = normalized ? JSON.stringify(normalized) : '';
+      if (signature === analyticEmitterDescriptorSignature) return analyticEmitterReceipt();
+      const previousFamily = analyticEmitterDescriptor?.family || null;
+      const previousSourceLaw = analyticEmitterDescriptor?.sourceLaw || null;
+      analyticEmitterDescriptor = normalized;
+      analyticEmitterDescriptorSignature = signature;
+      updateAnalyticEmitterDebug();
+      if (device
+        && state.coreEmitterSourceMode === 'analytic-only'
+        && previousFamily
+        && normalized?.family
+        && (previousFamily !== normalized.family || previousSourceLaw !== normalized.sourceLaw)) {
+        rebuildFluidState(
+          gridSize,
+          previousFamily !== normalized.family ? 'analytic-emitter-family-change' : 'analytic-emitter-source-law-change',
+        );
+      }
+      return analyticEmitterReceipt();
     },
     updateVolumePrimitiveTransform(id, nextTransform) {
       const primitive = volumePrimitives.find(candidate => candidate.id === id);
@@ -13889,7 +21683,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         scale: finiteTriplet(transform.scale, primitive.transform.scale),
       };
       publishVolumePrimitiveState();
-      writeLiquidFireContactParams();
       return {
         id: primitive.id,
         transform: {
@@ -13897,79 +21690,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           rotation: [...primitive.transform.rotation],
           scale: [...primitive.transform.scale],
         },
-      };
-    },
-    setLiquidFireContactDescriptor(descriptor) {
-      if (!descriptor?.device) throw new Error('Liquid fire contact descriptor has no GPUDevice');
-      if (gpuInitialized && device !== descriptor.device) {
-        throw new Error('Liquid fire contact descriptor must use the same GPUDevice as the active Pyro simulator');
-      }
-      if (configuredSharedGpuContext?.device && configuredSharedGpuContext.device !== descriptor.device) {
-        throw new Error('Liquid fire contact descriptor conflicts with the configured shared GPUDevice');
-      }
-      configuredSharedGpuContext = {
-        device: descriptor.device,
-        queue: descriptor.queue,
-        adapter: configuredSharedGpuContext?.adapter || null,
-      };
-      liquidFireContactDescriptor = validateLiquidFireContactSourceDescriptor(descriptor, {
-        device: descriptor.device,
-        expectedGeneration: descriptor.allocationGeneration,
-        expectedEpoch: descriptor.epoch,
-      });
-      state.liquidFireContactStatus = gpuInitialized ? 'binding-gpu-sparse-source' : 'bound-awaiting-pyro-initialization';
-      state.liquidFireContactSourceGeneration = descriptor.allocationGeneration;
-      state.liquidFireContactSourceEpoch = descriptor.epoch;
-      state.liquidFireContactSourceFrameHash = descriptor.sourceFrameHash;
-      if (gpuInitialized) rebuildLiquidFireContactConsumer();
-      emitStatus({ phase: 'liquid-fire-contact-source-bound' });
-      return {
-        schema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
-        status: state.liquidFireContactStatus,
-        sameDevice: !gpuInitialized || device === descriptor.device,
-        sourceGeneration: descriptor.allocationGeneration,
-        sourceEpoch: descriptor.epoch,
-        sourceFrameHash: descriptor.sourceFrameHash,
-        sourceFrameId: descriptor.sourceFrameId,
-        receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
-      };
-    },
-    setLiquidFireSourcePilotEnabled(enabled) {
-      sourcePilotEnabled = enabled === true;
-      state.liquidFireSourcePilotEnabled = sourcePilotEnabled;
-      emitStatus({ phase: sourcePilotEnabled ? 'liquid-fire-source-pilot-enabled' : 'liquid-fire-source-pilot-disabled' });
-      return {
-        enabled: sourcePilotEnabled,
-        policy: LIQUID_FIRE_SOURCE_REIGNITION_POLICY,
-        authority: 'explicit-live-source-pilot-v0',
-        simulationReset: false,
-      };
-    },
-    setLiquidFireContactTransferEnabled(enabled, { reason = 'host-control' } = {}) {
-      liquidFireContactTransferEnabled = enabled === true;
-      state.liquidFireContactTransferEnabled = liquidFireContactTransferEnabled;
-      state.liquidFireContactTransferGateReason = String(reason || 'host-control');
-      if (liquidFireContactTransferEnabled) {
-        state.liquidFireContactTransferEnabledAtMs = performance.now();
-        state.liquidFireContactStatus = liquidFireContactDescriptor
-          ? 'bound-gpu-sparse-source'
-          : 'unbound';
-      } else {
-        liquidFireContactSuppressedFrameCount = 0;
-        state.liquidFireContactSuppressedFrameCount = 0;
-        state.liquidFireContactTransferEnabledAtMs = null;
-        state.liquidFireContactFirstDispatchAtMs = null;
-        state.liquidFireContactStatus = liquidFireContactDescriptor
-          ? 'staged-awaiting-contact-window'
-          : 'unbound';
-      }
-      emitStatus({
-        phase: liquidFireContactTransferEnabled ? 'liquid-fire-contact-transfer-enabled' : 'liquid-fire-contact-transfer-staged',
-      });
-      return {
-        enabled: liquidFireContactTransferEnabled,
-        reason: state.liquidFireContactTransferGateReason,
-        status: state.liquidFireContactStatus,
       };
     },
     setExternalEmitters(payload = {}) {
@@ -13989,7 +21709,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const requestedRole = normalizeSelectiveHeadLiveRole(role);
       controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRole: requestedRole };
       state.selectiveHeadLiveRole = requestedRole;
-      resetTemporalHistory('selective-head-live-role-change');
       return {
         requestedRole,
         effectiveRole: state.selectiveHeadLiveEffectiveRole,
@@ -14000,19 +21719,40 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     setSelectiveHeadLiveRenderComposition(composition) {
       const request = selectiveHeadLiveRenderCompositionRequest(composition);
+      const previousComposition = selectiveHeadLiveRenderCompositionRequest(
+        controlsSnapshot.selectiveHeadLiveRenderComposition,
+      ).requested;
+      const compositionChanged = previousComposition !== request.requested;
       controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRenderComposition: request.requested };
       updateSelectiveHeadLiveCompositionState();
-      resetTemporalHistory('selective-head-live-render-composition-change');
       return {
         requestedCompositionRaw: request.raw,
         requestedComposition: request.requested,
         effectiveComposition: state.selectiveHeadLiveCompositionEffective,
         compositionAuthority: state.selectiveHeadLiveCompositionAuthority,
         compositionFallbackReason: request.fallbackReason,
+        compositionChanged,
         routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
       };
     },
     setSelectiveHeadLiveCapturePaused(paused) {
+      if (Boolean(paused) && selectiveHeadLiveExactPause) {
+        const exactPause = selectiveHeadLiveExactPause;
+        selectiveHeadLiveExactPause = null;
+        exactPause.resolve({
+          ok: false,
+          reason: 'exact-step-pause-cancelled-by-manual-pause',
+          authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+          requestedSimStepCount: exactPause.targetSimStepCount,
+          effectiveSimStepCount: state.simStepCount,
+          frameCount: state.frameCount,
+          paused: true,
+          gpuComplete: false,
+          routeIdentity: ROUTE_IDENTITY,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+        });
+      }
       selectiveHeadLiveCapturePaused = Boolean(paused);
       state.selectiveHeadLiveCapturePaused = selectiveHeadLiveCapturePaused;
       cancelAnimationFrame(raf);
@@ -14025,24 +21765,65 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         authority: 'witness-owned-presented-frame-pause-release-v0',
       };
     },
-    setSimulationPaused(paused) {
-      simulationPaused = paused === true;
-      state.simulationPaused = simulationPaused;
-      return {
-        paused: simulationPaused,
-        active: state.active,
+    enableLiveCompleteFlameOpticalCoefficients,
+    sampleLiveCompleteFlameOpticalCoefficientStats,
+    async pauseSelectiveHeadLiveAtSimStep(target) {
+      const targetSimStepCount = Number(target);
+      const baseReceipt = {
+        authority: 'renderer-internal-exact-sim-step-pause-gpu-complete-v0',
+        requestedSimStepCount: targetSimStepCount,
+        effectiveSimStepCount: state.simStepCount,
         frameCount: state.frameCount,
-        simStepCount: state.simStepCount,
-        authority: 'witness-owned-compute-pause-render-live-v0',
+        routeIdentity: ROUTE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
       };
+      if (!Number.isInteger(targetSimStepCount) || targetSimStepCount < 0) {
+        return { ...baseReceipt, ok: false, reason: 'invalid-exact-step-target', paused: selectiveHeadLiveCapturePaused, gpuComplete: false };
+      }
+      if (!state.active || !device) {
+        return { ...baseReceipt, ok: false, reason: 'inactive', paused: selectiveHeadLiveCapturePaused, gpuComplete: false };
+      }
+      if (state.simStepCount > targetSimStepCount) {
+        return { ...baseReceipt, ok: false, reason: `exact-step-already-passed:${targetSimStepCount}:${state.simStepCount}`, paused: selectiveHeadLiveCapturePaused, gpuComplete: false };
+      }
+      if (selectiveHeadLiveExactPause) {
+        return { ...baseReceipt, ok: false, reason: `exact-step-pause-already-armed:${selectiveHeadLiveExactPause.targetSimStepCount}`, paused: selectiveHeadLiveCapturePaused, gpuComplete: false };
+      }
+      if (state.simStepCount === targetSimStepCount) {
+        selectiveHeadLiveCapturePaused = true;
+        state.selectiveHeadLiveCapturePaused = true;
+        cancelAnimationFrame(raf);
+        raf = 0;
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        const receipt = { ...baseReceipt, ok: true, reason: null, paused: true, gpuComplete: true };
+        state.selectiveHeadLiveExactPause = { ...receipt };
+        return receipt;
+      }
+      const receiptPromise = new Promise(resolve => {
+        selectiveHeadLiveExactPause = { targetSimStepCount, resolve };
+      });
+      state.selectiveHeadLiveExactPause = {
+        status: 'armed',
+        targetSimStepCount,
+        effectiveSimStepCount: state.simStepCount,
+      };
+      if (selectiveHeadLiveCapturePaused) {
+        selectiveHeadLiveCapturePaused = false;
+        state.selectiveHeadLiveCapturePaused = false;
+      }
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(render);
+      return receiptPromise;
     },
-    async stepSelectiveHeadLiveCaptureFrame() {
+    async stepSelectiveHeadLiveCaptureFrame(options = {}) {
       if (!state.active || !device) return { ok: false, reason: 'inactive' };
       if (!selectiveHeadLiveCapturePaused) return { ok: false, reason: 'capture-not-paused' };
       const beforeFrameCount = state.frameCount;
       const beforeSimStepCount = state.simStepCount;
       selectiveHeadLiveCapturePaused = false;
-      render(performance.now());
+      const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+      render(sampleNow);
       selectiveHeadLiveCapturePaused = true;
       state.selectiveHeadLiveCapturePaused = true;
       cancelAnimationFrame(raf);
@@ -14058,6 +21839,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         beforeSimStepCount,
         frameCount: state.frameCount,
         simStepCount: state.simStepCount,
+        sampleNowMs: sampleNow,
         effectiveRole: state.selectiveHeadLiveEffectiveRole,
         requestedRole: state.selectiveHeadLiveRole,
         roleAuthority: state.selectiveHeadLiveRoleAuthority,
@@ -14151,6 +21933,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     debugState() {
       return {
         ...state,
+        coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
+        cameraSignature: cameraSignature(),
+        boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),
@@ -14334,32 +22119,62 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fireIrradianceLightField,
     sampleFireLightFieldGpuProfile,
     sampleFrame,
-    sampleLiquidFireContactConsumer,
+    sampleFourArmHeldStateLedger,
+    sampleBoundarySplatOpticalAdjudication,
+    sampleBoundarySplatOpticalDepthOrderDiagnostic,
+    sampleBoundarySplatFootprintAudit,
+    sampleBoundarySplatInstanceResidency,
     sampleDeterministicReplayFrame,
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
     finishDebugFullFieldImport,
     advanceDebugImportedFieldSteps,
     resumeDebugImportedFieldLive,
+    beginDebugNonRidgeOpticalCapture,
+    materializeLiveCompleteFlameOpticalCoefficients,
+    readDebugNonRidgeOpticalCaptureChunk,
+    releaseDebugNonRidgeOpticalCapture,
+    applyDebugNonRidgeCausalControls,
+    beginDebugNonRidgeSourceBasisCapture,
+    readDebugNonRidgeSourceBasisCaptureChunk,
+    releaseDebugNonRidgeSourceBasisCapture,
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
+    loadBoundarySplatLiveUnionCoefficientOverlay,
+    activateBoundarySplatLiveUnionCoefficientOverlayForOperatorExploration,
+    auditBoundarySplatLiveUnionCoefficientOverlayPopulation,
+    auditBoundarySplatLiveUnionSourceHashes,
+    clearBoundarySplatLiveUnionCoefficientOverlay,
+    setFullSupportDepositionMode,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
     captureSelectiveHeadLiveFrame,
     renderFrozenScaleToCanvas,
+    readFlowKernelDescriptorCaptureChunk,
+    releaseFlowKernelDescriptorCapture,
     dispose() {
       this.setActive(false);
+      persistentSparseCohortGpuState = null;
+      fourArmHeldStateRuntimeState = null;
+      fourArmHeldStateResidualGrid = null;
+      clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
+      boundarySplatHdrTexture?.destroy();
+      boundarySplatOpticalTexture?.destroy();
+      fourArmHeldStateLinearTexture?.destroy();
+      fourArmHeldStateResidualTexture?.destroy();
+      fourArmHeldStateResidualParamsBuffer?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
-      destroyLiquidFireContactConsumer();
+      analyticEmitterInjectionUniformBuffer?.destroy();
+      analyticEmitterInjectionUniformBuffer = null;
+      volumePresentationControlsBuffer?.destroy();
+      volumePresentationControlsBuffer = null;
       boundarySplatCameraBuffer?.destroy();
       boundarySplatCameraBuffer = null;
-      destroyTemporalHistory();
       destroyFluidState();
-      destroyMajorantState();
       canvas.remove();
     },
   };
