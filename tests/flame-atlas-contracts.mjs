@@ -63,7 +63,10 @@ test("generated-worlds README and flame screening room public claims agree", () 
   assert.match(rootReadme, /\*\*A world kiln\*\*/);
   assert.match(rootReadme, /Generated creatures can preserve deliberate morphology\s+through generative transformation and return to mechanical control\./);
   assert.doesNotMatch(rootReadme, /Generated beings retain identity, structure, and handles after inference/i);
-  assert.match(html, /<a href=["']\.\.\/\.\.\/["']>Kaminos<\/a>/);
+  assert.match(
+    html,
+    /<a href=["']https:\/\/github\.com\/lyonsno\/kaminos["']>Kaminos<\/a>/,
+  );
   assert.doesNotMatch(html, /href=["']\.\.\/\.\.\/README\.md["']/);
   assert.match(atlasReadme, /capture-manifest\.json/);
   assert.match(manifest.claim_boundary, /no simulator frame-rate or quality-tier claim/i);
