@@ -1551,6 +1551,35 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-emitter-source-depth" data-volume-settings-param="volume_emitter_source_depth" min="0.006" max="0.24" step="any" value="0.04">
       <span class="slider-val" id="volume-emitter-source-depth-val">0.040</span>
     </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Inlet profile</span>
+      <select id="volume-emitter-inlet-profile" data-volume-settings-param="volume_emitter_inlet_profile" class="select-input">
+        <option value="plug">Plug</option>
+        <option value="resolved-shear">Resolved shear</option>
+        <option value="edge-entrained">Edge entrained</option>
+      </select>
+      <span class="slider-val" id="volume-emitter-inlet-profile-val">plug</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Link momentum to flow</span>
+      <input type="checkbox" id="volume-emitter-momentum-linked" data-volume-settings-param="volume_emitter_momentum_linked" checked>
+      <span class="slider-val" id="volume-emitter-momentum-linked-val">on</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Inlet Δv (field/step)</span>
+      <input type="range" id="volume-emitter-inlet-velocity" data-volume-settings-param="volume_emitter_inlet_velocity" min="0" max="1" step="any" value="0.04">
+      <span class="slider-val" id="volume-emitter-inlet-velocity-val">0.0400</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Shear width (cells)</span>
+      <input type="range" id="volume-emitter-shear-width" data-volume-settings-param="volume_emitter_shear_width_cells" min="0.5" max="8" step="any" value="3">
+      <span class="slider-val" id="volume-emitter-shear-width-val">3.0</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Edge entrainment (×)</span>
+      <input type="range" id="volume-emitter-edge-entrainment" data-volume-settings-param="volume_emitter_edge_entrainment" min="0" max="2" step="any" value="0.65">
+      <span class="slider-val" id="volume-emitter-edge-entrainment-val">0.65</span>
+    </div>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
       <input type="checkbox" id="volume-fixed-source-dephase" data-volume-settings-param="volume_fixed_source_dephase" checked>
@@ -2808,7 +2837,11 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=fire-actor-parity-0722';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
-import { VOLUME_EMITTER_SOURCE_LAWS } from './volume-emitter-basis.mjs';
+import {
+  VOLUME_EMITTER_INLET_PROFILES,
+  VOLUME_EMITTER_SOURCE_LAWS,
+  resolveVolumeEmitterInletVelocity,
+} from './volume-emitter-basis.mjs';
 import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
 import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contract.mjs';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
@@ -17109,6 +17142,16 @@ function backOffVolumeLegacyPyroControls(controls) {
   };
 }
 
+function linkedVolumeEmitterInletVelocity() {
+  return resolveVolumeEmitterInletVelocity({
+    momentumLinked: true,
+    sourceStrength: parseFloat(document.getElementById('volume-flow-rate').value),
+    velocitySpeed: 0.22,
+    transportSpeed: parseFloat(document.getElementById('volume-speed').value),
+    inletVelocity: parseFloat(document.getElementById('volume-emitter-inlet-velocity').value),
+  }).linkedInletVelocity;
+}
+
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
@@ -17185,6 +17228,11 @@ function readVolumeControls() {
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     emitterSourceLaw: document.getElementById('volume-emitter-source-law').value,
     emitterSourceDepth: parseFloat(document.getElementById('volume-emitter-source-depth').value),
+    emitterInletProfile: document.getElementById('volume-emitter-inlet-profile').value,
+    emitterMomentumLinked: document.getElementById('volume-emitter-momentum-linked').checked,
+    emitterInletVelocity: parseFloat(document.getElementById('volume-emitter-inlet-velocity').value),
+    emitterShearWidthCells: parseFloat(document.getElementById('volume-emitter-shear-width').value),
+    emitterEdgeEntrainment: parseFloat(document.getElementById('volume-emitter-edge-entrainment').value),
     fixedSourceDephase: document.getElementById('volume-fixed-source-dephase').checked,
     reactionLiveView,
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
@@ -17462,6 +17510,11 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-family-val').textContent = document.getElementById('emitter-assay-family').value;
   document.getElementById('volume-emitter-source-law-val').textContent = c.emitterSourceLaw;
   document.getElementById('volume-emitter-source-depth-val').textContent = c.emitterSourceDepth.toFixed(3);
+  document.getElementById('volume-emitter-inlet-profile-val').textContent = c.emitterInletProfile;
+  document.getElementById('volume-emitter-momentum-linked-val').textContent = c.emitterMomentumLinked ? 'on' : 'off';
+  document.getElementById('volume-emitter-inlet-velocity-val').textContent = c.emitterInletVelocity.toFixed(4);
+  document.getElementById('volume-emitter-shear-width-val').textContent = c.emitterShearWidthCells.toFixed(1);
+  document.getElementById('volume-emitter-edge-entrainment-val').textContent = c.emitterEdgeEntrainment.toFixed(2);
   document.getElementById('volume-fixed-source-dephase-val').textContent = c.fixedSourceDephase ? 'on' : 'off';
   document.getElementById('volume-reaction-boundary-fire-clean-color-val').textContent = c.reactionBoundaryFireCleanColor;
   document.getElementById('volume-reaction-boundary-fire-soot-color-val').textContent = c.reactionBoundaryFireSootColor;
@@ -17710,8 +17763,10 @@ for (const button of document.querySelectorAll('[data-raymarch-smoke-presentatio
 
 function renderVolumeEmitterReceipt(receipt) {
   if (!receipt) return;
-  document.getElementById('volume-emitter-requested').textContent = `${receipt.requested.family} / ${receipt.requested.sourceLaw} / ${receipt.requested.sourceDepth}`;
-  document.getElementById('volume-emitter-effective').textContent = `${receipt.effective.family} / ${receipt.effective.sourceLaw} / ${receipt.effective.sourceDepth}`;
+  const requestedMomentum = receipt.requested.momentumLinked ? 'linked' : receipt.requested.inletVelocity;
+  const effectiveMomentum = receipt.effective.momentumLinked ? 'linked' : receipt.effective.effectiveInletVelocity;
+  document.getElementById('volume-emitter-requested').textContent = `${receipt.requested.family} / ${receipt.requested.sourceLaw} / ${receipt.requested.inletProfile} / ${requestedMomentum}`;
+  document.getElementById('volume-emitter-effective').textContent = `${receipt.effective.family} / ${receipt.effective.sourceLaw} / ${receipt.effective.inletProfile} / ${effectiveMomentum}`;
   document.getElementById('volume-emitter-carrier').textContent = `${receipt.effective.sourceMode} / ${receipt.effective.sourceCount} / ${receipt.effective.coordinateSpace}`;
   document.getElementById('volume-emitter-fallback').textContent = receipt.fallbackUsed ? 'yes' : 'no';
 }
@@ -18013,6 +18068,21 @@ async function initKaminosVolumeRoute() {
   const routeEmitterSourceDepth = Number(params.get('volume_emitter_source_depth'));
   if (params.has('volume_emitter_source_depth') && Number.isFinite(routeEmitterSourceDepth)) {
     document.getElementById('volume-emitter-source-depth').value = String(Math.max(0.006, Math.min(0.24, routeEmitterSourceDepth)));
+  }
+  const routeEmitterInletVelocity = Number(params.get('volume_emitter_inlet_velocity'));
+  if (params.has('volume_emitter_inlet_velocity') && Number.isFinite(routeEmitterInletVelocity)) {
+    document.getElementById('volume-emitter-inlet-velocity').value = String(Math.max(0, Math.min(1, routeEmitterInletVelocity)));
+  }
+  const routeEmitterShearWidth = Number(params.get('volume_emitter_shear_width_cells'));
+  if (params.has('volume_emitter_shear_width_cells') && Number.isFinite(routeEmitterShearWidth)) {
+    document.getElementById('volume-emitter-shear-width').value = String(Math.max(0.5, Math.min(8, routeEmitterShearWidth)));
+  }
+  const routeEmitterEdgeEntrainment = Number(params.get('volume_emitter_edge_entrainment'));
+  if (params.has('volume_emitter_edge_entrainment') && Number.isFinite(routeEmitterEdgeEntrainment)) {
+    document.getElementById('volume-emitter-edge-entrainment').value = String(Math.max(0, Math.min(2, routeEmitterEdgeEntrainment)));
+  }
+  if (params.has('volume_emitter_momentum_linked')) {
+    setVolumeControlValue('volume-emitter-momentum-linked', params.get('volume_emitter_momentum_linked'));
   }
   if (params.has('volume_fixed_source_dephase')) {
     setVolumeControlValue('volume-fixed-source-dephase', params.get('volume_fixed_source_dephase'));
@@ -18484,17 +18554,22 @@ async function initKaminosVolumeRoute() {
   const routeExternalEmitters = params.get('volume_external_emitters') || '';
   const requestedEmitterFamily = params.get('volume_emitter_family') || 'cluster';
   const requestedEmitterSourceLaw = params.get('volume_emitter_source_law') || 'legacy-volume';
+  const requestedEmitterInletProfile = params.get('volume_emitter_inlet_profile') || 'plug';
   if (!VOLUME_RUNTIME_EMITTER_FAMILIES.includes(requestedEmitterFamily)) {
     throw new Error(`unsupported volume_emitter_family route: ${requestedEmitterFamily}`);
   }
   if (!VOLUME_EMITTER_SOURCE_LAWS.includes(requestedEmitterSourceLaw)) {
     throw new Error(`unsupported volume_emitter_source_law route: ${requestedEmitterSourceLaw}`);
   }
+  if (!VOLUME_EMITTER_INLET_PROFILES.includes(requestedEmitterInletProfile)) {
+    throw new Error(`unsupported volume_emitter_inlet_profile route: ${requestedEmitterInletProfile}`);
+  }
   if (routeExternalEmitters && requestedEmitterFamily !== 'cluster') {
     throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${requestedEmitterFamily}`);
   }
   document.getElementById('emitter-assay-family').value = requestedEmitterFamily;
   document.getElementById('volume-emitter-source-law').value = requestedEmitterSourceLaw;
+  document.getElementById('volume-emitter-inlet-profile').value = requestedEmitterInletProfile;
   if (params.has('volume_artistic_swirl')) {
     setVolumeControlValue('volume-artistic-swirl', params.get('volume_artistic_swirl'));
   }
@@ -18699,9 +18774,25 @@ async function initKaminosVolumeRoute() {
     'volume-radiance',
     'volume-absorption',
   ]);
-  const emitterMorphologyControls = new Set(['emitter-assay-family', 'volume-emitter-source-law', 'volume-emitter-source-depth', 'volume-input-radius', 'volume-flow-rate']);
+  const emitterMorphologyControls = new Set([
+    'emitter-assay-family',
+    'volume-emitter-source-law',
+    'volume-emitter-source-depth',
+    'volume-emitter-inlet-profile',
+    'volume-emitter-momentum-linked',
+    'volume-emitter-inlet-velocity',
+    'volume-emitter-shear-width',
+    'volume-emitter-edge-entrainment',
+    'volume-input-radius',
+    'volume-flow-rate',
+    'volume-speed',
+  ]);
   const syncControls = event => {
     if (event?.target?.id === 'volume-render-scale' && event.isTrusted === true) adoptVolumeRenderScaleSliderValue();
+    if (event?.target?.id === 'volume-emitter-momentum-linked'
+      && event.target.checked === false) {
+      document.getElementById('volume-emitter-inlet-velocity').value = String(linkedVolumeEmitterInletVelocity());
+    }
     if (event?.target?.id === 'volume-scene') {
       applyVolumeScenePreset(event.target.value);
     } else if (event?.target?.id) {
@@ -18731,7 +18822,16 @@ async function initKaminosVolumeRoute() {
     setVolumeRenderScaleControlValue(nextValue);
     syncControls({ target: document.getElementById('volume-render-scale-full') });
   });
-  for (const id of ['volume-emitter-source-law', 'volume-emitter-source-depth', 'volume-fixed-source-dephase']) {
+  for (const id of [
+    'volume-emitter-source-law',
+    'volume-emitter-source-depth',
+    'volume-emitter-inlet-profile',
+    'volume-emitter-momentum-linked',
+    'volume-emitter-inlet-velocity',
+    'volume-emitter-shear-width',
+    'volume-emitter-edge-entrainment',
+    'volume-fixed-source-dephase',
+  ]) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }

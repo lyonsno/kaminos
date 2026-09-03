@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 190,
+  "controlCount": 195,
   "controls": [
     {
       "key": "volume-scene",
@@ -28,6 +28,41 @@
       "tagName": "INPUT",
       "type": "range",
       "additiveDefault": 0.04
+    },
+    {
+      "key": "volume-emitter-inlet-profile",
+      "param": "volume_emitter_inlet_profile",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "plug"
+    },
+    {
+      "key": "volume-emitter-momentum-linked",
+      "param": "volume_emitter_momentum_linked",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-emitter-inlet-velocity",
+      "param": "volume_emitter_inlet_velocity",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.04
+    },
+    {
+      "key": "volume-emitter-shear-width",
+      "param": "volume_emitter_shear_width_cells",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 3
+    },
+    {
+      "key": "volume-emitter-edge-entrainment",
+      "param": "volume_emitter_edge_entrainment",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.65
     },
     {
       "key": "volume-fixed-source-dephase",

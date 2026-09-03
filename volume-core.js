@@ -1508,6 +1508,12 @@ const ANALYTIC_EMITTER_SOURCE_LAW_MODE = Object.freeze({
   'shallow-primary': 1,
 });
 
+const ANALYTIC_EMITTER_INLET_PROFILE_MODE = Object.freeze({
+  plug: 0,
+  'resolved-shear': 1,
+  'edge-entrained': 2,
+});
+
 function analyticEmitterVec3(value, label) {
   if (!Array.isArray(value) || value.length !== 3 || value.some(component => !Number.isFinite(Number(component)))) {
     throw new Error(`${label} must be a finite vec3`);
@@ -1548,6 +1554,10 @@ function normalizeAnalyticEmitterDescriptor(descriptor) {
   if (!Object.hasOwn(ANALYTIC_EMITTER_SOURCE_LAW_MODE, sourceLaw)) {
     throw new Error(`unsupported analytic emitter source law: ${sourceLaw || 'missing-source-law'}`);
   }
+  const inletProfile = String(descriptor.inletProfile ?? 'plug');
+  if (!Object.hasOwn(ANALYTIC_EMITTER_INLET_PROFILE_MODE, inletProfile)) {
+    throw new Error(`unsupported analytic emitter inlet profile: ${inletProfile || 'missing-inlet-profile'}`);
+  }
   const axis = normalizeAnalyticEmitterVec3(descriptor.axis, 'analytic emitter axis');
   const supportAxis = orthonormalAnalyticEmitterSupportAxis(axis, descriptor.supportAxis);
   const normalized = {
@@ -1562,6 +1572,12 @@ function normalizeAnalyticEmitterDescriptor(descriptor) {
     velocitySpeed: clampFinite(descriptor.velocitySpeed, 0, 3, 0.22),
     sourceLaw,
     sourceDepth: clampFinite(descriptor.sourceDepth, 0.006, 0.36, 0.04),
+    inletProfile,
+    momentumLinked: descriptor.momentumLinked === undefined ? true : Boolean(descriptor.momentumLinked),
+    inletVelocity: clampFinite(descriptor.inletVelocity, 0, 1, 0.04),
+    effectiveInletVelocity: clampFinite(descriptor.effectiveInletVelocity, 0, 12, 0.04),
+    shearWidthCells: clampFinite(descriptor.shearWidthCells, 0.5, 8, 3),
+    edgeEntrainment: clampFinite(descriptor.edgeEntrainment, 0, 2, 0.65),
     chemistry: {
       smoke: clampFinite(chemistry.smoke, 0, 3, 0),
       heat: clampFinite(chemistry.heat, 0, 4, 0),
@@ -1648,7 +1664,10 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize) {
   if (descriptor === null || descriptor === undefined) return inactive;
   const normalized = normalizeAnalyticEmitterDescriptor(descriptor);
   const cellWidth = 2 / grid;
-  const halfExtent = analyticEmitterComponentwiseHalfExtent(normalized, cellWidth * 0.5);
+  const edgeMargin = normalized.inletProfile === 'edge-entrained'
+    ? normalized.shearWidthCells * cellWidth
+    : 0;
+  const halfExtent = analyticEmitterComponentwiseHalfExtent(normalized, cellWidth * 0.5 + edgeMargin);
   const center = normalized.family === 'nozzle'
     ? normalized.origin.map((component, index) => component + normalized.axis[index] * (
       normalized.sourceLaw === 'shallow-primary' ? normalized.sourceDepth * 0.5 : normalized.extent * 0.5
@@ -1705,8 +1724,13 @@ function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatc
   floats[20] = Number.isFinite(Number(speed)) ? Number(speed) : 1;
   floats[21] = ANALYTIC_EMITTER_SOURCE_LAW_MODE[descriptor.sourceLaw] || 0;
   floats[22] = descriptor.sourceDepth;
-  words.set([...dispatch.cellMin, dispatch.grid], 24);
-  words.set([...dispatch.cellExtent, 0], 28);
+  floats[23] = descriptor.edgeEntrainment;
+  floats[24] = ANALYTIC_EMITTER_INLET_PROFILE_MODE[descriptor.inletProfile] || 0;
+  floats[25] = descriptor.momentumLinked ? 0 : 1;
+  floats[26] = descriptor.inletVelocity;
+  floats[27] = descriptor.shearWidthCells;
+  words.set([...dispatch.cellMin, dispatch.grid], 28);
+  words.set([...dispatch.cellExtent, 0], 32);
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -6052,6 +6076,7 @@ struct AnalyticEmitterInjectionUniforms {
   geometry: vec4<f32>,
   chemistry: vec4<f32>,
   transport: vec4<f32>,
+  inlet_controls: vec4<f32>,
   cell_min_grid: vec4<u32>,
   cell_extent: vec4<u32>,
 };
@@ -6098,6 +6123,32 @@ fn torusSignedDistance(p: vec3<f32>, origin: vec3<f32>, axis: vec3<f32>, ringRad
   return length(vec2<f32>(radialError, axial)) - tubeRadius;
 }
 
+fn apertureSignedDistance(
+  p: vec3<f32>,
+  origin: vec3<f32>,
+  axis: vec3<f32>,
+  supportAxis: vec3<f32>,
+  radius: f32,
+  extent: f32,
+  familyMode: u32
+) -> f32 {
+  let relative = p - origin;
+  let axial = dot(relative, axis);
+  let planar = relative - axis * axial;
+  if (familyMode == 1u || familyMode == 2u) {
+    return length(planar) - radius;
+  }
+  if (familyMode == 3u) {
+    let secondaryAxis = cross(axis, supportAxis);
+    let d = abs(vec2<f32>(
+      dot(relative, supportAxis),
+      dot(relative, secondaryAxis)
+    )) - vec2<f32>(extent * 0.5, radius);
+    return length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0);
+  }
+  return abs(length(planar) - extent) - radius;
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   if (any(localId >= emitter.cell_extent.xyz)) { return; }
@@ -6111,31 +6162,44 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   let supportAxis = emitter.support_radius.xyz;
   let radius = max(0.006, emitter.support_radius.w);
   let extent = max(0.012, emitter.geometry.x);
-  var signedDistance = 1.0;
+  var geometrySignedDistance = 1.0;
   if (familyMode == 1u) {
     let halfSpan = axis * extent * 0.5;
-    signedDistance = capsuleSignedDistance(p, origin - halfSpan, origin + halfSpan, radius);
+    geometrySignedDistance = capsuleSignedDistance(p, origin - halfSpan, origin + halfSpan, radius);
   } else if (familyMode == 2u) {
-    signedDistance = cylinderSignedDistance(p, origin, axis, radius, extent);
+    geometrySignedDistance = cylinderSignedDistance(p, origin, axis, radius, extent);
   } else if (familyMode == 3u) {
-    signedDistance = ribbonSignedDistance(p, origin, axis, supportAxis, radius, extent);
+    geometrySignedDistance = ribbonSignedDistance(p, origin, axis, supportAxis, radius, extent);
   } else if (familyMode == 4u) {
-    signedDistance = torusSignedDistance(p, origin, axis, extent, radius);
+    geometrySignedDistance = torusSignedDistance(p, origin, axis, extent, radius);
   }
   let cellWidth = 2.0 / f32(GRID);
   let sourceLaw = emitter.transport.y;
   let sourceDepth = max(0.006, emitter.transport.z);
-  if (sourceLaw >= 0.5) {
-    let axialFromOrigin = dot(p - origin, axis);
-    var inletSignedDistance = abs(axialFromOrigin) - sourceDepth * 0.5;
-    if (familyMode == 2u) {
-      inletSignedDistance = max(-axialFromOrigin, axialFromOrigin - sourceDepth);
-    }
-    signedDistance = max(signedDistance, inletSignedDistance);
+  var sourceSignedDistance = geometrySignedDistance;
+  let axialFromOrigin = dot(p - origin, axis);
+  var inletSignedDistance = abs(axialFromOrigin) - sourceDepth * 0.5;
+  if (familyMode == 2u) {
+    inletSignedDistance = max(-axialFromOrigin, axialFromOrigin - sourceDepth);
   }
-  let support = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, signedDistance);
-  if (support <= 0.0) { return; }
-  let weight = support * max(0.0, emitter.axis_strength.w);
+  let inletDepthSupport = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, inletSignedDistance);
+  if (sourceLaw >= 0.5) {
+    sourceSignedDistance = max(geometrySignedDistance, inletSignedDistance);
+  }
+  let chemicalSupport = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, sourceSignedDistance);
+  let apertureDistance = apertureSignedDistance(p, origin, axis, supportAxis, radius, extent, familyMode);
+  let profileMode = u32(max(0.0, floor(emitter.inlet_controls.x + 0.5)));
+  let profileWidth = max(0.5, emitter.inlet_controls.w) * cellWidth;
+  var axialWeight = chemicalSupport;
+  if (profileMode >= 1u) {
+    axialWeight = inletDepthSupport * smoothstep(0.0, profileWidth, max(0.0, -apertureDistance));
+  }
+  var edgeWeight = 0.0;
+  if (profileMode == 2u) {
+    edgeWeight = inletDepthSupport * (1.0 - smoothstep(0.0, profileWidth, abs(apertureDistance)));
+  }
+  if (chemicalSupport <= 0.0 && axialWeight <= 0.0 && edgeWeight <= 0.0) { return; }
+  let chemistryWeight = chemicalSupport * max(0.0, emitter.axis_strength.w);
   let chemistry = emitter.chemistry;
   let detail = max(0.0, emitter.geometry.z);
   let base = cellIndex(cell) * SLOTS_PER_CELL;
@@ -6146,24 +6210,49 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   var material = previousMaterial;
   var fireLayer = previousFireLayer;
   var microLayer = previousMicroLayer;
-  let velocity = axis * emitter.geometry.y * weight;
+  let linkedInletVelocity = emitter.geometry.y * emitter.axis_strength.w * (0.18 + emitter.transport.x * 0.036);
+  let effectiveInletVelocity = select(emitter.inlet_controls.z, linkedInletVelocity, emitter.inlet_controls.y < 0.5);
+  var axialVelocity = axis * effectiveInletVelocity * axialWeight;
+  if (profileMode == 0u && emitter.inlet_controls.y < 0.5) {
+    let predecessorVelocity = axis * emitter.geometry.y * chemistryWeight;
+    axialVelocity = predecessorVelocity * (0.18 + emitter.transport.x * 0.036);
+  }
+  var entrainmentVelocity = vec3<f32>(0.0);
+  if (profileMode == 2u && edgeWeight > 0.0) {
+    let normalStep = cellWidth * 0.5;
+    let gradient = vec3<f32>(
+      apertureSignedDistance(p + vec3<f32>(normalStep, 0.0, 0.0), origin, axis, supportAxis, radius, extent, familyMode)
+        - apertureSignedDistance(p - vec3<f32>(normalStep, 0.0, 0.0), origin, axis, supportAxis, radius, extent, familyMode),
+      apertureSignedDistance(p + vec3<f32>(0.0, normalStep, 0.0), origin, axis, supportAxis, radius, extent, familyMode)
+        - apertureSignedDistance(p - vec3<f32>(0.0, normalStep, 0.0), origin, axis, supportAxis, radius, extent, familyMode),
+      apertureSignedDistance(p + vec3<f32>(0.0, 0.0, normalStep), origin, axis, supportAxis, radius, extent, familyMode)
+        - apertureSignedDistance(p - vec3<f32>(0.0, 0.0, normalStep), origin, axis, supportAxis, radius, extent, familyMode)
+    );
+    var apertureNormal = supportAxis;
+    let gradientLength = length(gradient);
+    if (gradientLength > 0.00001) {
+      apertureNormal = gradient / gradientLength;
+    }
+    let transportedAxialSpeed = max(0.0, dot(previousVelocityDensity.xyz, axis));
+    entrainmentVelocity = -apertureNormal * transportedAxialSpeed * edgeWeight * max(0.0, emitter.transport.w);
+  }
   let injectedVelocity = clamp(
-    previousVelocityDensity.xyz + velocity * (0.18 + emitter.transport.x * 0.036),
+    previousVelocityDensity.xyz + axialVelocity + entrainmentVelocity,
     vec3<f32>(-0.34),
     vec3<f32>(0.52)
   );
-  material.x = max(material.x, chemistry.x * weight * 0.76);
-  material.y = max(material.y, chemistry.y * weight * 0.92);
-  material.z = max(material.z, chemistry.z * weight * 0.72);
+  material.x = max(material.x, chemistry.x * chemistryWeight * 0.76);
+  material.y = max(material.y, chemistry.y * chemistryWeight * 0.92);
+  material.z = max(material.z, chemistry.z * chemistryWeight * 0.72);
   if (sourceLaw < 0.5) {
-    material.w = max(material.w, detail * weight * 0.90);
-    fireLayer.x = max(fireLayer.x, chemistry.w * weight);
-    fireLayer.y = max(fireLayer.y, chemistry.w * weight * 0.42);
-    fireLayer.z = max(fireLayer.z, detail * weight * 0.82);
-    microLayer.x = max(microLayer.x, detail * weight * 0.72);
-    microLayer.y = max(microLayer.y, detail * weight * 0.42 + chemistry.w * weight * 0.12);
-    microLayer.z = max(microLayer.z, chemistry.w * weight * 0.60);
-    microLayer.w = max(microLayer.w, chemistry.w * weight * 0.22);
+    material.w = max(material.w, detail * chemistryWeight * 0.90);
+    fireLayer.x = max(fireLayer.x, chemistry.w * chemistryWeight);
+    fireLayer.y = max(fireLayer.y, chemistry.w * chemistryWeight * 0.42);
+    fireLayer.z = max(fireLayer.z, detail * chemistryWeight * 0.82);
+    microLayer.x = max(microLayer.x, detail * chemistryWeight * 0.72);
+    microLayer.y = max(microLayer.y, detail * chemistryWeight * 0.42 + chemistry.w * chemistryWeight * 0.12);
+    microLayer.z = max(microLayer.z, chemistry.w * chemistryWeight * 0.60);
+    microLayer.w = max(microLayer.w, chemistry.w * chemistryWeight * 0.22);
   }
   material = clamp(material, vec4<f32>(0.0), vec4<f32>(2.2, 2.4, 1.8, 1.8));
   fireLayer = clamp(fireLayer, vec4<f32>(0.0), vec4<f32>(2.4, 2.0, 1.8, 1.8));
@@ -7796,8 +7885,21 @@ export function createKaminosVolumePrototype({
     analyticEmitterFamily: 'cluster',
     analyticEmitterRequestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
     analyticEmitterRequestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
+    analyticEmitterRequestedInletProfile: String(controlsSnapshot.emitterInletProfile ?? 'plug'),
+    analyticEmitterRequestedMomentumLinked: controlsSnapshot.emitterMomentumLinked === undefined
+      ? true
+      : Boolean(controlsSnapshot.emitterMomentumLinked),
+    analyticEmitterRequestedInletVelocity: Number(controlsSnapshot.emitterInletVelocity ?? 0.04),
+    analyticEmitterRequestedShearWidthCells: Number(controlsSnapshot.emitterShearWidthCells ?? 3),
+    analyticEmitterRequestedEdgeEntrainment: Number(controlsSnapshot.emitterEdgeEntrainment ?? 0.65),
     analyticEmitterSourceLaw: 'inactive',
     analyticEmitterSourceDepth: null,
+    analyticEmitterInletProfile: 'inactive',
+    analyticEmitterMomentumLinked: null,
+    analyticEmitterInletVelocity: null,
+    analyticEmitterEffectiveInletVelocity: null,
+    analyticEmitterShearWidthCells: null,
+    analyticEmitterEdgeEntrainment: null,
     fixedSourceDephase: controlsSnapshot.fixedSourceDephase !== false,
     analyticEmitterCoordinateSpace: 'none',
     analyticEmitterCount: 0,
@@ -8263,7 +8365,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatShader = null;
   let uniformBuffer = null;
   let analyticEmitterInjectionUniformBuffer = null;
-  const analyticEmitterInjectionUniformData = new ArrayBuffer(32 * Float32Array.BYTES_PER_ELEMENT);
+  const analyticEmitterInjectionUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
   const analyticEmitterInjectionUniformFloats = new Float32Array(analyticEmitterInjectionUniformData);
   const analyticEmitterInjectionUniformWords = new Uint32Array(analyticEmitterInjectionUniformData);
   let volumePresentationControlsBuffer = null;
@@ -8485,8 +8587,21 @@ export function createKaminosVolumePrototype({
       family: analyticEmitterDescriptor?.family || 'cluster',
       requestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
       requestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
+      requestedInletProfile: String(controlsSnapshot.emitterInletProfile ?? 'plug'),
+      requestedMomentumLinked: controlsSnapshot.emitterMomentumLinked === undefined
+        ? true
+        : Boolean(controlsSnapshot.emitterMomentumLinked),
+      requestedInletVelocity: Number(controlsSnapshot.emitterInletVelocity ?? 0.04),
+      requestedShearWidthCells: Number(controlsSnapshot.emitterShearWidthCells ?? 3),
+      requestedEdgeEntrainment: Number(controlsSnapshot.emitterEdgeEntrainment ?? 0.65),
       sourceLaw: analyticEmitterDescriptor ? analyticEmitterDescriptor.sourceLaw : 'inactive',
       sourceDepth: analyticEmitterDescriptor ? analyticEmitterDescriptor.sourceDepth : null,
+      inletProfile: analyticEmitterDescriptor ? analyticEmitterDescriptor.inletProfile : 'inactive',
+      momentumLinked: analyticEmitterDescriptor ? analyticEmitterDescriptor.momentumLinked : null,
+      inletVelocity: analyticEmitterDescriptor ? analyticEmitterDescriptor.inletVelocity : null,
+      effectiveInletVelocity: analyticEmitterDescriptor ? analyticEmitterDescriptor.effectiveInletVelocity : null,
+      shearWidthCells: analyticEmitterDescriptor ? analyticEmitterDescriptor.shearWidthCells : null,
+      edgeEntrainment: analyticEmitterDescriptor ? analyticEmitterDescriptor.edgeEntrainment : null,
       coordinateSpace: analyticEmitterDescriptor ? 'volume-local' : 'none',
       count: analyticEmitterDescriptor ? 1 : 0,
       frameId: analyticEmitterDescriptor?.frameId || null,
@@ -8500,8 +8615,19 @@ export function createKaminosVolumePrototype({
     state.analyticEmitterFamily = receipt.family;
     state.analyticEmitterRequestedSourceLaw = receipt.requestedSourceLaw;
     state.analyticEmitterRequestedSourceDepth = receipt.requestedSourceDepth;
+    state.analyticEmitterRequestedInletProfile = receipt.requestedInletProfile;
+    state.analyticEmitterRequestedMomentumLinked = receipt.requestedMomentumLinked;
+    state.analyticEmitterRequestedInletVelocity = receipt.requestedInletVelocity;
+    state.analyticEmitterRequestedShearWidthCells = receipt.requestedShearWidthCells;
+    state.analyticEmitterRequestedEdgeEntrainment = receipt.requestedEdgeEntrainment;
     state.analyticEmitterSourceLaw = receipt.sourceLaw;
     state.analyticEmitterSourceDepth = receipt.sourceDepth;
+    state.analyticEmitterInletProfile = receipt.inletProfile;
+    state.analyticEmitterMomentumLinked = receipt.momentumLinked;
+    state.analyticEmitterInletVelocity = receipt.inletVelocity;
+    state.analyticEmitterEffectiveInletVelocity = receipt.effectiveInletVelocity;
+    state.analyticEmitterShearWidthCells = receipt.shearWidthCells;
+    state.analyticEmitterEdgeEntrainment = receipt.edgeEntrainment;
     state.analyticEmitterCoordinateSpace = receipt.coordinateSpace;
     state.analyticEmitterCount = receipt.count;
     state.analyticEmitterFrameId = receipt.frameId;
@@ -21104,6 +21230,13 @@ export function createKaminosVolumePrototype({
       state.fixedSourceDephase = controlsSnapshot.fixedSourceDephase !== false;
       state.analyticEmitterRequestedSourceLaw = String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume');
       state.analyticEmitterRequestedSourceDepth = Number(controlsSnapshot.emitterSourceDepth ?? 0.04);
+      state.analyticEmitterRequestedInletProfile = String(controlsSnapshot.emitterInletProfile ?? 'plug');
+      state.analyticEmitterRequestedMomentumLinked = controlsSnapshot.emitterMomentumLinked === undefined
+        ? true
+        : Boolean(controlsSnapshot.emitterMomentumLinked);
+      state.analyticEmitterRequestedInletVelocity = Number(controlsSnapshot.emitterInletVelocity ?? 0.04);
+      state.analyticEmitterRequestedShearWidthCells = Number(controlsSnapshot.emitterShearWidthCells ?? 3);
+      state.analyticEmitterRequestedEdgeEntrainment = Number(controlsSnapshot.emitterEdgeEntrainment ?? 0.65);
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
@@ -21207,6 +21340,7 @@ export function createKaminosVolumePrototype({
       if (signature === analyticEmitterDescriptorSignature) return analyticEmitterReceipt();
       const previousFamily = analyticEmitterDescriptor?.family || null;
       const previousSourceLaw = analyticEmitterDescriptor?.sourceLaw || null;
+      const previousInletProfile = analyticEmitterDescriptor?.inletProfile || null;
       analyticEmitterDescriptor = normalized;
       analyticEmitterDescriptorSignature = signature;
       updateAnalyticEmitterDebug();
@@ -21214,10 +21348,17 @@ export function createKaminosVolumePrototype({
         && state.coreEmitterSourceMode === 'analytic-only'
         && previousFamily
         && normalized?.family
-        && (previousFamily !== normalized.family || previousSourceLaw !== normalized.sourceLaw)) {
+        && (previousFamily !== normalized.family
+          || previousSourceLaw !== normalized.sourceLaw
+          || previousInletProfile !== normalized.inletProfile)) {
+        const resetReason = previousFamily !== normalized.family
+          ? 'analytic-emitter-family-change'
+          : (previousSourceLaw !== normalized.sourceLaw
+            ? 'analytic-emitter-source-law-change'
+            : 'analytic-emitter-inlet-profile-change');
         rebuildFluidState(
           gridSize,
-          previousFamily !== normalized.family ? 'analytic-emitter-family-change' : 'analytic-emitter-source-law-change',
+          resetReason,
         );
       }
       return analyticEmitterReceipt();

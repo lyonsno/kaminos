@@ -14,6 +14,12 @@ export const VOLUME_EMITTER_SOURCE_LAWS = Object.freeze([
   'shallow-primary',
 ]);
 
+export const VOLUME_EMITTER_INLET_PROFILES = Object.freeze([
+  'plug',
+  'resolved-shear',
+  'edge-entrained',
+]);
+
 export const VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES = Object.freeze({
   'legacy-volume': Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
   'shallow-primary': Object.freeze([0, 1, 2, 4, 5, 6]),
@@ -30,6 +36,12 @@ const FLUID_COMPONENT_NAMES = Object.freeze(['x', 'y', 'z', 'w']);
 function assertEmitterSourceLaw(sourceLaw) {
   if (!VOLUME_EMITTER_SOURCE_LAWS.includes(sourceLaw)) {
     throw new Error(`unsupported emitter source law: ${sourceLaw || 'missing-source-law'}`);
+  }
+}
+
+function assertEmitterInletProfile(inletProfile) {
+  if (!VOLUME_EMITTER_INLET_PROFILES.includes(inletProfile)) {
+    throw new Error(`unsupported emitter inlet profile: ${inletProfile || 'missing-inlet-profile'}`);
   }
 }
 
@@ -99,6 +111,56 @@ function numberInRange(value, label, min, max) {
     throw new Error(`${label} ${number} must be within [${min}, ${max}]`);
   }
   return number;
+}
+
+function smoothstep(edge0, edge1, value) {
+  if (edge1 <= edge0) return value < edge0 ? 0 : 1;
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+export function resolveVolumeEmitterInletVelocity({
+  momentumLinked = true,
+  sourceStrength,
+  velocitySpeed = 0.22,
+  transportSpeed = 1,
+  inletVelocity = 0.04,
+} = {}) {
+  const strength = numberInRange(sourceStrength, 'sourceStrength', 0, 4);
+  const sourceVelocitySpeed = numberInRange(velocitySpeed, 'velocitySpeed', 0, 3);
+  const currentTransportSpeed = numberInRange(transportSpeed, 'transportSpeed', 0, 20);
+  const requestedInletVelocity = numberInRange(inletVelocity, 'inletVelocity', 0, 1);
+  const linkedInletVelocity = sourceVelocitySpeed * strength * (0.18 + currentTransportSpeed * 0.036);
+  return {
+    momentumLinked: Boolean(momentumLinked),
+    requestedInletVelocity,
+    linkedInletVelocity,
+    effectiveInletVelocity: momentumLinked ? linkedInletVelocity : requestedInletVelocity,
+  };
+}
+
+export function resolveVolumeEmitterInletProfileWeights({
+  profile,
+  apertureSignedDistance,
+  inletSupport,
+  cellWidth,
+  shearWidthCells,
+} = {}) {
+  const inletProfile = String(profile || 'plug');
+  assertEmitterInletProfile(inletProfile);
+  const signedDistance = finiteNumber(apertureSignedDistance, 'apertureSignedDistance');
+  const axialSupport = numberInRange(inletSupport, 'inletSupport', 0, 1);
+  const gridCellWidth = numberInRange(cellWidth, 'cellWidth', Number.EPSILON, 2);
+  const widthCells = numberInRange(shearWidthCells ?? 3, 'shearWidthCells', 0.5, 8);
+  if (inletProfile === 'plug') {
+    return { axialWeight: axialSupport, edgeWeight: 0 };
+  }
+  const bandWidth = gridCellWidth * widthCells;
+  const axialWeight = axialSupport * smoothstep(0, bandWidth, Math.max(0, -signedDistance));
+  const edgeWeight = inletProfile === 'edge-entrained'
+    ? axialSupport * (1 - smoothstep(0, bandWidth, Math.abs(signedDistance)))
+    : 0;
+  return { axialWeight, edgeWeight };
 }
 
 function vec3(value, label, fallback) {
@@ -247,6 +309,13 @@ export function compileVolumeEmitterFamily(request = {}) {
   const sourceDepth = numberInRange(request.sourceDepth ?? 0.04, 'sourceDepth', 0.006, 0.36);
   const strength = numberInRange(request.strength ?? 1, 'strength', 0, 4);
   const velocitySpeed = numberInRange(request.velocitySpeed ?? 0.22, 'velocitySpeed', 0, 3);
+  const transportSpeed = numberInRange(request.transportSpeed ?? 1, 'transportSpeed', 0, 20);
+  const inletProfile = String(request.inletProfile ?? 'plug');
+  assertEmitterInletProfile(inletProfile);
+  const momentumLinked = request.momentumLinked === undefined ? true : Boolean(request.momentumLinked);
+  const inletVelocity = numberInRange(request.inletVelocity ?? 0.04, 'inletVelocity', 0, 1);
+  const shearWidthCells = numberInRange(request.shearWidthCells ?? 3, 'shearWidthCells', 0.5, 8);
+  const edgeEntrainment = numberInRange(request.edgeEntrainment ?? 0.65, 'edgeEntrainment', 0, 2);
   const lifetime = numberInRange(request.lifetime ?? 0.55, 'lifetime', 0.016, 8);
   const timestampMs = numberInRange(request.timestampMs ?? 0, 'timestampMs', 0, Number.MAX_SAFE_INTEGER);
   const frameId = String(request.frameId ?? `${family}-emitter-frame`).trim();
@@ -255,6 +324,13 @@ export function compileVolumeEmitterFamily(request = {}) {
   const temporal = normalizeTemporal(request.temporal);
   const strengthMultiplier = temporalStrengthMultiplier(temporal, timestampMs);
   const effectiveStrength = strength * strengthMultiplier;
+  const inletVelocityReceipt = resolveVolumeEmitterInletVelocity({
+    momentumLinked,
+    sourceStrength: effectiveStrength,
+    velocitySpeed,
+    transportSpeed,
+    inletVelocity,
+  });
 
   let requestedSupportAxis = [1, 0, 0];
   let supportAxis = [1, 0, 0];
@@ -291,8 +367,14 @@ export function compileVolumeEmitterFamily(request = {}) {
     ...familyRequested,
     strength,
     velocitySpeed,
+    transportSpeed,
     sourceLaw,
     sourceDepth,
+    inletProfile,
+    momentumLinked,
+    inletVelocity,
+    shearWidthCells,
+    edgeEntrainment,
     chemistry,
     temporal,
     lifetime,
@@ -314,8 +396,15 @@ export function compileVolumeEmitterFamily(request = {}) {
     extent,
     strength: effectiveStrength,
     velocitySpeed,
+    transportSpeed,
     sourceLaw,
     sourceDepth,
+    inletProfile,
+    momentumLinked,
+    inletVelocity,
+    effectiveInletVelocity: inletVelocityReceipt.effectiveInletVelocity,
+    shearWidthCells,
+    edgeEntrainment,
     chemistry,
     temporal: effectiveTemporal,
     support,
@@ -343,6 +432,12 @@ export function compileVolumeEmitterFamily(request = {}) {
       velocitySpeed,
       sourceLaw,
       sourceDepth,
+      inletProfile,
+      momentumLinked,
+      inletVelocity,
+      effectiveInletVelocity: inletVelocityReceipt.effectiveInletVelocity,
+      shearWidthCells,
+      edgeEntrainment,
       chemistry,
       temporal: effectiveTemporal,
       sourceCount: 1,

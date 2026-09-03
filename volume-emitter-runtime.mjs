@@ -124,6 +124,11 @@ function verifyAnalyticReceipt(descriptor, receipt) {
   if (receipt.sourceDepth !== descriptor.sourceDepth) {
     throw new Error(`analytic emitter source depth mismatch: requested ${descriptor.sourceDepth}, effective ${receipt.sourceDepth ?? 'missing'}`);
   }
+  for (const key of ['inletProfile', 'momentumLinked', 'inletVelocity', 'effectiveInletVelocity', 'shearWidthCells', 'edgeEntrainment']) {
+    if (receipt[key] !== descriptor[key]) {
+      throw new Error(`analytic emitter ${key} mismatch: requested ${descriptor[key]}, effective ${receipt[key] ?? 'missing'}`);
+    }
+  }
 }
 
 function assayGeometry(family, inputRadius) {
@@ -157,6 +162,14 @@ export function applyVolumeEmitterFamilyRuntime({
   const requestedCoreFlowRate = finiteNumber(controls.flowRate, 'controls.flowRate');
   const sourceLaw = String(controls.emitterSourceLaw ?? 'legacy-volume');
   const sourceDepth = finiteNumber(controls.emitterSourceDepth ?? 0.04, 'controls.emitterSourceDepth');
+  const inletProfile = String(controls.emitterInletProfile ?? 'plug');
+  const momentumLinked = controls.emitterMomentumLinked === undefined
+    ? true
+    : Boolean(controls.emitterMomentumLinked);
+  const inletVelocity = finiteNumber(controls.emitterInletVelocity ?? 0.04, 'controls.emitterInletVelocity');
+  const shearWidthCells = finiteNumber(controls.emitterShearWidthCells ?? 3, 'controls.emitterShearWidthCells');
+  const edgeEntrainment = finiteNumber(controls.emitterEdgeEntrainment ?? 0.65, 'controls.emitterEdgeEntrainment');
+  const transportSpeed = finiteNumber(controls.speed ?? 1, 'controls.speed');
   if (inputRadius < 0.08 || inputRadius > 0.7) {
     throw new Error(`controls.inputRadius ${inputRadius} must be within [0.08, 0.7]`);
   }
@@ -195,8 +208,14 @@ export function applyVolumeEmitterFamilyRuntime({
       ...assayGeometry(requestedFamily, inputRadius),
       strength: requestedCoreFlowRate,
       velocitySpeed: 0.22,
+      transportSpeed,
       sourceLaw,
       sourceDepth,
+      inletProfile,
+      momentumLinked,
+      inletVelocity,
+      shearWidthCells,
+      edgeEntrainment,
       chemistry: HELD_ASSAY_CHEMISTRY,
       temporal: HELD_ASSAY_TEMPORAL,
       lifetime: 0.55,
@@ -227,6 +246,11 @@ export function applyVolumeEmitterFamilyRuntime({
       inputRadius,
       sourceLaw,
       sourceDepth,
+      inletProfile,
+      momentumLinked,
+      inletVelocity,
+      shearWidthCells,
+      edgeEntrainment,
       frameId,
       timestampMs,
     },
@@ -238,6 +262,12 @@ export function applyVolumeEmitterFamilyRuntime({
       sourceMode: sourceReceipt.mode,
       sourceLaw: compilerReceipt?.effective.sourceLaw ?? 'inactive',
       sourceDepth: compilerReceipt?.effective.sourceDepth ?? null,
+      inletProfile: compilerReceipt?.effective.inletProfile ?? 'inactive',
+      momentumLinked: compilerReceipt?.effective.momentumLinked ?? null,
+      inletVelocity: compilerReceipt?.effective.inletVelocity ?? null,
+      effectiveInletVelocity: compilerReceipt?.effective.effectiveInletVelocity ?? null,
+      shearWidthCells: compilerReceipt?.effective.shearWidthCells ?? null,
+      edgeEntrainment: compilerReceipt?.effective.edgeEntrainment ?? null,
       coordinateSpace: sourceReceipt.coordinateSpace,
       externalStrength: fixedAnalytic ? compilerReceipt.effective.strength : 0,
       externalEmitterCount: sourceReceipt.count,

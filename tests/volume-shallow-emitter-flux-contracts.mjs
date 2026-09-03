@@ -113,7 +113,7 @@ assert.deepEqual(
 
 assert.match(injectionShader, /let sourceLaw = emitter\.transport\.y;/, 'the GPU consumer receives the source law');
 assert.match(injectionShader, /let sourceDepth = max\([^\n]+emitter\.transport\.z\);/, 'the GPU consumer receives source depth');
-assert.match(injectionShader, /signedDistance = max\(signedDistance, inletSignedDistance\);/, 'shallow support is the intersection of geometry and inlet depth');
+assert.match(injectionShader, /sourceSignedDistance = max\(geometrySignedDistance, inletSignedDistance\);/, 'shallow support is the intersection of geometry and inlet depth');
 assert.match(injectionShader, /if \(sourceLaw < 0\.5\) \{[\s\S]*?material\.w = max[\s\S]*?fireLayer\.x = max[\s\S]*?microLayer\.w = max[\s\S]*?\}/, 'legacy derived-field painting is isolated behind the legacy law');
 assert.match(injectionShader, /\$\{VOLUME_EMITTER_FIELD_COMMIT_WGSL\}/, 'the live shader commits fields through the shared executable write policy');
 assert.match(VOLUME_EMITTER_FIELD_COMMIT_WGSL, /let committedMaterial = vec4<f32>\([\s\S]*candidateMaterial\.x,[\s\S]*candidateMaterial\.y,[\s\S]*candidateMaterial\.z,[\s\S]*select\(previousMaterial\.w, candidateMaterial\.w, legacyVolumeSourceLaw\)/, 'the shared shader policy preserves shallow material detail');
@@ -143,6 +143,12 @@ const prototype = {
           family: descriptor.family,
           sourceLaw: descriptor.sourceLaw,
           sourceDepth: descriptor.sourceDepth,
+          inletProfile: descriptor.inletProfile,
+          momentumLinked: descriptor.momentumLinked,
+          inletVelocity: descriptor.inletVelocity,
+          effectiveInletVelocity: descriptor.effectiveInletVelocity,
+          shearWidthCells: descriptor.shearWidthCells,
+          edgeEntrainment: descriptor.edgeEntrainment,
           count: 1,
           coordinateSpace: 'volume-local',
         }

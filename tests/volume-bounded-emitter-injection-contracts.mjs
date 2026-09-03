@@ -89,7 +89,7 @@ assert.doesNotMatch(
 );
 assert.match(
   injectionShader,
-  /let weight = support \* max\(0\.0, emitter\.axis_strength\.w\);/,
+  /let chemistryWeight = chemicalSupport \* max\(0\.0, emitter\.axis_strength\.w\);/,
   'bounded injection strength is the authored strength over geometric support',
 );
 assert.doesNotMatch(
