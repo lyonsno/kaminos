@@ -58,60 +58,132 @@ assert.throws(
   /mode all.*stride 1.*offset 0/,
 );
 
-const tinyComparison = compareWebGpuParityArrays(
-  new Float64Array([2e-200]),
-  new Float64Array([1e-200]),
+assert.throws(
+  () => compareWebGpuParityArrays(
+    new Float64Array([1]),
+    new Float64Array([1]),
+  ),
+  /Float64Array.*unsupported.*Float32Array/,
 );
-assert.equal(tinyComparison.metrics.maxAbsoluteError, 1e-200);
-assert.equal(tinyComparison.metrics.l2Error, 1e-200);
-assert.equal(tinyComparison.metrics.rootMeanSquareError, 1e-200);
-assert.equal(tinyComparison.metrics.relativeL2Error, 1);
-assert.equal(tinyComparison.metrics.relativeL2Status, 'defined');
-assert.equal(tinyComparison.metrics.cosineSimilarity, 1);
 
-const largeEqualComparison = compareWebGpuParityArrays(
-  new Float64Array([1e200, 1e200]),
-  new Float64Array([1e200, 1e200]),
+const float32MinimumSubnormal = 2 ** -149;
+const float32MinimumNormal = 2 ** -126;
+const float32Maximum = 3.4028234663852886e38;
+
+const subnormalEqualComparison = compareWebGpuParityArrays(
+  new Float32Array([float32MinimumSubnormal, float32MinimumSubnormal]),
+  new Float32Array([float32MinimumSubnormal, float32MinimumSubnormal]),
 );
-assert.equal(largeEqualComparison.metrics.maxAbsoluteError, 0);
-assert.equal(largeEqualComparison.metrics.l2Error, 0);
-assert.equal(largeEqualComparison.metrics.relativeL2Error, 0);
-assert.equal(largeEqualComparison.metrics.cosineSimilarity, 1);
+assert.equal(subnormalEqualComparison.actual.mean, float32MinimumSubnormal);
+assert.equal(subnormalEqualComparison.actual.standardDeviation, 0);
+assert.equal(subnormalEqualComparison.metrics.exactMatch, true);
+assert.equal(subnormalEqualComparison.metrics.mismatchCount, 0);
 
-const maximum = Number.MAX_VALUE;
+const subnormalErrorComparison = compareWebGpuParityArrays(
+  new Float32Array([float32MinimumSubnormal, float32MinimumSubnormal]),
+  new Float32Array([0, 0]),
+);
+assert.equal(subnormalErrorComparison.metrics.meanAbsoluteError, float32MinimumSubnormal);
+assertClose(subnormalErrorComparison.metrics.l2Error, Math.SQRT2 * float32MinimumSubnormal);
+assert.equal(subnormalErrorComparison.metrics.relativeL2Error, null);
+assert.equal(subnormalErrorComparison.metrics.relativeL2Status, 'infinite-zero-reference-norm');
+
 const overflowingReferenceNorm = compareWebGpuParityArrays(
-  new Float64Array([maximum / 2, maximum / 2]),
-  new Float64Array([maximum, maximum]),
+  new Float32Array([float32Maximum / 2, float32Maximum / 2]),
+  new Float32Array([float32Maximum, float32Maximum]),
 );
 assertClose(overflowingReferenceNorm.metrics.relativeL2Error, 0.5, 1e-12);
 assert.equal(overflowingReferenceNorm.metrics.relativeL2Status, 'defined');
 
-const highErrorZeroReference = compareWebGpuParityArrays(
-  new Float64Array([1e308, 1e308]),
-  new Float64Array([0, 0]),
+const float32BoundaryComparison = compareWebGpuParityArrays(
+  new Float32Array([0, float32MinimumSubnormal, float32MinimumNormal, 1, float32Maximum]),
+  new Float32Array([0, float32MinimumSubnormal, float32MinimumNormal, 1, float32Maximum]),
 );
-assert.equal(highErrorZeroReference.metrics.meanAbsoluteError, 1e308);
-assertClose(highErrorZeroReference.metrics.l2Error, Math.SQRT2 * 1e308);
-assert.equal(highErrorZeroReference.metrics.relativeL2Error, null);
-assert.equal(highErrorZeroReference.metrics.relativeL2Status, 'infinite-zero-reference-norm');
+assert.equal(float32BoundaryComparison.metrics.exactMatch, true);
+assert.equal(float32BoundaryComparison.metrics.relativeL2Error, 0);
+assert.ok(Number.isFinite(float32BoundaryComparison.actual.mean));
+assert.ok(Number.isFinite(float32BoundaryComparison.actual.standardDeviation));
 
-const highVariance = compareWebGpuParityArrays(
-  new Float64Array([1e154, -1e154]),
-  new Float64Array([1e154, -1e154]),
+const cancellationComparison = compareWebGpuParityArrays(
+  new Float32Array([float32Maximum, 1, -float32Maximum]),
+  new Float32Array([float32Maximum, 1, -float32Maximum]),
 );
-assert.equal(highVariance.actual.mean, 0);
-assertClose(highVariance.actual.standardDeviation, 1e154);
-assert.equal(highVariance.reference.mean, 0);
-assertClose(highVariance.reference.standardDeviation, 1e154);
-assert.equal(highVariance.metrics.maxAbsoluteError, 0);
+assertClose(cancellationComparison.actual.mean, 1 / 3);
+assertClose(cancellationComparison.reference.mean, 1 / 3);
 
-const offsetComparison = compareWebGpuParityArrays(
-  new Float64Array([100000000, 100000002]),
-  new Float64Array([100000000, 100000002]),
+const tinyRelativeComparison = compareWebGpuParityArrays(
+  new Float32Array([0, float32Maximum]),
+  new Float32Array([float32MinimumSubnormal, float32Maximum]),
 );
-assert.equal(offsetComparison.actual.mean, 100000001);
-assertClose(offsetComparison.actual.standardDeviation, 1, 1e-8);
-assertClose(offsetComparison.reference.standardDeviation, 1, 1e-8);
+assert.ok(tinyRelativeComparison.metrics.relativeL2Error > 0);
+assert.equal(tinyRelativeComparison.metrics.relativeL2Status, 'defined');
+
+const signedZeroComparison = compareWebGpuParityArrays(
+  new Float32Array([-0]),
+  new Float32Array([0]),
+);
+assert.equal(signedZeroComparison.metrics.exactMatch, true);
+assert.equal(signedZeroComparison.metrics.mismatchCount, 0);
+
+for (const value of [
+  -float32Maximum,
+  -1,
+  -float32MinimumNormal,
+  -float32MinimumSubnormal,
+  0,
+  float32MinimumSubnormal,
+  float32MinimumNormal,
+  1,
+  float32Maximum,
+]) {
+  const constant = new Float32Array([value, value]);
+  const boundaryComparison = compareWebGpuParityArrays(constant, constant);
+  assert.equal(boundaryComparison.metrics.exactMatch, true);
+  assert.equal(boundaryComparison.metrics.mismatchCount, 0);
+  assert.equal(boundaryComparison.actual.mean, value);
+  assert.equal(boundaryComparison.actual.standardDeviation, 0);
+  assert.equal(boundaryComparison.metrics.relativeL2Error, 0);
+}
+
+assert.throws(
+  () => compareWebGpuParityArrays(
+    new Float32Array([1]),
+    new Uint32Array([1]),
+  ),
+  /same typed array constructor/,
+);
+
+const integerComparison = compareWebGpuParityArrays(
+  new Uint32Array([0, 4_294_967_295]),
+  new Uint32Array([0, 4_294_967_294]),
+);
+assert.deepEqual(integerComparison.comparisonDomain, {
+  mode: 'integer-exact',
+  effectiveType: 'Uint32Array',
+  normalization: 'none',
+});
+assert.equal(integerComparison.metrics.exactMatch, false);
+assert.equal(integerComparison.metrics.mismatchCount, 1);
+assert.equal(integerComparison.metrics.maxAbsoluteError, 1);
+
+for (const Constructor of [
+  Int8Array,
+  Uint8Array,
+  Uint8ClampedArray,
+  Int16Array,
+  Uint16Array,
+  Int32Array,
+  Uint32Array,
+]) {
+  const integerBoundary = compareWebGpuParityArrays(
+    new Constructor([0, 1]),
+    new Constructor([0, 1]),
+  );
+  assert.equal(integerBoundary.comparisonDomain.mode, 'integer-exact');
+  assert.equal(integerBoundary.comparisonDomain.effectiveType, Constructor.name);
+  assert.equal(integerBoundary.metrics.exactMatch, true);
+  assert.equal(integerBoundary.metrics.mismatchCount, 0);
+}
 
 assert.throws(
   () => compareWebGpuParityArrays(
@@ -136,6 +208,11 @@ assert.equal(comparison.sourceElementCount, 4);
 assert.equal(comparison.comparedElementCount, 2);
 assert.equal(comparison.actualType, 'Float32Array');
 assert.equal(comparison.referenceType, 'Float32Array');
+assert.deepEqual(comparison.comparisonDomain, {
+  mode: 'float32-metrics',
+  effectiveType: 'Float32Array',
+  normalization: 'none',
+});
 assert.deepEqual(comparison.sampling, {
   mode: 'stride',
   stride: 2,
@@ -144,6 +221,8 @@ assert.deepEqual(comparison.sampling, {
   lastSourceIndex: 3,
 });
 assert.equal(comparison.metrics.maxAbsoluteError, 2);
+assert.equal(comparison.metrics.exactMatch, false);
+assert.equal(comparison.metrics.mismatchCount, 2);
 assert.equal(comparison.metrics.worstSourceIndex, 3);
 assert.equal(comparison.metrics.meanAbsoluteError, 1.5);
 assertClose(comparison.metrics.rootMeanSquareError, Math.sqrt(2.5));
@@ -173,14 +252,6 @@ assert.equal(zeroComparison.metrics.relativeL2Error, 0);
 assert.equal(zeroComparison.metrics.cosineSimilarity, null);
 assert.deepEqual(JSON.parse(JSON.stringify(zeroComparison)).metrics, zeroComparison.metrics);
 
-assert.throws(
-  () => compareWebGpuParityArrays(
-    new Float64Array([Number.MAX_VALUE]),
-    new Float64Array([-Number.MAX_VALUE]),
-  ),
-  /finite JavaScript number range/,
-);
-
 const registry = createWebGpuParityCaptureRegistry({ runId: 'run-a' });
 const source = new Float32Array([0.5, -1.25, 3, 9.5, 12]);
 const capture = registry.capture('encoder.block-0', source, {
@@ -204,6 +275,10 @@ assert.throws(
 assert.throws(
   () => registry.capture('bad-layout', new Float32Array([1]), { layout: { order: 'NCHW' } }),
   /layout must be a non-empty string/,
+);
+assert.throws(
+  () => registry.capture('float64', new Float64Array([1])),
+  /Float64Array.*unsupported.*Float32Array/,
 );
 
 const chunks = await encodeWebGpuParityCaptureChunks(registry.get('encoder.block-0'), {

@@ -376,11 +376,22 @@ const comparison = compareWebGpuParityArrays(captured.values, referenceValues, {
 ```
 
 Comparison is exhaustive unless the caller explicitly supplies a deterministic
-stride. Results retain source and compared element counts, the effective sample
-plan, array types, value summaries, non-finite counts, maximum and RMS error,
-relative L2 error, and cosine similarity. Unequal lengths, selected non-finite
-values, empty selections, invalid shapes, non-finite metrics, and transport
-identity or integrity failures reject instead of producing a partial result.
+stride. Native floating comparison accepts `Float32Array`, which is the scalar
+domain produced by WebGPU `f32` tensors. Decode FP16 storage into exactly
+represented `Float32Array` values before calling the comparator. Integer typed
+arrays compare under an explicit `integer-exact` mode. Actual and reference
+arrays must use the same constructor; `Float64Array` is rejected because this
+API is not a general binary64 statistics package. Positive and negative zero
+are numerically equal for exact-match accounting.
+
+Results retain source and compared element counts, the effective sample plan,
+effective comparison type and normalization, value summaries, exact mismatch
+count, maximum and RMS error, relative L2 error, and cosine similarity. The
+effective normalization is currently always `none`: representation conversion
+belongs to the model adapter and must happen before comparison. Unequal lengths,
+mixed constructors, selected non-finite values, empty selections, invalid
+shapes, non-finite metrics, unsupported representations, and transport identity
+or integrity failures reject instead of producing a persuasive partial result.
 
 The model port owns stage names, hook placement, GPU readback timing, shape and
 layout meaning, convention alignment, and the tolerance used for its parity

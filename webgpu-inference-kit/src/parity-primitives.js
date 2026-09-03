@@ -12,7 +12,16 @@ const TYPED_ARRAYS = new Map([
   ['Int32Array', Int32Array],
   ['Uint32Array', Uint32Array],
   ['Float32Array', Float32Array],
-  ['Float64Array', Float64Array],
+]);
+
+const INTEGER_TYPED_ARRAYS = new Set([
+  'Int8Array',
+  'Uint8Array',
+  'Uint8ClampedArray',
+  'Int16Array',
+  'Uint16Array',
+  'Int32Array',
+  'Uint32Array',
 ]);
 
 const PLATFORM_BYTE_ORDER = new Uint8Array(new Uint16Array([0x0102]).buffer)[0] === 0x02
@@ -32,8 +41,13 @@ function requireIdentity(name, value) {
 
 function requireNumericTypedArray(name, value) {
   const constructorName = value?.constructor?.name;
+  if (constructorName === 'Float64Array') {
+    throw new TypeError(
+      `${name} Float64Array is unsupported; compare WebGPU floating tensors as Float32Array after FP16 decoding`,
+    );
+  }
   if (!ArrayBuffer.isView(value) || value instanceof DataView || !TYPED_ARRAYS.has(constructorName)) {
-    throw new TypeError(`${name} must be a numeric typed array`);
+    throw new TypeError(`${name} must be a supported WebGPU parity typed array`);
   }
   return constructorName;
 }
@@ -120,108 +134,79 @@ function describeNonFinite(values, indices) {
 }
 
 function summarize(values, indices) {
-  let count = 0;
-  let mean = 0;
-  let scale = 0;
+  const sum = { sum: 0, compensation: 0 };
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (const index of indices) {
     const value = values[index];
-    count += 1;
-    mean = mean * ((count - 1) / count) + value / count;
-    scale = Math.max(scale, Math.abs(value));
+    compensatedAdd(sum, value);
     min = Math.min(min, value);
     max = Math.max(max, value);
   }
-  let normalizedSquaredDeviation = 0;
-  let compensation = 0;
-  if (scale > 0) {
-    const normalizedMean = mean / scale;
-    for (const index of indices) {
-      const deviation = values[index] / scale - normalizedMean;
-      const squared = deviation * deviation;
-      const adjusted = squared - compensation;
-      const next = normalizedSquaredDeviation + adjusted;
-      compensation = (next - normalizedSquaredDeviation) - adjusted;
-      normalizedSquaredDeviation = next;
-    }
+  const mean = compensatedValue(sum) / indices.length;
+  const squaredDeviations = { sum: 0, compensation: 0 };
+  for (const index of indices) {
+    const deviation = values[index] - mean;
+    compensatedAdd(squaredDeviations, deviation * deviation);
   }
-  const standardDeviation = scale * Math.sqrt(Math.max(0, normalizedSquaredDeviation / count));
+  const standardDeviation = Math.sqrt(
+    Math.max(0, compensatedValue(squaredDeviations) / indices.length),
+  );
   if (!Number.isFinite(mean) || !Number.isFinite(standardDeviation)) {
-    throw new RangeError('value summary is outside the finite JavaScript number range');
+    throw new RangeError('value summary is outside the declared WebGPU tensor domain');
   }
   return Object.freeze({ min, max, mean, standardDeviation });
 }
 
-function createScaledNormAccumulator() {
-  let scale = 0;
-  let scaledSquares = 1;
+function createNormAccumulator() {
+  const squares = { sum: 0, compensation: 0 };
   return {
     add(value) {
-      const absolute = Math.abs(value);
-      if (absolute === 0) return;
-      if (scale < absolute) {
-        const ratio = scale / absolute;
-        scaledSquares = 1 + scaledSquares * ratio * ratio;
-        scale = absolute;
-      } else {
-        const ratio = absolute / scale;
-        scaledSquares += ratio * ratio;
-      }
+      compensatedAdd(squares, value * value);
     },
     value() {
-      return scale === 0 ? 0 : scale * Math.sqrt(scaledSquares);
-    },
-    ratioTo(other) {
-      if (scale === 0) return 0;
-      if (other.scale() === 0) return Number.POSITIVE_INFINITY;
-      const logRatio = Math.log(scale) - Math.log(other.scale())
-        + 0.5 * (Math.log(scaledSquares) - Math.log(other.scaledSquares()));
-      return Math.exp(logRatio);
-    },
-    scale() {
-      return scale;
-    },
-    scaledSquares() {
-      return scaledSquares;
+      return Math.sqrt(Math.max(0, compensatedValue(squares)));
     },
   };
 }
 
 function compensatedAdd(state, value) {
-  const adjusted = value - state.compensation;
-  const next = state.sum + adjusted;
-  state.compensation = (next - state.sum) - adjusted;
+  const next = state.sum + value;
+  if (Math.abs(state.sum) >= Math.abs(value)) {
+    state.compensation += (state.sum - next) + value;
+  } else {
+    state.compensation += (value - next) + state.sum;
+  }
   state.sum = next;
 }
 
-function stableCosineSimilarity(actual, reference, indices) {
-  let actualScale = 0;
-  let referenceScale = 0;
-  for (const index of indices) {
-    actualScale = Math.max(actualScale, Math.abs(actual[index]));
-    referenceScale = Math.max(referenceScale, Math.abs(reference[index]));
-  }
-  if (actualScale === 0 || referenceScale === 0) return null;
+function compensatedValue(state) {
+  return state.sum + state.compensation;
+}
 
+function stableCosineSimilarity(actual, reference, indices) {
   const dot = { sum: 0, compensation: 0 };
   const actualSquares = { sum: 0, compensation: 0 };
   const referenceSquares = { sum: 0, compensation: 0 };
   for (const index of indices) {
-    const scaledActual = actual[index] / actualScale;
-    const scaledReference = reference[index] / referenceScale;
-    compensatedAdd(dot, scaledActual * scaledReference);
-    compensatedAdd(actualSquares, scaledActual * scaledActual);
-    compensatedAdd(referenceSquares, scaledReference * scaledReference);
+    compensatedAdd(dot, actual[index] * reference[index]);
+    compensatedAdd(actualSquares, actual[index] * actual[index]);
+    compensatedAdd(referenceSquares, reference[index] * reference[index]);
   }
-  const denominator = Math.sqrt(actualSquares.sum * referenceSquares.sum);
-  return denominator === 0 ? null : Math.max(-1, Math.min(1, dot.sum / denominator));
+  const denominator = Math.sqrt(compensatedValue(actualSquares))
+    * Math.sqrt(compensatedValue(referenceSquares));
+  return denominator === 0
+    ? null
+    : Math.max(-1, Math.min(1, compensatedValue(dot) / denominator));
 }
 
 export function compareWebGpuParityArrays(actual, reference, options = {}) {
   const actualType = requireNumericTypedArray('actual', actual);
   const referenceType = requireNumericTypedArray('reference', reference);
   if (!isPlainObject(options)) throw new TypeError('options must be an object');
+  if (actualType !== referenceType) {
+    throw new TypeError('actual and reference must use the same typed array constructor');
+  }
   if (actual.length !== reference.length) {
     throw new RangeError('actual and reference must have the same length');
   }
@@ -240,21 +225,20 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
     );
   }
 
-  let meanAbsoluteError = 0;
-  let errorCount = 0;
-  const errorNormAccumulator = createScaledNormAccumulator();
-  const referenceNormAccumulator = createScaledNormAccumulator();
+  const absoluteErrors = { sum: 0, compensation: 0 };
+  const errorNormAccumulator = createNormAccumulator();
+  const referenceNormAccumulator = createNormAccumulator();
   let maxAbsoluteError = -1;
   let worstSourceIndex = null;
+  let mismatchCount = 0;
   for (const index of indices) {
     const actualValue = actual[index];
     const referenceValue = reference[index];
     const absoluteError = Math.abs(actualValue - referenceValue);
-    errorCount += 1;
-    meanAbsoluteError = meanAbsoluteError * ((errorCount - 1) / errorCount)
-      + absoluteError / errorCount;
+    compensatedAdd(absoluteErrors, absoluteError);
     errorNormAccumulator.add(absoluteError);
     referenceNormAccumulator.add(referenceValue);
+    if (actualValue !== referenceValue) mismatchCount += 1;
     if (absoluteError > maxAbsoluteError) {
       maxAbsoluteError = absoluteError;
       worstSourceIndex = index;
@@ -264,20 +248,22 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
   const l2Error = errorNormAccumulator.value();
   let relativeL2Error;
   let relativeL2Status;
-  if (referenceNormAccumulator.scale() === 0) {
+  const referenceL2Norm = referenceNormAccumulator.value();
+  if (referenceL2Norm === 0) {
     relativeL2Error = l2Error === 0 ? 0 : null;
     relativeL2Status = l2Error === 0 ? 'defined' : 'infinite-zero-reference-norm';
   } else {
-    const ratio = errorNormAccumulator.ratioTo(referenceNormAccumulator);
-    relativeL2Error = Number.isFinite(ratio) ? ratio : null;
-    relativeL2Status = Number.isFinite(ratio) ? 'defined' : 'outside-finite-range';
+    relativeL2Error = l2Error / referenceL2Norm;
+    relativeL2Status = 'defined';
   }
   const metrics = {
+    exactMatch: mismatchCount === 0,
+    mismatchCount,
     maxAbsoluteError,
     worstSourceIndex,
     worstActual: actual[worstSourceIndex],
     worstReference: reference[worstSourceIndex],
-    meanAbsoluteError,
+    meanAbsoluteError: compensatedValue(absoluteErrors) / indices.length,
     rootMeanSquareError: l2Error / Math.sqrt(indices.length),
     l2Error,
     relativeL2Error,
@@ -293,6 +279,11 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
   return Object.freeze({
     schema: WEBGPU_PARITY_COMPARISON_SCHEMA,
     stageId: options.stageId == null ? null : requireIdentity('stageId', options.stageId),
+    comparisonDomain: Object.freeze({
+      mode: INTEGER_TYPED_ARRAYS.has(actualType) ? 'integer-exact' : 'float32-metrics',
+      effectiveType: actualType,
+      normalization: 'none',
+    }),
     actualType,
     referenceType,
     sourceElementCount: actual.length,
