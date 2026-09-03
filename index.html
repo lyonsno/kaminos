@@ -18714,8 +18714,7 @@ async function initKaminosVolumeRoute() {
     updateVolumeControlLabels();
     const controlsSnapshot = readVolumeControls();
     const selectedEmitterFamily = document.getElementById('emitter-assay-family').value;
-    if (emitterMorphologyControls.has(event?.target?.id)
-      && (event?.target?.id === 'emitter-assay-family' || selectedEmitterFamily !== 'cluster')) {
+    if (emitterMorphologyControls.has(event?.target?.id)) {
       applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
     } else if (event?.target?.id === 'volume-scene' && selectedEmitterFamily !== 'cluster') {
       applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);

@@ -28,6 +28,11 @@ const common = {
 const legacy = compileVolumeEmitterFamily(common);
 assert.equal(legacy.descriptor.sourceLaw, 'legacy-volume', 'existing callers retain the filled-volume law explicitly');
 assert.equal(legacy.descriptor.compactSupport.interior, 'full');
+assert.deepEqual(
+  legacy.descriptor.writableFluidComponentIndices,
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15],
+  'the legacy receipt names every velocity/material/fire/micro component it can rewrite',
+);
 
 const shallow = compileVolumeEmitterFamily({
   ...common,
@@ -46,6 +51,25 @@ assert.deepEqual(
   ['velocity', 'smoke', 'heat', 'fuel'],
   'the inlet authors only primary transport/reaction inputs',
 );
+assert.deepEqual(
+  shallow.descriptor.writableFluidComponentIndices,
+  [0, 1, 2, 4, 5, 6],
+  'the shallow inlet cannot rewrite density carrier or any derived fire/detail component',
+);
+const sentinelBefore = Array.from({ length: 16 }, (_, index) => 1000 + index);
+const sentinelInjected = Array.from({ length: 16 }, (_, index) => 2000 + index);
+const applyWritableComponents = descriptor => sentinelBefore.map((value, index) => (
+  descriptor.writableFluidComponentIndices.includes(index) ? sentinelInjected[index] : value
+));
+const shallowSentinelAfter = applyWritableComponents(shallow.descriptor);
+assert.deepEqual(
+  shallowSentinelAfter.map((value, index) => value !== sentinelBefore[index] ? index : null).filter(index => index !== null),
+  [0, 1, 2, 4, 5, 6],
+  'a 16-component sentinel proves the shallow law changes exactly velocity xyz, smoke, heat, and fuel',
+);
+for (const index of [3, 7, 8, 9, 10, 11, 12, 13, 14, 15]) {
+  assert.equal(shallowSentinelAfter[index], sentinelBefore[index], `shallow component ${index} remains byte-for-byte preserved`);
+}
 assert.throws(
   () => compileVolumeEmitterFamily({ ...common, sourceLaw: 'painted-volume' }),
   /unsupported emitter source law: painted-volume/,
@@ -76,6 +100,11 @@ assert.match(injectionShader, /let sourceLaw = emitter\.transport\.y;/, 'the GPU
 assert.match(injectionShader, /let sourceDepth = max\([^\n]+emitter\.transport\.z\);/, 'the GPU consumer receives source depth');
 assert.match(injectionShader, /signedDistance = max\(signedDistance, inletSignedDistance\);/, 'shallow support is the intersection of geometry and inlet depth');
 assert.match(injectionShader, /if \(sourceLaw < 0\.5\) \{[\s\S]*?material\.w = max[\s\S]*?fireLayer\.x = max[\s\S]*?microLayer\.w = max[\s\S]*?\}/, 'legacy derived-field painting is isolated behind the legacy law');
+assert.match(
+  injectionShader,
+  /let injectedDensity = select\(velocityDensity\.w, legacyInjectedDensity, sourceLaw < 0\.5\);/,
+  'the shallow law preserves the transported density carrier instead of reconstructing it from its new primary inputs',
+);
 assert.match(coreSource, /let fixedSourceDephase = step\(0\.5, u\.reserved_source_extension_0\.x\);/, 'the fixed-grid source perturbation has an executable ablation gate');
 assert.match(coreSource, /let sourceStartupDephase = sourceSpatialDephase \* sourceStartupAuthority \* fixedSourceDephase;/, 'the ordinary source dephase obeys the ablation gate');
 assert.match(coreSource, /let startupDephase = staticDephase \* startupAuthority \* fixedSourceDephase;/, 'the Bonfire fixed-grid dephase obeys the same ablation gate');
@@ -135,6 +164,19 @@ const inactiveReceipt = applyVolumeEmitterFamilyRuntime({
 });
 assert.equal(inactiveReceipt.effective.sourceLaw, 'inactive', 'cluster mode cannot imply an analytic source law ran');
 assert.equal(inactiveReceipt.effective.sourceDepth, null, 'cluster mode cannot report an effective analytic inlet depth');
+
+const analyticReceiptSource = coreSource.match(/function analyticEmitterReceipt\(\) \{[\s\S]*?\n  \}/)?.[0] || '';
+assert.match(analyticReceiptSource, /requestedSourceLaw:/, 'the core analytic receipt preserves the requested law separately');
+assert.match(analyticReceiptSource, /requestedSourceDepth:/, 'the core analytic receipt preserves the requested depth separately');
+assert.match(analyticReceiptSource, /sourceLaw: analyticEmitterDescriptor \?[^\n]+: 'inactive'/, 'an inactive analytic source cannot report a legacy law as effective');
+assert.match(analyticReceiptSource, /sourceDepth: analyticEmitterDescriptor \?[^\n]+: null/, 'an inactive analytic source cannot report a numerical effective depth');
+
+const syncControlsSource = cockpitSource.match(/const syncControls = event => \{[\s\S]*?\n  \};/)?.[0] || '';
+assert.match(
+  syncControlsSource,
+  /if \(emitterMorphologyControls\.has\(event\?\.target\?\.id\)\) \{\s*applyVolumeEmitterFamilyRuntimeToCockpit\(controlsSnapshot\);/,
+  'source-law and source-depth edits recompose the receipt even while Cluster is the effective source',
+);
 
 assert.match(cockpitSource, /id="volume-emitter-source-law"[^>]+data-volume-settings-param="volume_emitter_source_law"/);
 assert.match(cockpitSource, /id="volume-emitter-source-depth"[^>]+data-volume-settings-param="volume_emitter_source_depth"/);

@@ -81,6 +81,46 @@ assert.equal(cluster.receipt.effective.coreFlowRate, HELD_CONTROLS.flowRate);
 assert.equal(cluster.receipt.effective.sourceCount, 0);
 assert.equal(cluster.receipt.effective.sourceMode, 'off');
 
+const clusterEditPrototype = makePrototype();
+const clusterBeforeEdit = applyVolumeEmitterFamilyRuntime({
+  prototype: clusterEditPrototype,
+  family: 'cluster',
+  controls: {
+    ...HELD_CONTROLS,
+    emitterSourceLaw: 'legacy-volume',
+    emitterSourceDepth: 0.04,
+  },
+  timestampMs: 1_000,
+  frameId: 'cluster-before-source-edit',
+});
+const clusterAfterEdit = applyVolumeEmitterFamilyRuntime({
+  prototype: clusterEditPrototype,
+  family: 'cluster',
+  controls: {
+    ...HELD_CONTROLS,
+    emitterSourceLaw: 'shallow-primary',
+    emitterSourceDepth: 0.09,
+  },
+  timestampMs: 1_001,
+  frameId: 'cluster-after-source-edit',
+});
+assert.deepEqual(
+  [clusterBeforeEdit.requested.sourceLaw, clusterBeforeEdit.requested.sourceDepth],
+  ['legacy-volume', 0.04],
+  'the initial Cluster receipt captures its requested analytic settings without claiming they ran',
+);
+assert.deepEqual(
+  [clusterAfterEdit.requested.sourceLaw, clusterAfterEdit.requested.sourceDepth],
+  ['shallow-primary', 0.09],
+  'a Cluster-mode source edit publishes the newly requested law and depth',
+);
+assert.deepEqual(
+  [clusterAfterEdit.effective.sourceLaw, clusterAfterEdit.effective.sourceDepth],
+  ['inactive', null],
+  'the same Cluster-mode edit keeps the analytic law and depth explicitly inactive',
+);
+assert.equal(clusterEditPrototype.calls.controls.length, 2, 'each Cluster-mode edit traverses the runtime composition boundary');
+
 const compiled = Object.fromEntries(['wick', 'nozzle', 'ribbon', 'ring'].map(family => {
   const result = apply(family);
   assert.equal(result.prototype.calls.controls.length, 1, `${family} applies controls once`);

@@ -14,6 +14,11 @@ export const VOLUME_EMITTER_SOURCE_LAWS = Object.freeze([
   'shallow-primary',
 ]);
 
+const WRITABLE_FLUID_COMPONENT_INDICES = Object.freeze({
+  'legacy-volume': Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15]),
+  'shallow-primary': Object.freeze([0, 1, 2, 4, 5, 6]),
+});
+
 const DEFAULT_CHEMISTRY = Object.freeze({
   smoke: 0.24,
   heat: 1.32,
@@ -265,7 +270,8 @@ export function compileVolumeEmitterFamily(request = {}) {
     support,
     injectedFields: sourceLaw === 'shallow-primary'
       ? ['velocity', 'smoke', 'heat', 'fuel']
-      : ['velocity', 'smoke', 'heat', 'fuel', 'detail', 'flame', 'fire-detail', 'microstructure'],
+      : ['velocity', 'density-carrier', 'smoke', 'heat', 'fuel', 'detail', 'flame', 'fire-detail', 'microstructure'],
+    writableFluidComponentIndices: [...WRITABLE_FLUID_COMPONENT_INDICES[sourceLaw]],
     compactSupport: {
       interior: sourceLaw === 'shallow-primary' ? 'shallow-inlet' : 'full',
       transition: 'one-grid-cell-smoothstep',

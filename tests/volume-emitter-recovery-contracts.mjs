@@ -100,11 +100,11 @@ assert.match(core, /fn externalEmitterInfluence\([\s\S]*?for \(var i:/, 'the gen
 
 const syncControls = cockpit.match(/const syncControls = event => \{[\s\S]*?\n  };/)?.[0] || '';
 assert.match(cockpit, /const emitterMorphologyControls = new Set\(\['emitter-assay-family', 'volume-emitter-source-law', 'volume-emitter-source-depth', 'volume-input-radius', 'volume-flow-rate'\]\)/, 'only source-law and morphology-bearing controls update the compact descriptor');
-assert.match(cockpit, /if \(emitterMorphologyControls\.has\(event\?\.target\?\.id\)[\s\S]*?selectedEmitterFamily !== 'cluster'\)/, 'fixed morphology updates are explicitly isolated from the general slider path');
+assert.match(cockpit, /if \(emitterMorphologyControls\.has\(event\?\.target\?\.id\)\) \{\s*applyVolumeEmitterFamilyRuntimeToCockpit\(controlsSnapshot\);/, 'every morphology edit republishes the requested/effective source receipt, including inactive Cluster mode');
 assert.match(
   syncControls,
-  /event\?\.target\?\.id === 'emitter-assay-family' \|\| selectedEmitterFamily !== 'cluster'[\s\S]*?applyVolumeEmitterFamilyRuntimeToCockpit\(controlsSnapshot\)[\s\S]*?} else if \(event\?\.target\?\.id === 'volume-scene' && selectedEmitterFamily !== 'cluster'\)[\s\S]*?applyVolumeEmitterFamilyRuntimeToCockpit\(controlsSnapshot\)[\s\S]*?} else \{\s*volumePrototype\.setControls\(controlsSnapshot\)/,
-  'ordinary and Cluster source sliders update controls directly while only fixed morphology or a fixed source-bearing scene preset recompiles the descriptor',
+  /if \(emitterMorphologyControls\.has\(event\?\.target\?\.id\)\) \{\s*applyVolumeEmitterFamilyRuntimeToCockpit\(controlsSnapshot\);[\s\S]*?} else if \(event\?\.target\?\.id === 'volume-scene' && selectedEmitterFamily !== 'cluster'\)[\s\S]*?applyVolumeEmitterFamilyRuntimeToCockpit\(controlsSnapshot\)[\s\S]*?} else \{\s*volumePrototype\.setControls\(controlsSnapshot\)/,
+  'morphology edits traverse the receipt-owning runtime boundary while unrelated controls retain the direct control path',
 );
 
 console.log('volume analytic emitter recovery contracts passed');

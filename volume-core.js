@@ -6164,7 +6164,7 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   material = clamp(material, vec4<f32>(0.0), vec4<f32>(2.2, 2.4, 1.8, 1.8));
   fireLayer = clamp(fireLayer, vec4<f32>(0.0), vec4<f32>(2.4, 2.0, 1.8, 1.8));
   microLayer = clamp(microLayer, vec4<f32>(0.0), vec4<f32>(1.8, 1.8, 1.8, 1.4));
-  let injectedDensity = clamp(max(
+  let legacyInjectedDensity = clamp(max(
     material.x * 1.08 + microLayer.x * 0.08,
     material.y * 0.42
       + material.w * 0.18
@@ -6172,6 +6172,7 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
       + microLayer.z * 0.05
       + material.z * 0.10
   ), 0.0, 2.2);
+  let injectedDensity = select(velocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
   fluid[base] = vec4<f32>(injectedVelocity, injectedDensity);
   fluid[base + 1u] = material;
   fluid[base + 2u] = fireLayer;
@@ -7784,8 +7785,10 @@ export function createKaminosVolumePrototype({
     coreEmitterSourceReceipt: null,
     analyticEmitterMode: 'off',
     analyticEmitterFamily: 'cluster',
-    analyticEmitterSourceLaw: 'legacy-volume',
-    analyticEmitterSourceDepth: 0.04,
+    analyticEmitterRequestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
+    analyticEmitterRequestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
+    analyticEmitterSourceLaw: 'inactive',
+    analyticEmitterSourceDepth: null,
     fixedSourceDephase: controlsSnapshot.fixedSourceDephase !== false,
     analyticEmitterCoordinateSpace: 'none',
     analyticEmitterCount: 0,
@@ -8471,8 +8474,10 @@ export function createKaminosVolumePrototype({
     return {
       mode: analyticEmitterDescriptor ? 'analytic-fixed' : 'off',
       family: analyticEmitterDescriptor?.family || 'cluster',
-      sourceLaw: analyticEmitterDescriptor?.sourceLaw || 'legacy-volume',
-      sourceDepth: analyticEmitterDescriptor?.sourceDepth ?? 0.04,
+      requestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
+      requestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
+      sourceLaw: analyticEmitterDescriptor ? analyticEmitterDescriptor.sourceLaw : 'inactive',
+      sourceDepth: analyticEmitterDescriptor ? analyticEmitterDescriptor.sourceDepth : null,
       coordinateSpace: analyticEmitterDescriptor ? 'volume-local' : 'none',
       count: analyticEmitterDescriptor ? 1 : 0,
       frameId: analyticEmitterDescriptor?.frameId || null,
@@ -8484,6 +8489,8 @@ export function createKaminosVolumePrototype({
     analyticEmitterDispatch = analyticEmitterInjectionDispatch(analyticEmitterDescriptor, gridSize);
     state.analyticEmitterMode = receipt.mode;
     state.analyticEmitterFamily = receipt.family;
+    state.analyticEmitterRequestedSourceLaw = receipt.requestedSourceLaw;
+    state.analyticEmitterRequestedSourceDepth = receipt.requestedSourceDepth;
     state.analyticEmitterSourceLaw = receipt.sourceLaw;
     state.analyticEmitterSourceDepth = receipt.sourceDepth;
     state.analyticEmitterCoordinateSpace = receipt.coordinateSpace;
@@ -21086,6 +21093,8 @@ export function createKaminosVolumePrototype({
       state.proceduralDetailForces = controlsSnapshot.proceduralDetailForces !== false;
       state.proceduralTransportSlip = controlsSnapshot.proceduralTransportSlip !== false;
       state.fixedSourceDephase = controlsSnapshot.fixedSourceDephase !== false;
+      state.analyticEmitterRequestedSourceLaw = String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume');
+      state.analyticEmitterRequestedSourceDepth = Number(controlsSnapshot.emitterSourceDepth ?? 0.04);
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;

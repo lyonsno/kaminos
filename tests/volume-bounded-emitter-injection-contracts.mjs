@@ -99,18 +99,18 @@ assert.doesNotMatch(
 );
 assert.match(
   injectionShader,
-  /let injectedDensity = clamp\(max\([\s\S]*?material\.x \* 1\.08 \+ microLayer\.x \* 0\.08[\s\S]*?material\.y \* 0\.42[\s\S]*?material\.w \* 0\.18[\s\S]*?microLayer\.y \* 0\.20[\s\S]*?microLayer\.z \* 0\.05[\s\S]*?material\.z \* 0\.10[\s\S]*?0\.0, 2\.2\);/,
-  'one bounded source step recomputes density from the updated material and microstructure record',
+  /let legacyInjectedDensity = clamp\(max\([\s\S]*?material\.x \* 1\.08 \+ microLayer\.x \* 0\.08[\s\S]*?material\.y \* 0\.42[\s\S]*?material\.w \* 0\.18[\s\S]*?microLayer\.y \* 0\.20[\s\S]*?microLayer\.z \* 0\.05[\s\S]*?material\.z \* 0\.10[\s\S]*?0\.0, 2\.2\);/,
+  'the legacy filled-volume source retains its density reconstruction law',
+);
+assert.match(
+  injectionShader,
+  /let injectedDensity = select\(velocityDensity\.w, legacyInjectedDensity, sourceLaw < 0\.5\);/,
+  'density reconstruction is effective only for the legacy law while shallow-primary preserves transported density',
 );
 assert.match(
   injectionShader,
   /let injectedVelocity = clamp\([\s\S]*?fluid\[base\] = vec4<f32>\(injectedVelocity, injectedDensity\);/,
-  'pressure receives density from the same bounded source step as the updated channels',
-);
-assert.doesNotMatch(
-  injectionShader,
-  /fluid\[base\] = vec4<f32>\(velocityDensity\.xyz, velocityDensity\.w\);/,
-  'the bounded pass cannot preserve stale density beside newly injected source channels',
+  'the bounded source write consumes the law-selected density contract',
 );
 assert.match(core, /function encodeAnalyticEmitterInjection\(encoder\)/, 'fixed morphology owns a separate encoder boundary');
 assert.match(
