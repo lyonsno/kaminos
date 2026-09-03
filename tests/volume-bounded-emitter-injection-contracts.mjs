@@ -104,13 +104,13 @@ assert.match(
 );
 assert.match(
   injectionShader,
-  /let injectedDensity = select\(velocityDensity\.w, legacyInjectedDensity, sourceLaw < 0\.5\);/,
+  /let injectedDensity = select\(previousVelocityDensity\.w, legacyInjectedDensity, sourceLaw < 0\.5\);/,
   'density reconstruction is effective only for the legacy law while shallow-primary preserves transported density',
 );
 assert.match(
   injectionShader,
-  /let injectedVelocity = clamp\([\s\S]*?fluid\[base\] = vec4<f32>\(injectedVelocity, injectedDensity\);/,
-  'the bounded source write consumes the law-selected density contract',
+  /let injectedVelocity = clamp\([\s\S]*?let candidateVelocityDensity = vec4<f32>\(injectedVelocity, injectedDensity\);[\s\S]*?\$\{VOLUME_EMITTER_FIELD_COMMIT_WGSL\}[\s\S]*?fluid\[base\] = committedVelocityDensity;/,
+  'the bounded source write consumes the law-selected density contract through the shared field policy',
 );
 assert.match(core, /function encodeAnalyticEmitterInjection\(encoder\)/, 'fixed morphology owns a separate encoder boundary');
 assert.match(

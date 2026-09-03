@@ -32,6 +32,7 @@ import {
   normalizeVolumeScene,
   volumeSceneReceipt,
 } from './volume-scene-ontology.mjs';
+import { VOLUME_EMITTER_FIELD_COMMIT_WGSL } from './volume-emitter-basis.mjs';
 import { resolveVolumeCoreEmitterSource } from './volume-emitter-runtime.mjs';
 import {
   auditLayerCoefficientLiveUnionPopulation,
@@ -6138,13 +6139,16 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   let chemistry = emitter.chemistry;
   let detail = max(0.0, emitter.geometry.z);
   let base = cellIndex(cell) * SLOTS_PER_CELL;
-  var velocityDensity = fluid[base];
-  var material = fluid[base + 1u];
-  var fireLayer = fluid[base + 2u];
-  var microLayer = fluid[base + 3u];
+  let previousVelocityDensity = fluid[base];
+  let previousMaterial = fluid[base + 1u];
+  let previousFireLayer = fluid[base + 2u];
+  let previousMicroLayer = fluid[base + 3u];
+  var material = previousMaterial;
+  var fireLayer = previousFireLayer;
+  var microLayer = previousMicroLayer;
   let velocity = axis * emitter.geometry.y * weight;
   let injectedVelocity = clamp(
-    velocityDensity.xyz + velocity * (0.18 + emitter.transport.x * 0.036),
+    previousVelocityDensity.xyz + velocity * (0.18 + emitter.transport.x * 0.036),
     vec3<f32>(-0.34),
     vec3<f32>(0.52)
   );
@@ -6172,11 +6176,16 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
       + microLayer.z * 0.05
       + material.z * 0.10
   ), 0.0, 2.2);
-  let injectedDensity = select(velocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
-  fluid[base] = vec4<f32>(injectedVelocity, injectedDensity);
-  fluid[base + 1u] = material;
-  fluid[base + 2u] = fireLayer;
-  fluid[base + 3u] = microLayer;
+  let injectedDensity = select(previousVelocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
+  let candidateVelocityDensity = vec4<f32>(injectedVelocity, injectedDensity);
+  let candidateMaterial = material;
+  let candidateFireLayer = fireLayer;
+  let candidateMicroLayer = microLayer;
+${VOLUME_EMITTER_FIELD_COMMIT_WGSL}
+  fluid[base] = committedVelocityDensity;
+  fluid[base + 1u] = committedMaterial;
+  fluid[base + 2u] = committedFireLayer;
+  fluid[base + 3u] = committedMicroLayer;
 }
 `;
 

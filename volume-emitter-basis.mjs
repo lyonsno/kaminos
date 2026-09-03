@@ -14,10 +14,63 @@ export const VOLUME_EMITTER_SOURCE_LAWS = Object.freeze([
   'shallow-primary',
 ]);
 
-const WRITABLE_FLUID_COMPONENT_INDICES = Object.freeze({
-  'legacy-volume': Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15]),
+export const VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES = Object.freeze({
+  'legacy-volume': Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
   'shallow-primary': Object.freeze([0, 1, 2, 4, 5, 6]),
 });
+
+const FLUID_COMPONENT_SLOTS = Object.freeze([
+  Object.freeze({ previous: 'previousVelocityDensity', candidate: 'candidateVelocityDensity', committed: 'committedVelocityDensity' }),
+  Object.freeze({ previous: 'previousMaterial', candidate: 'candidateMaterial', committed: 'committedMaterial' }),
+  Object.freeze({ previous: 'previousFireLayer', candidate: 'candidateFireLayer', committed: 'committedFireLayer' }),
+  Object.freeze({ previous: 'previousMicroLayer', candidate: 'candidateMicroLayer', committed: 'committedMicroLayer' }),
+]);
+const FLUID_COMPONENT_NAMES = Object.freeze(['x', 'y', 'z', 'w']);
+
+function assertEmitterSourceLaw(sourceLaw) {
+  if (!VOLUME_EMITTER_SOURCE_LAWS.includes(sourceLaw)) {
+    throw new Error(`unsupported emitter source law: ${sourceLaw || 'missing-source-law'}`);
+  }
+}
+
+function emitterWritableComponentSet(sourceLaw) {
+  assertEmitterSourceLaw(sourceLaw);
+  return new Set(VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES[sourceLaw]);
+}
+
+export function applyVolumeEmitterFieldWritePolicy({ sourceLaw, previousComponents, candidateComponents } = {}) {
+  if (!Array.isArray(previousComponents) || previousComponents.length !== 16) {
+    throw new Error('previousComponents must contain exactly 16 fluid components');
+  }
+  if (!Array.isArray(candidateComponents) || candidateComponents.length !== 16) {
+    throw new Error('candidateComponents must contain exactly 16 fluid components');
+  }
+  const writable = emitterWritableComponentSet(sourceLaw);
+  return previousComponents.map((value, index) => writable.has(index) ? candidateComponents[index] : value);
+}
+
+function buildVolumeEmitterFieldCommitWgsl() {
+  const legacyWritable = emitterWritableComponentSet('legacy-volume');
+  const shallowWritable = emitterWritableComponentSet('shallow-primary');
+  const lines = ['let legacyVolumeSourceLaw = sourceLaw < 0.5;'];
+  for (let slotIndex = 0; slotIndex < FLUID_COMPONENT_SLOTS.length; slotIndex += 1) {
+    const slot = FLUID_COMPONENT_SLOTS[slotIndex];
+    const components = FLUID_COMPONENT_NAMES.map((component, componentIndex) => {
+      const index = slotIndex * 4 + componentIndex;
+      if (legacyWritable.has(index) && shallowWritable.has(index)) return `${slot.candidate}.${component}`;
+      if (legacyWritable.has(index)) {
+        return `select(${slot.previous}.${component}, ${slot.candidate}.${component}, legacyVolumeSourceLaw)`;
+      }
+      return `${slot.previous}.${component}`;
+    });
+    lines.push(`let ${slot.committed} = vec4<f32>(`);
+    lines.push(`  ${components.join(',\n  ')}`);
+    lines.push(');');
+  }
+  return lines.join('\n');
+}
+
+export const VOLUME_EMITTER_FIELD_COMMIT_WGSL = buildVolumeEmitterFieldCommitWgsl();
 
 const DEFAULT_CHEMISTRY = Object.freeze({
   smoke: 0.24,
@@ -190,9 +243,7 @@ export function compileVolumeEmitterFamily(request = {}) {
   const axis = normalize(requestedDirection, 'direction');
   const radius = numberInRange(request.radius ?? 0.04, 'radius', 0.006, 0.18);
   const sourceLaw = String(request.sourceLaw ?? 'legacy-volume');
-  if (!VOLUME_EMITTER_SOURCE_LAWS.includes(sourceLaw)) {
-    throw new Error(`unsupported emitter source law: ${sourceLaw || 'missing-source-law'}`);
-  }
+  assertEmitterSourceLaw(sourceLaw);
   const sourceDepth = numberInRange(request.sourceDepth ?? 0.04, 'sourceDepth', 0.006, 0.36);
   const strength = numberInRange(request.strength ?? 1, 'strength', 0, 4);
   const velocitySpeed = numberInRange(request.velocitySpeed ?? 0.22, 'velocitySpeed', 0, 3);
@@ -271,7 +322,7 @@ export function compileVolumeEmitterFamily(request = {}) {
     injectedFields: sourceLaw === 'shallow-primary'
       ? ['velocity', 'smoke', 'heat', 'fuel']
       : ['velocity', 'density-carrier', 'smoke', 'heat', 'fuel', 'detail', 'flame', 'fire-detail', 'microstructure'],
-    writableFluidComponentIndices: [...WRITABLE_FLUID_COMPONENT_INDICES[sourceLaw]],
+    writableFluidComponentIndices: [...VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES[sourceLaw]],
     compactSupport: {
       interior: sourceLaw === 'shallow-primary' ? 'shallow-inlet' : 'full',
       transition: 'one-grid-cell-smoothstep',
