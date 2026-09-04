@@ -17,6 +17,7 @@ const state = {
   frameIntervals: [],
   framesDuringInference: 0,
   worstGapDuringInference: 0,
+  inferenceGaps: [],
   inferring: false,
   lastRouteResult: null,
 };
@@ -63,6 +64,7 @@ function startFrameMonitor() {
     if (state.frameIntervals.length > 600) state.frameIntervals.shift();
     if (state.inferring) {
       state.framesDuringInference++;
+      state.inferenceGaps.push(dt);
       if (dt > state.worstGapDuringInference) state.worstGapDuringInference = dt;
     }
     last = now;
@@ -159,7 +161,7 @@ async function fetchTestImageData() {
 
 // On-device chunk telemetry: THIS browser's run is the measurement of record
 // (headless harness frame numbers are compositor-quantized and only relative).
-function renderChunkTelemetry(sched, worstGapMs) {
+function renderChunkTelemetry(sched, worstGapMs, gaps = []) {
   let panel = document.getElementById('chunk-telemetry');
   if (!panel) {
     panel = document.createElement('div');
@@ -173,7 +175,13 @@ function renderChunkTelemetry(sched, worstGapMs) {
     .sort((a, b) => b.waitMs - a.waitMs);
   const rows = waits.slice(0, 5).map(w =>
     `<div style="display:flex;justify-content:space-between"><span style="color:#9a958a">${w.label}</span><span>${w.waitMs.toFixed(0)}ms</span></div>`).join('');
-  panel.innerHTML = `<div style="color:#9a958a;margin-bottom:3px">worst frame gap this run: <b style="color:${worstGapMs > 34 ? '#e06c5a' : '#79c98f'}">${worstGapMs.toFixed(0)}ms</b> · ${waits.length} chunks · worst queue waits:</div>${rows}`;
+  const xs = [...gaps].sort((a, b) => a - b);
+  const pick = q => xs.length ? xs[Math.min(xs.length - 1, Math.floor(q * xs.length))] : 0;
+  const over = t => gaps.filter(g => g > t).length;
+  const dist = xs.length
+    ? `frames ${xs.length} · p50 ${pick(0.5).toFixed(1)}ms · p95 ${pick(0.95).toFixed(1)}ms · >34ms: ${over(34)} · >50ms: ${over(50)}`
+    : 'no frame samples';
+  panel.innerHTML = `<div style="color:#9a958a;margin-bottom:3px">worst frame gap this run: <b style="color:${worstGapMs > 34 ? '#e06c5a' : '#79c98f'}">${worstGapMs.toFixed(0)}ms</b><br>${dist}<br>${waits.length} chunks · worst queue waits:</div>${rows}`;
 }
 
 function paintDepth(result) {
@@ -201,6 +209,7 @@ async function runInference(inference) {
   hud('hud-infer').className = 'v warn';
   state.framesDuringInference = 0;
   state.worstGapDuringInference = 0;
+  state.inferenceGaps = [];
   state.inferring = true;
   const t0 = performance.now();
   try {
@@ -221,7 +230,7 @@ async function runInference(inference) {
     const sched = result.schedulerVerificationReceipt;
     hud('hud-sched').textContent = sched ? `${sched.status} / ${sched.classification}` : 'missing';
     hud('hud-sched').className = `v ${sched?.status === 'verified' ? 'good' : 'warn'}`;
-    renderChunkTelemetry(sched, state.worstGapDuringInference);
+    renderChunkTelemetry(sched, state.worstGapDuringInference, state.inferenceGaps);
     paintDepth(result);
   } catch (e) {
     state.inferring = false;
