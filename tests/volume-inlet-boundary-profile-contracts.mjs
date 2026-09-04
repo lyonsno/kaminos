@@ -112,15 +112,36 @@ assert.throws(
 assert.match(injectionShader, /fn apertureSignedDistance\(/, 'the shader owns an analytic aperture boundary distinct from volume support');
 assert.match(injectionShader, /let inletDepthSupport = 1\.0 - smoothstep\(-0\.5 \* cellWidth, 0\.5 \* cellWidth, inletSignedDistance\);[\s\S]*?if \(sourceLaw >= 0\.5\)/, 'shaped momentum remains confined to the inlet depth even when legacy chemistry support is selected');
 assert.match(injectionShader, /let chemistryWeight = chemicalSupport \* max\(0\.0, emitter\.axis_strength\.w\);/, 'chemistry remains controlled by source strength');
-assert.match(injectionShader, /let linkedInletVelocity = emitter\.geometry\.y \* emitter\.axis_strength\.w \* \(0\.18 \+ emitter\.transport\.x \* 0\.036\);/, 'the linked arm preserves the predecessor momentum equation');
-assert.match(injectionShader, /let effectiveInletVelocity = select\(emitter\.inlet_controls\.z, linkedInletVelocity, emitter\.inlet_controls\.y < 0\.5\);/, 'the independent arm bypasses chemical strength and global transport speed');
+assert.match(injectionShader, /let effectiveInletVelocity = emitter\.inlet_controls\.z;/, 'the shader consumes the descriptor-authoritative effective inlet velocity');
+assert.doesNotMatch(injectionShader, /linkedInletVelocity|0\.18 \+ emitter\.transport\.x \* 0\.036/, 'the shader does not independently recompute linked inlet velocity');
 assert.match(injectionShader, /let transportedAxialSpeed = max\(0\.0, dot\(previousVelocityDensity\.xyz, axis\)\);/, 'edge entrainment responds to transported same-cell state');
 assert.match(injectionShader, /entrainmentVelocity = -apertureNormal \* transportedAxialSpeed \* edgeWeight \* max\(0\.0, emitter\.transport\.w\);/, 'edge entrainment points inward along the analytic source normal');
 assert.doesNotMatch(injectionShader, /sin\(|cos\(|hash|random/i, 'the inlet-profile pass contains no periodic or random forcing');
 assert.doesNotMatch(injectionShader, /fluid\[(?!base(?: \+ [123]u)?\])/, 'the inlet-profile pass does not read neighboring fluid cells');
 assert.match(coreSource, /new ArrayBuffer\(36 \* Float32Array\.BYTES_PER_ELEMENT\)/, 'the expanded analytic emitter uniform owns nine aligned vec4 slots');
-assert.match(coreSource, /floats\[23\] = descriptor\.edgeEntrainment;[\s\S]*?floats\[24\] = ANALYTIC_EMITTER_INLET_PROFILE_MODE\[descriptor\.inletProfile\][\s\S]*?floats\[25\] = descriptor\.momentumLinked \? 0 : 1;[\s\S]*?floats\[26\] = descriptor\.inletVelocity;[\s\S]*?floats\[27\] = descriptor\.shearWidthCells;[\s\S]*?words\.set\(\[\.\.\.dispatch\.cellMin, dispatch\.grid\], 28\);[\s\S]*?words\.set\(\[\.\.\.dispatch\.cellExtent, 0\], 32\);/, 'CPU uniform packing exactly matches the inlet-controls and dispatch vec4 boundaries');
+assert.match(coreSource, /floats\[23\] = descriptor\.edgeEntrainment;[\s\S]*?floats\[24\] = ANALYTIC_EMITTER_INLET_PROFILE_MODE\[descriptor\.inletProfile\][\s\S]*?floats\[25\] = descriptor\.momentumLinked \? 0 : 1;[\s\S]*?floats\[26\] = descriptor\.effectiveInletVelocity;[\s\S]*?floats\[27\] = descriptor\.shearWidthCells;[\s\S]*?words\.set\(\[\.\.\.dispatch\.cellMin, dispatch\.grid\], 28\);[\s\S]*?words\.set\(\[\.\.\.dispatch\.cellExtent, 0\], 32\);/, 'CPU uniform packing carries the descriptor-authoritative effective inlet velocity at the inlet-controls boundary');
 assert.match(injectionShader, /transport: vec4<f32>,\s+inlet_controls: vec4<f32>,\s+cell_min_grid: vec4<u32>,\s+cell_extent: vec4<u32>,/, 'WGSL reads the same aligned uniform layout written by JavaScript');
+
+assert.equal(typeof volumeCore.writeAnalyticEmitterInjectionUniform, 'function', 'the production uniform writer is directly contractable');
+const directSnapshotUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
+const directSnapshotUniformFloats = new Float32Array(directSnapshotUniformData);
+const directSnapshotUniformWords = new Uint32Array(directSnapshotUniformData);
+volumeCore.writeAnalyticEmitterInjectionUniform(
+  directSnapshotUniformFloats,
+  directSnapshotUniformWords,
+  predecessor.descriptor,
+  volumeCore.analyticEmitterInjectionDispatch(predecessor.descriptor, 160),
+  0,
+  10,
+);
+assert.ok(
+  Math.abs(directSnapshotUniformFloats[26] - predecessor.descriptor.effectiveInletVelocity) < 1e-7,
+  'a later direct-control speed snapshot cannot diverge the GPU scalar from the descriptor receipt',
+);
+assert.ok(
+  Math.abs(directSnapshotUniformFloats[26] - 0.0396) < 1e-7,
+  'the exact 0.0396 receipt remains the GPU-consumed scalar instead of silently becoming 0.0594',
+);
 
 const edgeDispatch = volumeCore.analyticEmitterInjectionDispatch(emitterBasis.compileVolumeEmitterFamily({
   ...common,
@@ -207,5 +228,6 @@ assert.match(cockpitSource, /Inlet Δv \(field\/step\)/, 'the direct velocity co
 assert.match(cockpitSource, /Shear width \(cells\)/, 'the spatial width is labeled in grid cells');
 assert.match(cockpitSource, /Edge entrainment \(×\)/, 'the entrainment response is labeled as a multiplier');
 assert.match(cockpitSource, /if \(event\?\.target\?\.id === 'volume-emitter-momentum-linked'[\s\S]*?\.checked === false\)[\s\S]*?volume-emitter-inlet-velocity[\s\S]*?linkedVolumeEmitterInletVelocity/, 'unlinking initializes the independent value from the currently effective linked inlet velocity');
+assert.match(cockpitSource, /linked \$\{formatVolumeEmitterInletVelocity\(receipt\.effective\.effectiveInletVelocity\)\}/, 'the concise operator receipt exposes the numeric linked velocity');
 
 console.log('volume inlet boundary profile contracts passed');

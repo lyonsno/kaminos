@@ -1697,7 +1697,7 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize) {
   };
 }
 
-function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds, speed) {
+export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds) {
   floats.fill(0);
   if (!descriptor || !dispatch.active) return;
   const familyMode = ANALYTIC_EMITTER_FAMILY_MODE[descriptor.family] || 0;
@@ -1721,13 +1721,13 @@ function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatc
   floats[17] = descriptor.chemistry.heat;
   floats[18] = descriptor.chemistry.fuel;
   floats[19] = descriptor.chemistry.flame;
-  floats[20] = Number.isFinite(Number(speed)) ? Number(speed) : 1;
+  floats[20] = descriptor.transportSpeed;
   floats[21] = ANALYTIC_EMITTER_SOURCE_LAW_MODE[descriptor.sourceLaw] || 0;
   floats[22] = descriptor.sourceDepth;
   floats[23] = descriptor.edgeEntrainment;
   floats[24] = ANALYTIC_EMITTER_INLET_PROFILE_MODE[descriptor.inletProfile] || 0;
   floats[25] = descriptor.momentumLinked ? 0 : 1;
-  floats[26] = descriptor.inletVelocity;
+  floats[26] = descriptor.effectiveInletVelocity;
   floats[27] = descriptor.shearWidthCells;
   words.set([...dispatch.cellMin, dispatch.grid], 28);
   words.set([...dispatch.cellExtent, 0], 32);
@@ -6210,13 +6210,8 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   var material = previousMaterial;
   var fireLayer = previousFireLayer;
   var microLayer = previousMicroLayer;
-  let linkedInletVelocity = emitter.geometry.y * emitter.axis_strength.w * (0.18 + emitter.transport.x * 0.036);
-  let effectiveInletVelocity = select(emitter.inlet_controls.z, linkedInletVelocity, emitter.inlet_controls.y < 0.5);
+  let effectiveInletVelocity = emitter.inlet_controls.z;
   var axialVelocity = axis * effectiveInletVelocity * axialWeight;
-  if (profileMode == 0u && emitter.inlet_controls.y < 0.5) {
-    let predecessorVelocity = axis * emitter.geometry.y * chemistryWeight;
-    axialVelocity = predecessorVelocity * (0.18 + emitter.transport.x * 0.036);
-  }
   var entrainmentVelocity = vec3<f32>(0.0);
   if (profileMode == 2u && edgeWeight > 0.0) {
     let normalStep = cellWidth * 0.5;
@@ -11834,7 +11829,6 @@ export function createKaminosVolumePrototype({
       analyticEmitterDescriptor,
       analyticEmitterDispatch,
       renderPhaseTimeMs * 0.001,
-      controlsSnapshot.speed,
     );
     device.queue.writeBuffer(
       analyticEmitterInjectionUniformBuffer,
