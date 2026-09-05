@@ -1,3 +1,5 @@
+import { migrateRetiredVolumeCockpitLayoutDocument } from './volume-retired-control-migration.mjs';
+
 export const VOLUME_COCKPIT_CONTROL_ROOT_IDS = Object.freeze([
   'volume-primary-control-root',
   'volume-authored-mix-control-root',
@@ -149,9 +151,10 @@ export function validateVolumeCockpitLayoutDocument({ document: documentValue, a
   };
 }
 
-export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, authorableControlIds }) {
-  const receipt = validateVolumeCockpitLayoutDocument({ document: documentValue, authorableControlIds });
-  const reconciled = cloneDocument(documentValue);
+export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, authorableControlIds, retiredControls = [] }) {
+  const retirementMigration = migrateRetiredVolumeCockpitLayoutDocument(documentValue, retiredControls);
+  const receipt = validateVolumeCockpitLayoutDocument({ document: retirementMigration.document, authorableControlIds });
+  const reconciled = cloneDocument(retirementMigration.document);
   if (receipt.missingControlIds.length) {
     let newControls = reconciled.groups.find(group => group.id === 'new-controls');
     if (!newControls) {
@@ -177,6 +180,7 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
     identity: 'kaminos.volume.cockpit-layout-reconciliation.v1',
     document: reconciled,
     newControlIds: receipt.missingControlIds,
+    retiredControlIds: retirementMigration.removedControlIds,
     effectiveReceipt,
   };
 }
@@ -481,6 +485,7 @@ class VolumeCockpitLayoutEditor {
     this.saveQueue = Promise.resolve();
     this.index = null;
     this.persistenceAvailable = true;
+    this.retiredControlIds = [];
     this.toolbar = this.requireToolbar();
   }
 
@@ -584,6 +589,7 @@ class VolumeCockpitLayoutEditor {
       storedLayoutLoaded,
       fallbackApplied: false,
       reason: null,
+      retiredControlIds: [...(this.retiredControlIds || [])],
     };
   }
 
@@ -684,7 +690,12 @@ class VolumeCockpitLayoutEditor {
   }
 
   apply() {
-    const reconciled = reconcileVolumeCockpitLayoutDocument({ document: this.layout, authorableControlIds: this.authorableControlIds });
+    const reconciled = reconcileVolumeCockpitLayoutDocument({
+      document: this.layout,
+      authorableControlIds: this.authorableControlIds,
+      retiredControls: this.schema.retiredControls,
+    });
+    this.retiredControlIds = [...reconciled.retiredControlIds];
     this.layout = reconciled.document;
     const clusters = new Map(this.authorableControls.map(control => [control.id, controlCluster(control)]));
     const parking = this.document.createDocumentFragment();
@@ -842,7 +853,12 @@ class VolumeCockpitLayoutEditor {
     this.status(`loading ${layoutId}…`);
     const artifact = await this.requestJson(`/api/volume-cockpit-layout?id=${encodeURIComponent(layoutId)}`);
     if (generation !== this.loadGeneration) return null;
-    const reconciled = reconcileVolumeCockpitLayoutDocument({ document: artifact.layout, authorableControlIds: this.authorableControlIds });
+    const reconciled = reconcileVolumeCockpitLayoutDocument({
+      document: artifact.layout,
+      authorableControlIds: this.authorableControlIds,
+      retiredControls: this.schema.retiredControls,
+    });
+    this.retiredControlIds = [...reconciled.retiredControlIds];
     this.layout = reconciled.document;
     this.apply();
     if (saveReconciliation && reconciled.newControlIds.length) await this.save();
@@ -953,6 +969,7 @@ export async function initializeVolumeCockpitLayout({
     storedLayoutLoaded: persistenceReceipt.storedLayoutLoaded,
     persistenceFailureReason: persistenceReceipt.reason,
     fallbackApplied: persistenceReceipt.fallbackApplied,
+    retiredControlIds: persistenceReceipt.retiredControlIds || [],
     authorableControlCount: authorableControls.length,
   };
 }
