@@ -482,7 +482,7 @@ for (const routeName of [
 ]) {
   assert.match(index, new RegExp(routeName), `Pyro route parser accepts ${routeName}`);
 }
-const volumeSyncControlLoop = index.match(/for \(const id of \[([\s\S]*?'volume-canonical-body-balance'[\s\S]*?)\]\) \{\s*document\.getElementById\(id\)\.addEventListener\('input', syncControls\)/);
+const volumeSyncControlLoop = index.match(/for \(const id of \[([\s\S]*?'volume-canonical-body-balance'[\s\S]*?)\]\) \{\s*document\.getElementById\(id\)\?\.addEventListener\('input', syncControls\)/);
 assert.ok(volumeSyncControlLoop, 'Volume cockpit has one explicit syncControls listener list for slider/select controls');
 for (const id of ['volume-pyro-flow-radiance', 'volume-pyro-flow-spikes']) {
   assert.match(volumeSyncControlLoop[1], new RegExp(`'${id}'`), `Flow control ${id} triggers syncControls instead of becoming a stale display-only knob`);
@@ -1555,8 +1555,7 @@ assert.match(core, /state\.bonfireReferenceConfinement/, 'debug state exposes re
 assert.match(core, /bonfireScalarSymmetryBlend/, 'zero-wind bonfire scalar symmetry is a named support blend, not the primary transport mechanism');
 assert.match(core, /bonfireLocalLateralTransportGain/, 'zero-wind bonfire convection preserves local lateral circulation instead of killing horizontal transport');
 assert.match(core, /bonfireLocalLateralForceGain/, 'zero-wind bonfire detail forces preserve bounded local lateral motion for convection');
-assert.match(core, /bonfireZeroMeanMicrodetailSlipGain/, 'zero-wind bonfire procedural microdetail transport has a named bounded local slip floor');
-assert.match(core, /bonfireLocalMicrodetailSlipGain/, 'the remaining operator-gated analytic slip identifies its microdetail-only authority');
+assert.doesNotMatch(core, /bonfireZeroMeanMicrodetailSlipGain|bonfireLocalMicrodetailSlipGain/, 'bonfire transport does not preserve a private microdetail slip path');
 assert.match(core, /csDivergencePressure/, 'bonfire plume needs a staged divergence pass instead of only in-line velocity heuristics');
 assert.match(core, /csPressureJacobi/, 'bonfire plume needs pressure iterations before projection, not just a one-sample divergence gradient');
 assert.match(core, /csProjectPressure/, 'bonfire plume needs a projection pass after all forces/source terms are applied');
@@ -1573,7 +1572,7 @@ assert.doesNotMatch(core, /bonfireNoWindSymmetryBlend = bonfireScene \* \(1\.0 -
 assert.match(core, /bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain/, 'bonfire lateral advection preserves local zero-wind transport while separate damping controls net drift');
 assert.match(core, /thermalAdvection\(cell, advectVelocity, speed, localMaterial\.y, thermalAdvectionRiseDirection\)/, 'bonfire thermal scalar advection must use transported velocity and heat lift without analytic lateral slip');
 assert.match(core, /fireLayerAdvection\(cell, advectVelocity, speed, localMaterial\.y, fireLayerRiseDirection\)/, 'bonfire fire-layer advection must use transported velocity and heat lift without analytic lateral slip');
-assert.match(core, /transportedMicrodetailAdvection\(cell, advectVelocity, speed, localMaterial\.y, localMaterial\.x, fireLayer\.x, bonfireLocalMicrodetailSlipGain, microdetailRiseDirection\)/, 'the separate procedural microdetail transport slip must route through its named microdetail-only gate');
+assert.match(core, /transportedMicrodetailAdvection\(cell, advectVelocity, speed, localMaterial\.y, fireLayer\.x, microdetailRiseDirection\)/, 'microdetail transport follows resolved velocity and its existing thermal lift without a separate slip vector');
 assert.match(core, /bonfireDetailLateralDamping = bonfireLocalLateralForceGain/, 'bonfire detail-force lateral authority preserves local zero-wind convection');
 assert.match(core, /isBonfireInitialScene/, 'initial fluid seed detects bonfire scene for centered no-wind reset state');
 assert.match(core, /seedLateralVelocity = isBonfireInitialScene \? 0 : 0\.11/, 'bonfire reset seed must not start with hidden swirl velocity');

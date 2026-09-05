@@ -19,7 +19,6 @@ function assertTransportedDetailForceBoundary(source) {
     source,
     [
       'transportedDetailDirection',
-      'transportedScalarSlip',
       'interfaceShreddingForce',
       'fieldDerivedFineScaleBreakup',
       'oracleActivityCurlForce',
@@ -29,19 +28,9 @@ function assertTransportedDetailForceBoundary(source) {
 
   const microAdvection = sourceBetween(source, 'fn transportedMicrodetailAdvection(', 'fn interfaceShreddingForce(');
   assert.doesNotMatch(microAdvection, /\b(?:sin|cos|tan)\s*\(/, 'microdetail transport must not use periodic slip');
-  assert.match(microAdvection, /if \(proceduralTransportSlip > 0\.5\) \{[\s\S]*transportedScalarSlip\(/, 'microdetail slip evaluation must occur inside its operator gate');
-  assert.doesNotMatch(
-    microAdvection.slice(0, microAdvection.indexOf('if (proceduralTransportSlip > 0.5) {')),
-    /transportedScalarSlip\(/,
-    'microdetail slip must not be evaluated before its operator gate',
-  );
-  assert.doesNotMatch(microAdvection, /\b(?:time|cameraPos_time)\b/, 'microdetail transport slip must not retain a hidden clock');
-  assertWgslCallsOwnedByBlock(
-    source,
-    'if (proceduralTransportSlip > 0.5) {',
-    { transportedScalarSlip: 1 },
-    { label: 'procedural transport-slip guard' },
-  );
+  assert.doesNotMatch(microAdvection, /\b(?:slip|time|cameraPos_time)\b/, 'microdetail transport must not retain independent slip or a hidden clock');
+  assert.match(microAdvection, /let backCell = cell - \(velocity \+ lift\) \* \(1\.44 \+ speed \* 0\.28\);/, 'microdetail follows the transported velocity and existing thermal lift');
+  assert.doesNotMatch(source, /fn transportedScalarSlip\(/, 'the field-derived scalar/velocity disagreement operator is retired');
 
   const detailHelpers = sourceBetween(source, 'fn interfaceShreddingForce(', 'fn smokeShredEnergy(');
   assert.doesNotMatch(detailHelpers, /\b(?:sin|cos|tan)\s*\(/, 'interface and fine-detail forces must derive from transported fields rather than periodic bases');
@@ -111,14 +100,6 @@ fn transportedDetailDirection(material: vec4<f32>, fireLayer: vec4<f32>, microLa
     /procedural detail-force guard must own every live transportedDetailDirection call/,
   ],
   [
-    'extra transport-slip evaluation after gate',
-    source => source.replace(
-      '  }\n  let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);',
-      '  }\n  slip = slip + transportedScalarSlip(velocity, heat, smoke, flame) * 0.001;\n  let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);',
-    ),
-    /procedural transport-slip guard must own every live transportedScalarSlip call/,
-  ],
-  [
     'extra Oracle curl evaluation after gate',
     source => source.replace(
       '  }\n  let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);',
@@ -135,12 +116,12 @@ fn transportedDetailDirection(material: vec4<f32>, fireLayer: vec4<f32>, microLa
     /shared trigonometric detail-force basis must be absent/,
   ],
   [
-    'microdetail evaluation moved before gate',
+    'restored hidden scalar slip',
     source => source.replace(
-      'var slip = vec3<f32>(0.0);\n  if (proceduralTransportSlip > 0.5) {',
-      'var slip = transportedScalarSlip(velocity, heat, smoke, flame);\n  if (proceduralTransportSlip > 0.5) {',
+      'fn transportedMicrodetailAdvection(',
+      'fn transportedScalarSlip() -> vec3<f32> { return vec3<f32>(0.1); }\n\nfn transportedMicrodetailAdvection(',
     ),
-    /microdetail slip must not be evaluated before its operator gate/,
+    /scalar\/velocity disagreement operator is retired/,
   ],
   [
     'restored periodic work count',

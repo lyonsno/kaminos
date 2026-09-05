@@ -1346,6 +1346,7 @@ const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedura
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
 const MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED = 'retired-periodic-bonfire-macro-forces-v0';
 const MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED = 'retired-periodic-scalar-advection-slip-v0';
+const MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY = 'retired-microdetail-transport-slip-v0';
 const MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED = 'retired-periodic-detail-force-basis-v0';
 const MAIN_FLUID_PERIODIC_ENTRAINMENT_SWAY_STRATEGY_RETIRED = 'retired-periodic-entrainment-sway-v0';
 const MAIN_FLUID_EXTERNAL_CARRIER_HIDDEN_FLICKER_STRATEGY_RETIRED = 'retired-hidden-external-emitter-flicker-v0';
@@ -2906,13 +2907,6 @@ fn transportedDetailDirection(material: vec4<f32>, fireLayer: vec4<f32>, microLa
   return direction / max(length(direction), 0.0001);
 }
 
-fn transportedScalarSlip(velocity: vec3<f32>, heat: f32, smoke: f32, flame: f32) -> vec3<f32> {
-  let lateralFlow = vec3<f32>(velocity.z, velocity.y * 0.16, -velocity.x);
-  let scalarSkew = vec3<f32>(heat - smoke * 0.52, flame - heat * 0.38, smoke - flame * 0.34);
-  let direction = lateralFlow + cross(velocity, scalarSkew) * 0.34 + scalarSkew * 0.08;
-  return direction / max(length(direction), 0.0001);
-}
-
 fn tallPlumeTransitionBandStagger(contourBreakup: f32, materialDetail: f32, microSmoke: f32, interfaceShred: f32, flameDetail: f32, frontTopology: f32) -> f32 {
   return clamp(
     0.58
@@ -2995,15 +2989,9 @@ fn bonfireReferenceConfinementForce(c: vec3<i32>, smoke: f32, heat: f32, flame: 
   return (confinement * 0.074 + frontShear * 0.018) * carrier * frontEnergy * clamp(strength, 0.0, 1.5);
 }
 
-fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32, microdetailRiseDirection: f32) -> vec4<f32> {
+fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, flame: f32, microdetailRiseDirection: f32) -> vec4<f32> {
   let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055) * microdetailRiseDirection, 0.0);
-  let proceduralTransportSlip = step(0.5, u.artistic_motion_controls.w);
-  var slip = vec3<f32>(0.0);
-  if (proceduralTransportSlip > 0.5) {
-    let rawSlip = transportedScalarSlip(velocity, heat, smoke, flame) * (0.18 + heat * 0.12 + smoke * 0.06);
-    slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
-  }
-  let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);
+  let backCell = cell - (velocity + lift) * (1.44 + speed * 0.28);
   return sampleFluidSlot(backCell, 3u);
 }
 
@@ -3571,15 +3559,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let microdetailRiseDirection = bonfireThermalRiseDirection;
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
-  let bonfireZeroMeanMicrodetailSlipGain = bonfireScene * (1.0 - explicitWindAuthority) * 0.58;
-  let bonfireLocalMicrodetailSlipGain = mix(1.0, max(explicitWindAuthority, bonfireZeroMeanMicrodetailSlipGain), bonfireScene);
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
   let localMaterial = readSlot(cellI, 1u);
   var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
   var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayerRiseDirection);
-  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireLocalMicrodetailSlipGain, microdetailRiseDirection);
+  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
   var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
@@ -7766,6 +7752,8 @@ export function createKaminosVolumePrototype({
     backend: 'inactive',
     retiredRaymarchControls: initialControlRetirement.retiredRaymarchControls,
     retiredRaymarchControlReceiptLifetime: RETIRED_RAYMARCH_CONTROL_RECEIPT_LIFETIME,
+    proceduralTransportSlip: false,
+    microdetailTransportSlipRetirementIdentity: MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY,
     active: false,
     width: 0,
     height: 0,
@@ -11838,7 +11826,7 @@ export function createKaminosVolumePrototype({
     uniforms[364] = controlsSnapshot.artisticSwirl === false ? 0 : 1;
     uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
     uniforms[366] = controlsSnapshot.proceduralDetailForces === false ? 0 : 1;
-    uniforms[367] = controlsSnapshot.proceduralTransportSlip === false ? 0 : 1;
+    uniforms[367] = 0;
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
@@ -11898,7 +11886,8 @@ export function createKaminosVolumePrototype({
     state.artisticSwirl = uniforms[364] >= 0.5;
     state.phasedSway = uniforms[365] >= 0.5;
     state.proceduralDetailForces = uniforms[366] >= 0.5;
-    state.proceduralTransportSlip = uniforms[367] >= 0.5;
+    state.proceduralTransportSlip = false;
+    state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
     state.fixedSourceDephase = uniforms[344] >= 0.5;
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -21220,7 +21209,8 @@ export function createKaminosVolumePrototype({
       state.artisticSwirl = controlsSnapshot.artisticSwirl !== false;
       state.phasedSway = controlsSnapshot.phasedSway !== false;
       state.proceduralDetailForces = controlsSnapshot.proceduralDetailForces !== false;
-      state.proceduralTransportSlip = controlsSnapshot.proceduralTransportSlip !== false;
+      state.proceduralTransportSlip = false;
+      state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
       state.fixedSourceDephase = controlsSnapshot.fixedSourceDephase !== false;
       state.analyticEmitterRequestedSourceLaw = String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume');
       state.analyticEmitterRequestedSourceDepth = Number(controlsSnapshot.emitterSourceDepth ?? 0.04);

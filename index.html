@@ -1601,11 +1601,6 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="checkbox" id="volume-procedural-detail-forces" checked>
       <span class="slider-val" id="volume-procedural-detail-forces-val">on</span>
     </div>
-    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
-      <span class="slider-label">Procedural transport slip</span>
-      <input type="checkbox" id="volume-procedural-transport-slip" checked>
-      <span class="slider-val" id="volume-procedural-transport-slip-val">on</span>
-    </div>
     <div class="slider-row" data-volume-visual-cost-knob="presentation-exposure">
       <span class="slider-label">Exposure</span>
       <input type="range" id="volume-exposure" min="0" max="3" step="any" value="1">
@@ -12116,7 +12111,6 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['artisticSwirl', 'volume_artistic_swirl'],
   ['phasedSway', 'volume_phased_sway'],
   ['proceduralDetailForces', 'volume_procedural_detail_forces'],
-  ['proceduralTransportSlip', 'volume_procedural_transport_slip'],
   ['volumeExposure', 'volume_exposure'],
   ['density', 'volume_density'],
   ['fire', 'volume_fire'],
@@ -17200,7 +17194,6 @@ function readVolumeControls() {
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked,
-    proceduralTransportSlip: document.getElementById('volume-procedural-transport-slip').checked,
     volumeExposure: parseFloat(document.getElementById('volume-exposure').value),
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
@@ -17477,7 +17470,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
   document.getElementById('volume-procedural-detail-forces-val').textContent = c.proceduralDetailForces ? 'on' : 'off';
-  document.getElementById('volume-procedural-transport-slip-val').textContent = c.proceduralTransportSlip ? 'on' : 'off';
   document.getElementById('volume-exposure-val').textContent = c.volumeExposure.toFixed(2);
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
@@ -18584,9 +18576,6 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_procedural_detail_forces')) {
     setVolumeControlValue('volume-procedural-detail-forces', params.get('volume_procedural_detail_forces'));
   }
-  if (params.has('volume_procedural_transport_slip')) {
-    setVolumeControlValue('volume-procedural-transport-slip', params.get('volume_procedural_transport_slip'));
-  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,
@@ -18841,8 +18830,8 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id).addEventListener('change', syncControls);
   }
   for (const id of ['volume-scene', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-procedural-transport-slip', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
-    document.getElementById(id).addEventListener('input', syncControls);
-    document.getElementById(id).addEventListener('change', syncControls);
+    document.getElementById(id)?.addEventListener('input', syncControls);
+    document.getElementById(id)?.addEventListener('change', syncControls);
   }
   document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);
