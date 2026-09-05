@@ -1090,9 +1090,10 @@ assert.match(core, /raymarchInterest/, 'raymarch computes local sample interest 
 assert.match(core, /adaptiveRayStepScale/, 'raymarch adapts step distance instead of only changing alpha');
 assert.match(core, /raymarchEarlyTermination/, 'raymarch exposes named early-termination behavior');
 assert.match(core, /occupancy_controls/, 'volume uniforms carry occupancy/importance skip controls separately from adaptive rays');
-assert.match(core, /raymarchOccupancySignal/, 'raymarch computes a named low-occupancy signal before expensive shading');
-assert.match(core, /occupancySkipStepScale/, 'raymarch can skip/coarsen low-occupancy spans before spending dense samples');
-assert.match(core, /occupancySkipStrength/, 'shader gives occupancy skipping an explicit bounded strength');
+assert.match(core, /directCellOpticalSupport/, 'raymarch conservatively proves native cells empty before occupancy acceleration');
+assert.match(core, /emptyCellAdvance = mix\([\s\S]*dtBase[\s\S]*directCellExitDistance|directCellExitDistance\(p, rd\)[\s\S]*emptyCellAdvance = mix\([\s\S]*dtBase/, 'occupancy skip interpolates between ordinary sampling and empty-cell boundary traversal');
+assert.match(core, /occupancySkipStrength/, 'shader gives conservative empty-cell acceleration an explicit bounded strength');
+assert.doesNotMatch(core, /occupancySkipStepScale/, 'low reconstructed occupancy cannot discard optically supported ridge samples');
 assert.match(core, /state\.occupancySkip/, 'debug state exposes effective occupancy skip strength');
 assert.match(core, /state\.frontFieldReadIndex/, 'debug state exposes the current front topology read buffer index');
 assert.match(core, /state\.frontFieldWriteIndex/, 'debug state exposes the current front topology write buffer index');

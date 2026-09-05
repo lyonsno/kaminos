@@ -3406,28 +3406,6 @@ fn segmentOpacity(opticalDepth: f32, maxOpacity: f32) -> f32 {
   return min(1.0 - exp(-max(0.0, opticalDepth)), maxOpacity);
 }
 
-fn raymarchOccupancySignal(
-  density: f32,
-  smoke: f32,
-  heat: f32,
-  temp: f32,
-  flame: f32,
-  microTextureSignal: f32,
-  velMag: f32,
-  extinction: f32
-) -> f32 {
-  let body = density * 0.44 + smoke * 0.38 + extinction * 0.28;
-  let fire = temp * 0.24 + flame * 0.28 + heat * 0.16;
-  let detail = microTextureSignal * 0.20 + velMag * 0.32;
-  return clamp(body + fire + detail, 0.0, 1.8);
-}
-
-fn occupancySkipStepScale(occupancy: f32, occupancySkipStrength: f32, adaptiveRays: f32) -> f32 {
-  let emptySpan = 1.0 - smoothstep(0.012, 0.135, occupancy);
-  let adaptiveAssist = mix(1.45, 3.20, clamp(adaptiveRays, 0.0, 1.0));
-  return clamp(1.0 + emptySpan * clamp(occupancySkipStrength, 0.0, 1.0) * adaptiveAssist, 1.0, 4.60);
-}
-
 fn raymarchEarlyTermination(transmittance: f32) -> bool {
   return transmittance < 0.012;
 }
@@ -4935,10 +4913,16 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
+    let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     let directSupport = directCellOpticalSupport(p);
     if (!fullGridCapture && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
-      t = t + min(cellExit + 0.0001, max(0.0001, endT - t));
+      let emptyCellAdvance = mix(
+        dtBase,
+        max(dtBase, cellExit + 0.0001),
+        occupancySkipStrength
+      );
+      t = t + min(emptyCellAdvance, max(0.0001, endT - t));
       continue;
     }
     var reconstructed: FlowReconstructionSample;
@@ -4971,7 +4955,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
-    let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
@@ -5015,12 +4998,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       * smoothstep(0.54, 1.18, tallPlumeRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
-    let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction) + tallPlumeTransitionWisps;
-    let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
-    if (!fullGridCapture && emptySpanScale > 1.08) {
-      t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
-      continue;
-    }
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
