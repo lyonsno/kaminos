@@ -16,6 +16,25 @@ function sameDescriptor(entry, retired) {
     && String(entry?.type || '').toLowerCase() === String(retired.type || '').toLowerCase();
 }
 
+function validateSourceCounts(documentValue, preset) {
+  for (const [axis, countField] of Object.entries(RETIRED_AXES)) {
+    const inventory = preset[axis];
+    if (inventory === undefined) continue;
+    if (!inventory || typeof inventory !== 'object' || Array.isArray(inventory)) {
+      throw new Error(`source ${axis} inventory is invalid`);
+    }
+    const declaredCount = Number(preset[countField]);
+    if (!Number.isSafeInteger(declaredCount) || declaredCount !== Object.keys(inventory).length) {
+      throw new Error(`source ${axis} count does not match its inventory`);
+    }
+  }
+  if (documentValue?.controlCount !== undefined
+    && preset.controlCount !== undefined
+    && Number(documentValue.controlCount) !== Number(preset.controlCount)) {
+    throw new Error('source artifact control count does not match its preset');
+  }
+}
+
 export function validateRetiredVolumeControlInventory(schema) {
   const retiredControls = schema?.retiredControls || [];
   if (!Array.isArray(retiredControls)) throw new Error('retired control inventory is invalid');
@@ -53,9 +72,11 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   if (!preset || typeof preset !== 'object') {
     return { document: migrated, removedControlIds: [], removedRouteParams: [], applied: false };
   }
+  validateSourceCounts(documentValue, documentValue.preset);
   const route = new URL(preset.route || '/', 'http://kaminos.invalid/');
   const removedControlIds = [];
   const removedRouteParams = [];
+  const changedAxes = new Set();
   for (const retired of retiredControls) {
     const axis = preset[retired.axis];
     const entry = axis && typeof axis === 'object' && !Array.isArray(axis) ? axis[retired.key] : undefined;
@@ -72,11 +93,15 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     route.searchParams.delete(retired.param);
     removedControlIds.push(retired.key);
     removedRouteParams.push(retired.param);
+    changedAxes.add(retired.axis);
   }
-  for (const [axis, countField] of Object.entries(RETIRED_AXES)) {
-    if (preset[axis] !== undefined) preset[countField] = Object.keys(preset[axis] || {}).length;
+  for (const axis of changedAxes) {
+    const countField = RETIRED_AXES[axis];
+    preset[countField] = Object.keys(preset[axis]).length;
   }
-  if (migrated.controlCount !== undefined) migrated.controlCount = preset.controlCount;
+  if (changedAxes.has('domControls') && migrated.controlCount !== undefined) {
+    migrated.controlCount = preset.controlCount;
+  }
   preset.route = route.href;
   return {
     document: migrated,

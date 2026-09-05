@@ -632,7 +632,16 @@ assert.match(index, /id="volume-steps"[^>]+value="96"/, 'smoke route defaults to
 assert.match(index, /id="volume-adaptive-rays"/, 'Volume tab exposes adaptive raymarch sampling control');
 assert.match(index, /volume_adaptive_rays/, 'URL route can override adaptive raymarch sampling');
 assert.match(index, /adaptiveRays/, 'Volume controls carry adaptive raymarch sampling into the renderer');
-assert.match(index, /id="volume-occupancy-skip"/, 'Volume tab exposes occupancy/importance skipping control');
+assert.match(
+  index,
+  /Empty-Space Acceleration[\s\S]*id="volume-occupancy-skip"/,
+  'Volume tab exposes conservative empty-space acceleration under the compatible occupancy key',
+);
+assert.match(
+  index,
+  /supported reconstructed samples are always evaluated and composited/,
+  'the empty-space acceleration control explains that supported ridge samples cannot be skipped',
+);
 assert.match(index, /volume_occupancy_skip/, 'URL route can override occupancy/importance skipping');
 assert.match(index, /occupancySkip/, 'Volume controls carry occupancy/importance skip strength into the renderer');
 assert.doesNotMatch(index, /volume_(?:majorant|temporal)|volume_history_clamp/, 'Volume routes do not retain retired raymarch controls');

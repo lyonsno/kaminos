@@ -19272,6 +19272,10 @@ export function createKaminosVolumePrototype({
         gridOverlay: state.gridOverlay,
         adaptiveRaymarch: state.adaptiveRaymarch,
         occupancySkip: state.occupancySkip,
+        occupancyAcceleration: {
+          identity: 'conservative-empty-native-support-cells-v1',
+          strength: state.occupancySkip,
+        },
         fireScale: state.fireScale,
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
@@ -19642,6 +19646,10 @@ export function createKaminosVolumePrototype({
       gridOverlay: state.gridOverlay,
       adaptiveRaymarch: state.adaptiveRaymarch,
       occupancySkip: state.occupancySkip,
+      occupancyAcceleration: {
+        identity: 'conservative-empty-native-support-cells-v1',
+        strength: state.occupancySkip,
+      },
       ...retiredRaymarchControlReceiptPayload(state),
       fireScale: state.fireScale,
       detailScale: state.detailScale,

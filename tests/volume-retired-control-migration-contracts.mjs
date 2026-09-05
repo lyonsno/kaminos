@@ -77,6 +77,42 @@ assert.equal(migratedReceipt.presetRoute.searchParams.has(retired.param), false)
 assert.equal(migratedReceipt.preset.domControls[activeDescriptor.key].value, 'bonfire');
 assert.equal(migratedReceipt.preset.controlCount, schema.controlCount);
 
+function currentPresetArtifact() {
+  const current = structuredClone(parentArtifact);
+  delete current.preset.domControls[retired.key];
+  const route = new URL(current.preset.route);
+  route.searchParams.delete(retired.param);
+  current.preset.route = route.href;
+  current.controlCount = schema.controlCount;
+  current.preset.controlCount = schema.controlCount;
+  return current;
+}
+
+const malformedDomCount = currentPresetArtifact();
+malformedDomCount.controlCount = 999;
+malformedDomCount.preset.controlCount = 999;
+assert.throws(
+  () => validateVolumeSettingsPresetDocument(malformedDomCount, malformedDomCount.presetId, schema),
+  /count|exactly|schema identity/i,
+  'migration cannot normalize malformed current-schema DOM counts when no retirement was applied',
+);
+
+const malformedRendererCount = currentPresetArtifact();
+malformedRendererCount.preset.rendererControlCount = 999;
+assert.throws(
+  () => validateVolumeSettingsPresetDocument(malformedRendererCount, malformedRendererCount.presetId, schema),
+  /renderer.*count|exactly .* renderer/i,
+  'migration cannot normalize a malformed auxiliary-axis count when no retirement was applied',
+);
+
+const malformedOuterCount = currentPresetArtifact();
+malformedOuterCount.controlCount = 999;
+assert.throws(
+  () => validateVolumeSettingsPresetDocument(malformedOuterCount, malformedOuterCount.presetId, schema),
+  /count|schema identity/i,
+  'migration cannot normalize disagreement between outer and source-preset DOM counts',
+);
+
 const retypedArtifact = structuredClone(parentArtifact);
 retypedArtifact.preset.domControls[retired.key].type = 'range';
 assert.throws(
