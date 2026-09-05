@@ -1218,7 +1218,11 @@ async function exerciseNoRenderService(mode, {
     returnedMode = 'ordinary-raf';
     await context.__kaminosVolumePrototype.setForegroundOpportunityMode(false);
   }
-  return { receipt, assay: context.__kaminosCurrentSourceNoRenderAssay };
+  return {
+    receipt,
+    assay: context.__kaminosCurrentSourceNoRenderAssay,
+    liveness: context.__kaminosCurrentSourceNoRenderAssayLiveness(),
+  };
 }
 
 for (const successorBeforeService of ['deactivate', 'ordinary-active', 'thrown-active']) {
@@ -1235,6 +1239,27 @@ const observedRafReceipt = observedRafResult.receipt;
 const fallbackReceipt = fallbackResult.receipt;
 assert.equal(fallbackReceipt.fallbackReason, 'raf-suspended-or-delayed');
 assert.equal(fallbackReceipt.rafTimestampMs, null);
+assert.equal(observedRafResult.liveness.requestCount, 1);
+assert.equal(observedRafResult.liveness.serviceCount, 1);
+assert.equal(observedRafResult.liveness.modeTransitionReceiptCount, 2);
+assert.equal(observedRafResult.liveness.productGpuIdentity.deviceIdentity, 'device-current-source');
+assert.equal(observedRafResult.liveness.productRouteIdentity.runId, 'run-observed-raf-callback');
+assert.equal(observedRafResult.liveness.lastService.requestId, observedRafReceipt.requestId);
+assert.equal(
+  Object.hasOwn(observedRafResult.liveness, 'requests'),
+  false,
+  'liveness projection must not serialize the uncapped request array',
+);
+assert.equal(
+  Object.hasOwn(observedRafResult.liveness, 'services'),
+  false,
+  'liveness projection must not serialize the uncapped service array',
+);
+assert.equal(
+  Object.hasOwn(observedRafResult.liveness, 'modeTransitionReceipts'),
+  false,
+  'liveness projection must not serialize the uncapped transition array',
+);
 
 const noRenderValidatorSource = witness.match(
   /function validateNoRenderAssayEvidence\([\s\S]*?\n}\n(?=\nfunction assembleNoRenderTerminalEvidence)/,
@@ -1761,6 +1786,18 @@ assert.match(
   /phase = 'monitoring-friendly-firing'[\s\S]*\}\)\(\)`, fireOperationTimeoutMs\);/,
   'The exact live route-state poll must consume the caller-owned deadline and report its monitoring phase truthfully',
 );
+assert.doesNotMatch(
+  witness.slice(monitorFiringSectionStart, monitorFiringSectionEnd),
+  /\.\.\.window\.__kaminosCurrentSourceNoRenderAssay/,
+  'The live route-state poll must not serialize the complete uncapped no-render assay arrays',
+);
+for (const arrayKey of ['noRenderRequests', 'noRenderModeTransitionReceipts', 'noRenderServices']) {
+  assert.match(
+    witness,
+    new RegExp(`arrayKey: '${arrayKey}'`),
+    `Terminal evidence must reconstruct ${arrayKey} through the lossless chunk reader`,
+  );
+}
 
 assert.doesNotMatch(
   witness,

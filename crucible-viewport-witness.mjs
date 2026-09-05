@@ -754,6 +754,29 @@ function buildNoRenderAssayInjectionExpression({ fallbackDelayMs = 250 } = {}) {
     let evidenceOrdinal = 0;
     let transitionOrdinal = 0;
     let eligibleActivationReceipt = null;
+    const livenessSnapshot = () => ({
+      schema: state.schema,
+      status: state.status,
+      presentationIsolation: state.presentationIsolation,
+      fallbackDelayMs: state.fallbackDelayMs,
+      requestCount: state.requestCount,
+      serviceCount: state.serviceCount,
+      observedRafCallbackCount: state.observedRafCallbackCount,
+      nonPresentFallbackCount: state.nonPresentFallbackCount,
+      productHookAssignments: state.productHookAssignments,
+      productHookType: state.productHookType || null,
+      productGpuIdentity: state.productGpuIdentity ? { ...state.productGpuIdentity } : null,
+      productRouteIdentity: state.productRouteIdentity ? { ...state.productRouteIdentity } : null,
+      requestRetention: state.requestRetention,
+      modeTransitionReceiptCount: state.modeTransitionReceiptCount,
+      modeTransitionReceiptRetention: state.modeTransitionReceiptRetention,
+      latestModeTransitionReceipt: state.modeTransitionReceipts.length
+        ? { ...state.modeTransitionReceipts[state.modeTransitionReceipts.length - 1] }
+        : null,
+      serviceRetention: state.serviceRetention,
+      lastService: state.lastService ? { ...state.lastService } : null,
+      authority: state.authority,
+    });
     const originalSetForegroundOpportunityMode = volume.setForegroundOpportunityMode;
     volume.setForegroundOpportunityMode = async function(active, ...rest) {
       const requestedActive = active === true;
@@ -965,7 +988,8 @@ function buildNoRenderAssayInjectionExpression({ fallbackDelayMs = 250 } = {}) {
       },
     });
     globalThis.__kaminosCurrentSourceNoRenderAssay = state;
-    return { ok: true, ...state };
+    globalThis.__kaminosCurrentSourceNoRenderAssayLiveness = livenessSnapshot;
+    return { ok: true, ...livenessSnapshot() };
   })()`;
 }
 
@@ -2161,9 +2185,7 @@ try {
         expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
         effectiveFirePresentation: liveVolume?.firePresentation || null,
         effectiveFlameContinuity: liveVolume?.flameContinuityEffective || null,
-        noRenderAssay: window.__kaminosCurrentSourceNoRenderAssay
-          ? { ...window.__kaminosCurrentSourceNoRenderAssay }
-          : null,
+        noRenderAssay: window.__kaminosCurrentSourceNoRenderAssayLiveness?.() || null,
         roomPosture: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleRoomPosture || null,
         settleMonitor: (() => {
           const monitor = window.__kaminosInFlightHybridSettleMonitor;
@@ -2312,9 +2334,8 @@ try {
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
       const kilnFrameStageLedger = routeState.result?.kilnFrameStageLedger || fire?.volumeDebugState?.kilnFrameStageLedger || null;
       const reportPath = routeState.result?.report?.path || null;
-      const noRenderAssay = window.__kaminosCurrentSourceNoRenderAssay
-        ? { ...window.__kaminosCurrentSourceNoRenderAssay }
-        : null;
+      const noRenderState = window.__kaminosCurrentSourceNoRenderAssay || null;
+      const noRenderAssay = window.__kaminosCurrentSourceNoRenderAssayLiveness?.() || null;
       const snapshotIdentity = {
         nonce: globalThis.crypto?.randomUUID?.() || ('witness-' + Date.now() + '-' + Math.random()),
         reportPath,
@@ -2328,6 +2349,9 @@ try {
         foregroundGaps: Object.freeze([...(sharpDutyCorrelation?.foregroundGaps || [])]),
         kilnFrameStageFrames: Object.freeze([...(kilnFrameStageLedger?.frames || [])]),
         kilnFrameStageEvents: Object.freeze([...(kilnFrameStageLedger?.events || [])]),
+        noRenderRequests: Object.freeze([...(noRenderState?.requests || [])]),
+        noRenderModeTransitionReceipts: Object.freeze([...(noRenderState?.modeTransitionReceipts || [])]),
+        noRenderServices: Object.freeze([...(noRenderState?.services || [])]),
       };
       const foregroundKilnHeartbeatWitness = foregroundKilnHeartbeat
         ? { ...foregroundKilnHeartbeat, samples: undefined, hostEvents: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined }
@@ -2403,6 +2427,35 @@ try {
           : null,
       },
     };
+    if (noRenderAssay) {
+      browserFiringEvidence.noRenderAssay.requests = await readBrowserArrayInChunks({
+        evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+        snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+        arrayKey: 'noRenderRequests',
+        expectedCount: browserFiringEvidence.noRenderAssay.requestCount,
+        expectedIdentity: browserFiringEvidence.snapshotIdentity,
+        timeoutMs: fireOperationTimeoutMs,
+        label: 'no-render requests',
+      });
+      browserFiringEvidence.noRenderAssay.modeTransitionReceipts = await readBrowserArrayInChunks({
+        evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+        snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+        arrayKey: 'noRenderModeTransitionReceipts',
+        expectedCount: browserFiringEvidence.noRenderAssay.modeTransitionReceiptCount,
+        expectedIdentity: browserFiringEvidence.snapshotIdentity,
+        timeoutMs: fireOperationTimeoutMs,
+        label: 'no-render mode transition receipts',
+      });
+      browserFiringEvidence.noRenderAssay.services = await readBrowserArrayInChunks({
+        evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+        snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+        arrayKey: 'noRenderServices',
+        expectedCount: browserFiringEvidence.noRenderAssay.serviceCount,
+        expectedIdentity: browserFiringEvidence.snapshotIdentity,
+        timeoutMs: fireOperationTimeoutMs,
+        label: 'no-render services',
+      });
+    }
     if (captureInFlight && inFlightCapture.status !== 'captured') {
       throw new Error(`Friendly firing did not expose an effective hybrid frame for visual capture: ${JSON.stringify(inFlightCapture)}`);
     }
