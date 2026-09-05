@@ -15896,11 +15896,18 @@ function sharpBreathingRoomSchedulerEventDurationMs(result) {
   ) {
     return Math.round(summary.lastTMs - summary.firstTMs);
   }
-  const times = sharpBreathingRoomSchedulerEvents(result)
-    .map(event => finiteKilnEvidenceNumber(event?.tMs))
-    .filter(value => value !== null);
-  if (times.length < 2) return null;
-  return Math.round(Math.max(...times) - Math.min(...times));
+  let observedCount = 0;
+  let firstTMs = null;
+  let lastTMs = null;
+  for (const event of sharpBreathingRoomSchedulerEvents(result)) {
+    const tMs = finiteKilnEvidenceNumber(event?.tMs);
+    if (tMs === null) continue;
+    observedCount += 1;
+    firstTMs = firstTMs === null ? tMs : Math.min(firstTMs, tMs);
+    lastTMs = lastTMs === null ? tMs : Math.max(lastTMs, tMs);
+  }
+  if (observedCount < 2) return null;
+  return Math.round(lastTMs - firstTMs);
 }
 
 function sharpBreathingRoomSchedulerEventSummary(result) {

@@ -919,6 +919,16 @@ assert.deepEqual(liveReport.requestedFireBudget, budget);
 assert.deepEqual(liveReport.effectiveFireBudget, budget);
 assert.equal(liveReport.sharpHeartbeat.schema, 'sharp-webgpu.background-heartbeat.v0');
 
+const uncappedLive = episodeHarness({ firingId: 'firing-production-cardinality' });
+uncappedLive.episode.start();
+for (let index = 0; index < 140_000; index += 1) {
+  uncappedLive.advance({ gapMs: index === 139_999 ? 47 : 16 });
+}
+const uncappedLiveReport = uncappedLive.episode.report({ phase: 'burning' });
+assert.equal(uncappedLiveReport.sampleCount, 140_001);
+assert.equal(uncappedLiveReport.frameGapCount, 140_000);
+assert.equal(uncappedLiveReport.maxFrameGapMs, 47);
+
 const preEpisodeFrame = episodeHarness();
 preEpisodeFrame.episode.start();
 preEpisodeFrame.advance({ gapMs: 16, frameTimestampMs: 99 });

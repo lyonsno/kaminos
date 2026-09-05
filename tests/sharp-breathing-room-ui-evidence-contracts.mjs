@@ -153,6 +153,31 @@ assert.equal(
   'Run duration must fall back to scheduler event tMs span when the report lacks direct durationMs',
 );
 
+const uncappedSchedulerRun = {
+  report: {
+    document: {
+      stages: [{
+        id: 'run-sharp-image-to-splat',
+        effectiveRoute: {
+          pipelineScheduler: {
+            schema: 'kaminos.pipeline-scheduler-composition.v0',
+            schedulerVerification: {
+              eventTrace: {
+                events: Array.from({ length: 200_000 }, (_, index) => ({ tMs: index * 2 })),
+              },
+            },
+          },
+        },
+      }],
+    },
+  },
+};
+assert.equal(
+  context.sharpBreathingRoomRunDurationMs(uncappedSchedulerRun),
+  399998,
+  'Uncapped scheduler traces must retain exact duration without spreading production-scale rows onto the call stack',
+);
+
 const compactSchedulerRun = {
   report: {
     document: {
