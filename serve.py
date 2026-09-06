@@ -782,7 +782,11 @@ def _volume_cockpit_layout_hash(layout):
 
 def write_volume_cockpit_layout(store_path, layout, activate=True, schema=None):
     store = _volume_settings_store_path(store_path)
-    normalized = _normalize_volume_cockpit_layout(layout, schema)
+    normalized, schema_projection = _project_volume_cockpit_layout(
+        layout,
+        schema,
+        allow_declared_retired=True,
+    )
     content_hash = _volume_cockpit_layout_hash(normalized)
     layout_path = store / "layouts" / f"{normalized['layoutId']}.json"
     written_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -819,6 +823,7 @@ def write_volume_cockpit_layout(store_path, layout, activate=True, schema=None):
             "contentHash": artifact["contentHash"],
             "active": bool(activate),
         },
+        "schemaProjection": schema_projection,
         "layoutUrl": f"/api/volume-cockpit-layout?id={normalized['layoutId']}",
     }
 
@@ -950,10 +955,16 @@ def _volume_settings_alias_for_label(store, label):
 
 def write_volume_settings_preset(store_path, label, payload, source, schema=None):
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
-    validate_volume_settings_preset_payload(payload, schema)
+    normalized_payload, schema_projection = normalize_volume_settings_preset_payload(payload, schema)
+    if schema_projection["defaultsApplied"]:
+        raise ValueError(
+            "settings preset write cannot project missing active controls: "
+            + ",".join(schema_projection["defaultsApplied"])
+        )
+    validate_volume_settings_preset_payload(normalized_payload, schema)
     store = _volume_settings_store_path(store_path)
     effective_label = str(label or "").strip() or "Unnamed preset"
-    content_hash = _volume_settings_content_hash(payload, schema)
+    content_hash = _volume_settings_content_hash(normalized_payload, schema)
     preset_id = f"vsp-{content_hash}"
     written_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     document = {
@@ -965,7 +976,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
         "initialLabel": effective_label,
         "writtenAt": written_at,
         "source": dict(source or {}),
-        "preset": payload,
+        "preset": normalized_payload,
     }
     with _volume_settings_store_lock(store):
         alias = _volume_settings_alias_for_label(store, effective_label)
@@ -1007,10 +1018,11 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "storePath": str(store),
             "schemaIdentity": schema["identity"],
             "controlCount": schema["controlCount"],
-            "rendererControlCount": len(payload.get("rendererControls") or {}),
-            "presentationControlCount": len(payload.get("presentationControls") or {}),
+            "rendererControlCount": len(normalized_payload.get("rendererControls") or {}),
+            "presentationControlCount": len(normalized_payload.get("presentationControls") or {}),
             "idempotent": idempotent,
         },
+        "schemaProjection": schema_projection,
         "presetUrl": preset_url,
         "presetViewUrls": {
             view: f"{preset_url}&view={view}"
