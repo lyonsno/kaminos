@@ -17,6 +17,7 @@ let serial = 0;
 const pending = new Map();
 const delay = ms => new Promise(r => setTimeout(r, ms));
 function call(method, params = {}) {
+  if (ws?.readyState !== 1) return Promise.reject(new Error('CDP transport is not open'));
   const id = ++serial;
   return new Promise((resolveCall, rejectCall) => {
     pending.set(id, { resolveCall, rejectCall });
