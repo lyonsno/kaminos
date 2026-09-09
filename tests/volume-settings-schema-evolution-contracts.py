@@ -174,6 +174,21 @@ def main():
     ]
 
     retired = legacy_payload()
+    with tempfile.TemporaryDirectory() as temporary:
+        for field in ("controlCount", "rendererControlCount", "presentationControlCount"):
+            for missing in (True, False):
+                incomplete = copy.deepcopy(normalized)
+                if missing:
+                    del incomplete[field]
+                else:
+                    incomplete[field] = None
+                try:
+                    serve.write_volume_settings_preset(Path(temporary), "Invalid count", incomplete, {}, SCHEMA)
+                except ValueError as error:
+                    assert field in str(error)
+                else:
+                    raise AssertionError(f"write synthesized missing/null {field}")
+        assert not list(Path(temporary).iterdir()), "rejected writes leave no artifacts"
     retired["domControls"]["volume-retired-raymarch"] = {
         "id": "volume-retired-raymarch",
         "param": "volume_retired_raymarch",

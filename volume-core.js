@@ -1,3 +1,5 @@
+import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT } from './volume-physical-color.mjs';
+export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY,
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL,
@@ -2164,6 +2166,9 @@ struct Uniforms {
   reserved_source_extension_3: vec4<f32>,
   reserved_source_extension_4: vec4<f32>,
   artistic_motion_controls: vec4<f32>,
+  physical_fire: vec4<f32>,
+  physical_display: vec4<f32>,
+  thermal_color_lut: array<vec4<f32>, ${THERMAL_LUT_COUNT}>,
 };
 
 struct ExternalEmitter {
@@ -3307,6 +3312,8 @@ fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
   let sz = slabAxis(ro.z, rd.z, b.z);
   return vec2<f32>(max(max(sx.x, sy.x), sz.x), min(min(sx.y, sy.y), sz.y));
 }
+
+${PHYSICAL_COLOR_WGSL}
 
 fn fireColor(temp: f32) -> vec3<f32> {
   let ember = vec3<f32>(0.70, 0.10, 0.018);
@@ -5223,6 +5230,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       let sootThermalBase = fireColor((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) * max(0.18, boundaryFireThermalWarmth));
       let sootThermalColor = mix(sootThermalBase, boundaryFireSootEndpoint * 1.55, clamp(sootMaturity * boundaryFireSootYellowing, 0.0, 1.0));
       boundaryFireColor = mix(cleanFuelColor, sootThermalColor, sootMaturity) * boundaryFireLuma;
+      if (u.physical_fire.x > 0.5) {
+        // A rendering-only heat-to-Kelvin mapping; never writes fluid fields.
+        let thermalCoordinate = clamp((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) / 2.4, 0.0, 1.0);
+        let kelvin = u.physical_fire.y + (thermalCoordinate - 0.5) * u.physical_fire.z;
+        let cleanChroma = boundaryFireCleanEndpoint / max(dot(boundaryFireCleanEndpoint, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.000001);
+        boundaryFireColor = thermalColor(kelvin) * sootMaturity * u.physical_fire.w
+          + cleanChroma * cleanBurnGate * u.physical_display.x;
+      }
       if (boundarySidecarView > 0.5) {
         let boundarySidecarCoverage = boundarySidecarDebugSample.y;
         let boundarySidecarProximity = clamp(max(boundarySidecarDebugSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarDebugSample.z * 0.58)), 0.0, 1.8);
@@ -5797,11 +5812,17 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    let standardRadianceContribution = alpha * local
+    var standardRadianceContribution = alpha * local
       + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene)
       + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority
       + shellSmokeBacklight * selectiveRaymarchFireAuthority
       + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight);
+    if (u.physical_fire.x > 0.5) {
+      // Retain the existing support/extinction; replace color authority only.
+      // Pyro pigments and legacy pale repaints are excluded from this arm.
+      standardRadianceContribution = fireAlpha * boundaryFireColor
+        + visibleSmokeAlpha * smokeCol * visibleSmokeAuthority;
+    }
     let directFlameSupervisionContribution = stockRenderMode * directFlameCandidateAlpha * directFlameUnitEmission;
     color = color + trans * mix(standardRadianceContribution, directFlameSupervisionContribution, supervisionFireOnlyTarget);
     let residualFeatureWeight = trans * rayStepOpacity;
@@ -5972,7 +5993,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   var grade = exposed * (0.80 + 0.18 * vignette);
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
-  let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  var current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  if (u.physical_fire.x > 0.5) {
+    current = physicalDisplay(color, u.physical_display.y, u.physical_display.z);
+    current = mix(current, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
+  }
   let residualFeature = vec4<f32>(
     clamp(1.0 - exp(-residualRadianceAuthority * 0.72), 0.0, 1.0),
     clamp(1.0 - exp(-residualFireAuthority * 0.82), 0.0, 1.0),
@@ -7635,7 +7660,8 @@ export function createKaminosVolumePrototype({
   const productModelMatrix = new THREE.Matrix4();
   const productViewProj = new THREE.Matrix4();
   const productLocalCameraPosition = new THREE.Vector3();
-  const uniforms = new Float32Array(384);
+  const uniforms = new Float32Array(PHYSICAL_COLOR_UNIFORM_FLOATS);
+  uniforms.set(THERMAL_LUT, 376);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
   let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
@@ -10263,6 +10289,7 @@ export function createKaminosVolumePrototype({
       context.configure({
         device,
         format,
+        colorSpace: 'srgb',
         alphaMode: 'opaque',
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
       });
@@ -11804,6 +11831,27 @@ export function createKaminosVolumePrototype({
     uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
     uniforms[366] = controlsSnapshot.proceduralDetailForces === false ? 0 : 1;
     uniforms[367] = 0;
+    const physicalColorRequested = controlsSnapshot.physicalColorMode === 1;
+    const physicalColorEffective = physicalColorRequested && fireRenderModeName === 'inspect' && boundaryFireInspectActive;
+    uniforms[368] = physicalColorEffective ? 1 : 0;
+    uniforms[369] = controlsSnapshot.physicalTemperature ?? 1900;
+    uniforms[370] = controlsSnapshot.physicalTemperatureSpread ?? 900;
+    uniforms[371] = controlsSnapshot.physicalThermalStrength ?? 1;
+    uniforms[372] = controlsSnapshot.physicalCleanStrength ?? 0.08;
+    uniforms[373] = controlsSnapshot.physicalExposureEV ?? 0;
+    uniforms[374] = controlsSnapshot.physicalHighlightKnee ?? 0.6;
+    uniforms[375] = 0;
+    state.physicalColor = {
+      requested: physicalColorRequested ? 'thermal-reaction-v1' : 'legacy',
+      effective: physicalColorEffective ? 'thermal-reaction-v1' : 'legacy',
+      inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-inspect-boundary-fire' : null,
+      workingSpace: 'linear-srgb', outputSpace: 'srgb',
+      displayTransform: physicalColorEffective ? 'luminance-knee-gamut-compression-srgb-v1' : 'legacy-exponential-power',
+      temperatureAuthority: 'render-only-heat-proxy-to-kelvin',
+      temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
+      cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],
+      paletteAuthority: physicalColorEffective ? 'thermal-lut-plus-clean-palette-no-pyro-repaint' : 'legacy',
+    };
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);

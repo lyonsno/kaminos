@@ -1409,6 +1409,43 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="color" class="volume-color-swatch" id="volume-reaction-boundary-fire-soot-color" value="#ffc460">
         <span class="slider-val" id="volume-reaction-boundary-fire-soot-color-val">#ffc460</span>
       </div>
+      <div class="volume-control-section-title">Boundary Fire color</div>
+      <span class="slider-help">Thermal + reaction: Planck/CIE soot chroma with independent clean emission; render-only Kelvin mapping, linear HDR → sRGB. Replaces legacy color/Pyro repaint, not dynamics. Soot yield and clean fuel swatch remain active. Legacy luma/warmth/yellowing, Radiance, Glow and volume exposure do not grade this arm.</span>
+      <div class="slider-row">
+        <span class="slider-label">Color model</span>
+        <select id="volume-physical-mode" class="select-input"><option value="0">Legacy</option><option value="1">Thermal + reaction</option></select>
+        <span class="slider-val" id="volume-physical-mode-val">0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Thermal K</span>
+        <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
+        <span class="slider-val" id="volume-physical-temperature-val">1900</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Kelvin spread</span>
+        <input type="range" id="volume-physical-spread" min="0" max="5200" step="any" value="900">
+        <span class="slider-val" id="volume-physical-spread-val">900</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Thermal emission</span>
+        <input type="range" id="volume-physical-thermal" min="0" max="20" step="any" value="1">
+        <span class="slider-val" id="volume-physical-thermal-val">1</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Clean emission</span>
+        <input type="range" id="volume-physical-clean" min="0" max="5" step="any" value="0.08">
+        <span class="slider-val" id="volume-physical-clean-val">0.08</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Exposure EV</span>
+        <input type="range" id="volume-physical-exposure" min="-8" max="8" step="any" value="0">
+        <span class="slider-val" id="volume-physical-exposure-val">0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Highlight knee</span>
+        <input type="range" id="volume-physical-knee" min="0.1" max="0.95" step="any" value="0.6">
+        <span class="slider-val" id="volume-physical-knee-val">0.6</span>
+      </div>
       <div class="volume-retired-control-state" data-volume-retired-control-state="atlas-capture" hidden>
       <div class="volume-control-section-title">Atlas capture</div>
       <div class="slider-row">
@@ -12014,6 +12051,13 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
+  { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 1, continuous: false, decimals: 0 },
+  { key: 'physicalTemperature', id: 'volume-physical-temperature', param: 'volume_physical_temperature', min: 800, max: 6000, continuous: true, decimals: 0 },
+  { key: 'physicalTemperatureSpread', id: 'volume-physical-spread', param: 'volume_physical_spread', min: 0, max: 5200, continuous: true, decimals: 0 },
+  { key: 'physicalThermalStrength', id: 'volume-physical-thermal', param: 'volume_physical_thermal', min: 0, max: 20, continuous: true, decimals: 2 },
+  { key: 'physicalCleanStrength', id: 'volume-physical-clean', param: 'volume_physical_clean', min: 0, max: 5, continuous: true, decimals: 3 },
+  { key: 'physicalExposureEV', id: 'volume-physical-exposure', param: 'volume_physical_exposure', min: -8, max: 8, continuous: true, decimals: 2 },
+  { key: 'physicalHighlightKnee', id: 'volume-physical-knee', param: 'volume_physical_knee', min: 0.1, max: 0.95, continuous: true, decimals: 2 },
   { key: 'reactionBoundaryGradient', id: 'volume-reaction-boundary-gradient', param: 'volume_reaction_boundary_gradient', min: 0, max: 4, step: 0.05, decimals: 2 },
   { key: 'reactionBoundarySupportThermal', id: 'volume-reaction-boundary-support-thermal', param: 'volume_reaction_boundary_support_thermal', min: 0, max: 2, step: 0.02, decimals: 2 },
   { key: 'reactionBoundarySupportReaction', id: 'volume-reaction-boundary-support-reaction', param: 'volume_reaction_boundary_support_reaction', min: 0, max: 2, step: 0.02, decimals: 2 },
@@ -17191,6 +17235,7 @@ function readVolumeControls() {
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
+    ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked,
@@ -17512,6 +17557,21 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-reaction-boundary-fire-soot-color-val').textContent = c.reactionBoundaryFireSootColor;
   document.getElementById('volume-fire-render-mode-val').textContent = c.fireRenderMode;
   document.getElementById('volume-shell-inspect-mode-val').textContent = c.shellInspectMode;
+  const physicalBoundaryColor = c.physicalColorMode === 1 && c.fireRenderMode === 'inspect' && c.shellInspectMode === 'boundary_fire';
+  document.getElementById('volume-physical-mode-val').textContent = c.physicalColorMode === 1 ? (physicalBoundaryColor ? 'active' : 'inactive route') : 'legacy';
+  for (const id of ['volume-radiance', 'volume-glow']) {
+    const input = document.getElementById(id);
+    input.disabled = c.fireRenderMode !== 'stock';
+    input.title = input.disabled ? 'Stock renderer only; inactive in this route' : '';
+  }
+  for (const id of ['volume-reaction-boundary-fire-clean-blue', 'volume-reaction-boundary-fire-yellow', 'volume-reaction-boundary-fire-warmth', 'volume-reaction-boundary-fire-luma', 'volume-reaction-boundary-fire-soot-color', 'volume-exposure']) {
+    const input = document.getElementById(id);
+    input.disabled = physicalBoundaryColor;
+    input.title = physicalBoundaryColor ? 'Legacy color control; use the Boundary Fire color section' : '';
+  }
+  for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') && field.key !== 'physicalColorMode')) {
+    document.getElementById(field.id).disabled = !physicalBoundaryColor;
+  }
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
   document.getElementById('volume-shell-width-val').textContent = c.shellWidth.toFixed(2);
   document.getElementById('volume-shell-thermal-val').textContent = c.shellThermal.toFixed(2);

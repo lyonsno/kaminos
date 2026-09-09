@@ -1,7 +1,60 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 194,
+  "controlCount": 201,
   "controls": [
+    {
+      "key": "volume-physical-mode",
+      "param": "volume_physical_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "0",
+      "allowedValues": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "key": "volume-physical-temperature",
+      "param": "volume_physical_temperature",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "1900"
+    },
+    {
+      "key": "volume-physical-spread",
+      "param": "volume_physical_spread",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "900"
+    },
+    {
+      "key": "volume-physical-thermal",
+      "param": "volume_physical_thermal",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "1"
+    },
+    {
+      "key": "volume-physical-clean",
+      "param": "volume_physical_clean",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.08"
+    },
+    {
+      "key": "volume-physical-exposure",
+      "param": "volume_physical_exposure",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0"
+    },
+    {
+      "key": "volume-physical-knee",
+      "param": "volume_physical_knee",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.6"
+    },
     {
       "key": "volume-scene",
       "param": "volume_scene",

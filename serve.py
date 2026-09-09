@@ -955,6 +955,10 @@ def _volume_settings_alias_for_label(store, label):
 
 def write_volume_settings_preset(store_path, label, payload, source, schema=None):
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    for axis, count_field in (("domControls", "controlCount"), ("rendererControls", "rendererControlCount"), ("presentationControls", "presentationControlCount")):
+        if axis == "domControls" or axis in payload or schema.get(axis):
+            if payload.get(count_field) is None:
+                raise ValueError(f"settings preset write requires authored {count_field}")
     normalized_payload, schema_projection = normalize_volume_settings_preset_payload(payload, schema)
     if schema_projection["defaultsApplied"]:
         raise ValueError(
