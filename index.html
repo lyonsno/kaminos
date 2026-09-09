@@ -13242,6 +13242,7 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
+    if (field.key === 'physicalColorMode') continue; // Route-aware status owns this label.
     if (!label || !Number.isFinite(value)) continue;
     label.textContent = value.toFixed(field.decimals);
   }
