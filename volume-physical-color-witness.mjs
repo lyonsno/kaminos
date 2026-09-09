@@ -24,9 +24,21 @@ function call(method, params = {}) {
   });
 }
 async function evaluate(expression) {
-  const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+  // Native readbacks include multi-megabyte field evidence. Sending one CDP
+  // return closed this Chrome connection (1006); transfer ALL text in pieces.
+  const result = await call('Runtime.evaluate', { expression: `(async()=>{window.__physicalColorWitnessJSON=JSON.stringify(await (${expression}));return window.__physicalColorWitnessJSON.length})()`, awaitPromise: true, returnByValue: true });
   if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
-  return result.result.value;
+  const length = result.result.value;
+  assert.ok(Number.isSafeInteger(length) && length >= 0, 'missing serialized witness');
+  let text = '';
+  const transferSize = 256 * 1024; // Transport framing, never a total data cap.
+  for (let offset = 0; offset < length; offset += transferSize) {
+    const part = await call('Runtime.evaluate', { expression: `window.__physicalColorWitnessJSON.slice(${offset},${offset+transferSize})`, returnByValue: true });
+    if (part.exceptionDetails) throw new Error(JSON.stringify(part.exceptionDetails));
+    assert.equal(part.result.value?.length, Math.min(transferSize, length-offset), 'partial witness transfer');
+    text += part.result.value;
+  }
+  return JSON.parse(text);
 }
 try {
   const response = await fetch(new URL('/api/runtime-config', url));
@@ -65,12 +77,18 @@ try {
     pending.delete(message.id);
     if (message.error) p.rejectCall(new Error(JSON.stringify(message.error))); else p.resolveCall(message.result);
   });
+  const rejectPending = error => {
+    for (const p of pending.values()) p.rejectCall(error);
+    pending.clear();
+  };
+  ws.addEventListener('close', event => rejectPending(new Error(`CDP closed ${event.code}: ${event.reason}`)));
+  ws.addEventListener('error', () => rejectPending(new Error('CDP transport error')));
   await call('Runtime.enable'); await call('Page.enable');
   report.phase = 'load'; save();
   let state;
   const deadline = Date.now() + 60000; // Existing browser-load witness deadline; not a data cap.
   do {
-    state = await evaluate('window.__kaminosVolumePrototype?.debugState?.()');
+    state = await evaluate('window.__kaminosVolumePrototype?.debugState?.() ?? null');
     if (state?.error) throw new Error(state.error);
     if (state?.active && state.frameCount > 2) break;
     await delay(250);
@@ -97,7 +115,7 @@ try {
         const input = document.getElementById(id); input.value = String(value); input.dispatchEvent(new Event('input', {bubbles:true}));
       }
       const core = window.__kaminosVolumePrototype;
-      const sample = await core.sampleFrame({advanceSim:false,includeRgba:true});
+      const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
       if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
       const {width,height,rgba} = sample.image;
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
