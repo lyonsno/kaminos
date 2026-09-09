@@ -71,6 +71,7 @@ learned residual, and external caller-owned resolve paths are not independently
 validated by this implementation's ordinary-cockpit witness.
 
 Tests: `node tests/volume-physical-color-contracts.mjs`,
+`node tests/volume-physical-highlight-contracts.mjs`,
 `node tests/volume-boundary-fire-palette-equivalence.mjs`,
 `python3 tests/volume-settings-schema-evolution-contracts.py`.
 The new reference test failed before implementation on the absent Planck/CIE
