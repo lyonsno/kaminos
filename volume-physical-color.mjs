@@ -37,20 +37,31 @@ export function sampleThermalLUT(kelvin) {
   return [0, 1, 2].map(i => THERMAL_LUT[lo*4+i] * (1-position+lo) + THERMAL_LUT[(lo+1)*4+i] * (position-lo));
 }
 
-// Linear below the knee; smooth luminance shoulder above it. Compress chroma
-// toward equal-energy RGB at fixed luminance only as needed to fit the SDR cube.
+// Peak shoulder / highlight desaturation adapted from Khronos PBR Neutral:
+// Copyright 2024 The Khronos Group, Inc. Apache-2.0 (shoulder adaptation).
+// License: LICENSES/Khronos-ToneMapping-Apache-2.0.txt. Modifications: configurable
+// knee, no reflective offset, signed-input projection, JS/WGSL and sRGB encoding.
+// https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/pbrNeutral.glsl
+// No reflective-material black offset: our input is emitted/transported light.
+// First project signed RGB toward neutral only enough to enter the nonnegative
+// cone. Then compress the PEAK, allowing luminance to roll off instead of forcing
+// an orange to become pastel at a prescribed display luminance. Neutralization
+// grows with radiance discarded by the shoulder, not mere SDR gamut contact.
 export function displayPhysicalRGB(rgb, exposureEV = 0, knee = 0.6) {
   const exposed = rgb.map(v => v * 2 ** exposureEV);
   const y = linearLuminance(exposed);
   if (y <= 0) return [0, 0, 0];
-  const mapped = y <= knee ? y : knee + (1-knee) * (1-Math.exp(-(y-knee)/(1-knee)));
-  const scaled = exposed.map(v => v * mapped / y);
-  let saturation = 1;
-  for (const v of scaled) {
-    if (v > mapped) saturation = Math.min(saturation, (1-mapped)/(v-mapped));
-    if (v < mapped) saturation = Math.min(saturation, mapped/(mapped-v));
+  const minimum = Math.min(...exposed);
+  const saturation = minimum < 0 ? y / (y - minimum) : 1;
+  let linear = exposed.map(v => Math.max(0, y + saturation * (v - y)));
+  const peak = Math.max(...linear);
+  if (peak > knee) {
+    const d = 1 - knee;
+    const mappedPeak = 1 - d * d / (peak + 1 - 2 * knee);
+    const neutral = 1 - 1 / (1 + 0.15 * (peak - mappedPeak));
+    linear = linear.map(v => mappedPeak * ((v / peak) * (1 - neutral) + neutral));
   }
-  return scaled.map(v => linearToSrgb(Math.max(0, Math.min(1, mapped + saturation*(v-mapped)))));
+  return linear.map(v => linearToSrgb(Math.max(0, Math.min(1, v))));
 }
 
 export const PHYSICAL_COLOR_WGSL = /* wgsl */`
@@ -63,15 +74,18 @@ fn physicalDisplay(rgb: vec3<f32>, ev: f32, knee: f32) -> vec3<f32> {
   let exposed = rgb * exp2(ev);
   let y = dot(exposed, vec3<f32>(0.2126, 0.7152, 0.0722));
   if (y <= 0.0) { return vec3<f32>(0.0); }
-  var mapped = y;
-  if (y > knee) { mapped = knee + (1.0-knee)*(1.0-exp(-(y-knee)/(1.0-knee))); }
-  let scaled = exposed * (mapped/y);
+  let minimum = min(exposed.r, min(exposed.g, exposed.b));
   var saturation = 1.0;
-  for (var i = 0u; i < 3u; i++) {
-    if (scaled[i] > mapped) { saturation = min(saturation, (1.0-mapped)/(scaled[i]-mapped)); }
-    if (scaled[i] < mapped) { saturation = min(saturation, mapped/(mapped-scaled[i])); }
+  if (minimum < 0.0) { saturation = y / (y - minimum); }
+  var linear = max(vec3<f32>(0.0), vec3<f32>(y) + saturation * (exposed - vec3<f32>(y)));
+  let peak = max(linear.r, max(linear.g, linear.b));
+  if (peak > knee) {
+    let d = 1.0 - knee;
+    let mappedPeak = 1.0 - d * d / (peak + 1.0 - 2.0 * knee);
+    let neutral = 1.0 - 1.0 / (1.0 + 0.15 * (peak - mappedPeak));
+    linear = mappedPeak * ((linear / peak) * (1.0 - neutral) + vec3<f32>(neutral));
   }
-  let linear = clamp(vec3<f32>(mapped) + saturation*(scaled-vec3<f32>(mapped)), vec3<f32>(0.0), vec3<f32>(1.0));
+  linear = clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0));
   return select(1.055*pow(linear, vec3<f32>(1.0/2.4))-vec3<f32>(0.055), linear*12.92, linear <= vec3<f32>(0.0031308));
 }
 `;

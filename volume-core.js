@@ -11847,7 +11847,7 @@ export function createKaminosVolumePrototype({
       effective: physicalColorEffective ? 'thermal-reaction-v1' : 'legacy',
       inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-inspect-boundary-fire' : null,
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
-      displayTransform: physicalColorEffective ? 'luminance-knee-gamut-compression-srgb-v1' : 'legacy-exponential-power',
+      displayTransform: physicalColorEffective ? 'peak-shoulder-delayed-neutral-srgb-v2' : 'legacy-exponential-power',
       temperatureAuthority: 'render-only-heat-proxy-to-kelvin',
       temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
       cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],

@@ -33,12 +33,34 @@ grade that radiance. Existing Pyro contributions to extinction remain; this is
 not a Pyro or simulation rewrite. Legacy Fire can still affect existing support
 or extinction pathways; it is not the new emission-strength control.
 
-Final display applies exposure in stops, a linear-below-knee exponential
-luminance shoulder, and the minimum neutral-axis chroma compression needed to
-fit the SDR cube at the mapped luminance. It then applies standard sRGB encoding
-once. The ordinary WebGPU canvas explicitly declares sRGB. This does not claim
-HDR display, P3 output, or perceptually uniform hue preservation. Peak saturation
-necessarily falls as display luminance approaches white.
+Final display applies exposure in stops, projects signed RGB toward equal RGB
+at fixed luminance only enough to remove negative components, then compresses
+the peak channel with a smooth shoulder. In-gamut input below the peak knee is
+unchanged. With peak `p`, knee `k`, and `d=1-k`, the compressed peak is
+`q=1-d*d/(p+1-2*k)`. RGB scales by `q/p`; the neutral blend toward `[q,q,q]`
+is `1-1/(1+0.15*(p-q))`. Thus bright colors may lose luminance before saturation;
+only stronger highlights gradually converge to white. Standard sRGB encoding
+runs once. The CPU reference and WGSL implement the same equations.
+
+This shoulder and delayed desaturation adapt
+[Khronos PBR Neutral](https://github.com/KhronosGroup/ToneMapping/tree/main/PBR_Neutral).
+The reflective-material black offset is deliberately omitted for emitted light;
+the operator's existing knee replaces its fixed compression threshold. The
+signed-input projection is our addition. This is not the unmodified Khronos
+transform or its reflective-material color-matching guarantee.
+
+The former fixed-luminance SDR fitting turned pure 1900 K at input Y=0.6 into
+`#ffbca1`, even without clean blue or smoke. The corrected mapping yields
+approximately `#f28e52` at the same input. Brightness is intentionally lower at
+equal exposure; exposure can now traverse a wider warm-highlight range. Existing
+thermal presets retain their numeric values but receive this corrected display;
+Legacy mode and its complete color path are unchanged. The diagnostic identity
+is `peak-shoulder-delayed-neutral-srgb-v2`.
+
+The ordinary WebGPU canvas explicitly declares sRGB. This does not claim HDR
+display, P3 output, calibrated flame photography, or perceptually uniform hue
+preservation. Clean-blue swatch emission and cool smoke can still shift the
+combined color. They must be judged separately from this display correction.
 
 Controls: center Kelvin, spread Kelvin, thermal strength, clean strength,
 exposure EV, highlight knee, and legacy/new mode. Inactive legacy controls are
