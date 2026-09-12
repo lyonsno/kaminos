@@ -4997,11 +4997,13 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       2.4
     );
     let temp = mix(mix(rawTemp, bonfireEmissionTemperature, bonfireRenderScene) * fireGain, 0.0, canonicalSmokeOnlyRender);
-    let smoke = mix(
+    let legacySmoke = mix(
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
       canonicalSmokeOnlyRender
     );
+    // Retired Smoke strength must not change adaptive sample placement in mode 2.
+    let smoke = select(legacySmoke, smokeDensity, u.physical_fire.x > 1.5);
     let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
     let tallPlumeRenderTransitionContour = clamp(0.70 + microTextureSignal * 0.12 + velMag * 0.18 + materialDetail * 0.06, 0.44, 1.20);
     let tallPlumeRenderTransitionStagger = tallPlumeTransitionBandStagger(tallPlumeRenderTransitionContour, materialDetail, microSmoke, interfaceShred, flameDetail, combustionFrontTopology);
