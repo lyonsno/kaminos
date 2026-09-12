@@ -2,10 +2,10 @@
 // Uses the ordinary cockpit + native sampleFrame contract, as the existing
 // volume/source-law witnesses do. Fixed-step replay supplies reproducible inputs.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-const [url, output, expectedRoot, expectedCommit] = process.argv.slice(2);
+const [url, output, expectedRoot, expectedCommit, armsPath] = process.argv.slice(2);
 assert.ok(output, 'usage: URL OUT_DIR REPO_ROOT COMMIT');
 const out = resolve(output);
 mkdirSync(out, { recursive: true });
@@ -102,16 +102,20 @@ try {
   report.phase = 'fixed-step-replay'; save();
   report.replay = await evaluate('window.__kaminosVolumePrototype.sampleDeterministicReplayFrame({steps:160,startTimeMs:1000,timeStepMs:1000/60})');
   assert.equal(report.replay.completedSteps, 160);
-  for (const arm of [
+  const arms = armsPath ? JSON.parse(readFileSync(armsPath,'utf8')) : [
     { id: 'legacy', mode: 0, temperature: 1900, ev: 0 },
     { id: 'thermal-1900', mode: 1, temperature: 1900, ev: 0 },
     { id: 'thermal-1900-plus-one', mode: 1, temperature: 1900, ev: 1 },
     { id: 'thermal-2400', mode: 1, temperature: 2400, ev: 0 },
     { id: 'legacy-return', mode: 0, temperature: 1900, ev: 0 },
-  ]) {
+  ];
+  assert.ok(Array.isArray(arms) && arms.length > 0, 'no capture arms');
+  report.arms = arms;
+  for (const arm of arms) {
+    assert.match(arm.id,/^[a-z0-9-]+$/, 'unsafe capture identifier');
     report.phase = arm.id; save();
     const result = await evaluate(`(async () => {
-      const changes = {'volume-physical-mode': ${arm.mode}, 'volume-physical-temperature': ${arm.temperature}, 'volume-physical-exposure': ${arm.ev}};
+      const changes = ${JSON.stringify({...arm.controls, 'volume-physical-mode':arm.mode, 'volume-physical-temperature':arm.temperature, 'volume-physical-exposure':arm.ev})};
       for (const [id, value] of Object.entries(changes)) {
         const input = document.getElementById(id); input.value = String(value); input.dispatchEvent(new Event('input', {bubbles:true}));
       }
@@ -125,7 +129,7 @@ try {
       return {sample, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
-    assert.equal(result.state.physicalColor.effective, arm.mode ? 'thermal-reaction-v1' : 'legacy');
+    assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, arm.temperature);
     assert.ok(result.sample.litPixels > 0, 'blank native frame');

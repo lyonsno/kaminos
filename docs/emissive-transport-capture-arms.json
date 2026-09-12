@@ -1,0 +1,5 @@
+[
+  { "id": "previous", "mode": 1, "temperature": 1900, "ev": 0 },
+  { "id": "emissive", "mode": 2, "temperature": 1900, "ev": 0 },
+  { "id": "emissive-exposed", "mode": 2, "temperature": 1900, "ev": 2 }
+]

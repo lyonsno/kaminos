@@ -1,4 +1,5 @@
-import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT } from './volume-physical-color.mjs';
+import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY,
@@ -2169,6 +2170,11 @@ struct Uniforms {
   physical_fire: vec4<f32>,
   physical_display: vec4<f32>,
   thermal_color_lut: array<vec4<f32>, ${THERMAL_LUT_COUNT}>,
+  emissive_material: vec4<f32>,
+  emissive_white_r: vec4<f32>,
+  emissive_white_g: vec4<f32>,
+  emissive_white_b: vec4<f32>,
+  emissive_reserved: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3314,6 +3320,7 @@ fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
 }
 
 ${PHYSICAL_COLOR_WGSL}
+${EMISSIVE_TRANSPORT_WGSL}
 
 fn fireColor(temp: f32) -> vec3<f32> {
   let ember = vec3<f32>(0.70, 0.10, 0.018);
@@ -5231,7 +5238,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       let sootThermalBase = fireColor((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) * max(0.18, boundaryFireThermalWarmth));
       let sootThermalColor = mix(sootThermalBase, boundaryFireSootEndpoint * 1.55, clamp(sootMaturity * boundaryFireSootYellowing, 0.0, 1.0));
       boundaryFireColor = mix(cleanFuelColor, sootThermalColor, sootMaturity) * boundaryFireLuma;
-      if (u.physical_fire.x > 0.5) {
+      if (u.physical_fire.x > 0.5 && u.physical_fire.x < 1.5) {
         // A rendering-only heat-to-Kelvin mapping; never writes fluid fields.
         let thermalCoordinate = clamp((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) / 2.4, 0.0, 1.0);
         let kelvin = u.physical_fire.y + (thermalCoordinate - 0.5) * u.physical_fire.z;
@@ -5818,7 +5825,17 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority
       + shellSmokeBacklight * selectiveRaymarchFireAuthority
       + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight);
-    if (u.physical_fire.x > 0.5) {
+    var standardExtinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    if (u.physical_fire.x > 1.5) {
+      // Boundary Fire has its own material support; shellAmount belongs to
+      // the separate topology-shell renderer (many valid basins set it to 0).
+      let coverage = boundaryCandidate * selectiveRaymarchFireAuthority;
+      let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
+      let sigma = medium.absorption + medium.scattering;
+      let emission = medium.emission + medium.scattering * incidentAt(p);
+      standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
+      standardExtinctionStep = sigma * localDt;
+    } else if (u.physical_fire.x > 0.5) {
       // Retain the existing support/extinction; replace color authority only.
       // Pyro pigments and legacy pale repaints are excluded from this arm.
       standardRadianceContribution = fireAlpha * boundaryFireColor
@@ -5832,7 +5849,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     residualFireAuthority = residualFireAuthority + residualFeatureWeight * clamp(pyroRawCurrentFire * 1.05 + fireMix * 0.90 + pyroFireEventCarrier * 0.55, 0.0, 3.5);
     residualInterfaceAuthority = residualInterfaceAuthority + residualFeatureWeight * clamp(pyroInterfaceSignal * 0.85 + pyroBiteAlphaBoost * 0.36 + flameDetail * 0.18 + fireLick * 0.16, 0.0, 3.5);
     residualSmokeAuthority = residualSmokeAuthority + residualFeatureWeight * clamp(smoke * 0.55 + rawExtinction * 0.38 + microSmoke * 0.32 + pyroFoldExtinctionBoost * 0.18, 0.0, 3.0);
-    let standardExtinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     let directFlameSupervisionExtinction = clamp(directFlameCandidateAlpha * 0.54, 0.0, 0.34);
     let structuralAEmissionCoefficient = directFlameCandidateAlpha * directFlameUnitEmission;
     let structuralAExtinctionCoefficient = clamp(directFlameCandidateAlpha * 0.54, 0.0, 0.34);
@@ -5996,7 +6012,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   var current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
   if (u.physical_fire.x > 0.5) {
-    current = physicalDisplay(color, u.physical_display.y, u.physical_display.z);
+    if (u.physical_fire.x > 1.5) {
+      current = emissiveCamera(color);
+    } else {
+      current = physicalDisplay(color, u.physical_display.y, u.physical_display.z);
+    }
     current = mix(current, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   }
   let residualFeature = vec4<f32>(
@@ -8277,6 +8297,9 @@ export function createKaminosVolumePrototype({
   let pressureProjectPipeline = null;
   let pressureProjectTieredPipeline = null;
   let boundarySidecarBuildPipeline = null;
+  let emissiveLightField = null;
+  let emissiveWhiteKelvin = null;
+  let emissiveWhiteMatrix = null;
   let boundarySplatCompactPipeline = null;
   let boundarySplatFinalizePipeline = null;
   let boundarySplatRenderPipeline = null;
@@ -8943,6 +8966,8 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    emissiveLightField?.destroy();
+    emissiveLightField = null;
     selectiveHeadLiveRuntime?.destroy();
     selectiveHeadLiveRuntime = null;
     selectiveHeadLiveBindGroups = null;
@@ -9058,6 +9083,7 @@ export function createKaminosVolumePrototype({
         { binding: 10, resource: { buffer: boundarySidecarBuffer } },
         { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
         { binding: 12, resource: { buffer: captureRows } },
+        { binding: 15, resource: { buffer: emissiveLightField.incident } },
       ],
     });
   }
@@ -10090,6 +10116,7 @@ export function createKaminosVolumePrototype({
       };
     }
     ensureNonRidgeOpticalCaptureBuffers();
+    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridSize}^3 ${index}`,
@@ -10475,6 +10502,7 @@ export function createKaminosVolumePrototype({
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'storage' },
         },
+        { binding: 15, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
       ],
     });
     analyticEmitterInjectionBindGroupLayout = device.createBindGroupLayout({
@@ -11832,9 +11860,17 @@ export function createKaminosVolumePrototype({
     uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
     uniforms[366] = controlsSnapshot.proceduralDetailForces === false ? 0 : 1;
     uniforms[367] = 0;
-    const physicalColorRequested = controlsSnapshot.physicalColorMode === 1;
-    const physicalColorEffective = physicalColorRequested && fireRenderModeName === 'inspect' && boundaryFireInspectActive;
-    uniforms[368] = physicalColorEffective ? 1 : 0;
+    const physicalColorMode = controlsSnapshot.physicalColorMode ?? 0;
+    const physicalColorRequested = physicalColorMode > 0;
+    const ordinaryEmissiveRoute = productFrameOwner !== 'caller'
+      && volumePresentationModeEffective === 'beauty'
+      && uniforms[312] === 0 && !appearanceDecompositionActive()
+      && !browserResidualRequested()
+      && normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'off'
+      && uniforms[316] === 0;
+    const physicalColorEffective = physicalColorRequested && fireRenderModeName === 'inspect' && boundaryFireInspectActive
+      && (physicalColorMode === 1 || ordinaryEmissiveRoute);
+    uniforms[368] = physicalColorEffective ? physicalColorMode : 0;
     uniforms[369] = controlsSnapshot.physicalTemperature ?? 1900;
     uniforms[370] = controlsSnapshot.physicalTemperatureSpread ?? 900;
     uniforms[371] = controlsSnapshot.physicalThermalStrength ?? 1;
@@ -11842,16 +11878,31 @@ export function createKaminosVolumePrototype({
     uniforms[373] = controlsSnapshot.physicalExposureEV ?? 0;
     uniforms[374] = controlsSnapshot.physicalHighlightKnee ?? 0.6;
     uniforms[375] = 0;
+    const whiteKelvin = controlsSnapshot.physicalWhiteBalance ?? 4000;
+    if (whiteKelvin !== emissiveWhiteKelvin) {
+      emissiveWhiteMatrix = cameraWhiteBalance(whiteKelvin);
+      emissiveWhiteKelvin = whiteKelvin;
+    }
+    uniforms.set([
+      controlsSnapshot.physicalSmokeExtinction ?? 2,
+      controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
+      controlsSnapshot.physicalAmbient ?? 0.02, 0,
+      ...emissiveWhiteMatrix[0], 0, ...emissiveWhiteMatrix[1], 0, ...emissiveWhiteMatrix[2], 0,
+      0,0,0,0,
+    ], EMISSIVE_UNIFORM_OFFSET);
+    const physicalModel = physicalColorMode === 2 ? 'emissive-transport-v2' : 'thermal-reaction-v1';
     state.physicalColor = {
-      requested: physicalColorRequested ? 'thermal-reaction-v1' : 'legacy',
-      effective: physicalColorEffective ? 'thermal-reaction-v1' : 'legacy',
-      inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-inspect-boundary-fire' : null,
+      requested: physicalColorRequested ? physicalModel : 'legacy',
+      effective: physicalColorEffective ? physicalModel : 'legacy',
+      inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-ordinary-beauty-boundary-fire-without-diagnostic-residual-splat-or-caller-presentation' : null,
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
-      displayTransform: physicalColorEffective ? 'peak-shoulder-delayed-neutral-srgb-v2' : 'legacy-exponential-power',
+      displayTransform: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-peak-shoulder-srgb-v3' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
       temperatureAuthority: 'render-only-heat-proxy-to-kelvin',
       temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
       cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],
-      paletteAuthority: physicalColorEffective ? 'thermal-lut-plus-clean-palette-no-pyro-repaint' : 'legacy',
+      paletteAuthority: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-reference-planck-power-plus-approximate-reaction-spectrum' : 'thermal-lut-plus-clean-palette-no-pyro-repaint') : 'legacy',
+      whiteBalanceKelvin: whiteKelvin,
+      material: physicalColorMode === 2 ? { thermalControl: 'hot-soot-optical-density', smokeExtinction: uniforms[EMISSIVE_UNIFORM_OFFSET], scatteringAlbedo: uniforms[EMISSIVE_UNIFORM_OFFSET+1], ambientRadiance: uniforms[EMISSIVE_UNIFORM_OFFSET+2] } : null,
     };
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
@@ -14925,6 +14976,10 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    if (uniforms[368] > 1.5) {
+      emissiveLightField.encode(encoder, currentFluid);
+      state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
+    }
     const pass = encoder.beginRenderPass({
       label,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),

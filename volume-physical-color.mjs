@@ -29,8 +29,14 @@ export const THERMAL_LUT_MAX = 6000;
 export const THERMAL_LUT_STEP = 10;
 export const THERMAL_LUT_COUNT = (THERMAL_LUT_MAX - THERMAL_LUT_MIN) / THERMAL_LUT_STEP + 1;
 // Uniform ABI follows the existing 368 floats, two control vectors, then LUT.
-export const PHYSICAL_COLOR_UNIFORM_FLOATS = 376 + 4 * THERMAL_LUT_COUNT;
-export const THERMAL_LUT = new Float32Array(Array.from({ length: THERMAL_LUT_COUNT }, (_, i) => [...thermalLinearRGB(THERMAL_LUT_MIN + i * THERMAL_LUT_STEP), 0]).flat());
+export const EMISSIVE_UNIFORM_OFFSET = 376 + 4 * THERMAL_LUT_COUNT;
+export const PHYSICAL_COLOR_UNIFORM_FLOATS = EMISSIVE_UNIFORM_OFFSET + 20;
+const referencePower = blackbodyXYZ(1900)[1];
+// RGB retains the mode-1 ABI; w preserves actual relative power for mode 2.
+export const THERMAL_LUT = new Float32Array(Array.from({ length: THERMAL_LUT_COUNT }, (_, i) => {
+  const kelvin = THERMAL_LUT_MIN + i * THERMAL_LUT_STEP;
+  return [...thermalLinearRGB(kelvin), blackbodyXYZ(kelvin)[1] / referencePower];
+}).flat());
 export function sampleThermalLUT(kelvin) {
   const position = (Math.max(THERMAL_LUT_MIN, Math.min(THERMAL_LUT_MAX, kelvin)) - THERMAL_LUT_MIN) / THERMAL_LUT_STEP;
   const lo = Math.min(THERMAL_LUT_COUNT - 2, Math.floor(position));
