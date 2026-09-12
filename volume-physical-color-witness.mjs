@@ -126,7 +126,9 @@ try {
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
       const image = document.createElement('canvas'); image.width=width; image.height=height;
       image.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(rgba),width,height),0,0);
-      return {sample, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      const profile = ${arm.profile === true} ? await core.captureSelectiveHeadLiveFrame({advanceSim:false,collectGpuTiming:true,startNow:${report.replay.finalTimeMs},frameIndex:0}) : null;
+      if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
+      return {sample, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
@@ -136,7 +138,7 @@ try {
     writeFileSync(join(out, `${arm.id}.png`), Buffer.from(result.png, 'base64'));
     writeFileSync(join(out, `${arm.id}.rgba`), Buffer.from(result.sample.image.rgba));
     const {image, ...sample} = result.sample;
-    report.captures.push({arm, sample, state:result.state, image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
+    report.captures.push({arm, sample, profile:result.profile, state:result.state, image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
   }
   const screenshot = await call('Page.captureScreenshot', {format:'png'});
   writeFileSync(join(out, 'cockpit.png'), Buffer.from(screenshot.data, 'base64'));

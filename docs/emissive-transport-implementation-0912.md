@@ -14,8 +14,21 @@ this is an illumination approximation, not an exact ridge integral.
 
 ## Evidence and outstanding work
 
-No visual acceptance claim yet. Native capture and ordinary review remain.
-The 32³ light-grid size is a candidate awaiting runtime/visual measurement.
+Initial native capture on `f5783b89` completed on Apple WebGPU. The owner
+inspected the previous, emissive, and exposed PNGs: amber/gold replaces the
+salmon cast, with localized cream highlights as exposure rises. The default
+smoke was too faint; a second ring-source material check at
+`/private/tmp/kaminos-emissive-smoke-0912/receipt.json` exposed an over-hot
+temperature mapping and excessive blue/thermal overlap when reaction strength
+was raised. These are intermediate observations, not handoff acceptance.
+
+Successor changes make mode 2 temperature explicitly the peak soot Kelvin,
+with spread cooling below it, and reduce reaction emission in soot-rich regions.
+The previous mode retains center/spread semantics. Added a timing pair to the
+existing native frame profiler so the lighting lattice is measured separately
+from the camera march. No new profiling system or image-completion gate.
+Source review is running against the first implementation; successor delta
+will be exposed for confirmation. The 32³ size awaits that runtime measurement.
 
 - `node --check volume-core.js`: pass.
 - `node tests/volume-emissive-transport-contracts.mjs`: pass (constant-medium

@@ -56,8 +56,8 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   const resolveOutput = group(resolve,3,[[3,incident]]);
   return {
     incident,
-    encode(encoder, sourceIndex) {
-      const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field' });
+    encode(encoder, sourceIndex, timestampWrites) {
+      const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });
       pass.setPipeline(seed); pass.setBindGroup(0,seedInputs[sourceIndex]); pass.setBindGroup(3,seedOutput);
       pass.dispatchWorkgroups(EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4);
       pass.setPipeline(sweep); pass.setBindGroup(0,sweepInput); pass.setBindGroup(3,sweepOutput);
@@ -93,7 +93,9 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   // curl or the detail-noise phase. Cold advected material stops emitting.
   let energy = m.y*0.65 + f.x + f.y*0.35 + f.z*0.40 + d.z*0.55;
   let activity = 1.0-exp(-energy*1.6);
-  let hotKelvin = u.physical_fire.y + (activity-0.5)*u.physical_fire.z;
+  // Mode 2's temperature is the hot ceiling, and spread is cooling below it.
+  // Brightness therefore cannot hide a much hotter, unlabelled half-spread.
+  let hotKelvin = u.physical_fire.y - (1.0-activity)*u.physical_fire.z;
   let kelvin = mix(800.0, max(800.0, hotKelvin), smoothstep(0.003, 0.10, energy));
   let sootYield = max(0.0, u.boundary_fire_color.y);
   let smokeAmount = (m.x+d.x*0.50+m.w*0.08) * max(0.0, u.viewport_steps_density.w) * max(0.0, u.fire_smoke_curl_speed.y);
@@ -105,7 +107,7 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   // suppresses it locally; there is no normalized blue term over the warm body.
   let front = smoothstep(0.001,0.12,r.frontTopology+f.w*0.5+d.z*0.08);
   let freshFuel = smoothstep(0.008,0.20,m.z);
-  let clean = max(0.0,coverage)*front*freshFuel*exp(-sootYield*smokeAmount*4.0);
+  let clean = max(0.0,coverage)*front*freshFuel*exp(-sootYield*smokeAmount*4.0-hotSoot*2.0);
   let gas = vec3<f32>(${REACTION_RGB.join(',')}) * clean * u.physical_display.x;
   let emission = hotSoot*thermalRadiance(kelvin) + gas;
   return EmissiveMaterial(emission, absorption, scattering);

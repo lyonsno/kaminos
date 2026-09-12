@@ -11897,7 +11897,7 @@ export function createKaminosVolumePrototype({
       inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-ordinary-beauty-boundary-fire-without-diagnostic-residual-splat-or-caller-presentation' : null,
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
       displayTransform: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-peak-shoulder-srgb-v3' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
-      temperatureAuthority: 'render-only-heat-proxy-to-kelvin',
+      temperatureAuthority: physicalColorMode === 2 ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'render-only-heat-proxy-to-kelvin',
       temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
       cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],
       paletteAuthority: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-reference-planck-power-plus-approximate-reaction-spectrum' : 'thermal-lut-plus-clean-palette-no-pyro-repaint') : 'legacy',
@@ -14977,7 +14977,7 @@ export function createKaminosVolumePrototype({
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     if (uniforms[368] > 1.5) {
-      emissiveLightField.encode(encoder, currentFluid);
+      emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
       state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
     }
     const pass = encoder.beginRenderPass({
@@ -20170,6 +20170,7 @@ export function createKaminosVolumePrototype({
         allocateTimingPair('finalize');
         allocateTimingPair('indirectSetup');
       }
+      if (composition.definition.raymarch && uniforms[368] > 1.5) allocateTimingPair('emissiveIncidentLight');
       if (composition.definition.raymarch) allocateTimingPair('matchedRaymarchRaster');
       if (composition.definition.splat) allocateTimingPair('splatRaster');
     }
@@ -20289,6 +20290,13 @@ export function createKaminosVolumePrototype({
         targetRaymarchPipeline,
         {
           bindGroup: selectiveRender,
+          ...(timingPairs.emissiveIncidentLight ? {
+            emissiveTimestampWrites: {
+              querySet: timingQuerySet,
+              beginningOfPassWriteIndex: timingPairs.emissiveIncidentLight.start,
+              endOfPassWriteIndex: timingPairs.emissiveIncidentLight.end,
+            },
+          } : {}),
           ...(timingQuerySet ? {
             timestampWrites: {
               querySet: timingQuerySet,
@@ -20412,6 +20420,7 @@ export function createKaminosVolumePrototype({
           indirectSetup: timingPairs.indirectSetup ? sampled('indirectSetup') : notRequested,
           splatRaster: timingPairs.splatRaster ? sampled('splatRaster') : notRequested,
           matchedRaymarchRaster: timingPairs.matchedRaymarchRaster ? sampled('matchedRaymarchRaster') : notRequested,
+          emissiveIncidentLight: timingPairs.emissiveIncidentLight ? sampled('emissiveIncidentLight') : notRequested,
           total: {
             status: 'sampled',
             ms: Number(timestamps[lastPair.end] - timestamps[firstPair.start]) / 1_000_000,

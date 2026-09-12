@@ -1417,7 +1417,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-physical-mode-val">0</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Thermal K</span>
+        <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
         <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
         <span class="slider-val" id="volume-physical-temperature-val">1900</span>
       </div>
@@ -17585,6 +17585,7 @@ function updateVolumeControlLabels() {
   const physicalBoundaryColor = c.physicalColorMode > 0 && c.fireRenderMode === 'inspect' && c.shellInspectMode === 'boundary_fire';
   document.getElementById('volume-physical-mode-val').textContent = c.physicalColorMode > 0 ? (physicalBoundaryColor ? (c.physicalColorMode === 1 ? 'active' : 'requested') : 'inactive route') : 'legacy';
   document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? 'Hot soot density' : 'Thermal emission';
+  document.getElementById('volume-physical-temperature-label').textContent = c.physicalColorMode === 2 ? 'Peak soot K' : 'Thermal K';
   document.getElementById('volume-reaction-boundary-fire-clean-color').disabled = physicalBoundaryColor && c.physicalColorMode === 2;
   for (const id of ['volume-radiance', 'volume-glow']) {
     const input = document.getElementById(id);
