@@ -14996,6 +14996,25 @@ export function createKaminosVolumePrototype({
     pass.end();
   }
 
+  async function sampleEmissiveLightProfile() {
+    if (uniforms[368] !== 2 || !timestampQueriesAvailable()) return { ok: false, reason: 'emissive-mode-or-gpu-timestamps-unavailable' };
+    const query = device.createQuerySet({ type: 'timestamp', count: 2 });
+    const resolved = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    const readback = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'same-state emissive lighting cost' });
+      emissiveLightField.encode(encoder, currentFluid, { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 });
+      encoder.resolveQuerySet(query,0,2,resolved,0);
+      encoder.copyBufferToBuffer(resolved,0,readback,0,16);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const times = new BigUint64Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      if (times[0] === 0n || times[1] <= times[0]) return { ok:false, reason:'missing-or-invalid-lighting-timestamps', timestamps:Array.from(times,String) };
+      return { ok:true, scope:'incident-light-compute-only-not-camera-or-frame', ms:Number(times[1]-times[0])/1e6, timestamps:Array.from(times,String), grid:EMISSIVE_LIGHT_GRID, simStepCount:state.simStepCount, effectiveRoute:state.effectiveRoute, physicalColor:state.physicalColor, backend:state.backend };
+    } finally { query.destroy(); resolved.destroy(); readback.destroy(); }
+  }
+
   function encodeProductSmokeRaymarch(encoder, colorView, sceneDepthView, bindGroup) {
     if (!productRaymarchPipeline || !productRaymarchDepthBindGroupLayout) {
       throw new Error('product-smoke-raymarch-pipeline-unavailable');
@@ -20170,7 +20189,6 @@ export function createKaminosVolumePrototype({
         allocateTimingPair('finalize');
         allocateTimingPair('indirectSetup');
       }
-      if (composition.definition.raymarch && uniforms[368] > 1.5) allocateTimingPair('emissiveIncidentLight');
       if (composition.definition.raymarch) allocateTimingPair('matchedRaymarchRaster');
       if (composition.definition.splat) allocateTimingPair('splatRaster');
     }
@@ -20290,13 +20308,6 @@ export function createKaminosVolumePrototype({
         targetRaymarchPipeline,
         {
           bindGroup: selectiveRender,
-          ...(timingPairs.emissiveIncidentLight ? {
-            emissiveTimestampWrites: {
-              querySet: timingQuerySet,
-              beginningOfPassWriteIndex: timingPairs.emissiveIncidentLight.start,
-              endOfPassWriteIndex: timingPairs.emissiveIncidentLight.end,
-            },
-          } : {}),
           ...(timingQuerySet ? {
             timestampWrites: {
               querySet: timingQuerySet,
@@ -20420,7 +20431,6 @@ export function createKaminosVolumePrototype({
           indirectSetup: timingPairs.indirectSetup ? sampled('indirectSetup') : notRequested,
           splatRaster: timingPairs.splatRaster ? sampled('splatRaster') : notRequested,
           matchedRaymarchRaster: timingPairs.matchedRaymarchRaster ? sampled('matchedRaymarchRaster') : notRequested,
-          emissiveIncidentLight: timingPairs.emissiveIncidentLight ? sampled('emissiveIncidentLight') : notRequested,
           total: {
             status: 'sampled',
             ms: Number(timestamps[lastPair.end] - timestamps[firstPair.start]) / 1_000_000,
@@ -21731,6 +21741,7 @@ export function createKaminosVolumePrototype({
     controlledStepFrame,
     controlledStepSequence,
     captureSelectiveHeadLiveFrame,
+    sampleEmissiveLightProfile,
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,

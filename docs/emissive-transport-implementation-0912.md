@@ -24,9 +24,12 @@ was raised. These are intermediate observations, not handoff acceptance.
 
 Successor changes make mode 2 temperature explicitly the peak soot Kelvin,
 with spread cooling below it, and reduce reaction emission in soot-rich regions.
-The previous mode retains center/spread semantics. Added a timing pair to the
-existing native frame profiler so the lighting lattice is measured separately
-from the camera march. No new profiling system or image-completion gate.
+The previous mode retains center/spread semantics. The existing selective-head
+profiler is not applicable with that composition off: its unwritten query
+reported `timestamp-query-incomplete:0,0` before any new captures. That failed
+attempt is preserved at `/private/tmp/kaminos-emissive-final-0912/receipt.json`.
+Use a direct timestamp pair around the incident-light compute pass instead;
+it reports only that pass, not whole-frame performance. No image-completion gate.
 Source review is running against the first implementation; successor delta
 will be exposed for confirmation. The 32³ size awaits that runtime measurement.
 

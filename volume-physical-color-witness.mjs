@@ -126,7 +126,7 @@ try {
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
       const image = document.createElement('canvas'); image.width=width; image.height=height;
       image.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(rgba),width,height),0,0);
-      const profile = ${arm.profile === true} ? await core.captureSelectiveHeadLiveFrame({advanceSim:false,collectGpuTiming:true,startNow:${report.replay.finalTimeMs},frameIndex:0}) : null;
+      const profile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveLightProfile() : null;
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
       return {sample, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
