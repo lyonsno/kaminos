@@ -17587,6 +17587,11 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? 'Hot soot density' : 'Thermal emission';
   document.getElementById('volume-physical-temperature-label').textContent = c.physicalColorMode === 2 ? 'Peak soot K' : 'Thermal K';
   document.getElementById('volume-reaction-boundary-fire-clean-color').disabled = physicalBoundaryColor && c.physicalColorMode === 2;
+  for (const id of ['volume-reaction-boundary-contrast','volume-reaction-boundary-gamma','volume-reaction-boundary-opacity','volume-smoke']) {
+    const input = document.getElementById(id);
+    input.disabled = physicalBoundaryColor && c.physicalColorMode === 2;
+    input.title = input.disabled ? 'Legacy rendering control; Emissive transport uses Hot soot density and Smoke extinction' : '';
+  }
   for (const id of ['volume-radiance', 'volume-glow']) {
     const input = document.getElementById(id);
     input.disabled = c.fireRenderMode !== 'stock';

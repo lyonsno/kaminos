@@ -30,8 +30,17 @@ reported `timestamp-query-incomplete:0,0` before any new captures. That failed
 attempt is preserved at `/private/tmp/kaminos-emissive-final-0912/receipt.json`.
 Use a direct timestamp pair around the incident-light compute pass instead;
 it reports only that pass, not whole-frame performance. No image-completion gate.
-Source review is running against the first implementation; successor delta
-will be exposed for confirmation. The 32³ size awaits that runtime measurement.
+Source review found two material defects: legacy display shaping still entered
+material density, and smoke was materially suppressed. The successor removes
+Boundary contrast/gamma/opacity from mode-2 material support and removes the old
+Smoke strength multiplier from the new smoke coefficient. Those legacy controls
+are explicitly inactive in mode 2. Approximate CH*/C2* reaction bands replace
+the violet CH-only approximation; this is not a fuel-chemistry solver.
+The direct native incident-light timestamps were 0.912403 and 0.319703 ms;
+these are two samples of the added compute pass, not a whole-frame benchmark.
+Successor composition capture: `/private/tmp/kaminos-emissive-composed-0912/receipt.json`,
+receiver Sexy Fireman. Its arms include a visual composition check and an exact
+frozen-image check that retired display controls cannot reshape mode 2.
 
 - `node --check volume-core.js`: pass.
 - `node tests/volume-emissive-transport-contracts.mjs`: pass (constant-medium

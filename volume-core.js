@@ -5156,6 +5156,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let inspectBoundaryFireMask = 1.0 - step(0.5, abs(shellInspectMode - 9.0));
     let boundarySurfaceMode = clamp(inspectBoundaryMask + inspectBoundaryFireMask, 0.0, 1.0);
     var boundaryCandidate = 0.0;
+    var boundaryMaterialSupport = 0.0;
     var boundaryFireColor = vec3<f32>(0.0);
     if (boundarySurfaceMode > 0.5) {
       let boundarySupportWeights = vec4<f32>(shellThermalGain, shellReactionGain, shellFrontGain, shellEdgeGain);
@@ -5230,6 +5231,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       );
       let boundaryFireErosion = clamp(boundaryFireTopologyErosion * (curlActivity * 0.36 + edgeSupport * 0.34 + divSupport * 0.18 + boundaryFireTipGate * 0.48), 0.0, 0.92);
       let boundaryRaw = clamp(boundarySupportEffective * boundaryGradientGate * boundaryCoreGate * boundaryTopology, 0.0, 2.0);
+      boundaryMaterialSupport = max(0.0, boundarySupportEffective * boundaryGradientGate * boundaryCoreGate * boundaryTopology)
+        * mix(1.0, clamp(boundaryFireRidgeEffective + boundaryFireTipGate * boundaryFireTipBreakup, 0.0, 1.0), 0.62)
+        * (1.0 - boundaryFireErosion);
       let boundaryScalar = clamp(pow(clamp(boundaryRaw * boundaryContrast, 0.0, 1.8), boundaryGamma) * boundaryOpacity, 0.0, 1.65);
       boundaryCandidate = mix(boundaryScalar, boundaryScalar * mix(1.0, clamp(boundaryFireRidgeEffective + boundaryFireTipGate * boundaryFireTipBreakup, 0.0, 1.0), 0.62) * (1.0 - boundaryFireErosion), inspectBoundaryFireMask);
       let cleanBurnGate = smoothstep(0.006, 0.34, reactionSupport + frontSupport * 0.38) * (1.0 - smoothstep(0.20, 0.86, sootSupport * boundaryFireSootYield));
@@ -5829,7 +5833,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     if (u.physical_fire.x > 1.5) {
       // Boundary Fire has its own material support; shellAmount belongs to
       // the separate topology-shell renderer (many valid basins set it to 0).
-      let coverage = boundaryCandidate * selectiveRaymarchFireAuthority;
+      let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
       let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
       let sigma = medium.absorption + medium.scattering;
       let emission = medium.emission + medium.scattering * incidentAt(p);

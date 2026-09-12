@@ -25,11 +25,13 @@ export function cameraWhiteBalance(kelvin) {
   const scale = source.map((v, i) => source.map((_, j) => i === j ? target[i] / v : 0));
   return multiply(xyzToRGB, multiply(inverseBradford, multiply(scale, multiply(bradford, rgbToXYZ))));
 }
-// Deliberately approximate reaction spectrum, not measured chemistry: a CH-like
-// 431 nm band plus a weak broad 470 nm contribution. No editable RGB swatch.
+// Approximate hydrocarbon reaction spectrum, not measured fuel chemistry.
+// CH* / C2* band reference: doi:10.3390/s22155665 (Figure 1).
+// Band positions are sourced; widths and relative powers are explicit renderer
+// approximations. Including C2 avoids mistaking CH-only violet for a blue flame.
 const reactionXYZ = [0,0,0];
 for (const [nm, x, y, z] of CIE_1931_2DEG) {
-  const power = Math.exp(-.5*((nm-431)/9)**2) + .15*Math.exp(-.5*((nm-470)/18)**2);
+  const power = Math.exp(-.5*((nm-431)/9)**2) + .25*Math.exp(-.5*((nm-474)/9)**2) + .60*Math.exp(-.5*((nm-516)/9)**2);
   [x,y,z].forEach((v, i) => reactionXYZ[i] += power*v);
 }
 const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => sum + v*reactionXYZ[i], 0)));
@@ -98,7 +100,9 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   let hotKelvin = u.physical_fire.y - (1.0-activity)*u.physical_fire.z;
   let kelvin = mix(800.0, max(800.0, hotKelvin), smoothstep(0.003, 0.10, energy));
   let sootYield = max(0.0, u.boundary_fire_color.y);
-  let smokeAmount = (m.x+d.x*0.50+m.w*0.08) * max(0.0, u.viewport_steps_density.w) * max(0.0, u.fire_smoke_curl_speed.y);
+  // Mode 2 has one named smoke coefficient scale; the old Smoke slider was
+  // a multiplier for a separately painted radiance/alpha path, not this material.
+  let smokeAmount = (m.x+d.x*0.50+m.w*0.08) * max(0.0, u.viewport_steps_density.w);
   let hotSoot = max(0.0, coverage) * sootYield * u.physical_fire.w * (0.35+smokeAmount*0.65);
   let smokeExtinction = smokeAmount * u.emissive_material.x * smokeVisible;
   let scattering = smokeExtinction * u.emissive_material.y;
@@ -146,7 +150,7 @@ fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
     let p = (vec3<f32>(c)+offset)*(2.0/f32(LIGHT_GRID))-vec3<f32>(1.0);
     let r = sampleWorldFlowReconstructionRaw(p);
     let support = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
-    let coverage = support*max(0.0,u.topology_shell_transport.w);
+    let coverage = support;
     let medium = emissiveMaterial(r,coverage,1.0-u.boundary_fire_display.z);
     coefficients += vec4<f32>(medium.emission,medium.absorption+medium.scattering)*0.125;
   }
