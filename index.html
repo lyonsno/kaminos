@@ -17865,6 +17865,10 @@ function renderVolumeEmitterReceipt(receipt) {
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  if (s.physicalColor?.requested === 'emissive-transport-v2') {
+    document.getElementById('volume-physical-mode-val').textContent = s.physicalColor.effective === 'emissive-transport-v2'
+      ? 'active: emissive v2' : `inactive: ${s.physicalColor.inactiveReason || 'unverified route'}`;
+  }
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);
   syncVolumePresentationControls(s.volumePresentationReceipt);
   syncRaymarchSmokePresentationControls(s.raymarchSmokePresentationReceipt);

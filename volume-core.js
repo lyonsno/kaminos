@@ -11902,7 +11902,7 @@ export function createKaminosVolumePrototype({
       effective: physicalColorEffective ? physicalModel : 'legacy',
       inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-ordinary-beauty-boundary-fire-without-diagnostic-residual-splat-or-caller-presentation' : null,
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
-      displayTransform: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-peak-shoulder-srgb-v3' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
+      displayTransform: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
       temperatureAuthority: physicalColorMode === 2 ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'render-only-heat-proxy-to-kelvin',
       temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
       cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],

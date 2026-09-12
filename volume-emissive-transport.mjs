@@ -2,6 +2,14 @@ import { blackbodyXYZ, thermalLinearRGB, linearLuminance } from './volume-physic
 import { CIE_1931_2DEG } from './cie-1931-observer.mjs';
 
 const referenceY = blackbodyXYZ(1900)[1];
+// Independent sensor-channel saturation; no exposure-dependent white is added.
+export function displayEmissiveRGB(rgb, ev = 0, knee = .6) {
+  return rgb.map(v => {
+    let x = Math.max(0, v * 2 ** ev);
+    if (x > knee) x = 1 - (1-knee)**2 / (x+1-2*knee);
+    return x <= .0031308 ? x*12.92 : 1.055*x**(1/2.4)-.055;
+  });
+}
 export function thermalRadianceRGB(kelvin) {
   return thermalLinearRGB(kelvin).map(v => v * blackbodyXYZ(kelvin)[1] / referenceY);
 }
@@ -118,7 +126,12 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
 }
 fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
   let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));
-  return physicalDisplay(balanced, u.physical_display.y, u.physical_display.z);
+  let exposed = max(vec3<f32>(0.0), balanced*exp2(u.physical_display.y));
+  let knee = u.physical_display.z;
+  let d = 1.0-knee;
+  let shoulder = vec3<f32>(1.0)-d*d/max(exposed+vec3<f32>(1.0-2.0*knee),vec3<f32>(d));
+  let linear = select(exposed, shoulder, exposed > vec3<f32>(knee));
+  return select(1.055*pow(linear,vec3<f32>(1.0/2.4))-vec3<f32>(0.055),linear*12.92,linear <= vec3<f32>(0.0031308));
 }
 const LIGHT_GRID: u32 = ${EMISSIVE_LIGHT_GRID}u;
 const LIGHT_CELLS: u32 = LIGHT_GRID*LIGHT_GRID*LIGHT_GRID;

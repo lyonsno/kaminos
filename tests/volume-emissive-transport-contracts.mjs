@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { integrateEmission, thermalRadianceRGB, cameraWhiteBalance } from '../volume-emissive-transport.mjs';
+import { integrateEmission, thermalRadianceRGB, cameraWhiteBalance, displayEmissiveRGB } from '../volume-emissive-transport.mjs';
 import { linearLuminance } from '../volume-physical-color.mjs';
 
 // Transport, not a verdict on whether the flame looks right.
@@ -14,6 +14,13 @@ assert.ok(Math.abs(linearLuminance(thermalRadianceRGB(1900)) - 1) < 1e-6);
 assert.ok(linearLuminance(thermalRadianceRGB(2400)) > 10);
 assert.ok(linearLuminance(thermalRadianceRGB(800)) < 1e-7);
 const matrix = cameraWhiteBalance(4000);
+assert.equal(displayEmissiveRGB([20,.5,.02])[2],displayEmissiveRGB([2,.5,.02])[2]);
+assert.deepEqual(displayEmissiveRGB([0,0,0]),[0,0,0]);
+for (const x of [.1,.6,1,10]) {
+  const neutral = displayEmissiveRGB([x,x,x]);
+  assert.equal(neutral[0],neutral[1]); assert.equal(neutral[1],neutral[2]);
+  assert.ok(neutral[0] >= 0 && neutral[0] <= 1);
+}
 const white = thermalRadianceRGB(4000);
 const balanced = matrix.map(row => row.reduce((sum, v, i) => sum + v * white[i], 0));
 assert.ok(Math.max(...balanced) / Math.min(...balanced) < 1.001);
