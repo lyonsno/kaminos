@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { integrateEmission, thermalRadianceRGB, cameraWhiteBalance, displayEmissiveRGB } from '../volume-emissive-transport.mjs';
+import { integrateEmission, thermalRadianceRGB, cameraWhiteBalance, displayEmissiveRGB, EMISSIVE_TRANSPORT_WGSL } from '../volume-emissive-transport.mjs';
 import { linearLuminance } from '../volume-physical-color.mjs';
 
 // Transport, not a verdict on whether the flame looks right.
@@ -14,6 +14,14 @@ assert.ok(Math.abs(linearLuminance(thermalRadianceRGB(1900)) - 1) < 1e-6);
 assert.ok(linearLuminance(thermalRadianceRGB(2400)) > 10);
 assert.ok(linearLuminance(thermalRadianceRGB(800)) < 1e-7);
 const matrix = cameraWhiteBalance(4000);
+// Production-linked shader contract, not just the CPU reference: channel-wise
+// shoulder and selection must remain on the actual camera path. Existing native
+// captures establish compilation/output; this narrow guard protects the formula.
+const camera = EMISSIVE_TRANSPORT_WGSL.split('fn emissiveCamera(')[1].split('const LIGHT_GRID')[0];
+assert.ok(camera.includes('let shoulder = vec3<f32>(1.0)-d*d/max(exposed+vec3<f32>(1.0-2.0*knee),vec3<f32>(d));'));
+assert.ok(camera.includes('let linear = select(exposed, shoulder, exposed > vec3<f32>(knee));'));
+assert.ok(camera.includes('linear*12.92,linear <= vec3<f32>(0.0031308)'));
+assert.doesNotMatch(camera, /physicalDisplay\(|neutral|mappedPeak/);
 assert.equal(displayEmissiveRGB([20,.5,.02])[2],displayEmissiveRGB([2,.5,.02])[2]);
 assert.deepEqual(displayEmissiveRGB([0,0,0]),[0,0,0]);
 for (const x of [.1,.6,1,10]) {

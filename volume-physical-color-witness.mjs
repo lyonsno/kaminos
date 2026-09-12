@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { assertArmEquivalent } from './volume-physical-color-witness-contract.mjs';
 const [url, output, expectedRoot, expectedCommit, armsPath] = process.argv.slice(2);
 assert.ok(output, 'usage: URL OUT_DIR REPO_ROOT COMMIT');
 const out = resolve(output);
@@ -111,8 +112,10 @@ try {
   ];
   assert.ok(Array.isArray(arms) && arms.length > 0, 'no capture arms');
   report.arms = arms;
+  const earlierRgba = new Map();
   for (const arm of arms) {
     assert.match(arm.id,/^[a-z0-9-]+$/, 'unsafe capture identifier');
+    assert.ok(!earlierRgba.has(arm.id), 'duplicate capture identifier');
     report.phase = arm.id; save();
     const result = await evaluate(`(async () => {
       const changes = ${JSON.stringify({...arm.controls, 'volume-physical-mode':arm.mode, 'volume-physical-temperature':arm.temperature, 'volume-physical-exposure':arm.ev})};
@@ -137,6 +140,9 @@ try {
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
     writeFileSync(join(out, `${arm.id}.png`), Buffer.from(result.png, 'base64'));
     writeFileSync(join(out, `${arm.id}.rgba`), Buffer.from(result.sample.image.rgba));
+    const rgba = Buffer.from(result.sample.image.rgba);
+    assertArmEquivalent(arm,rgba,earlierRgba);
+    earlierRgba.set(arm.id,rgba);
     const {image, ...sample} = result.sample;
     report.captures.push({arm, sample, profile:result.profile, state:result.state, image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
   }
