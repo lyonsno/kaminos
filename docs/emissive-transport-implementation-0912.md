@@ -30,8 +30,15 @@ channels, preserving neutral inputs without manufacturing green/blue from red
 exposure. The old response failed that explicit channel-isolation numerical
 check; the new one passes. Mode 1 keeps its old response unchanged.
 
-Fresh source confirmation is running against exact `a6dd10ee`.
-Final evidence and review custody are preserved in the owner's scoped report.
+Source confirmation at exact `a6dd10ee` accepted both runtime corrections and
+the inspected native component coexistence. Final narrow confirmation at
+`608fed7b` accepted the production-linked shader and raw-RGBA isolation
+regressions with no material findings. Renderer code is unchanged across those
+revisions. Final evidence and review custody remain in the owner's scoped report.
+The saved link was also opened normally, allowed to advance to 80 simulation
+steps, and inspected from the displayed browser canvas on Apple WebGPU.
+The separate Authored Mix bootstrap warning and stock-only Content label are
+known cockpit residuals, not failures of the ordinary emissive route.
 The local server accepted and read back all 205 controls in a new, separately
 named derived preset; existing operator records were not overwritten.
 Preset: `vsp-2956bbf0d01fe8b1aa10e270a32fa26b826341fa4580c8a18cf58b8aaf11d50f`.
