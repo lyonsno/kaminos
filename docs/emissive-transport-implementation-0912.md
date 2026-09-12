@@ -1,4 +1,4 @@
-# Emissive transport implementation — in progress
+# Emissive transport implementation — native composition inspected
 
 Consumer: Noah's ordinary Boundary Fire cockpit. Owner: Sexy Fireman.
 Source branch: `cc/sexy-fireman-color-model-0908`. Main landing is not authorized.
@@ -7,12 +7,36 @@ The replacement is mode 2; modes 0 and 1 retain their prior transport. New mode
 uses fixed-reference Planck/CIE power, local fresh-fuel reaction emission,
 shared emission/extinction segment integration, a coarse six-direction
 single-scattering incident-light lattice, and fixed Bradford camera white
-balance before the existing highlight shoulder and single sRGB encode.
+balance before independent channel shoulders and a single sRGB encode.
 The dynamics and camera ridge support are unchanged. The lighting lattice
 currently approximates ridge coverage by eight coarse source samples per cell;
 this is an illumination approximation, not an exact ridge integral.
 
 ## Evidence and outstanding work
+
+Exact `a6dd10ee` native Apple WebGPU final capture:
+`/private/tmp/kaminos-emissive-camera-0912/receipt.json`. Owner inspected warm,
+bright, and clean PNGs: amber/gold body, yellow-white exposed ridges, visible
+smoke, separate blue low-soot reaction zone. Existing structural banding remains;
+this is not a claim about a new dynamics basin. The normal route is
+`emissive-transport-v2`, 96³ simulation, 160 steps, native pixel resolution.
+Raising legacy Boundary contrast/gamma/opacity and Smoke strength leaves the
+bright arm's raw pixels byte-identical. Incident-light compute was 0.309245 ms;
+whole-frame speed and raymarch optimization have not been benchmarked here.
+
+The inherited peak shoulder's added neutral component caused the brighter
+intermediate capture to become pastel again. Mode 2 now saturates independent
+channels, preserving neutral inputs without manufacturing green/blue from red
+exposure. The old response failed that explicit channel-isolation numerical
+check; the new one passes. Mode 1 keeps its old response unchanged.
+
+Fresh source confirmation is running against exact `a6dd10ee`.
+Final evidence and review custody are preserved in the owner's scoped report.
+The local server accepted and read back all 205 controls in a new, separately
+named derived preset; existing operator records were not overwritten.
+Preset: `vsp-2956bbf0d01fe8b1aa10e270a32fa26b826341fa4580c8a18cf58b8aaf11d50f`.
+The first scripted write used an invalid checkbox descriptor and was rejected
+before mutation; its failure receipt is retained alongside the corrected write.
 
 Initial native capture on `f5783b89` completed on Apple WebGPU. The owner
 inspected the previous, emissive, and exposed PNGs: amber/gold replaces the

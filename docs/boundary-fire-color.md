@@ -1,11 +1,44 @@
-# Boundary Fire thermal + reaction color
+# Boundary Fire emissive color
 
-## Complete emissive replacement — implementation target, 2026-09-12
+## Complete emissive replacement — mode 2, 2026-09-12
 
-The implementation described below is incomplete and has failed operator
-acceptance. Its component checks do not establish the requested outcome:
-usable flame color and brightness together in the ordinary Boundary Fire
-cockpit. This section is the replacement plan, not a claim that it is built.
+Mode 2 implements the complete material/transport/camera replacement. The old
+mode-1 implementation remains available for replay but failed the operator's
+color-and-brightness acceptance. Exact implementation/evidence and residuals:
+`docs/emissive-transport-implementation-0912.md`. The source-to-pixel table below
+preserves the replacement decisions against that old implementation.
+
+The new camera uses fixed Bradford white balance and independent channel
+shoulders, followed by one sRGB encode. The planned reuse of mode 1's peak
+shoulder was rejected after integrated bright-fire inspection: its explicit
+neutral mixing brought the pastel failure back. Independent channels permit
+orange → yellow → white as exposure increases without adding white radiance.
+
+### Driving the new model
+
+Select **Emissive transport** under color model; its live status must say
+`active: emissive v2`. It applies to ordinary Boundary Fire beauty rendering,
+not alternate authored/splat/diagnostic/caller-owned composition.
+
+- **Peak soot K**: maximum render temperature inferred from transported fields.
+  **Spread K** cools below that peak; these are rendering proxies, not CFD Kelvin.
+- **Hot soot density**: emitting/absorbing soot amount, distinct from camera EV.
+- **Clean emission**: approximate reaction-band power where fresh fuel/front
+  support exists and soot does not dominate.
+- **Exposure EV**, **camera white K**, **highlight knee**: camera response only.
+- **Smoke extinction**, **scattering albedo**, **ambient radiance**: smoke
+  material and illumination. Hot fire supplies a same-state coarse incident field.
+
+Legacy Boundary contrast/gamma/opacity, Smoke strength, paint endpoints,
+Radiance/Glow and legacy color grading do not own mode-2 light. Disabled controls
+remain in saved presets for earlier-mode reproducibility. The new four controls
+round-trip through the 205-control schema; old presets gain additive defaults,
+not automatic new-mode conversion.
+
+A verified engineering starting point is peak 2300 K, spread 600 K, hot soot
+1.5, clean .08, EV 0 (bright arm +1.5), white 4000 K, knee .6, smoke extinction
+2, albedo .6, ambient .2. It is a derived older ring fixture, not Noah's missing
+September 6 basin, and should not be mistaken for a dynamics/style prescription.
 
 The consumer is Noah using his existing dynamics and emitter controls. The
 composition horizon is the ordinary Boundary Fire raymarch, including visible
@@ -23,7 +56,7 @@ The renderer must own its own success assessment before an operator handoff.
 | `fireAlpha * boundaryFireColor` uses capped segment opacity as emitted energy | Construct emission and absorption per unit volume-local distance, then integrate both over the actual segment length. |
 | `standardExtinctionStep` applies another transform to already capped alpha, including Pyro alpha additions | Replace on the new path with the same material extinction used in the segment integral. Legacy/Pyro opacity edits may not silently alter the new transport. |
 | `smokeCol` is a fixed cool radiance modulated partly by speed | Make smoke an absorbing/scattering material illuminated by an explicit incident-light approximation. Remove the speed-colored, self-luminous cool veil. |
-| Peak shoulder plus sRGB encoding, with no explicit chromatic adaptation | Retain a single camera resolve; include a fixed, explicit white-balance transform before highlight compression. Do not auto-normalize each frame to its hottest sample. Evaluate the shoulder on the integrated result, not only a color patch. |
+| Peak shoulder plus sRGB encoding, with no explicit chromatic adaptation | Single camera resolve with fixed white balance and independent sensor-channel roll-off. No frame normalization or exposure-dependent neutral mixing. |
 | Physical-mode eligibility checks only `inspect / boundary_fire` | Also account for diagnostic sidecar views, appearance decompositions, learned residuals, and caller-owned presentation. These are separate authorities; they must not masquerade as the new ordinary color route. |
 | Old controls remain in saved basins | Keep legacy reproducibility. Give the new route an honest model identity and clearly identify active material/camera controls; do not silently reuse a control with a different physical meaning. |
 
