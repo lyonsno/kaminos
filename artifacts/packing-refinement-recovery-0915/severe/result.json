@@ -1,0 +1,260 @@
+{
+  "status": "experiment-completed",
+  "runId": "c6101569-d3cb-4001-acdb-ca7b98cbf768",
+  "started": "2026-09-15T18:41:49.256Z",
+  "finished": "2026-09-15T18:50:07.269Z",
+  "provenance": {
+    "runId": "c6101569-d3cb-4001-acdb-ca7b98cbf768",
+    "started": "2026-09-15T18:41:49.256Z",
+    "variant": "severe",
+    "requestedRoute": "experimental-source-gap-authored-inequality-trajectory",
+    "effectiveRoute": "experimental-source-gap-authored-inequality-trajectory",
+    "sourceFiles": {
+      "authored-packing-sweep-core.mjs": "473586c5549148c3ea6d6e355c0cee62b65ab13576c1b98e92ed745b52062a19",
+      "packing-inequality-step.mjs": "c0ce79ade72a2ba9aeadfa3242b5d0086239d70bd9892cf902face44a46e9fb4",
+      "tools/packing-inequality-subproblem.py": "1b8f3e37799095a94864fb20a5c67208a8c5371cd9edc278f67cd3347fc40005",
+      "tools/packing-inequality-trajectory.mjs": "0015453082ae206da900002bacc143e0b2746b2302323027515b675e17d6c603"
+    },
+    "manifestSha256": "0b7fd5374edaa70dc38c68d0da41e67a9df56dadc0cb2c29199e1ce8fbe991fb",
+    "problemSha256": "7b647f5e546296aa04995556b2c887c4cb7a72330cb6d581369d94754275f317",
+    "requestedSteps": 8,
+    "config": {
+      "radius": 2,
+      "finiteDifferenceStep": 0.001,
+      "translationBounds": [
+        -50,
+        50
+      ],
+      "backtrackingScales": [
+        1,
+        0.5,
+        0.25,
+        0.125,
+        0.0625,
+        0.03125,
+        0.015625,
+        0.0078125,
+        0.00390625,
+        0.001953125,
+        0.0009765625,
+        0.00048828125,
+        0.000244140625,
+        0.0001220703125,
+        0.00006103515625,
+        0.000030517578125,
+        0.0000152587890625,
+        0.00000762939453125,
+        0.000003814697265625,
+        0.0000019073486328125,
+        9.5367431640625e-7,
+        4.76837158203125e-7,
+        2.384185791015625e-7,
+        1.1920928955078125e-7,
+        5.960464477539063e-8,
+        2.9802322387695312e-8,
+        1.4901161193847656e-8,
+        7.450580596923828e-9,
+        3.725290298461914e-9,
+        1.862645149230957e-9,
+        9.313225746154785e-10
+      ],
+      "python": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/.venv-packing/bin/python"
+    },
+    "initialization": "canonical restoration-to-reference bridge; zero sine coefficients, not unmodified authored mesh",
+    "objective": "minimize pairwise overlap; do not worsen skeletal/compartment/endpoint/admitted-volume residuals"
+  },
+  "termination": "step-budget-exhausted",
+  "attemptedSteps": 8,
+  "acceptedSteps": 8,
+  "evaluationCount": 545,
+  "start": {
+    "pairwisePenetration": 9.5149820048862,
+    "skeletalPenetration": 6.1626139143582055,
+    "rawPairwisePenetration": 9.5149820048862,
+    "rawSkeletalPenetration": 6.1626139143582055,
+    "compartmentEscape": 0,
+    "endpointDrift": 0,
+    "maximumRelativeVolumeError": 0,
+    "rawMaximumRelativeVolumeError": 0.6940475332131871
+  },
+  "selected": {
+    "pairwisePenetration": 8.412153173199302,
+    "skeletalPenetration": 5.807935663586861,
+    "rawPairwisePenetration": 8.412153173199302,
+    "rawSkeletalPenetration": 5.807935663586861,
+    "compartmentEscape": 0,
+    "endpointDrift": 0,
+    "maximumRelativeVolumeError": 0,
+    "rawMaximumRelativeVolumeError": 0.6939904621815317
+  },
+  "displacement": [
+    {
+      "constructionId": "muscle-1",
+      "maximumNodeDisplacement": 0.7156799005678975
+    },
+    {
+      "constructionId": "muscle-2",
+      "maximumNodeDisplacement": 0.6151825992038955
+    },
+    {
+      "constructionId": "tendon-1",
+      "maximumNodeDisplacement": 1.3134695032393314e-8
+    },
+    {
+      "constructionId": "muscle-3",
+      "maximumNodeDisplacement": 0.22082106539742474
+    },
+    {
+      "constructionId": "muscle-4",
+      "maximumNodeDisplacement": 1.2170111266981858e-8
+    },
+    {
+      "constructionId": "tendon-2",
+      "maximumNodeDisplacement": 3.932559374401066e-8
+    }
+  ],
+  "history": [
+    {
+      "step": 1,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 8.506025809610756,
+        "skeletalPenetration": 5.812467441841391,
+        "rawPairwisePenetration": 8.506025809610756,
+        "rawSkeletalPenetration": 5.812467441841391,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.69404803321366
+      },
+      "evaluationCount": 68,
+      "selectedScale": 0.5
+    },
+    {
+      "step": 2,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 8.438304363918819,
+        "skeletalPenetration": 5.812467441841538,
+        "rawPairwisePenetration": 8.438304363918819,
+        "rawSkeletalPenetration": 5.812467441841538,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939913413175498
+      },
+      "evaluationCount": 68,
+      "selectedScale": 0.0625
+    },
+    {
+      "step": 3,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 8.425085497388213,
+        "skeletalPenetration": 5.807935663585632,
+        "rawPairwisePenetration": 8.425085497388213,
+        "rawSkeletalPenetration": 5.807935663585632,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939917881292325
+      },
+      "evaluationCount": 68,
+      "selectedScale": 0.0078125
+    },
+    {
+      "step": 4,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 8.424359231520453,
+        "skeletalPenetration": 5.807935663585631,
+        "rawPairwisePenetration": 8.424359231520453,
+        "rawSkeletalPenetration": 5.807935663585631,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939913396018792
+      },
+      "evaluationCount": 68,
+      "selectedScale": 0.00048828125
+    },
+    {
+      "step": 5,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 8.4216321555757,
+        "skeletalPenetration": 5.807935663586136,
+        "rawPairwisePenetration": 8.4216321555757,
+        "rawSkeletalPenetration": 5.807935663586136,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939917864269671
+      },
+      "evaluationCount": 68,
+      "selectedScale": 0.0078125
+    },
+    {
+      "step": 6,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 8.418730181828607,
+        "skeletalPenetration": 5.8079356635861386,
+        "rawPairwisePenetration": 8.418730181828607,
+        "rawSkeletalPenetration": 5.8079356635861386,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939899898129919
+      },
+      "evaluationCount": 68,
+      "selectedScale": 0.001953125
+    },
+    {
+      "step": 7,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 8.418004996429236,
+        "skeletalPenetration": 5.807935663586141,
+        "rawPairwisePenetration": 8.418004996429236,
+        "rawSkeletalPenetration": 5.807935663586141,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939895404191224
+      },
+      "evaluationCount": 68,
+      "selectedScale": 0.00048828125
+    },
+    {
+      "step": 8,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 8.412153173199302,
+        "skeletalPenetration": 5.807935663586861,
+        "rawPairwisePenetration": 8.412153173199302,
+        "rawSkeletalPenetration": 5.807935663586861,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939904621815317
+      },
+      "evaluationCount": 68,
+      "selectedScale": 0.015625
+    }
+  ],
+  "artifacts": {
+    "problem.json": "fdedcd3ef9b901bae57e0e0c32c42913deaef49cdb53662ff712f77ba94736a5",
+    "provenance.json": "c4706c52b1331e42a2928ab72b5ed2ce8452f176961e0bbae3debf136714e253",
+    "start.json": "7280c4ebe96474e719949f347c01a4baa04988b2203acec9256a4c486bebe35b",
+    "step-001.json": "406a25e97d766415eb1291d3e74f042c2d18005826d203e219b3a1553dd6caa6",
+    "step-002.json": "01e0076a8020586c3aba8c991cb41cbe95b0e7a79cfd6f53c76597680054bec2",
+    "step-003.json": "6e20eb704c63dbea518fcb47421eea32e77204d18912d07c1c956d831ca945b8",
+    "step-004.json": "592818f0c7e14c84625ea7b2aedf2584e823cd0d3dad484eef4611cf8144cd4b",
+    "step-005.json": "adf21991e4fd87d1b14a502e3cbf97e1b2586c0f6bc253b855f59d1aeb751846",
+    "step-006.json": "7bfb4f702c44f30641ff2295f37c47efe2b7e23850cffe5f48673b83c8cf87cf",
+    "step-007.json": "8a3fda914539efad7b0f86aca75ed2185e0926afd5e7f0c4b06befff8860d9dd",
+    "step-008.json": "46c6b0db212c1d7629145f8f7c58441713e1b8a59d8628e1b12600a490b6ef8f",
+    "selected.json": "fd1653e141d9284856790af7708cd844d353428e0a3ee0acad7ae2ccac9f9308"
+  }
+}

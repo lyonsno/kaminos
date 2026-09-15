@@ -1,0 +1,18 @@
+✔ a tangent move may solve penetration without strictly improving touching guards (234.311708ms)
+✔ minimum-displacement complete restoration uses available guard slack (229.70175ms)
+✔ opposed contact demands return no improvement rather than an infeasibility claim (236.531958ms)
+✔ nonlinear evaluation vetoes a misleading linear guard prediction (230.378917ms)
+✔ candidate missing contact rows fails instead of claiming improvement (235.665292ms)
+✔ negative penetration metric is invalid evaluator output (245.101459ms)
+✔ failed reinvocation replaces stale successful result with current failure (73.069833ms)
+✔ invalid authored variant leaves current failure report rather than stale success (70.318583ms)
+✔ trajectory view consumes selected carrier without requiring intercept diagnostic (87.351ms)
+✔ refinement recovery view distinguishes initialized start, previous stop and new result (96.467625ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1563.669083

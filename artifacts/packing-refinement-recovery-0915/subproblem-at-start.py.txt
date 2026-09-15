@@ -27,15 +27,10 @@ def solve(p):
                      method='SLSQP', bounds=bounds, constraints=constraints,
                      options={'ftol': 1e-10})
     def receipt(r):
-        # Invalid optional iterates remain inspectable over strict JSON without
-        # preventing a separately validated primary direction from reaching JS.
-        def number(x):
-            return float(x) if np.isfinite(x) else str(float(x))
         return {'success': bool(r.success), 'message': str(r.message),
-                'iterations': int(r.nit), 'x': [number(x) for x in r.x],
-                'finite': bool(np.isfinite(r.x).all()),
-                'minimumSlack': number(np.min(b + matrix @ r.x)),
-                'norm': number(np.linalg.norm(r.x[:n]))}
+                'iterations': int(r.nit), 'x': r.x.tolist(),
+                'minimumSlack': float(np.min(b + matrix @ r.x)),
+                'norm': float(np.linalg.norm(r.x[:n]))}
     def valid(r, candidate_bounds):
         return (r.success and r.x.shape == (n + 1,) and np.isfinite(r.x).all()
                 and np.min(b + matrix @ r.x) >= -1e-8

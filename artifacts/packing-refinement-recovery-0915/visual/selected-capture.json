@@ -1,0 +1,209 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-same-page-screenshot-v1",
+    "effective": "independent-headless-same-page-screenshot-v1",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777233,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://localhost:8793/artifacts/packing-refinement-recovery-0915/visual/index.html?state=selected",
+    "outputPath": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-refinement-recovery-0915/visual/selected.png",
+    "reportPath": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-refinement-recovery-0915/visual/selected-capture.json",
+    "viewport": {
+      "width": 1400,
+      "height": 1000
+    },
+    "captureTimeoutMs": 30000,
+    "cleanupGraceMs": 1000,
+    "domDatasetKeys": [
+      "witnessRenderComplete",
+      "witnessRenderFrame",
+      "witnessState",
+      "witnessBundle",
+      "witnessCarrier",
+      "witnessRoute",
+      "witnessCaptureBatch"
+    ],
+    "captureBatchIdentity": {
+      "sha256": "b6541966850b4569059c61ea63885d359e44e430f568dd655f4148e816cb35ed"
+    },
+    "pathEncoding": "absolute-runtime-paths"
+  },
+  "process": {
+    "pid": 51060,
+    "processGroupId": 51060,
+    "detachedProcessGroup": true,
+    "exit": {
+      "code": 143,
+      "signal": null
+    },
+    "cleanup": {
+      "processGroupId": 51060,
+      "graceMs": 1000,
+      "groupPresentBefore": true,
+      "actions": [
+        {
+          "signal": "SIGTERM",
+          "result": "sent"
+        }
+      ],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-same-page-headless-H47SD9"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3062,
+    "retainedBytes": 3062,
+    "truncated": false,
+    "tail": "\nDevTools listening on ws://127.0.0.1:59228/devtools/browser/fba109b8-ab74-4234-8e17-a8227607fcbc\n[0915/145238.198632:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0915/145238.229965:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/145238.373055:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://localhost:8793/artifacts/packing-refinement-recovery-0915/visual/index.html?state=selected (0)\n[0915/145238.373589:INFO:CONSOLE:0] \"[.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-refinement-recovery-0915/visual/index.html?state=selected (0)\n[0915/145238.374463:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/145238.383486:INFO:CONSOLE:0] \"[.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-refinement-recovery-0915/visual/index.html?state=selected (0)\n[0915/145238.384203:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/145238.393597:INFO:CONSOLE:0] \"[.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-refinement-recovery-0915/visual/index.html?state=selected (0)\n[0915/145238.394051:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0915/145238.403515:INFO:CONSOLE:0] \"[.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://localhost:8793/artifacts/packing-refinement-recovery-0915/visual/index.html?state=selected (0)\n[0915/145238.563358:ERROR:content/browser/gpu/gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=15\n[0915/145238.563374:WARNING:content/browser/gpu/gpu_process_host.cc:1479] The GPU process has crashed 1 time(s)\n[0915/145238.589236:ERROR:base/apple/mach_port_rendezvous_mac.cc:256] bootstrap_look_up org.chromium.Chromium.MachPortRendezvousServer.1: Permission denied (1100)\n[0915/145238.589477:ERROR:base/memory/shared_memory_switch.cc:261] No rendezvous client, terminating process (parent died?)\n"
+  },
+  "primaryOutput": {
+    "path": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-refinement-recovery-0915/visual/selected.png",
+    "sizeBytes": 184483,
+    "sha256": "7be50e34a35d343593fc8d9e03528dbda9af20e5a31ddfd1818b9c13c0c189ea",
+    "png": {
+      "width": 1400,
+      "height": 1000,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 48,
+      "idatBytes": 183886
+    },
+    "visualSignal": {
+      "width": 1400,
+      "height": 1000,
+      "pixelCount": 1400000,
+      "nonUniformPixels": 250886,
+      "minimumChannel": 16,
+      "maximumChannel": 255,
+      "channelRange": 239,
+      "admission": "nonblank-v0"
+    }
+  },
+  "frameReceipt": {
+    "status": "complete",
+    "route": "same-cdp-page-frame-v0",
+    "targetId": "6E285E8F8F0CEE0B9809ED416EEBD6A1",
+    "targetType": "page",
+    "requestedUrl": "http://localhost:8793/artifacts/packing-refinement-recovery-0915/visual/index.html?state=selected",
+    "dataset": {
+      "witnessRenderComplete": "true",
+      "witnessRenderFrame": "10",
+      "witnessState": "selected",
+      "witnessBundle": "b6541966850b4569059c61ea63885d359e44e430f568dd655f4148e816cb35ed",
+      "witnessCarrier": "33d234bc4e3194ddc02fdc1376c60a105e170c0de04ad1a04b3f505219802b8b",
+      "witnessRoute": "experimental-packing-refinement-recovery-v0",
+      "witnessCaptureBatch": "b6541966850b4569059c61ea63885d359e44e430f568dd655f4148e816cb35ed"
+    },
+    "renderComplete": "true",
+    "renderFrame": "10",
+    "captureBatchIdentitySha256": "b6541966850b4569059c61ea63885d359e44e430f568dd655f4148e816cb35ed",
+    "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+  },
+  "domReceipt": null,
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "same-page-frame-captured",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777233,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-refinement-recovery-0915/visual/selected.png",
+      "sizeBytes": 184483,
+      "sha256": "7be50e34a35d343593fc8d9e03528dbda9af20e5a31ddfd1818b9c13c0c189ea",
+      "png": {
+        "width": 1400,
+        "height": 1000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 48,
+        "idatBytes": 183886
+      },
+      "visualSignal": {
+        "width": 1400,
+        "height": 1000,
+        "pixelCount": 1400000,
+        "nonUniformPixels": 250886,
+        "minimumChannel": 16,
+        "maximumChannel": 255,
+        "channelRange": 239,
+        "admission": "nonblank-v0"
+      }
+    },
+    "frameReceipt": {
+      "status": "complete",
+      "route": "same-cdp-page-frame-v0",
+      "targetId": "6E285E8F8F0CEE0B9809ED416EEBD6A1",
+      "targetType": "page",
+      "requestedUrl": "http://localhost:8793/artifacts/packing-refinement-recovery-0915/visual/index.html?state=selected",
+      "dataset": {
+        "witnessRenderComplete": "true",
+        "witnessRenderFrame": "10",
+        "witnessState": "selected",
+        "witnessBundle": "b6541966850b4569059c61ea63885d359e44e430f568dd655f4148e816cb35ed",
+        "witnessCarrier": "33d234bc4e3194ddc02fdc1376c60a105e170c0de04ad1a04b3f505219802b8b",
+        "witnessRoute": "experimental-packing-refinement-recovery-v0",
+        "witnessCaptureBatch": "b6541966850b4569059c61ea63885d359e44e430f568dd655f4148e816cb35ed"
+      },
+      "renderComplete": "true",
+      "renderFrame": "10",
+      "captureBatchIdentitySha256": "b6541966850b4569059c61ea63885d359e44e430f568dd655f4148e816cb35ed",
+      "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+    }
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "status": "verified",
+  "input": "/private/tmp/packer-refinement-recovery-severe-0915-r1",
+  "steps": [
+    {
+      "step": 1,
+      "directionSource": "minimum-norm",
+      "refinementStatus": "succeeded",
+      "proposalMatches": true,
+      "selectedGeometryMatches": true,
+      "metrics": {
+        "pairwisePenetration": 8.506025809610756,
+        "skeletalPenetration": 5.812467441841391,
+        "rawPairwisePenetration": 8.506025809610756,
+        "rawSkeletalPenetration": 5.812467441841391,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.69404803321366
+      }
+    },
+    {
+      "step": 2,
+      "directionSource": "minimax",
+      "refinementStatus": "failed",
+      "proposalMatches": true,
+      "selectedGeometryMatches": true,
+      "metrics": {
+        "pairwisePenetration": 8.438304363918819,
+        "skeletalPenetration": 5.812467441841538,
+        "rawPairwisePenetration": 8.438304363918819,
+        "rawSkeletalPenetration": 5.812467441841538,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939913413175498
+      }
+    },
+    {
+      "step": 3,
+      "directionSource": "minimum-norm",
+      "refinementStatus": "succeeded",
+      "proposalMatches": true,
+      "selectedGeometryMatches": true,
+      "metrics": {
+        "pairwisePenetration": 8.425085497388213,
+        "skeletalPenetration": 5.807935663585632,
+        "rawPairwisePenetration": 8.425085497388213,
+        "rawSkeletalPenetration": 5.807935663585632,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939917881292325
+      }
+    },
+    {
+      "step": 4,
+      "directionSource": "minimax",
+      "refinementStatus": "failed",
+      "proposalMatches": true,
+      "selectedGeometryMatches": true,
+      "metrics": {
+        "pairwisePenetration": 8.424359231520453,
+        "skeletalPenetration": 5.807935663585631,
+        "rawPairwisePenetration": 8.424359231520453,
+        "rawSkeletalPenetration": 5.807935663585631,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939913396018792
+      }
+    },
+    {
+      "step": 5,
+      "directionSource": "minimum-norm",
+      "refinementStatus": "succeeded",
+      "proposalMatches": true,
+      "selectedGeometryMatches": true,
+      "metrics": {
+        "pairwisePenetration": 8.4216321555757,
+        "skeletalPenetration": 5.807935663586136,
+        "rawPairwisePenetration": 8.4216321555757,
+        "rawSkeletalPenetration": 5.807935663586136,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939917864269671
+      }
+    },
+    {
+      "step": 6,
+      "directionSource": "minimum-norm",
+      "refinementStatus": "succeeded",
+      "proposalMatches": true,
+      "selectedGeometryMatches": true,
+      "metrics": {
+        "pairwisePenetration": 8.418730181828607,
+        "skeletalPenetration": 5.8079356635861386,
+        "rawPairwisePenetration": 8.418730181828607,
+        "rawSkeletalPenetration": 5.8079356635861386,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939899898129919
+      }
+    },
+    {
+      "step": 7,
+      "directionSource": "minimum-norm",
+      "refinementStatus": "succeeded",
+      "proposalMatches": true,
+      "selectedGeometryMatches": true,
+      "metrics": {
+        "pairwisePenetration": 8.418004996429236,
+        "skeletalPenetration": 5.807935663586141,
+        "rawPairwisePenetration": 8.418004996429236,
+        "rawSkeletalPenetration": 5.807935663586141,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939895404191224
+      }
+    },
+    {
+      "step": 8,
+      "directionSource": "minimum-norm",
+      "refinementStatus": "succeeded",
+      "proposalMatches": true,
+      "selectedGeometryMatches": true,
+      "metrics": {
+        "pairwisePenetration": 8.412153173199302,
+        "skeletalPenetration": 5.807935663586861,
+        "rawPairwisePenetration": 8.412153173199302,
+        "rawSkeletalPenetration": 5.807935663586861,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.6939904621815317
+      }
+    }
+  ],
+  "lastTrustworthyEvidence": "step-008.json",
+  "finalSolverSha256": "b7a6ce7d2a77498cfc89dc883bfbfb4628ef86cfa232695152f2fd6030986e82",
+  "provenanceLimit": "Original run spans a receipt-only source change. Exact per-step load times unrecorded. Replay establishes final-solver proposal equivalence, not uniform original source identity."
+}

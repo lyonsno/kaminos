@@ -4,12 +4,14 @@ import {createHash} from 'node:crypto';
 import {extractMuscleCompartmentRingCageBoundary} from '../muscle-compartment-ring-cage-contact-core.mjs';
 const [input,output,mode='intercept-diagnostic']=process.argv.slice(2);
 if(!input||!output)throw new Error('usage: INPUT_DIR OUTPUT_DIR');
-if(!['intercept-diagnostic','source-repair','trajectory'].includes(mode))throw new Error('unknown view mode');
+if(!['intercept-diagnostic','source-repair','trajectory','refinement-recovery'].includes(mode))throw new Error('unknown view mode');
 await fs.mkdir(output,{recursive:true});
 const documents={};
-const names=mode==='trajectory'?['start.json','selected.json']:mode==='source-repair'?['start.json','baseline-state.json','candidate.json']:['start.json','baseline-state.json','candidate.json','gap-probe.json'];
+const names=mode==='refinement-recovery'?['start.json','previous.json','selected.json']:mode==='trajectory'?['start.json','selected.json']:mode==='source-repair'?['start.json','baseline-state.json','candidate.json']:['start.json','baseline-state.json','candidate.json','gap-probe.json'];
 for(const name of names) documents[name]=JSON.parse(await fs.readFile(path.join(input,name),'utf8'));
-const selections=mode==='trajectory'
+const selections=mode==='refinement-recovery'
+  ? [['start','Initialized authored start',documents['start.json']],['previous','Previous stopped result',documents['previous.json']],['selected','After refinement recovery',documents['selected.json']]]
+  : mode==='trajectory'
   ? [['start','Initialized authored start',documents['start.json']],['selected','After inequality steps',documents['selected.json']]]
   : [['start','Same late-stage start',documents['start.json']],['baseline','Old step',documents['baseline-state.json']],['candidate',mode==='source-repair'?'Inequality step · source gap repaired':'Inequality step · uncorrected gap',documents['candidate.json'].selected],...(mode==='intercept-diagnostic'?[['corrected','Intercept-only diagnostic',documents['gap-probe.json'].state]]:[])];
 const states=selections.map(([id,label,s])=>{
@@ -22,12 +24,13 @@ const states=selections.map(([id,label,s])=>{
 const sha=createHash('sha256').update(JSON.stringify(states)).digest('hex');
 const route=mode==='intercept-diagnostic'?'experimental-packing-inequality-comparison-v0':`experimental-packing-${mode}-v0`;
 const payload={route,sha,states};
+const recoveryExplanation=mode==='refinement-recovery'?' The previous stop and recovered trajectory are separate saved runs. Recovery retains a valid primary proposal when optional minimum-movement refinement fails; actual geometry checks still decide acceptance.':'';
 const explanation=mode==='intercept-diagnostic'?'The fourth state changes one inconsistent bone-gap intercept in the optimizer input. The original nonlinear evaluator judges the result. This is a diagnostic, not a production repair.':mode==='source-repair'?'Both steps use the repaired source gap. The unchanged nonlinear admission checks judge each result.':'Original authored variant through the restoration-to-reference bridge, then repeated inequality steps. Fixed attachments and the original volume allowance remain in force. The objective reduces muscle overlap while preventing bone overlap from worsening; it does not optimize compactness.';
 await fs.writeFile(path.join(output,'display-data.json'),JSON.stringify(payload,null,2)+'\n');
 await fs.writeFile(path.join(output,'index.html'),`<!doctype html><html lang="en"><meta charset="utf-8"><title>Packing step comparison</title>
 <style>body{margin:0;background:#10151b;color:#eee;font:15px system-ui}aside{box-sizing:border-box;position:absolute;left:0;top:0;width:360px;padding:24px;height:100vh;overflow:auto}h1{font-size:23px}button{display:block;width:100%;text-align:left;margin:8px 0;padding:12px;background:#26303c;border:1px solid #526171;color:white;border-radius:6px;font:inherit;cursor:pointer}button[aria-pressed=true]{background:#e6cf9b;color:#151515}main{position:absolute;left:360px;top:0;right:0;height:100vh}p{line-height:1.45}pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}.muted{color:#a7b2bf}</style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
-<aside><h1>${mode==='trajectory'?'Authored-start contact trajectory':'Same-state packing step'}</h1><p>Identical camera and solid materials. Actual scale; no amplified displacement.</p><div id="buttons"></div><p id="selected"></p><pre id="metrics"></pre><p class="muted">${explanation}</p><p class="muted">Residuals describe the existing tetrahedral contact model, not anatomical admission. Raw volume error is shown separately from admitted error. Bone and overlap volumes are not drawn.</p><pre id="identity"></pre><p>Drag to orbit · scroll to zoom.</p></aside><main></main>
+<aside><h1>${mode==='refinement-recovery'?'Severe-case refinement recovery':mode==='trajectory'?'Authored-start contact trajectory':'Same-state packing step'}</h1><p>Identical camera and solid materials. Actual scale; no amplified displacement.</p><div id="buttons"></div><p id="selected"></p><pre id="metrics"></pre><p class="muted">${explanation}${recoveryExplanation}</p><p class="muted">Residuals describe the existing tetrahedral contact model, not anatomical admission. Raw volume error is shown separately from admitted error. Bone and overlap volumes are not drawn.</p><pre id="identity"></pre><p>Drag to orbit · scroll to zoom.</p></aside><main></main>
 <script type="module">
 import * as THREE from 'three';import{OrbitControls}from'three/addons/controls/OrbitControls.js';
 const p=${JSON.stringify(payload).replaceAll('<','\\u003c')};

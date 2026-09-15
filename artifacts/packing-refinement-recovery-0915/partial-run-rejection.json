@@ -1,0 +1,7 @@
+{
+  "status": "failed",
+  "input": "/private/tmp/packer-refinement-recovery-severe-0915-r1",
+  "steps": [],
+  "lastTrustworthyEvidence": null,
+  "error": "AssertionError [ERR_ASSERTION]: partial/failed run is not replay evidence\n+ actual - expected\n\n+ 'running'\n- 'experiment-completed'\n\n    at file:///private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-refinement-recovery-0915/verify.mjs:17:10\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)"
+}
