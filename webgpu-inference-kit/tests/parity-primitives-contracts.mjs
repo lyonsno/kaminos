@@ -439,4 +439,58 @@ const stableDecoded = await decodeWebGpuParityCaptureChunks(stableChunks, {
 });
 assert.equal(stableDecoded.values[0], 0.5);
 
+const mutableIdentityCapture = {
+  schema: 'kaminos.webgpu-parity-capture.v0',
+  runId: 'initial-run',
+  stageId: 'initial-stage',
+  typedArrayConstructor: 'Float32Array',
+  elementCount: 2,
+  byteLength: 8,
+  shape: [2],
+  layout: 'N',
+  values: new Float32Array([1, 2]),
+};
+const identityMutationRace = encodeWebGpuParityCaptureChunks(
+  mutableIdentityCapture,
+  { chunkByteLength: 4 },
+);
+queueMicrotask(() => {
+  mutableIdentityCapture.runId = 'substituted-run';
+  mutableIdentityCapture.stageId = 'substituted-stage';
+});
+const identityStableChunks = await identityMutationRace;
+assert.ok(identityStableChunks.every(chunk => chunk.runId === 'initial-run'));
+assert.ok(identityStableChunks.every(chunk => chunk.stageId === 'initial-stage'));
+const identityStableDecoded = await decodeWebGpuParityCaptureChunks(identityStableChunks, {
+  expectedCapture: { runId: 'initial-run', stageId: 'initial-stage' },
+});
+assert.deepEqual(Array.from(identityStableDecoded.values), [1, 2]);
+
+const mutableSizeCapture = {
+  schema: 'kaminos.webgpu-parity-capture.v0',
+  runId: 'size-run',
+  stageId: 'size-stage',
+  typedArrayConstructor: 'Float32Array',
+  elementCount: 2,
+  byteLength: 8,
+  shape: [2],
+  layout: 'N',
+  values: new Float32Array([3, 4]),
+};
+const sizeMutationRace = encodeWebGpuParityCaptureChunks(
+  mutableSizeCapture,
+  { chunkByteLength: 4 },
+);
+queueMicrotask(() => {
+  mutableSizeCapture.elementCount = 999;
+  mutableSizeCapture.byteLength = 999;
+});
+const sizeStableChunks = await sizeMutationRace;
+assert.ok(sizeStableChunks.every(chunk => chunk.elementCount === 2));
+assert.ok(sizeStableChunks.every(chunk => chunk.totalByteLength === 8));
+const sizeStableDecoded = await decodeWebGpuParityCaptureChunks(sizeStableChunks, {
+  expectedCapture: { runId: 'size-run', stageId: 'size-stage' },
+});
+assert.deepEqual(Array.from(sizeStableDecoded.values), [3, 4]);
+
 console.log('parity primitive contracts passed');

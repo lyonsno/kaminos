@@ -374,10 +374,6 @@ async function sha256Hex(bytes) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function captureBytes(capture) {
-  return new Uint8Array(capture.values.buffer, capture.values.byteOffset, capture.values.byteLength);
-}
-
 function createCaptureManifest(fields, chunkPlan) {
   return {
     schema: WEBGPU_PARITY_CAPTURE_MANIFEST_SCHEMA,
@@ -405,24 +401,26 @@ export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
     throw new TypeError(`capture.schema must be ${WEBGPU_PARITY_CAPTURE_SCHEMA}`);
   }
   if (!isPlainObject(options)) throw new TypeError('options must be an object');
-  requireIdentity('capture.runId', capture.runId);
-  requireIdentity('capture.stageId', capture.stageId);
-  const typedArrayConstructor = requireNumericTypedArray('capture.values', capture.values);
+  const captureSchema = capture.schema;
+  const runId = requireIdentity('capture.runId', capture.runId);
+  const stageId = requireIdentity('capture.stageId', capture.stageId);
+  const values = capture.values;
+  const typedArrayConstructor = requireNumericTypedArray('capture.values', values);
   if (typedArrayConstructor !== capture.typedArrayConstructor) {
     throw new TypeError('capture typedArrayConstructor must match values');
   }
-  if (capture.elementCount !== capture.values.length || capture.byteLength !== capture.values.byteLength) {
+  const elementCount = capture.elementCount;
+  const byteLength = capture.byteLength;
+  if (elementCount !== values.length || byteLength !== values.byteLength) {
     throw new RangeError('capture elementCount and byteLength must match values');
   }
-  const shape = normalizeShape(capture.shape, capture.values.length);
+  const shape = normalizeShape(capture.shape, values.length);
   const layout = capture.layout == null ? null : requireIdentity('capture.layout', capture.layout);
   const chunkByteLength = options.chunkByteLength ?? 18 * 1024 * 1024;
   if (!Number.isSafeInteger(chunkByteLength) || chunkByteLength <= 0) {
     throw new TypeError('chunkByteLength must be a positive safe integer');
   }
-  // Snapshot before the first await so one encoded artifact cannot mix caller
-  // mutations from different points in the asynchronous digest sequence.
-  const bytes = captureBytes(capture).slice();
+  const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength).slice();
   if (bytes.byteLength === 0) throw new RangeError('capture values must not be empty');
   const chunkCount = Math.ceil(bytes.byteLength / chunkByteLength);
   const chunkPlan = Object.freeze(Array.from({ length: chunkCount }, (_, chunkIndex) => {
@@ -433,34 +431,49 @@ export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
       byteLength: Math.min(chunkByteLength, bytes.byteLength - byteOffset),
     });
   }));
-  const tensorSha256 = await sha256Hex(bytes);
-  const captureManifest = createCaptureManifest({
-    runId: capture.runId,
-    stageId: capture.stageId,
+  // Every authority-bearing field is copied before the first await. The
+  // asynchronous digest sequence must never re-read caller-owned state.
+  const snapshot = Object.freeze({
+    captureSchema,
+    runId,
+    stageId,
     typedArrayConstructor,
-    elementCount: capture.elementCount,
-    totalByteLength: capture.byteLength,
+    elementCount,
+    byteLength,
     shape,
     layout,
     byteOrder: PLATFORM_BYTE_ORDER,
+    bytes,
+    chunkPlan,
+  });
+  const tensorSha256 = await sha256Hex(snapshot.bytes);
+  const captureManifest = createCaptureManifest({
+    runId: snapshot.runId,
+    stageId: snapshot.stageId,
+    typedArrayConstructor: snapshot.typedArrayConstructor,
+    elementCount: snapshot.elementCount,
+    totalByteLength: snapshot.byteLength,
+    shape: snapshot.shape,
+    layout: snapshot.layout,
+    byteOrder: snapshot.byteOrder,
     tensorSha256,
-  }, chunkPlan);
+  }, snapshot.chunkPlan);
   const captureSha256 = await digestCaptureManifest(captureManifest);
   const chunks = [];
-  for (const plan of chunkPlan) {
+  for (const plan of snapshot.chunkPlan) {
     const { chunkIndex, byteOffset, byteLength } = plan;
-    const payload = bytes.subarray(byteOffset, byteOffset + byteLength);
+    const payload = snapshot.bytes.subarray(byteOffset, byteOffset + byteLength);
     chunks.push(Object.freeze({
       schema: WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA,
-      captureSchema: WEBGPU_PARITY_CAPTURE_SCHEMA,
-      runId: capture.runId,
-      stageId: capture.stageId,
-      typedArrayConstructor,
-      elementCount: capture.elementCount,
-      totalByteLength: capture.byteLength,
-      shape,
-      layout,
-      byteOrder: PLATFORM_BYTE_ORDER,
+      captureSchema: snapshot.captureSchema,
+      runId: snapshot.runId,
+      stageId: snapshot.stageId,
+      typedArrayConstructor: snapshot.typedArrayConstructor,
+      elementCount: snapshot.elementCount,
+      totalByteLength: snapshot.byteLength,
+      shape: snapshot.shape,
+      layout: snapshot.layout,
+      byteOrder: snapshot.byteOrder,
       chunkIndex,
       chunkCount,
       byteOffset,
