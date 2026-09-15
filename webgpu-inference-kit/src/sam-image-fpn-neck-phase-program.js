@@ -1,3 +1,4 @@
+import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   defineWebGpuRoute,
@@ -830,6 +831,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    yield: input.yield,
     residentTensorResolver: input.residentTensorResolver,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
@@ -1017,10 +1019,10 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
   if (input.includeReadback === true) {
     authoritative.debugReadback = {
       mode: 'explicit-debug-evidence',
-      fpnNeckFeature0: Array.from(new Float32Array(readback.fpnNeckFeature0)),
-      fpnNeckFeature1: Array.from(new Float32Array(readback.fpnNeckFeature1)),
-      fpnNeckFeature2: Array.from(new Float32Array(readback.fpnNeckFeature2)),
-      fpnNeckFeature3: Array.from(new Float32Array(readback.fpnNeckFeature3)),
+      fpnNeckFeature0: sam3Readback(input, new Float32Array(readback.fpnNeckFeature0)),
+      fpnNeckFeature1: sam3Readback(input, new Float32Array(readback.fpnNeckFeature1)),
+      fpnNeckFeature2: sam3Readback(input, new Float32Array(readback.fpnNeckFeature2)),
+      fpnNeckFeature3: sam3Readback(input, new Float32Array(readback.fpnNeckFeature3)),
     };
   }
   authoritative.resourceDisposal = runtime.dispose();
@@ -1111,6 +1113,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    yield: input.yield,
     residentTensorResolver: input.residentTensorResolver,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
@@ -1307,7 +1310,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
   const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
   if (input.includeReadback === true) {
     authoritative.debugReadback = { mode: 'explicit-debug-evidence' };
-    for (const [key, value] of Object.entries(readback)) authoritative.debugReadback[key] = Array.from(new Float32Array(value));
+    for (const [key, value] of Object.entries(readback)) authoritative.debugReadback[key] = sam3Readback(input, new Float32Array(value));
   }
   authoritative.resourceDisposal = runtime.dispose();
   return authoritative;

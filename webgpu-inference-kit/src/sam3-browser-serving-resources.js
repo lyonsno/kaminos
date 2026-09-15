@@ -30,11 +30,13 @@ export function createSam3BrowserImageCacheKey({ packageId, sourceImage, imageSh
 export function createSam3BrowserServingResources({
   acquireExecutionContext,
   acquireModelSession = createSam3BrowserResidentModelSession,
+  deviceOwnership = 'owned',
   now = () => globalThis.performance?.now?.() ?? Date.now(),
 }) {
   if (typeof acquireExecutionContext !== 'function') throw new Error('acquireExecutionContext must be a function');
   if (typeof acquireModelSession !== 'function') throw new Error('acquireModelSession must be a function');
   if (typeof now !== 'function') throw new Error('now must be a function');
+  if (!['owned', 'borrowed'].includes(deviceOwnership)) throw new Error('deviceOwnership must be owned or borrowed');
 
   let status = 'active';
   let context = null;
@@ -193,7 +195,7 @@ export function createSam3BrowserServingResources({
           acquired = null;
         }
       }
-      acquired?.device?.destroy?.();
+      if (deviceOwnership === 'owned') acquired?.device?.destroy?.();
       context = null;
       contextPromise = null;
       residentModelSession = null;

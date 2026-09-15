@@ -70,7 +70,7 @@ assert.match(smokeJs, /imageVitBlockStackEvidence/, 'browser smoke state must pr
 assert.match(smokeJs, /vitBlockStackHiddenStatesOutput/, 'browser smoke must preserve block-stack output identity as an ingress edge');
 assert.match(smokeJs, /firstGlobalLayerIndex/, 'browser smoke must preserve first global-attention boundary identity');
 assert.match(smokeJs, /fullBackbone/, 'browser smoke must preserve full-backbone range identity');
-assert.match(smokeJs, /validateFiniteCheckpoints:\s*true/, 'grounded browser smoke must fail at the first non-finite ViT layer checkpoint');
+assert.match(smokeJs, /validateFiniteCheckpoints:\s*verificationAttached\s*\|\|\s*diagnosticReadbackEnabled/, 'reference parity keeps finite layer checkpoints; serving requests them only with explicit diagnostics');
 assert.match(smokeJs, /validateFinitePhaseLayerIndex:\s*vitFinitePhaseLayerIndex/, 'browser smoke must pass an invocation-scoped ViT phase diagnostic target');
 assert.match(smokeJs, /expectedVitLayerCheckpoints/, 'browser smoke must load and pass authenticated per-layer MLX checkpoints');
 assert.match(smokeJs, /expectedLayerCheckpoints:\s*expectedVitLayerCheckpoints/, 'browser smoke must bind loaded ViT checkpoints into the route input by the exact lexical owner name');

@@ -3,8 +3,8 @@ import {
 } from './runtime-primitives.js';
 import {
   defineWebGpuModelResourceManifest,
-  prepareWebGpuModelResourceBundle,
 } from './model-resource-manifest.js';
+import { defineWebGpuModelResourcePackage } from './model-resource-package.js';
 
 export const SAM31_RESIDENT_MODEL_RESOURCES_SCHEMA = 'kaminos.sam31-resident-model-resources.v0';
 
@@ -69,11 +69,6 @@ function equalShape(left, right) {
   return left.length === right.length && left.every((dimension, index) => dimension === right[index]);
 }
 
-async function sha256Hex(bytes) {
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-  return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
 function artifactHex(sha256) {
   const value = requireString(sha256, 'static artifact sha256');
   if (!/^sha256:[a-f0-9]{64}$/.test(value)) throw new Error(`invalid static artifact sha256 ${value}`);
@@ -88,7 +83,7 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
   requireObject(packageRuntime, 'packageRuntime');
   requireObject(route, 'route');
   if (typeof packageRuntime.loadUint8 !== 'function') throw new Error('packageRuntime.loadUint8 must be a function');
-  if (typeof route.loadModelResources !== 'function') throw new Error('route.loadModelResources must be a function');
+  if (typeof route.loadModelResourcePackageFromSources !== 'function') throw new Error('route.loadModelResourcePackageFromSources must be a function');
   const packageId = requireString(packageRuntime.packageId, 'packageRuntime.packageId');
   const modelPackage = requireObject(packageRuntime.modelPackage, 'packageRuntime.modelPackage');
   const artifacts = modelPackage.staticArtifacts;
@@ -96,7 +91,6 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
 
   const seenSha = new Set();
   const loaded = [];
-  let bundleByteLength = 0;
   for (const [index, artifact] of artifacts.entries()) {
     requireObject(artifact, `staticArtifacts[${index}]`);
     artifactHex(artifact.sha256);
@@ -105,65 +99,71 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     }
     if (seenSha.has(artifact.sha256)) throw new Error(`duplicate static artifact ${artifact.sha256}`);
     seenSha.add(artifact.sha256);
-    loaded.push({ artifact, byteOffset: bundleByteLength });
-    bundleByteLength += artifact.byteLength;
+    loaded.push({ artifact });
   }
 
-  const bundle = new Uint8Array(bundleByteLength);
-  for (const item of loaded) {
-    const { artifact } = item;
-    const bytes = await packageRuntime.loadUint8(artifact);
-    if (!(bytes instanceof Uint8Array)) throw new Error(`static artifact ${artifact.sha256} did not load as Uint8Array`);
-    if (bytes.byteLength !== artifact.byteLength) throw new Error(`static artifact ${artifact.sha256} byte length mismatch`);
-    const effectiveSha256 = `sha256:${await sha256Hex(bytes)}`;
-    if (effectiveSha256 !== artifact.sha256) throw new Error(`static artifact ${artifact.sha256} content hash mismatch: ${effectiveSha256}`);
-    item.authenticatedSource = {
-      buffer: bytes.buffer,
-      byteOffset: bytes.byteOffset,
-      byteLength: bytes.byteLength,
-    };
-    bundle.set(bytes, item.byteOffset);
-  }
-
-  const bundleSha256 = await sha256Hex(bundle);
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
   const model = modelPackage.model || {};
-  const manifest = defineWebGpuModelResourceManifest({
-    modelId: model.id || 'facebook/sam3.1',
-    revision: model.revision || packageId,
-    metadata: { packageId, kernelProfile: 'sam31-resident-model-owner-v0' },
-    bundle: { byteLength: bundle.byteLength, sha256: bundleSha256 },
-    allocations: loaded.map((item, index) => ({
-      allocationId: `sam31-static-${index}-${artifactHex(item.artifact.sha256).slice(0, 16)}`,
-      byteOffset: item.byteOffset,
-      byteLength: item.artifact.byteLength,
-      usage,
-      metadata: {
-        packageId,
-        modelId: model.id || 'facebook/sam3.1',
-        revision: model.revision || packageId,
-        kernelProfile: 'sam31-resident-model-owner-v0',
-        file: item.artifact.file,
-        artifactSha256: item.artifact.sha256,
-        aliases: cloneJson(item.artifact.aliases || []),
+  const modelId = model.id || 'facebook/sam3.1';
+  const revision = model.revision || packageId;
+  const sources = Object.create(null);
+  const resources = loaded.map((item, index) => {
+    const { artifact } = item;
+    const resourceId = `sam31-static-${index}-${artifactHex(artifact.sha256).slice(0, 16)}`;
+    // Zero prefetch: the shared loader pulls one artifact, verifies it, then uploads it.
+    sources[resourceId] = new Response(new ReadableStream({
+      async pull(controller) {
+        try {
+          const bytes = await packageRuntime.loadUint8(artifact);
+          if (!(bytes instanceof Uint8Array)) throw new Error(`static artifact ${artifact.sha256} did not load as Uint8Array`);
+          if (bytes.byteLength !== artifact.byteLength) throw new Error(`static artifact ${artifact.sha256} byte length mismatch`);
+          item.authenticatedSource = { buffer: bytes.buffer, byteOffset: bytes.byteOffset, byteLength: bytes.byteLength };
+          controller.enqueue(bytes);
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
       },
-      tensors: [{
-        name: `sam31.static.${artifactHex(item.artifact.sha256)}`,
-        dtype: 'u8',
-        shape: [item.artifact.byteLength],
+    }, { highWaterMark: 0 }), { headers: { 'content-length': String(artifact.byteLength) } });
+    return { resourceId, manifest: defineWebGpuModelResourceManifest({
+      modelId,
+      revision,
+      metadata: { packageId, kernelProfile: 'sam31-resident-model-owner-v0' },
+      bundle: { byteLength: artifact.byteLength, sha256: artifactHex(artifact.sha256) },
+      allocations: [{
+        allocationId: resourceId,
         byteOffset: 0,
-        byteLength: item.artifact.byteLength,
-        metadata: { artifactSha256: item.artifact.sha256 },
+        byteLength: artifact.byteLength,
+        usage,
+        metadata: {
+          packageId,
+          modelId,
+          revision,
+          kernelProfile: 'sam31-resident-model-owner-v0',
+          file: artifact.file,
+          artifactSha256: artifact.sha256,
+          aliases: cloneJson(artifact.aliases || []),
+        },
+        tensors: [{
+          name: `sam31.static.${artifactHex(artifact.sha256)}`,
+          dtype: 'u8',
+          shape: [artifact.byteLength],
+          byteOffset: 0,
+          byteLength: artifact.byteLength,
+          metadata: { artifactSha256: artifact.sha256 },
+        }],
       }],
-    })),
+    }) };
   });
-  const preparedBundle = await prepareWebGpuModelResourceBundle(manifest, bundle.buffer, { ownership: 'transfer' });
-  let modelLease;
-  try {
-    modelLease = await route.loadModelResources({ manifest, bundle: preparedBundle });
-  } finally {
-    preparedBundle.release();
-  }
+  const resourcePackage = defineWebGpuModelResourcePackage({
+    packageId,
+    modelId: model.id || 'facebook/sam3.1',
+    revision,
+    resources,
+  });
+  const packageIdentityDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(resourcePackage.identity)));
+  const resourcePackageIdentitySha256 = `sha256:${Array.from(packageIdentityDigest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  const modelLease = await route.loadModelResourcePackageFromSources({ package: resourcePackage, sources });
   const allocationBySha = new Map();
   const authenticatedByBuffer = new Map();
   for (let index = 0; index < loaded.length; index += 1) {
@@ -250,8 +250,9 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
   const api = {
     schema: SAM31_RESIDENT_MODEL_RESOURCES_SCHEMA,
     packageId,
-    manifest,
+    resourcePackage,
     modelLease,
+    acquisitionReport() { return modelLease.report; },
     loadUint8(entry) {
       return authenticatedView(entry, Uint8Array);
     },
@@ -411,8 +412,14 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
       return Object.freeze({
         schema: 'kaminos.sam31-resident-model-resources-evidence.v0',
         packageId,
-        manifestIdentity: manifest.identity,
-        bundleVerification: cloneJson(modelLease.verification),
+        resourcePackageIdentitySha256,
+        packageAcquisition: {
+          schema: modelLease.report.schema,
+          status: modelLease.report.status,
+          resourceCount: modelLease.report.resources.length,
+          sourceMemoryBound: cloneJson(modelLease.report.sourceMemoryBound),
+          fullReportAccess: 'acquisitionReport()',
+        },
         released,
         truncated: false,
         resourceCount: loaded.length,

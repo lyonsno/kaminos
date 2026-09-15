@@ -1,3 +1,4 @@
+import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   defineWebGpuRoute,
@@ -1194,6 +1195,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    yield: input.yield,
     residentTensorResolver: input.residentTensorResolver,
   });
 
@@ -1550,22 +1552,22 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
   if (input.includeReadback === true) {
     authoritative.debugReadback = {
       mode: 'explicit-debug-evidence',
-      lastHs: Array.from(new Float32Array(lastHs)),
-      referenceBoxes: Array.from(new Float32Array(referenceBoxes)),
-      presenceLogits: Array.from(presenceLogits),
+      lastHs: sam3Readback(input, new Float32Array(lastHs)),
+      referenceBoxes: sam3Readback(input, new Float32Array(referenceBoxes)),
+      presenceLogits: sam3Readback(input, presenceLogits),
     };
     if (decoderHiddenStates) {
-      authoritative.debugReadback.decoderHiddenStates = Array.from(decoderHiddenStates);
+      authoritative.debugReadback.decoderHiddenStates = sam3Readback(input, decoderHiddenStates);
     }
     if (input.includeIntermediateReadback === true) {
       authoritative.debugReadback.intermediate = {};
       const debugLayerCount = input.includeAllHiddenStatesReadback === true ? shape.layerCount : 1;
       for (let layerIndex = 0; layerIndex < debugLayerCount; layerIndex += 1) {
-        authoritative.debugReadback.intermediate[`lastHsLayer${layerIndex}`] = Array.from(new Float32Array(run.outputs[`lastHsLayer${layerIndex}`]));
-        authoritative.debugReadback.intermediate[`referenceBoxesLayer${layerIndex}`] = Array.from(new Float32Array(run.outputs[`referenceBoxesLayer${layerIndex}`]));
+        authoritative.debugReadback.intermediate[`lastHsLayer${layerIndex}`] = sam3Readback(input, new Float32Array(run.outputs[`lastHsLayer${layerIndex}`]));
+        authoritative.debugReadback.intermediate[`referenceBoxesLayer${layerIndex}`] = sam3Readback(input, new Float32Array(run.outputs[`referenceBoxesLayer${layerIndex}`]));
       }
-      authoritative.debugReadback.intermediate.queryPosLayer0 = Array.from(new Float32Array(run.outputs.queryPosLayer0));
-      authoritative.debugReadback.intermediate.rpbLayer0Prefix = Array.from(new Float32Array(run.outputs.rpbLayer0Prefix));
+      authoritative.debugReadback.intermediate.queryPosLayer0 = sam3Readback(input, new Float32Array(run.outputs.queryPosLayer0));
+      authoritative.debugReadback.intermediate.rpbLayer0Prefix = sam3Readback(input, new Float32Array(run.outputs.rpbLayer0Prefix));
     }
   }
   authoritative.resourceDisposal = runtime.dispose();

@@ -1,3 +1,4 @@
+import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   defineWebGpuRoute,
@@ -458,6 +459,7 @@ export async function runSam3SelectionPostprocessPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    yield: input.yield,
   });
 
   let tensors = null;
@@ -592,12 +594,12 @@ export async function runSam3SelectionPostprocessPhaseProgramRoute(input = {}) {
   if (input.includeReadback === true) {
     authoritative.debugReadback = {
       mode: 'explicit-debug-evidence',
-      scores: Array.from(new Float32Array(run.outputs.scores)),
-      boxes: Array.from(new Float32Array(run.outputs.boxes)),
-      keep: Array.from(new Uint32Array(run.outputs.keep)),
-      selectedIndex: Array.from(new Uint32Array(run.outputs.selectedIndex)),
-      selectedScore: Array.from(new Float32Array(run.outputs.selectedScore)),
-      selectedBox: Array.from(new Float32Array(run.outputs.selectedBox)),
+      scores: sam3Readback(input, new Float32Array(run.outputs.scores)),
+      boxes: sam3Readback(input, new Float32Array(run.outputs.boxes)),
+      keep: sam3Readback(input, new Uint32Array(run.outputs.keep)),
+      selectedIndex: sam3Readback(input, new Uint32Array(run.outputs.selectedIndex)),
+      selectedScore: sam3Readback(input, new Float32Array(run.outputs.selectedScore)),
+      selectedBox: sam3Readback(input, new Float32Array(run.outputs.selectedBox)),
     };
   }
   authoritative.resourceDisposal = runtime.dispose();

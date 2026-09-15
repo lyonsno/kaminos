@@ -208,6 +208,14 @@ await Promise.all([firstClose, secondClose]);
 await resources.close();
 assert.equal(destroyCount, 1, 'resident serving close must release its device exactly once');
 assert.equal(modelCloseCount, 1, 'resident serving close must release its model session exactly once');
+let borrowedDeviceDestroys = 0;
+const borrowedResources = kit.createSam3BrowserServingResources({
+  deviceOwnership: 'borrowed',
+  acquireExecutionContext: async () => ({ adapter: {}, device: { destroy() { borrowedDeviceDestroys += 1; } } }),
+});
+await borrowedResources.executionContext();
+await borrowedResources.close();
+assert.equal(borrowedDeviceDestroys, 0, 'SAM teardown must preserve the application-owned renderer device');
 assert.deepEqual(lifecycle, ['model-close', 'device-destroy'], 'model leases must close before their device is destroyed');
 await assert.rejects(() => resources.executionContext(), /serving resources are closed/);
 assert.throws(() => resources.setImageFeatures(firstImageKey, cachedFeatures), /serving resources are closed/);

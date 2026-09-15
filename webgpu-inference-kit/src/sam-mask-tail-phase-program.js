@@ -1,3 +1,4 @@
+import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   defineWebGpuRoute,
@@ -400,6 +401,7 @@ export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    yield: input.yield,
     residentTensorResolver: input.residentTensorResolver,
   });
 
@@ -519,8 +521,8 @@ export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
   if (input.includeReadback === true) {
     authoritative.debugReadback = {
       mode: 'explicit-debug-evidence',
-      maskLogits: Array.from(new Float32Array(maskLogits)),
-      binaryMask: Array.from(new Uint32Array(binaryMask)),
+      maskLogits: sam3Readback(input, new Float32Array(maskLogits)),
+      binaryMask: sam3Readback(input, new Uint32Array(binaryMask)),
     };
   }
   authoritative.resourceDisposal = runtime.dispose();

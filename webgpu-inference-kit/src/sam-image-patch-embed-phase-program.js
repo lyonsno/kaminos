@@ -1,3 +1,4 @@
+import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   defineWebGpuRoute,
@@ -282,6 +283,7 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    yield: input.yield,
     residentTensorResolver: input.residentTensorResolver,
   });
 
@@ -361,7 +363,7 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
   if (input.includeReadback === true) {
     authoritative.debugReadback = {
       mode: 'explicit-debug-evidence',
-      patchEmbeddings: Array.from(new Float32Array(run.outputs.patchEmbeddings)),
+      patchEmbeddings: sam3Readback(input, new Float32Array(run.outputs.patchEmbeddings)),
     };
   }
   authoritative.resourceDisposal = runtime.dispose();

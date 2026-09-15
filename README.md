@@ -72,6 +72,14 @@ generation and accumulate into later rounds of authorship.
 
 ## Browser-Native Intelligence
 
+The reusable runtime is [Kaminos WebGPU Inference Kit](webgpu-inference-kit/README.md), published as `@kaminos/webgpu-inference-kit`. It gives model ports shared device and session ownership, persistent weights, queued invocations, cooperative execution boundaries, and runtime telemetry. Model implementations retain their kernels and tensor semantics; applications retain their interaction and rendering loop.
+
+```sh
+npm install @kaminos/webgpu-inference-kit
+```
+
+The [integration guide](webgpu-inference-kit/docs/getting-started.md) starts with a working model adapter. The [SAM image/prompt/mask demo](webgpu-inference-kit/docs/sam-semantic-demo.md) exercises the resident package and invocation path; parity verification is a separate mode, not work repeated for each prompt.
+
 Spatial models execute inside the same browser environment that consumes their
 outputs. Local WebGPU inference, geometry, motion, and simulation can therefore
 remain part of one operating world rather than terminating at a model response

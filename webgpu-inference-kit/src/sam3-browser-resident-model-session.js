@@ -14,7 +14,7 @@ function requireString(value, label) {
   return value;
 }
 
-function createResidentSession({ packageRuntime, inferenceSession, ownerRoute, residentResources, commit, preparationMilliseconds }) {
+function createResidentSession({ packageRuntime, inferenceSession, ownerRoute, residentResources, commit, preparationMilliseconds, ownsInferenceSession = true }) {
   requireObject(packageRuntime, 'packageRuntime');
   requireObject(inferenceSession, 'inferenceSession');
   requireObject(ownerRoute, 'ownerRoute');
@@ -45,10 +45,10 @@ function createResidentSession({ packageRuntime, inferenceSession, ownerRoute, r
     closePromise = (async () => {
       const errors = [];
       for (const closeStep of [
-        () => inferenceSession.drain(),
+        () => ownsInferenceSession ? inferenceSession.drain() : ownerRoute.drain(),
         () => residentResources.release(),
         () => inferenceSession.unregisterRoute(ownerRoute.routeId),
-        () => inferenceSession.close(),
+        () => ownsInferenceSession ? inferenceSession.close() : undefined,
       ]) {
         try {
           await closeStep();
@@ -73,6 +73,14 @@ function createResidentSession({ packageRuntime, inferenceSession, ownerRoute, r
 
   return Object.freeze({
     packageId,
+    acquisitionReport() { return residentResources.acquisitionReport(); },
+    enqueue(input) {
+      assertActive();
+      return ownerRoute.enqueue(input);
+    },
+    forgetJob(jobId) {
+      return ownerRoute.forgetJob(jobId);
+    },
     loadFloat32(entry) {
       assertActive();
       const sourceData = residentResources.loadFloat32(entry);
@@ -101,7 +109,11 @@ export async function createSam3BrowserResidentModelSession({
   const adapterName = executionContext.adapter?.info?.description
     || executionContext.adapter?.info?.device
     || 'browser-webgpu-adapter';
-  const inferenceSession = await createWebGpuInferenceSession({
+  const ownsInferenceSession = executionContext.inferenceSession == null;
+  if (!ownsInferenceSession && executionContext.inferenceSession.device !== executionContext.device) {
+    throw new Error('borrowed inference session must own the exact execution device');
+  }
+  const inferenceSession = executionContext.inferenceSession || await createWebGpuInferenceSession({
     sessionId,
     adapter: executionContext.adapter,
     device: executionContext.device,
@@ -126,13 +138,20 @@ export async function createSam3BrowserResidentModelSession({
       inferenceSession,
       ownerRoute,
       residentResources,
+      ownsInferenceSession,
       commit,
       preparationMilliseconds: now() - startedAt,
     });
   } catch (error) {
-    residentResources?.release?.();
-    if (ownerRoute) inferenceSession.unregisterRoute(ownerRoute.routeId);
-    inferenceSession.close();
+    const cleanupErrors = [];
+    for (const cleanup of [
+      () => residentResources?.release?.(),
+      () => ownerRoute ? inferenceSession.unregisterRoute(ownerRoute.routeId) : undefined,
+      () => ownsInferenceSession ? inferenceSession.close() : undefined,
+    ]) {
+      try { await cleanup(); } catch (cleanupError) { cleanupErrors.push(cleanupError); }
+    }
+    if (cleanupErrors.length) error.cleanupErrors = cleanupErrors;
     throw error;
   }
 }

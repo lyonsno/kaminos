@@ -17,6 +17,7 @@ import {
   createSam3BrowserImageCacheKey,
   createSam3BrowserModelPackageRuntime,
   createSam3BrowserServingResources,
+  requestBrowserWebGpuDevice,
   createSam3BrowserStaticArtifactCache,
   resolveSam3BrowserArtifactUrl,
   resolveSam3BrowserPackageManifest,
@@ -60,20 +61,26 @@ import {
   runSam3DetrEncoderPhaseProgramRoute as runSam3DetrEncoderPhaseProgramRouteRaw,
   runSam3DetrDecoderPhaseProgramRoute as runSam3DetrDecoderPhaseProgramRouteRaw,
   runSam3ScoringPhaseProgramRoute as runSam3ScoringPhaseProgramRouteRaw,
-  runSam3SelectionPostprocessPhaseProgramRoute,
-  runSam3ImagePreprocessPhaseProgramRoute,
+  runSam3SelectionPostprocessPhaseProgramRoute as runSam3SelectionPostprocessPhaseProgramRouteRaw,
+  runSam3ImagePreprocessPhaseProgramRoute as runSam3ImagePreprocessPhaseProgramRouteRaw,
   runSam3ImagePatchEmbedPhaseProgramRoute as runSam3ImagePatchEmbedPhaseProgramRouteRaw,
   runSam3ImageVitPrefixPhaseProgramRoute as runSam3ImageVitPrefixPhaseProgramRouteRaw,
   runSam3ImageVitFirstBlockPhaseProgramRoute as runSam3ImageVitFirstBlockPhaseProgramRouteRaw,
   runSam3ImageVitBlockStackPhaseProgramRoute as runSam3ImageVitBlockStackPhaseProgramRouteRaw,
   runSam3ImageFpnNeckPhaseProgramRoute as runSam3ImageFpnNeckPhaseProgramRouteRaw,
 } from '../src/index.js';
+import { sam3Readback, sam3TypedView } from '../src/sam-readback.js';
 
 let activeResidentTensorResolver = null;
 let activeResidentWeightSource = null;
-const residentPhaseInput = input => activeResidentTensorResolver
-  ? { ...input, residentTensorResolver: activeResidentTensorResolver }
-  : input;
+let activeReadbackFormat = 'array';
+const readbackValues = values => sam3Readback({ readbackFormat: activeReadbackFormat }, values);
+const residentPhaseInput = input => ({
+  ...input,
+  yield: window.sam3CooperativeYield,
+  readbackFormat: activeReadbackFormat,
+  ...(activeResidentTensorResolver ? { residentTensorResolver: activeResidentTensorResolver } : {}),
+});
 const runSam3MaskTailPhaseProgramRoute = input => runSam3MaskTailPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3PixelDecoderPhaseProgramRoute = input => runSam3PixelDecoderPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3PromptTextIngressPhaseProgramRoute = input => runSam3PromptTextIngressPhaseProgramRouteRaw(residentPhaseInput(input));
@@ -81,6 +88,8 @@ const runSam3PromptFpnPhaseProgramRoute = input => runSam3PromptFpnPhaseProgramR
 const runSam3DetrEncoderPhaseProgramRoute = input => runSam3DetrEncoderPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3DetrDecoderPhaseProgramRoute = input => runSam3DetrDecoderPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3ScoringPhaseProgramRoute = input => runSam3ScoringPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3SelectionPostprocessPhaseProgramRoute = input => runSam3SelectionPostprocessPhaseProgramRouteRaw(residentPhaseInput(input));
+const runSam3ImagePreprocessPhaseProgramRoute = input => runSam3ImagePreprocessPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3ImagePatchEmbedPhaseProgramRoute = input => runSam3ImagePatchEmbedPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3ImageVitPrefixPhaseProgramRoute = input => runSam3ImageVitPrefixPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3ImageVitFirstBlockPhaseProgramRoute = input => runSam3ImageVitFirstBlockPhaseProgramRouteRaw(residentPhaseInput(input));
@@ -167,6 +176,7 @@ function resetInvocationState() {
 }
 
 window.samMaskIslandParitySmokeState = () => JSON.parse(JSON.stringify(state));
+window.samMaskIslandProgress = () => ({ status: state.status, error: state.error });
 window.samMaskIslandVisualOutput = () => visualOutput;
 
 const params = new URLSearchParams(window.location.search);
@@ -184,13 +194,20 @@ const summaryEl = document.getElementById('summary');
 const reportEl = document.getElementById('report');
 const canvas = document.getElementById('sam-mask-parity-canvas');
 const sourceImageEl = document.getElementById('sam-source-image');
+const applicationSession = window.sam3InferenceSession || null;
 const servingResources = createSam3BrowserServingResources({
+  deviceOwnership: applicationSession ? 'borrowed' : 'owned',
   async acquireExecutionContext() {
+    if (applicationSession) return {
+      adapter: applicationSession.adapter,
+      device: applicationSession.device,
+      inferenceSession: applicationSession,
+    };
     setStatus('request-webgpu-adapter');
-    if (!navigator.gpu) throw new Error('navigator.gpu unavailable');
-    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) throw new Error('WebGPU adapter unavailable');
-    return { adapter, device: await adapter.requestDevice() };
+    return requestBrowserWebGpuDevice(navigator.gpu, {
+      adapterOptions: { powerPreference: 'high-performance' },
+      label: 'sam3-semantic-workbench',
+    });
   },
 });
 window.addEventListener('pagehide', () => void servingResources.close(), { once: true });
@@ -241,7 +258,9 @@ window.samMaskIslandDiagnosticReadback = ({ tensorName = null, base64Offset = 0,
 function setStatus(status, message = status) {
   state.status = status;
   statusEl.textContent = message;
-  reportEl.textContent = JSON.stringify(state, null, 2);
+  if (defaultVerificationMode !== 'execution-only' || diagnosticReadbackEnabled) {
+    reportEl.textContent = JSON.stringify(state, null, 2);
+  }
 }
 
 function renderSummary(entries) {
@@ -1255,9 +1274,9 @@ async function loadDetrDecoderPayload(manifest) {
         },
         includeReadback: true,
       });
-      const gpuLastHs = new Float32Array(decoderResult.debugReadback.lastHs);
-      const gpuReferenceBoxes = new Float32Array(decoderResult.debugReadback.referenceBoxes);
-      const gpuPresenceLogits = new Float32Array(decoderResult.debugReadback.presenceLogits);
+      const gpuLastHs = sam3TypedView(Float32Array, decoderResult.debugReadback.lastHs);
+      const gpuReferenceBoxes = sam3TypedView(Float32Array, decoderResult.debugReadback.referenceBoxes);
+      const gpuPresenceLogits = sam3TypedView(Float32Array, decoderResult.debugReadback.presenceLogits);
       const lastHsOutput = decoderResult.receipt.outputs.find(output => output.role === 'last-hs');
       const referenceBoxesOutput = decoderResult.receipt.outputs.find(output => output.role === 'reference-boxes');
       const presenceLogitsOutput = decoderResult.receipt.outputs.find(output => output.role === 'presence-logits');
@@ -1291,9 +1310,9 @@ async function loadDetrDecoderPayload(manifest) {
         compositionRouteReceipts: [decoderResult.receipt, tailResult.receipt],
         backend: tailResult.backend,
         debugReadback: {
-          lastHs: Array.from(gpuLastHs),
-          referenceBoxes: Array.from(gpuReferenceBoxes),
-          presenceLogits: Array.from(gpuPresenceLogits),
+          lastHs: readbackValues(gpuLastHs),
+          referenceBoxes: readbackValues(gpuReferenceBoxes),
+          presenceLogits: readbackValues(gpuPresenceLogits),
           intermediate: decoderResult.debugReadback.intermediate || null,
           maskLogits: tailResult.debugReadback.maskLogits,
           binaryMask: tailResult.debugReadback.binaryMask,
@@ -2114,7 +2133,7 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imagePreprocess: manifest.imagePreprocess || null },
         });
         imagePreprocessResult = await runSam3ImagePreprocessPhaseProgramRoute({ request: imagePreprocessRequest, route: imagePreprocessRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imagePreprocessRoute.kernel, model: { revision: imagePreprocessRoute.model.revision, weightsHash: 'none', dtype: 'u8-to-fp32' }, tensors: { rgba, shape: preprocessShape }, includeReadback: true });
-        gpuPixelValues = new Float32Array(imagePreprocessResult.debugReadback.pixelValues);
+        gpuPixelValues = sam3TypedView(Float32Array, imagePreprocessResult.debugReadback.pixelValues);
         pixelValuesOutput = imagePreprocessResult.receipt.outputs.find(output => output.role === 'pixel-values');
         if (!pixelValuesOutput?.sha256 || !pixelValuesOutput?.artifactId) throw new Error('SAM3 image-preprocess pixel-values output identity missing');
       }
@@ -2145,7 +2164,7 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imagePatchEmbed: manifest.imagePatchEmbed || null, composedFrom: imagePreprocessResult.receipt?.effectiveRouteId, pixelValuesOutput },
         });
         imagePatchEmbedResult = await runSam3ImagePatchEmbedPhaseProgramRoute({ request: imagePatchEmbedRequest, route: imagePatchEmbedRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imagePatchEmbedRoute.kernel, model: { revision: imagePatchEmbedRoute.model.revision, weightsHash: weightsByRole['patch-embed-projection-weight'].sha256, dtype: 'fp32' }, tensors: { pixelValues: gpuPixelValues, weights: { projection: patchProjectionWeight }, shape: patchEmbedShape }, includeReadback: true });
-        gpuPatchEmbeddings = new Float32Array(imagePatchEmbedResult.debugReadback.patchEmbeddings);
+        gpuPatchEmbeddings = sam3TypedView(Float32Array, imagePatchEmbedResult.debugReadback.patchEmbeddings);
         patchEmbeddingsOutput = imagePatchEmbedResult.receipt.outputs.find(output => output.role === 'patch-embeddings');
         if (!patchEmbeddingsOutput?.sha256 || !patchEmbeddingsOutput?.artifactId) throw new Error('SAM3 image patch-embed output identity missing');
       }
@@ -2182,7 +2201,7 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imageVitPrefix: manifest.imageVitPrefix || null, composedFrom: imagePatchEmbedResult.receipt?.effectiveRouteId, patchEmbeddingsOutput },
         });
         imageVitPrefixResult = await runSam3ImageVitPrefixPhaseProgramRoute({ request: imageVitPrefixRequest, route: imageVitPrefixRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageVitPrefixRoute.kernel, model: { revision: imageVitPrefixRoute.model.revision, weightsHash: imageVitPrefixRequest.inputs.find(input => input.role === 'sam3-image-vit-prefix-weights')?.sha256, dtype: 'fp32' }, tensors: { patchEmbeddings: gpuPatchEmbeddings, weights: vitPrefixWeights, shape: vitPrefixShape }, includeReadback: true });
-        gpuVitPrefixHiddenStates = new Float32Array(imageVitPrefixResult.debugReadback.vitPrefixHiddenStates);
+        gpuVitPrefixHiddenStates = sam3TypedView(Float32Array, imageVitPrefixResult.debugReadback.vitPrefixHiddenStates);
         vitPrefixHiddenStatesOutput = imageVitPrefixResult.receipt.outputs.find(output => output.role === 'vit-prefix-hidden-states');
         if (!vitPrefixHiddenStatesOutput?.sha256 || !vitPrefixHiddenStatesOutput?.artifactId) throw new Error('SAM3 image ViT-prefix output identity missing');
       }
@@ -2214,7 +2233,7 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imageVitFirstBlock: manifest.imageVitFirstBlock || null, composedFrom: imageVitPrefixResult.receipt?.effectiveRouteId, vitPrefixHiddenStatesOutput },
         });
         imageVitFirstBlockResult = await runSam3ImageVitFirstBlockPhaseProgramRoute({ request: imageVitFirstBlockRequest, route: imageVitFirstBlockRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageVitFirstBlockRoute.kernel, model: { revision: imageVitFirstBlockRoute.model.revision, weightsHash: imageVitFirstBlockRequest.inputs.find(input => input.role === 'sam3-image-vit-first-block-weights')?.sha256, dtype: 'fp32' }, tensors: { hiddenStates: gpuVitPrefixHiddenStates, weights: vitFirstBlockWeights, shape: vitFirstBlockShape }, includeReadback: true });
-        gpuVitFirstBlockHiddenStates = new Float32Array(imageVitFirstBlockResult.debugReadback.vitFirstBlockHiddenStates);
+        gpuVitFirstBlockHiddenStates = sam3TypedView(Float32Array, imageVitFirstBlockResult.debugReadback.vitFirstBlockHiddenStates);
         vitFirstBlockHiddenStatesOutput = imageVitFirstBlockResult.receipt.outputs.find(output => output.role === 'vit-first-block-hidden-states');
         if (!vitFirstBlockHiddenStatesOutput?.sha256 || !vitFirstBlockHiddenStatesOutput?.artifactId) throw new Error('SAM3 image ViT first-block output identity missing');
       }
@@ -2247,8 +2266,8 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           },
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imageVitBlockStack: manifest.imageVitBlockStack || null, composedFrom: imageVitPrefixResult.receipt?.effectiveRouteId, vitPrefixHiddenStatesOutput, firstGlobalLayerIndex: vitBlockStackShape.firstGlobalLayerIndex },
         });
-        imageVitBlockStackResult = await runSam3ImageVitBlockStackPhaseProgramRoute({ request: imageVitBlockStackRequest, route: imageVitBlockStackRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageVitBlockStackRoute.kernel, model: { revision: imageVitBlockStackRoute.model.revision, weightsHash: imageVitBlockStackRequest.inputs.find(input => input.role === 'sam3-image-vit-block-stack-weights')?.sha256, dtype: 'fp32' }, tensors: { hiddenStates: gpuVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape }, ...(verificationAttached ? { expectedLayerCheckpoints: expectedVitLayerCheckpoints } : {}), includeReadback: true, validateFiniteCheckpoints: true, validateFinitePhaseLayerIndex: vitFinitePhaseLayerIndex });
-        gpuVitBlockStackHiddenStates = new Float32Array(imageVitBlockStackResult.debugReadback.vitBlockStackHiddenStates);
+        imageVitBlockStackResult = await runSam3ImageVitBlockStackPhaseProgramRoute({ request: imageVitBlockStackRequest, route: imageVitBlockStackRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageVitBlockStackRoute.kernel, model: { revision: imageVitBlockStackRoute.model.revision, weightsHash: imageVitBlockStackRequest.inputs.find(input => input.role === 'sam3-image-vit-block-stack-weights')?.sha256, dtype: 'fp32' }, tensors: { hiddenStates: gpuVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape }, ...(verificationAttached ? { expectedLayerCheckpoints: expectedVitLayerCheckpoints } : {}), includeReadback: true, validateFiniteCheckpoints: verificationAttached || diagnosticReadbackEnabled, validateFinitePhaseLayerIndex: vitFinitePhaseLayerIndex });
+        gpuVitBlockStackHiddenStates = sam3TypedView(Float32Array, imageVitBlockStackResult.debugReadback.vitBlockStackHiddenStates);
         vitBlockStackHiddenStatesOutput = imageVitBlockStackResult.receipt.outputs.find(output => output.role === 'vit-block-stack-hidden-states');
         if (!vitBlockStackHiddenStatesOutput?.sha256 || !vitBlockStackHiddenStatesOutput?.artifactId) throw new Error('SAM3 image ViT block-stack output identity missing');
       }
@@ -2291,10 +2310,10 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imageFpnNeck: manifest.imageFpnNeck || null, composedFrom: imageVitBlockStackResult.receipt?.effectiveRouteId, vitBlockStackHiddenStatesOutput },
         });
         imageFpnNeckResult = await runSam3ImageFpnNeckPhaseProgramRoute({ request: imageFpnNeckRequest, route: imageFpnNeckRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageFpnNeckRoute.kernel, model: { revision: imageFpnNeckRoute.model.revision, weightsHash: imageFpnNeckRequest.inputs.find(input => input.role === 'sam3-image-fpn-neck-weights')?.sha256, dtype: 'fp32' }, tensors: { backboneHiddenStates: gpuVitBlockStackHiddenStates, weights: fpnNeckWeights, shape: fpnNeckShape }, includeReadback: true });
-        gpuFpnNeckFeature0 = new Float32Array(imageFpnNeckResult.debugReadback.fpnNeckFeature0);
-        gpuFpnNeckFeature1 = new Float32Array(imageFpnNeckResult.debugReadback.fpnNeckFeature1);
-        gpuFpnNeckFeature2 = new Float32Array(imageFpnNeckResult.debugReadback.fpnNeckFeature2);
-        gpuFpnNeckFeature3 = new Float32Array(imageFpnNeckResult.debugReadback.fpnNeckFeature3);
+        gpuFpnNeckFeature0 = sam3TypedView(Float32Array, imageFpnNeckResult.debugReadback.fpnNeckFeature0);
+        gpuFpnNeckFeature1 = sam3TypedView(Float32Array, imageFpnNeckResult.debugReadback.fpnNeckFeature1);
+        gpuFpnNeckFeature2 = sam3TypedView(Float32Array, imageFpnNeckResult.debugReadback.fpnNeckFeature2);
+        gpuFpnNeckFeature3 = sam3TypedView(Float32Array, imageFpnNeckResult.debugReadback.fpnNeckFeature3);
         fpnNeckFeature0Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-0');
         fpnNeckFeature1Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-1');
         fpnNeckFeature2Output = imageFpnNeckResult.receipt.outputs.find(output => output.role === 'fpn-neck-feature-2');
@@ -2355,8 +2374,8 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, promptTextIngress: manifest.promptTextIngress || null },
         });
         promptTextResult = await runSam3PromptTextIngressPhaseProgramRoute({ request: promptTextRequest, route: promptTextRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: promptTextRoute.kernel, model: { revision: promptTextRoute.model.revision, weightsHash: promptTextWeightsSha256, dtype: 'fp32' }, tensors: { inputIds: browserPromptInputIds, attentionMask: browserPromptAttentionMask, weights: promptTextWeights, shape: promptTextShape }, includeReadback: true });
-        gpuPromptFeatures = new Float32Array(promptTextResult.debugReadback.promptFeatures);
-        gpuPromptMask = new Float32Array(promptTextResult.debugReadback.promptMask);
+        gpuPromptFeatures = sam3TypedView(Float32Array, promptTextResult.debugReadback.promptFeatures);
+        gpuPromptMask = sam3TypedView(Float32Array, promptTextResult.debugReadback.promptMask);
         promptFeaturesOutput = promptTextResult.receipt.outputs.find(output => output.role === 'prompt-features');
         promptMaskOutput = promptTextResult.receipt.outputs.find(output => output.role === 'prompt-mask');
         if (!promptFeaturesOutput?.sha256 || !promptFeaturesOutput?.artifactId || !promptMaskOutput?.sha256 || !promptMaskOutput?.artifactId) throw new Error('SAM3 prompt/text ingress output identity missing');
@@ -2405,7 +2424,7 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
       }) : request;
       setStatus('run-detr-encoder');
       const encoderResult = await runSam3DetrEncoderPhaseProgramRoute({ request: encoderRequest, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderSrc: effectiveEncoderSrc, encoderPos: effectiveEncoderPos, promptFeatures: effectivePromptFeatures, promptMask: effectivePromptMask, layers: encoderWeights.layers, shape: encoderShape }, includeReadback: true });
-      const gpuEncoderHiddenStates = new Float32Array(encoderResult.debugReadback.encoderHiddenStates);
+      const gpuEncoderHiddenStates = sam3TypedView(Float32Array, encoderResult.debugReadback.encoderHiddenStates);
       const detrEncoderOutput = encoderResult.receipt.outputs.find(output => output.role === 'encoder-hidden-states');
       if (!detrEncoderOutput?.sha256 || !detrEncoderOutput?.artifactId) throw new Error('DETR encoder output identity missing for decoder composition');
       let promptResult = null;
@@ -2437,7 +2456,7 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: encoderResult.receipt?.effectiveRouteId, detrEncoderOutput, browserFpnDetrIngress: browserFpnDetrIngressEvidence },
         });
         promptResult = await runSam3PromptFpnPhaseProgramRoute({ request: promptRequest, route: promptRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: promptRoute.kernel, model: { revision: promptRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderHiddenStates: gpuEncoderHiddenStates, promptFeatures: effectivePromptFeatures, promptMask: effectivePromptMask, weights: promptWeights, shape: promptShape }, includeReadback: true });
-        gpuPromptFpnFeature = new Float32Array(promptResult.debugReadback.promptFpnFeature);
+        gpuPromptFpnFeature = sam3TypedView(Float32Array, promptResult.debugReadback.promptFpnFeature);
         promptFpnOutput = promptResult.receipt.outputs.find(output => output.role === 'prompt-fpn-feature');
         if (!promptFpnOutput?.sha256 || !promptFpnOutput?.artifactId) throw new Error('image-FPN detector-stack prompt-FPN output identity missing');
         setStatus('run-pixel-decoder');
@@ -2460,7 +2479,7 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: promptResult.receipt?.effectiveRouteId, promptFpnOutput },
         });
         pixelResult = await runSam3PixelDecoderPhaseProgramRoute({ request: pixelRequest, route: pixelRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: pixelRoute.kernel, model: { revision: pixelRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { features: [gpuFpnNeckFeature0, gpuFpnNeckFeature1, gpuPromptFpnFeature], weights: pixelWeights, shape: pixelShape }, includeReadback: true });
-        gpuPixelEmbed = new Float32Array(pixelResult.debugReadback.pixelEmbed);
+        gpuPixelEmbed = sam3TypedView(Float32Array, pixelResult.debugReadback.pixelEmbed);
         pixelEmbedOutput = pixelResult.receipt.outputs.find(output => output.role === 'pixel-embed');
         if (!pixelEmbedOutput?.sha256 || !pixelEmbedOutput?.artifactId) throw new Error('image-FPN detector-stack pixel-decoder output identity missing');
       }
@@ -2523,10 +2542,10 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
         routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: encoderResult.receipt?.effectiveRouteId, detrEncoderOutput, browserFpnDetrIngress: browserFpnDetrIngressEvidence },
       });
       const decoderResult = await runSam3DetrDecoderPhaseProgramRoute({ request: decoderRequest, route: decoderRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: decoderRoute.kernel, model: { revision: decoderRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { visionFeatures: gpuEncoderHiddenStates, visionPosEncoding: effectiveEncoderPos, promptFeatures: effectivePromptFeatures, promptMask: effectivePromptMask, shape: decoderShape, ...decoderWeights }, includeReadback: true, includeAllHiddenStatesReadback: includeStackScoring });
-      const gpuLastHs = new Float32Array(decoderResult.debugReadback.lastHs);
-      const gpuDecoderHiddenStates = includeStackScoring ? new Float32Array(decoderResult.debugReadback.decoderHiddenStates) : null;
-      const gpuReferenceBoxes = new Float32Array(decoderResult.debugReadback.referenceBoxes);
-      const gpuPresenceLogits = new Float32Array(decoderResult.debugReadback.presenceLogits);
+      const gpuLastHs = sam3TypedView(Float32Array, decoderResult.debugReadback.lastHs);
+      const gpuDecoderHiddenStates = includeStackScoring ? sam3TypedView(Float32Array, decoderResult.debugReadback.decoderHiddenStates) : null;
+      const gpuReferenceBoxes = sam3TypedView(Float32Array, decoderResult.debugReadback.referenceBoxes);
+      const gpuPresenceLogits = sam3TypedView(Float32Array, decoderResult.debugReadback.presenceLogits);
       const lastHsOutput = decoderResult.receipt.outputs.find(output => output.role === 'last-hs');
       const decoderHiddenStatesOutput = includeStackScoring ? decoderResult.receipt.outputs.find(output => output.role === 'decoder-hidden-states') : null;
       const referenceBoxesOutput = decoderResult.receipt.outputs.find(output => output.role === 'reference-boxes');
@@ -2569,7 +2588,7 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: decoderResult.receipt?.effectiveRouteId, decoderHiddenStatesOutput },
         });
         scoringResult = await runSam3ScoringPhaseProgramRoute({ request: scoringRequest, route: scoringRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: scoringRoute.kernel, model: { revision: scoringRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { hiddenStates: gpuDecoderHiddenStates, promptFeatures: effectivePromptFeatures, promptMask: effectivePromptMask, weights: scoringWeights, shape: scoringShape }, includeReadback: true });
-        gpuPredLogits = new Float32Array(scoringResult.debugReadback.predLogits);
+        gpuPredLogits = sam3TypedView(Float32Array, scoringResult.debugReadback.predLogits);
         scoringOutput = scoringResult.receipt.outputs.find(output => output.role === 'pred-logits');
         if (!scoringOutput?.sha256 || !scoringOutput?.artifactId) throw new Error('DETR stack scoring pred-logits output identity missing');
       }
@@ -2598,12 +2617,12 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', promptHash: manifest.prompt?.sha256, composedFrom: scoringResult.receipt?.effectiveRouteId, scoringOutput, referenceBoxesOutput, presenceLogitsOutput },
         });
         selectionResult = await runSam3SelectionPostprocessPhaseProgramRoute({ request: selectionRequest, route: selectionRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: selectionRoute.kernel, model: { revision: selectionRoute.model.revision, weightsHash: 'none', dtype: 'fp32' }, tensors: { predLogits: gpuPredLogits, referenceBoxes: gpuReferenceBoxes, presenceLogits: gpuPresenceLogits, shape: selectionShape }, includeReadback: true });
-        gpuSelectionScores = new Float32Array(selectionResult.debugReadback.scores);
-        gpuSelectionBoxes = new Float32Array(selectionResult.debugReadback.boxes);
-        gpuSelectionKeep = new Uint32Array(selectionResult.debugReadback.keep);
-        gpuSelectedIndex = new Uint32Array(selectionResult.debugReadback.selectedIndex);
-        gpuSelectedScore = new Float32Array(selectionResult.debugReadback.selectedScore);
-        gpuSelectedBox = new Float32Array(selectionResult.debugReadback.selectedBox);
+        gpuSelectionScores = sam3TypedView(Float32Array, selectionResult.debugReadback.scores);
+        gpuSelectionBoxes = sam3TypedView(Float32Array, selectionResult.debugReadback.boxes);
+        gpuSelectionKeep = sam3TypedView(Uint32Array, selectionResult.debugReadback.keep);
+        gpuSelectedIndex = sam3TypedView(Uint32Array, selectionResult.debugReadback.selectedIndex);
+        gpuSelectedScore = sam3TypedView(Float32Array, selectionResult.debugReadback.selectedScore);
+        gpuSelectedBox = sam3TypedView(Float32Array, selectionResult.debugReadback.selectedBox);
         selectionOutput = selectionResult.receipt.outputs.find(output => output.role === 'selected-index');
         if (!selectionOutput?.sha256 || !selectionOutput?.artifactId) throw new Error('DETR stack selection output identity missing');
       }
@@ -2676,43 +2695,43 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
         compositionRequestIds: executedRouteResults.filter(Boolean).map(routeResult => routeResult.requestId),
         backend: tailResult.backend,
         debugReadback: {
-          pixelValues: gpuPixelValues ? Array.from(gpuPixelValues) : undefined,
+          pixelValues: gpuPixelValues ? readbackValues(gpuPixelValues) : undefined,
           imagePreprocessCpuMaxAbsDiff,
-          patchEmbeddings: gpuPatchEmbeddings ? Array.from(gpuPatchEmbeddings) : undefined,
+          patchEmbeddings: gpuPatchEmbeddings ? readbackValues(gpuPatchEmbeddings) : undefined,
           imagePatchEmbedCpuMaxAbsDiff,
-          vitPrefixHiddenStates: gpuVitPrefixHiddenStates ? Array.from(gpuVitPrefixHiddenStates) : undefined,
+          vitPrefixHiddenStates: gpuVitPrefixHiddenStates ? readbackValues(gpuVitPrefixHiddenStates) : undefined,
           imageVitPrefixCpuMaxAbsDiff,
-          vitFirstBlockHiddenStates: gpuVitFirstBlockHiddenStates ? Array.from(gpuVitFirstBlockHiddenStates) : undefined,
+          vitFirstBlockHiddenStates: gpuVitFirstBlockHiddenStates ? readbackValues(gpuVitFirstBlockHiddenStates) : undefined,
           imageVitFirstBlockCpuMaxAbsDiff,
-          vitBlockStackHiddenStates: gpuVitBlockStackHiddenStates ? Array.from(gpuVitBlockStackHiddenStates) : undefined,
+          vitBlockStackHiddenStates: gpuVitBlockStackHiddenStates ? readbackValues(gpuVitBlockStackHiddenStates) : undefined,
           vitLayerParityCheckpoints: imageVitBlockStackResult?.finiteCheckpoints,
           imageVitBlockStackCpuMaxAbsDiff,
           vitFirstGlobalHiddenStatesMaxAbsDiff,
-          fpnNeckFeature0: gpuFpnNeckFeature0 ? Array.from(gpuFpnNeckFeature0) : undefined,
-          fpnNeckFeature1: gpuFpnNeckFeature1 ? Array.from(gpuFpnNeckFeature1) : undefined,
-          fpnNeckFeature2: gpuFpnNeckFeature2 ? Array.from(gpuFpnNeckFeature2) : undefined,
-          fpnNeckFeature3: gpuFpnNeckFeature3 ? Array.from(gpuFpnNeckFeature3) : undefined,
+          fpnNeckFeature0: gpuFpnNeckFeature0 ? readbackValues(gpuFpnNeckFeature0) : undefined,
+          fpnNeckFeature1: gpuFpnNeckFeature1 ? readbackValues(gpuFpnNeckFeature1) : undefined,
+          fpnNeckFeature2: gpuFpnNeckFeature2 ? readbackValues(gpuFpnNeckFeature2) : undefined,
+          fpnNeckFeature3: gpuFpnNeckFeature3 ? readbackValues(gpuFpnNeckFeature3) : undefined,
           imageFpnNeckCpuMaxAbsDiff,
-          encoderSrc: includeImageFpnNeck ? Array.from(effectiveEncoderSrc) : undefined,
-          encoderPos: includeImageFpnNeck ? Array.from(effectiveEncoderPos) : undefined,
-          promptFeatures: gpuPromptFeatures ? Array.from(gpuPromptFeatures) : undefined,
-          promptMask: gpuPromptMask ? Array.from(gpuPromptMask) : undefined,
+          encoderSrc: includeImageFpnNeck ? readbackValues(effectiveEncoderSrc) : undefined,
+          encoderPos: includeImageFpnNeck ? readbackValues(effectiveEncoderPos) : undefined,
+          promptFeatures: gpuPromptFeatures ? readbackValues(gpuPromptFeatures) : undefined,
+          promptMask: gpuPromptMask ? readbackValues(gpuPromptMask) : undefined,
           promptTextMaxAbsDiff,
           promptMaskMaxAbsDiff,
-          encoderHiddenStates: Array.from(gpuEncoderHiddenStates),
-          promptFpnFeature: gpuPromptFpnFeature ? Array.from(gpuPromptFpnFeature) : undefined,
-          pixelEmbed: gpuPixelEmbed ? Array.from(gpuPixelEmbed) : undefined,
-          decoderHiddenStates: gpuDecoderHiddenStates ? Array.from(gpuDecoderHiddenStates) : undefined,
-          lastHs: Array.from(gpuLastHs),
-          referenceBoxes: Array.from(gpuReferenceBoxes),
-          presenceLogits: Array.from(gpuPresenceLogits),
-          predLogits: gpuPredLogits ? Array.from(gpuPredLogits) : undefined,
-          selectionScores: gpuSelectionScores ? Array.from(gpuSelectionScores) : undefined,
-          selectionBoxes: gpuSelectionBoxes ? Array.from(gpuSelectionBoxes) : undefined,
-          selectionKeep: gpuSelectionKeep ? Array.from(gpuSelectionKeep) : undefined,
-          selectedIndex: gpuSelectedIndex ? Array.from(gpuSelectedIndex) : undefined,
-          selectedScore: gpuSelectedScore ? Array.from(gpuSelectedScore) : undefined,
-          selectedBox: gpuSelectedBox ? Array.from(gpuSelectedBox) : undefined,
+          encoderHiddenStates: readbackValues(gpuEncoderHiddenStates),
+          promptFpnFeature: gpuPromptFpnFeature ? readbackValues(gpuPromptFpnFeature) : undefined,
+          pixelEmbed: gpuPixelEmbed ? readbackValues(gpuPixelEmbed) : undefined,
+          decoderHiddenStates: gpuDecoderHiddenStates ? readbackValues(gpuDecoderHiddenStates) : undefined,
+          lastHs: readbackValues(gpuLastHs),
+          referenceBoxes: readbackValues(gpuReferenceBoxes),
+          presenceLogits: readbackValues(gpuPresenceLogits),
+          predLogits: gpuPredLogits ? readbackValues(gpuPredLogits) : undefined,
+          selectionScores: gpuSelectionScores ? readbackValues(gpuSelectionScores) : undefined,
+          selectionBoxes: gpuSelectionBoxes ? readbackValues(gpuSelectionBoxes) : undefined,
+          selectionKeep: gpuSelectionKeep ? readbackValues(gpuSelectionKeep) : undefined,
+          selectedIndex: gpuSelectedIndex ? readbackValues(gpuSelectedIndex) : undefined,
+          selectedScore: gpuSelectedScore ? readbackValues(gpuSelectedScore) : undefined,
+          selectedBox: gpuSelectedBox ? readbackValues(gpuSelectedBox) : undefined,
           maskLogits: tailResult.debugReadback.maskLogits,
           binaryMask: tailResult.debugReadback.binaryMask,
         },
@@ -3134,7 +3153,7 @@ async function loadPixelDecoderPayload(manifest) {
         },
         includeReadback: true,
       });
-      const gpuPixelEmbed = new Float32Array(pixelResult.debugReadback.pixelEmbed);
+      const gpuPixelEmbed = sam3TypedView(Float32Array, pixelResult.debugReadback.pixelEmbed);
       const pixelEmbedOutput = pixelResult.receipt.outputs.find(output => output.role === 'pixel-embed');
       if (!pixelEmbedOutput?.sha256 || !pixelEmbedOutput?.artifactId) throw new Error('pixel route output identity missing');
       const downstreamTensorSha256 = await aggregateTensorBundleSha256('sam3-mask-tail-composed-tensors', [
@@ -3207,7 +3226,7 @@ async function loadPixelDecoderPayload(manifest) {
         downstreamRouteReceipt: tailResult.receipt,
         backend: tailResult.backend,
         debugReadback: {
-          pixelEmbed: Array.from(gpuPixelEmbed),
+          pixelEmbed: readbackValues(gpuPixelEmbed),
           maskLogits: tailResult.debugReadback.maskLogits,
           binaryMask: tailResult.debugReadback.binaryMask,
         },
@@ -3344,7 +3363,7 @@ async function loadDetrEncoderPayload(manifest) {
     },
     async run({ device, adapter, route, request }) {
       const detrResult = await runSam3DetrEncoderPhaseProgramRoute({ request, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderSrc, encoderPos, promptFeatures, promptMask, layers: detrWeights.layers, shape: detrShape }, includeReadback: true });
-      const gpuEncoderHiddenStates = new Float32Array(detrResult.debugReadback.encoderHiddenStates);
+      const gpuEncoderHiddenStates = sam3TypedView(Float32Array, detrResult.debugReadback.encoderHiddenStates);
       const encoderHiddenStatesOutput = detrResult.receipt.outputs.find(output => output.role === 'encoder-hidden-states');
       if (!encoderHiddenStatesOutput?.sha256 || !encoderHiddenStatesOutput?.artifactId) throw new Error('DETR encoder output identity missing');
       const encoderTensorSha256 = await aggregateTensorBundleSha256('sam3-prompt-fpn-composed-tensors', [
@@ -3364,7 +3383,7 @@ async function loadDetrEncoderPayload(manifest) {
         routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-encoder', promptHash: manifest.prompt?.sha256, composedFrom: detrResult.receipt?.effectiveRouteId, encoderHiddenStatesOutput },
       });
       const promptResult = await runSam3PromptFpnPhaseProgramRoute({ request: promptRequest, route: promptRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: promptRoute.kernel, model: { revision: promptRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderHiddenStates: gpuEncoderHiddenStates, promptFeatures, promptMask, weights: promptWeights, shape: promptShape }, includeReadback: true });
-      const gpuPromptFpnFeature = new Float32Array(promptResult.debugReadback.promptFpnFeature);
+      const gpuPromptFpnFeature = sam3TypedView(Float32Array, promptResult.debugReadback.promptFpnFeature);
       const promptFpnOutput = promptResult.receipt.outputs.find(output => output.role === 'prompt-fpn-feature');
       if (!promptFpnOutput?.sha256 || !promptFpnOutput?.artifactId) throw new Error('prompt-FPN route output identity missing');
       const pixelTensorSha256 = await aggregateTensorBundleSha256('sam3-pixel-decoder-composed-tensors', [
@@ -3384,7 +3403,7 @@ async function loadDetrEncoderPayload(manifest) {
         routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-encoder', promptHash: manifest.prompt?.sha256, composedFrom: promptResult.receipt?.effectiveRouteId, promptFpnOutput },
       });
       const pixelResult = await runSam3PixelDecoderPhaseProgramRoute({ request: pixelRequest, route: pixelRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: pixelRoute.kernel, model: { revision: pixelRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { features: [backboneFeatures[0], backboneFeatures[1], gpuPromptFpnFeature], weights: pixelWeights, shape: pixelShape }, includeReadback: true });
-      const gpuPixelEmbed = new Float32Array(pixelResult.debugReadback.pixelEmbed);
+      const gpuPixelEmbed = sam3TypedView(Float32Array, pixelResult.debugReadback.pixelEmbed);
       const pixelEmbedOutput = pixelResult.receipt.outputs.find(output => output.role === 'pixel-embed');
       if (!pixelEmbedOutput?.sha256 || !pixelEmbedOutput?.artifactId) throw new Error('pixel route output identity missing');
       const downstreamTensorSha256 = await aggregateTensorBundleSha256('sam3-mask-tail-composed-tensors', [
@@ -3414,7 +3433,7 @@ async function loadDetrEncoderPayload(manifest) {
         downstreamRouteReceipt: tailResult.receipt,
         compositionRouteReceipts: [detrResult.receipt, promptResult.receipt, pixelResult.receipt, tailResult.receipt],
         backend: tailResult.backend,
-        debugReadback: { encoderHiddenStates: Array.from(gpuEncoderHiddenStates), promptFpnFeature: Array.from(gpuPromptFpnFeature), pixelEmbed: Array.from(gpuPixelEmbed), maskLogits: tailResult.debugReadback.maskLogits, binaryMask: tailResult.debugReadback.binaryMask },
+        debugReadback: { encoderHiddenStates: readbackValues(gpuEncoderHiddenStates), promptFpnFeature: readbackValues(gpuPromptFpnFeature), pixelEmbed: readbackValues(gpuPixelEmbed), maskLogits: tailResult.debugReadback.maskLogits, binaryMask: tailResult.debugReadback.binaryMask },
         compositionEdge: { upstreamRouteId: detrResult.receipt.effectiveRouteId, promptRouteId: promptResult.receipt.effectiveRouteId, midstreamRouteId: pixelResult.receipt.effectiveRouteId, downstreamRouteId: tailResult.receipt.effectiveRouteId, encoderHiddenStatesOutput, encoderTensorSha256, promptFpnOutput, pixelTensorSha256, pixelEmbedOutput, downstreamTensorSha256 },
       };
     },
@@ -3535,7 +3554,7 @@ async function loadPromptFpnPayload(manifest) {
     },
     async run({ device, adapter, route, request }) {
       const promptResult = await runSam3PromptFpnPhaseProgramRoute({ request, route, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: route.kernel, model: { revision: route.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { encoderHiddenStates, promptFeatures, promptMask, weights: promptWeights, shape: promptShape }, includeReadback: true });
-      const gpuPromptFpnFeature = new Float32Array(promptResult.debugReadback.promptFpnFeature);
+      const gpuPromptFpnFeature = sam3TypedView(Float32Array, promptResult.debugReadback.promptFpnFeature);
       const promptFpnOutput = promptResult.receipt.outputs.find(output => output.role === 'prompt-fpn-feature');
       if (!promptFpnOutput?.sha256 || !promptFpnOutput?.artifactId) throw new Error('prompt-FPN route output identity missing');
       const pixelTensorSha256 = await aggregateTensorBundleSha256('sam3-pixel-decoder-composed-tensors', [
@@ -3555,7 +3574,7 @@ async function loadPromptFpnPayload(manifest) {
         routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-prompt-fpn', promptHash: manifest.prompt?.sha256, composedFrom: promptResult.receipt?.effectiveRouteId, promptFpnOutput },
       });
       const pixelResult = await runSam3PixelDecoderPhaseProgramRoute({ request: pixelRequest, route: pixelRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: pixelRoute.kernel, model: { revision: pixelRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { features: [backboneFeatures[0], backboneFeatures[1], gpuPromptFpnFeature], weights: pixelWeights, shape: pixelShape }, includeReadback: true });
-      const gpuPixelEmbed = new Float32Array(pixelResult.debugReadback.pixelEmbed);
+      const gpuPixelEmbed = sam3TypedView(Float32Array, pixelResult.debugReadback.pixelEmbed);
       const pixelEmbedOutput = pixelResult.receipt.outputs.find(output => output.role === 'pixel-embed');
       if (!pixelEmbedOutput?.sha256 || !pixelEmbedOutput?.artifactId) throw new Error('pixel route output identity missing');
       const downstreamTensorSha256 = await aggregateTensorBundleSha256('sam3-mask-tail-composed-tensors', [
@@ -3577,7 +3596,7 @@ async function loadPromptFpnPayload(manifest) {
         routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-prompt-fpn', promptHash: manifest.prompt?.sha256, composedFrom: pixelResult.receipt?.effectiveRouteId, pixelEmbedOutput },
       });
       const tailResult = await runSam3MaskTailPhaseProgramRoute({ request: maskRequest, route: maskRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: maskRoute.kernel, model: { revision: maskRoute.model.revision, weightsHash: manifest.staticWeights.sha256, dtype: 'fp32' }, tensors: { lastHs, pixelEmbed: gpuPixelEmbed, weights: tailWeights, shape: maskTailShape }, includeReadback: true });
-      return { ...tailResult, receipt: promptResult.receipt, routeReceipt: promptResult.receipt, midstreamRouteReceipt: pixelResult.receipt, downstreamRouteReceipt: tailResult.receipt, backend: tailResult.backend, debugReadback: { promptFpnFeature: Array.from(gpuPromptFpnFeature), pixelEmbed: Array.from(gpuPixelEmbed), maskLogits: tailResult.debugReadback.maskLogits, binaryMask: tailResult.debugReadback.binaryMask }, compositionEdge: { upstreamRouteId: promptResult.receipt.effectiveRouteId, midstreamRouteId: pixelResult.receipt.effectiveRouteId, downstreamRouteId: tailResult.receipt.effectiveRouteId, promptFpnOutput, pixelTensorSha256, pixelEmbedOutput, downstreamTensorSha256 } };
+      return { ...tailResult, receipt: promptResult.receipt, routeReceipt: promptResult.receipt, midstreamRouteReceipt: pixelResult.receipt, downstreamRouteReceipt: tailResult.receipt, backend: tailResult.backend, debugReadback: { promptFpnFeature: readbackValues(gpuPromptFpnFeature), pixelEmbed: readbackValues(gpuPixelEmbed), maskLogits: tailResult.debugReadback.maskLogits, binaryMask: tailResult.debugReadback.binaryMask }, compositionEdge: { upstreamRouteId: promptResult.receipt.effectiveRouteId, midstreamRouteId: pixelResult.receipt.effectiveRouteId, downstreamRouteId: tailResult.receipt.effectiveRouteId, promptFpnOutput, pixelTensorSha256, pixelEmbedOutput, downstreamTensorSha256 } };
     },
   };
 }
@@ -3590,6 +3609,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
       throw new Error(`unsupported SAM3 verification mode: ${verificationMode}`);
     }
     const verificationAttached = verificationMode === 'reference-parity';
+    activeReadbackFormat = verificationAttached || diagnosticReadbackEnabled ? 'array' : 'typed-array';
     const hasDynamicInput = Object.hasOwn(invocationOptions, 'promptText') || Object.hasOwn(invocationOptions, 'sourceImage');
     if (verificationAttached && hasDynamicInput) {
       throw new Error('dynamic SAM3 input requires verificationMode execution-only');
@@ -3963,7 +3983,23 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
 
     setStatus('run-webgpu-route');
     const executionStartedAt = performance.now();
-    const result = await payload.run({ device, adapter, route, request, sourceImage });
+    let result;
+    if (modelSession) {
+      const job = modelSession.enqueue({
+        jobId: invocationId,
+        execute: () => payload.run({ device, adapter, route, request, sourceImage }),
+      });
+      const completion = await job.completion;
+      const { output, ...completionReceipt } = completion;
+      state.servingCompletion = completionReceipt;
+      modelSession.forgetJob(job.jobId);
+      if (completion.status !== 'succeeded' || !completion.outputPresent) {
+        throw new Error(completion.failure?.message || `SAM3 invocation ${completion.status}`);
+      }
+      result = output;
+    } else {
+      result = await payload.run({ device, adapter, route, request, sourceImage });
+    }
     const executionMilliseconds = performance.now() - executionStartedAt;
     state.servingTimings = {
       modelPreparationMilliseconds: servingResources.evidence().modelPreparationMilliseconds,
@@ -3996,9 +4032,9 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
       ? await aggregateTensorBundleSha256('sam3-browser-invocation-terminal-outputs', terminalOutputs)
       : null;
 
-    const gpuLogits = result.debugReadback.maskLogits ? new Float32Array(result.debugReadback.maskLogits) : null;
-    const gpuBinary = result.debugReadback.binaryMask ? new Uint32Array(result.debugReadback.binaryMask) : null;
-    const gpuPredLogits = result.debugReadback.predLogits ? new Float32Array(result.debugReadback.predLogits) : null;
+    const gpuLogits = result.debugReadback.maskLogits ? sam3TypedView(Float32Array, result.debugReadback.maskLogits) : null;
+    const gpuBinary = result.debugReadback.binaryMask ? sam3TypedView(Uint32Array, result.debugReadback.binaryMask) : null;
+    const gpuPredLogits = result.debugReadback.predLogits ? sam3TypedView(Float32Array, result.debugReadback.predLogits) : null;
     const binaryThresholdMismatchEvidence = collectBinaryThresholdMismatchEvidence(
       expectedLogits,
       gpuLogits,
@@ -4008,42 +4044,42 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     const parity = verificationAttached ? {
       promptTokenIdMismatchCount: payload.browserPromptTokenizerEvidence?.promptTokenIdMismatchCount,
       promptAttentionMaskMismatchCount: payload.browserPromptTokenizerEvidence?.promptAttentionMaskMismatchCount,
-      encoderHiddenStatesMaxAbsDiff: result.debugReadback.encoderHiddenStates ? maxAbsDiff(payload.expectedEncoderHiddenStates || [], new Float32Array(result.debugReadback.encoderHiddenStates)) : undefined,
-      decoderHiddenStatesMaxAbsDiff: result.debugReadback.decoderHiddenStates ? maxAbsDiff(payload.expectedDecoderHiddenStates || [], new Float32Array(result.debugReadback.decoderHiddenStates)) : undefined,
-      lastHsMaxAbsDiff: result.debugReadback.lastHs ? maxAbsDiff(payload.expectedLastHs || [], new Float32Array(result.debugReadback.lastHs)) : undefined,
-      referenceBoxesMaxAbsDiff: result.debugReadback.referenceBoxes ? maxAbsDiff(payload.expectedReferenceBoxes || [], new Float32Array(result.debugReadback.referenceBoxes)) : undefined,
-      presenceLogitsMaxAbsDiff: result.debugReadback.presenceLogits ? maxAbsDiff(payload.expectedPresenceLogits || [], new Float32Array(result.debugReadback.presenceLogits)) : undefined,
-      pixelValuesMaxAbsDiff: result.debugReadback.pixelValues ? maxAbsDiff(payload.expectedPixelValues || [], new Float32Array(result.debugReadback.pixelValues)) : undefined,
+      encoderHiddenStatesMaxAbsDiff: result.debugReadback.encoderHiddenStates ? maxAbsDiff(payload.expectedEncoderHiddenStates || [], sam3TypedView(Float32Array, result.debugReadback.encoderHiddenStates)) : undefined,
+      decoderHiddenStatesMaxAbsDiff: result.debugReadback.decoderHiddenStates ? maxAbsDiff(payload.expectedDecoderHiddenStates || [], sam3TypedView(Float32Array, result.debugReadback.decoderHiddenStates)) : undefined,
+      lastHsMaxAbsDiff: result.debugReadback.lastHs ? maxAbsDiff(payload.expectedLastHs || [], sam3TypedView(Float32Array, result.debugReadback.lastHs)) : undefined,
+      referenceBoxesMaxAbsDiff: result.debugReadback.referenceBoxes ? maxAbsDiff(payload.expectedReferenceBoxes || [], sam3TypedView(Float32Array, result.debugReadback.referenceBoxes)) : undefined,
+      presenceLogitsMaxAbsDiff: result.debugReadback.presenceLogits ? maxAbsDiff(payload.expectedPresenceLogits || [], sam3TypedView(Float32Array, result.debugReadback.presenceLogits)) : undefined,
+      pixelValuesMaxAbsDiff: result.debugReadback.pixelValues ? maxAbsDiff(payload.expectedPixelValues || [], sam3TypedView(Float32Array, result.debugReadback.pixelValues)) : undefined,
       imagePreprocessCpuMaxAbsDiff: result.debugReadback.imagePreprocessCpuMaxAbsDiff,
-      patchEmbeddingsMaxAbsDiff: result.debugReadback.patchEmbeddings ? maxAbsDiff(payload.expectedPatchEmbeddings || [], new Float32Array(result.debugReadback.patchEmbeddings)) : undefined,
+      patchEmbeddingsMaxAbsDiff: result.debugReadback.patchEmbeddings ? maxAbsDiff(payload.expectedPatchEmbeddings || [], sam3TypedView(Float32Array, result.debugReadback.patchEmbeddings)) : undefined,
       imagePatchEmbedCpuMaxAbsDiff: result.debugReadback.imagePatchEmbedCpuMaxAbsDiff,
-      vitPrefixHiddenStatesMaxAbsDiff: result.debugReadback.vitPrefixHiddenStates ? maxAbsDiff(payload.expectedVitPrefixHiddenStates || [], new Float32Array(result.debugReadback.vitPrefixHiddenStates)) : undefined,
+      vitPrefixHiddenStatesMaxAbsDiff: result.debugReadback.vitPrefixHiddenStates ? maxAbsDiff(payload.expectedVitPrefixHiddenStates || [], sam3TypedView(Float32Array, result.debugReadback.vitPrefixHiddenStates)) : undefined,
       imageVitPrefixCpuMaxAbsDiff: result.debugReadback.imageVitPrefixCpuMaxAbsDiff,
-      vitFirstBlockHiddenStatesMaxAbsDiff: result.debugReadback.vitFirstBlockHiddenStates ? maxAbsDiff(payload.expectedVitFirstBlockHiddenStates || [], new Float32Array(result.debugReadback.vitFirstBlockHiddenStates)) : undefined,
+      vitFirstBlockHiddenStatesMaxAbsDiff: result.debugReadback.vitFirstBlockHiddenStates ? maxAbsDiff(payload.expectedVitFirstBlockHiddenStates || [], sam3TypedView(Float32Array, result.debugReadback.vitFirstBlockHiddenStates)) : undefined,
       imageVitFirstBlockCpuMaxAbsDiff: result.debugReadback.imageVitFirstBlockCpuMaxAbsDiff,
-      vitBlockStackHiddenStatesMaxAbsDiff: result.debugReadback.vitBlockStackHiddenStates ? maxAbsDiff(payload.expectedVitBlockStackHiddenStates || [], new Float32Array(result.debugReadback.vitBlockStackHiddenStates)) : undefined,
-      vitBackboneHiddenStatesMaxAbsDiff: result.debugReadback.vitBlockStackHiddenStates && payload.expectedVitBackboneHiddenStates ? maxAbsDiff(payload.expectedVitBackboneHiddenStates, new Float32Array(result.debugReadback.vitBlockStackHiddenStates)) : undefined,
+      vitBlockStackHiddenStatesMaxAbsDiff: result.debugReadback.vitBlockStackHiddenStates ? maxAbsDiff(payload.expectedVitBlockStackHiddenStates || [], sam3TypedView(Float32Array, result.debugReadback.vitBlockStackHiddenStates)) : undefined,
+      vitBackboneHiddenStatesMaxAbsDiff: result.debugReadback.vitBlockStackHiddenStates && payload.expectedVitBackboneHiddenStates ? maxAbsDiff(payload.expectedVitBackboneHiddenStates, sam3TypedView(Float32Array, result.debugReadback.vitBlockStackHiddenStates)) : undefined,
       imageVitBlockStackCpuMaxAbsDiff: result.debugReadback.imageVitBlockStackCpuMaxAbsDiff,
       vitFirstGlobalHiddenStatesMaxAbsDiff: result.debugReadback.vitFirstGlobalHiddenStatesMaxAbsDiff,
-      fpnNeckFeature0MaxAbsDiff: result.debugReadback.fpnNeckFeature0 ? maxAbsDiff(payload.expectedFpnNeckFeature0 || [], new Float32Array(result.debugReadback.fpnNeckFeature0)) : undefined,
-      fpnNeckFeature1MaxAbsDiff: result.debugReadback.fpnNeckFeature1 ? maxAbsDiff(payload.expectedFpnNeckFeature1 || [], new Float32Array(result.debugReadback.fpnNeckFeature1)) : undefined,
-      fpnNeckFeature2MaxAbsDiff: result.debugReadback.fpnNeckFeature2 ? maxAbsDiff(payload.expectedFpnNeckFeature2 || [], new Float32Array(result.debugReadback.fpnNeckFeature2)) : undefined,
-      fpnNeckFeature3MaxAbsDiff: result.debugReadback.fpnNeckFeature3 ? maxAbsDiff(payload.expectedFpnNeckFeature3 || [], new Float32Array(result.debugReadback.fpnNeckFeature3)) : undefined,
+      fpnNeckFeature0MaxAbsDiff: result.debugReadback.fpnNeckFeature0 ? maxAbsDiff(payload.expectedFpnNeckFeature0 || [], sam3TypedView(Float32Array, result.debugReadback.fpnNeckFeature0)) : undefined,
+      fpnNeckFeature1MaxAbsDiff: result.debugReadback.fpnNeckFeature1 ? maxAbsDiff(payload.expectedFpnNeckFeature1 || [], sam3TypedView(Float32Array, result.debugReadback.fpnNeckFeature1)) : undefined,
+      fpnNeckFeature2MaxAbsDiff: result.debugReadback.fpnNeckFeature2 ? maxAbsDiff(payload.expectedFpnNeckFeature2 || [], sam3TypedView(Float32Array, result.debugReadback.fpnNeckFeature2)) : undefined,
+      fpnNeckFeature3MaxAbsDiff: result.debugReadback.fpnNeckFeature3 ? maxAbsDiff(payload.expectedFpnNeckFeature3 || [], sam3TypedView(Float32Array, result.debugReadback.fpnNeckFeature3)) : undefined,
       imageFpnNeckCpuMaxAbsDiff: result.debugReadback.imageFpnNeckCpuMaxAbsDiff,
-      encoderSrcMaxAbsDiff: result.debugReadback.encoderSrc ? maxAbsDiff(payload.expectedEncoderSrc || [], new Float32Array(result.debugReadback.encoderSrc)) : undefined,
-      encoderPosMaxAbsDiff: result.debugReadback.encoderPos ? maxAbsDiff(payload.expectedEncoderPos || [], new Float32Array(result.debugReadback.encoderPos)) : undefined,
-      promptTextMaxAbsDiff: result.debugReadback.promptFeatures ? maxAbsDiff(payload.expectedPromptFeatures || [], new Float32Array(result.debugReadback.promptFeatures)) : undefined,
-      promptMaskMaxAbsDiff: result.debugReadback.promptMask ? maxAbsDiff(payload.expectedPromptMask || [], new Float32Array(result.debugReadback.promptMask)) : undefined,
-      promptFpnMaxAbsDiff: result.debugReadback.promptFpnFeature ? maxAbsDiff(payload.expectedPromptFpnFeature || [], new Float32Array(result.debugReadback.promptFpnFeature)) : undefined,
-      pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], new Float32Array(result.debugReadback.pixelEmbed)) : undefined,
+      encoderSrcMaxAbsDiff: result.debugReadback.encoderSrc ? maxAbsDiff(payload.expectedEncoderSrc || [], sam3TypedView(Float32Array, result.debugReadback.encoderSrc)) : undefined,
+      encoderPosMaxAbsDiff: result.debugReadback.encoderPos ? maxAbsDiff(payload.expectedEncoderPos || [], sam3TypedView(Float32Array, result.debugReadback.encoderPos)) : undefined,
+      promptTextMaxAbsDiff: result.debugReadback.promptFeatures ? maxAbsDiff(payload.expectedPromptFeatures || [], sam3TypedView(Float32Array, result.debugReadback.promptFeatures)) : undefined,
+      promptMaskMaxAbsDiff: result.debugReadback.promptMask ? maxAbsDiff(payload.expectedPromptMask || [], sam3TypedView(Float32Array, result.debugReadback.promptMask)) : undefined,
+      promptFpnMaxAbsDiff: result.debugReadback.promptFpnFeature ? maxAbsDiff(payload.expectedPromptFpnFeature || [], sam3TypedView(Float32Array, result.debugReadback.promptFpnFeature)) : undefined,
+      pixelEmbedMaxAbsDiff: result.debugReadback.pixelEmbed ? maxAbsDiff(payload.expectedPixelEmbed || [], sam3TypedView(Float32Array, result.debugReadback.pixelEmbed)) : undefined,
       maskLogitsMaxAbsDiff: gpuLogits ? maxAbsDiff(expectedLogits, gpuLogits) : undefined,
       predLogitsMaxAbsDiff: gpuPredLogits ? maxAbsDiff(expectedPredLogits, gpuPredLogits) : undefined,
-      selectionScoresMaxAbsDiff: result.debugReadback.selectionScores ? maxAbsDiff(payload.expectedSelectionScores || [], new Float32Array(result.debugReadback.selectionScores)) : undefined,
-      selectionBoxesMaxAbsDiff: result.debugReadback.selectionBoxes ? maxAbsDiff(payload.expectedSelectionBoxes || [], new Float32Array(result.debugReadback.selectionBoxes)) : undefined,
-      selectionKeepMismatchCount: result.debugReadback.selectionKeep ? mismatchCount(payload.expectedSelectionKeep || [], new Uint32Array(result.debugReadback.selectionKeep)) : undefined,
-      selectedIndexMaxAbsDiff: result.debugReadback.selectedIndex ? maxAbsDiff(payload.expectedSelectedIndex || [], new Uint32Array(result.debugReadback.selectedIndex)) : undefined,
-      selectedScoreMaxAbsDiff: result.debugReadback.selectedScore ? maxAbsDiff(payload.expectedSelectedScore || [], new Float32Array(result.debugReadback.selectedScore)) : undefined,
-      selectedBoxMaxAbsDiff: result.debugReadback.selectedBox ? maxAbsDiff(payload.expectedSelectedBox || [], new Float32Array(result.debugReadback.selectedBox)) : undefined,
+      selectionScoresMaxAbsDiff: result.debugReadback.selectionScores ? maxAbsDiff(payload.expectedSelectionScores || [], sam3TypedView(Float32Array, result.debugReadback.selectionScores)) : undefined,
+      selectionBoxesMaxAbsDiff: result.debugReadback.selectionBoxes ? maxAbsDiff(payload.expectedSelectionBoxes || [], sam3TypedView(Float32Array, result.debugReadback.selectionBoxes)) : undefined,
+      selectionKeepMismatchCount: result.debugReadback.selectionKeep ? mismatchCount(payload.expectedSelectionKeep || [], sam3TypedView(Uint32Array, result.debugReadback.selectionKeep)) : undefined,
+      selectedIndexMaxAbsDiff: result.debugReadback.selectedIndex ? maxAbsDiff(payload.expectedSelectedIndex || [], sam3TypedView(Uint32Array, result.debugReadback.selectedIndex)) : undefined,
+      selectedScoreMaxAbsDiff: result.debugReadback.selectedScore ? maxAbsDiff(payload.expectedSelectedScore || [], sam3TypedView(Float32Array, result.debugReadback.selectedScore)) : undefined,
+      selectedBoxMaxAbsDiff: result.debugReadback.selectedBox ? maxAbsDiff(payload.expectedSelectedBox || [], sam3TypedView(Float32Array, result.debugReadback.selectedBox)) : undefined,
       binaryMismatchCount: gpuBinary ? mismatchCount(expectedBinary, gpuBinary) : 0,
       expectedElementCount: expectedLogits?.length ?? expectedPredLogits?.length,
       gpuElementCount: gpuLogits?.length ?? gpuPredLogits?.length,
@@ -4079,42 +4115,42 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     const selectedScoreTolerance = manifest.tolerances?.selectedScoreMaxAbsDiff ?? 0.00001;
     const selectedBoxTolerance = manifest.tolerances?.selectedBoxMaxAbsDiff ?? 0.0001;
     const debugReadbackSamples = {
-      lastHs: result.debugReadback.lastHs ? Array.from(new Float32Array(result.debugReadback.lastHs).slice(0, 16)) : undefined,
+      lastHs: result.debugReadback.lastHs ? Array.from(sam3TypedView(Float32Array, result.debugReadback.lastHs).slice(0, 16)) : undefined,
       expectedLastHs: payload.expectedLastHs ? Array.from(payload.expectedLastHs.slice(0, 16)) : undefined,
-      decoderHiddenStates: result.debugReadback.decoderHiddenStates ? Array.from(new Float32Array(result.debugReadback.decoderHiddenStates).slice(0, 16)) : undefined,
+      decoderHiddenStates: result.debugReadback.decoderHiddenStates ? Array.from(sam3TypedView(Float32Array, result.debugReadback.decoderHiddenStates).slice(0, 16)) : undefined,
       expectedDecoderHiddenStates: payload.expectedDecoderHiddenStates ? Array.from(payload.expectedDecoderHiddenStates.slice(0, 16)) : undefined,
-      referenceBoxes: result.debugReadback.referenceBoxes ? Array.from(new Float32Array(result.debugReadback.referenceBoxes).slice(0, 16)) : undefined,
+      referenceBoxes: result.debugReadback.referenceBoxes ? Array.from(sam3TypedView(Float32Array, result.debugReadback.referenceBoxes).slice(0, 16)) : undefined,
       expectedReferenceBoxes: payload.expectedReferenceBoxes ? Array.from(payload.expectedReferenceBoxes.slice(0, 16)) : undefined,
-      presenceLogits: result.debugReadback.presenceLogits ? Array.from(new Float32Array(result.debugReadback.presenceLogits).slice(0, 8)) : undefined,
+      presenceLogits: result.debugReadback.presenceLogits ? Array.from(sam3TypedView(Float32Array, result.debugReadback.presenceLogits).slice(0, 8)) : undefined,
       expectedPresenceLogits: payload.expectedPresenceLogits ? Array.from(payload.expectedPresenceLogits.slice(0, 8)) : undefined,
-      pixelValues: result.debugReadback.pixelValues ? Array.from(new Float32Array(result.debugReadback.pixelValues).slice(0, 16)) : undefined,
+      pixelValues: result.debugReadback.pixelValues ? Array.from(sam3TypedView(Float32Array, result.debugReadback.pixelValues).slice(0, 16)) : undefined,
       expectedPixelValues: payload.expectedPixelValues ? Array.from(payload.expectedPixelValues.slice(0, 16)) : undefined,
-      patchEmbeddings: result.debugReadback.patchEmbeddings ? Array.from(new Float32Array(result.debugReadback.patchEmbeddings).slice(0, 16)) : undefined,
+      patchEmbeddings: result.debugReadback.patchEmbeddings ? Array.from(sam3TypedView(Float32Array, result.debugReadback.patchEmbeddings).slice(0, 16)) : undefined,
       expectedPatchEmbeddings: payload.expectedPatchEmbeddings ? Array.from(payload.expectedPatchEmbeddings.slice(0, 16)) : undefined,
-      vitPrefixHiddenStates: result.debugReadback.vitPrefixHiddenStates ? Array.from(new Float32Array(result.debugReadback.vitPrefixHiddenStates).slice(0, 16)) : undefined,
+      vitPrefixHiddenStates: result.debugReadback.vitPrefixHiddenStates ? Array.from(sam3TypedView(Float32Array, result.debugReadback.vitPrefixHiddenStates).slice(0, 16)) : undefined,
       expectedVitPrefixHiddenStates: payload.expectedVitPrefixHiddenStates ? Array.from(payload.expectedVitPrefixHiddenStates.slice(0, 16)) : undefined,
-      vitFirstBlockHiddenStates: result.debugReadback.vitFirstBlockHiddenStates ? Array.from(new Float32Array(result.debugReadback.vitFirstBlockHiddenStates).slice(0, 16)) : undefined,
+      vitFirstBlockHiddenStates: result.debugReadback.vitFirstBlockHiddenStates ? Array.from(sam3TypedView(Float32Array, result.debugReadback.vitFirstBlockHiddenStates).slice(0, 16)) : undefined,
       expectedVitFirstBlockHiddenStates: payload.expectedVitFirstBlockHiddenStates ? Array.from(payload.expectedVitFirstBlockHiddenStates.slice(0, 16)) : undefined,
-      vitBlockStackHiddenStates: result.debugReadback.vitBlockStackHiddenStates ? Array.from(new Float32Array(result.debugReadback.vitBlockStackHiddenStates).slice(0, 16)) : undefined,
+      vitBlockStackHiddenStates: result.debugReadback.vitBlockStackHiddenStates ? Array.from(sam3TypedView(Float32Array, result.debugReadback.vitBlockStackHiddenStates).slice(0, 16)) : undefined,
       expectedVitBlockStackHiddenStates: payload.expectedVitBlockStackHiddenStates ? Array.from(payload.expectedVitBlockStackHiddenStates.slice(0, 16)) : undefined,
       expectedVitFirstGlobalHiddenStates: payload.expectedVitFirstGlobalHiddenStates ? Array.from(payload.expectedVitFirstGlobalHiddenStates.slice(0, 16)) : undefined,
-      fpnNeckFeature0: result.debugReadback.fpnNeckFeature0 ? Array.from(new Float32Array(result.debugReadback.fpnNeckFeature0).slice(0, 16)) : undefined,
+      fpnNeckFeature0: result.debugReadback.fpnNeckFeature0 ? Array.from(sam3TypedView(Float32Array, result.debugReadback.fpnNeckFeature0).slice(0, 16)) : undefined,
       expectedFpnNeckFeature0: payload.expectedFpnNeckFeature0 ? Array.from(payload.expectedFpnNeckFeature0.slice(0, 16)) : undefined,
-      fpnNeckFeature3: result.debugReadback.fpnNeckFeature3 ? Array.from(new Float32Array(result.debugReadback.fpnNeckFeature3).slice(0, 16)) : undefined,
+      fpnNeckFeature3: result.debugReadback.fpnNeckFeature3 ? Array.from(sam3TypedView(Float32Array, result.debugReadback.fpnNeckFeature3).slice(0, 16)) : undefined,
       expectedFpnNeckFeature3: payload.expectedFpnNeckFeature3 ? Array.from(payload.expectedFpnNeckFeature3.slice(0, 16)) : undefined,
-      encoderSrc: result.debugReadback.encoderSrc ? Array.from(new Float32Array(result.debugReadback.encoderSrc).slice(0, 16)) : undefined,
+      encoderSrc: result.debugReadback.encoderSrc ? Array.from(sam3TypedView(Float32Array, result.debugReadback.encoderSrc).slice(0, 16)) : undefined,
       expectedEncoderSrc: payload.expectedEncoderSrc ? Array.from(payload.expectedEncoderSrc.slice(0, 16)) : undefined,
-      encoderPos: result.debugReadback.encoderPos ? Array.from(new Float32Array(result.debugReadback.encoderPos).slice(0, 16)) : undefined,
+      encoderPos: result.debugReadback.encoderPos ? Array.from(sam3TypedView(Float32Array, result.debugReadback.encoderPos).slice(0, 16)) : undefined,
       expectedEncoderPos: payload.expectedEncoderPos ? Array.from(payload.expectedEncoderPos.slice(0, 16)) : undefined,
-      promptFeatures: result.debugReadback.promptFeatures ? Array.from(new Float32Array(result.debugReadback.promptFeatures).slice(0, 16)) : undefined,
+      promptFeatures: result.debugReadback.promptFeatures ? Array.from(sam3TypedView(Float32Array, result.debugReadback.promptFeatures).slice(0, 16)) : undefined,
       expectedPromptFeatures: payload.expectedPromptFeatures ? Array.from(payload.expectedPromptFeatures.slice(0, 16)) : undefined,
-      promptMask: result.debugReadback.promptMask ? Array.from(new Float32Array(result.debugReadback.promptMask).slice(0, 16)) : undefined,
+      promptMask: result.debugReadback.promptMask ? Array.from(sam3TypedView(Float32Array, result.debugReadback.promptMask).slice(0, 16)) : undefined,
       expectedPromptMask: payload.expectedPromptMask ? Array.from(payload.expectedPromptMask.slice(0, 16)) : undefined,
-      predLogits: result.debugReadback.predLogits ? Array.from(new Float32Array(result.debugReadback.predLogits).slice(0, 16)) : undefined,
+      predLogits: result.debugReadback.predLogits ? Array.from(sam3TypedView(Float32Array, result.debugReadback.predLogits).slice(0, 16)) : undefined,
       expectedPredLogits: payload.expectedPredLogits ? Array.from(payload.expectedPredLogits.slice(0, 16)) : undefined,
-      selectedIndex: result.debugReadback.selectedIndex ? Array.from(new Uint32Array(result.debugReadback.selectedIndex).slice(0, 8)) : undefined,
+      selectedIndex: result.debugReadback.selectedIndex ? Array.from(sam3TypedView(Uint32Array, result.debugReadback.selectedIndex).slice(0, 8)) : undefined,
       expectedSelectedIndex: payload.expectedSelectedIndex ? Array.from(payload.expectedSelectedIndex.slice(0, 8)) : undefined,
-      selectedScore: result.debugReadback.selectedScore ? Array.from(new Float32Array(result.debugReadback.selectedScore).slice(0, 8)) : undefined,
+      selectedScore: result.debugReadback.selectedScore ? Array.from(sam3TypedView(Float32Array, result.debugReadback.selectedScore).slice(0, 8)) : undefined,
       expectedSelectedScore: payload.expectedSelectedScore ? Array.from(payload.expectedSelectedScore.slice(0, 8)) : undefined,
     };
     const detectorSelectedMaskIndex = Number.isInteger(debugReadbackSamples.selectedIndex?.[0])
@@ -4296,8 +4332,8 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
         binaryMismatchCount: parity.binaryMismatchCount,
       } : null,
       debugReadbackSamples: {
-        promptFpnFeature: result.debugReadback.promptFpnFeature ? Array.from(new Float32Array(result.debugReadback.promptFpnFeature).slice(0, 16)) : undefined,
-        pixelEmbed: result.debugReadback.pixelEmbed ? Array.from(new Float32Array(result.debugReadback.pixelEmbed).slice(0, 16)) : undefined,
+        promptFpnFeature: result.debugReadback.promptFpnFeature ? Array.from(sam3TypedView(Float32Array, result.debugReadback.promptFpnFeature).slice(0, 16)) : undefined,
+        pixelEmbed: result.debugReadback.pixelEmbed ? Array.from(sam3TypedView(Float32Array, result.debugReadback.pixelEmbed).slice(0, 16)) : undefined,
       },
     } : null;
     if (verificationAttached) {
@@ -4346,7 +4382,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     }
 
     const selectionKeep = result.debugReadback.selectionKeep
-      ? new Uint32Array(result.debugReadback.selectionKeep)
+      ? sam3TypedView(Uint32Array, result.debugReadback.selectionKeep)
       : null;
     const selectedCandidateCount = selectionKeep
       ? selectionKeep.reduce((count, keep) => count + (keep ? 1 : 0), 0)
@@ -4388,7 +4424,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
         selectedBox: selectedCandidateCount === 0
           ? [0, 0, 0, 0]
           : result.debugReadback.selectedBox
-            ? Array.from(new Float32Array(result.debugReadback.selectedBox).slice(0, 4))
+            ? Array.from(sam3TypedView(Float32Array, result.debugReadback.selectedBox).slice(0, 4))
             : null,
         width: visualShape.width,
         height: visualShape.height,

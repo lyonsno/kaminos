@@ -215,7 +215,7 @@ async function runMask(controlKind = 'positive') {
   try {
     const runtime = await waitForRuntime();
     phaseTimer = window.setInterval(() => {
-      const runtimeState = runtime.samMaskIslandParitySmokeState?.();
+      const runtimeState = runtime.samMaskIslandProgress?.();
       if (runtimeState?.status && activeInvocationId === invocationId) {
         setStatus('running', runtimeState.status.replaceAll('-', ' '));
       }

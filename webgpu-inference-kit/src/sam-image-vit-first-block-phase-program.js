@@ -1,3 +1,4 @@
+import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   defineWebGpuRoute,
@@ -821,6 +822,7 @@ export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    yield: input.yield,
     residentTensorResolver: input.residentTensorResolver,
   });
 
@@ -953,7 +955,7 @@ export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
   if (input.includeReadback === true) {
     authoritative.debugReadback = {
       mode: 'explicit-debug-evidence',
-      vitFirstBlockHiddenStates: Array.from(new Float32Array(run.outputs.vitFirstBlockHiddenStates)),
+      vitFirstBlockHiddenStates: sam3Readback(input, new Float32Array(run.outputs.vitFirstBlockHiddenStates)),
     };
   }
   authoritative.resourceDisposal = runtime.dispose();

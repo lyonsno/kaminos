@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
+import { sam3TypedView, sam3Readback } from '../src/sam-readback.js';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSourceUrl = new URL('../src/sam-image-patch-embed-phase-program.js', import.meta.url);
@@ -162,6 +163,7 @@ const residentBuffer = {
   destroy() { this.destroyCount += 1; },
 };
 let residentResolverCalls = 0;
+let yieldCalls = 0;
 const residentRequest = createRouteInvocationRequest(residentRoute, {
   requestId: 'sam3-patch-resident-contract',
   inputs: {
@@ -171,7 +173,12 @@ const residentRequest = createRouteInvocationRequest(residentRoute, {
   },
   outputs: { 'patch-embeddings': { artifactId: 'resident-output' } },
 });
-await runSam3ImagePatchEmbedPhaseProgramRoute({
+const residentInput = {
+  includeReadback: true,
+  yield: async metadata => {
+    yieldCalls += 1;
+    return { reason: metadata.reason, elapsedMs: 0 };
+  },
   request: residentRequest,
   route: residentRoute,
   device: residentFixture.device,
@@ -201,8 +208,18 @@ await runSam3ImagePatchEmbedPhaseProgramRoute({
     weights: { projection: residentProjection },
     shape: { batch: 1, imageHeight: 2, imageWidth: 2, imageChannels: 3, patchSize: 2, patchHeight: 1, patchWidth: 1, hiddenSize: 2 },
   },
-});
+};
+const residentResult = await runSam3ImagePatchEmbedPhaseProgramRoute({ ...residentInput, readbackFormat: 'typed-array' });
+assert.ok(residentResult.debugReadback.patchEmbeddings instanceof Float32Array,
+  'serving must receive typed tensors from the executed route, not boxed JSON arrays');
+assert.deepEqual(Array.from(residentResult.debugReadback.patchEmbeddings), [0, 0],
+  'the no-compute fixture returns exactly its untouched output buffer, not CPU oracle output');
+const view = residentResult.debugReadback.patchEmbeddings;
+assert.strictEqual(sam3TypedView(Float32Array, view), view, 'phase composition must not copy typed outputs');
+assert.strictEqual(sam3Readback({ readbackFormat: 'typed-array' }, view), view);
+assert.deepEqual(sam3Readback({}, view), [0, 0], 'evidence consumers retain the JSON array contract');
 assert.equal(residentResolverCalls, 1, 'the real patch route must resolve its immutable projection through residency exactly once');
+assert.ok(yieldCalls > 0, 'the executed phase route must service the application cooperative callback');
 assert.equal(residentFixture.calls.writes.some(write => write.buffer === residentBuffer), false, 'resident projection bytes must not upload per invocation');
 assert.equal(residentBuffer.destroyCount, 0, 'route disposal must not destroy the session-owned resident projection');
 assert.equal(

@@ -43,6 +43,7 @@ const bytesBySha = new Map([
   [artifactA.sha256, artifactABytes],
   [artifactB.sha256, artifactBBytes],
 ]);
+const acquisitionTrace = [];
 const packageRuntime = {
   packageId: 'sam31-tracker-model-package:resident-fixture',
   modelPackage: {
@@ -50,6 +51,7 @@ const packageRuntime = {
     staticArtifacts: [artifactA, artifactB],
   },
   async loadUint8(entry) {
+    acquisitionTrace.push(`load:${entry.file}`);
     const bytes = bytesBySha.get(entry.sha256);
     if (!bytes) throw new Error(`unknown fixture artifact ${entry.sha256}`);
     return bytes.slice();
@@ -67,6 +69,7 @@ const writes = [];
 const device = {
   queue: {
     writeBuffer(buffer, offset, data) {
+      acquisitionTrace.push('upload');
       writes.push({ buffer, offset, bytes: new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice() });
     },
   },
@@ -97,21 +100,31 @@ const ownerRoute = await session.registerRoute({
   },
 });
 
-const resident = await createSam31ResidentModelResources({ packageRuntime, route: ownerRoute });
+let packageLoads = 0;
+const resident = await createSam31ResidentModelResources({ packageRuntime, route: {
+  ...ownerRoute,
+  loadModelResources() { throw new Error('whole-model bundle assembly is forbidden on the SAM serving path'); },
+  loadModelResourcePackageFromSources(input) {
+    packageLoads += 1;
+    return ownerRoute.loadModelResourcePackageFromSources(input);
+  },
+} });
+assert.equal(packageLoads, 1, 'SAM must load its artifacts through the shared sequential package consumer');
+assert.deepEqual(acquisitionTrace, ['load:static/a.bin', 'upload', 'load:static/b.bin', 'upload'],
+  'later artifact bytes must not be prefetched before the previous artifact reaches residency');
 assert.equal(resident.schema, 'kaminos.sam31-resident-model-resources.v0');
 assert.equal(resident.packageId, packageRuntime.packageId);
 assert.equal(
-  resident.manifest.schema,
-  'kaminos.webgpu-model-resource-manifest.v1',
-  'the SAM resident owner must regenerate model resources through the current semantic manifest schema',
+  resident.resourcePackage.schema,
+  'kaminos.webgpu-model-resource-package.v0',
+  'the SAM resident owner must compose verified per-artifact manifests through the kit package loader',
 );
-assert.equal(
-  resident.manifest.resourceSharing.policy,
-  'semantic-identity',
-  'SAM must retain semantic isolation unless a separate compatibility contract authorizes physical dedupe',
-);
-assert.equal(resident.manifest.allocations.length, 2);
-for (const allocation of resident.manifest.allocations) {
+assert.equal(resident.resourcePackage.resources.length, 2);
+for (const resource of resident.resourcePackage.resources) {
+  assert.equal(resource.manifest.schema, 'kaminos.webgpu-model-resource-manifest.v1');
+  assert.equal(resource.manifest.resourceSharing.policy, 'semantic-identity');
+  assert.equal(resource.manifest.allocations.length, 1);
+  const allocation = resource.manifest.allocations[0];
   assert.match(allocation.physicalResourceId, /^kaminos:model-resource:sha256:/);
   assert.match(allocation.semanticResourceId, /^kaminos:model-resource:sha256:.*:semantic:/);
   assert.notEqual(allocation.physicalResourceId, allocation.semanticResourceId);
@@ -137,11 +150,16 @@ for (const resource of resident.evidence().resources) {
   assert.match(resource.semanticResourceId, /^kaminos:model-resource:sha256:.*:semantic:/);
   assert.match(resource.semanticLeaseId, /^kaminos:model-resource:sha256:.*:semantic:.*:lease:/);
 }
-assert.equal(
-  resident.evidence().bundleVerification.byteCustody,
-  'loader-owned-transfer-before-verification',
-  'the assembled full model bundle must transfer custody instead of retaining a second full-size loader copy',
-);
+const packageReport = resident.evidence().packageAcquisition;
+assert.equal(Object.hasOwn(packageReport, 'progress'), false,
+  'routine serving evidence must not duplicate the full package progress journal');
+assert.equal(packageReport.status, 'loaded');
+assert.equal(packageReport.sourceMemoryBound.totalPackageByteLength, 28);
+assert.equal(packageReport.sourceMemoryBound.largestResourceByteLength, 20,
+  'source acquisition must be bounded by the largest actual artifact, not the full model');
+assert.equal(packageReport.resourceCount, 2);
+assert.strictEqual(resident.acquisitionReport(), resident.modelLease.report, 'the complete uncapped journal remains available without copying');
+assert.equal(resident.acquisitionReport().resources.length, 2, 'each artifact retains its own verification report');
 
 const entryA = { ...artifactA, role: 'patch-embed-projection-weight', dtype: 'float32', shape: [1, 5, 1, 1] };
 const fakeFileEntry = { ...entryA, file: 'invocation/fake-equal-bytes.bin' };
@@ -261,10 +279,38 @@ assert.throws(
 );
 
 const release = resident.release();
+const borrowedModel = await kit.createSam3BrowserResidentModelSession({
+  packageRuntime,
+  executionContext: { adapter: { info: { description: 'fixture-adapter' } }, device, inferenceSession: session },
+});
+const modelJob = borrowedModel.enqueue({ jobId: 'shared-session-sam', execute: async () => new Float32Array([7, 9]) });
+const completion = await modelJob.completion;
+assert.equal(completion.status, 'succeeded');
+assert.deepEqual(completion.output, new Float32Array([7, 9]));
+borrowedModel.forgetJob(modelJob.jobId);
+await borrowedModel.close();
+assert.equal(session.snapshot().status, 'active', 'public SAM factory must leave the application session usable');
+assert.equal(buffers.some(buffer => buffer.destroyCount !== 0), false);
+
+const corruptedPackage = {
+  ...packageRuntime,
+  modelPackage: { ...packageRuntime.modelPackage, model: { id: 'facebook/sam3.1', revision: 'corrupted-input-probe' } },
+  async loadUint8(entry) {
+    const bytes = await packageRuntime.loadUint8(entry);
+    if (entry.file === 'static/b.bin') bytes[0] ^= 1;
+    return bytes;
+  },
+};
+await assert.rejects(() => createSam31ResidentModelResources({ packageRuntime: corruptedPackage, route: ownerRoute }), error => {
+  assert.equal(error.packageReport.status, 'failed');
+  assert.equal(error.packageReport.resources.length, 1, 'first child completed before second child failed verification');
+  assert.equal(error.packageReport.cleanup.status, 'released');
+  return /sha-?256|digest|hash/i.test(error.message);
+}, 'corrupted package child must not become resident or strand prior child leases');
 assert.equal(release.status, 'released');
 assert.equal(resident.release().status, 'already-released');
 assert.equal(session.snapshot().residency.activeLeaseCount, 0);
 session.close();
-assert.deepEqual(buffers.map(buffer => buffer.destroyCount), [1, 1], 'session close must destroy managed resident buffers exactly once');
+assert.ok(buffers.every(buffer => buffer.destroyCount === 1), 'session close must destroy managed resident buffers exactly once');
 
 console.log('sam3.1 resident model resource contracts passed');

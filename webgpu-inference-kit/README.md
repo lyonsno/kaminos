@@ -97,6 +97,8 @@ Kaminos is already used across substantially different browser-native inference 
 
 Ports can adopt a common application-facing shape:
 
+The in-tree [SAM semantic-mask demo](./docs/sam-semantic-demo.md) adds image-and-prompt segmentation with persistent, authenticated weights and cached image features. It uses the shared sequential model-package loader and registered invocation queue. Its serving path is separate from reference verification; current semantic/performance evidence and the remaining shared-rendering measurement gate are described in the demo guide.
+
 ```text
 shared session
     -> persistent model route

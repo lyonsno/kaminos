@@ -58,7 +58,7 @@ assert.match(smokeHtml, /sam-mask-parity-canvas/, 'smoke page must expose a visi
 assert.match(smokeHtml, /sam-source-image/, 'smoke page must expose the source image panel');
 
 assert.match(smokeJs, /navigator\.gpu/, 'browser smoke must require a real browser WebGPU adapter');
-assert.match(smokeJs, /requestAdapter/, 'browser smoke must request an effective adapter');
+assert.match(smokeJs, /requestBrowserWebGpuDevice/, 'browser smoke must acquire its effective adapter and supported limits through the shared kit');
 assert.match(smokeJs, /runSam3MaskDecoderIslandRoute/, 'browser smoke must run the package route runner');
 assert.match(smokeJs, /runSam3MaskTailPhaseProgramRoute/, 'browser smoke must run the mask-tail phase-program route runner');
 assert.match(smokeJs, /runSam3PixelDecoderPhaseProgramRoute/, 'browser smoke must run the pixel-decoder phase-program route runner');

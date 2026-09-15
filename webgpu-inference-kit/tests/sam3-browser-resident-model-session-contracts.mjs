@@ -112,6 +112,21 @@ assert.deepEqual(
 assert.equal(failedCloseSession.evidence().status, 'closed');
 
 const sourceText = readFileSync(new URL('../src/sam3-browser-resident-model-session.js', import.meta.url), 'utf8');
+const borrowedLifecycle = [];
+const borrowed = kit.createSam3BrowserResidentModelSessionForTest({
+  packageRuntime,
+  ownsInferenceSession: false,
+  inferenceSession: {
+    drain() { throw new Error('must not drain unrelated application routes'); },
+    close() { throw new Error('must not close the application session'); },
+    unregisterRoute() { borrowedLifecycle.push('unregister'); },
+    snapshot() { return { sessionId: 'application' }; },
+  },
+  ownerRoute: { ...ownerRoute, drain() { borrowedLifecycle.push('drain-sam-only'); } },
+  residentResources: { ...residentResources, release() { borrowedLifecycle.push('release-sam'); } },
+});
+await borrowed.close();
+assert.deepEqual(borrowedLifecycle, ['drain-sam-only', 'release-sam', 'unregister']);
 assert.match(sourceText, /createWebGpuInferenceSession/);
 assert.match(sourceText, /deviceOwnership:\s*['"]borrowed['"]/);
 assert.match(sourceText, /createSam31ResidentModelResources/);
