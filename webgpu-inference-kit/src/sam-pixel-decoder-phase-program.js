@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -455,118 +456,119 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-pixel-decoder-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    tensors = {
-      features: features.map((feature, index) => stage.createTensor({ name: `sam3.fpn-feature.${index}`, shape: [shape.batch, shape.levels[index].height, shape.levels[index].width, shape.channels], dtype: 'f32', usage: readonlyUsage })),
-      upsampled: [],
-      convolved: [],
-      normalized: [],
-      stats: [],
-      dims: [],
-      weights: weights.stages.map((stageWeights, index) => ({
-        convWeight: stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv.weight`, shape: [shape.channels, 3, 3, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.convWeight }),
-        convBias: stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.convBias }),
-        normWeight: stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm.weight`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.normWeight }),
-        normBias: stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.normBias }),
-      })),
-    };
-    for (let index = 0; index < features.length; index += 1) stage.uploadTensor(tensors.features[index], features[index]);
-    for (let index = 0; index < stageCount; index += 1) {
-      const targetLevel = shape.levels[shape.levels.length - 2 - index];
-      const sourceLevel = shape.levels[shape.levels.length - 1 - index];
-      const total = levelElementCount(shape, targetLevel);
-      tensors.upsampled[index] = stage.createTensor({ name: `sam3.pixel-decoder.${index}.upsample-add`, shape: [shape.batch, targetLevel.height, targetLevel.width, shape.channels], dtype: 'f32', usage });
-      tensors.convolved[index] = stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv`, shape: [shape.batch, targetLevel.height, targetLevel.width, shape.channels], dtype: 'f32', usage });
-      tensors.normalized[index] = stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm-relu`, shape: [shape.batch, targetLevel.height, targetLevel.width, shape.channels], dtype: 'f32', usage });
-      tensors.stats[index] = stage.createTensor({ name: `sam3.pixel-decoder.${index}.groupnorm-stats`, shape: [shape.batch, shape.groups, 2], dtype: 'f32', usage });
-      tensors.dims[index] = stage.createUniformBuffer({
-        label: `sam3.pixel-decoder.${index}.dims`,
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'channels', type: 'u32' },
-          { name: 'source_height', type: 'u32' },
-          { name: 'source_width', type: 'u32' },
-          { name: 'target_height', type: 'u32' },
-          { name: 'target_width', type: 'u32' },
-          { name: 'total', type: 'u32' },
-          { name: 'groups', type: 'u32' },
-        ],
-        values: { batch: shape.batch, channels: shape.channels, source_height: sourceLevel.height, source_width: sourceLevel.width, target_height: targetLevel.height, target_width: targetLevel.width, total, groups: shape.groups },
-      });
-      stage.uploadTensor(tensors.weights[index].convWeight, weights.stages[index].convWeight);
-      stage.uploadTensor(tensors.weights[index].convBias, weights.stages[index].convBias);
-      stage.uploadTensor(tensors.weights[index].normWeight, weights.stages[index].normWeight);
-      stage.uploadTensor(tensors.weights[index].normBias, weights.stages[index].normBias);
-    }
-    await stage.yieldToBrowser({ reason: 'after-sam3-pixel-decoder-upload' });
-  }, { shape });
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-pixel-decoder-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      tensors = {
+        features: features.map((feature, index) => stage.createTensor({ name: `sam3.fpn-feature.${index}`, shape: [shape.batch, shape.levels[index].height, shape.levels[index].width, shape.channels], dtype: 'f32', usage: readonlyUsage })),
+        upsampled: [],
+        convolved: [],
+        normalized: [],
+        stats: [],
+        dims: [],
+        weights: weights.stages.map((stageWeights, index) => ({
+          convWeight: stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv.weight`, shape: [shape.channels, 3, 3, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.convWeight }),
+          convBias: stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.convBias }),
+          normWeight: stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm.weight`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.normWeight }),
+          normBias: stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: stageWeights.normBias }),
+        })),
+      };
+      for (let index = 0; index < features.length; index += 1) stage.uploadTensor(tensors.features[index], features[index]);
+      for (let index = 0; index < stageCount; index += 1) {
+        const targetLevel = shape.levels[shape.levels.length - 2 - index];
+        const sourceLevel = shape.levels[shape.levels.length - 1 - index];
+        const total = levelElementCount(shape, targetLevel);
+        tensors.upsampled[index] = stage.createTensor({ name: `sam3.pixel-decoder.${index}.upsample-add`, shape: [shape.batch, targetLevel.height, targetLevel.width, shape.channels], dtype: 'f32', usage });
+        tensors.convolved[index] = stage.createTensor({ name: `sam3.pixel-decoder.${index}.conv`, shape: [shape.batch, targetLevel.height, targetLevel.width, shape.channels], dtype: 'f32', usage });
+        tensors.normalized[index] = stage.createTensor({ name: `sam3.pixel-decoder.${index}.norm-relu`, shape: [shape.batch, targetLevel.height, targetLevel.width, shape.channels], dtype: 'f32', usage });
+        tensors.stats[index] = stage.createTensor({ name: `sam3.pixel-decoder.${index}.groupnorm-stats`, shape: [shape.batch, shape.groups, 2], dtype: 'f32', usage });
+        tensors.dims[index] = stage.createUniformBuffer({
+          label: `sam3.pixel-decoder.${index}.dims`,
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'channels', type: 'u32' },
+            { name: 'source_height', type: 'u32' },
+            { name: 'source_width', type: 'u32' },
+            { name: 'target_height', type: 'u32' },
+            { name: 'target_width', type: 'u32' },
+            { name: 'total', type: 'u32' },
+            { name: 'groups', type: 'u32' },
+          ],
+          values: { batch: shape.batch, channels: shape.channels, source_height: sourceLevel.height, source_width: sourceLevel.width, target_height: targetLevel.height, target_width: targetLevel.width, total, groups: shape.groups },
+        });
+        stage.uploadTensor(tensors.weights[index].convWeight, weights.stages[index].convWeight);
+        stage.uploadTensor(tensors.weights[index].convBias, weights.stages[index].convBias);
+        stage.uploadTensor(tensors.weights[index].normWeight, weights.stages[index].normWeight);
+        stage.uploadTensor(tensors.weights[index].normBias, weights.stages[index].normBias);
+      }
+      await stage.yieldToBrowser({ reason: 'after-sam3-pixel-decoder-upload' });
+    }, { shape });
 
-  const programTensors = {};
-  for (let index = 0; index < tensors.features.length; index += 1) programTensors[`feature${index}`] = tensors.features[index];
-  for (let index = 0; index < stageCount; index += 1) {
-    programTensors[`upsampled${index}`] = tensors.upsampled[index];
-    programTensors[`convolved${index}`] = tensors.convolved[index];
-    programTensors[`normalized${index}`] = tensors.normalized[index];
-    programTensors[`stats${index}`] = tensors.stats[index];
-    programTensors[`convWeight${index}`] = tensors.weights[index].convWeight;
-    programTensors[`convBias${index}`] = tensors.weights[index].convBias;
-    programTensors[`normWeight${index}`] = tensors.weights[index].normWeight;
-    programTensors[`normBias${index}`] = tensors.weights[index].normBias;
-  }
-  const uniforms = Object.fromEntries(tensors.dims.map((dims, index) => [`dims${index}`, dims]));
-  const kernels = {};
-  const phases = [];
-  for (let index = 0; index < stageCount; index += 1) {
-    const sourceTensor = index === 0 ? `feature${features.length - 1}` : `normalized${index - 1}`;
-    const skipTensor = `feature${features.length - 2 - index}`;
-    const targetLevel = shape.levels[shape.levels.length - 2 - index];
-    const total = levelElementCount(shape, targetLevel);
-    kernels[`upsampleAdd${index}`] = { code: UPSAMPLE_ADD_WGSL, bindings: [{ name: 'source', resource: `tensor:${sourceTensor}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'skip', resource: `tensor:${skipTensor}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:upsampled${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
-    kernels[`conv3x3_${index}`] = { code: CONV3X3_WGSL, bindings: [{ name: 'input', resource: `tensor:upsampled${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:convWeight${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:convBias${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:convolved${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
-    kernels[`groupnormStats${index}`] = { code: GROUPNORM_STATS_WGSL, bindings: [{ name: 'input', resource: `tensor:convolved${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'stats', resource: `tensor:stats${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
-    kernels[`groupnormRelu${index}`] = { code: GROUPNORM_RELU_WGSL, bindings: [{ name: 'input', resource: `tensor:convolved${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'stats', resource: `tensor:stats${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normWeight', resource: `tensor:normWeight${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normBias', resource: `tensor:normBias${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:normalized${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
-    phases.push(
-      { name: `pixel-upsample-add-${index}`, kernel: `upsampleAdd${index}`, dispatch: [workgroups(total)], yieldAfter: true },
-      { name: `pixel-conv3x3-${index}`, kernel: `conv3x3_${index}`, dispatch: [workgroups(total)], yieldAfter: true },
-      { name: `pixel-groupnorm-stats-${index}`, kernel: `groupnormStats${index}`, dispatch: [shape.batch * shape.groups], yieldAfter: true },
-      { name: `pixel-groupnorm-relu-${index}`, kernel: `groupnormRelu${index}`, dispatch: [workgroups(total)], yieldAfter: true },
-    );
-  }
-  phases.push({ name: 'readback-pixel-embed', readbacks: [{ name: 'pixelEmbed', tensor: `normalized${stageCount - 1}` }] });
-  const program = runtime.defineProgram({
-    name: 'sam3.pixel-decoder-phase-program',
-    tensors: programTensors,
-    uniforms,
-    kernels,
-    phases,
-    metadata: { routeId: SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID },
+    const programTensors = {};
+    for (let index = 0; index < tensors.features.length; index += 1) programTensors[`feature${index}`] = tensors.features[index];
+    for (let index = 0; index < stageCount; index += 1) {
+      programTensors[`upsampled${index}`] = tensors.upsampled[index];
+      programTensors[`convolved${index}`] = tensors.convolved[index];
+      programTensors[`normalized${index}`] = tensors.normalized[index];
+      programTensors[`stats${index}`] = tensors.stats[index];
+      programTensors[`convWeight${index}`] = tensors.weights[index].convWeight;
+      programTensors[`convBias${index}`] = tensors.weights[index].convBias;
+      programTensors[`normWeight${index}`] = tensors.weights[index].normWeight;
+      programTensors[`normBias${index}`] = tensors.weights[index].normBias;
+    }
+    const uniforms = Object.fromEntries(tensors.dims.map((dims, index) => [`dims${index}`, dims]));
+    const kernels = {};
+    const phases = [];
+    for (let index = 0; index < stageCount; index += 1) {
+      const sourceTensor = index === 0 ? `feature${features.length - 1}` : `normalized${index - 1}`;
+      const skipTensor = `feature${features.length - 2 - index}`;
+      const targetLevel = shape.levels[shape.levels.length - 2 - index];
+      const total = levelElementCount(shape, targetLevel);
+      kernels[`upsampleAdd${index}`] = { code: UPSAMPLE_ADD_WGSL, bindings: [{ name: 'source', resource: `tensor:${sourceTensor}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'skip', resource: `tensor:${skipTensor}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:upsampled${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
+      kernels[`conv3x3_${index}`] = { code: CONV3X3_WGSL, bindings: [{ name: 'input', resource: `tensor:upsampled${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:convWeight${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:convBias${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:convolved${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
+      kernels[`groupnormStats${index}`] = { code: GROUPNORM_STATS_WGSL, bindings: [{ name: 'input', resource: `tensor:convolved${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'stats', resource: `tensor:stats${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
+      kernels[`groupnormRelu${index}`] = { code: GROUPNORM_RELU_WGSL, bindings: [{ name: 'input', resource: `tensor:convolved${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'stats', resource: `tensor:stats${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normWeight', resource: `tensor:normWeight${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normBias', resource: `tensor:normBias${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:normalized${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
+      phases.push(
+        { name: `pixel-upsample-add-${index}`, kernel: `upsampleAdd${index}`, dispatch: [workgroups(total)], yieldAfter: true },
+        { name: `pixel-conv3x3-${index}`, kernel: `conv3x3_${index}`, dispatch: [workgroups(total)], yieldAfter: true },
+        { name: `pixel-groupnorm-stats-${index}`, kernel: `groupnormStats${index}`, dispatch: [shape.batch * shape.groups], yieldAfter: true },
+        { name: `pixel-groupnorm-relu-${index}`, kernel: `groupnormRelu${index}`, dispatch: [workgroups(total)], yieldAfter: true },
+      );
+    }
+    phases.push({ name: 'readback-pixel-embed', readbacks: [{ name: 'pixelEmbed', tensor: `normalized${stageCount - 1}` }] });
+    const program = runtime.defineProgram({
+      name: 'sam3.pixel-decoder-phase-program',
+      tensors: programTensors,
+      uniforms,
+      kernels,
+      phases,
+      metadata: { routeId: SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID },
+    });
+    const run = await runtime.runProgram(program);
+    const pixelEmbed = run.outputs.pixelEmbed;
+    const outputs = outputArtifacts(input.request, {
+      pixelEmbed: await sha256Hex(pixelEmbed),
+    }, pixelShape);
+    const receipt = createSam3PixelDecoderPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      weightsPacket,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        pixelEmbed: sam3Readback(input, new Float32Array(pixelEmbed)),
+      };
+    }
+    return authoritative;
   });
-  const run = await runtime.runProgram(program);
-  const pixelEmbed = run.outputs.pixelEmbed;
-  const outputs = outputArtifacts(input.request, {
-    pixelEmbed: await sha256Hex(pixelEmbed),
-  }, pixelShape);
-  const receipt = createSam3PixelDecoderPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    weightsPacket,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      pixelEmbed: sam3Readback(input, new Float32Array(pixelEmbed)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }

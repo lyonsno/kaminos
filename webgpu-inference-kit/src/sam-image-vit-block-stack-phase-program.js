@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -1121,289 +1122,289 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
     yield: input.yield,
     residentTensorResolver: input.residentTensorResolver,
   });
-  const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
-  let tensors = null;
-  let residentLayerWeights = null;
-  const layerWeightDefinitions = Object.freeze({
-    layerNorm1Weight: { label: 'layernorm1.weight', shape: [shape.hiddenSize] },
-    layerNorm1Bias: { label: 'layernorm1.bias', shape: [shape.hiddenSize] },
-    qProjWeight: { label: 'q.weight', shape: [shape.hiddenSize, shape.hiddenSize] },
-    qProjBias: { label: 'q.bias', shape: [shape.hiddenSize] },
-    kProjWeight: { label: 'k.weight', shape: [shape.hiddenSize, shape.hiddenSize] },
-    kProjBias: { label: 'k.bias', shape: [shape.hiddenSize] },
-    vProjWeight: { label: 'v.weight', shape: [shape.hiddenSize, shape.hiddenSize] },
-    vProjBias: { label: 'v.bias', shape: [shape.hiddenSize] },
-    oProjWeight: { label: 'o.weight', shape: [shape.hiddenSize, shape.hiddenSize] },
-    oProjBias: { label: 'o.bias', shape: [shape.hiddenSize] },
-    layerNorm2Weight: { label: 'layernorm2.weight', shape: [shape.hiddenSize] },
-    layerNorm2Bias: { label: 'layernorm2.bias', shape: [shape.hiddenSize] },
-    mlpFc1Weight: { label: 'mlp.fc1.weight', shape: [shape.intermediateSize, shape.hiddenSize] },
-    mlpFc1Bias: { label: 'mlp.fc1.bias', shape: [shape.intermediateSize] },
-    mlpFc2Weight: { label: 'mlp.fc2.weight', shape: [shape.hiddenSize, shape.intermediateSize] },
-    mlpFc2Bias: { label: 'mlp.fc2.bias', shape: [shape.hiddenSize] },
-  });
-  const layerWeightNames = Object.keys(layerWeightDefinitions);
-  const blockDimsValues = layerShape => ({
-    batch: layerShape.batch,
-    height: layerShape.height,
-    width: layerShape.width,
-    channels: layerShape.hiddenSize,
-    heads: layerShape.numHeads,
-    head_dim: layerShape.headDim,
-    window_size: layerShape.windowSize,
-    intermediate_size: layerShape.intermediateSize,
-    padded_height: layerShape.paddedHeight,
-    padded_width: layerShape.paddedWidth,
-    windows_per_row: layerShape.windowsPerRow,
-    window_count: layerShape.windowCount,
-    window_tokens: layerShape.windowTokens,
-    total_values: layerShape.totalValues,
-    padded_total_values: layerShape.paddedTotalValues,
-    rope_scale: layerShape.ropeScale,
-  });
-  const uploadLayerWeights = (stage, layer) => {
-    if (residentLayerWeights) return;
-    for (const name of layerWeightNames) {
-      stage.uploadTensor(tensors[name], layer[name]);
-    }
-  };
-  await runtime.runStage('load-image-vit-block-stack-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const tensor = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
-    tensors = {
-      hiddenA: tensor('sam3.image-vit-block-stack.hidden-a', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
-      hiddenB: tensor('sam3.image-vit-block-stack.hidden-b', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
-      layerNorm1: tensor('sam3.image-vit-block-stack.layernorm1.out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
-      windows: tensor('sam3.image-vit-block-stack.windows', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
-      q: tensor('sam3.image-vit-block-stack.q', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
-      k: tensor('sam3.image-vit-block-stack.k', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
-      v: tensor('sam3.image-vit-block-stack.v', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
-      qRope: tensor('sam3.image-vit-block-stack.q-rope', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
-      kRope: tensor('sam3.image-vit-block-stack.k-rope', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
-      attention: tensor('sam3.image-vit-block-stack.attention', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
-      projected: tensor('sam3.image-vit-block-stack.projected', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
-      attentionResidual: tensor('sam3.image-vit-block-stack.attention-residual', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
-      layerNorm2: tensor('sam3.image-vit-block-stack.layernorm2.out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
-      mlpHidden: tensor('sam3.image-vit-block-stack.mlp-hidden', [shape.batch, shape.height * shape.width, shape.intermediateSize]),
-      mlpOut: tensor('sam3.image-vit-block-stack.mlp-out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
-      blockDims: stage.createUniformBuffer({
-        label: 'sam3.image-vit-block-stack.dims',
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'height', type: 'u32' },
-          { name: 'width', type: 'u32' },
-          { name: 'channels', type: 'u32' },
-          { name: 'heads', type: 'u32' },
-          { name: 'head_dim', type: 'u32' },
-          { name: 'window_size', type: 'u32' },
-          { name: 'intermediate_size', type: 'u32' },
-          { name: 'padded_height', type: 'u32' },
-          { name: 'padded_width', type: 'u32' },
-          { name: 'windows_per_row', type: 'u32' },
-          { name: 'window_count', type: 'u32' },
-          { name: 'window_tokens', type: 'u32' },
-          { name: 'total_values', type: 'u32' },
-          { name: 'padded_total_values', type: 'u32' },
-          { name: 'rope_scale', type: 'f32' },
-        ],
-        values: blockDimsValues(blockShapeForLayer(shape, weights.layers[0])),
-      }),
-      lnDims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.ln-dims', schema: [{ name: 'token_count', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: '_pad0', type: 'u32' }, { name: '_pad1', type: 'u32' }], values: { token_count: shape.tokenCount, channels: shape.hiddenSize, _pad0: 0, _pad1: 0 } }),
-      windowLinearDims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.window-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.hiddenSize, output_channels: shape.hiddenSize, total_output: blockShapeForLayer(shape, weights.layers[0]).paddedTotalValues, _pad0: 0 } }),
-      fc1Dims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.fc1-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.hiddenSize, output_channels: shape.intermediateSize, total_output: shape.tokenCount * shape.intermediateSize, _pad0: 0 } }),
-      fc2Dims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.fc2-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.intermediateSize, output_channels: shape.hiddenSize, total_output: shape.totalValues, _pad0: 0 } }),
+  return withSamPhaseCleanup(runtime, async () => {
+    const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
+
+    let tensors = null;
+    let residentLayerWeights = null;
+    const layerWeightDefinitions = Object.freeze({
+      layerNorm1Weight: { label: 'layernorm1.weight', shape: [shape.hiddenSize] },
+      layerNorm1Bias: { label: 'layernorm1.bias', shape: [shape.hiddenSize] },
+      qProjWeight: { label: 'q.weight', shape: [shape.hiddenSize, shape.hiddenSize] },
+      qProjBias: { label: 'q.bias', shape: [shape.hiddenSize] },
+      kProjWeight: { label: 'k.weight', shape: [shape.hiddenSize, shape.hiddenSize] },
+      kProjBias: { label: 'k.bias', shape: [shape.hiddenSize] },
+      vProjWeight: { label: 'v.weight', shape: [shape.hiddenSize, shape.hiddenSize] },
+      vProjBias: { label: 'v.bias', shape: [shape.hiddenSize] },
+      oProjWeight: { label: 'o.weight', shape: [shape.hiddenSize, shape.hiddenSize] },
+      oProjBias: { label: 'o.bias', shape: [shape.hiddenSize] },
+      layerNorm2Weight: { label: 'layernorm2.weight', shape: [shape.hiddenSize] },
+      layerNorm2Bias: { label: 'layernorm2.bias', shape: [shape.hiddenSize] },
+      mlpFc1Weight: { label: 'mlp.fc1.weight', shape: [shape.intermediateSize, shape.hiddenSize] },
+      mlpFc1Bias: { label: 'mlp.fc1.bias', shape: [shape.intermediateSize] },
+      mlpFc2Weight: { label: 'mlp.fc2.weight', shape: [shape.hiddenSize, shape.intermediateSize] },
+      mlpFc2Bias: { label: 'mlp.fc2.bias', shape: [shape.hiddenSize] },
+    });
+    const layerWeightNames = Object.keys(layerWeightDefinitions);
+    const blockDimsValues = layerShape => ({
+      batch: layerShape.batch,
+      height: layerShape.height,
+      width: layerShape.width,
+      channels: layerShape.hiddenSize,
+      heads: layerShape.numHeads,
+      head_dim: layerShape.headDim,
+      window_size: layerShape.windowSize,
+      intermediate_size: layerShape.intermediateSize,
+      padded_height: layerShape.paddedHeight,
+      padded_width: layerShape.paddedWidth,
+      windows_per_row: layerShape.windowsPerRow,
+      window_count: layerShape.windowCount,
+      window_tokens: layerShape.windowTokens,
+      total_values: layerShape.totalValues,
+      padded_total_values: layerShape.paddedTotalValues,
+      rope_scale: layerShape.ropeScale,
+    });
+    const uploadLayerWeights = (stage, layer) => {
+      if (residentLayerWeights) return;
+      for (const name of layerWeightNames) {
+        stage.uploadTensor(tensors[name], layer[name]);
+      }
     };
-    if (input.residentTensorResolver) {
-      residentLayerWeights = new Map();
-      for (const layer of weights.layers) {
-        const layerTensors = {};
+    await runtime.runStage('load-image-vit-block-stack-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      const tensor = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
+      tensors = {
+        hiddenA: tensor('sam3.image-vit-block-stack.hidden-a', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
+        hiddenB: tensor('sam3.image-vit-block-stack.hidden-b', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
+        layerNorm1: tensor('sam3.image-vit-block-stack.layernorm1.out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
+        windows: tensor('sam3.image-vit-block-stack.windows', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+        q: tensor('sam3.image-vit-block-stack.q', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+        k: tensor('sam3.image-vit-block-stack.k', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+        v: tensor('sam3.image-vit-block-stack.v', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+        qRope: tensor('sam3.image-vit-block-stack.q-rope', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+        kRope: tensor('sam3.image-vit-block-stack.k-rope', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+        attention: tensor('sam3.image-vit-block-stack.attention', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+        projected: tensor('sam3.image-vit-block-stack.projected', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+        attentionResidual: tensor('sam3.image-vit-block-stack.attention-residual', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
+        layerNorm2: tensor('sam3.image-vit-block-stack.layernorm2.out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
+        mlpHidden: tensor('sam3.image-vit-block-stack.mlp-hidden', [shape.batch, shape.height * shape.width, shape.intermediateSize]),
+        mlpOut: tensor('sam3.image-vit-block-stack.mlp-out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
+        blockDims: stage.createUniformBuffer({
+          label: 'sam3.image-vit-block-stack.dims',
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'height', type: 'u32' },
+            { name: 'width', type: 'u32' },
+            { name: 'channels', type: 'u32' },
+            { name: 'heads', type: 'u32' },
+            { name: 'head_dim', type: 'u32' },
+            { name: 'window_size', type: 'u32' },
+            { name: 'intermediate_size', type: 'u32' },
+            { name: 'padded_height', type: 'u32' },
+            { name: 'padded_width', type: 'u32' },
+            { name: 'windows_per_row', type: 'u32' },
+            { name: 'window_count', type: 'u32' },
+            { name: 'window_tokens', type: 'u32' },
+            { name: 'total_values', type: 'u32' },
+            { name: 'padded_total_values', type: 'u32' },
+            { name: 'rope_scale', type: 'f32' },
+          ],
+          values: blockDimsValues(blockShapeForLayer(shape, weights.layers[0])),
+        }),
+        lnDims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.ln-dims', schema: [{ name: 'token_count', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: '_pad0', type: 'u32' }, { name: '_pad1', type: 'u32' }], values: { token_count: shape.tokenCount, channels: shape.hiddenSize, _pad0: 0, _pad1: 0 } }),
+        windowLinearDims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.window-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.hiddenSize, output_channels: shape.hiddenSize, total_output: blockShapeForLayer(shape, weights.layers[0]).paddedTotalValues, _pad0: 0 } }),
+        fc1Dims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.fc1-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.hiddenSize, output_channels: shape.intermediateSize, total_output: shape.tokenCount * shape.intermediateSize, _pad0: 0 } }),
+        fc2Dims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.fc2-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.intermediateSize, output_channels: shape.hiddenSize, total_output: shape.totalValues, _pad0: 0 } }),
+      };
+      if (input.residentTensorResolver) {
+        residentLayerWeights = new Map();
+        for (const layer of weights.layers) {
+          const layerTensors = {};
+          for (const name of layerWeightNames) {
+            const definition = layerWeightDefinitions[name];
+            layerTensors[name] = stage.createTensor({
+              name: `sam3.image-vit-block-stack.layer-${layer.layerIndex}.${definition.label}`,
+              shape: definition.shape,
+              dtype: 'f32',
+              usage: readonlyUsage,
+              sourceData: layer[name],
+            });
+            stage.uploadTensor(layerTensors[name], layer[name]);
+          }
+          residentLayerWeights.set(layer.layerIndex, Object.freeze(layerTensors));
+        }
+      } else {
         for (const name of layerWeightNames) {
           const definition = layerWeightDefinitions[name];
-          layerTensors[name] = stage.createTensor({
-            name: `sam3.image-vit-block-stack.layer-${layer.layerIndex}.${definition.label}`,
-            shape: definition.shape,
-            dtype: 'f32',
-            usage: readonlyUsage,
-            sourceData: layer[name],
-          });
-          stage.uploadTensor(layerTensors[name], layer[name]);
+          tensors[name] = tensor(`sam3.image-vit-block-stack.${definition.label}`, definition.shape, readonlyUsage);
         }
-        residentLayerWeights.set(layer.layerIndex, Object.freeze(layerTensors));
       }
-    } else {
-      for (const name of layerWeightNames) {
-        const definition = layerWeightDefinitions[name];
-        tensors[name] = tensor(`sam3.image-vit-block-stack.${definition.label}`, definition.shape, readonlyUsage);
-      }
-    }
-    stage.uploadTensor(tensors.hiddenA, hiddenStates);
-    await stage.yieldToBrowser({ reason: 'after-sam3-image-vit-block-stack-upload' });
-  }, { shape, referenceBoundary: 'MLX VitBlock: LN1 -> window partition/pad/crop -> pairwise RoPE attention -> residual -> LN2 -> GELU MLP -> residual' });
+      stage.uploadTensor(tensors.hiddenA, hiddenStates);
+      await stage.yieldToBrowser({ reason: 'after-sam3-image-vit-block-stack-upload' });
+    }, { shape, referenceBoundary: 'MLX VitBlock: LN1 -> window partition/pad/crop -> pairwise RoPE attention -> residual -> LN2 -> GELU MLP -> residual' });
 
-  const bindTensor = (resource, access = 'read-only-storage') => ({ name: resource.replace(/^tensor:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, access });
-  const bindUniform = resource => ({ name: resource.replace(/^uniform:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' });
-  const createLayerProgram = ({ layerShape, inputTensorName, outputTensorName }) => {
-    const programTensors = residentLayerWeights
-      ? { ...tensors, ...residentLayerWeights.get(layerShape.layerIndex) }
-      : tensors;
-    const dispatchPlan = createSam3ImageVitBlockStackDispatchPlan({
-      shape,
-      layerIndex: layerShape.layerIndex,
-      isGlobal: layerShape.isGlobal,
-      maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
-    });
-    const phases = [
-      { name: 'vit-block-stack-layernorm1', kernel: 'layerNorm1', dispatch: dispatchPlan.layerNorm1.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-window-partition', kernel: 'windowPartition', dispatch: dispatchPlan.windowPartition.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'qProjection', dispatch: dispatchPlan.qProjection.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'kProjection', dispatch: dispatchPlan.kProjection.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'vProjection', dispatch: dispatchPlan.vProjection.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-rope-attention', kernel: 'qRope', dispatch: dispatchPlan.qRope.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-rope-attention', kernel: 'kRope', dispatch: dispatchPlan.kRope.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: layerShape.isGlobal ? 'vit-block-stack-global-attention' : 'vit-block-stack-rope-attention', kernel: 'attention', dispatch: dispatchPlan.attention.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-output-projection', kernel: 'outputProjection', dispatch: dispatchPlan.outputProjection.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-window-unpartition', kernel: 'windowUnpartition', dispatch: dispatchPlan.windowUnpartition.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-layernorm2', kernel: 'layerNorm2', dispatch: dispatchPlan.layerNorm2.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc1', dispatch: dispatchPlan.mlpFc1.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: dispatchPlan.mlpFc2.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: dispatchPlan.residualMlp.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-    ];
-    const phaseTensorNames = {
-      layerNorm1: 'layerNorm1',
-      windowPartition: 'windows',
-      qProjection: 'q',
-      kProjection: 'k',
-      vProjection: 'v',
-      qRope: 'qRope',
-      kRope: 'kRope',
-      attention: 'attention',
-      outputProjection: 'projected',
-      windowUnpartition: 'attentionResidual',
-      layerNorm2: 'layerNorm2',
-      mlpFc1: 'mlpHidden',
-      mlpFc2: 'mlpOut',
-      residualMlp: outputTensorName,
-    };
-    const instrumentedPhases = input.validateFinitePhaseLayerIndex === layerShape.layerIndex
-      ? phases.flatMap(phase => [
-          phase,
-          {
-            name: `validate-vit-block-stack-layer-${layerShape.layerIndex}-${phase.kernel}-finite`,
-            readback: { name: phase.kernel, tensor: `tensor:${phaseTensorNames[phase.kernel]}` },
-            metadata: { layerIndex: layerShape.layerIndex, kernel: phase.kernel, diagnostic: 'finite-phase-checkpoint' },
-          },
-        ])
-      : phases;
-    return runtime.defineProgram({
-    name: `sam3.image-vit-block-stack-layer-${layerShape.layerIndex}-phase-program`,
-    tensors: programTensors,
-    uniforms: { blockDims: tensors.blockDims, lnDims: tensors.lnDims, windowLinearDims: tensors.windowLinearDims, fc1Dims: tensors.fc1Dims, fc2Dims: tensors.fc2Dims },
-    kernels: {
-      layerNorm1: { code: LAYERNORM_WGSL, bindings: [bindTensor(`tensor:${inputTensorName}`), bindTensor('tensor:layerNorm1Weight'), bindTensor('tensor:layerNorm1Bias'), bindTensor('tensor:layerNorm1', 'storage'), bindUniform('uniform:lnDims')] },
-      windowPartition: { code: WINDOW_PARTITION_WGSL, bindings: [bindTensor('tensor:layerNorm1'), bindTensor('tensor:windows', 'storage'), bindUniform('uniform:blockDims')] },
-      qProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
-      kProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:kProjWeight'), bindTensor('tensor:kProjBias'), bindTensor('tensor:k', 'storage'), bindUniform('uniform:windowLinearDims')] },
-      vProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
-      qRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:q'), bindTensor('tensor:qRope', 'storage'), bindUniform('uniform:blockDims')] },
-      kRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:k'), bindTensor('tensor:kRope', 'storage'), bindUniform('uniform:blockDims')] },
-      attention: { code: ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
-      outputProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
-      windowUnpartition: { code: WINDOW_UNPARTITION_WGSL, bindings: [bindTensor('tensor:projected'), bindTensor(`tensor:${inputTensorName}`), bindTensor('tensor:attentionResidual', 'storage'), bindUniform('uniform:blockDims')] },
-      layerNorm2: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:layerNorm2Weight'), bindTensor('tensor:layerNorm2Bias'), bindTensor('tensor:layerNorm2', 'storage'), bindUniform('uniform:lnDims')] },
-      mlpFc1: { code: LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
-      mlpFc2: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
-      residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor(`tensor:${outputTensorName}`, 'storage'), bindUniform('uniform:blockDims')] },
-    },
-    phases: instrumentedPhases,
-    metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', referenceBoundary: shape.fullBackbone ? 'SAM3 image ViT contiguous full backbone' : 'SAM3 image ViT contiguous block stack through first global attention' },
-  });
-  };
-
-  await runtime.runStage('vit-block-stack-layer-range', async stage => {
-    await stage.yieldToBrowser({ reason: 'sam3-image-vit-block-stack-layer-range-established', metadata: { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, finalLayerIndex: shape.finalLayerIndex, fullBackbone: shape.fullBackbone } });
-  }, { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, finalLayerIndex: shape.finalLayerIndex, fullBackbone: shape.fullBackbone, global_attn_indexes: shape.globalAttnIndexes });
-
-  let inputTensorName = 'hiddenA';
-  let outputTensorName = 'hiddenB';
-  const finiteCheckpoints = [];
-  const finitePhaseCheckpoints = [];
-  for (const layer of weights.layers) {
-    const layerShape = blockShapeForLayer(shape, layer);
-    await runtime.runStage('vit-block-stack-layer-range', async stage => {
-      uploadLayerWeights(stage, layer);
-      tensors.blockDims.update(blockDimsValues(layerShape));
-      tensors.windowLinearDims.update({ input_channels: shape.hiddenSize, output_channels: shape.hiddenSize, total_output: layerShape.paddedTotalValues, _pad0: 0 });
-      await stage.yieldToBrowser({ reason: 'sam3-image-vit-block-stack-layer-upload', metadata: { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, windowSize: layerShape.windowSize } });
-    }, { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, windowSize: layerShape.windowSize, windowTokens: layerShape.windowTokens });
-    const program = createLayerProgram({ layerShape, inputTensorName, outputTensorName });
-    const programRun = await runtime.runProgram(program);
-    if (input.validateFinitePhaseLayerIndex === layer.layerIndex) {
-      const phaseEvidence = summarizeSam3FinitePhaseOutputs(programRun.outputs);
-      const parity = expectedPhaseCheckpoints
-        ? summarizeSam3PhaseParityCheckpoints(programRun.outputs, expectedPhaseCheckpoints)
-        : [];
-      finitePhaseCheckpoints.push({ layerIndex: layer.layerIndex, phases: phaseEvidence, parity });
-      const firstNonFinitePhase = phaseEvidence.find(checkpoint => checkpoint.nonFiniteCount > 0);
-      if (firstNonFinitePhase) {
-        runtime.dispose();
-        throw new Error(`SAM3 ViT block layer ${layer.layerIndex} first non-finite phase: ${JSON.stringify(firstNonFinitePhase)}; phase checkpoints: ${JSON.stringify(phaseEvidence)}`);
-      }
-    }
-    if (input.validateFiniteCheckpoints === true) {
-      const checkpointBytes = await runtime.runStage(
-        `validate-vit-block-stack-layer-${layer.layerIndex}-finite`,
-        stage => stage.readTensor(tensors[outputTensorName]),
-        { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, outputTensor: outputTensorName },
-      );
-      const checkpointValues = new Float32Array(checkpointBytes);
-      const checkpoint = {
-        layerIndex: layer.layerIndex,
+    const bindTensor = (resource, access = 'read-only-storage') => ({ name: resource.replace(/^tensor:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, access });
+    const bindUniform = resource => ({ name: resource.replace(/^uniform:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' });
+    const createLayerProgram = ({ layerShape, inputTensorName, outputTensorName }) => {
+      const programTensors = residentLayerWeights
+        ? { ...tensors, ...residentLayerWeights.get(layerShape.layerIndex) }
+        : tensors;
+      const dispatchPlan = createSam3ImageVitBlockStackDispatchPlan({
+        shape,
+        layerIndex: layerShape.layerIndex,
         isGlobal: layerShape.isGlobal,
-        ...summarizeSam3FiniteValues(checkpointValues),
-        ...(expectedLayerCheckpoints?.has(layer.layerIndex) ? summarizeSam3LayerParityCheckpoint(
-          layer.layerIndex,
-          layerShape.isGlobal,
-          expectedLayerCheckpoints.get(layer.layerIndex),
-          checkpointValues,
-        ) : {}),
+        maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
+      });
+      const phases = [
+        { name: 'vit-block-stack-layernorm1', kernel: 'layerNorm1', dispatch: dispatchPlan.layerNorm1.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-window-partition', kernel: 'windowPartition', dispatch: dispatchPlan.windowPartition.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-qkv-projection', kernel: 'qProjection', dispatch: dispatchPlan.qProjection.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-qkv-projection', kernel: 'kProjection', dispatch: dispatchPlan.kProjection.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-qkv-projection', kernel: 'vProjection', dispatch: dispatchPlan.vProjection.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-rope-attention', kernel: 'qRope', dispatch: dispatchPlan.qRope.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-rope-attention', kernel: 'kRope', dispatch: dispatchPlan.kRope.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: layerShape.isGlobal ? 'vit-block-stack-global-attention' : 'vit-block-stack-rope-attention', kernel: 'attention', dispatch: dispatchPlan.attention.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-output-projection', kernel: 'outputProjection', dispatch: dispatchPlan.outputProjection.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-window-unpartition', kernel: 'windowUnpartition', dispatch: dispatchPlan.windowUnpartition.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-layernorm2', kernel: 'layerNorm2', dispatch: dispatchPlan.layerNorm2.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc1', dispatch: dispatchPlan.mlpFc1.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: dispatchPlan.mlpFc2.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+        { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: dispatchPlan.residualMlp.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      ];
+      const phaseTensorNames = {
+        layerNorm1: 'layerNorm1',
+        windowPartition: 'windows',
+        qProjection: 'q',
+        kProjection: 'k',
+        vProjection: 'v',
+        qRope: 'qRope',
+        kRope: 'kRope',
+        attention: 'attention',
+        outputProjection: 'projected',
+        windowUnpartition: 'attentionResidual',
+        layerNorm2: 'layerNorm2',
+        mlpFc1: 'mlpHidden',
+        mlpFc2: 'mlpOut',
+        residualMlp: outputTensorName,
       };
-      finiteCheckpoints.push(checkpoint);
-      if (checkpoint.nonFiniteCount > 0) {
-        runtime.dispose();
-        throw new Error(`SAM3 ViT block layer ${layer.layerIndex} produced non-finite checkpoint: ${JSON.stringify(checkpoint)}`);
-      }
-    }
-    [inputTensorName, outputTensorName] = [outputTensorName, inputTensorName];
-  }
-
-  const readback = await runtime.runStage('readback-vit-block-stack-hidden-states', async stage => ({
-    vitBlockStackHiddenStates: await stage.readTensor(tensors[inputTensorName]),
-  }), { outputTensor: inputTensorName, outputRole: 'vit-block-stack-hidden-states' });
-  const outputs = outputArtifacts(input.request, {
-    vitBlockStackHiddenStates: await sha256Hex(readback.vitBlockStackHiddenStates),
-  }, shape);
-  const receipt = createSam3ImageVitBlockStackPhaseProgramRouteReceipt({
-    sourceImage,
-    hiddenStates: hiddenStatesArtifact,
-    weights: weightsArtifact,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  authoritative.finiteCheckpoints = finiteCheckpoints;
-  authoritative.finitePhaseCheckpoints = finitePhaseCheckpoints;
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      vitBlockStackHiddenStates: sam3Readback(input, new Float32Array(readback.vitBlockStackHiddenStates)),
+      const instrumentedPhases = input.validateFinitePhaseLayerIndex === layerShape.layerIndex
+        ? phases.flatMap(phase => [
+            phase,
+            {
+              name: `validate-vit-block-stack-layer-${layerShape.layerIndex}-${phase.kernel}-finite`,
+              readback: { name: phase.kernel, tensor: `tensor:${phaseTensorNames[phase.kernel]}` },
+              metadata: { layerIndex: layerShape.layerIndex, kernel: phase.kernel, diagnostic: 'finite-phase-checkpoint' },
+            },
+          ])
+        : phases;
+      return runtime.defineProgram({
+      name: `sam3.image-vit-block-stack-layer-${layerShape.layerIndex}-phase-program`,
+      tensors: programTensors,
+      uniforms: { blockDims: tensors.blockDims, lnDims: tensors.lnDims, windowLinearDims: tensors.windowLinearDims, fc1Dims: tensors.fc1Dims, fc2Dims: tensors.fc2Dims },
+      kernels: {
+        layerNorm1: { code: LAYERNORM_WGSL, bindings: [bindTensor(`tensor:${inputTensorName}`), bindTensor('tensor:layerNorm1Weight'), bindTensor('tensor:layerNorm1Bias'), bindTensor('tensor:layerNorm1', 'storage'), bindUniform('uniform:lnDims')] },
+        windowPartition: { code: WINDOW_PARTITION_WGSL, bindings: [bindTensor('tensor:layerNorm1'), bindTensor('tensor:windows', 'storage'), bindUniform('uniform:blockDims')] },
+        qProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        kProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:kProjWeight'), bindTensor('tensor:kProjBias'), bindTensor('tensor:k', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        vProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        qRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:q'), bindTensor('tensor:qRope', 'storage'), bindUniform('uniform:blockDims')] },
+        kRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:k'), bindTensor('tensor:kRope', 'storage'), bindUniform('uniform:blockDims')] },
+        attention: { code: ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
+        outputProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        windowUnpartition: { code: WINDOW_UNPARTITION_WGSL, bindings: [bindTensor('tensor:projected'), bindTensor(`tensor:${inputTensorName}`), bindTensor('tensor:attentionResidual', 'storage'), bindUniform('uniform:blockDims')] },
+        layerNorm2: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:layerNorm2Weight'), bindTensor('tensor:layerNorm2Bias'), bindTensor('tensor:layerNorm2', 'storage'), bindUniform('uniform:lnDims')] },
+        mlpFc1: { code: LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
+        mlpFc2: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
+        residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor(`tensor:${outputTensorName}`, 'storage'), bindUniform('uniform:blockDims')] },
+      },
+      phases: instrumentedPhases,
+      metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', referenceBoundary: shape.fullBackbone ? 'SAM3 image ViT contiguous full backbone' : 'SAM3 image ViT contiguous block stack through first global attention' },
+    });
     };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
+
+    await runtime.runStage('vit-block-stack-layer-range', async stage => {
+      await stage.yieldToBrowser({ reason: 'sam3-image-vit-block-stack-layer-range-established', metadata: { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, finalLayerIndex: shape.finalLayerIndex, fullBackbone: shape.fullBackbone } });
+    }, { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, finalLayerIndex: shape.finalLayerIndex, fullBackbone: shape.fullBackbone, global_attn_indexes: shape.globalAttnIndexes });
+
+    let inputTensorName = 'hiddenA';
+    let outputTensorName = 'hiddenB';
+    const finiteCheckpoints = [];
+    const finitePhaseCheckpoints = [];
+    for (const layer of weights.layers) {
+      const layerShape = blockShapeForLayer(shape, layer);
+      await runtime.runStage('vit-block-stack-layer-range', async stage => {
+        uploadLayerWeights(stage, layer);
+        tensors.blockDims.update(blockDimsValues(layerShape));
+        tensors.windowLinearDims.update({ input_channels: shape.hiddenSize, output_channels: shape.hiddenSize, total_output: layerShape.paddedTotalValues, _pad0: 0 });
+        await stage.yieldToBrowser({ reason: 'sam3-image-vit-block-stack-layer-upload', metadata: { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, windowSize: layerShape.windowSize } });
+      }, { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, windowSize: layerShape.windowSize, windowTokens: layerShape.windowTokens });
+      const program = createLayerProgram({ layerShape, inputTensorName, outputTensorName });
+      const programRun = await runtime.runProgram(program);
+      if (input.validateFinitePhaseLayerIndex === layer.layerIndex) {
+        const phaseEvidence = summarizeSam3FinitePhaseOutputs(programRun.outputs);
+        const parity = expectedPhaseCheckpoints
+          ? summarizeSam3PhaseParityCheckpoints(programRun.outputs, expectedPhaseCheckpoints)
+          : [];
+        finitePhaseCheckpoints.push({ layerIndex: layer.layerIndex, phases: phaseEvidence, parity });
+        const firstNonFinitePhase = phaseEvidence.find(checkpoint => checkpoint.nonFiniteCount > 0);
+        if (firstNonFinitePhase) {
+          throw new Error(`SAM3 ViT block layer ${layer.layerIndex} first non-finite phase: ${JSON.stringify(firstNonFinitePhase)}; phase checkpoints: ${JSON.stringify(phaseEvidence)}`);
+        }
+      }
+      if (input.validateFiniteCheckpoints === true) {
+        const checkpointBytes = await runtime.runStage(
+          `validate-vit-block-stack-layer-${layer.layerIndex}-finite`,
+          stage => stage.readTensor(tensors[outputTensorName]),
+          { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, outputTensor: outputTensorName },
+        );
+        const checkpointValues = new Float32Array(checkpointBytes);
+        const checkpoint = {
+          layerIndex: layer.layerIndex,
+          isGlobal: layerShape.isGlobal,
+          ...summarizeSam3FiniteValues(checkpointValues),
+          ...(expectedLayerCheckpoints?.has(layer.layerIndex) ? summarizeSam3LayerParityCheckpoint(
+            layer.layerIndex,
+            layerShape.isGlobal,
+            expectedLayerCheckpoints.get(layer.layerIndex),
+            checkpointValues,
+          ) : {}),
+        };
+        finiteCheckpoints.push(checkpoint);
+        if (checkpoint.nonFiniteCount > 0) {
+          throw new Error(`SAM3 ViT block layer ${layer.layerIndex} produced non-finite checkpoint: ${JSON.stringify(checkpoint)}`);
+        }
+      }
+      [inputTensorName, outputTensorName] = [outputTensorName, inputTensorName];
+    }
+
+    const readback = await runtime.runStage('readback-vit-block-stack-hidden-states', async stage => ({
+      vitBlockStackHiddenStates: await stage.readTensor(tensors[inputTensorName]),
+    }), { outputTensor: inputTensorName, outputRole: 'vit-block-stack-hidden-states' });
+    const outputs = outputArtifacts(input.request, {
+      vitBlockStackHiddenStates: await sha256Hex(readback.vitBlockStackHiddenStates),
+    }, shape);
+    const receipt = createSam3ImageVitBlockStackPhaseProgramRouteReceipt({
+      sourceImage,
+      hiddenStates: hiddenStatesArtifact,
+      weights: weightsArtifact,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    authoritative.finiteCheckpoints = finiteCheckpoints;
+    authoritative.finitePhaseCheckpoints = finitePhaseCheckpoints;
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        vitBlockStackHiddenStates: sam3Readback(input, new Float32Array(readback.vitBlockStackHiddenStates)),
+      };
+    }
+    return authoritative;
+  });
 }

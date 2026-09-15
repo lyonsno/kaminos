@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -669,290 +670,291 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-prompt-text-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const createWeightTensor = (name, value, shapeValue, resident = true) => {
-      const tensor = stage.createTensor({ name, shape: shapeValue, dtype: 'f32', usage: readonlyUsage, ...(resident ? { sourceData: value } : {}) });
-      stage.uploadTensor(tensor, value);
-      return tensor;
-    };
-    tensors = {
-      inputIds: stage.createTensor({ name: 'sam3.prompt-text.input-ids', shape: [shape.batch, shape.promptTokens], dtype: 'u32', usage: readonlyUsage }),
-      attentionMask: stage.createTensor({ name: 'sam3.prompt-text.attention-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
-      tokenEmbeddingWeight: createWeightTensor('sam3.prompt-text.token-embedding-rows', promptTokenEmbeddingRows, [shape.batch, shape.promptTokens, shape.hiddenSize], false),
-      positionEmbeddingWeight: createWeightTensor('sam3.prompt-text.position-embedding-weight', weights.positionEmbeddingWeight, [shape.maxPositionEmbeddings, shape.hiddenSize]),
-      hiddenA: stage.createTensor({ name: 'sam3.prompt-text.hidden-a', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
-      hiddenB: stage.createTensor({ name: 'sam3.prompt-text.hidden-b', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
-      q: stage.createTensor({ name: 'sam3.prompt-text.q', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
-      k: stage.createTensor({ name: 'sam3.prompt-text.k', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
-      v: stage.createTensor({ name: 'sam3.prompt-text.v', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
-      attn: stage.createTensor({ name: 'sam3.prompt-text.attn', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
-      mlp: stage.createTensor({ name: 'sam3.prompt-text.mlp', shape: [shape.batch, shape.promptTokens, shape.intermediateSize], dtype: 'f32', usage }),
-      mlpGelu: stage.createTensor({ name: 'sam3.prompt-text.mlp-gelu', shape: [shape.batch, shape.promptTokens, shape.intermediateSize], dtype: 'f32', usage }),
-      promptFeatures: stage.createTensor({ name: 'sam3.prompt-text.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
-      promptMask: stage.createTensor({ name: 'sam3.prompt-text.prompt-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage }),
-      finalLayerNormWeight: createWeightTensor('sam3.prompt-text.final-layernorm-weight', weights.finalLayerNormWeight, [shape.hiddenSize]),
-      finalLayerNormBias: createWeightTensor('sam3.prompt-text.final-layernorm-bias', weights.finalLayerNormBias, [shape.hiddenSize]),
-      textProjectionWeight: createWeightTensor('sam3.prompt-text.text-projection-weight', weights.textProjectionWeight, [shape.channels, shape.hiddenSize]),
-      textProjectionBias: createWeightTensor('sam3.prompt-text.text-projection-bias', weights.textProjectionBias, [shape.channels]),
-      textDims: stage.createUniformBuffer({
-        label: 'sam3.prompt-text.dims',
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'prompt_tokens', type: 'u32' },
-          { name: 'hidden_size', type: 'u32' },
-          { name: 'channels', type: 'u32' },
-          { name: 'intermediate_size', type: 'u32' },
-          { name: 'heads', type: 'u32' },
-          { name: 'head_dim', type: 'u32' },
-          { name: 'total_hidden', type: 'u32' },
-        ],
-        values: { batch: shape.batch, prompt_tokens: shape.promptTokens, hidden_size: shape.hiddenSize, channels: shape.channels, intermediate_size: shape.intermediateSize, heads: shape.heads, head_dim: shape.headDim, total_hidden: totalHidden },
-      }),
-      hiddenHiddenDims: linearDims(stage, 'sam3.prompt-text.hidden-hidden-dims', rows, shape.hiddenSize, shape.hiddenSize),
-      hiddenIntermediateDims: linearDims(stage, 'sam3.prompt-text.hidden-intermediate-dims', rows, shape.hiddenSize, shape.intermediateSize),
-      intermediateHiddenDims: linearDims(stage, 'sam3.prompt-text.intermediate-hidden-dims', rows, shape.intermediateSize, shape.hiddenSize),
-      hiddenChannelsDims: linearDims(stage, 'sam3.prompt-text.hidden-channels-dims', rows, shape.hiddenSize, shape.channels),
-      geluDims: stage.createUniformBuffer({
-        label: 'sam3.prompt-text.gelu-dims',
-        schema: [
-          { name: 'total_values', type: 'u32' },
-          { name: '_pad0', type: 'u32' },
-          { name: '_pad1', type: 'u32' },
-          { name: '_pad2', type: 'u32' },
-        ],
-        values: { total_values: totalIntermediate, _pad0: 0, _pad1: 0, _pad2: 0 },
-      }),
-      layers: [],
-    };
-    stage.uploadTensor(tensors.inputIds, inputIds);
-    stage.uploadTensor(tensors.attentionMask, attentionMask);
-    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
-      const layer = weights.layers[layerIndex];
-      tensors.layers.push({
-        layerNorm1Weight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.layernorm1-weight`, layer.layerNorm1Weight, [shape.hiddenSize]),
-        layerNorm1Bias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.layernorm1-bias`, layer.layerNorm1Bias, [shape.hiddenSize]),
-        qWeight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.q-weight`, layer.qWeight, [shape.hiddenSize, shape.hiddenSize]),
-        qBias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.q-bias`, layer.qBias, [shape.hiddenSize]),
-        kWeight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.k-weight`, layer.kWeight, [shape.hiddenSize, shape.hiddenSize]),
-        kBias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.k-bias`, layer.kBias, [shape.hiddenSize]),
-        vWeight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.v-weight`, layer.vWeight, [shape.hiddenSize, shape.hiddenSize]),
-        vBias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.v-bias`, layer.vBias, [shape.hiddenSize]),
-        oWeight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.o-weight`, layer.oWeight, [shape.hiddenSize, shape.hiddenSize]),
-        oBias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.o-bias`, layer.oBias, [shape.hiddenSize]),
-        layerNorm2Weight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.layernorm2-weight`, layer.layerNorm2Weight, [shape.hiddenSize]),
-        layerNorm2Bias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.layernorm2-bias`, layer.layerNorm2Bias, [shape.hiddenSize]),
-        fc1Weight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.fc1-weight`, layer.fc1Weight, [shape.intermediateSize, shape.hiddenSize]),
-        fc1Bias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.fc1-bias`, layer.fc1Bias, [shape.intermediateSize]),
-        fc2Weight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.fc2-weight`, layer.fc2Weight, [shape.hiddenSize, shape.intermediateSize]),
-        fc2Bias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.fc2-bias`, layer.fc2Bias, [shape.hiddenSize]),
-      });
-    }
-    await stage.yieldToBrowser({ reason: 'after-sam3-prompt-text-upload' });
-  }, { shape });
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-prompt-text-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      const createWeightTensor = (name, value, shapeValue, resident = true) => {
+        const tensor = stage.createTensor({ name, shape: shapeValue, dtype: 'f32', usage: readonlyUsage, ...(resident ? { sourceData: value } : {}) });
+        stage.uploadTensor(tensor, value);
+        return tensor;
+      };
+      tensors = {
+        inputIds: stage.createTensor({ name: 'sam3.prompt-text.input-ids', shape: [shape.batch, shape.promptTokens], dtype: 'u32', usage: readonlyUsage }),
+        attentionMask: stage.createTensor({ name: 'sam3.prompt-text.attention-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
+        tokenEmbeddingWeight: createWeightTensor('sam3.prompt-text.token-embedding-rows', promptTokenEmbeddingRows, [shape.batch, shape.promptTokens, shape.hiddenSize], false),
+        positionEmbeddingWeight: createWeightTensor('sam3.prompt-text.position-embedding-weight', weights.positionEmbeddingWeight, [shape.maxPositionEmbeddings, shape.hiddenSize]),
+        hiddenA: stage.createTensor({ name: 'sam3.prompt-text.hidden-a', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
+        hiddenB: stage.createTensor({ name: 'sam3.prompt-text.hidden-b', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
+        q: stage.createTensor({ name: 'sam3.prompt-text.q', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
+        k: stage.createTensor({ name: 'sam3.prompt-text.k', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
+        v: stage.createTensor({ name: 'sam3.prompt-text.v', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
+        attn: stage.createTensor({ name: 'sam3.prompt-text.attn', shape: [shape.batch, shape.promptTokens, shape.hiddenSize], dtype: 'f32', usage }),
+        mlp: stage.createTensor({ name: 'sam3.prompt-text.mlp', shape: [shape.batch, shape.promptTokens, shape.intermediateSize], dtype: 'f32', usage }),
+        mlpGelu: stage.createTensor({ name: 'sam3.prompt-text.mlp-gelu', shape: [shape.batch, shape.promptTokens, shape.intermediateSize], dtype: 'f32', usage }),
+        promptFeatures: stage.createTensor({ name: 'sam3.prompt-text.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
+        promptMask: stage.createTensor({ name: 'sam3.prompt-text.prompt-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage }),
+        finalLayerNormWeight: createWeightTensor('sam3.prompt-text.final-layernorm-weight', weights.finalLayerNormWeight, [shape.hiddenSize]),
+        finalLayerNormBias: createWeightTensor('sam3.prompt-text.final-layernorm-bias', weights.finalLayerNormBias, [shape.hiddenSize]),
+        textProjectionWeight: createWeightTensor('sam3.prompt-text.text-projection-weight', weights.textProjectionWeight, [shape.channels, shape.hiddenSize]),
+        textProjectionBias: createWeightTensor('sam3.prompt-text.text-projection-bias', weights.textProjectionBias, [shape.channels]),
+        textDims: stage.createUniformBuffer({
+          label: 'sam3.prompt-text.dims',
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'prompt_tokens', type: 'u32' },
+            { name: 'hidden_size', type: 'u32' },
+            { name: 'channels', type: 'u32' },
+            { name: 'intermediate_size', type: 'u32' },
+            { name: 'heads', type: 'u32' },
+            { name: 'head_dim', type: 'u32' },
+            { name: 'total_hidden', type: 'u32' },
+          ],
+          values: { batch: shape.batch, prompt_tokens: shape.promptTokens, hidden_size: shape.hiddenSize, channels: shape.channels, intermediate_size: shape.intermediateSize, heads: shape.heads, head_dim: shape.headDim, total_hidden: totalHidden },
+        }),
+        hiddenHiddenDims: linearDims(stage, 'sam3.prompt-text.hidden-hidden-dims', rows, shape.hiddenSize, shape.hiddenSize),
+        hiddenIntermediateDims: linearDims(stage, 'sam3.prompt-text.hidden-intermediate-dims', rows, shape.hiddenSize, shape.intermediateSize),
+        intermediateHiddenDims: linearDims(stage, 'sam3.prompt-text.intermediate-hidden-dims', rows, shape.intermediateSize, shape.hiddenSize),
+        hiddenChannelsDims: linearDims(stage, 'sam3.prompt-text.hidden-channels-dims', rows, shape.hiddenSize, shape.channels),
+        geluDims: stage.createUniformBuffer({
+          label: 'sam3.prompt-text.gelu-dims',
+          schema: [
+            { name: 'total_values', type: 'u32' },
+            { name: '_pad0', type: 'u32' },
+            { name: '_pad1', type: 'u32' },
+            { name: '_pad2', type: 'u32' },
+          ],
+          values: { total_values: totalIntermediate, _pad0: 0, _pad1: 0, _pad2: 0 },
+        }),
+        layers: [],
+      };
+      stage.uploadTensor(tensors.inputIds, inputIds);
+      stage.uploadTensor(tensors.attentionMask, attentionMask);
+      for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
+        const layer = weights.layers[layerIndex];
+        tensors.layers.push({
+          layerNorm1Weight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.layernorm1-weight`, layer.layerNorm1Weight, [shape.hiddenSize]),
+          layerNorm1Bias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.layernorm1-bias`, layer.layerNorm1Bias, [shape.hiddenSize]),
+          qWeight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.q-weight`, layer.qWeight, [shape.hiddenSize, shape.hiddenSize]),
+          qBias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.q-bias`, layer.qBias, [shape.hiddenSize]),
+          kWeight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.k-weight`, layer.kWeight, [shape.hiddenSize, shape.hiddenSize]),
+          kBias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.k-bias`, layer.kBias, [shape.hiddenSize]),
+          vWeight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.v-weight`, layer.vWeight, [shape.hiddenSize, shape.hiddenSize]),
+          vBias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.v-bias`, layer.vBias, [shape.hiddenSize]),
+          oWeight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.o-weight`, layer.oWeight, [shape.hiddenSize, shape.hiddenSize]),
+          oBias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.o-bias`, layer.oBias, [shape.hiddenSize]),
+          layerNorm2Weight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.layernorm2-weight`, layer.layerNorm2Weight, [shape.hiddenSize]),
+          layerNorm2Bias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.layernorm2-bias`, layer.layerNorm2Bias, [shape.hiddenSize]),
+          fc1Weight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.fc1-weight`, layer.fc1Weight, [shape.intermediateSize, shape.hiddenSize]),
+          fc1Bias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.fc1-bias`, layer.fc1Bias, [shape.intermediateSize]),
+          fc2Weight: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.fc2-weight`, layer.fc2Weight, [shape.hiddenSize, shape.intermediateSize]),
+          fc2Bias: createWeightTensor(`sam3.prompt-text.layer${layerIndex}.fc2-bias`, layer.fc2Bias, [shape.hiddenSize]),
+        });
+      }
+      await stage.yieldToBrowser({ reason: 'after-sam3-prompt-text-upload' });
+    }, { shape });
 
-  const kernels = {
-    embedding: {
-      code: EMBEDDING_WGSL,
-      bindings: [
-        tensorBinding('inputIds', 'tensor:inputIds'),
-        tensorBinding('attentionMask', 'tensor:attentionMask'),
-        tensorBinding('tokenEmbedding', 'tensor:tokenEmbeddingWeight'),
-        tensorBinding('positionEmbedding', 'tensor:positionEmbeddingWeight'),
-        tensorBinding('hiddenOut', 'tensor:hiddenA', 'storage'),
-        uniformBinding('dims', 'uniform:textDims'),
-      ],
-    },
-    maskCopy: {
-      code: MASK_COPY_WGSL,
-      bindings: [
-        tensorBinding('attentionMask', 'tensor:attentionMask'),
-        tensorBinding('promptMask', 'tensor:promptMask', 'storage'),
-        uniformBinding('dims', 'uniform:textDims'),
-      ],
-    },
-    finalLayerNorm: {
-      code: LAYER_NORM_WGSL,
-      bindings: [
+    const kernels = {
+      embedding: {
+        code: EMBEDDING_WGSL,
+        bindings: [
+          tensorBinding('inputIds', 'tensor:inputIds'),
+          tensorBinding('attentionMask', 'tensor:attentionMask'),
+          tensorBinding('tokenEmbedding', 'tensor:tokenEmbeddingWeight'),
+          tensorBinding('positionEmbedding', 'tensor:positionEmbeddingWeight'),
+          tensorBinding('hiddenOut', 'tensor:hiddenA', 'storage'),
+          uniformBinding('dims', 'uniform:textDims'),
+        ],
+      },
+      maskCopy: {
+        code: MASK_COPY_WGSL,
+        bindings: [
+          tensorBinding('attentionMask', 'tensor:attentionMask'),
+          tensorBinding('promptMask', 'tensor:promptMask', 'storage'),
+          uniformBinding('dims', 'uniform:textDims'),
+        ],
+      },
+      finalLayerNorm: {
+        code: LAYER_NORM_WGSL,
+        bindings: [
+          tensorBinding('inputValues', 'tensor:hiddenA'),
+          tensorBinding('normWeight', 'tensor:finalLayerNormWeight'),
+          tensorBinding('normBias', 'tensor:finalLayerNormBias'),
+          tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
+          uniformBinding('dims', 'uniform:textDims'),
+        ],
+      },
+      projection: {
+        code: LINEAR_WGSL,
+        bindings: [
+          tensorBinding('inputValues', 'tensor:hiddenB'),
+          tensorBinding('weight', 'tensor:textProjectionWeight'),
+          tensorBinding('bias', 'tensor:textProjectionBias'),
+          tensorBinding('outputValues', 'tensor:promptFeatures', 'storage'),
+          uniformBinding('dims', 'uniform:hiddenChannelsDims'),
+        ],
+      },
+    };
+    const phases = [
+      { name: 'prompt-token-position-embedding', kernel: 'embedding', dispatch: [workgroups(Math.max(totalHidden, rows))], yieldAfter: true },
+      { name: 'prompt-mask-copy', kernel: 'maskCopy', dispatch: [workgroups(rows)], yieldAfter: true },
+    ];
+
+    const registerLayerKernel = (name, code, bindings) => {
+      kernels[name] = { code, bindings };
+    };
+    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
+      const prefix = `layer${layerIndex}`;
+      const resources = tensors.layers[layerIndex];
+      registerLayerKernel(`${prefix}.ln1`, LAYER_NORM_WGSL, [
         tensorBinding('inputValues', 'tensor:hiddenA'),
-        tensorBinding('normWeight', 'tensor:finalLayerNormWeight'),
-        tensorBinding('normBias', 'tensor:finalLayerNormBias'),
+        tensorBinding('normWeight', resources.layerNorm1Weight),
+        tensorBinding('normBias', resources.layerNorm1Bias),
         tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
         uniformBinding('dims', 'uniform:textDims'),
-      ],
-    },
-    projection: {
-      code: LINEAR_WGSL,
-      bindings: [
-        tensorBinding('inputValues', 'tensor:hiddenB'),
-        tensorBinding('weight', 'tensor:textProjectionWeight'),
-        tensorBinding('bias', 'tensor:textProjectionBias'),
-        tensorBinding('outputValues', 'tensor:promptFeatures', 'storage'),
-        uniformBinding('dims', 'uniform:hiddenChannelsDims'),
-      ],
-    },
-  };
-  const phases = [
-    { name: 'prompt-token-position-embedding', kernel: 'embedding', dispatch: [workgroups(Math.max(totalHidden, rows))], yieldAfter: true },
-    { name: 'prompt-mask-copy', kernel: 'maskCopy', dispatch: [workgroups(rows)], yieldAfter: true },
-  ];
-
-  const registerLayerKernel = (name, code, bindings) => {
-    kernels[name] = { code, bindings };
-  };
-  for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
-    const prefix = `layer${layerIndex}`;
-    const resources = tensors.layers[layerIndex];
-    registerLayerKernel(`${prefix}.ln1`, LAYER_NORM_WGSL, [
-      tensorBinding('inputValues', 'tensor:hiddenA'),
-      tensorBinding('normWeight', resources.layerNorm1Weight),
-      tensorBinding('normBias', resources.layerNorm1Bias),
-      tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
-      uniformBinding('dims', 'uniform:textDims'),
-    ]);
-    for (const projection of ['q', 'k', 'v']) {
-      registerLayerKernel(`${prefix}.${projection}`, LINEAR_WGSL, [
-        tensorBinding('inputValues', 'tensor:hiddenB'),
-        tensorBinding('weight', resources[`${projection}Weight`]),
-        tensorBinding('bias', resources[`${projection}Bias`]),
-        tensorBinding('outputValues', `tensor:${projection}`, 'storage'),
+      ]);
+      for (const projection of ['q', 'k', 'v']) {
+        registerLayerKernel(`${prefix}.${projection}`, LINEAR_WGSL, [
+          tensorBinding('inputValues', 'tensor:hiddenB'),
+          tensorBinding('weight', resources[`${projection}Weight`]),
+          tensorBinding('bias', resources[`${projection}Bias`]),
+          tensorBinding('outputValues', `tensor:${projection}`, 'storage'),
+          uniformBinding('dims', 'uniform:hiddenHiddenDims'),
+        ]);
+      }
+      registerLayerKernel(`${prefix}.attention`, ATTENTION_WGSL, [
+        tensorBinding('qValues', 'tensor:q'),
+        tensorBinding('kValues', 'tensor:k'),
+        tensorBinding('vValues', 'tensor:v'),
+        tensorBinding('promptMask', 'tensor:promptMask'),
+        tensorBinding('outputValues', 'tensor:attn', 'storage'),
+        uniformBinding('dims', 'uniform:textDims'),
+      ]);
+      registerLayerKernel(`${prefix}.out`, LINEAR_WGSL, [
+        tensorBinding('inputValues', 'tensor:attn'),
+        tensorBinding('weight', resources.oWeight),
+        tensorBinding('bias', resources.oBias),
+        tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
         uniformBinding('dims', 'uniform:hiddenHiddenDims'),
       ]);
+      registerLayerKernel(`${prefix}.add1`, ADD_WGSL, [
+        tensorBinding('aValues', 'tensor:hiddenA'),
+        tensorBinding('bValues', 'tensor:hiddenB'),
+        tensorBinding('outputValues', 'tensor:attn', 'storage'),
+        uniformBinding('dims', 'uniform:textDims'),
+      ]);
+      registerLayerKernel(`${prefix}.ln2`, LAYER_NORM_WGSL, [
+        tensorBinding('inputValues', 'tensor:attn'),
+        tensorBinding('normWeight', resources.layerNorm2Weight),
+        tensorBinding('normBias', resources.layerNorm2Bias),
+        tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
+        uniformBinding('dims', 'uniform:textDims'),
+      ]);
+      registerLayerKernel(`${prefix}.fc1`, LINEAR_WGSL, [
+        tensorBinding('inputValues', 'tensor:hiddenB'),
+        tensorBinding('weight', resources.fc1Weight),
+        tensorBinding('bias', resources.fc1Bias),
+        tensorBinding('outputValues', 'tensor:mlp', 'storage'),
+        uniformBinding('dims', 'uniform:hiddenIntermediateDims'),
+      ]);
+      registerLayerKernel(`${prefix}.gelu`, GELU_WGSL, [
+        tensorBinding('inputValues', 'tensor:mlp'),
+        tensorBinding('outputValues', 'tensor:mlpGelu', 'storage'),
+        uniformBinding('dims', 'uniform:geluDims'),
+      ]);
+      registerLayerKernel(`${prefix}.fc2`, LINEAR_WGSL, [
+        tensorBinding('inputValues', 'tensor:mlpGelu'),
+        tensorBinding('weight', resources.fc2Weight),
+        tensorBinding('bias', resources.fc2Bias),
+        tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
+        uniformBinding('dims', 'uniform:intermediateHiddenDims'),
+      ]);
+      registerLayerKernel(`${prefix}.add2`, ADD_WGSL, [
+        tensorBinding('aValues', 'tensor:attn'),
+        tensorBinding('bValues', 'tensor:hiddenB'),
+        tensorBinding('outputValues', 'tensor:hiddenA', 'storage'),
+        uniformBinding('dims', 'uniform:textDims'),
+      ]);
+      phases.push(
+        { name: `prompt-text-layernorm1-${layerIndex}`, kernel: `${prefix}.ln1`, dispatch: [workgroups(rows)], yieldAfter: true },
+        { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-output-add-${layerIndex}`, kernel: `${prefix}.add1`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-layernorm2-${layerIndex}`, kernel: `${prefix}.ln2`, dispatch: [workgroups(rows)], yieldAfter: true },
+        { name: `prompt-text-mlp-fc1-${layerIndex}`, kernel: `${prefix}.fc1`, dispatch: [workgroups(totalIntermediate)], yieldAfter: true },
+        { name: `prompt-text-mlp-gelu-${layerIndex}`, kernel: `${prefix}.gelu`, dispatch: [workgroups(totalIntermediate)], yieldAfter: true },
+        { name: `prompt-text-mlp-fc2-${layerIndex}`, kernel: `${prefix}.fc2`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-mlp-residual-${layerIndex}`, kernel: `${prefix}.add2`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+      );
     }
-    registerLayerKernel(`${prefix}.attention`, ATTENTION_WGSL, [
-      tensorBinding('qValues', 'tensor:q'),
-      tensorBinding('kValues', 'tensor:k'),
-      tensorBinding('vValues', 'tensor:v'),
-      tensorBinding('promptMask', 'tensor:promptMask'),
-      tensorBinding('outputValues', 'tensor:attn', 'storage'),
-      uniformBinding('dims', 'uniform:textDims'),
-    ]);
-    registerLayerKernel(`${prefix}.out`, LINEAR_WGSL, [
-      tensorBinding('inputValues', 'tensor:attn'),
-      tensorBinding('weight', resources.oWeight),
-      tensorBinding('bias', resources.oBias),
-      tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
-      uniformBinding('dims', 'uniform:hiddenHiddenDims'),
-    ]);
-    registerLayerKernel(`${prefix}.add1`, ADD_WGSL, [
-      tensorBinding('aValues', 'tensor:hiddenA'),
-      tensorBinding('bValues', 'tensor:hiddenB'),
-      tensorBinding('outputValues', 'tensor:attn', 'storage'),
-      uniformBinding('dims', 'uniform:textDims'),
-    ]);
-    registerLayerKernel(`${prefix}.ln2`, LAYER_NORM_WGSL, [
-      tensorBinding('inputValues', 'tensor:attn'),
-      tensorBinding('normWeight', resources.layerNorm2Weight),
-      tensorBinding('normBias', resources.layerNorm2Bias),
-      tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
-      uniformBinding('dims', 'uniform:textDims'),
-    ]);
-    registerLayerKernel(`${prefix}.fc1`, LINEAR_WGSL, [
-      tensorBinding('inputValues', 'tensor:hiddenB'),
-      tensorBinding('weight', resources.fc1Weight),
-      tensorBinding('bias', resources.fc1Bias),
-      tensorBinding('outputValues', 'tensor:mlp', 'storage'),
-      uniformBinding('dims', 'uniform:hiddenIntermediateDims'),
-    ]);
-    registerLayerKernel(`${prefix}.gelu`, GELU_WGSL, [
-      tensorBinding('inputValues', 'tensor:mlp'),
-      tensorBinding('outputValues', 'tensor:mlpGelu', 'storage'),
-      uniformBinding('dims', 'uniform:geluDims'),
-    ]);
-    registerLayerKernel(`${prefix}.fc2`, LINEAR_WGSL, [
-      tensorBinding('inputValues', 'tensor:mlpGelu'),
-      tensorBinding('weight', resources.fc2Weight),
-      tensorBinding('bias', resources.fc2Bias),
-      tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
-      uniformBinding('dims', 'uniform:intermediateHiddenDims'),
-    ]);
-    registerLayerKernel(`${prefix}.add2`, ADD_WGSL, [
-      tensorBinding('aValues', 'tensor:attn'),
-      tensorBinding('bValues', 'tensor:hiddenB'),
-      tensorBinding('outputValues', 'tensor:hiddenA', 'storage'),
-      uniformBinding('dims', 'uniform:textDims'),
-    ]);
     phases.push(
-      { name: `prompt-text-layernorm1-${layerIndex}`, kernel: `${prefix}.ln1`, dispatch: [workgroups(rows)], yieldAfter: true },
-      { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-      { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-      { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-      { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-      { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-      { name: `prompt-text-output-add-${layerIndex}`, kernel: `${prefix}.add1`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-      { name: `prompt-text-layernorm2-${layerIndex}`, kernel: `${prefix}.ln2`, dispatch: [workgroups(rows)], yieldAfter: true },
-      { name: `prompt-text-mlp-fc1-${layerIndex}`, kernel: `${prefix}.fc1`, dispatch: [workgroups(totalIntermediate)], yieldAfter: true },
-      { name: `prompt-text-mlp-gelu-${layerIndex}`, kernel: `${prefix}.gelu`, dispatch: [workgroups(totalIntermediate)], yieldAfter: true },
-      { name: `prompt-text-mlp-fc2-${layerIndex}`, kernel: `${prefix}.fc2`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-      { name: `prompt-text-mlp-residual-${layerIndex}`, kernel: `${prefix}.add2`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+      { name: 'prompt-text-final-layernorm', kernel: 'finalLayerNorm', dispatch: [workgroups(rows)], yieldAfter: true },
+      { name: 'prompt-text-projection', kernel: 'projection', dispatch: [workgroups(totalPromptFeatures)], yieldAfter: true },
+      { name: 'readback-prompt-text-ingress', readbacks: [{ name: 'promptFeatures', tensor: 'promptFeatures' }, { name: 'promptMask', tensor: 'promptMask' }] },
     );
-  }
-  phases.push(
-    { name: 'prompt-text-final-layernorm', kernel: 'finalLayerNorm', dispatch: [workgroups(rows)], yieldAfter: true },
-    { name: 'prompt-text-projection', kernel: 'projection', dispatch: [workgroups(totalPromptFeatures)], yieldAfter: true },
-    { name: 'readback-prompt-text-ingress', readbacks: [{ name: 'promptFeatures', tensor: 'promptFeatures' }, { name: 'promptMask', tensor: 'promptMask' }] },
-  );
 
-  const program = runtime.defineProgram({
-    name: 'sam3.prompt-text-ingress-phase-program',
-    tensors: {
-      inputIds: tensors.inputIds,
-      attentionMask: tensors.attentionMask,
-      tokenEmbeddingWeight: tensors.tokenEmbeddingWeight,
-      positionEmbeddingWeight: tensors.positionEmbeddingWeight,
-      hiddenA: tensors.hiddenA,
-      hiddenB: tensors.hiddenB,
-      q: tensors.q,
-      k: tensors.k,
-      v: tensors.v,
-      attn: tensors.attn,
-      mlp: tensors.mlp,
-      mlpGelu: tensors.mlpGelu,
-      promptFeatures: tensors.promptFeatures,
-      promptMask: tensors.promptMask,
-      finalLayerNormWeight: tensors.finalLayerNormWeight,
-      finalLayerNormBias: tensors.finalLayerNormBias,
-      textProjectionWeight: tensors.textProjectionWeight,
-      textProjectionBias: tensors.textProjectionBias,
-    },
-    uniforms: {
-      textDims: tensors.textDims,
-      hiddenHiddenDims: tensors.hiddenHiddenDims,
-      hiddenIntermediateDims: tensors.hiddenIntermediateDims,
-      intermediateHiddenDims: tensors.intermediateHiddenDims,
-      hiddenChannelsDims: tensors.hiddenChannelsDims,
-      geluDims: tensors.geluDims,
-    },
-    kernels,
-    phases,
-    metadata: { routeId: SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID },
+    const program = runtime.defineProgram({
+      name: 'sam3.prompt-text-ingress-phase-program',
+      tensors: {
+        inputIds: tensors.inputIds,
+        attentionMask: tensors.attentionMask,
+        tokenEmbeddingWeight: tensors.tokenEmbeddingWeight,
+        positionEmbeddingWeight: tensors.positionEmbeddingWeight,
+        hiddenA: tensors.hiddenA,
+        hiddenB: tensors.hiddenB,
+        q: tensors.q,
+        k: tensors.k,
+        v: tensors.v,
+        attn: tensors.attn,
+        mlp: tensors.mlp,
+        mlpGelu: tensors.mlpGelu,
+        promptFeatures: tensors.promptFeatures,
+        promptMask: tensors.promptMask,
+        finalLayerNormWeight: tensors.finalLayerNormWeight,
+        finalLayerNormBias: tensors.finalLayerNormBias,
+        textProjectionWeight: tensors.textProjectionWeight,
+        textProjectionBias: tensors.textProjectionBias,
+      },
+      uniforms: {
+        textDims: tensors.textDims,
+        hiddenHiddenDims: tensors.hiddenHiddenDims,
+        hiddenIntermediateDims: tensors.hiddenIntermediateDims,
+        intermediateHiddenDims: tensors.intermediateHiddenDims,
+        hiddenChannelsDims: tensors.hiddenChannelsDims,
+        geluDims: tensors.geluDims,
+      },
+      kernels,
+      phases,
+      metadata: { routeId: SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID },
+    });
+    const run = await runtime.runProgram(program);
+    const outputs = outputArtifacts(input.request, {
+      promptFeatures: await sha256Hex(run.outputs.promptFeatures),
+      promptMask: await sha256Hex(run.outputs.promptMask),
+    }, shape);
+    const receipt = createSam3PromptTextIngressPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      weights: weightsArtifact,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsArtifact.sha256, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        promptFeatures: sam3Readback(input, new Float32Array(run.outputs.promptFeatures)),
+        promptMask: sam3Readback(input, new Float32Array(run.outputs.promptMask)),
+      };
+    }
+    return authoritative;
   });
-  const run = await runtime.runProgram(program);
-  const outputs = outputArtifacts(input.request, {
-    promptFeatures: await sha256Hex(run.outputs.promptFeatures),
-    promptMask: await sha256Hex(run.outputs.promptMask),
-  }, shape);
-  const receipt = createSam3PromptTextIngressPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    weights: weightsArtifact,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsArtifact.sha256, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      promptFeatures: sam3Readback(input, new Float32Array(run.outputs.promptFeatures)),
-      promptMask: sam3Readback(input, new Float32Array(run.outputs.promptMask)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }

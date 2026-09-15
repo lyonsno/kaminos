@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -405,126 +406,127 @@ export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-mask-tail-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    tensors = {
-      lastHs: stage.createTensor({ name: 'sam3.last-hs', shape: [shape.batch, shape.maskTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-      pixelEmbed: stage.createTensor({ name: 'sam3.pixel-embed', shape: [shape.batch, shape.height, shape.width, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-      layer0: stage.createTensor({ name: 'sam3.mask-embedder.layer0', shape: [shape.batch, shape.maskTokens, shape.channels], dtype: 'f32', usage }),
-      layer1: stage.createTensor({ name: 'sam3.mask-embedder.layer1', shape: [shape.batch, shape.maskTokens, shape.channels], dtype: 'f32', usage }),
-      maskEmbeddings: stage.createTensor({ name: 'sam3.mask-embeddings', shape: [shape.batch, shape.maskTokens, shape.channels], dtype: 'f32', usage }),
-      upscaledEmbedding: stage.createTensor({ name: 'sam3.upscaled-embedding', shape: [shape.batch, shape.channels, shape.height, shape.width], dtype: 'f32', usage }),
-      maskLogits: stage.createTensor({ name: 'sam3.mask-tail-logits', shape: maskShape, dtype: 'f32', usage }),
-      binaryMask: stage.createTensor({ name: 'sam3.mask-tail-binary', shape: maskShape, dtype: 'u32', usage }),
-      dims: stage.createUniformBuffer({
-        label: 'sam3.mask-tail.dims',
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'mask_tokens', type: 'u32' },
-          { name: 'channels', type: 'u32' },
-          { name: 'height', type: 'u32' },
-          { name: 'width', type: 'u32' },
-          { name: 'mask_tail_total', type: 'u32' },
-          { name: 'mask_total', type: 'u32' },
-          { name: 'spatial', type: 'u32' },
-        ],
-        values: { batch: shape.batch, mask_tokens: shape.maskTokens, channels: shape.channels, height: shape.height, width: shape.width, mask_tail_total: maskTailTotal, mask_total: maskTotal, spatial },
-      }),
-      thresholdDims: stage.createUniformBuffer({
-        label: 'sam3.mask-tail.threshold-dims',
-        schema: [{ name: 'total', type: 'u32' }],
-        values: { total: maskTotal },
-      }),
-      weights: {
-        maskEmbedder: weights.maskEmbedder.map((layer, index) => ({
-          weight: stage.createTensor({ name: `sam3.mask-embedder.${index}.weight`, shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: layer.weight }),
-          bias: stage.createTensor({ name: `sam3.mask-embedder.${index}.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: layer.bias }),
-        })),
-        instanceProjection: {
-          weight: stage.createTensor({ name: 'sam3.instance-projection.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: weights.instanceProjection.weight }),
-          bias: stage.createTensor({ name: 'sam3.instance-projection.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: weights.instanceProjection.bias }),
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-mask-tail-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      tensors = {
+        lastHs: stage.createTensor({ name: 'sam3.last-hs', shape: [shape.batch, shape.maskTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        pixelEmbed: stage.createTensor({ name: 'sam3.pixel-embed', shape: [shape.batch, shape.height, shape.width, shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        layer0: stage.createTensor({ name: 'sam3.mask-embedder.layer0', shape: [shape.batch, shape.maskTokens, shape.channels], dtype: 'f32', usage }),
+        layer1: stage.createTensor({ name: 'sam3.mask-embedder.layer1', shape: [shape.batch, shape.maskTokens, shape.channels], dtype: 'f32', usage }),
+        maskEmbeddings: stage.createTensor({ name: 'sam3.mask-embeddings', shape: [shape.batch, shape.maskTokens, shape.channels], dtype: 'f32', usage }),
+        upscaledEmbedding: stage.createTensor({ name: 'sam3.upscaled-embedding', shape: [shape.batch, shape.channels, shape.height, shape.width], dtype: 'f32', usage }),
+        maskLogits: stage.createTensor({ name: 'sam3.mask-tail-logits', shape: maskShape, dtype: 'f32', usage }),
+        binaryMask: stage.createTensor({ name: 'sam3.mask-tail-binary', shape: maskShape, dtype: 'u32', usage }),
+        dims: stage.createUniformBuffer({
+          label: 'sam3.mask-tail.dims',
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'mask_tokens', type: 'u32' },
+            { name: 'channels', type: 'u32' },
+            { name: 'height', type: 'u32' },
+            { name: 'width', type: 'u32' },
+            { name: 'mask_tail_total', type: 'u32' },
+            { name: 'mask_total', type: 'u32' },
+            { name: 'spatial', type: 'u32' },
+          ],
+          values: { batch: shape.batch, mask_tokens: shape.maskTokens, channels: shape.channels, height: shape.height, width: shape.width, mask_tail_total: maskTailTotal, mask_total: maskTotal, spatial },
+        }),
+        thresholdDims: stage.createUniformBuffer({
+          label: 'sam3.mask-tail.threshold-dims',
+          schema: [{ name: 'total', type: 'u32' }],
+          values: { total: maskTotal },
+        }),
+        weights: {
+          maskEmbedder: weights.maskEmbedder.map((layer, index) => ({
+            weight: stage.createTensor({ name: `sam3.mask-embedder.${index}.weight`, shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: layer.weight }),
+            bias: stage.createTensor({ name: `sam3.mask-embedder.${index}.bias`, shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: layer.bias }),
+          })),
+          instanceProjection: {
+            weight: stage.createTensor({ name: 'sam3.instance-projection.weight', shape: [shape.channels, shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: weights.instanceProjection.weight }),
+            bias: stage.createTensor({ name: 'sam3.instance-projection.bias', shape: [shape.channels], dtype: 'f32', usage: readonlyUsage, sourceData: weights.instanceProjection.bias }),
+          },
         },
-      },
-    };
-    stage.uploadTensor(tensors.lastHs, lastHs);
-    stage.uploadTensor(tensors.pixelEmbed, pixelEmbed);
-    for (let index = 0; index < 3; index += 1) {
-      stage.uploadTensor(tensors.weights.maskEmbedder[index].weight, weights.maskEmbedder[index].weight);
-      stage.uploadTensor(tensors.weights.maskEmbedder[index].bias, weights.maskEmbedder[index].bias);
-    }
-    stage.uploadTensor(tensors.weights.instanceProjection.weight, weights.instanceProjection.weight);
-    stage.uploadTensor(tensors.weights.instanceProjection.bias, weights.instanceProjection.bias);
-    await stage.yieldToBrowser({ reason: 'after-sam3-mask-tail-upload' });
-  }, { shape });
+      };
+      stage.uploadTensor(tensors.lastHs, lastHs);
+      stage.uploadTensor(tensors.pixelEmbed, pixelEmbed);
+      for (let index = 0; index < 3; index += 1) {
+        stage.uploadTensor(tensors.weights.maskEmbedder[index].weight, weights.maskEmbedder[index].weight);
+        stage.uploadTensor(tensors.weights.maskEmbedder[index].bias, weights.maskEmbedder[index].bias);
+      }
+      stage.uploadTensor(tensors.weights.instanceProjection.weight, weights.instanceProjection.weight);
+      stage.uploadTensor(tensors.weights.instanceProjection.bias, weights.instanceProjection.bias);
+      await stage.yieldToBrowser({ reason: 'after-sam3-mask-tail-upload' });
+    }, { shape });
 
-  const program = runtime.defineProgram({
-    name: 'sam3.mask-tail-phase-program',
-    tensors: {
-      lastHs: tensors.lastHs,
-      pixelEmbed: tensors.pixelEmbed,
-      layer0: tensors.layer0,
-      layer1: tensors.layer1,
-      maskEmbeddings: tensors.maskEmbeddings,
-      upscaledEmbedding: tensors.upscaledEmbedding,
-      maskLogits: tensors.maskLogits,
-      binaryMask: tensors.binaryMask,
-      w0: tensors.weights.maskEmbedder[0].weight,
-      b0: tensors.weights.maskEmbedder[0].bias,
-      w1: tensors.weights.maskEmbedder[1].weight,
-      b1: tensors.weights.maskEmbedder[1].bias,
-      w2: tensors.weights.maskEmbedder[2].weight,
-      b2: tensors.weights.maskEmbedder[2].bias,
-      instanceWeight: tensors.weights.instanceProjection.weight,
-      instanceBias: tensors.weights.instanceProjection.bias,
-    },
-    uniforms: { dims: tensors.dims, thresholdDims: tensors.thresholdDims },
-    kernels: {
-      maskEmbedderLayer0: { code: LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:lastHs', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:layer0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      maskEmbedderLayer1: { code: LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:layer0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:layer1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      maskEmbedderLayer2: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:layer1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:maskEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      instanceProjection: { code: INSTANCE_PROJECTION_WGSL, bindings: [{ name: 'pixelEmbed', resource: 'tensor:pixelEmbed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:instanceWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:instanceBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'upscaledEmbedding', resource: 'tensor:upscaledEmbedding', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      decodeMask: { code: MASK_PROJECTION_WGSL, bindings: [{ name: 'maskEmbeddings', resource: 'tensor:maskEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'upscaledEmbedding', resource: 'tensor:upscaledEmbedding', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'maskLogits', resource: 'tensor:maskLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      thresholdMask: { code: THRESHOLD_WGSL, bindings: [{ name: 'maskLogits', resource: 'tensor:maskLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'binaryMask', resource: 'tensor:binaryMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:thresholdDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-    },
-    phases: [
-      { name: 'mask-embedder-layer-0', kernel: 'maskEmbedderLayer0', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
-      { name: 'mask-embedder-layer-1', kernel: 'maskEmbedderLayer1', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
-      { name: 'mask-embedder-layer-2', kernel: 'maskEmbedderLayer2', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
-      { name: 'instance-projection-1x1', kernel: 'instanceProjection', dispatch: [workgroups(shape.batch * shape.channels * spatial)], yieldAfter: true },
-      { name: 'decode-mask', kernel: 'decodeMask', dispatch: [workgroups(maskTotal)], yieldAfter: true },
-      { name: 'threshold-mask', kernel: 'thresholdMask', dispatch: [workgroups(maskTotal)], yieldAfter: true },
-      { name: 'readback-mask', readbacks: [{ name: 'maskLogits', tensor: 'maskLogits' }, { name: 'binaryMask', tensor: 'binaryMask' }] },
-    ],
-    metadata: { routeId: SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID },
+    const program = runtime.defineProgram({
+      name: 'sam3.mask-tail-phase-program',
+      tensors: {
+        lastHs: tensors.lastHs,
+        pixelEmbed: tensors.pixelEmbed,
+        layer0: tensors.layer0,
+        layer1: tensors.layer1,
+        maskEmbeddings: tensors.maskEmbeddings,
+        upscaledEmbedding: tensors.upscaledEmbedding,
+        maskLogits: tensors.maskLogits,
+        binaryMask: tensors.binaryMask,
+        w0: tensors.weights.maskEmbedder[0].weight,
+        b0: tensors.weights.maskEmbedder[0].bias,
+        w1: tensors.weights.maskEmbedder[1].weight,
+        b1: tensors.weights.maskEmbedder[1].bias,
+        w2: tensors.weights.maskEmbedder[2].weight,
+        b2: tensors.weights.maskEmbedder[2].bias,
+        instanceWeight: tensors.weights.instanceProjection.weight,
+        instanceBias: tensors.weights.instanceProjection.bias,
+      },
+      uniforms: { dims: tensors.dims, thresholdDims: tensors.thresholdDims },
+      kernels: {
+        maskEmbedderLayer0: { code: LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:lastHs', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:layer0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        maskEmbedderLayer1: { code: LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:layer0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:layer1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        maskEmbedderLayer2: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:layer1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:maskEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        instanceProjection: { code: INSTANCE_PROJECTION_WGSL, bindings: [{ name: 'pixelEmbed', resource: 'tensor:pixelEmbed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:instanceWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:instanceBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'upscaledEmbedding', resource: 'tensor:upscaledEmbedding', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        decodeMask: { code: MASK_PROJECTION_WGSL, bindings: [{ name: 'maskEmbeddings', resource: 'tensor:maskEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'upscaledEmbedding', resource: 'tensor:upscaledEmbedding', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'maskLogits', resource: 'tensor:maskLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        thresholdMask: { code: THRESHOLD_WGSL, bindings: [{ name: 'maskLogits', resource: 'tensor:maskLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'binaryMask', resource: 'tensor:binaryMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:thresholdDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+      },
+      phases: [
+        { name: 'mask-embedder-layer-0', kernel: 'maskEmbedderLayer0', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
+        { name: 'mask-embedder-layer-1', kernel: 'maskEmbedderLayer1', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
+        { name: 'mask-embedder-layer-2', kernel: 'maskEmbedderLayer2', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
+        { name: 'instance-projection-1x1', kernel: 'instanceProjection', dispatch: [workgroups(shape.batch * shape.channels * spatial)], yieldAfter: true },
+        { name: 'decode-mask', kernel: 'decodeMask', dispatch: [workgroups(maskTotal)], yieldAfter: true },
+        { name: 'threshold-mask', kernel: 'thresholdMask', dispatch: [workgroups(maskTotal)], yieldAfter: true },
+        { name: 'readback-mask', readbacks: [{ name: 'maskLogits', tensor: 'maskLogits' }, { name: 'binaryMask', tensor: 'binaryMask' }] },
+      ],
+      metadata: { routeId: SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID },
+    });
+    const run = await runtime.runProgram(program);
+    const maskLogits = run.outputs.maskLogits;
+    const binaryMask = run.outputs.binaryMask;
+    const outputs = outputArtifacts(input.request, {
+      maskLogits: await sha256Hex(maskLogits),
+      binaryMask: await sha256Hex(binaryMask),
+    }, maskShape);
+    const receipt = createSam3MaskTailPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      weightsPacket,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        maskLogits: sam3Readback(input, new Float32Array(maskLogits)),
+        binaryMask: sam3Readback(input, new Uint32Array(binaryMask)),
+      };
+    }
+    return authoritative;
   });
-  const run = await runtime.runProgram(program);
-  const maskLogits = run.outputs.maskLogits;
-  const binaryMask = run.outputs.binaryMask;
-  const outputs = outputArtifacts(input.request, {
-    maskLogits: await sha256Hex(maskLogits),
-    binaryMask: await sha256Hex(binaryMask),
-  }, maskShape);
-  const receipt = createSam3MaskTailPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    weightsPacket,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      maskLogits: sam3Readback(input, new Float32Array(maskLogits)),
-      binaryMask: sam3Readback(input, new Uint32Array(binaryMask)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }

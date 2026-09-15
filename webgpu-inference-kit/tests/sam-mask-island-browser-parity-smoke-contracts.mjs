@@ -130,7 +130,7 @@ assert.match(smokeJs, /base64Offset[\s\S]*base64Length[\s\S]*base64TotalLength/,
 assert.match(smokeJs, /encoderHiddenStates[\s\S]*encoderPos[\s\S]*promptFeatures[\s\S]*promptMask[\s\S]*pixelEmbed[\s\S]*decoderHiddenStates[\s\S]*lastHs[\s\S]*maskLogits/, 'diagnostic readback must preserve both decoder inputs and browser outputs needed to isolate amplification');
 for (const file of composedSamRouteFiles) {
   const source = readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8');
-  assert.match(source, /authoritative\.resourceDisposal\s*=\s*runtime\.dispose\(\);\s*\n\s*return authoritative;/, `${file} must release route-owned GPU buffers after preserving its readbacks and receipt`);
+  assert.match(source, /return withSamPhaseCleanup\(runtime, async \(\) => \{/, `${file} must use the failure-tested phase cleanup boundary`);
 }
 
 assert.match(witness, /--enable-unsafe-webgpu/, 'witness must launch Chrome with WebGPU enabled');

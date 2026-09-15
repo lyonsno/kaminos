@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -216,78 +217,79 @@ export async function runSam3ImagePreprocessPhaseProgramRoute(input = {}) {
     yield: input.yield,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-image-preprocess-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const rgbaU32 = new Uint32Array(rgba.length);
-    for (let index = 0; index < rgba.length; index += 1) rgbaU32[index] = rgba[index];
-    tensors = {
-      rgba: stage.createTensor({ name: 'sam3.image-preprocess.rgba-u8-as-u32', shape: [shape.batch, shape.height, shape.width, 4], dtype: 'u32', usage: readonlyUsage }),
-      pixelValues: stage.createTensor({ name: 'sam3.image-preprocess.pixel-values', shape: [shape.batch, shape.height, shape.width, shape.channels], dtype: 'f32', usage }),
-      dims: stage.createUniformBuffer({
-        label: 'sam3.image-preprocess.dims',
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'height', type: 'u32' },
-          { name: 'width', type: 'u32' },
-          { name: 'channels', type: 'u32' },
-          { name: 'total_values', type: 'u32' },
-          { name: '_pad0', type: 'u32' },
-          { name: '_pad1', type: 'u32' },
-          { name: '_pad2', type: 'u32' },
-        ],
-        values: { batch: shape.batch, height: shape.height, width: shape.width, channels: shape.channels, total_values: totalValues, _pad0: 0, _pad1: 0, _pad2: 0 },
-      }),
-    };
-    stage.uploadTensor(tensors.rgba, rgbaU32);
-    await stage.yieldToBrowser({ reason: 'after-sam3-image-preprocess-upload' });
-  }, { shape });
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-image-preprocess-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      const rgbaU32 = new Uint32Array(rgba.length);
+      for (let index = 0; index < rgba.length; index += 1) rgbaU32[index] = rgba[index];
+      tensors = {
+        rgba: stage.createTensor({ name: 'sam3.image-preprocess.rgba-u8-as-u32', shape: [shape.batch, shape.height, shape.width, 4], dtype: 'u32', usage: readonlyUsage }),
+        pixelValues: stage.createTensor({ name: 'sam3.image-preprocess.pixel-values', shape: [shape.batch, shape.height, shape.width, shape.channels], dtype: 'f32', usage }),
+        dims: stage.createUniformBuffer({
+          label: 'sam3.image-preprocess.dims',
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'height', type: 'u32' },
+            { name: 'width', type: 'u32' },
+            { name: 'channels', type: 'u32' },
+            { name: 'total_values', type: 'u32' },
+            { name: '_pad0', type: 'u32' },
+            { name: '_pad1', type: 'u32' },
+            { name: '_pad2', type: 'u32' },
+          ],
+          values: { batch: shape.batch, height: shape.height, width: shape.width, channels: shape.channels, total_values: totalValues, _pad0: 0, _pad1: 0, _pad2: 0 },
+        }),
+      };
+      stage.uploadTensor(tensors.rgba, rgbaU32);
+      await stage.yieldToBrowser({ reason: 'after-sam3-image-preprocess-upload' });
+    }, { shape });
 
-  const program = runtime.defineProgram({
-    name: 'sam3.image-preprocess-phase-program',
-    tensors: {
-      rgba: tensors.rgba,
-      pixelValues: tensors.pixelValues,
-    },
-    uniforms: { dims: tensors.dims },
-    kernels: {
-      normalize: {
-        code: PREPROCESS_WGSL,
-        bindings: [
-          { name: 'rgba', resource: 'tensor:rgba', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'pixelValues', resource: 'tensor:pixelValues', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
-        ],
+    const program = runtime.defineProgram({
+      name: 'sam3.image-preprocess-phase-program',
+      tensors: {
+        rgba: tensors.rgba,
+        pixelValues: tensors.pixelValues,
       },
-    },
-    phases: [
-      { name: 'image-u8-to-normalized-f32', kernel: 'normalize', dispatch: [workgroups(totalValues)], yieldAfter: true },
-      { name: 'readback-pixel-values', readbacks: [{ name: 'pixelValues', tensor: 'pixelValues' }] },
-    ],
-    metadata: { routeId: SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID },
+      uniforms: { dims: tensors.dims },
+      kernels: {
+        normalize: {
+          code: PREPROCESS_WGSL,
+          bindings: [
+            { name: 'rgba', resource: 'tensor:rgba', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'pixelValues', resource: 'tensor:pixelValues', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+          ],
+        },
+      },
+      phases: [
+        { name: 'image-u8-to-normalized-f32', kernel: 'normalize', dispatch: [workgroups(totalValues)], yieldAfter: true },
+        { name: 'readback-pixel-values', readbacks: [{ name: 'pixelValues', tensor: 'pixelValues' }] },
+      ],
+      metadata: { routeId: SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID },
+    });
+    const run = await runtime.runProgram(program);
+    const outputs = outputArtifacts(input.request, {
+      pixelValues: await sha256Hex(run.outputs.pixelValues),
+    }, shape);
+    const receipt = createSam3ImagePreprocessPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || 'none', dtype: input.model?.dtype || 'u8-to-fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        pixelValues: sam3Readback(input, new Float32Array(run.outputs.pixelValues)),
+      };
+    }
+    return authoritative;
   });
-  const run = await runtime.runProgram(program);
-  const outputs = outputArtifacts(input.request, {
-    pixelValues: await sha256Hex(run.outputs.pixelValues),
-  }, shape);
-  const receipt = createSam3ImagePreprocessPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || 'none', dtype: input.model?.dtype || 'u8-to-fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      pixelValues: sam3Readback(input, new Float32Array(run.outputs.pixelValues)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }

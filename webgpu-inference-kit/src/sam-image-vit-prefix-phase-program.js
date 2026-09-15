@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -354,111 +355,112 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-image-vit-prefix-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    tensors = {
-      patchEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.patch-embeddings', shape: [shape.batch, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage: readonlyUsage }),
-      positionEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.position-embeddings', shape: [1, shape.pretrainGridSize * shape.pretrainGridSize, shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: positionEmbeddings }),
-      layerNormWeight: stage.createTensor({ name: 'sam3.image-vit-prefix.layernorm.weight', shape: [shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: layerNormWeight }),
-      layerNormBias: stage.createTensor({ name: 'sam3.image-vit-prefix.layernorm.bias', shape: [shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: layerNormBias }),
-      tiledPositionEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.tiled-position-embeddings', shape: [1, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
-      patchPlusPosition: stage.createTensor({ name: 'sam3.image-vit-prefix.patch-plus-position', shape: [shape.batch, shape.patchHeight, shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
-      vitPrefixHiddenStates: stage.createTensor({ name: 'sam3.image-vit-prefix.hidden-states', shape: [shape.batch, shape.patchHeight, shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
-      dims: stage.createUniformBuffer({
-        label: 'sam3.image-vit-prefix.dims',
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'patch_height', type: 'u32' },
-          { name: 'patch_width', type: 'u32' },
-          { name: 'hidden_size', type: 'u32' },
-          { name: 'pretrain_grid_size', type: 'u32' },
-          { name: 'patch_tokens', type: 'u32' },
-          { name: 'total_values', type: 'u32' },
-          { name: '_pad0', type: 'u32' },
-        ],
-        values: { batch: shape.batch, patch_height: shape.patchHeight, patch_width: shape.patchWidth, hidden_size: shape.hiddenSize, pretrain_grid_size: shape.pretrainGridSize, patch_tokens: shape.patchTokens, total_values: totalValues, _pad0: 0 },
-      }),
-    };
-    stage.uploadTensor(tensors.patchEmbeddings, patchEmbeddings);
-    stage.uploadTensor(tensors.positionEmbeddings, positionEmbeddings);
-    stage.uploadTensor(tensors.layerNormWeight, layerNormWeight);
-    stage.uploadTensor(tensors.layerNormBias, layerNormBias);
-    await stage.yieldToBrowser({ reason: 'after-sam3-image-vit-prefix-upload' });
-  }, { shape, positionEmbeddingRule: 'HF/SAM3 tiling (repeating), not interpolation; crop to target B,H,W,C grid' });
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-image-vit-prefix-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      tensors = {
+        patchEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.patch-embeddings', shape: [shape.batch, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage: readonlyUsage }),
+        positionEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.position-embeddings', shape: [1, shape.pretrainGridSize * shape.pretrainGridSize, shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: positionEmbeddings }),
+        layerNormWeight: stage.createTensor({ name: 'sam3.image-vit-prefix.layernorm.weight', shape: [shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: layerNormWeight }),
+        layerNormBias: stage.createTensor({ name: 'sam3.image-vit-prefix.layernorm.bias', shape: [shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: layerNormBias }),
+        tiledPositionEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.tiled-position-embeddings', shape: [1, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
+        patchPlusPosition: stage.createTensor({ name: 'sam3.image-vit-prefix.patch-plus-position', shape: [shape.batch, shape.patchHeight, shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
+        vitPrefixHiddenStates: stage.createTensor({ name: 'sam3.image-vit-prefix.hidden-states', shape: [shape.batch, shape.patchHeight, shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
+        dims: stage.createUniformBuffer({
+          label: 'sam3.image-vit-prefix.dims',
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'patch_height', type: 'u32' },
+            { name: 'patch_width', type: 'u32' },
+            { name: 'hidden_size', type: 'u32' },
+            { name: 'pretrain_grid_size', type: 'u32' },
+            { name: 'patch_tokens', type: 'u32' },
+            { name: 'total_values', type: 'u32' },
+            { name: '_pad0', type: 'u32' },
+          ],
+          values: { batch: shape.batch, patch_height: shape.patchHeight, patch_width: shape.patchWidth, hidden_size: shape.hiddenSize, pretrain_grid_size: shape.pretrainGridSize, patch_tokens: shape.patchTokens, total_values: totalValues, _pad0: 0 },
+        }),
+      };
+      stage.uploadTensor(tensors.patchEmbeddings, patchEmbeddings);
+      stage.uploadTensor(tensors.positionEmbeddings, positionEmbeddings);
+      stage.uploadTensor(tensors.layerNormWeight, layerNormWeight);
+      stage.uploadTensor(tensors.layerNormBias, layerNormBias);
+      await stage.yieldToBrowser({ reason: 'after-sam3-image-vit-prefix-upload' });
+    }, { shape, positionEmbeddingRule: 'HF/SAM3 tiling (repeating), not interpolation; crop to target B,H,W,C grid' });
 
-  const program = runtime.defineProgram({
-    name: 'sam3.image-vit-prefix-phase-program',
-    tensors: {
-      patchEmbeddings: tensors.patchEmbeddings,
-      positionEmbeddings: tensors.positionEmbeddings,
-      layerNormWeight: tensors.layerNormWeight,
-      layerNormBias: tensors.layerNormBias,
-      tiledPositionEmbeddings: tensors.tiledPositionEmbeddings,
-      patchPlusPosition: tensors.patchPlusPosition,
-      vitPrefixHiddenStates: tensors.vitPrefixHiddenStates,
-    },
-    uniforms: { dims: tensors.dims },
-    kernels: {
-      tilePositionEmbeddings: {
-        code: TILE_POSITION_WGSL,
-        bindings: [
-          { name: 'positionEmbeddings', resource: 'tensor:positionEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'tiledPositionEmbeddings', resource: 'tensor:tiledPositionEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
-        ],
+    const program = runtime.defineProgram({
+      name: 'sam3.image-vit-prefix-phase-program',
+      tensors: {
+        patchEmbeddings: tensors.patchEmbeddings,
+        positionEmbeddings: tensors.positionEmbeddings,
+        layerNormWeight: tensors.layerNormWeight,
+        layerNormBias: tensors.layerNormBias,
+        tiledPositionEmbeddings: tensors.tiledPositionEmbeddings,
+        patchPlusPosition: tensors.patchPlusPosition,
+        vitPrefixHiddenStates: tensors.vitPrefixHiddenStates,
       },
-      addPositionEmbeddings: {
-        code: ADD_POSITION_WGSL,
-        bindings: [
-          { name: 'patchEmbeddings', resource: 'tensor:patchEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'tiledPositionEmbeddings', resource: 'tensor:tiledPositionEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'patchPlusPosition', resource: 'tensor:patchPlusPosition', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
-        ],
+      uniforms: { dims: tensors.dims },
+      kernels: {
+        tilePositionEmbeddings: {
+          code: TILE_POSITION_WGSL,
+          bindings: [
+            { name: 'positionEmbeddings', resource: 'tensor:positionEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'tiledPositionEmbeddings', resource: 'tensor:tiledPositionEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+          ],
+        },
+        addPositionEmbeddings: {
+          code: ADD_POSITION_WGSL,
+          bindings: [
+            { name: 'patchEmbeddings', resource: 'tensor:patchEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'tiledPositionEmbeddings', resource: 'tensor:tiledPositionEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'patchPlusPosition', resource: 'tensor:patchPlusPosition', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+          ],
+        },
+        vitPrefixLayernorm: {
+          code: LAYERNORM_WGSL,
+          bindings: [
+            { name: 'inputValues', resource: 'tensor:patchPlusPosition', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'normWeight', resource: 'tensor:layerNormWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'normBias', resource: 'tensor:layerNormBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'outputValues', resource: 'tensor:vitPrefixHiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+          ],
+        },
       },
-      vitPrefixLayernorm: {
-        code: LAYERNORM_WGSL,
-        bindings: [
-          { name: 'inputValues', resource: 'tensor:patchPlusPosition', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'normWeight', resource: 'tensor:layerNormWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'normBias', resource: 'tensor:layerNormBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'outputValues', resource: 'tensor:vitPrefixHiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
-        ],
-      },
-    },
-    phases: [
-      { name: 'tile-position-embeddings', kernel: 'tilePositionEmbeddings', dispatch: dispatchPlan.tilePositionEmbeddings.dispatch, yieldAfter: true },
-      { name: 'add-position-embeddings', kernel: 'addPositionEmbeddings', dispatch: dispatchPlan.addPositionEmbeddings.dispatch, yieldAfter: true },
-      { name: 'vit-prefix-layernorm', kernel: 'vitPrefixLayernorm', dispatch: dispatchPlan.vitPrefixLayernorm.dispatch, yieldAfter: true },
-      { name: 'readback-vit-prefix-hidden-states', readbacks: [{ name: 'vitPrefixHiddenStates', tensor: 'vitPrefixHiddenStates' }] },
-    ],
-    metadata: { routeId: SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', positionEmbeddingRule: 'tiling (repeating), not interpolation' },
+      phases: [
+        { name: 'tile-position-embeddings', kernel: 'tilePositionEmbeddings', dispatch: dispatchPlan.tilePositionEmbeddings.dispatch, yieldAfter: true },
+        { name: 'add-position-embeddings', kernel: 'addPositionEmbeddings', dispatch: dispatchPlan.addPositionEmbeddings.dispatch, yieldAfter: true },
+        { name: 'vit-prefix-layernorm', kernel: 'vitPrefixLayernorm', dispatch: dispatchPlan.vitPrefixLayernorm.dispatch, yieldAfter: true },
+        { name: 'readback-vit-prefix-hidden-states', readbacks: [{ name: 'vitPrefixHiddenStates', tensor: 'vitPrefixHiddenStates' }] },
+      ],
+      metadata: { routeId: SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', positionEmbeddingRule: 'tiling (repeating), not interpolation' },
+    });
+    const run = await runtime.runProgram(program);
+    const outputs = outputArtifacts(input.request, {
+      vitPrefixHiddenStates: await sha256Hex(run.outputs.vitPrefixHiddenStates),
+    }, shape);
+    const receipt = createSam3ImageVitPrefixPhaseProgramRouteReceipt({
+      sourceImage,
+      patchEmbeddings: patchEmbeddingsArtifact,
+      weights: weightsArtifact,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        vitPrefixHiddenStates: sam3Readback(input, new Float32Array(run.outputs.vitPrefixHiddenStates)),
+      };
+    }
+    return authoritative;
   });
-  const run = await runtime.runProgram(program);
-  const outputs = outputArtifacts(input.request, {
-    vitPrefixHiddenStates: await sha256Hex(run.outputs.vitPrefixHiddenStates),
-  }, shape);
-  const receipt = createSam3ImageVitPrefixPhaseProgramRouteReceipt({
-    sourceImage,
-    patchEmbeddings: patchEmbeddingsArtifact,
-    weights: weightsArtifact,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      vitPrefixHiddenStates: sam3Readback(input, new Float32Array(run.outputs.vitPrefixHiddenStates)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }

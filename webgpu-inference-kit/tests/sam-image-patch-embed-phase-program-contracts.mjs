@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { sam3TypedView, sam3Readback } from '../src/sam-readback.js';
+import { withSamPhaseCleanup } from '../src/sam-phase-cleanup.js';
+import { createWebGpuInferenceSession } from '../src/inference-session.js';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSourceUrl = new URL('../src/sam-image-patch-embed-phase-program.js', import.meta.url);
@@ -227,5 +229,61 @@ assert.equal(
   true,
   'the real patch kernel must bind the exact resident projection buffer',
 );
+
+for (const failureKind of ['yield', 'submit']) {
+  const fixture = createResidentRouteDevice();
+  const failure = new Error(`intentional ${failureKind} failure`);
+  const submit = fixture.device.queue.submit;
+  if (failureKind === 'submit') fixture.device.queue.submit = () => { throw failure; };
+  await assert.rejects(runSam3ImagePatchEmbedPhaseProgramRoute({
+    ...residentInput,
+    device: fixture.device,
+    queue: fixture.device.queue,
+    yield: failureKind === 'yield' ? async () => { throw failure; } : residentInput.yield,
+  }), error => error === failure, 'cleanup must preserve the original failure object');
+  assert.ok(fixture.calls.buffers.length > 0, 'failure occurs after phase-owned allocation');
+  assert.ok(fixture.calls.buffers.every(buffer => buffer.destroyCount === 1), `${failureKind} failure must destroy every phase-owned buffer once`);
+  assert.equal(residentBuffer.destroyCount, 0, 'failed phase cannot destroy resident weights');
+  fixture.device.queue.submit = submit;
+  const next = await runSam3ImagePatchEmbedPhaseProgramRoute({
+    ...residentInput, device: fixture.device, queue: fixture.device.queue, readbackFormat: 'typed-array',
+  });
+  assert.ok(next.debugReadback.patchEmbeddings instanceof Float32Array, 'the same device and resident weights remain usable after failure');
+  assert.ok(fixture.calls.buffers.every(buffer => buffer.destroyCount === 1));
+}
+
+const cleanupFailure = new Error('cleanup failed');
+for (const primary of [new Error('execution failed'), Object.freeze(new Error('frozen failure')), undefined]) {
+  let disposalCalls = 0;
+  await assert.rejects(withSamPhaseCleanup({ dispose() { disposalCalls += 1; throw cleanupFailure; } }, async () => { throw primary; }),
+    error => error === primary);
+  assert.equal(disposalCalls, 1);
+  if (primary && !Object.isFrozen(primary)) assert.deepEqual(primary.cleanupErrors, [cleanupFailure]);
+}
+await assert.rejects(withSamPhaseCleanup({ dispose() { throw cleanupFailure; } }, async () => ({})), error => error === cleanupFailure);
+
+const queueFixture = createResidentRouteDevice();
+queueFixture.device.lost = new Promise(() => {});
+const application = await createWebGpuInferenceSession({
+  sessionId: 'sam-phase-cleanup-contract',
+  device: queueFixture.device, queue: queueFixture.device.queue, adapterName: 'queue-cleanup-contract', deviceOwnership: 'borrowed',
+});
+const owner = await application.registerRoute({ routeId: 'sam-phase-cleanup-test', runtimeOptions: { requiredStages: [] } });
+const badJob = owner.enqueue({ jobId: 'failed-phase', execute: () => runSam3ImagePatchEmbedPhaseProgramRoute({
+  ...residentInput, device: application.device, queue: application.device.queue,
+  yield: async () => { throw new Error('queued yield failure'); },
+}) });
+const nextJob = owner.enqueue({ jobId: 'next-phase', execute: () => runSam3ImagePatchEmbedPhaseProgramRoute({
+  ...residentInput, device: application.device, queue: application.device.queue, readbackFormat: 'typed-array',
+}) });
+assert.equal((await badJob.completion).status, 'failed');
+const nextCompletion = await nextJob.completion;
+assert.equal(nextCompletion.status, 'succeeded', 'the next queued request must survive a failed phase on the same session');
+assert.ok(nextCompletion.output.debugReadback.patchEmbeddings instanceof Float32Array);
+assert.ok(queueFixture.calls.buffers.every(buffer => buffer.destroyCount === 1));
+assert.equal(residentBuffer.destroyCount, 0);
+await owner.drain();
+application.unregisterRoute(owner.routeId);
+await application.close();
 
 console.log('sam image patch-embed phase-program contracts passed');

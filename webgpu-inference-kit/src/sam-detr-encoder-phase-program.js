@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -596,238 +597,239 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  const totalEncoder = shape.batch * shape.spatialTokens * shape.channels;
-  const totalPrompt = shape.batch * shape.promptTokens * shape.channels;
-  const spatialTokenCount = shape.batch * shape.spatialTokens;
-  const promptTokenCount = shape.batch * shape.promptTokens;
-  const totalMlpHidden = shape.batch * shape.spatialTokens * shape.mlpHidden;
-  let tensors = null;
+  return withSamPhaseCleanup(runtime, async () => {
+    const totalEncoder = shape.batch * shape.spatialTokens * shape.channels;
+    const totalPrompt = shape.batch * shape.promptTokens * shape.channels;
+    const spatialTokenCount = shape.batch * shape.spatialTokens;
+    const promptTokenCount = shape.batch * shape.promptTokens;
+    const totalMlpHidden = shape.batch * shape.spatialTokens * shape.mlpHidden;
+    let tensors = null;
 
-  await runtime.runStage('load-detr-encoder-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const weightTensor = (name, value, weightShape) => stage.createTensor({ name, shape: weightShape, dtype: 'f32', usage: readonlyUsage, sourceData: value });
-    tensors = {
-      encoderSrc: stage.createTensor({ name: 'sam3.detr-encoder.src', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-      encoderPos: stage.createTensor({ name: 'sam3.detr-encoder.pos', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-      promptFeatures: stage.createTensor({ name: 'sam3.detr-encoder.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-      promptMask: stage.createTensor({ name: 'sam3.detr-encoder.prompt-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
-      layerNormDims: stage.createUniformBuffer({
-        label: 'sam3.detr-encoder.layernorm-dims',
-        schema: [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }],
-        values: { total_tokens: spatialTokenCount, channels: shape.channels },
-      }),
-      addDims: stage.createUniformBuffer({
-        label: 'sam3.detr-encoder.add-dims',
-        schema: [{ name: 'total', type: 'u32' }],
-        values: { total: totalEncoder },
-      }),
-      spatialLinearDims: stage.createUniformBuffer({
-        label: 'sam3.detr-encoder.spatial-linear-dims',
-        schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }],
-        values: { input_channels: shape.channels, output_channels: shape.channels, total_output: totalEncoder },
-      }),
-      promptLinearDims: stage.createUniformBuffer({
-        label: 'sam3.detr-encoder.prompt-linear-dims',
-        schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }],
-        values: { input_channels: shape.channels, output_channels: shape.channels, total_output: totalPrompt },
-      }),
-      fc1Dims: stage.createUniformBuffer({
-        label: 'sam3.detr-encoder.fc1-dims',
-        schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }],
-        values: { input_channels: shape.channels, output_channels: shape.mlpHidden, total_output: totalMlpHidden },
-      }),
-      fc2Dims: stage.createUniformBuffer({
-        label: 'sam3.detr-encoder.fc2-dims',
-        schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }],
-        values: { input_channels: shape.mlpHidden, output_channels: shape.channels, total_output: totalEncoder },
-      }),
-      selfAttentionDims: stage.createUniformBuffer({
-        label: 'sam3.detr-encoder.self-attention-dims',
-        schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }],
-        values: { batch: shape.batch, query_tokens: shape.spatialTokens, key_tokens: shape.spatialTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: totalEncoder },
-      }),
-      crossAttentionDims: stage.createUniformBuffer({
-        label: 'sam3.detr-encoder.cross-attention-dims',
-        schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }],
-        values: { batch: shape.batch, query_tokens: shape.spatialTokens, key_tokens: shape.promptTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: totalEncoder },
-      }),
-      layers: [],
-    };
-    stage.uploadTensor(tensors.encoderSrc, encoderSrc);
-    stage.uploadTensor(tensors.encoderPos, encoderPos);
-    stage.uploadTensor(tensors.promptFeatures, promptFeatures);
-    stage.uploadTensor(tensors.promptMask, promptMask);
-    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
-      const layerTensors = {
-        norm1: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.norm1`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        selfInput: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-input`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        selfQ: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-q`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        selfK: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-k`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        selfV: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-v`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        selfAttention: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-attention`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        selfProjected: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-projected`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        selfHidden: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-hidden`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        norm2: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.norm2`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        crossQ: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-q`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        crossK: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-k`, shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
-        crossV: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-v`, shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
-        crossAttention: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-attention`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        crossProjected: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-projected`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        crossHidden: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-hidden`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        norm3: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.norm3`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        mlp1: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.mlp1`, shape: [shape.batch, shape.spatialTokens, shape.mlpHidden], dtype: 'f32', usage }),
-        mlp2: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.mlp2`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        output: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.output`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-        weights: {
-          layerNorm1Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm1.weight`, layers[layerIndex].layerNorm1Weight, [shape.channels]),
-          layerNorm1Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm1.bias`, layers[layerIndex].layerNorm1Bias, [shape.channels]),
-          selfQWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-q.weight`, layers[layerIndex].selfQWeight, [shape.channels, shape.channels]),
-          selfQBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-q.bias`, layers[layerIndex].selfQBias, [shape.channels]),
-          selfKWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-k.weight`, layers[layerIndex].selfKWeight, [shape.channels, shape.channels]),
-          selfKBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-k.bias`, layers[layerIndex].selfKBias, [shape.channels]),
-          selfVWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-v.weight`, layers[layerIndex].selfVWeight, [shape.channels, shape.channels]),
-          selfVBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-v.bias`, layers[layerIndex].selfVBias, [shape.channels]),
-          selfOWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-o.weight`, layers[layerIndex].selfOWeight, [shape.channels, shape.channels]),
-          selfOBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-o.bias`, layers[layerIndex].selfOBias, [shape.channels]),
-          layerNorm2Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm2.weight`, layers[layerIndex].layerNorm2Weight, [shape.channels]),
-          layerNorm2Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm2.bias`, layers[layerIndex].layerNorm2Bias, [shape.channels]),
-          crossQWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-q.weight`, layers[layerIndex].crossQWeight, [shape.channels, shape.channels]),
-          crossQBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-q.bias`, layers[layerIndex].crossQBias, [shape.channels]),
-          crossKWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-k.weight`, layers[layerIndex].crossKWeight, [shape.channels, shape.channels]),
-          crossKBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-k.bias`, layers[layerIndex].crossKBias, [shape.channels]),
-          crossVWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-v.weight`, layers[layerIndex].crossVWeight, [shape.channels, shape.channels]),
-          crossVBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-v.bias`, layers[layerIndex].crossVBias, [shape.channels]),
-          crossOWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-o.weight`, layers[layerIndex].crossOWeight, [shape.channels, shape.channels]),
-          crossOBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-o.bias`, layers[layerIndex].crossOBias, [shape.channels]),
-          layerNorm3Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm3.weight`, layers[layerIndex].layerNorm3Weight, [shape.channels]),
-          layerNorm3Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm3.bias`, layers[layerIndex].layerNorm3Bias, [shape.channels]),
-          fc1Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.fc1.weight`, layers[layerIndex].fc1Weight, [shape.mlpHidden, shape.channels]),
-          fc1Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.fc1.bias`, layers[layerIndex].fc1Bias, [shape.mlpHidden]),
-          fc2Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.fc2.weight`, layers[layerIndex].fc2Weight, [shape.channels, shape.mlpHidden]),
-          fc2Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.fc2.bias`, layers[layerIndex].fc2Bias, [shape.channels]),
-        },
+    await runtime.runStage('load-detr-encoder-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      const weightTensor = (name, value, weightShape) => stage.createTensor({ name, shape: weightShape, dtype: 'f32', usage: readonlyUsage, sourceData: value });
+      tensors = {
+        encoderSrc: stage.createTensor({ name: 'sam3.detr-encoder.src', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+        encoderPos: stage.createTensor({ name: 'sam3.detr-encoder.pos', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        promptFeatures: stage.createTensor({ name: 'sam3.detr-encoder.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        promptMask: stage.createTensor({ name: 'sam3.detr-encoder.prompt-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
+        layerNormDims: stage.createUniformBuffer({
+          label: 'sam3.detr-encoder.layernorm-dims',
+          schema: [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }],
+          values: { total_tokens: spatialTokenCount, channels: shape.channels },
+        }),
+        addDims: stage.createUniformBuffer({
+          label: 'sam3.detr-encoder.add-dims',
+          schema: [{ name: 'total', type: 'u32' }],
+          values: { total: totalEncoder },
+        }),
+        spatialLinearDims: stage.createUniformBuffer({
+          label: 'sam3.detr-encoder.spatial-linear-dims',
+          schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }],
+          values: { input_channels: shape.channels, output_channels: shape.channels, total_output: totalEncoder },
+        }),
+        promptLinearDims: stage.createUniformBuffer({
+          label: 'sam3.detr-encoder.prompt-linear-dims',
+          schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }],
+          values: { input_channels: shape.channels, output_channels: shape.channels, total_output: totalPrompt },
+        }),
+        fc1Dims: stage.createUniformBuffer({
+          label: 'sam3.detr-encoder.fc1-dims',
+          schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }],
+          values: { input_channels: shape.channels, output_channels: shape.mlpHidden, total_output: totalMlpHidden },
+        }),
+        fc2Dims: stage.createUniformBuffer({
+          label: 'sam3.detr-encoder.fc2-dims',
+          schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }],
+          values: { input_channels: shape.mlpHidden, output_channels: shape.channels, total_output: totalEncoder },
+        }),
+        selfAttentionDims: stage.createUniformBuffer({
+          label: 'sam3.detr-encoder.self-attention-dims',
+          schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }],
+          values: { batch: shape.batch, query_tokens: shape.spatialTokens, key_tokens: shape.spatialTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: totalEncoder },
+        }),
+        crossAttentionDims: stage.createUniformBuffer({
+          label: 'sam3.detr-encoder.cross-attention-dims',
+          schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }],
+          values: { batch: shape.batch, query_tokens: shape.spatialTokens, key_tokens: shape.promptTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: totalEncoder },
+        }),
+        layers: [],
       };
-      for (const [name, tensor] of Object.entries(layerTensors.weights)) stage.uploadTensor(tensor, layers[layerIndex][name]);
-      tensors.layers.push(layerTensors);
-    }
-    await stage.yieldToBrowser({ reason: 'after-sam3-detr-encoder-upload' });
-  }, { shape });
+      stage.uploadTensor(tensors.encoderSrc, encoderSrc);
+      stage.uploadTensor(tensors.encoderPos, encoderPos);
+      stage.uploadTensor(tensors.promptFeatures, promptFeatures);
+      stage.uploadTensor(tensors.promptMask, promptMask);
+      for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
+        const layerTensors = {
+          norm1: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.norm1`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          selfInput: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-input`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          selfQ: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-q`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          selfK: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-k`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          selfV: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-v`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          selfAttention: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-attention`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          selfProjected: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-projected`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          selfHidden: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.self-hidden`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          norm2: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.norm2`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          crossQ: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-q`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          crossK: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-k`, shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
+          crossV: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-v`, shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
+          crossAttention: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-attention`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          crossProjected: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-projected`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          crossHidden: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.cross-hidden`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          norm3: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.norm3`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          mlp1: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.mlp1`, shape: [shape.batch, shape.spatialTokens, shape.mlpHidden], dtype: 'f32', usage }),
+          mlp2: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.mlp2`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          output: stage.createTensor({ name: `sam3.detr-encoder.layer-${layerIndex}.output`, shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+          weights: {
+            layerNorm1Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm1.weight`, layers[layerIndex].layerNorm1Weight, [shape.channels]),
+            layerNorm1Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm1.bias`, layers[layerIndex].layerNorm1Bias, [shape.channels]),
+            selfQWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-q.weight`, layers[layerIndex].selfQWeight, [shape.channels, shape.channels]),
+            selfQBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-q.bias`, layers[layerIndex].selfQBias, [shape.channels]),
+            selfKWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-k.weight`, layers[layerIndex].selfKWeight, [shape.channels, shape.channels]),
+            selfKBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-k.bias`, layers[layerIndex].selfKBias, [shape.channels]),
+            selfVWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-v.weight`, layers[layerIndex].selfVWeight, [shape.channels, shape.channels]),
+            selfVBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-v.bias`, layers[layerIndex].selfVBias, [shape.channels]),
+            selfOWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-o.weight`, layers[layerIndex].selfOWeight, [shape.channels, shape.channels]),
+            selfOBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.self-o.bias`, layers[layerIndex].selfOBias, [shape.channels]),
+            layerNorm2Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm2.weight`, layers[layerIndex].layerNorm2Weight, [shape.channels]),
+            layerNorm2Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm2.bias`, layers[layerIndex].layerNorm2Bias, [shape.channels]),
+            crossQWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-q.weight`, layers[layerIndex].crossQWeight, [shape.channels, shape.channels]),
+            crossQBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-q.bias`, layers[layerIndex].crossQBias, [shape.channels]),
+            crossKWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-k.weight`, layers[layerIndex].crossKWeight, [shape.channels, shape.channels]),
+            crossKBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-k.bias`, layers[layerIndex].crossKBias, [shape.channels]),
+            crossVWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-v.weight`, layers[layerIndex].crossVWeight, [shape.channels, shape.channels]),
+            crossVBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-v.bias`, layers[layerIndex].crossVBias, [shape.channels]),
+            crossOWeight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-o.weight`, layers[layerIndex].crossOWeight, [shape.channels, shape.channels]),
+            crossOBias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.cross-o.bias`, layers[layerIndex].crossOBias, [shape.channels]),
+            layerNorm3Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm3.weight`, layers[layerIndex].layerNorm3Weight, [shape.channels]),
+            layerNorm3Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.layernorm3.bias`, layers[layerIndex].layerNorm3Bias, [shape.channels]),
+            fc1Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.fc1.weight`, layers[layerIndex].fc1Weight, [shape.mlpHidden, shape.channels]),
+            fc1Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.fc1.bias`, layers[layerIndex].fc1Bias, [shape.mlpHidden]),
+            fc2Weight: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.fc2.weight`, layers[layerIndex].fc2Weight, [shape.channels, shape.mlpHidden]),
+            fc2Bias: weightTensor(`sam3.detr-encoder.layer-${layerIndex}.fc2.bias`, layers[layerIndex].fc2Bias, [shape.channels]),
+          },
+        };
+        for (const [name, tensor] of Object.entries(layerTensors.weights)) stage.uploadTensor(tensor, layers[layerIndex][name]);
+        tensors.layers.push(layerTensors);
+      }
+      await stage.yieldToBrowser({ reason: 'after-sam3-detr-encoder-upload' });
+    }, { shape });
 
-  const programTensors = {
-    encoderSrc: tensors.encoderSrc,
-    encoderPos: tensors.encoderPos,
-    promptFeatures: tensors.promptFeatures,
-    promptMask: tensors.promptMask,
-  };
-  const kernels = {};
-  const phases = [];
-  let currentHidden = 'encoderSrc';
-  for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
-    const layer = tensors.layers[layerIndex];
-    const layerKeys = {};
-    for (const [name, tensor] of Object.entries(layer)) {
-      if (name === 'weights') continue;
-      const key = layerTensorName(layerIndex, name);
-      layerKeys[name] = key;
-      programTensors[key] = tensor;
-    }
-    for (const [name, tensor] of Object.entries(layer.weights)) {
-      const key = layerTensorName(layerIndex, name);
-      layerKeys[name] = key;
-      programTensors[key] = tensor;
-    }
-    const kernelBase = `layer${layerIndex}`;
-    const addLinearKernel = (name, code, bindings) => {
-      kernels[`${kernelBase}${name}`] = { code, bindings };
+    const programTensors = {
+      encoderSrc: tensors.encoderSrc,
+      encoderPos: tensors.encoderPos,
+      promptFeatures: tensors.promptFeatures,
+      promptMask: tensors.promptMask,
     };
-    addLinearKernel('LayerNorm1', LAYERNORM_WGSL, [{ name: 'input', resource: `tensor:${currentHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.layerNorm1Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.layerNorm1Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.norm1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:layerNormDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('AddPos', ADD_WGSL, [{ name: 'a', resource: `tensor:${layerKeys.norm1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: 'tensor:encoderPos', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfInput}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('SelfQ', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfInput}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfQWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfQBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('SelfK', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfInput}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfKWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfKBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('SelfV', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.norm1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfVWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfVBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('SelfAttention', ATTENTION_WGSL, [{ name: 'q', resource: `tensor:${layerKeys.selfQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: `tensor:${layerKeys.selfK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: `tensor:${layerKeys.selfV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:selfAttentionDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('SelfOutput', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfOWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfOBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('SelfResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${currentHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.selfProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('LayerNorm2', LAYERNORM_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.layerNorm2Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.layerNorm2Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.norm2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:layerNormDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('CrossQ', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.norm2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossQWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossQBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('CrossK', LINEAR_WGSL, [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossKWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossKBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:promptLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('CrossV', LINEAR_WGSL, [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossVWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossVBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:promptLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('CrossAttention', MASKED_ATTENTION_WGSL, [{ name: 'q', resource: `tensor:${layerKeys.crossQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: `tensor:${layerKeys.crossK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: `tensor:${layerKeys.crossV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'mask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:crossAttentionDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('CrossOutput', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.crossAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossOWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossOBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('CrossResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.crossProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('LayerNorm3', LAYERNORM_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.layerNorm3Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.layerNorm3Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.norm3}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:layerNormDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('MlpFc1Relu', LINEAR_RELU_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.norm3}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.fc1Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.fc1Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.mlp1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:fc1Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('MlpFc2', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.mlp1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.fc2Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.fc2Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.mlp2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:fc2Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    addLinearKernel('MlpResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.mlp2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.output}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-    phases.push(
-      { name: `detr-encoder-layernorm1-${layerIndex}`, kernel: `${kernelBase}LayerNorm1`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
-      { name: `detr-encoder-add-pos-${layerIndex}`, kernel: `${kernelBase}AddPos`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-self-q-${layerIndex}`, kernel: `${kernelBase}SelfQ`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-self-k-${layerIndex}`, kernel: `${kernelBase}SelfK`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-self-v-${layerIndex}`, kernel: `${kernelBase}SelfV`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-self-attention-softmax-${layerIndex}`, kernel: `${kernelBase}SelfAttention`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-self-output-linear-${layerIndex}`, kernel: `${kernelBase}SelfOutput`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-self-output-residual-${layerIndex}`, kernel: `${kernelBase}SelfResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-layernorm2-${layerIndex}`, kernel: `${kernelBase}LayerNorm2`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
-      { name: `detr-encoder-cross-q-${layerIndex}`, kernel: `${kernelBase}CrossQ`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-cross-k-${layerIndex}`, kernel: `${kernelBase}CrossK`, dispatch: [workgroups(totalPrompt)], yieldAfter: true },
-      { name: `detr-encoder-cross-v-${layerIndex}`, kernel: `${kernelBase}CrossV`, dispatch: [workgroups(totalPrompt)], yieldAfter: true },
-      { name: `detr-encoder-cross-attention-softmax-${layerIndex}`, kernel: `${kernelBase}CrossAttention`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-cross-output-linear-${layerIndex}`, kernel: `${kernelBase}CrossOutput`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-cross-output-residual-${layerIndex}`, kernel: `${kernelBase}CrossResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-layernorm3-${layerIndex}`, kernel: `${kernelBase}LayerNorm3`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
-      { name: `detr-encoder-mlp-fc1-relu-${layerIndex}`, kernel: `${kernelBase}MlpFc1Relu`, dispatch: [workgroups(totalMlpHidden)], yieldAfter: true },
-      { name: `detr-encoder-mlp-fc2-linear-${layerIndex}`, kernel: `${kernelBase}MlpFc2`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: `detr-encoder-mlp-fc2-residual-${layerIndex}`, kernel: `${kernelBase}MlpResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-    );
-    currentHidden = layerKeys.output;
-  }
-  phases.push({ name: 'readback-encoder-hidden-states', readbacks: [{ name: 'encoderHiddenStates', tensor: currentHidden }] });
+    const kernels = {};
+    const phases = [];
+    let currentHidden = 'encoderSrc';
+    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
+      const layer = tensors.layers[layerIndex];
+      const layerKeys = {};
+      for (const [name, tensor] of Object.entries(layer)) {
+        if (name === 'weights') continue;
+        const key = layerTensorName(layerIndex, name);
+        layerKeys[name] = key;
+        programTensors[key] = tensor;
+      }
+      for (const [name, tensor] of Object.entries(layer.weights)) {
+        const key = layerTensorName(layerIndex, name);
+        layerKeys[name] = key;
+        programTensors[key] = tensor;
+      }
+      const kernelBase = `layer${layerIndex}`;
+      const addLinearKernel = (name, code, bindings) => {
+        kernels[`${kernelBase}${name}`] = { code, bindings };
+      };
+      addLinearKernel('LayerNorm1', LAYERNORM_WGSL, [{ name: 'input', resource: `tensor:${currentHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.layerNorm1Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.layerNorm1Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.norm1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:layerNormDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('AddPos', ADD_WGSL, [{ name: 'a', resource: `tensor:${layerKeys.norm1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: 'tensor:encoderPos', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfInput}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('SelfQ', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfInput}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfQWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfQBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('SelfK', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfInput}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfKWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfKBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('SelfV', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.norm1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfVWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfVBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('SelfAttention', ATTENTION_WGSL, [{ name: 'q', resource: `tensor:${layerKeys.selfQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: `tensor:${layerKeys.selfK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: `tensor:${layerKeys.selfV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:selfAttentionDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('SelfOutput', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfOWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfOBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('SelfResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${currentHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.selfProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('LayerNorm2', LAYERNORM_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.layerNorm2Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.layerNorm2Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.norm2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:layerNormDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('CrossQ', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.norm2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossQWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossQBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('CrossK', LINEAR_WGSL, [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossKWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossKBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:promptLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('CrossV', LINEAR_WGSL, [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossVWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossVBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:promptLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('CrossAttention', MASKED_ATTENTION_WGSL, [{ name: 'q', resource: `tensor:${layerKeys.crossQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: `tensor:${layerKeys.crossK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: `tensor:${layerKeys.crossV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'mask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:crossAttentionDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('CrossOutput', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.crossAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossOWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossOBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('CrossResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.crossProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('LayerNorm3', LAYERNORM_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.layerNorm3Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.layerNorm3Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.norm3}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:layerNormDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('MlpFc1Relu', LINEAR_RELU_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.norm3}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.fc1Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.fc1Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.mlp1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:fc1Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('MlpFc2', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.mlp1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.fc2Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.fc2Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.mlp2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:fc2Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('MlpResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.mlp2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.output}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      phases.push(
+        { name: `detr-encoder-layernorm1-${layerIndex}`, kernel: `${kernelBase}LayerNorm1`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
+        { name: `detr-encoder-add-pos-${layerIndex}`, kernel: `${kernelBase}AddPos`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-self-q-${layerIndex}`, kernel: `${kernelBase}SelfQ`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-self-k-${layerIndex}`, kernel: `${kernelBase}SelfK`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-self-v-${layerIndex}`, kernel: `${kernelBase}SelfV`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-self-attention-softmax-${layerIndex}`, kernel: `${kernelBase}SelfAttention`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-self-output-linear-${layerIndex}`, kernel: `${kernelBase}SelfOutput`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-self-output-residual-${layerIndex}`, kernel: `${kernelBase}SelfResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-layernorm2-${layerIndex}`, kernel: `${kernelBase}LayerNorm2`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
+        { name: `detr-encoder-cross-q-${layerIndex}`, kernel: `${kernelBase}CrossQ`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-cross-k-${layerIndex}`, kernel: `${kernelBase}CrossK`, dispatch: [workgroups(totalPrompt)], yieldAfter: true },
+        { name: `detr-encoder-cross-v-${layerIndex}`, kernel: `${kernelBase}CrossV`, dispatch: [workgroups(totalPrompt)], yieldAfter: true },
+        { name: `detr-encoder-cross-attention-softmax-${layerIndex}`, kernel: `${kernelBase}CrossAttention`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-cross-output-linear-${layerIndex}`, kernel: `${kernelBase}CrossOutput`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-cross-output-residual-${layerIndex}`, kernel: `${kernelBase}CrossResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-layernorm3-${layerIndex}`, kernel: `${kernelBase}LayerNorm3`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
+        { name: `detr-encoder-mlp-fc1-relu-${layerIndex}`, kernel: `${kernelBase}MlpFc1Relu`, dispatch: [workgroups(totalMlpHidden)], yieldAfter: true },
+        { name: `detr-encoder-mlp-fc2-linear-${layerIndex}`, kernel: `${kernelBase}MlpFc2`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-mlp-fc2-residual-${layerIndex}`, kernel: `${kernelBase}MlpResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+      );
+      currentHidden = layerKeys.output;
+    }
+    phases.push({ name: 'readback-encoder-hidden-states', readbacks: [{ name: 'encoderHiddenStates', tensor: currentHidden }] });
 
-  const program = runtime.defineProgram({
-    name: 'sam3.detr-encoder-phase-program',
-    tensors: programTensors,
-    uniforms: {
-      layerNormDims: tensors.layerNormDims,
-      addDims: tensors.addDims,
-      spatialLinearDims: tensors.spatialLinearDims,
-      promptLinearDims: tensors.promptLinearDims,
-      fc1Dims: tensors.fc1Dims,
-      fc2Dims: tensors.fc2Dims,
-      selfAttentionDims: tensors.selfAttentionDims,
-      crossAttentionDims: tensors.crossAttentionDims,
-    },
-    kernels,
-    phases,
-    metadata: { routeId: SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID },
-  });
+    const program = runtime.defineProgram({
+      name: 'sam3.detr-encoder-phase-program',
+      tensors: programTensors,
+      uniforms: {
+        layerNormDims: tensors.layerNormDims,
+        addDims: tensors.addDims,
+        spatialLinearDims: tensors.spatialLinearDims,
+        promptLinearDims: tensors.promptLinearDims,
+        fc1Dims: tensors.fc1Dims,
+        fc2Dims: tensors.fc2Dims,
+        selfAttentionDims: tensors.selfAttentionDims,
+        crossAttentionDims: tensors.crossAttentionDims,
+      },
+      kernels,
+      phases,
+      metadata: { routeId: SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID },
+    });
 
-  const run = await runtime.runProgram(program);
-  const encoderHiddenStates = run.outputs.encoderHiddenStates;
-  const outputs = {
-    ...outputArtifacts(input.request, { encoderHiddenStates: await sha256Hex(encoderHiddenStates) }, outputShape),
-  };
-  const receipt = createSam3DetrEncoderPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    weightsPacket,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      encoderHiddenStates: sam3Readback(input, new Float32Array(encoderHiddenStates)),
+    const run = await runtime.runProgram(program);
+    const encoderHiddenStates = run.outputs.encoderHiddenStates;
+    const outputs = {
+      ...outputArtifacts(input.request, { encoderHiddenStates: await sha256Hex(encoderHiddenStates) }, outputShape),
     };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
+    const receipt = createSam3DetrEncoderPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      weightsPacket,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        encoderHiddenStates: sam3Readback(input, new Float32Array(encoderHiddenStates)),
+      };
+    }
+    return authoritative;
+  });
 }
 
 export { DETR_ENCODER_ROUTE_SOURCE_MARKERS };

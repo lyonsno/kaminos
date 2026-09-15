@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -287,85 +288,86 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-image-patch-embed-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    tensors = {
-      pixelValues: stage.createTensor({ name: 'sam3.image-patch-embed.pixel-values', shape: [shape.batch, shape.imageHeight, shape.imageWidth, shape.imageChannels], dtype: 'f32', usage: readonlyUsage }),
-      projection: stage.createTensor({ name: 'sam3.image-patch-embed.projection-weight', shape: [shape.hiddenSize, shape.patchSize, shape.patchSize, shape.imageChannels], dtype: 'f32', usage: readonlyUsage, sourceData: projection }),
-      patchEmbeddings: stage.createTensor({ name: 'sam3.image-patch-embed.patch-embeddings', shape: [shape.batch, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
-      dims: stage.createUniformBuffer({
-        label: 'sam3.image-patch-embed.dims',
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'image_height', type: 'u32' },
-          { name: 'image_width', type: 'u32' },
-          { name: 'image_channels', type: 'u32' },
-          { name: 'patch_size', type: 'u32' },
-          { name: 'patch_height', type: 'u32' },
-          { name: 'patch_width', type: 'u32' },
-          { name: 'hidden_size', type: 'u32' },
-          { name: 'total_values', type: 'u32' },
-          { name: '_pad0', type: 'u32' },
-          { name: '_pad1', type: 'u32' },
-          { name: '_pad2', type: 'u32' },
-        ],
-        values: { batch: shape.batch, image_height: shape.imageHeight, image_width: shape.imageWidth, image_channels: shape.imageChannels, patch_size: shape.patchSize, patch_height: shape.patchHeight, patch_width: shape.patchWidth, hidden_size: shape.hiddenSize, total_values: totalValues, _pad0: 0, _pad1: 0, _pad2: 0 },
-      }),
-    };
-    stage.uploadTensor(tensors.pixelValues, pixelValues);
-    stage.uploadTensor(tensors.projection, projection);
-    await stage.yieldToBrowser({ reason: 'after-sam3-image-patch-embed-upload' });
-  }, { shape, weightLayout: 'out,kH,kW,in' });
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-image-patch-embed-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      tensors = {
+        pixelValues: stage.createTensor({ name: 'sam3.image-patch-embed.pixel-values', shape: [shape.batch, shape.imageHeight, shape.imageWidth, shape.imageChannels], dtype: 'f32', usage: readonlyUsage }),
+        projection: stage.createTensor({ name: 'sam3.image-patch-embed.projection-weight', shape: [shape.hiddenSize, shape.patchSize, shape.patchSize, shape.imageChannels], dtype: 'f32', usage: readonlyUsage, sourceData: projection }),
+        patchEmbeddings: stage.createTensor({ name: 'sam3.image-patch-embed.patch-embeddings', shape: [shape.batch, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
+        dims: stage.createUniformBuffer({
+          label: 'sam3.image-patch-embed.dims',
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'image_height', type: 'u32' },
+            { name: 'image_width', type: 'u32' },
+            { name: 'image_channels', type: 'u32' },
+            { name: 'patch_size', type: 'u32' },
+            { name: 'patch_height', type: 'u32' },
+            { name: 'patch_width', type: 'u32' },
+            { name: 'hidden_size', type: 'u32' },
+            { name: 'total_values', type: 'u32' },
+            { name: '_pad0', type: 'u32' },
+            { name: '_pad1', type: 'u32' },
+            { name: '_pad2', type: 'u32' },
+          ],
+          values: { batch: shape.batch, image_height: shape.imageHeight, image_width: shape.imageWidth, image_channels: shape.imageChannels, patch_size: shape.patchSize, patch_height: shape.patchHeight, patch_width: shape.patchWidth, hidden_size: shape.hiddenSize, total_values: totalValues, _pad0: 0, _pad1: 0, _pad2: 0 },
+        }),
+      };
+      stage.uploadTensor(tensors.pixelValues, pixelValues);
+      stage.uploadTensor(tensors.projection, projection);
+      await stage.yieldToBrowser({ reason: 'after-sam3-image-patch-embed-upload' });
+    }, { shape, weightLayout: 'out,kH,kW,in' });
 
-  const program = runtime.defineProgram({
-    name: 'sam3.image-patch-embed-phase-program',
-    tensors: {
-      pixelValues: tensors.pixelValues,
-      projection: tensors.projection,
-      patchEmbeddings: tensors.patchEmbeddings,
-    },
-    uniforms: { dims: tensors.dims },
-    kernels: {
-      patchConv2dStride: {
-        code: PATCH_EMBED_WGSL,
-        bindings: [
-          { name: 'pixelValues', resource: 'tensor:pixelValues', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'projection', resource: 'tensor:projection', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'patchEmbeddings', resource: 'tensor:patchEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
-        ],
+    const program = runtime.defineProgram({
+      name: 'sam3.image-patch-embed-phase-program',
+      tensors: {
+        pixelValues: tensors.pixelValues,
+        projection: tensors.projection,
+        patchEmbeddings: tensors.patchEmbeddings,
       },
-    },
-    phases: [
-      { name: 'patch-conv2d-stride', kernel: 'patchConv2dStride', dispatch: dispatchPlan.patchConv2dStride.dispatch, yieldAfter: true },
-      { name: 'readback-patch-embeddings', readbacks: [{ name: 'patchEmbeddings', tensor: 'patchEmbeddings' }] },
-    ],
-    metadata: { routeId: SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID, weightLayout: 'out,kH,kW,in' },
+      uniforms: { dims: tensors.dims },
+      kernels: {
+        patchConv2dStride: {
+          code: PATCH_EMBED_WGSL,
+          bindings: [
+            { name: 'pixelValues', resource: 'tensor:pixelValues', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'projection', resource: 'tensor:projection', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'patchEmbeddings', resource: 'tensor:patchEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+          ],
+        },
+      },
+      phases: [
+        { name: 'patch-conv2d-stride', kernel: 'patchConv2dStride', dispatch: dispatchPlan.patchConv2dStride.dispatch, yieldAfter: true },
+        { name: 'readback-patch-embeddings', readbacks: [{ name: 'patchEmbeddings', tensor: 'patchEmbeddings' }] },
+      ],
+      metadata: { routeId: SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID, weightLayout: 'out,kH,kW,in' },
+    });
+    const run = await runtime.runProgram(program);
+    const outputs = outputArtifacts(input.request, {
+      patchEmbeddings: await sha256Hex(run.outputs.patchEmbeddings),
+    }, shape);
+    const receipt = createSam3ImagePatchEmbedPhaseProgramRouteReceipt({
+      sourceImage,
+      pixelValues: pixelValuesArtifact,
+      weights: weightsArtifact,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        patchEmbeddings: sam3Readback(input, new Float32Array(run.outputs.patchEmbeddings)),
+      };
+    }
+    return authoritative;
   });
-  const run = await runtime.runProgram(program);
-  const outputs = outputArtifacts(input.request, {
-    patchEmbeddings: await sha256Hex(run.outputs.patchEmbeddings),
-  }, shape);
-  const receipt = createSam3ImagePatchEmbedPhaseProgramRouteReceipt({
-    sourceImage,
-    pixelValues: pixelValuesArtifact,
-    weights: weightsArtifact,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      patchEmbeddings: sam3Readback(input, new Float32Array(run.outputs.patchEmbeddings)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }

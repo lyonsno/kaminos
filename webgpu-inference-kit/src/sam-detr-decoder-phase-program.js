@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -1199,379 +1200,380 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  const hiddenTokens = shape.batch * (shape.queryTokens + 1);
-  const queryTokens = shape.batch * shape.queryTokens;
-  const spatialTokens = shape.batch * shape.spatialTokens;
-  const promptTokens = shape.batch * shape.promptTokens;
-  const hiddenTotal = hiddenTokens * shape.channels;
-  const queryTotal = queryTokens * shape.channels;
-  const promptTotal = promptTokens * shape.channels;
-  const spatialTotal = spatialTokens * shape.channels;
-  const mlpTotal = hiddenTokens * shape.mlpHidden;
-  const sineTotal = queryTokens * shape.channels * 2;
-  const boxTotal = queryTokens * 4;
-  const rpbTotal = shape.batch * shape.heads * (shape.queryTokens + 1) * shape.spatialTokens;
-  const initialHiddenStates = initialHidden(queryEmbed, presenceToken, shape);
-  const initialBoxes = initialReferenceBoxes(referencePoints, shape);
+  return withSamPhaseCleanup(runtime, async () => {
+    const hiddenTokens = shape.batch * (shape.queryTokens + 1);
+    const queryTokens = shape.batch * shape.queryTokens;
+    const spatialTokens = shape.batch * shape.spatialTokens;
+    const promptTokens = shape.batch * shape.promptTokens;
+    const hiddenTotal = hiddenTokens * shape.channels;
+    const queryTotal = queryTokens * shape.channels;
+    const promptTotal = promptTokens * shape.channels;
+    const spatialTotal = spatialTokens * shape.channels;
+    const mlpTotal = hiddenTokens * shape.mlpHidden;
+    const sineTotal = queryTokens * shape.channels * 2;
+    const boxTotal = queryTokens * 4;
+    const rpbTotal = shape.batch * shape.heads * (shape.queryTokens + 1) * shape.spatialTokens;
+    const initialHiddenStates = initialHidden(queryEmbed, presenceToken, shape);
+    const initialBoxes = initialReferenceBoxes(referencePoints, shape);
 
-  let tensors = null;
-  await runtime.runStage('load-detr-decoder-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const tensor = (name, tensorShape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
-    tensors = {
-      visionFeatures: tensor('sam3.detr-decoder.vision-features', [shape.batch, shape.spatialTokens, shape.channels], readonlyUsage),
-      visionPosEncoding: tensor('sam3.detr-decoder.vision-pos', [shape.batch, shape.spatialTokens, shape.channels], readonlyUsage),
-      promptFeatures: tensor('sam3.detr-decoder.prompt-features', [shape.batch, shape.promptTokens, shape.channels], readonlyUsage),
-      promptMask: tensor('sam3.detr-decoder.prompt-mask', [shape.batch, shape.promptTokens], readonlyUsage),
-      hidden: tensor('sam3.detr-decoder.hidden', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      hiddenPlusPos: tensor('sam3.detr-decoder.hidden-plus-pos', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      q: tensor('sam3.detr-decoder.q', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      kHidden: tensor('sam3.detr-decoder.k-hidden', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      vHidden: tensor('sam3.detr-decoder.v-hidden', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      kPrompt: tensor('sam3.detr-decoder.k-prompt', [shape.batch, shape.promptTokens, shape.channels]),
-      vPrompt: tensor('sam3.detr-decoder.v-prompt', [shape.batch, shape.promptTokens, shape.channels]),
-      kVision: tensor('sam3.detr-decoder.k-vision', [shape.batch, shape.spatialTokens, shape.channels]),
-      kVisionProjected: tensor('sam3.detr-decoder.k-vision-projected', [shape.batch, shape.spatialTokens, shape.channels]),
-      vVision: tensor('sam3.detr-decoder.v-vision', [shape.batch, shape.spatialTokens, shape.channels]),
-      attention: tensor('sam3.detr-decoder.attention', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      projected: tensor('sam3.detr-decoder.projected', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      residual: tensor('sam3.detr-decoder.residual', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      mlpHidden: tensor('sam3.detr-decoder.mlp-hidden', [shape.batch, shape.queryTokens + 1, shape.mlpHidden]),
-      sine: tensor('sam3.detr-decoder.sine', [shape.batch, shape.queryTokens, shape.channels * 2]),
-      refPointHidden: tensor('sam3.detr-decoder.ref-point-hidden', [shape.batch, shape.queryTokens, shape.channels]),
-      queryPos: tensor('sam3.detr-decoder.query-pos', [shape.batch, shape.queryTokens, shape.channels]),
-      queryPosPadded: tensor('sam3.detr-decoder.query-pos-padded', [shape.batch, shape.queryTokens + 1, shape.channels]),
-      queryRaw: tensor('sam3.detr-decoder.query-raw', [shape.batch, shape.queryTokens, shape.channels]),
-      lastHs: tensor('sam3.detr-decoder.last-hs', [shape.batch, shape.queryTokens, shape.channels]),
-      boxHidden1: tensor('sam3.detr-decoder.box-hidden-1', [shape.batch, shape.queryTokens, shape.channels]),
-      boxHidden2: tensor('sam3.detr-decoder.box-hidden-2', [shape.batch, shape.queryTokens, shape.channels]),
-      boxDelta: tensor('sam3.detr-decoder.box-delta', [shape.batch, shape.queryTokens, 4]),
-      presenceRaw: tensor('sam3.detr-decoder.presence-raw', [shape.batch, shape.channels]),
-      presenceNormed: tensor('sam3.detr-decoder.presence-normed', [shape.batch, shape.channels]),
-      referenceA: tensor('sam3.detr-decoder.reference-a', [shape.batch, shape.queryTokens, 4]),
-      referenceB: tensor('sam3.detr-decoder.reference-b', [shape.batch, shape.queryTokens, 4]),
-      rpbXHidden: tensor('sam3.detr-decoder.rpb-x-hidden', [shape.batch, shape.queryTokens, shape.width, shape.channels]),
-      rpbYHidden: tensor('sam3.detr-decoder.rpb-y-hidden', [shape.batch, shape.queryTokens, shape.height, shape.channels]),
-      rpb: tensor('sam3.detr-decoder.rpb', [shape.batch, shape.heads, shape.queryTokens + 1, shape.spatialTokens]),
-      dummyMask: tensor('sam3.detr-decoder.dummy-mask', [1], readonlyUsage),
-      decoderDims: stage.createUniformBuffer({
-        label: 'sam3.detr-decoder.dims',
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'query_tokens', type: 'u32' },
-          { name: 'prompt_tokens', type: 'u32' },
-          { name: 'spatial_tokens', type: 'u32' },
-          { name: 'channels', type: 'u32' },
-          { name: 'heads', type: 'u32' },
-          { name: 'head_dim', type: 'u32' },
-          { name: 'mlp_hidden', type: 'u32' },
-          { name: 'height', type: 'u32' },
-          { name: 'width', type: 'u32' },
-          { name: 'sine_features', type: 'u32' },
-          { name: 'total', type: 'u32' },
-        ],
-        values: { batch: shape.batch, query_tokens: shape.queryTokens, prompt_tokens: shape.promptTokens, spatial_tokens: shape.spatialTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, mlp_hidden: shape.mlpHidden, height: shape.height, width: shape.width, sine_features: shape.sineFeatures, total: 0 },
-      }),
-      hiddenLayerNormDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.hidden-ln-dims', schema: [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }], values: { total_tokens: hiddenTokens, channels: shape.channels } }),
-      queryLayerNormDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.query-ln-dims', schema: [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }], values: { total_tokens: queryTokens, channels: shape.channels } }),
-      presenceLayerNormDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.presence-ln-dims', schema: [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }], values: { total_tokens: shape.batch, channels: shape.channels } }),
-      hiddenAddDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.hidden-add-dims', schema: [{ name: 'total', type: 'u32' }], values: { total: hiddenTotal } }),
-      spatialAddDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.spatial-add-dims', schema: [{ name: 'total', type: 'u32' }], values: { total: spatialTotal } }),
-      hiddenLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.hidden-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: hiddenTotal } }),
-      promptLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.prompt-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: promptTotal } }),
-      visionLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.vision-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: spatialTotal } }),
-      fc1Dims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.fc1-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.mlpHidden, total_output: mlpTotal } }),
-      fc2Dims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.fc2-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.mlpHidden, output_channels: shape.channels, total_output: hiddenTotal } }),
-      sineLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.sine-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels * 2, output_channels: shape.channels, total_output: queryTotal } }),
-      queryLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.query-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: queryTotal } }),
-      boxDeltaDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.box-delta-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: 4, total_output: boxTotal } }),
-      rpbXDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.rpb-x-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'axis_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'coord_axis', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens, axis_tokens: shape.width, channels: shape.channels, coord_axis: 0 } }),
-      rpbYDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.rpb-y-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'axis_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'coord_axis', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens, axis_tokens: shape.height, channels: shape.channels, coord_axis: 1 } }),
-      selfAttentionDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.self-attn-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: 'mask_mode', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens + 1, key_tokens: shape.queryTokens + 1, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: hiddenTotal, mask_mode: 0 } }),
-      textAttentionDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.text-attn-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: 'mask_mode', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens + 1, key_tokens: shape.promptTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: hiddenTotal, mask_mode: 1 } }),
-      visionAttentionDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.vision-attn-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: 'mask_mode', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens + 1, key_tokens: shape.spatialTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: hiddenTotal, mask_mode: 0 } }),
-      sharedWeights: {},
-      layerWeights: [],
-      presenceLogits: [],
-    };
-    stage.uploadTensor(tensors.visionFeatures, visionFeatures);
-    stage.uploadTensor(tensors.visionPosEncoding, visionPosEncoding);
-    stage.uploadTensor(tensors.promptFeatures, promptFeatures);
-    stage.uploadTensor(tensors.promptMask, promptMask);
-    stage.uploadTensor(tensors.hidden, initialHiddenStates);
-    stage.uploadTensor(tensors.referenceA, initialBoxes);
-    stage.uploadTensor(tensors.dummyMask, new Float32Array([1]));
-    for (const [name, values] of Object.entries(shared)) {
-      const weightShape = name.includes('Layer3Bias') || name.includes('RpbXLayer2Bias') || name.includes('RpbYLayer2Bias') ? [values.length] : [values.length];
-      const tensorName = `sam3.detr-decoder.shared.${name}`;
-      tensors.sharedWeights[name] = tensor(tensorName, weightShape, readonlyUsage, values);
-      stage.uploadTensor(tensors.sharedWeights[name], values);
-    }
-    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
-      const layerTensors = {};
-      for (const [name, values] of Object.entries(layers[layerIndex])) {
-        layerTensors[name] = tensor(`sam3.detr-decoder.layer-${layerIndex}.${name}`, [values.length], readonlyUsage, values);
-        stage.uploadTensor(layerTensors[name], values);
+    let tensors = null;
+    await runtime.runStage('load-detr-decoder-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      const tensor = (name, tensorShape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
+      tensors = {
+        visionFeatures: tensor('sam3.detr-decoder.vision-features', [shape.batch, shape.spatialTokens, shape.channels], readonlyUsage),
+        visionPosEncoding: tensor('sam3.detr-decoder.vision-pos', [shape.batch, shape.spatialTokens, shape.channels], readonlyUsage),
+        promptFeatures: tensor('sam3.detr-decoder.prompt-features', [shape.batch, shape.promptTokens, shape.channels], readonlyUsage),
+        promptMask: tensor('sam3.detr-decoder.prompt-mask', [shape.batch, shape.promptTokens], readonlyUsage),
+        hidden: tensor('sam3.detr-decoder.hidden', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        hiddenPlusPos: tensor('sam3.detr-decoder.hidden-plus-pos', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        q: tensor('sam3.detr-decoder.q', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        kHidden: tensor('sam3.detr-decoder.k-hidden', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        vHidden: tensor('sam3.detr-decoder.v-hidden', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        kPrompt: tensor('sam3.detr-decoder.k-prompt', [shape.batch, shape.promptTokens, shape.channels]),
+        vPrompt: tensor('sam3.detr-decoder.v-prompt', [shape.batch, shape.promptTokens, shape.channels]),
+        kVision: tensor('sam3.detr-decoder.k-vision', [shape.batch, shape.spatialTokens, shape.channels]),
+        kVisionProjected: tensor('sam3.detr-decoder.k-vision-projected', [shape.batch, shape.spatialTokens, shape.channels]),
+        vVision: tensor('sam3.detr-decoder.v-vision', [shape.batch, shape.spatialTokens, shape.channels]),
+        attention: tensor('sam3.detr-decoder.attention', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        projected: tensor('sam3.detr-decoder.projected', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        residual: tensor('sam3.detr-decoder.residual', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        mlpHidden: tensor('sam3.detr-decoder.mlp-hidden', [shape.batch, shape.queryTokens + 1, shape.mlpHidden]),
+        sine: tensor('sam3.detr-decoder.sine', [shape.batch, shape.queryTokens, shape.channels * 2]),
+        refPointHidden: tensor('sam3.detr-decoder.ref-point-hidden', [shape.batch, shape.queryTokens, shape.channels]),
+        queryPos: tensor('sam3.detr-decoder.query-pos', [shape.batch, shape.queryTokens, shape.channels]),
+        queryPosPadded: tensor('sam3.detr-decoder.query-pos-padded', [shape.batch, shape.queryTokens + 1, shape.channels]),
+        queryRaw: tensor('sam3.detr-decoder.query-raw', [shape.batch, shape.queryTokens, shape.channels]),
+        lastHs: tensor('sam3.detr-decoder.last-hs', [shape.batch, shape.queryTokens, shape.channels]),
+        boxHidden1: tensor('sam3.detr-decoder.box-hidden-1', [shape.batch, shape.queryTokens, shape.channels]),
+        boxHidden2: tensor('sam3.detr-decoder.box-hidden-2', [shape.batch, shape.queryTokens, shape.channels]),
+        boxDelta: tensor('sam3.detr-decoder.box-delta', [shape.batch, shape.queryTokens, 4]),
+        presenceRaw: tensor('sam3.detr-decoder.presence-raw', [shape.batch, shape.channels]),
+        presenceNormed: tensor('sam3.detr-decoder.presence-normed', [shape.batch, shape.channels]),
+        referenceA: tensor('sam3.detr-decoder.reference-a', [shape.batch, shape.queryTokens, 4]),
+        referenceB: tensor('sam3.detr-decoder.reference-b', [shape.batch, shape.queryTokens, 4]),
+        rpbXHidden: tensor('sam3.detr-decoder.rpb-x-hidden', [shape.batch, shape.queryTokens, shape.width, shape.channels]),
+        rpbYHidden: tensor('sam3.detr-decoder.rpb-y-hidden', [shape.batch, shape.queryTokens, shape.height, shape.channels]),
+        rpb: tensor('sam3.detr-decoder.rpb', [shape.batch, shape.heads, shape.queryTokens + 1, shape.spatialTokens]),
+        dummyMask: tensor('sam3.detr-decoder.dummy-mask', [1], readonlyUsage),
+        decoderDims: stage.createUniformBuffer({
+          label: 'sam3.detr-decoder.dims',
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'query_tokens', type: 'u32' },
+            { name: 'prompt_tokens', type: 'u32' },
+            { name: 'spatial_tokens', type: 'u32' },
+            { name: 'channels', type: 'u32' },
+            { name: 'heads', type: 'u32' },
+            { name: 'head_dim', type: 'u32' },
+            { name: 'mlp_hidden', type: 'u32' },
+            { name: 'height', type: 'u32' },
+            { name: 'width', type: 'u32' },
+            { name: 'sine_features', type: 'u32' },
+            { name: 'total', type: 'u32' },
+          ],
+          values: { batch: shape.batch, query_tokens: shape.queryTokens, prompt_tokens: shape.promptTokens, spatial_tokens: shape.spatialTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, mlp_hidden: shape.mlpHidden, height: shape.height, width: shape.width, sine_features: shape.sineFeatures, total: 0 },
+        }),
+        hiddenLayerNormDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.hidden-ln-dims', schema: [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }], values: { total_tokens: hiddenTokens, channels: shape.channels } }),
+        queryLayerNormDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.query-ln-dims', schema: [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }], values: { total_tokens: queryTokens, channels: shape.channels } }),
+        presenceLayerNormDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.presence-ln-dims', schema: [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }], values: { total_tokens: shape.batch, channels: shape.channels } }),
+        hiddenAddDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.hidden-add-dims', schema: [{ name: 'total', type: 'u32' }], values: { total: hiddenTotal } }),
+        spatialAddDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.spatial-add-dims', schema: [{ name: 'total', type: 'u32' }], values: { total: spatialTotal } }),
+        hiddenLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.hidden-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: hiddenTotal } }),
+        promptLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.prompt-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: promptTotal } }),
+        visionLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.vision-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: spatialTotal } }),
+        fc1Dims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.fc1-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.mlpHidden, total_output: mlpTotal } }),
+        fc2Dims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.fc2-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.mlpHidden, output_channels: shape.channels, total_output: hiddenTotal } }),
+        sineLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.sine-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels * 2, output_channels: shape.channels, total_output: queryTotal } }),
+        queryLinearDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.query-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: queryTotal } }),
+        boxDeltaDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.box-delta-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: 4, total_output: boxTotal } }),
+        rpbXDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.rpb-x-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'axis_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'coord_axis', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens, axis_tokens: shape.width, channels: shape.channels, coord_axis: 0 } }),
+        rpbYDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.rpb-y-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'axis_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'coord_axis', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens, axis_tokens: shape.height, channels: shape.channels, coord_axis: 1 } }),
+        selfAttentionDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.self-attn-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: 'mask_mode', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens + 1, key_tokens: shape.queryTokens + 1, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: hiddenTotal, mask_mode: 0 } }),
+        textAttentionDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.text-attn-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: 'mask_mode', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens + 1, key_tokens: shape.promptTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: hiddenTotal, mask_mode: 1 } }),
+        visionAttentionDims: stage.createUniformBuffer({ label: 'sam3.detr-decoder.vision-attn-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: 'mask_mode', type: 'u32' }], values: { batch: shape.batch, query_tokens: shape.queryTokens + 1, key_tokens: shape.spatialTokens, channels: shape.channels, heads: shape.heads, head_dim: shape.headDim, total_output: hiddenTotal, mask_mode: 0 } }),
+        sharedWeights: {},
+        layerWeights: [],
+        presenceLogits: [],
+      };
+      stage.uploadTensor(tensors.visionFeatures, visionFeatures);
+      stage.uploadTensor(tensors.visionPosEncoding, visionPosEncoding);
+      stage.uploadTensor(tensors.promptFeatures, promptFeatures);
+      stage.uploadTensor(tensors.promptMask, promptMask);
+      stage.uploadTensor(tensors.hidden, initialHiddenStates);
+      stage.uploadTensor(tensors.referenceA, initialBoxes);
+      stage.uploadTensor(tensors.dummyMask, new Float32Array([1]));
+      for (const [name, values] of Object.entries(shared)) {
+        const weightShape = name.includes('Layer3Bias') || name.includes('RpbXLayer2Bias') || name.includes('RpbYLayer2Bias') ? [values.length] : [values.length];
+        const tensorName = `sam3.detr-decoder.shared.${name}`;
+        tensors.sharedWeights[name] = tensor(tensorName, weightShape, readonlyUsage, values);
+        stage.uploadTensor(tensors.sharedWeights[name], values);
       }
-      tensors.layerWeights.push(layerTensors);
-      tensors.presenceLogits.push(tensor(`sam3.detr-decoder.layer-${layerIndex}.presence-logit`, [shape.batch], usage));
-    }
-    await stage.yieldToBrowser({ reason: 'after-sam3-detr-decoder-upload' });
-  }, { shape });
-
-  const programTensors = {
-    visionFeatures: tensors.visionFeatures,
-    visionPosEncoding: tensors.visionPosEncoding,
-    promptFeatures: tensors.promptFeatures,
-    promptMask: tensors.promptMask,
-    hidden: tensors.hidden,
-    hiddenPlusPos: tensors.hiddenPlusPos,
-    q: tensors.q,
-    kHidden: tensors.kHidden,
-    vHidden: tensors.vHidden,
-    kPrompt: tensors.kPrompt,
-    vPrompt: tensors.vPrompt,
-    kVision: tensors.kVision,
-    kVisionProjected: tensors.kVisionProjected,
-    vVision: tensors.vVision,
-    attention: tensors.attention,
-    projected: tensors.projected,
-    residual: tensors.residual,
-    mlpHidden: tensors.mlpHidden,
-    sine: tensors.sine,
-    refPointHidden: tensors.refPointHidden,
-    queryPos: tensors.queryPos,
-    queryPosPadded: tensors.queryPosPadded,
-    queryRaw: tensors.queryRaw,
-    lastHs: tensors.lastHs,
-    boxHidden1: tensors.boxHidden1,
-    boxHidden2: tensors.boxHidden2,
-    boxDelta: tensors.boxDelta,
-    presenceRaw: tensors.presenceRaw,
-    presenceNormed: tensors.presenceNormed,
-    referenceA: tensors.referenceA,
-    referenceB: tensors.referenceB,
-    rpbXHidden: tensors.rpbXHidden,
-    rpbYHidden: tensors.rpbYHidden,
-    rpb: tensors.rpb,
-    dummyMask: tensors.dummyMask,
-  };
-  for (const [name, tensor] of Object.entries(tensors.sharedWeights)) programTensors[name] = tensor;
-  tensors.presenceLogits.forEach((tensor, index) => { programTensors[`presenceLogits${index}`] = tensor; });
-
-  const uniforms = {
-    decoderDims: tensors.decoderDims,
-    hiddenLayerNormDims: tensors.hiddenLayerNormDims,
-    queryLayerNormDims: tensors.queryLayerNormDims,
-    presenceLayerNormDims: tensors.presenceLayerNormDims,
-    hiddenAddDims: tensors.hiddenAddDims,
-    spatialAddDims: tensors.spatialAddDims,
-    hiddenLinearDims: tensors.hiddenLinearDims,
-    promptLinearDims: tensors.promptLinearDims,
-    visionLinearDims: tensors.visionLinearDims,
-    fc1Dims: tensors.fc1Dims,
-    fc2Dims: tensors.fc2Dims,
-    sineLinearDims: tensors.sineLinearDims,
-    queryLinearDims: tensors.queryLinearDims,
-    boxDeltaDims: tensors.boxDeltaDims,
-    rpbXDims: tensors.rpbXDims,
-    rpbYDims: tensors.rpbYDims,
-    selfAttentionDims: tensors.selfAttentionDims,
-    textAttentionDims: tensors.textAttentionDims,
-    visionAttentionDims: tensors.visionAttentionDims,
-  };
-  const kernels = {};
-  const phases = [];
-  let referenceInput = 'referenceA';
-  let referenceOutput = 'referenceB';
-  const addKernel = (name, code, bindings) => { kernels[name] = { code, bindings }; };
-  for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
-    const layerWeights = tensors.layerWeights[layerIndex];
-    const layerTensorKeys = {};
-    for (const [name, tensor] of Object.entries(layerWeights)) {
-      const key = layerKey(layerIndex, name);
-      layerTensorKeys[name] = key;
-      programTensors[key] = tensor;
-    }
-    const k = suffix => `layer${layerIndex}${suffix}`;
-    addKernel(k('Sine'), SINE_BOX_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:sine', 'storage'), bindUniform('decoderDims')]);
-    addKernel(k('Ref1'), LINEAR_RELU_WGSL, [bindTensor('tensor:sine'), bindTensor('tensor:refPointHeadLayer1Weight'), bindTensor('tensor:refPointHeadLayer1Bias'), bindTensor('tensor:refPointHidden', 'storage'), bindUniform('sineLinearDims')]);
-    addKernel(k('Ref2'), LINEAR_RELU_WGSL, [bindTensor('tensor:refPointHidden'), bindTensor('tensor:refPointHeadLayer2Weight'), bindTensor('tensor:refPointHeadLayer2Bias'), bindTensor('tensor:queryPos', 'storage'), bindUniform('queryLinearDims')]);
-    addKernel(k('PadPos'), PAD_QUERY_POS_WGSL, [bindTensor('tensor:queryPos'), bindTensor('tensor:queryPosPadded', 'storage'), bindUniform('decoderDims')]);
-    addKernel(k('RpbXHidden'), RPB_AXIS_HIDDEN_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxRpbXLayer1Weight'), bindTensor('tensor:boxRpbXLayer1Bias'), bindTensor('tensor:rpbXHidden', 'storage'), bindUniform('rpbXDims')]);
-    addKernel(k('RpbYHidden'), RPB_AXIS_HIDDEN_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxRpbYLayer1Weight'), bindTensor('tensor:boxRpbYLayer1Bias'), bindTensor('tensor:rpbYHidden', 'storage'), bindUniform('rpbYDims')]);
-    addKernel(k('Rpb'), RPB_COMBINE_WGSL, [bindTensor('tensor:rpbXHidden'), bindTensor('tensor:boxRpbXLayer2Weight'), bindTensor('tensor:boxRpbXLayer2Bias'), bindTensor('tensor:rpbYHidden'), bindTensor('tensor:boxRpbYLayer2Weight'), bindTensor('tensor:boxRpbYLayer2Bias'), bindTensor('tensor:rpb', 'storage'), bindUniform('decoderDims')]);
-    addKernel(k('AddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
-    addKernel(k('SelfQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfQWeight}`), bindTensor(`tensor:${layerTensorKeys.selfQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
-    addKernel(k('SelfK'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfKWeight}`), bindTensor(`tensor:${layerTensorKeys.selfKBias}`), bindTensor('tensor:kHidden', 'storage'), bindUniform('hiddenLinearDims')]);
-    addKernel(k('SelfV'), LINEAR_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.selfVWeight}`), bindTensor(`tensor:${layerTensorKeys.selfVBias}`), bindTensor('tensor:vHidden', 'storage'), bindUniform('hiddenLinearDims')]);
-    addKernel(k('SelfAttn'), ATTENTION_MASKED_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kHidden'), bindTensor('tensor:vHidden'), bindTensor('tensor:dummyMask'), bindTensor('tensor:attention', 'storage'), bindUniform('selfAttentionDims')]);
-    addKernel(k('SelfOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.selfOWeight}`), bindTensor(`tensor:${layerTensorKeys.selfOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
-    addKernel(k('SelfResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
-    addKernel(k('SelfNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.selfLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.selfLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
-    addKernel(k('TextAddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
-    addKernel(k('TextQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.textQWeight}`), bindTensor(`tensor:${layerTensorKeys.textQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
-    addKernel(k('TextK'), LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textKWeight}`), bindTensor(`tensor:${layerTensorKeys.textKBias}`), bindTensor('tensor:kPrompt', 'storage'), bindUniform('promptLinearDims')]);
-    addKernel(k('TextV'), LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textVWeight}`), bindTensor(`tensor:${layerTensorKeys.textVBias}`), bindTensor('tensor:vPrompt', 'storage'), bindUniform('promptLinearDims')]);
-    addKernel(k('TextAttn'), ATTENTION_MASKED_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kPrompt'), bindTensor('tensor:vPrompt'), bindTensor('tensor:promptMask'), bindTensor('tensor:attention', 'storage'), bindUniform('textAttentionDims')]);
-    addKernel(k('TextOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.textOWeight}`), bindTensor(`tensor:${layerTensorKeys.textOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
-    addKernel(k('TextResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
-    addKernel(k('TextNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.textLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.textLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
-    addKernel(k('VisionAddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
-    addKernel(k('VisionQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.visionQWeight}`), bindTensor(`tensor:${layerTensorKeys.visionQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
-    addKernel(k('VisionKeyAdd'), ADD_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor('tensor:visionPosEncoding'), bindTensor('tensor:kVision', 'storage'), bindUniform('spatialAddDims')]);
-    addKernel(k('VisionK'), LINEAR_WGSL, [bindTensor('tensor:kVision'), bindTensor(`tensor:${layerTensorKeys.visionKWeight}`), bindTensor(`tensor:${layerTensorKeys.visionKBias}`), bindTensor('tensor:kVisionProjected', 'storage'), bindUniform('visionLinearDims')]);
-    addKernel(k('VisionV'), LINEAR_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor(`tensor:${layerTensorKeys.visionVWeight}`), bindTensor(`tensor:${layerTensorKeys.visionVBias}`), bindTensor('tensor:vVision', 'storage'), bindUniform('visionLinearDims')]);
-    addKernel(k('VisionAttn'), ATTENTION_BIAS_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kVisionProjected'), bindTensor('tensor:vVision'), bindTensor('tensor:rpb'), bindTensor('tensor:attention', 'storage'), bindUniform('visionAttentionDims')]);
-    addKernel(k('VisionOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.visionOWeight}`), bindTensor(`tensor:${layerTensorKeys.visionOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
-    addKernel(k('VisionResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
-    addKernel(k('VisionNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.visionLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.visionLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
-    addKernel(k('Mlp1'), LINEAR_RELU_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.fc1Weight}`), bindTensor(`tensor:${layerTensorKeys.fc1Bias}`), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('fc1Dims')]);
-    addKernel(k('Mlp2'), LINEAR_WGSL, [bindTensor('tensor:mlpHidden'), bindTensor(`tensor:${layerTensorKeys.fc2Weight}`), bindTensor(`tensor:${layerTensorKeys.fc2Bias}`), bindTensor('tensor:projected', 'storage'), bindUniform('fc2Dims')]);
-    addKernel(k('MlpResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
-    addKernel(k('MlpNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.mlpLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.mlpLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
-    addKernel(k('SliceQuery'), SLICE_QUERIES_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryRaw', 'storage'), bindUniform('decoderDims')]);
-    addKernel(k('OutputNorm'), LAYERNORM_WGSL, [bindTensor('tensor:queryRaw'), bindTensor('tensor:outputLayerNormWeight'), bindTensor('tensor:outputLayerNormBias'), bindTensor('tensor:lastHs', 'storage'), bindUniform('queryLayerNormDims')]);
-    addKernel(k('BoxHead1'), LINEAR_RELU_WGSL, [bindTensor('tensor:lastHs'), bindTensor('tensor:boxHeadLayer1Weight'), bindTensor('tensor:boxHeadLayer1Bias'), bindTensor('tensor:boxHidden1', 'storage'), bindUniform('queryLinearDims')]);
-    addKernel(k('BoxHead2'), LINEAR_RELU_WGSL, [bindTensor('tensor:boxHidden1'), bindTensor('tensor:boxHeadLayer2Weight'), bindTensor('tensor:boxHeadLayer2Bias'), bindTensor('tensor:boxHidden2', 'storage'), bindUniform('queryLinearDims')]);
-    addKernel(k('BoxHead3'), LINEAR_WGSL, [bindTensor('tensor:boxHidden2'), bindTensor('tensor:boxHeadLayer3Weight'), bindTensor('tensor:boxHeadLayer3Bias'), bindTensor('tensor:boxDelta', 'storage'), bindUniform('boxDeltaDims')]);
-    addKernel(k('BoxRefine'), BOX_APPLY_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxDelta'), bindTensor(`tensor:${referenceOutput}`, 'storage'), bindUniform('decoderDims')]);
-    addKernel(k('SlicePresence'), SLICE_PRESENCE_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:presenceRaw', 'storage'), bindUniform('decoderDims')]);
-    addKernel(k('PresenceNorm'), LAYERNORM_WGSL, [bindTensor('tensor:presenceRaw'), bindTensor('tensor:presenceLayerNormWeight'), bindTensor('tensor:presenceLayerNormBias'), bindTensor('tensor:presenceNormed', 'storage'), bindUniform('presenceLayerNormDims')]);
-    addKernel(k('PresenceHead'), PRESENCE_HEAD_WGSL, [bindTensor('tensor:presenceNormed'), bindTensor('tensor:presenceHeadLayer1Weight'), bindTensor('tensor:presenceHeadLayer1Bias'), bindTensor('tensor:presenceHeadLayer2Weight'), bindTensor('tensor:presenceHeadLayer2Bias'), bindTensor('tensor:presenceHeadLayer3Weight'), bindTensor('tensor:presenceHeadLayer3Bias'), bindTensor(`tensor:presenceLogits${layerIndex}`, 'storage'), bindUniform('decoderDims')]);
-    phases.push(
-      { name: `detr-decoder-sine-box-position-${layerIndex}`, kernel: k('Sine'), dispatch: [workgroups(sineTotal)], yieldAfter: true },
-      { name: `detr-decoder-ref-point-head-1-${layerIndex}`, kernel: k('Ref1'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-      { name: `detr-decoder-ref-point-head-${layerIndex}`, kernel: k('Ref2'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-      ...(input.includeIntermediateReadback === true && layerIndex === 0
-        ? [{ name: 'debug-detr-decoder-layer-0-query-pos', readbacks: [{ name: 'queryPosLayer0', tensor: 'queryPos' }] }]
-        : []),
-      { name: `detr-decoder-pad-query-position-${layerIndex}`, kernel: k('PadPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-box-rpb-x-hidden-${layerIndex}`, kernel: k('RpbXHidden'), dispatch: [workgroups(shape.batch * shape.queryTokens * shape.width * shape.channels)], yieldAfter: true },
-      { name: `detr-decoder-box-rpb-y-hidden-${layerIndex}`, kernel: k('RpbYHidden'), dispatch: [workgroups(shape.batch * shape.queryTokens * shape.height * shape.channels)], yieldAfter: true },
-      { name: `detr-decoder-box-rpb-${layerIndex}`, kernel: k('Rpb'), dispatch: [workgroups(rpbTotal)], yieldAfter: true },
-      ...(input.includeIntermediateReadback === true && layerIndex === 0
-        ? [{ name: 'debug-detr-decoder-layer-0-rpb', readbacks: [{ name: 'rpbLayer0Prefix', tensor: 'rpb', options: { size: 4096 } }] }]
-        : []),
-      { name: `detr-decoder-self-add-pos-${layerIndex}`, kernel: k('AddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-self-q-${layerIndex}`, kernel: k('SelfQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-self-k-${layerIndex}`, kernel: k('SelfK'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-self-v-${layerIndex}`, kernel: k('SelfV'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-self-attention-softmax-${layerIndex}`, kernel: k('SelfAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-self-output-${layerIndex}`, kernel: k('SelfOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-self-residual-${layerIndex}`, kernel: k('SelfResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-self-layernorm-${layerIndex}`, kernel: k('SelfNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
-      { name: `detr-decoder-text-add-pos-${layerIndex}`, kernel: k('TextAddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-text-q-${layerIndex}`, kernel: k('TextQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-text-k-${layerIndex}`, kernel: k('TextK'), dispatch: [workgroups(promptTotal)], yieldAfter: true },
-      { name: `detr-decoder-text-v-${layerIndex}`, kernel: k('TextV'), dispatch: [workgroups(promptTotal)], yieldAfter: true },
-      { name: `detr-decoder-text-attention-softmax-${layerIndex}`, kernel: k('TextAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-text-output-${layerIndex}`, kernel: k('TextOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-text-residual-${layerIndex}`, kernel: k('TextResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-text-layernorm-${layerIndex}`, kernel: k('TextNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
-      { name: `detr-decoder-vision-add-pos-${layerIndex}`, kernel: k('VisionAddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-vision-q-${layerIndex}`, kernel: k('VisionQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-vision-key-add-pos-${layerIndex}`, kernel: k('VisionKeyAdd'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
-      { name: `detr-decoder-vision-k-${layerIndex}`, kernel: k('VisionK'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
-      { name: `detr-decoder-vision-v-${layerIndex}`, kernel: k('VisionV'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
-      { name: `detr-decoder-vision-attention-softmax-${layerIndex}`, kernel: k('VisionAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-vision-output-${layerIndex}`, kernel: k('VisionOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-vision-residual-${layerIndex}`, kernel: k('VisionResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-vision-layernorm-${layerIndex}`, kernel: k('VisionNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
-      { name: `detr-decoder-mlp-fc1-${layerIndex}`, kernel: k('Mlp1'), dispatch: [workgroups(mlpTotal)], yieldAfter: true },
-      { name: `detr-decoder-mlp-fc2-${layerIndex}`, kernel: k('Mlp2'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-mlp-residual-${layerIndex}`, kernel: k('MlpResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: `detr-decoder-mlp-${layerIndex}`, kernel: k('MlpNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
-      { name: `detr-decoder-slice-query-${layerIndex}`, kernel: k('SliceQuery'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-      { name: `detr-decoder-output-layernorm-${layerIndex}`, kernel: k('OutputNorm'), dispatch: [workgroups(queryTokens)], yieldAfter: true },
-      { name: `detr-decoder-box-head-1-${layerIndex}`, kernel: k('BoxHead1'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-      { name: `detr-decoder-box-head-2-${layerIndex}`, kernel: k('BoxHead2'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-      { name: `detr-decoder-box-head-3-${layerIndex}`, kernel: k('BoxHead3'), dispatch: [workgroups(boxTotal)], yieldAfter: true },
-      { name: `detr-decoder-box-refinement-${layerIndex}`, kernel: k('BoxRefine'), dispatch: [workgroups(boxTotal)], yieldAfter: true },
-      ...((input.includeIntermediateReadback === true && layerIndex === 0) || input.includeAllHiddenStatesReadback === true
-        ? [{
-            name: `debug-detr-decoder-layer-${layerIndex}-outputs`,
-            readbacks: [
-              { name: `lastHsLayer${layerIndex}`, tensor: 'lastHs' },
-              { name: `referenceBoxesLayer${layerIndex}`, tensor: referenceOutput },
-            ],
-          }]
-        : []),
-      { name: `detr-decoder-slice-presence-${layerIndex}`, kernel: k('SlicePresence'), dispatch: [workgroups(shape.batch * shape.channels)], yieldAfter: true },
-      { name: `detr-decoder-presence-layernorm-${layerIndex}`, kernel: k('PresenceNorm'), dispatch: [workgroups(shape.batch)], yieldAfter: true },
-      { name: `detr-decoder-presence-head-${layerIndex}`, kernel: k('PresenceHead'), dispatch: [shape.batch], yieldAfter: true },
-    );
-    const tmp = referenceInput;
-    referenceInput = referenceOutput;
-    referenceOutput = tmp;
-  }
-  phases.push({ name: 'readback-detr-decoder-outputs', readbacks: [{ name: 'lastHs', tensor: 'lastHs' }, { name: 'referenceBoxes', tensor: referenceInput }, ...tensors.presenceLogits.map((_, index) => ({ name: `presenceLogits${index}`, tensor: `presenceLogits${index}` }))] });
-
-  const program = runtime.defineProgram({
-    name: 'sam3.detr-decoder-phase-program',
-    tensors: programTensors,
-    uniforms,
-    kernels,
-    phases,
-    metadata: { routeId: SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID },
-  });
-
-  const run = await runtime.runProgram(program);
-  const lastHs = run.outputs.lastHs;
-  const referenceBoxes = run.outputs.referenceBoxes;
-  const presenceParts = tensors.presenceLogits.map((_, index) => new Float32Array(run.outputs[`presenceLogits${index}`]));
-  const presenceLogits = new Float32Array(shape.layerCount * shape.batch);
-  for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) presenceLogits.set(presenceParts[layerIndex], layerIndex * shape.batch);
-  let decoderHiddenStates = null;
-  if (input.includeAllHiddenStatesReadback === true) {
-    decoderHiddenStates = new Float32Array(shape.layerCount * shape.batch * shape.queryTokens * shape.channels);
-    const layerSize = shape.batch * shape.queryTokens * shape.channels;
-    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
-      decoderHiddenStates.set(new Float32Array(run.outputs[`lastHsLayer${layerIndex}`]), layerIndex * layerSize);
-    }
-  }
-  const outputs = outputArtifacts(input.request, {
-    lastHs: await sha256Hex(lastHs),
-    decoderHiddenStates: decoderHiddenStates ? await sha256Hex(decoderHiddenStates.buffer) : null,
-    referenceBoxes: await sha256Hex(referenceBoxes),
-    presenceLogits: await sha256Hex(presenceLogits.buffer),
-  }, shape);
-  const receipt = createSam3DetrDecoderPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    weightsPacket,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      lastHs: sam3Readback(input, new Float32Array(lastHs)),
-      referenceBoxes: sam3Readback(input, new Float32Array(referenceBoxes)),
-      presenceLogits: sam3Readback(input, presenceLogits),
-    };
-    if (decoderHiddenStates) {
-      authoritative.debugReadback.decoderHiddenStates = sam3Readback(input, decoderHiddenStates);
-    }
-    if (input.includeIntermediateReadback === true) {
-      authoritative.debugReadback.intermediate = {};
-      const debugLayerCount = input.includeAllHiddenStatesReadback === true ? shape.layerCount : 1;
-      for (let layerIndex = 0; layerIndex < debugLayerCount; layerIndex += 1) {
-        authoritative.debugReadback.intermediate[`lastHsLayer${layerIndex}`] = sam3Readback(input, new Float32Array(run.outputs[`lastHsLayer${layerIndex}`]));
-        authoritative.debugReadback.intermediate[`referenceBoxesLayer${layerIndex}`] = sam3Readback(input, new Float32Array(run.outputs[`referenceBoxesLayer${layerIndex}`]));
+      for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
+        const layerTensors = {};
+        for (const [name, values] of Object.entries(layers[layerIndex])) {
+          layerTensors[name] = tensor(`sam3.detr-decoder.layer-${layerIndex}.${name}`, [values.length], readonlyUsage, values);
+          stage.uploadTensor(layerTensors[name], values);
+        }
+        tensors.layerWeights.push(layerTensors);
+        tensors.presenceLogits.push(tensor(`sam3.detr-decoder.layer-${layerIndex}.presence-logit`, [shape.batch], usage));
       }
-      authoritative.debugReadback.intermediate.queryPosLayer0 = sam3Readback(input, new Float32Array(run.outputs.queryPosLayer0));
-      authoritative.debugReadback.intermediate.rpbLayer0Prefix = sam3Readback(input, new Float32Array(run.outputs.rpbLayer0Prefix));
+      await stage.yieldToBrowser({ reason: 'after-sam3-detr-decoder-upload' });
+    }, { shape });
+
+    const programTensors = {
+      visionFeatures: tensors.visionFeatures,
+      visionPosEncoding: tensors.visionPosEncoding,
+      promptFeatures: tensors.promptFeatures,
+      promptMask: tensors.promptMask,
+      hidden: tensors.hidden,
+      hiddenPlusPos: tensors.hiddenPlusPos,
+      q: tensors.q,
+      kHidden: tensors.kHidden,
+      vHidden: tensors.vHidden,
+      kPrompt: tensors.kPrompt,
+      vPrompt: tensors.vPrompt,
+      kVision: tensors.kVision,
+      kVisionProjected: tensors.kVisionProjected,
+      vVision: tensors.vVision,
+      attention: tensors.attention,
+      projected: tensors.projected,
+      residual: tensors.residual,
+      mlpHidden: tensors.mlpHidden,
+      sine: tensors.sine,
+      refPointHidden: tensors.refPointHidden,
+      queryPos: tensors.queryPos,
+      queryPosPadded: tensors.queryPosPadded,
+      queryRaw: tensors.queryRaw,
+      lastHs: tensors.lastHs,
+      boxHidden1: tensors.boxHidden1,
+      boxHidden2: tensors.boxHidden2,
+      boxDelta: tensors.boxDelta,
+      presenceRaw: tensors.presenceRaw,
+      presenceNormed: tensors.presenceNormed,
+      referenceA: tensors.referenceA,
+      referenceB: tensors.referenceB,
+      rpbXHidden: tensors.rpbXHidden,
+      rpbYHidden: tensors.rpbYHidden,
+      rpb: tensors.rpb,
+      dummyMask: tensors.dummyMask,
+    };
+    for (const [name, tensor] of Object.entries(tensors.sharedWeights)) programTensors[name] = tensor;
+    tensors.presenceLogits.forEach((tensor, index) => { programTensors[`presenceLogits${index}`] = tensor; });
+
+    const uniforms = {
+      decoderDims: tensors.decoderDims,
+      hiddenLayerNormDims: tensors.hiddenLayerNormDims,
+      queryLayerNormDims: tensors.queryLayerNormDims,
+      presenceLayerNormDims: tensors.presenceLayerNormDims,
+      hiddenAddDims: tensors.hiddenAddDims,
+      spatialAddDims: tensors.spatialAddDims,
+      hiddenLinearDims: tensors.hiddenLinearDims,
+      promptLinearDims: tensors.promptLinearDims,
+      visionLinearDims: tensors.visionLinearDims,
+      fc1Dims: tensors.fc1Dims,
+      fc2Dims: tensors.fc2Dims,
+      sineLinearDims: tensors.sineLinearDims,
+      queryLinearDims: tensors.queryLinearDims,
+      boxDeltaDims: tensors.boxDeltaDims,
+      rpbXDims: tensors.rpbXDims,
+      rpbYDims: tensors.rpbYDims,
+      selfAttentionDims: tensors.selfAttentionDims,
+      textAttentionDims: tensors.textAttentionDims,
+      visionAttentionDims: tensors.visionAttentionDims,
+    };
+    const kernels = {};
+    const phases = [];
+    let referenceInput = 'referenceA';
+    let referenceOutput = 'referenceB';
+    const addKernel = (name, code, bindings) => { kernels[name] = { code, bindings }; };
+    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
+      const layerWeights = tensors.layerWeights[layerIndex];
+      const layerTensorKeys = {};
+      for (const [name, tensor] of Object.entries(layerWeights)) {
+        const key = layerKey(layerIndex, name);
+        layerTensorKeys[name] = key;
+        programTensors[key] = tensor;
+      }
+      const k = suffix => `layer${layerIndex}${suffix}`;
+      addKernel(k('Sine'), SINE_BOX_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:sine', 'storage'), bindUniform('decoderDims')]);
+      addKernel(k('Ref1'), LINEAR_RELU_WGSL, [bindTensor('tensor:sine'), bindTensor('tensor:refPointHeadLayer1Weight'), bindTensor('tensor:refPointHeadLayer1Bias'), bindTensor('tensor:refPointHidden', 'storage'), bindUniform('sineLinearDims')]);
+      addKernel(k('Ref2'), LINEAR_RELU_WGSL, [bindTensor('tensor:refPointHidden'), bindTensor('tensor:refPointHeadLayer2Weight'), bindTensor('tensor:refPointHeadLayer2Bias'), bindTensor('tensor:queryPos', 'storage'), bindUniform('queryLinearDims')]);
+      addKernel(k('PadPos'), PAD_QUERY_POS_WGSL, [bindTensor('tensor:queryPos'), bindTensor('tensor:queryPosPadded', 'storage'), bindUniform('decoderDims')]);
+      addKernel(k('RpbXHidden'), RPB_AXIS_HIDDEN_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxRpbXLayer1Weight'), bindTensor('tensor:boxRpbXLayer1Bias'), bindTensor('tensor:rpbXHidden', 'storage'), bindUniform('rpbXDims')]);
+      addKernel(k('RpbYHidden'), RPB_AXIS_HIDDEN_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxRpbYLayer1Weight'), bindTensor('tensor:boxRpbYLayer1Bias'), bindTensor('tensor:rpbYHidden', 'storage'), bindUniform('rpbYDims')]);
+      addKernel(k('Rpb'), RPB_COMBINE_WGSL, [bindTensor('tensor:rpbXHidden'), bindTensor('tensor:boxRpbXLayer2Weight'), bindTensor('tensor:boxRpbXLayer2Bias'), bindTensor('tensor:rpbYHidden'), bindTensor('tensor:boxRpbYLayer2Weight'), bindTensor('tensor:boxRpbYLayer2Bias'), bindTensor('tensor:rpb', 'storage'), bindUniform('decoderDims')]);
+      addKernel(k('AddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
+      addKernel(k('SelfQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfQWeight}`), bindTensor(`tensor:${layerTensorKeys.selfQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('SelfK'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfKWeight}`), bindTensor(`tensor:${layerTensorKeys.selfKBias}`), bindTensor('tensor:kHidden', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('SelfV'), LINEAR_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.selfVWeight}`), bindTensor(`tensor:${layerTensorKeys.selfVBias}`), bindTensor('tensor:vHidden', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('SelfAttn'), ATTENTION_MASKED_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kHidden'), bindTensor('tensor:vHidden'), bindTensor('tensor:dummyMask'), bindTensor('tensor:attention', 'storage'), bindUniform('selfAttentionDims')]);
+      addKernel(k('SelfOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.selfOWeight}`), bindTensor(`tensor:${layerTensorKeys.selfOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('SelfResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
+      addKernel(k('SelfNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.selfLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.selfLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
+      addKernel(k('TextAddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
+      addKernel(k('TextQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.textQWeight}`), bindTensor(`tensor:${layerTensorKeys.textQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('TextK'), LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textKWeight}`), bindTensor(`tensor:${layerTensorKeys.textKBias}`), bindTensor('tensor:kPrompt', 'storage'), bindUniform('promptLinearDims')]);
+      addKernel(k('TextV'), LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textVWeight}`), bindTensor(`tensor:${layerTensorKeys.textVBias}`), bindTensor('tensor:vPrompt', 'storage'), bindUniform('promptLinearDims')]);
+      addKernel(k('TextAttn'), ATTENTION_MASKED_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kPrompt'), bindTensor('tensor:vPrompt'), bindTensor('tensor:promptMask'), bindTensor('tensor:attention', 'storage'), bindUniform('textAttentionDims')]);
+      addKernel(k('TextOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.textOWeight}`), bindTensor(`tensor:${layerTensorKeys.textOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('TextResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
+      addKernel(k('TextNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.textLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.textLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
+      addKernel(k('VisionAddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
+      addKernel(k('VisionQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.visionQWeight}`), bindTensor(`tensor:${layerTensorKeys.visionQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('VisionKeyAdd'), ADD_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor('tensor:visionPosEncoding'), bindTensor('tensor:kVision', 'storage'), bindUniform('spatialAddDims')]);
+      addKernel(k('VisionK'), LINEAR_WGSL, [bindTensor('tensor:kVision'), bindTensor(`tensor:${layerTensorKeys.visionKWeight}`), bindTensor(`tensor:${layerTensorKeys.visionKBias}`), bindTensor('tensor:kVisionProjected', 'storage'), bindUniform('visionLinearDims')]);
+      addKernel(k('VisionV'), LINEAR_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor(`tensor:${layerTensorKeys.visionVWeight}`), bindTensor(`tensor:${layerTensorKeys.visionVBias}`), bindTensor('tensor:vVision', 'storage'), bindUniform('visionLinearDims')]);
+      addKernel(k('VisionAttn'), ATTENTION_BIAS_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kVisionProjected'), bindTensor('tensor:vVision'), bindTensor('tensor:rpb'), bindTensor('tensor:attention', 'storage'), bindUniform('visionAttentionDims')]);
+      addKernel(k('VisionOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.visionOWeight}`), bindTensor(`tensor:${layerTensorKeys.visionOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('VisionResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
+      addKernel(k('VisionNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.visionLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.visionLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
+      addKernel(k('Mlp1'), LINEAR_RELU_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.fc1Weight}`), bindTensor(`tensor:${layerTensorKeys.fc1Bias}`), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('fc1Dims')]);
+      addKernel(k('Mlp2'), LINEAR_WGSL, [bindTensor('tensor:mlpHidden'), bindTensor(`tensor:${layerTensorKeys.fc2Weight}`), bindTensor(`tensor:${layerTensorKeys.fc2Bias}`), bindTensor('tensor:projected', 'storage'), bindUniform('fc2Dims')]);
+      addKernel(k('MlpResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
+      addKernel(k('MlpNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.mlpLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.mlpLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
+      addKernel(k('SliceQuery'), SLICE_QUERIES_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryRaw', 'storage'), bindUniform('decoderDims')]);
+      addKernel(k('OutputNorm'), LAYERNORM_WGSL, [bindTensor('tensor:queryRaw'), bindTensor('tensor:outputLayerNormWeight'), bindTensor('tensor:outputLayerNormBias'), bindTensor('tensor:lastHs', 'storage'), bindUniform('queryLayerNormDims')]);
+      addKernel(k('BoxHead1'), LINEAR_RELU_WGSL, [bindTensor('tensor:lastHs'), bindTensor('tensor:boxHeadLayer1Weight'), bindTensor('tensor:boxHeadLayer1Bias'), bindTensor('tensor:boxHidden1', 'storage'), bindUniform('queryLinearDims')]);
+      addKernel(k('BoxHead2'), LINEAR_RELU_WGSL, [bindTensor('tensor:boxHidden1'), bindTensor('tensor:boxHeadLayer2Weight'), bindTensor('tensor:boxHeadLayer2Bias'), bindTensor('tensor:boxHidden2', 'storage'), bindUniform('queryLinearDims')]);
+      addKernel(k('BoxHead3'), LINEAR_WGSL, [bindTensor('tensor:boxHidden2'), bindTensor('tensor:boxHeadLayer3Weight'), bindTensor('tensor:boxHeadLayer3Bias'), bindTensor('tensor:boxDelta', 'storage'), bindUniform('boxDeltaDims')]);
+      addKernel(k('BoxRefine'), BOX_APPLY_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxDelta'), bindTensor(`tensor:${referenceOutput}`, 'storage'), bindUniform('decoderDims')]);
+      addKernel(k('SlicePresence'), SLICE_PRESENCE_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:presenceRaw', 'storage'), bindUniform('decoderDims')]);
+      addKernel(k('PresenceNorm'), LAYERNORM_WGSL, [bindTensor('tensor:presenceRaw'), bindTensor('tensor:presenceLayerNormWeight'), bindTensor('tensor:presenceLayerNormBias'), bindTensor('tensor:presenceNormed', 'storage'), bindUniform('presenceLayerNormDims')]);
+      addKernel(k('PresenceHead'), PRESENCE_HEAD_WGSL, [bindTensor('tensor:presenceNormed'), bindTensor('tensor:presenceHeadLayer1Weight'), bindTensor('tensor:presenceHeadLayer1Bias'), bindTensor('tensor:presenceHeadLayer2Weight'), bindTensor('tensor:presenceHeadLayer2Bias'), bindTensor('tensor:presenceHeadLayer3Weight'), bindTensor('tensor:presenceHeadLayer3Bias'), bindTensor(`tensor:presenceLogits${layerIndex}`, 'storage'), bindUniform('decoderDims')]);
+      phases.push(
+        { name: `detr-decoder-sine-box-position-${layerIndex}`, kernel: k('Sine'), dispatch: [workgroups(sineTotal)], yieldAfter: true },
+        { name: `detr-decoder-ref-point-head-1-${layerIndex}`, kernel: k('Ref1'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
+        { name: `detr-decoder-ref-point-head-${layerIndex}`, kernel: k('Ref2'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
+        ...(input.includeIntermediateReadback === true && layerIndex === 0
+          ? [{ name: 'debug-detr-decoder-layer-0-query-pos', readbacks: [{ name: 'queryPosLayer0', tensor: 'queryPos' }] }]
+          : []),
+        { name: `detr-decoder-pad-query-position-${layerIndex}`, kernel: k('PadPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-box-rpb-x-hidden-${layerIndex}`, kernel: k('RpbXHidden'), dispatch: [workgroups(shape.batch * shape.queryTokens * shape.width * shape.channels)], yieldAfter: true },
+        { name: `detr-decoder-box-rpb-y-hidden-${layerIndex}`, kernel: k('RpbYHidden'), dispatch: [workgroups(shape.batch * shape.queryTokens * shape.height * shape.channels)], yieldAfter: true },
+        { name: `detr-decoder-box-rpb-${layerIndex}`, kernel: k('Rpb'), dispatch: [workgroups(rpbTotal)], yieldAfter: true },
+        ...(input.includeIntermediateReadback === true && layerIndex === 0
+          ? [{ name: 'debug-detr-decoder-layer-0-rpb', readbacks: [{ name: 'rpbLayer0Prefix', tensor: 'rpb', options: { size: 4096 } }] }]
+          : []),
+        { name: `detr-decoder-self-add-pos-${layerIndex}`, kernel: k('AddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-self-q-${layerIndex}`, kernel: k('SelfQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-self-k-${layerIndex}`, kernel: k('SelfK'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-self-v-${layerIndex}`, kernel: k('SelfV'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-self-attention-softmax-${layerIndex}`, kernel: k('SelfAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-self-output-${layerIndex}`, kernel: k('SelfOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-self-residual-${layerIndex}`, kernel: k('SelfResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-self-layernorm-${layerIndex}`, kernel: k('SelfNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
+        { name: `detr-decoder-text-add-pos-${layerIndex}`, kernel: k('TextAddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-text-q-${layerIndex}`, kernel: k('TextQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-text-k-${layerIndex}`, kernel: k('TextK'), dispatch: [workgroups(promptTotal)], yieldAfter: true },
+        { name: `detr-decoder-text-v-${layerIndex}`, kernel: k('TextV'), dispatch: [workgroups(promptTotal)], yieldAfter: true },
+        { name: `detr-decoder-text-attention-softmax-${layerIndex}`, kernel: k('TextAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-text-output-${layerIndex}`, kernel: k('TextOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-text-residual-${layerIndex}`, kernel: k('TextResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-text-layernorm-${layerIndex}`, kernel: k('TextNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
+        { name: `detr-decoder-vision-add-pos-${layerIndex}`, kernel: k('VisionAddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-vision-q-${layerIndex}`, kernel: k('VisionQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-vision-key-add-pos-${layerIndex}`, kernel: k('VisionKeyAdd'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
+        { name: `detr-decoder-vision-k-${layerIndex}`, kernel: k('VisionK'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
+        { name: `detr-decoder-vision-v-${layerIndex}`, kernel: k('VisionV'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
+        { name: `detr-decoder-vision-attention-softmax-${layerIndex}`, kernel: k('VisionAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-vision-output-${layerIndex}`, kernel: k('VisionOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-vision-residual-${layerIndex}`, kernel: k('VisionResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-vision-layernorm-${layerIndex}`, kernel: k('VisionNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
+        { name: `detr-decoder-mlp-fc1-${layerIndex}`, kernel: k('Mlp1'), dispatch: [workgroups(mlpTotal)], yieldAfter: true },
+        { name: `detr-decoder-mlp-fc2-${layerIndex}`, kernel: k('Mlp2'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-mlp-residual-${layerIndex}`, kernel: k('MlpResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: `detr-decoder-mlp-${layerIndex}`, kernel: k('MlpNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
+        { name: `detr-decoder-slice-query-${layerIndex}`, kernel: k('SliceQuery'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
+        { name: `detr-decoder-output-layernorm-${layerIndex}`, kernel: k('OutputNorm'), dispatch: [workgroups(queryTokens)], yieldAfter: true },
+        { name: `detr-decoder-box-head-1-${layerIndex}`, kernel: k('BoxHead1'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
+        { name: `detr-decoder-box-head-2-${layerIndex}`, kernel: k('BoxHead2'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
+        { name: `detr-decoder-box-head-3-${layerIndex}`, kernel: k('BoxHead3'), dispatch: [workgroups(boxTotal)], yieldAfter: true },
+        { name: `detr-decoder-box-refinement-${layerIndex}`, kernel: k('BoxRefine'), dispatch: [workgroups(boxTotal)], yieldAfter: true },
+        ...((input.includeIntermediateReadback === true && layerIndex === 0) || input.includeAllHiddenStatesReadback === true
+          ? [{
+              name: `debug-detr-decoder-layer-${layerIndex}-outputs`,
+              readbacks: [
+                { name: `lastHsLayer${layerIndex}`, tensor: 'lastHs' },
+                { name: `referenceBoxesLayer${layerIndex}`, tensor: referenceOutput },
+              ],
+            }]
+          : []),
+        { name: `detr-decoder-slice-presence-${layerIndex}`, kernel: k('SlicePresence'), dispatch: [workgroups(shape.batch * shape.channels)], yieldAfter: true },
+        { name: `detr-decoder-presence-layernorm-${layerIndex}`, kernel: k('PresenceNorm'), dispatch: [workgroups(shape.batch)], yieldAfter: true },
+        { name: `detr-decoder-presence-head-${layerIndex}`, kernel: k('PresenceHead'), dispatch: [shape.batch], yieldAfter: true },
+      );
+      const tmp = referenceInput;
+      referenceInput = referenceOutput;
+      referenceOutput = tmp;
     }
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
+    phases.push({ name: 'readback-detr-decoder-outputs', readbacks: [{ name: 'lastHs', tensor: 'lastHs' }, { name: 'referenceBoxes', tensor: referenceInput }, ...tensors.presenceLogits.map((_, index) => ({ name: `presenceLogits${index}`, tensor: `presenceLogits${index}` }))] });
+
+    const program = runtime.defineProgram({
+      name: 'sam3.detr-decoder-phase-program',
+      tensors: programTensors,
+      uniforms,
+      kernels,
+      phases,
+      metadata: { routeId: SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID },
+    });
+
+    const run = await runtime.runProgram(program);
+    const lastHs = run.outputs.lastHs;
+    const referenceBoxes = run.outputs.referenceBoxes;
+    const presenceParts = tensors.presenceLogits.map((_, index) => new Float32Array(run.outputs[`presenceLogits${index}`]));
+    const presenceLogits = new Float32Array(shape.layerCount * shape.batch);
+    for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) presenceLogits.set(presenceParts[layerIndex], layerIndex * shape.batch);
+    let decoderHiddenStates = null;
+    if (input.includeAllHiddenStatesReadback === true) {
+      decoderHiddenStates = new Float32Array(shape.layerCount * shape.batch * shape.queryTokens * shape.channels);
+      const layerSize = shape.batch * shape.queryTokens * shape.channels;
+      for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
+        decoderHiddenStates.set(new Float32Array(run.outputs[`lastHsLayer${layerIndex}`]), layerIndex * layerSize);
+      }
+    }
+    const outputs = outputArtifacts(input.request, {
+      lastHs: await sha256Hex(lastHs),
+      decoderHiddenStates: decoderHiddenStates ? await sha256Hex(decoderHiddenStates.buffer) : null,
+      referenceBoxes: await sha256Hex(referenceBoxes),
+      presenceLogits: await sha256Hex(presenceLogits.buffer),
+    }, shape);
+    const receipt = createSam3DetrDecoderPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      weightsPacket,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        lastHs: sam3Readback(input, new Float32Array(lastHs)),
+        referenceBoxes: sam3Readback(input, new Float32Array(referenceBoxes)),
+        presenceLogits: sam3Readback(input, presenceLogits),
+      };
+      if (decoderHiddenStates) {
+        authoritative.debugReadback.decoderHiddenStates = sam3Readback(input, decoderHiddenStates);
+      }
+      if (input.includeIntermediateReadback === true) {
+        authoritative.debugReadback.intermediate = {};
+        const debugLayerCount = input.includeAllHiddenStatesReadback === true ? shape.layerCount : 1;
+        for (let layerIndex = 0; layerIndex < debugLayerCount; layerIndex += 1) {
+          authoritative.debugReadback.intermediate[`lastHsLayer${layerIndex}`] = sam3Readback(input, new Float32Array(run.outputs[`lastHsLayer${layerIndex}`]));
+          authoritative.debugReadback.intermediate[`referenceBoxesLayer${layerIndex}`] = sam3Readback(input, new Float32Array(run.outputs[`referenceBoxesLayer${layerIndex}`]));
+        }
+        authoritative.debugReadback.intermediate.queryPosLayer0 = sam3Readback(input, new Float32Array(run.outputs.queryPosLayer0));
+        authoritative.debugReadback.intermediate.rpbLayer0Prefix = sam3Readback(input, new Float32Array(run.outputs.rpbLayer0Prefix));
+      }
+    }
+    return authoritative;
+  });
 }
 
 export { DETR_DECODER_ROUTE_SOURCE_MARKERS };

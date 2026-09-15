@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -462,146 +463,147 @@ export async function runSam3SelectionPostprocessPhaseProgramRoute(input = {}) {
     yield: input.yield,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-selection-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    tensors = {
-      predLogits: stage.createTensor({ name: 'sam3.selection.pred-logits', shape: [shape.layerCount, shape.batch, shape.queryTokens, 1], dtype: 'f32', usage: readonlyUsage }),
-      referenceBoxes: stage.createTensor({ name: 'sam3.selection.reference-boxes', shape: [shape.batch, shape.queryTokens, 4], dtype: 'f32', usage: readonlyUsage }),
-      presenceLogits: stage.createTensor({ name: 'sam3.selection.presence-logits', shape: [shape.layerCount, shape.batch, 1], dtype: 'f32', usage: readonlyUsage }),
-      scores: stage.createTensor({ name: 'sam3.selection.scores', shape: [shape.batch, shape.queryTokens], dtype: 'f32', usage }),
-      boxes: stage.createTensor({ name: 'sam3.selection.boxes', shape: [shape.batch, shape.queryTokens, 4], dtype: 'f32', usage }),
-      keep: stage.createTensor({ name: 'sam3.selection.keep', shape: [shape.batch, shape.queryTokens], dtype: 'u32', usage }),
-      selectedIndex: stage.createTensor({ name: 'sam3.selection.selected-index', shape: [shape.batch], dtype: 'u32', usage }),
-      selectedScore: stage.createTensor({ name: 'sam3.selection.selected-score', shape: [shape.batch], dtype: 'f32', usage }),
-      selectedBox: stage.createTensor({ name: 'sam3.selection.selected-box', shape: [shape.batch, 4], dtype: 'f32', usage }),
-      dims: stage.createUniformBuffer({
-        label: 'sam3.selection.dims',
-        schema: [
-          { name: 'layer_count', type: 'u32' },
-          { name: 'batch', type: 'u32' },
-          { name: 'query_tokens', type: 'u32' },
-          { name: 'image_height', type: 'u32' },
-          { name: 'image_width', type: 'u32' },
-          { name: 'total_queries', type: 'u32' },
-          { name: 'score_threshold', type: 'f32' },
-          { name: 'nms_iou_threshold', type: 'f32' },
-        ],
-        values: {
-          layer_count: shape.layerCount,
-          batch: shape.batch,
-          query_tokens: shape.queryTokens,
-          image_height: shape.imageHeight,
-          image_width: shape.imageWidth,
-          total_queries: totalQueries,
-          score_threshold: shape.scoreThreshold,
-          nms_iou_threshold: shape.nmsIouThreshold,
-        },
-      }),
-    };
-    stage.uploadTensor(tensors.predLogits, predLogits);
-    stage.uploadTensor(tensors.referenceBoxes, referenceBoxes);
-    stage.uploadTensor(tensors.presenceLogits, presenceLogits);
-    await stage.yieldToBrowser({ reason: 'after-sam3-selection-upload' });
-  }, { shape });
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-selection-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      tensors = {
+        predLogits: stage.createTensor({ name: 'sam3.selection.pred-logits', shape: [shape.layerCount, shape.batch, shape.queryTokens, 1], dtype: 'f32', usage: readonlyUsage }),
+        referenceBoxes: stage.createTensor({ name: 'sam3.selection.reference-boxes', shape: [shape.batch, shape.queryTokens, 4], dtype: 'f32', usage: readonlyUsage }),
+        presenceLogits: stage.createTensor({ name: 'sam3.selection.presence-logits', shape: [shape.layerCount, shape.batch, 1], dtype: 'f32', usage: readonlyUsage }),
+        scores: stage.createTensor({ name: 'sam3.selection.scores', shape: [shape.batch, shape.queryTokens], dtype: 'f32', usage }),
+        boxes: stage.createTensor({ name: 'sam3.selection.boxes', shape: [shape.batch, shape.queryTokens, 4], dtype: 'f32', usage }),
+        keep: stage.createTensor({ name: 'sam3.selection.keep', shape: [shape.batch, shape.queryTokens], dtype: 'u32', usage }),
+        selectedIndex: stage.createTensor({ name: 'sam3.selection.selected-index', shape: [shape.batch], dtype: 'u32', usage }),
+        selectedScore: stage.createTensor({ name: 'sam3.selection.selected-score', shape: [shape.batch], dtype: 'f32', usage }),
+        selectedBox: stage.createTensor({ name: 'sam3.selection.selected-box', shape: [shape.batch, 4], dtype: 'f32', usage }),
+        dims: stage.createUniformBuffer({
+          label: 'sam3.selection.dims',
+          schema: [
+            { name: 'layer_count', type: 'u32' },
+            { name: 'batch', type: 'u32' },
+            { name: 'query_tokens', type: 'u32' },
+            { name: 'image_height', type: 'u32' },
+            { name: 'image_width', type: 'u32' },
+            { name: 'total_queries', type: 'u32' },
+            { name: 'score_threshold', type: 'f32' },
+            { name: 'nms_iou_threshold', type: 'f32' },
+          ],
+          values: {
+            layer_count: shape.layerCount,
+            batch: shape.batch,
+            query_tokens: shape.queryTokens,
+            image_height: shape.imageHeight,
+            image_width: shape.imageWidth,
+            total_queries: totalQueries,
+            score_threshold: shape.scoreThreshold,
+            nms_iou_threshold: shape.nmsIouThreshold,
+          },
+        }),
+      };
+      stage.uploadTensor(tensors.predLogits, predLogits);
+      stage.uploadTensor(tensors.referenceBoxes, referenceBoxes);
+      stage.uploadTensor(tensors.presenceLogits, presenceLogits);
+      await stage.yieldToBrowser({ reason: 'after-sam3-selection-upload' });
+    }, { shape });
 
-  const program = runtime.defineProgram({
-    name: 'sam3.selection-postprocess-phase-program',
-    tensors: {
-      predLogits: tensors.predLogits,
-      referenceBoxes: tensors.referenceBoxes,
-      presenceLogits: tensors.presenceLogits,
-      scores: tensors.scores,
-      boxes: tensors.boxes,
-      keep: tensors.keep,
-      selectedIndex: tensors.selectedIndex,
-      selectedScore: tensors.selectedScore,
-      selectedBox: tensors.selectedBox,
-    },
-    uniforms: { dims: tensors.dims },
-    kernels: {
-      postprocess: {
-        code: POSTPROCESS_WGSL,
-        bindings: [
-          { name: 'predLogits', resource: 'tensor:predLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'referenceBoxes', resource: 'tensor:referenceBoxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'presenceLogits', resource: 'tensor:presenceLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'scores', resource: 'tensor:scores', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'boxes', resource: 'tensor:boxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'keep', resource: 'tensor:keep', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
-        ],
+    const program = runtime.defineProgram({
+      name: 'sam3.selection-postprocess-phase-program',
+      tensors: {
+        predLogits: tensors.predLogits,
+        referenceBoxes: tensors.referenceBoxes,
+        presenceLogits: tensors.presenceLogits,
+        scores: tensors.scores,
+        boxes: tensors.boxes,
+        keep: tensors.keep,
+        selectedIndex: tensors.selectedIndex,
+        selectedScore: tensors.selectedScore,
+        selectedBox: tensors.selectedBox,
       },
-      boxNms: {
-        code: NMS_WGSL,
-        bindings: [
-          { name: 'scores', resource: 'tensor:scores', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'boxes', resource: 'tensor:boxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'keep', resource: 'tensor:keep', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
-        ],
+      uniforms: { dims: tensors.dims },
+      kernels: {
+        postprocess: {
+          code: POSTPROCESS_WGSL,
+          bindings: [
+            { name: 'predLogits', resource: 'tensor:predLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'referenceBoxes', resource: 'tensor:referenceBoxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'presenceLogits', resource: 'tensor:presenceLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'scores', resource: 'tensor:scores', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'boxes', resource: 'tensor:boxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'keep', resource: 'tensor:keep', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+          ],
+        },
+        boxNms: {
+          code: NMS_WGSL,
+          bindings: [
+            { name: 'scores', resource: 'tensor:scores', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'boxes', resource: 'tensor:boxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'keep', resource: 'tensor:keep', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+          ],
+        },
+        select: {
+          code: SELECT_WGSL,
+          bindings: [
+            { name: 'scores', resource: 'tensor:scores', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'boxes', resource: 'tensor:boxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'keep', resource: 'tensor:keep', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
+            { name: 'selectedIndex', resource: 'tensor:selectedIndex', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'selectedScore', resource: 'tensor:selectedScore', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'selectedBox', resource: 'tensor:selectedBox', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
+            { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
+          ],
+        },
       },
-      select: {
-        code: SELECT_WGSL,
-        bindings: [
-          { name: 'scores', resource: 'tensor:scores', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'boxes', resource: 'tensor:boxes', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'keep', resource: 'tensor:keep', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' },
-          { name: 'selectedIndex', resource: 'tensor:selectedIndex', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'selectedScore', resource: 'tensor:selectedScore', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'selectedBox', resource: 'tensor:selectedBox', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' },
-          { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' },
-        ],
-      },
-    },
-    phases: [
-      { name: 'selection-score-threshold', kernel: 'postprocess', dispatch: [workgroups(totalQueries)], yieldAfter: true },
-      { name: 'selection-box-cxcywh-to-xyxy', kernel: 'postprocess', dispatch: [workgroups(totalQueries)], yieldAfter: true },
-      { name: 'selection-box-nms', kernel: 'boxNms', dispatch: [shape.batch], yieldAfter: true },
-      { name: 'selection-argmax', kernel: 'select', dispatch: [shape.batch], yieldAfter: true },
-      { name: 'readback-selection', readbacks: [
-        { name: 'scores', tensor: 'scores' },
-        { name: 'boxes', tensor: 'boxes' },
-        { name: 'keep', tensor: 'keep' },
-        { name: 'selectedIndex', tensor: 'selectedIndex' },
-        { name: 'selectedScore', tensor: 'selectedScore' },
-        { name: 'selectedBox', tensor: 'selectedBox' },
-      ] },
-    ],
-    metadata: { routeId: SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID },
+      phases: [
+        { name: 'selection-score-threshold', kernel: 'postprocess', dispatch: [workgroups(totalQueries)], yieldAfter: true },
+        { name: 'selection-box-cxcywh-to-xyxy', kernel: 'postprocess', dispatch: [workgroups(totalQueries)], yieldAfter: true },
+        { name: 'selection-box-nms', kernel: 'boxNms', dispatch: [shape.batch], yieldAfter: true },
+        { name: 'selection-argmax', kernel: 'select', dispatch: [shape.batch], yieldAfter: true },
+        { name: 'readback-selection', readbacks: [
+          { name: 'scores', tensor: 'scores' },
+          { name: 'boxes', tensor: 'boxes' },
+          { name: 'keep', tensor: 'keep' },
+          { name: 'selectedIndex', tensor: 'selectedIndex' },
+          { name: 'selectedScore', tensor: 'selectedScore' },
+          { name: 'selectedBox', tensor: 'selectedBox' },
+        ] },
+      ],
+      metadata: { routeId: SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID },
+    });
+    const run = await runtime.runProgram(program);
+    const outputs = outputArtifacts(input.request, {
+      scores: await sha256Hex(run.outputs.scores),
+      boxes: await sha256Hex(run.outputs.boxes),
+      keep: await sha256Hex(run.outputs.keep),
+      selectedIndex: await sha256Hex(run.outputs.selectedIndex),
+      selectedScore: await sha256Hex(run.outputs.selectedScore),
+      selectedBox: await sha256Hex(run.outputs.selectedBox),
+    }, shape);
+    const receipt = createSam3SelectionPostprocessPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || 'none', dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        scores: sam3Readback(input, new Float32Array(run.outputs.scores)),
+        boxes: sam3Readback(input, new Float32Array(run.outputs.boxes)),
+        keep: sam3Readback(input, new Uint32Array(run.outputs.keep)),
+        selectedIndex: sam3Readback(input, new Uint32Array(run.outputs.selectedIndex)),
+        selectedScore: sam3Readback(input, new Float32Array(run.outputs.selectedScore)),
+        selectedBox: sam3Readback(input, new Float32Array(run.outputs.selectedBox)),
+      };
+    }
+    return authoritative;
   });
-  const run = await runtime.runProgram(program);
-  const outputs = outputArtifacts(input.request, {
-    scores: await sha256Hex(run.outputs.scores),
-    boxes: await sha256Hex(run.outputs.boxes),
-    keep: await sha256Hex(run.outputs.keep),
-    selectedIndex: await sha256Hex(run.outputs.selectedIndex),
-    selectedScore: await sha256Hex(run.outputs.selectedScore),
-    selectedBox: await sha256Hex(run.outputs.selectedBox),
-  }, shape);
-  const receipt = createSam3SelectionPostprocessPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || 'none', dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      scores: sam3Readback(input, new Float32Array(run.outputs.scores)),
-      boxes: sam3Readback(input, new Float32Array(run.outputs.boxes)),
-      keep: sam3Readback(input, new Uint32Array(run.outputs.keep)),
-      selectedIndex: sam3Readback(input, new Uint32Array(run.outputs.selectedIndex)),
-      selectedScore: sam3Readback(input, new Float32Array(run.outputs.selectedScore)),
-      selectedBox: sam3Readback(input, new Float32Array(run.outputs.selectedBox)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }

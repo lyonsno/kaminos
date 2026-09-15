@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -455,124 +456,125 @@ export async function runSam3PromptFpnPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-prompt-fpn-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const weightTensor = (name, value, weightShape) => stage.createTensor({ name, shape: weightShape, dtype: 'f32', usage: readonlyUsage, sourceData: value });
-    tensors = {
-      encoderHiddenStates: stage.createTensor({ name: 'sam3.prompt-fpn.encoder-hidden-states', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-      promptFeatures: stage.createTensor({ name: 'sam3.prompt-fpn.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-      promptMask: stage.createTensor({ name: 'sam3.prompt-fpn.prompt-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
-      normed: stage.createTensor({ name: 'sam3.prompt-fpn.normed', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-      q: stage.createTensor({ name: 'sam3.prompt-fpn.q', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-      k: stage.createTensor({ name: 'sam3.prompt-fpn.k', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
-      v: stage.createTensor({ name: 'sam3.prompt-fpn.v', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
-      attention: stage.createTensor({ name: 'sam3.prompt-fpn.attention', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
-      output: stage.createTensor({ name: 'sam3.prompt-fpn.output', shape: outputShape, dtype: 'f32', usage }),
-      dims: stage.createUniformBuffer({
-        label: 'sam3.prompt-fpn.dims',
-        schema: [
-          { name: 'batch', type: 'u32' },
-          { name: 'spatial_tokens', type: 'u32' },
-          { name: 'prompt_tokens', type: 'u32' },
-          { name: 'channels', type: 'u32' },
-          { name: 'heads', type: 'u32' },
-          { name: 'head_dim', type: 'u32' },
-          { name: 'total_encoder', type: 'u32' },
-          { name: 'total_prompt', type: 'u32' },
-        ],
-        values: {
-          batch: shape.batch,
-          spatial_tokens: shape.spatialTokens,
-          prompt_tokens: shape.promptTokens,
-          channels: shape.channels,
-          heads: shape.heads,
-          head_dim: shape.headDim,
-          total_encoder: shape.batch * shape.spatialTokens * shape.channels,
-          total_prompt: shape.batch * shape.promptTokens * shape.channels,
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-prompt-fpn-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      const weightTensor = (name, value, weightShape) => stage.createTensor({ name, shape: weightShape, dtype: 'f32', usage: readonlyUsage, sourceData: value });
+      tensors = {
+        encoderHiddenStates: stage.createTensor({ name: 'sam3.prompt-fpn.encoder-hidden-states', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        promptFeatures: stage.createTensor({ name: 'sam3.prompt-fpn.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        promptMask: stage.createTensor({ name: 'sam3.prompt-fpn.prompt-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
+        normed: stage.createTensor({ name: 'sam3.prompt-fpn.normed', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+        q: stage.createTensor({ name: 'sam3.prompt-fpn.q', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+        k: stage.createTensor({ name: 'sam3.prompt-fpn.k', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
+        v: stage.createTensor({ name: 'sam3.prompt-fpn.v', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
+        attention: stage.createTensor({ name: 'sam3.prompt-fpn.attention', shape: [shape.batch, shape.spatialTokens, shape.channels], dtype: 'f32', usage }),
+        output: stage.createTensor({ name: 'sam3.prompt-fpn.output', shape: outputShape, dtype: 'f32', usage }),
+        dims: stage.createUniformBuffer({
+          label: 'sam3.prompt-fpn.dims',
+          schema: [
+            { name: 'batch', type: 'u32' },
+            { name: 'spatial_tokens', type: 'u32' },
+            { name: 'prompt_tokens', type: 'u32' },
+            { name: 'channels', type: 'u32' },
+            { name: 'heads', type: 'u32' },
+            { name: 'head_dim', type: 'u32' },
+            { name: 'total_encoder', type: 'u32' },
+            { name: 'total_prompt', type: 'u32' },
+          ],
+          values: {
+            batch: shape.batch,
+            spatial_tokens: shape.spatialTokens,
+            prompt_tokens: shape.promptTokens,
+            channels: shape.channels,
+            heads: shape.heads,
+            head_dim: shape.headDim,
+            total_encoder: shape.batch * shape.spatialTokens * shape.channels,
+            total_prompt: shape.batch * shape.promptTokens * shape.channels,
+          },
+        }),
+        weights: {
+          layerNormWeight: weightTensor('sam3.prompt-fpn.norm.weight', weights.layerNormWeight, [shape.channels]),
+          layerNormBias: weightTensor('sam3.prompt-fpn.norm.bias', weights.layerNormBias, [shape.channels]),
+          qWeight: weightTensor('sam3.prompt-fpn.q.weight', weights.qWeight, [shape.channels, shape.channels]),
+          qBias: weightTensor('sam3.prompt-fpn.q.bias', weights.qBias, [shape.channels]),
+          kWeight: weightTensor('sam3.prompt-fpn.k.weight', weights.kWeight, [shape.channels, shape.channels]),
+          kBias: weightTensor('sam3.prompt-fpn.k.bias', weights.kBias, [shape.channels]),
+          vWeight: weightTensor('sam3.prompt-fpn.v.weight', weights.vWeight, [shape.channels, shape.channels]),
+          vBias: weightTensor('sam3.prompt-fpn.v.bias', weights.vBias, [shape.channels]),
+          oWeight: weightTensor('sam3.prompt-fpn.o.weight', weights.oWeight, [shape.channels, shape.channels]),
+          oBias: weightTensor('sam3.prompt-fpn.o.bias', weights.oBias, [shape.channels]),
         },
-      }),
-      weights: {
-        layerNormWeight: weightTensor('sam3.prompt-fpn.norm.weight', weights.layerNormWeight, [shape.channels]),
-        layerNormBias: weightTensor('sam3.prompt-fpn.norm.bias', weights.layerNormBias, [shape.channels]),
-        qWeight: weightTensor('sam3.prompt-fpn.q.weight', weights.qWeight, [shape.channels, shape.channels]),
-        qBias: weightTensor('sam3.prompt-fpn.q.bias', weights.qBias, [shape.channels]),
-        kWeight: weightTensor('sam3.prompt-fpn.k.weight', weights.kWeight, [shape.channels, shape.channels]),
-        kBias: weightTensor('sam3.prompt-fpn.k.bias', weights.kBias, [shape.channels]),
-        vWeight: weightTensor('sam3.prompt-fpn.v.weight', weights.vWeight, [shape.channels, shape.channels]),
-        vBias: weightTensor('sam3.prompt-fpn.v.bias', weights.vBias, [shape.channels]),
-        oWeight: weightTensor('sam3.prompt-fpn.o.weight', weights.oWeight, [shape.channels, shape.channels]),
-        oBias: weightTensor('sam3.prompt-fpn.o.bias', weights.oBias, [shape.channels]),
+      };
+      stage.uploadTensor(tensors.encoderHiddenStates, encoderHiddenStates);
+      stage.uploadTensor(tensors.promptFeatures, promptFeatures);
+      stage.uploadTensor(tensors.promptMask, promptMask);
+      for (const [name, tensor] of Object.entries(tensors.weights)) stage.uploadTensor(tensor, weights[name]);
+      await stage.yieldToBrowser({ reason: 'after-sam3-prompt-fpn-upload' });
+    }, { shape });
+
+    const totalEncoder = shape.batch * shape.spatialTokens * shape.channels;
+    const totalPrompt = shape.batch * shape.promptTokens * shape.channels;
+    const program = runtime.defineProgram({
+      name: 'sam3.prompt-fpn-phase-program',
+      tensors: {
+        encoderHiddenStates: tensors.encoderHiddenStates,
+        promptFeatures: tensors.promptFeatures,
+        promptMask: tensors.promptMask,
+        normed: tensors.normed,
+        q: tensors.q,
+        k: tensors.k,
+        v: tensors.v,
+        attention: tensors.attention,
+        output: tensors.output,
+        ...tensors.weights,
       },
-    };
-    stage.uploadTensor(tensors.encoderHiddenStates, encoderHiddenStates);
-    stage.uploadTensor(tensors.promptFeatures, promptFeatures);
-    stage.uploadTensor(tensors.promptMask, promptMask);
-    for (const [name, tensor] of Object.entries(tensors.weights)) stage.uploadTensor(tensor, weights[name]);
-    await stage.yieldToBrowser({ reason: 'after-sam3-prompt-fpn-upload' });
-  }, { shape });
+      uniforms: { dims: tensors.dims },
+      kernels: {
+        layerNorm: { code: PROMPT_LAYER_NORM_WGSL, bindings: [{ name: 'input', resource: 'tensor:encoderHiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normWeight', resource: 'tensor:layerNormWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normBias', resource: 'tensor:layerNormBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:normed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        qLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:normed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:qWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:qBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:q', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        kLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:kWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:kBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:k', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        vLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:vWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:vBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:v', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        attention: { code: PROMPT_ATTENTION_SOFTMAX_WGSL, bindings: [{ name: 'q', resource: 'tensor:q', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: 'tensor:k', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: 'tensor:v', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'promptMask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:attention', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        outputResidual: { code: PROMPT_OUTPUT_RESIDUAL_WGSL, bindings: [{ name: 'attention', resource: 'tensor:attention', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'residual', resource: 'tensor:encoderHiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:oWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:oBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:output', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+      },
+      phases: [
+        { name: 'prompt-layernorm', kernel: 'layerNorm', dispatch: [workgroups(shape.batch * shape.spatialTokens)], yieldAfter: true },
+        { name: 'prompt-qkv-q', kernel: 'qLinear', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: 'prompt-qkv-k', kernel: 'kLinear', dispatch: [workgroups(totalPrompt)], yieldAfter: true },
+        { name: 'prompt-qkv-v', kernel: 'vLinear', dispatch: [workgroups(totalPrompt)], yieldAfter: true },
+        { name: 'prompt-attention-softmax', kernel: 'attention', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: 'prompt-output-residual', kernel: 'outputResidual', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: 'readback-prompt-fpn-feature', readbacks: [{ name: 'promptFpnFeature', tensor: 'output' }] },
+      ],
+      metadata: { routeId: SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID },
+    });
 
-  const totalEncoder = shape.batch * shape.spatialTokens * shape.channels;
-  const totalPrompt = shape.batch * shape.promptTokens * shape.channels;
-  const program = runtime.defineProgram({
-    name: 'sam3.prompt-fpn-phase-program',
-    tensors: {
-      encoderHiddenStates: tensors.encoderHiddenStates,
-      promptFeatures: tensors.promptFeatures,
-      promptMask: tensors.promptMask,
-      normed: tensors.normed,
-      q: tensors.q,
-      k: tensors.k,
-      v: tensors.v,
-      attention: tensors.attention,
-      output: tensors.output,
-      ...tensors.weights,
-    },
-    uniforms: { dims: tensors.dims },
-    kernels: {
-      layerNorm: { code: PROMPT_LAYER_NORM_WGSL, bindings: [{ name: 'input', resource: 'tensor:encoderHiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normWeight', resource: 'tensor:layerNormWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normBias', resource: 'tensor:layerNormBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:normed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      qLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:normed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:qWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:qBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:q', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      kLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:kWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:kBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:k', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      vLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:vWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:vBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:v', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      attention: { code: PROMPT_ATTENTION_SOFTMAX_WGSL, bindings: [{ name: 'q', resource: 'tensor:q', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: 'tensor:k', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: 'tensor:v', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'promptMask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:attention', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      outputResidual: { code: PROMPT_OUTPUT_RESIDUAL_WGSL, bindings: [{ name: 'attention', resource: 'tensor:attention', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'residual', resource: 'tensor:encoderHiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:oWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:oBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:output', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-    },
-    phases: [
-      { name: 'prompt-layernorm', kernel: 'layerNorm', dispatch: [workgroups(shape.batch * shape.spatialTokens)], yieldAfter: true },
-      { name: 'prompt-qkv-q', kernel: 'qLinear', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: 'prompt-qkv-k', kernel: 'kLinear', dispatch: [workgroups(totalPrompt)], yieldAfter: true },
-      { name: 'prompt-qkv-v', kernel: 'vLinear', dispatch: [workgroups(totalPrompt)], yieldAfter: true },
-      { name: 'prompt-attention-softmax', kernel: 'attention', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: 'prompt-output-residual', kernel: 'outputResidual', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-      { name: 'readback-prompt-fpn-feature', readbacks: [{ name: 'promptFpnFeature', tensor: 'output' }] },
-    ],
-    metadata: { routeId: SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID },
+    const run = await runtime.runProgram(program);
+    const promptFpnFeature = run.outputs.promptFpnFeature;
+    const outputs = outputArtifacts(input.request, {
+      promptFpnFeature: await sha256Hex(promptFpnFeature),
+    }, outputShape);
+    const receipt = createSam3PromptFpnPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      weightsPacket,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        promptFpnFeature: sam3Readback(input, new Float32Array(promptFpnFeature)),
+      };
+    }
+    return authoritative;
   });
-
-  const run = await runtime.runProgram(program);
-  const promptFpnFeature = run.outputs.promptFpnFeature;
-  const outputs = outputArtifacts(input.request, {
-    promptFpnFeature: await sha256Hex(promptFpnFeature),
-  }, outputShape);
-  const receipt = createSam3PromptFpnPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    weightsPacket,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      promptFpnFeature: sam3Readback(input, new Float32Array(promptFpnFeature)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }

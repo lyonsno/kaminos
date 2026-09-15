@@ -1,3 +1,4 @@
+import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -438,106 +439,107 @@ export async function runSam3ScoringPhaseProgramRoute(input = {}) {
     residentTensorResolver: input.residentTensorResolver,
   });
 
-  let tensors = null;
-  await runtime.runStage('load-scoring-tensors', async stage => {
-    const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
-    const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const weightTensor = (name, value, weightShape) => stage.createTensor({ name, shape: weightShape, dtype: 'f32', usage: readonlyUsage, sourceData: value });
-    tensors = {
-      hiddenStates: stage.createTensor({ name: 'sam3.scoring.hidden-states', shape: [shape.layerCount, shape.batch, shape.queryTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-      promptFeatures: stage.createTensor({ name: 'sam3.scoring.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
-      promptMask: stage.createTensor({ name: 'sam3.scoring.prompt-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
-      textMlp1: stage.createTensor({ name: 'sam3.scoring.text-mlp1', shape: [shape.batch, shape.promptTokens, shape.mlpHidden], dtype: 'f32', usage }),
-      textMlp2: stage.createTensor({ name: 'sam3.scoring.text-mlp2', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
-      textProcessed: stage.createTensor({ name: 'sam3.scoring.text-processed', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
-      pooledText: stage.createTensor({ name: 'sam3.scoring.pooled-text', shape: [shape.batch, shape.channels], dtype: 'f32', usage }),
-      projectedText: stage.createTensor({ name: 'sam3.scoring.projected-text', shape: [shape.batch, shape.channels], dtype: 'f32', usage }),
-      projectedQueries: stage.createTensor({ name: 'sam3.scoring.projected-queries', shape: [shape.layerCount, shape.batch, shape.queryTokens, shape.channels], dtype: 'f32', usage }),
-      predLogits: stage.createTensor({ name: 'sam3.scoring.pred-logits', shape: scoreShape, dtype: 'f32', usage }),
-      textMlp1Dims: stage.createUniformBuffer({ label: 'sam3.scoring.text-mlp1-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.mlpHidden, total_output: textMlpHiddenTotal } }),
-      textMlp2Dims: stage.createUniformBuffer({ label: 'sam3.scoring.text-mlp2-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.mlpHidden, output_channels: shape.channels, total_output: promptFeatureTotal } }),
-      textDims: stage.createUniformBuffer({ label: 'sam3.scoring.text-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'prompt_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total_tokens', type: 'u32' }], values: { batch: shape.batch, prompt_tokens: shape.promptTokens, channels: shape.channels, total_tokens: promptTotal } }),
-      textProjDims: stage.createUniformBuffer({ label: 'sam3.scoring.text-proj-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: pooledTotal } }),
-      queryProjDims: stage.createUniformBuffer({ label: 'sam3.scoring.query-proj-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: hiddenTotal } }),
-      scoreDims: stage.createUniformBuffer({ label: 'sam3.scoring.score-dims', schema: [{ name: 'layer_count', type: 'u32' }, { name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total_scores', type: 'u32' }], values: { layer_count: shape.layerCount, batch: shape.batch, query_tokens: shape.queryTokens, channels: shape.channels, total_scores: scoreTotal } }),
-      weights: {
-        textMlpLayer1Weight: weightTensor('sam3.scoring.text-mlp.layer1.weight', weights.textMlpLayer1Weight, [shape.mlpHidden, shape.channels]),
-        textMlpLayer1Bias: weightTensor('sam3.scoring.text-mlp.layer1.bias', weights.textMlpLayer1Bias, [shape.mlpHidden]),
-        textMlpLayer2Weight: weightTensor('sam3.scoring.text-mlp.layer2.weight', weights.textMlpLayer2Weight, [shape.channels, shape.mlpHidden]),
-        textMlpLayer2Bias: weightTensor('sam3.scoring.text-mlp.layer2.bias', weights.textMlpLayer2Bias, [shape.channels]),
-        textMlpOutNormWeight: weightTensor('sam3.scoring.text-mlp-out-norm.weight', weights.textMlpOutNormWeight, [shape.channels]),
-        textMlpOutNormBias: weightTensor('sam3.scoring.text-mlp-out-norm.bias', weights.textMlpOutNormBias, [shape.channels]),
-        textProjWeight: weightTensor('sam3.scoring.text-proj.weight', weights.textProjWeight, [shape.channels, shape.channels]),
-        textProjBias: weightTensor('sam3.scoring.text-proj.bias', weights.textProjBias, [shape.channels]),
-        queryProjWeight: weightTensor('sam3.scoring.query-proj.weight', weights.queryProjWeight, [shape.channels, shape.channels]),
-        queryProjBias: weightTensor('sam3.scoring.query-proj.bias', weights.queryProjBias, [shape.channels]),
-      },
-    };
-    stage.uploadTensor(tensors.hiddenStates, hiddenStates);
-    stage.uploadTensor(tensors.promptFeatures, promptFeatures);
-    stage.uploadTensor(tensors.promptMask, promptMask);
-    for (const [name, value] of Object.entries(weights)) stage.uploadTensor(tensors.weights[name], value);
-    await stage.yieldToBrowser({ reason: 'after-sam3-scoring-upload' });
-  }, { shape });
+  return withSamPhaseCleanup(runtime, async () => {
+    let tensors = null;
+    await runtime.runStage('load-scoring-tensors', async stage => {
+      const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
+      const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+      const weightTensor = (name, value, weightShape) => stage.createTensor({ name, shape: weightShape, dtype: 'f32', usage: readonlyUsage, sourceData: value });
+      tensors = {
+        hiddenStates: stage.createTensor({ name: 'sam3.scoring.hidden-states', shape: [shape.layerCount, shape.batch, shape.queryTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        promptFeatures: stage.createTensor({ name: 'sam3.scoring.prompt-features', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage: readonlyUsage }),
+        promptMask: stage.createTensor({ name: 'sam3.scoring.prompt-mask', shape: [shape.batch, shape.promptTokens], dtype: 'f32', usage: readonlyUsage }),
+        textMlp1: stage.createTensor({ name: 'sam3.scoring.text-mlp1', shape: [shape.batch, shape.promptTokens, shape.mlpHidden], dtype: 'f32', usage }),
+        textMlp2: stage.createTensor({ name: 'sam3.scoring.text-mlp2', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
+        textProcessed: stage.createTensor({ name: 'sam3.scoring.text-processed', shape: [shape.batch, shape.promptTokens, shape.channels], dtype: 'f32', usage }),
+        pooledText: stage.createTensor({ name: 'sam3.scoring.pooled-text', shape: [shape.batch, shape.channels], dtype: 'f32', usage }),
+        projectedText: stage.createTensor({ name: 'sam3.scoring.projected-text', shape: [shape.batch, shape.channels], dtype: 'f32', usage }),
+        projectedQueries: stage.createTensor({ name: 'sam3.scoring.projected-queries', shape: [shape.layerCount, shape.batch, shape.queryTokens, shape.channels], dtype: 'f32', usage }),
+        predLogits: stage.createTensor({ name: 'sam3.scoring.pred-logits', shape: scoreShape, dtype: 'f32', usage }),
+        textMlp1Dims: stage.createUniformBuffer({ label: 'sam3.scoring.text-mlp1-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.mlpHidden, total_output: textMlpHiddenTotal } }),
+        textMlp2Dims: stage.createUniformBuffer({ label: 'sam3.scoring.text-mlp2-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.mlpHidden, output_channels: shape.channels, total_output: promptFeatureTotal } }),
+        textDims: stage.createUniformBuffer({ label: 'sam3.scoring.text-dims', schema: [{ name: 'batch', type: 'u32' }, { name: 'prompt_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total_tokens', type: 'u32' }], values: { batch: shape.batch, prompt_tokens: shape.promptTokens, channels: shape.channels, total_tokens: promptTotal } }),
+        textProjDims: stage.createUniformBuffer({ label: 'sam3.scoring.text-proj-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: pooledTotal } }),
+        queryProjDims: stage.createUniformBuffer({ label: 'sam3.scoring.query-proj-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }], values: { input_channels: shape.channels, output_channels: shape.channels, total_output: hiddenTotal } }),
+        scoreDims: stage.createUniformBuffer({ label: 'sam3.scoring.score-dims', schema: [{ name: 'layer_count', type: 'u32' }, { name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total_scores', type: 'u32' }], values: { layer_count: shape.layerCount, batch: shape.batch, query_tokens: shape.queryTokens, channels: shape.channels, total_scores: scoreTotal } }),
+        weights: {
+          textMlpLayer1Weight: weightTensor('sam3.scoring.text-mlp.layer1.weight', weights.textMlpLayer1Weight, [shape.mlpHidden, shape.channels]),
+          textMlpLayer1Bias: weightTensor('sam3.scoring.text-mlp.layer1.bias', weights.textMlpLayer1Bias, [shape.mlpHidden]),
+          textMlpLayer2Weight: weightTensor('sam3.scoring.text-mlp.layer2.weight', weights.textMlpLayer2Weight, [shape.channels, shape.mlpHidden]),
+          textMlpLayer2Bias: weightTensor('sam3.scoring.text-mlp.layer2.bias', weights.textMlpLayer2Bias, [shape.channels]),
+          textMlpOutNormWeight: weightTensor('sam3.scoring.text-mlp-out-norm.weight', weights.textMlpOutNormWeight, [shape.channels]),
+          textMlpOutNormBias: weightTensor('sam3.scoring.text-mlp-out-norm.bias', weights.textMlpOutNormBias, [shape.channels]),
+          textProjWeight: weightTensor('sam3.scoring.text-proj.weight', weights.textProjWeight, [shape.channels, shape.channels]),
+          textProjBias: weightTensor('sam3.scoring.text-proj.bias', weights.textProjBias, [shape.channels]),
+          queryProjWeight: weightTensor('sam3.scoring.query-proj.weight', weights.queryProjWeight, [shape.channels, shape.channels]),
+          queryProjBias: weightTensor('sam3.scoring.query-proj.bias', weights.queryProjBias, [shape.channels]),
+        },
+      };
+      stage.uploadTensor(tensors.hiddenStates, hiddenStates);
+      stage.uploadTensor(tensors.promptFeatures, promptFeatures);
+      stage.uploadTensor(tensors.promptMask, promptMask);
+      for (const [name, value] of Object.entries(weights)) stage.uploadTensor(tensors.weights[name], value);
+      await stage.yieldToBrowser({ reason: 'after-sam3-scoring-upload' });
+    }, { shape });
 
-  const program = runtime.defineProgram({
-    name: 'sam3.scoring-phase-program',
-    tensors: {
-      hiddenStates: tensors.hiddenStates,
-      promptFeatures: tensors.promptFeatures,
-      promptMask: tensors.promptMask,
-      textMlp1: tensors.textMlp1,
-      textMlp2: tensors.textMlp2,
-      textProcessed: tensors.textProcessed,
-      pooledText: tensors.pooledText,
-      projectedText: tensors.projectedText,
-      projectedQueries: tensors.projectedQueries,
-      predLogits: tensors.predLogits,
-      ...tensors.weights,
-    },
-    uniforms: { textMlp1Dims: tensors.textMlp1Dims, textMlp2Dims: tensors.textMlp2Dims, textDims: tensors.textDims, textProjDims: tensors.textProjDims, queryProjDims: tensors.queryProjDims, scoreDims: tensors.scoreDims },
-    kernels: {
-      textMlpFc1Relu: { code: LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpLayer1Weight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpLayer1Bias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textMlp1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textMlp1Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      textMlpFc2: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:textMlp1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpLayer2Weight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpLayer2Bias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textMlp2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textMlp2Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      residualLayernorm: { code: RESIDUAL_LAYERNORM_WGSL, bindings: [{ name: 'mlp', resource: 'tensor:textMlp2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'residual', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpOutNormWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpOutNormBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textProcessed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      maskedPool: { code: MASKED_POOL_WGSL, bindings: [{ name: 'text', resource: 'tensor:textProcessed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'mask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'pooled', resource: 'tensor:pooledText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      textProj: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:pooledText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textProjWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textProjBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:projectedText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textProjDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      queryProj: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:hiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:queryProjWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:queryProjBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:projectedQueries', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:queryProjDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-      dotProduct: { code: DOT_PRODUCT_WGSL, bindings: [{ name: 'queries', resource: 'tensor:projectedQueries', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'text', resource: 'tensor:projectedText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'predLogits', resource: 'tensor:predLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:scoreDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-    },
-    phases: [
-      { name: 'scoring-text-mlp-fc1-relu', kernel: 'textMlpFc1Relu', dispatch: [workgroups(textMlpHiddenTotal)], yieldAfter: true },
-      { name: 'scoring-text-mlp-fc2', kernel: 'textMlpFc2', dispatch: [workgroups(promptFeatureTotal)], yieldAfter: true },
-      { name: 'scoring-text-mlp-residual-layernorm', kernel: 'residualLayernorm', dispatch: [workgroups(promptTotal)], yieldAfter: true },
-      { name: 'scoring-mask-pool-text', kernel: 'maskedPool', dispatch: [workgroups(pooledTotal)], yieldAfter: true },
-      { name: 'scoring-text-proj', kernel: 'textProj', dispatch: [workgroups(pooledTotal)], yieldAfter: true },
-      { name: 'scoring-query-proj', kernel: 'queryProj', dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-      { name: 'scoring-dot-product', kernel: 'dotProduct', dispatch: [workgroups(scoreTotal)], yieldAfter: true },
-      { name: 'readback-scoring', readbacks: [{ name: 'predLogits', tensor: 'predLogits' }] },
-    ],
-    metadata: { routeId: SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID },
+    const program = runtime.defineProgram({
+      name: 'sam3.scoring-phase-program',
+      tensors: {
+        hiddenStates: tensors.hiddenStates,
+        promptFeatures: tensors.promptFeatures,
+        promptMask: tensors.promptMask,
+        textMlp1: tensors.textMlp1,
+        textMlp2: tensors.textMlp2,
+        textProcessed: tensors.textProcessed,
+        pooledText: tensors.pooledText,
+        projectedText: tensors.projectedText,
+        projectedQueries: tensors.projectedQueries,
+        predLogits: tensors.predLogits,
+        ...tensors.weights,
+      },
+      uniforms: { textMlp1Dims: tensors.textMlp1Dims, textMlp2Dims: tensors.textMlp2Dims, textDims: tensors.textDims, textProjDims: tensors.textProjDims, queryProjDims: tensors.queryProjDims, scoreDims: tensors.scoreDims },
+      kernels: {
+        textMlpFc1Relu: { code: LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpLayer1Weight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpLayer1Bias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textMlp1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textMlp1Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        textMlpFc2: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:textMlp1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpLayer2Weight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpLayer2Bias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textMlp2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textMlp2Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        residualLayernorm: { code: RESIDUAL_LAYERNORM_WGSL, bindings: [{ name: 'mlp', resource: 'tensor:textMlp2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'residual', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpOutNormWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpOutNormBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textProcessed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        maskedPool: { code: MASKED_POOL_WGSL, bindings: [{ name: 'text', resource: 'tensor:textProcessed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'mask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'pooled', resource: 'tensor:pooledText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        textProj: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:pooledText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textProjWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textProjBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:projectedText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textProjDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        queryProj: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:hiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:queryProjWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:queryProjBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:projectedQueries', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:queryProjDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        dotProduct: { code: DOT_PRODUCT_WGSL, bindings: [{ name: 'queries', resource: 'tensor:projectedQueries', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'text', resource: 'tensor:projectedText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'predLogits', resource: 'tensor:predLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:scoreDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+      },
+      phases: [
+        { name: 'scoring-text-mlp-fc1-relu', kernel: 'textMlpFc1Relu', dispatch: [workgroups(textMlpHiddenTotal)], yieldAfter: true },
+        { name: 'scoring-text-mlp-fc2', kernel: 'textMlpFc2', dispatch: [workgroups(promptFeatureTotal)], yieldAfter: true },
+        { name: 'scoring-text-mlp-residual-layernorm', kernel: 'residualLayernorm', dispatch: [workgroups(promptTotal)], yieldAfter: true },
+        { name: 'scoring-mask-pool-text', kernel: 'maskedPool', dispatch: [workgroups(pooledTotal)], yieldAfter: true },
+        { name: 'scoring-text-proj', kernel: 'textProj', dispatch: [workgroups(pooledTotal)], yieldAfter: true },
+        { name: 'scoring-query-proj', kernel: 'queryProj', dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
+        { name: 'scoring-dot-product', kernel: 'dotProduct', dispatch: [workgroups(scoreTotal)], yieldAfter: true },
+        { name: 'readback-scoring', readbacks: [{ name: 'predLogits', tensor: 'predLogits' }] },
+      ],
+      metadata: { routeId: SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID },
+    });
+    const run = await runtime.runProgram(program);
+    const predLogits = run.outputs.predLogits;
+    const outputs = outputArtifacts(input.request, { predLogits: await sha256Hex(predLogits) }, scoreShape);
+    const receipt = createSam3ScoringPhaseProgramRouteReceipt({
+      sourceImage,
+      tensorPacket,
+      weightsPacket,
+      outputs,
+      backend: runtime.backendIdentity,
+      model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
+      kernel: input.kernel || runtime.kernel,
+      profile: runtime.profile,
+    });
+    const result = createRouteWorkerResult(route, { request: input.request, receipt });
+    const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+    if (input.includeReadback === true) {
+      authoritative.debugReadback = {
+        mode: 'explicit-debug-evidence',
+        predLogits: sam3Readback(input, new Float32Array(predLogits)),
+      };
+    }
+    return authoritative;
   });
-  const run = await runtime.runProgram(program);
-  const predLogits = run.outputs.predLogits;
-  const outputs = outputArtifacts(input.request, { predLogits: await sha256Hex(predLogits) }, scoreShape);
-  const receipt = createSam3ScoringPhaseProgramRouteReceipt({
-    sourceImage,
-    tensorPacket,
-    weightsPacket,
-    outputs,
-    backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || weightsPacket.sha256, dtype: input.model?.dtype || 'fp32' },
-    kernel: input.kernel || runtime.kernel,
-    profile: runtime.profile,
-  });
-  const result = createRouteWorkerResult(route, { request: input.request, receipt });
-  const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
-  if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      predLogits: sam3Readback(input, new Float32Array(predLogits)),
-    };
-  }
-  authoritative.resourceDisposal = runtime.dispose();
-  return authoritative;
 }
