@@ -119,6 +119,9 @@ function startFire(sharedGpuContext) {
   // raymarch (the main app's composition), enabled by tall_plume +
   // boundarySplatMode 'learned'. raymarch-only-v0 was the legacy diagnostic.
   prototype.setSelectiveHeadLiveRenderComposition('smoke-raymarch-under-splats-v0');
+  // The learned splat fire renders from the selective-head live capture; the
+  // main app seats this role before activation (index.html init order).
+  prototype.setSelectiveHeadLiveRole('truthHigh');
   prototype.setActive(true);
   window.__flameVolumePrototype = prototype;
   return prototype;
@@ -239,7 +242,7 @@ async function runInference(inference) {
       scheduler: {
         mode: 'cooperative', yieldMs: 0, vitBlockChunkSize: 1,
         splitVitBlocks: true, splitDecoderResBlocks: true,
-        pacing: 'bounded-prefix', maxInFlightChunks: 2,
+        pacing: 'bounded-prefix', maxInFlightChunks: 1,
       },
     });
     const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
