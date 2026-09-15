@@ -3,7 +3,11 @@ import * as kit from '../src/index.js';
 
 assert.equal(typeof kit.createWebGpuResourceFactory, 'function');
 
-const { createWebGpuResourceFactory, createWebGpuResourceResidency } = kit;
+const {
+  WEBGPU_RESOURCE_CANCELLATION_MODES,
+  createWebGpuResourceFactory,
+  createWebGpuResourceResidency,
+} = kit;
 
 function deferred() {
   let resolve;
@@ -57,6 +61,16 @@ assert.equal(sameTurnCreateCount, 0, 'same-turn final-waiter cancellation must w
 assert.equal(factory.snapshot().activeFlightCount, 0, 'same-turn cancellation must not strand an active flight');
 assert.equal(factory.snapshot().flights.find(flight => flight.resourceId === 'same-turn-abort')?.status, 'cancelled');
 
+await assert.rejects(
+  () => factory.acquireExisting({
+    resourceId: 'not-present',
+    routeId: 'resident-probe',
+    declaredBytes: 4,
+    kind: 'model-weight',
+    metadata: null,
+  }),
+  error => error.code === 'WEBGPU_RESOURCE_NOT_RESIDENT' && error.resourceId === 'not-present',
+);
 const creation = deferred();
 let createCount = 0;
 const requests = Array.from({ length: 32 }, (_, index) => factory.acquireOrCreate({
@@ -94,6 +108,16 @@ assert.equal(leases[0].resource, shared);
 assert.equal(residency.snapshot().totalResidentDeclaredBytes, 4096);
 assert.equal(residency.snapshot().activeLeaseCount, 32);
 leases.forEach(lease => lease.release());
+const residentLease = await factory.acquireExisting({
+  resourceId: 'weights.shared',
+  routeId: 'resident-reuse',
+  declaredBytes: 4096,
+  kind: 'model-weight',
+  metadata: { precision: 'f16' },
+});
+assert.equal(residentLease.resource, shared);
+assert.equal(createCount, 1, 'resident-only acquisition must not invoke a creator');
+assert.equal(residentLease.release().status, 'released');
 
 const partial = deferred();
 const partialAbort = new AbortController();
@@ -143,8 +167,38 @@ allAbortGate.reject(new Error('creator observed abort'));
 await factory.drain();
 assert.equal(factory.snapshot().activeFlightCount, 0);
 
+const creatorSettlementAbort = new AbortController();
+let creatorSettlementSignal;
+const creatorSettlementRequests = ['creator', 'joiner'].map((routeId, index) => factory.acquireOrCreate({
+  resourceId: 'creator-settlement',
+  routeId,
+  declaredBytes: 12,
+  signal: creatorSettlementAbort.signal,
+  cancellationMode: WEBGPU_RESOURCE_CANCELLATION_MODES.creatorSettlement,
+  async create({ signal }) {
+    assert.equal(index, 0, 'only the creator callback may run');
+    creatorSettlementSignal = signal;
+    const rejectWithCreatorIdentity = () => {
+      const error = new DOMException('creator retained exact cancellation identity', 'AbortError');
+      error.creatorFailureIdentity = 'chunk-1';
+      return error;
+    };
+    if (signal.aborted) throw rejectWithCreatorIdentity();
+    await new Promise((_, reject) => signal.addEventListener('abort', () => {
+      reject(rejectWithCreatorIdentity());
+    }, { once: true }));
+  },
+  dispose() {},
+}));
+creatorSettlementAbort.abort('all-report-bearing-waiters-left');
+const creatorSettlementResults = await Promise.allSettled(creatorSettlementRequests);
+assert.equal(creatorSettlementSignal.aborted, true);
+assert.deepEqual(creatorSettlementResults.map(result => result.status), ['rejected', 'rejected']);
+assert.equal(creatorSettlementResults[0].reason, creatorSettlementResults[1].reason);
+assert.equal(creatorSettlementResults[1].reason.creatorFailureIdentity, 'chunk-1');
+
 assert.equal(factory.snapshot().retention, 'uncapped-until-explicit-forget-flight');
-assert.equal(factory.snapshot().flights.length, 7);
+assert.equal(factory.snapshot().flights.length, 8);
 assert.equal(factory.forgetFlight(factory.snapshot().flights[0].flightId), true);
 
 const lost = deferred();

@@ -370,6 +370,31 @@ assert.equal(modelB.release().status, 'released');
 assert.equal(residency.snapshot().activeLeaseCount, 0);
 assert.equal(residency.snapshot().evictionCandidates.length, 2);
 
+const invalidatedModelResidency = createWebGpuResourceResidency({ sessionId: 'invalidated-model' });
+const invalidatedModelFactory = createWebGpuResourceFactory({
+  sessionId: 'invalidated-model',
+  residency: invalidatedModelResidency,
+});
+const invalidatedModel = await loadWebGpuModelResources({
+  manifest,
+  bundle,
+  route: routeFixture({
+    routeId: 'invalidated-model-route',
+    runtime: runtimeFixture(),
+    residency: invalidatedModelResidency,
+    factory: invalidatedModelFactory,
+  }),
+});
+invalidatedModelResidency.invalidateAll({ reason: 'device-lost:test' });
+const invalidatedModelRelease = invalidatedModel.release();
+assert.equal(invalidatedModelRelease.status, 'invalidated');
+assert.equal(invalidatedModelRelease.releasedLeaseCount, 0);
+assert.equal(invalidatedModelRelease.invalidatedLeaseCount, 2);
+assert.deepEqual(
+  invalidatedModelRelease.releases.map(release => release.status),
+  ['invalidated', 'invalidated'],
+);
+
 const revisionManifest = manifestFor(bundle, { revision: 'fedcba9876543210' });
 const roleManifest = manifestFor(bundle, {
   metadata: {

@@ -32,6 +32,28 @@ export {
 } from './phase-program.js';
 
 export {
+  WEBGPU_PHASE_RESOURCE_PLAN_SCHEMA,
+  WEBGPU_PHASE_RESOURCE_TRANSITION_SCHEMA,
+  WEBGPU_PHASE_RESOURCE_WORKING_SET_SCHEMA,
+  createWebGpuPhaseResourceWorkingSet,
+  defineWebGpuPhaseResourcePlan,
+} from './phase-resource-working-set.js';
+
+export {
+  WEBGPU_SCRATCH_ARENA_SCHEMA,
+  WEBGPU_SCRATCH_ARENA_USE_SCHEMA,
+  createWebGpuScratchArena,
+} from './scratch-arena.js';
+
+export {
+  WEBGPU_WORKER_PHASE_PROGRESS_SCHEMA,
+  WEBGPU_WORKER_PHASE_REPORT_SCHEMA,
+  WEBGPU_WORKER_PHASE_REQUEST_SCHEMA,
+  WEBGPU_WORKER_PHASE_RESULT_SCHEMA,
+  runWebGpuWorkerPhase,
+} from './worker-phase.js';
+
+export {
   WEBGPU_INFERENCE_RUNTIME_SCHEMA,
   createCooperativeYield,
   createWebGpuInferenceRuntime,
@@ -54,6 +76,32 @@ export {
   createSam3BrowserResidentModelSession,
   createSam3BrowserResidentModelSessionForTest,
 } from './sam3-browser-resident-model-session.js';
+export {
+  WEBGPU_COOPERATIVE_BOUNDARY_MANIFEST_SCHEMA,
+  defineWebGpuCooperativeBoundaryManifest,
+} from './cooperative-boundary-manifest.js';
+
+export {
+  WEBGPU_COOPERATIVE_EXECUTION_REPORT_SCHEMA,
+  WEBGPU_COOPERATIVE_PROGRESS_SCHEMA,
+  WEBGPU_COOPERATIVE_RANGE_SCHEMA,
+  createWebGpuCooperativeExecution,
+} from './cooperative-execution.js';
+
+export {
+  WEBGPU_COOPERATIVE_REPORT_VALIDATION_SCHEMA,
+  validateWebGpuCooperativeExecutionReport,
+} from './cooperative-report-validation.js';
+
+export {
+  WEBGPU_BOUNDED_GPU_SUBMISSION_REPORT_SCHEMA,
+  createWebGpuBoundedSubmissionQueue,
+} from './bounded-gpu-submission.js';
+
+export {
+  WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
+  runWebGpuCooperativeAdapterConformance,
+} from './cooperative-adapter-conformance.js';
 
 export {
   createWebGpuBackendIdentity,
@@ -100,6 +148,21 @@ export {
 } from './foreground-budget-governor.js';
 
 export {
+  WEBGPU_ADAPTIVE_COMMAND_DUTY_OBSERVATION_SCHEMA,
+  WEBGPU_ADAPTIVE_COMMAND_DUTY_PLANNER_SCHEMA,
+  WEBGPU_ADAPTIVE_COMMAND_DUTY_RANGE_SCHEMA,
+  createWebGpuAdaptiveCommandDutyPlanner,
+} from './adaptive-command-duty.js';
+
+export {
+  WEBGPU_FOREGROUND_OPPORTUNITY_PRESSURE_SCHEMA,
+  WEBGPU_FOREGROUND_OPPORTUNITY_RECEIPT_SCHEMA,
+  WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
+  WEBGPU_FOREGROUND_OPPORTUNITY_SERVICE_SCHEMA,
+  createWebGpuForegroundOpportunityInterlock,
+} from './foreground-opportunity.js';
+
+export {
   WEBGPU_SCHEDULER_APPLICATION_SCHEMA,
   WEBGPU_SCHEDULER_BOUNDARY_SCHEMA,
   WEBGPU_SCHEDULER_DECISION_APPLICATION_SCHEMA,
@@ -139,6 +202,7 @@ export {
 } from './resource-residency.js';
 
 export {
+  WEBGPU_RESOURCE_CANCELLATION_MODES,
   WEBGPU_RESOURCE_FACTORY_SCHEMA,
   WEBGPU_RESOURCE_FLIGHT_SCHEMA,
   createWebGpuResourceFactory,
@@ -149,14 +213,56 @@ export {
   WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
   WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
   WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_RESIDENT_REUSE_SCHEMA,
   WEBGPU_MODEL_RESOURCE_SHARING_POLICIES,
   WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA,
   defineWebGpuModelResourceManifest,
+  loadResidentWebGpuModelResources,
   loadWebGpuModelResources,
   prepareWebGpuModelResourceBundle,
   validateWebGpuModelResourceManifest,
   verifyWebGpuModelResourceBundle,
 } from './model-resource-manifest.js';
+
+export {
+  WEBGPU_MODEL_RESOURCE_SOURCE_PROGRESS_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_SOURCE_REPORT_SCHEMA,
+  acquireWebGpuModelResourceBundle,
+  describeWebGpuModelResourceSource,
+} from './model-resource-source.js';
+
+export {
+  WEBGPU_MODEL_RESOURCE_CACHE_STORAGE_SCHEMA,
+  createWebGpuModelResourceCacheStorage,
+} from './model-resource-cache-storage.js';
+
+export {
+  WEBGPU_MODEL_RESOURCE_PACKAGE_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_LEASE_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_REPORT_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_PROGRESS_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_LOADER_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_LEASE_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_PACKAGE_CHILD_REPORT_SCHEMA,
+  createWebGpuModelResourcePackageLoader,
+  defineWebGpuModelResourcePackage,
+  validateWebGpuModelResourcePackage,
+  loadWebGpuModelResourcePackageFromSources,
+} from './model-resource-package.js';
+
+export {
+  WEBGPU_MODEL_RESOURCE_CHUNK_PLAN_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_CHUNK_CUSTODY_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_CHUNK_VERIFICATION_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_CHUNK_PLAN_VERIFICATION_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_CHUNK_SOURCE_REPORT_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_CHUNK_LOAD_REPORT_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_CHUNK_PROGRESS_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_CHUNK_ALLOCATION_PROVENANCE_SCHEMA,
+  defineWebGpuModelResourceChunkPlan,
+  validateWebGpuModelResourceChunkPlan,
+  loadWebGpuModelResourceChunksFromSources,
+} from './model-resource-chunk-plan.js';
 
 export {
   WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,

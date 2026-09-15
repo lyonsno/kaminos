@@ -1,0 +1,377 @@
+{
+  "schema": "kaminos.track-m-authored-source-m0-preflight-report.v0",
+  "status": "validated",
+  "failurePhase": null,
+  "requested": {
+    "expectedGraphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
+    "expectedSourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3"
+  },
+  "inputs": {
+    "graph": {
+      "requestedPath": "/private/tmp/kaminos-molten-cat-armature-source-projection-0803-output-v2/cat-armature.source-graph.json",
+      "effectivePath": "/private/tmp/kaminos-molten-cat-armature-source-projection-0803-output-v2/cat-armature.source-graph.json",
+      "bytesSha256": "8fe8eb8c65118102243b75c324638155a814f3c70095af5f8462326f2b4d68f6",
+      "byteLength": 489899
+    },
+    "bundleSource": {
+      "requestedPath": "fixtures/track-m-three-condition-source.compatibility.v0.json",
+      "effectivePath": "/private/tmp/kaminos-mushfinger-phase-three-source-validator-0731-mushfinger-track-m-m0-validator-0802-mushfinger-track-m-bundle-consumer-0802-mushfinger-cat-armature-m0-preflight-0803/fixtures/track-m-three-condition-source.compatibility.v0.json",
+      "bytesSha256": "8a8b37d1672ba32d07192edb632547a775286ac408d0c2fbe9fb5a037f9f7dbc",
+      "byteLength": 4293
+    },
+    "selection": {
+      "requestedPath": null,
+      "effectivePath": null,
+      "bytesSha256": null,
+      "byteLength": null
+    }
+  },
+  "effectivePlanRoute": "deterministic-plan-from-verified-bundle-source",
+  "validation": {
+    "schema": "kaminos.track-m-authored-source-m0-preflight.v0",
+    "disposition": "HOLD_MUSCULATURE_SOURCE_EVIDENCE",
+    "ok": false,
+    "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
+    "sourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "graphIdentityVerified": true,
+    "bundlePredecessorCompatible": true,
+    "selectedFixture": null,
+    "candidates": {
+      "totalConstructions": 68,
+      "completeSourceMeshRelations": 51,
+      "provisionalEndpointRelations": 12,
+      "incompleteConstructions": 7,
+      "completeSourceMeshConstructionIds": [
+        "muscle-42",
+        "muscle-28",
+        "muscle-27",
+        "muscle-48",
+        "muscle-10",
+        "muscle-16",
+        "muscle-38",
+        "muscle-22",
+        "muscle-09",
+        "muscle-20",
+        "muscle",
+        "muscle-60",
+        "muscle-25",
+        "muscle-05",
+        "muscle-14",
+        "muscle-59",
+        "muscle-47",
+        "muscle-39",
+        "muscle-61",
+        "muscle-63",
+        "muscle-43",
+        "muscle-07",
+        "muscle-21",
+        "muscle-15",
+        "muscle-65",
+        "muscle-46",
+        "muscle-26",
+        "muscle-06",
+        "muscle-64",
+        "muscle-03",
+        "muscle-37",
+        "muscle-53",
+        "muscle-04",
+        "muscle-18",
+        "muscle-41",
+        "muscle-23",
+        "muscle-52",
+        "muscle-45",
+        "muscle-08",
+        "muscle-44",
+        "muscle-31",
+        "muscle-62",
+        "muscle-58",
+        "muscle-11",
+        "muscle-35",
+        "muscle-34",
+        "muscle-02",
+        "muscle-12",
+        "muscle-32",
+        "muscle-30",
+        "muscle-13"
+      ]
+    },
+    "sourceOmissions": [
+      {
+        "constructionId": "muscle-17",
+        "missingComponentRoles": [
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-57",
+        "missingComponentRoles": [
+          "attachment_insertion",
+          "belly_profile",
+          "muscle_path",
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-54",
+        "missingComponentRoles": [
+          "attachment_insertion"
+        ]
+      },
+      {
+        "constructionId": "muscle-55",
+        "missingComponentRoles": [
+          "attachment_insertion",
+          "attachment_origin",
+          "belly_profile",
+          "muscle_path",
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-36",
+        "missingComponentRoles": [
+          "muscle_path",
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-49",
+        "missingComponentRoles": [
+          "muscle_surface_provisional"
+        ]
+      },
+      {
+        "constructionId": "muscle-56",
+        "missingComponentRoles": [
+          "attachment_insertion",
+          "belly_profile",
+          "muscle_path",
+          "muscle_surface_provisional"
+        ]
+      }
+    ],
+    "satisfied": [
+      {
+        "field": "trackScope",
+        "value": "shape-bearing-musculature"
+      },
+      {
+        "field": "sourceIdentity",
+        "sourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+        "byteLength": 549819
+      },
+      {
+        "field": "sourcePath",
+        "requestedPath": "/private/tmp/kaminos-molten-cat-armature-source-0803/source/cat_armature_001.blend",
+        "effectivePath": "/private/tmp/kaminos-molten-cat-armature-source-0803/source/cat_armature_001.blend"
+      },
+      {
+        "field": "sourceCompletenessAndKnownOmissions",
+        "completeness": "incomplete",
+        "omissionCount": 7
+      },
+      {
+        "field": "sourceUnits",
+        "system": "METRIC",
+        "lengthUnit": "METERS",
+        "scaleLength": 1
+      },
+      {
+        "field": "authoredConstructionInventory",
+        "sourceMeshCount": 16,
+        "muscleCount": 68
+      },
+      {
+        "field": "componentLineage",
+        "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0"
+      },
+      {
+        "field": "rawGeometryAndTransforms",
+        "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0"
+      },
+      {
+        "field": "bundleComparisonClass",
+        "sourceReceiptId": "operator-musculature-source-receipt-v0",
+        "planId": "16989ca7c629fc0c26bd5a4e82915e234cc114c9f637705b3400679877a813c6",
+        "conditionIds": [
+          "deep-geometry-absent",
+          "deep-geometry-correctly-routed",
+          "deep-geometry-matched-wrong-routing"
+        ]
+      }
+    ],
+    "missing": [
+      {
+        "field": "selectedFixture",
+        "candidateCount": 51,
+        "owner": "external-relation-selection-authority"
+      },
+      {
+        "field": "selectedFixtureAuthority"
+      },
+      {
+        "field": "matchedControlIdentity"
+      },
+      {
+        "field": "semanticNames"
+      },
+      {
+        "field": "localFrames"
+      },
+      {
+        "field": "attachmentInsertionBindings"
+      },
+      {
+        "field": "routedPathControls"
+      },
+      {
+        "field": "tendonBellyIntervals"
+      },
+      {
+        "field": "wrapGuides"
+      },
+      {
+        "field": "neutralConservativePosePair"
+      },
+      {
+        "field": "fixedCamera"
+      },
+      {
+        "field": "packingBehavior"
+      },
+      {
+        "field": "m0MatchedBudgetLedgerAndWitnesses"
+      },
+      {
+        "field": "neighboringSupportIndependence"
+      },
+      {
+        "field": "sourceEvidenceChecks"
+      }
+    ],
+    "contradictory": [],
+    "selectionAdapter": {
+      "schema": "kaminos.track-m-authored-relation-fixture-selection.v0",
+      "requiredCallerFields": [
+        "schema",
+        "graphSha256",
+        "primaryConstructionId",
+        "matchedWrongDonorConstructionId",
+        "nullConstructionIds",
+        "authority",
+        "selectedBeforeOutputInspection"
+      ],
+      "selectsForCaller": false,
+      "resolution": "caller ids resolve one primary route, one matched donor, and two same-object null controls; all identities are copied from the authenticated graph",
+      "admittedEndpointAuthorityWithoutOverride": "source_mesh",
+      "outputAuthority": "selected sensitivity-fixture identity only; no cross-wire transform, tolerance, superiority, M0, station, pose, or routing admission"
+    },
+    "bundleCompatibility": {
+      "schema": "kaminos.track-m-m0-bundle-compatibility.v0",
+      "disposition": "HOLD_MUSCULATURE_SOURCE_EVIDENCE",
+      "comparisonClassCompatible": true,
+      "losslessM0Receipt": false,
+      "sourceSchema": "kaminos.track-m-evidence-source.v0",
+      "targetSchema": "kaminos.musculature-source-m0.v0",
+      "sourceReceiptId": "operator-musculature-source-receipt-v0",
+      "planId": "16989ca7c629fc0c26bd5a4e82915e234cc114c9f637705b3400679877a813c6",
+      "mappedPredicates": {
+        "sourceReceiptId": "operator-musculature-source-receipt-v0",
+        "assetId": "operator-musculature-source-v0",
+        "assetPath": "/caller/source.blend",
+        "assetSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "conservativePoseId": "conservative-pose-v0",
+        "conservativePoseAuthorityId": "external-pose-authority",
+        "conservativePoseSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "fixedCameraId": "track-m-fixed-camera-v0",
+        "fixedCameraSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "routingRelationId": "deep-flexor-routing-v0",
+        "deepGeometryIds": [
+          "deep-flexor-a",
+          "deep-flexor-b"
+        ],
+        "attachmentEndpointMultisetSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+        "expectedRoutingGraphSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+        "conditionIds": [
+          "deep-geometry-absent",
+          "deep-geometry-correctly-routed",
+          "deep-geometry-matched-wrong-routing"
+        ],
+        "conditionTransformIds": {
+          "deep-geometry-absent": "remove-deep-geometry-v0",
+          "deep-geometry-correctly-routed": "correct-routing-v0",
+          "deep-geometry-matched-wrong-routing": "wrong-routing-v0"
+        }
+      },
+      "matchedBudgetCoverage": {
+        "bundleFields": [
+          "primitiveCount",
+          "vertexCount",
+          "triangleCount",
+          "parameterCount"
+        ],
+        "m0RequiredFields": [
+          "primitiveCount",
+          "curveCount",
+          "controlCount",
+          "crossSectionBudget",
+          "routeLength",
+          "occupiedVolume",
+          "surfaceArea"
+        ],
+        "coveredFields": [
+          "primitiveCount"
+        ],
+        "missingFields": [
+          "curveCount",
+          "controlCount",
+          "crossSectionBudget",
+          "routeLength",
+          "occupiedVolume",
+          "surfaceArea"
+        ]
+      },
+      "missingM0Authority": [
+        "matchedControlIdentity",
+        "sourceCompletenessAndKnownOmissions",
+        "sourceUnits",
+        "semanticNames",
+        "localFrames",
+        "attachmentInsertionBindings",
+        "routedPathControls",
+        "tendonBellyIntervals",
+        "wrapGuides",
+        "neutralConservativePosePair",
+        "packingBehavior",
+        "m0MatchedBudgetLedgerAndWitnesses",
+        "neighboringSupportIndependence",
+        "sourceEvidenceChecks"
+      ],
+      "ignoredDownstreamFields": [],
+      "holds": [
+        {
+          "code": "track-m-m0-source-authority-missing",
+          "message": "The three-condition bundle preserves the comparison class but cannot supply the authored anatomical source authority required by M0.",
+          "fields": [
+            "matchedControlIdentity",
+            "sourceCompletenessAndKnownOmissions",
+            "sourceUnits",
+            "semanticNames",
+            "localFrames",
+            "attachmentInsertionBindings",
+            "routedPathControls",
+            "tendonBellyIntervals",
+            "wrapGuides",
+            "neutralConservativePosePair",
+            "packingBehavior",
+            "m0MatchedBudgetLedgerAndWitnesses",
+            "neighboringSupportIndependence",
+            "sourceEvidenceChecks"
+          ]
+        }
+      ],
+      "failures": []
+    }
+  },
+  "error": null
+}

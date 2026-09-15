@@ -490,6 +490,41 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #finger-juice-host-overlay { position: absolute; top: 16px; left: 16px; min-width: 360px; max-width: min(560px, calc(100% - 32px)); background: rgba(4,7,10,0.78); border: 1px solid #31485a; border-radius: 8px; padding: 10px 12px; color: #b7d4dc; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
 #finger-juice-host-overlay-title { font: 11px 'SF Mono', monospace; color: #8fc7d6; text-transform: uppercase; letter-spacing: 0.8px; }
 #finger-juice-host-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #d4ecf3; overflow-wrap: anywhere; }
+
+/* Native finger fluid bench */
+.finger-fluid-bench-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
+.finger-fluid-bench-readout .field { margin: 0; padding: 0; }
+.finger-fluid-bench-readout .finger-fluid-bench-renderer-route { grid-column: 1 / -1; }
+.finger-fluid-bench-downgrades { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.finger-fluid-bench-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid #3f3b66; color: #d8c4ff; background: #17152b; border-radius: 5px; padding: 3px 6px; font: 9px 'SF Mono', monospace; }
+#finger-fluid-bench-operator-panel { position: absolute; inset: 0; z-index: 4; background: #03070a; }
+#finger-fluid-bench-operator-panel[hidden] { display: none; }
+#finger-fluid-bench-canvas { width: 100%; height: 100%; display: block; background: #03070a; touch-action: none; cursor: grab; }
+#finger-fluid-bench-canvas:active { cursor: grabbing; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] { background: #020304; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] { touch-action: none; cursor: grab; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"]:active { cursor: grabbing; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] #kaminos-volume-canvas.active { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; opacity: 1; pointer-events: auto; background: transparent; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] #finger-fluid-bench-canvas { position: absolute; inset: 0; z-index: 1; background: transparent; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] #finger-fluid-bench-overlay { z-index: 3; }
+#finger-fluid-bench-overlay { position: absolute; right: 16px; bottom: 16px; width: min(620px, calc(100% - 32px)); background: rgba(3,7,10,0.76); border: 1px solid #2d5065; border-radius: 8px; padding: 10px 12px; color: #c7e7ef; box-shadow: 0 10px 30px rgba(0,0,0,0.36); }
+#finger-fluid-bench-overlay-title { font: 11px 'SF Mono', monospace; color: #7fd7e0; text-transform: uppercase; letter-spacing: 0.8px; }
+#finger-fluid-bench-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #efe5c0; overflow-wrap: anywhere; }
+#finger-fluid-bench-pulse-control { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(127,215,224,0.32); white-space: pre-line; font: 11px/1.45 'SF Mono', monospace; letter-spacing: 0; color: #9ff6dc; }
+#finger-fluid-oracle-cockpit-panel { margin-top: 9px; border-top: 1px solid rgba(127,215,224,0.28); padding-top: 9px; }
+#finger-fluid-oracle-cockpit-panel[hidden] { display: none; }
+.finger-fluid-oracle-cockpit-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.finger-fluid-oracle-cockpit-field { min-width: 0; }
+.finger-fluid-oracle-cockpit-field label { display: block; color: #7fd7e0; font: 8px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0; margin-bottom: 2px; }
+.finger-fluid-oracle-cockpit-field select,
+.finger-fluid-oracle-cockpit-field input { width: 100%; min-height: 24px; box-sizing: border-box; border: 1px solid #2d5065; border-radius: 4px; background: #071216; color: #e1f8fb; font: 10px 'SF Mono', monospace; padding: 2px 5px; }
+.finger-fluid-oracle-cockpit-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.finger-fluid-oracle-cockpit-actions .btn { min-height: 24px; padding: 3px 7px; font-size: 10px; }
+.finger-fluid-oracle-cockpit-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 7px; font: 9px 'SF Mono', monospace; color: #efe5c0; }
+.finger-fluid-oracle-cockpit-readout .field { margin: 0; padding: 0; min-width: 0; }
+.finger-fluid-oracle-cockpit-readout .field-key { margin-right: 6px; }
+.finger-fluid-oracle-cockpit-readout .field-val { overflow-wrap: anywhere; }
+.finger-fluid-oracle-cockpit-warn { margin-top: 6px; color: #ffcb7c; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -504,6 +539,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="tab" data-tab="motion">Motion</div>
     <div class="tab" data-tab="volume">Volume</div>
     <div class="tab" data-tab="worlds">Worlds</div>
+    <div class="tab" data-tab="finger-fluid-bench">Fluid</div>
     <div class="tab" data-tab="finger-juice-host">Host</div>
     <div class="tab" data-tab="finger-juice">Juice</div>
     <div class="tab" data-tab="greenroom">Greenroom</div>
@@ -2221,6 +2257,30 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
   </div>
 
+  <!-- Finger Fluid Bench Tab -->
+  <div class="tab-content" id="tab-finger-fluid-bench">
+    <h2>Finger Fluid Bench</h2>
+    <div class="panel">
+      <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_finger_fluid_bench=1</span></div>
+      <div class="field"><span class="field-key">Bench</span><span class="field-val">kaminos/finger-fluid-bench</span></div>
+      <div class="field"><span class="field-key">Source</span><span class="field-val" id="finger-fluid-bench-source-schema">big-papa.finger-fluid.synthetic-source.v0</span></div>
+      <div class="field"><span class="field-key">Status</span><span class="field-val" id="finger-fluid-bench-status">pending</span></div>
+    </div>
+    <div class="panel finger-fluid-bench-readout">
+      <div class="field"><span class="field-key">Solver</span><span class="field-val" id="finger-fluid-bench-solver">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Requested</span><span class="field-val" id="finger-fluid-bench-renderer-requested">pending</span></div>
+      <div class="field finger-fluid-bench-renderer-route"><span class="field-key">Effective</span><span class="field-val" id="finger-fluid-bench-renderer">pending</span></div>
+      <div class="field"><span class="field-key">Active</span><span class="field-val" id="finger-fluid-bench-active">0.00</span></div>
+      <div class="field"><span class="field-key">Basin</span><span class="field-val" id="finger-fluid-bench-basin">0.00</span></div>
+      <div class="field"><span class="field-key">Frame</span><span class="field-val" id="finger-fluid-bench-frame-ms">0 ms</span></div>
+      <div class="field"><span class="field-key">Exports</span><span class="field-val" id="finger-fluid-bench-exports">lerms.juice-hit-event.v0</span></div>
+    </div>
+    <div class="panel">
+      <div class="field"><span class="field-key">Downgrades</span></div>
+      <div class="finger-fluid-bench-downgrades" id="finger-fluid-bench-downgrades"></div>
+    </div>
+  </div>
+
   <!-- Finger Juice Tab -->
   <div class="tab-content" id="tab-finger-juice">
     <h2>Finger Juice</h2>
@@ -2488,6 +2548,76 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div id="finger-juice-host-overlay-body">kaminos/finger-juice-host · packet pending</div>
     </div>
   </div>
+  <div id="finger-fluid-bench-operator-panel" hidden>
+    <canvas id="finger-fluid-bench-canvas"></canvas>
+    <div id="finger-fluid-bench-overlay">
+      <div id="finger-fluid-bench-overlay-title">Finger Fluid Bench</div>
+      <div id="finger-fluid-bench-overlay-body">kaminos/finger-fluid-bench · synthetic Kaminos fluid source</div>
+      <div id="finger-fluid-bench-pulse-control" hidden></div>
+      <div id="finger-fluid-oracle-cockpit-panel" hidden>
+        <div class="finger-fluid-oracle-cockpit-grid">
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-resolution">Res</label>
+            <select id="finger-fluid-oracle-resolution">
+                <option value="baseline">Baseline</option>
+                <option value="production">Production</option>
+                <option value="sweep3x">Sweep 3x</option>
+                <option value="sweep4x">Sweep 4x</option>
+                <option value="sweep6x">Sweep 6x</option>
+                <option value="high">High</option>
+            </select>
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-spacing">Spacing</label>
+            <input id="finger-fluid-oracle-spacing" type="number" min="0.25" max="2.5" step="0.01" value="1">
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-kernel">Kernel</label>
+            <input id="finger-fluid-oracle-kernel" type="number" min="0.5" max="2.5" step="0.01" value="1">
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-flux">Flux</label>
+            <input id="finger-fluid-oracle-flux" type="number" min="0" max="4" step="0.01" value="1">
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-pressure">P iter</label>
+            <input id="finger-fluid-oracle-pressure" type="number" min="1" max="12" step="1" value="3">
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-viscosity">Visc</label>
+            <input id="finger-fluid-oracle-viscosity" type="number" min="0" max="0.75" step="0.01" value="0.17">
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-cohesion">Cohesion</label>
+            <input id="finger-fluid-oracle-cohesion" type="number" min="0" max="1.5" step="0.01" value="0.72">
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-sheet-support">Sheet</label>
+            <input id="finger-fluid-oracle-sheet-support" type="number" min="0" max="2" step="0.05" value="0">
+          </div>
+          <div class="finger-fluid-oracle-cockpit-field">
+            <label for="finger-fluid-oracle-replay">Replay</label>
+            <input id="finger-fluid-oracle-replay" type="text" value="default">
+          </div>
+        </div>
+        <div class="finger-fluid-oracle-cockpit-actions">
+          <button class="btn" id="finger-fluid-oracle-pause">Pause</button>
+          <button class="btn" id="finger-fluid-oracle-fixed-camera">Camera</button>
+          <button class="btn" id="finger-fluid-oracle-reset">Reset</button>
+          <button class="btn" id="finger-fluid-oracle-restart">Restart</button>
+          <a class="btn" id="finger-fluid-oracle-low-url" href="#">Low</a>
+          <a class="btn" id="finger-fluid-oracle-high-url" href="#">High</a>
+        </div>
+        <div class="finger-fluid-oracle-cockpit-readout">
+          <div class="field"><span class="field-key">Requested</span><span class="field-val" id="finger-fluid-oracle-requested">pending</span></div>
+          <div class="field"><span class="field-key">Effective</span><span class="field-val" id="finger-fluid-oracle-effective">pending</span></div>
+          <div class="field"><span class="field-key">Route</span><span class="field-val" id="finger-fluid-oracle-route">pending</span></div>
+          <div class="field"><span class="field-key">Unsupported</span><span class="field-val" id="finger-fluid-oracle-unsupported">none</span></div>
+        </div>
+        <div class="finger-fluid-oracle-cockpit-warn" id="finger-fluid-oracle-warning"></div>
+      </div>
+    </div>
+  </div>
   <div id="finger-juice-operator-panel" hidden>
     <iframe
       id="finger-juice-viewport-frame"
@@ -2636,6 +2766,50 @@ import {
   KAMINOS_FINGER_JUICE_HOST_STATE_SCHEMA,
   createFingerJuiceHostState,
 } from './finger-juice-host-core.js';
+import {
+  BIG_PAPA_FLUID_SOURCE_SCHEMA,
+  KAMINOS_FINGER_FLUID_BENCH_ROUTE,
+  KAMINOS_FINGER_FLUID_BENCH_STATE_SCHEMA,
+  createFingerFluidBenchState,
+} from './finger-fluid-bench-core.js';
+import {
+  FINGER_FLUID_ORACLE_COCKPIT_ADAPTER,
+  clearFingerFluidOracleRestartRequired,
+  createFingerFluidOracleABReplayUrls,
+  createFingerFluidOracleCockpitState,
+  fingerFluidOracleRequestedConfigFromParams,
+  isFingerFluidOracleCockpitRoute,
+  updateFingerFluidOracleCockpitUrl,
+} from './finger-fluid-oracle-cockpit.js';
+import {
+  KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,
+  KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST,
+  KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
+  KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
+  KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
+  KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
+  KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION,
+  KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH,
+  createFingerFluidPulseControlReadout,
+  createFingerFluidWaterfallOracleConfig,
+  createWebGPUFingerFluidSolver,
+  resolveFingerFluidColorMode,
+  resolveFingerFluidTruthScene,
+  resolveFingerFluidRendererMode,
+  resolveFingerFluidOpticalDebugMode,
+  resolveFingerFluidParticleShiftStrength,
+  resolveFingerFluidSupportFriction,
+  resolveFingerFluidChemistryDiffusion,
+  resolveFingerFluidCapillaryStrength,
+  resolveFingerFluidThinSheetVorticityAttenuation,
+  resolveFingerFluidFreeFlightViscosityBoost,
+  resolveFingerFluidMaxSpeed,
+  resolveFingerFluidUnsupportedSheetStrength,
+  resolveFingerFluidInletCutoffStep,
+  resolveFingerFluidParticleCount,
+  resolveFingerFluidWaterfallOraclePreset,
+} from './finger-fluid-webgpu-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -2744,6 +2918,138 @@ let fingerJuiceHostState = {
   error: null,
 };
 let fingerJuiceHostRouteInitialized = false;
+let fingerFluidBenchRouteInitialized = false;
+let fingerFluidBenchAnimationFrame = null;
+let fingerFluidBenchFrameStartedAt = performance.now();
+let fingerFluidBenchLastFrameMs = 26.5;
+let fingerFluidBenchSolver = null;
+let fingerFluidBenchSolverPromise = null;
+let fingerFluidBenchRunning = false;
+let fingerFluidBenchSimulationPaused = false;
+let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
+const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
+const FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP = 220;
+const FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP = 230;
+const FINGER_FLUID_PYRO_SOURCE_DRY_POSITION = [0.65, -0.35, 0.51];
+const FINGER_FLUID_PYRO_SOURCE_WET_POSITION = [0.54, -0.81, 0.29];
+const FINGER_FLUID_PYRO_SOURCE_WET_POSITION_PROVENANCE = 'step-238-stable-contact-record-v0';
+let fingerFluidBenchConfig = null;
+let fingerFluidOracleCockpitState = null;
+let fingerFluidOracleCockpitControlsInstalled = false;
+let fingerFluidPyroCompositionState = {
+  schema: 'kaminos.finger-fluid-pyro-composition.v0',
+  requestedRoute: 'finger_fluid_pyro_composition=1',
+  effectiveRoute: 'inactive',
+  source: 'unbound',
+  consumer: 'unbound',
+  sameDevice: false,
+};
+let fingerFluidPyroCompositionActivatedAtMs = null;
+let fingerFluidPyroCompositionSourceTrajectoryEnabled = true;
+
+function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.location.search)) {
+  const requestedTruthScene = params.get('finger_fluid_truth_scene') || 'multi_regime_playground';
+  const oracleCockpitRequested = isFingerFluidOracleCockpitRoute(params)
+    ? fingerFluidOracleRequestedConfigFromParams(params)
+    : null;
+  const effectiveTruthScene = resolveFingerFluidTruthScene(requestedTruthScene);
+  const requestedWaterfallOraclePreset = params.get('finger_fluid_oracle_resolution')
+    ?? oracleCockpitRequested?.resolutionPreset
+    ?? 'baseline';
+  const effectiveWaterfallOraclePreset = resolveFingerFluidWaterfallOraclePreset(requestedWaterfallOraclePreset);
+  const waterfallOracleConfig = effectiveTruthScene === 'waterfall_resolution_oracle'
+    ? createFingerFluidWaterfallOracleConfig(effectiveWaterfallOraclePreset)
+    : null;
+  const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
+  const requestedRendererMode = params.get('finger_fluid_renderer') || 'screen_space_surface';
+  const requestedOpticalDebugMode = params.get('finger_fluid_optical_debug') || 'shaded';
+  const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
+  const requestedSupportFriction = Number(params.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
+  const requestedChemistryDiffusion = Number(params.get('finger_fluid_chemistry_diffusion') ?? 0);
+  const requestedCapillaryStrength = Number(params.get('finger_fluid_capillary_strength') ?? oracleCockpitRequested?.cohesion ?? KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH);
+  const requestedThinSheetVorticityAttenuation = Number(params.get('finger_fluid_thin_sheet_vorticity_attenuation') ?? KAMINOS_FINGER_FLUID_DEFAULT_THIN_SHEET_VORTICITY_ATTENUATION);
+  const requestedFreeFlightViscosityBoost = Number(params.get('finger_fluid_free_flight_viscosity_boost') ?? oracleCockpitRequested?.viscosity ?? KAMINOS_FINGER_FLUID_DEFAULT_FREE_FLIGHT_VISCOSITY_BOOST);
+  const requestedUnsupportedSheetStrength = Number(params.get('finger_fluid_unsupported_sheet_strength')
+    ?? oracleCockpitRequested?.unsupportedSheetStrength
+    ?? KAMINOS_FINGER_FLUID_DEFAULT_UNSUPPORTED_SHEET_STRENGTH);
+  const requestedMaxFluidSpeed = Number(params.get('finger_fluid_max_speed')
+    ?? KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED);
+  const requestedAdaptiveDensityValue = params.get('finger_fluid_adaptive_density');
+  if (requestedAdaptiveDensityValue !== null && !['0', '1'].includes(requestedAdaptiveDensityValue)) {
+    throw new RangeError(`Finger Fluid adaptive density must be 0 or 1: ${requestedAdaptiveDensityValue}`);
+  }
+  const requestedAdaptiveDensity = requestedAdaptiveDensityValue === '1';
+  const requestedParticleCount = Number(params.get('finger_fluid_particle_count')
+    ?? oracleCockpitRequested?.particleCount
+    ?? waterfallOracleConfig?.defaultParticleCount
+    ?? KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT);
+  const requestedPressureIterations = Number(params.get('finger_fluid_density_iterations') ?? oracleCockpitRequested?.pressureIterations ?? 3);
+  const requestedWitnessTargetStepValue = params.get('finger_fluid_witness_target_step');
+  const requestedWitnessTargetStep = requestedWitnessTargetStepValue === null
+    ? null
+    : Number(requestedWitnessTargetStepValue);
+  if (requestedWitnessTargetStep !== null
+    && (!Number.isSafeInteger(requestedWitnessTargetStep) || requestedWitnessTargetStep < 1)) {
+    throw new RangeError(`Finger Fluid witness target step must be a positive safe integer: ${requestedWitnessTargetStepValue}`);
+  }
+  const requestedInletCutoffStepValue = params.get('finger_fluid_inlet_cutoff_step');
+  const requestedInletCutoffStep = requestedInletCutoffStepValue === null
+    ? null
+    : Number(requestedInletCutoffStepValue);
+  return {
+    schema: 'kaminos.finger-fluid-bench.route-config.v0',
+    oracleCockpitRequested,
+    requestedTruthScene,
+    effectiveTruthScene,
+    requestedWaterfallOraclePreset,
+    effectiveWaterfallOraclePreset,
+    waterfallOracleConfig,
+    requestedColorMode,
+    effectiveColorMode: resolveFingerFluidColorMode(requestedColorMode),
+    requestedRendererMode,
+    effectiveRendererMode: resolveFingerFluidRendererMode(requestedRendererMode),
+    sphereDebugRoute: 'finger_fluid_renderer=sphere_debug',
+    refractionRoute: 'finger_fluid_renderer=screen_space_refraction',
+    requestedOpticalDebugMode,
+    effectiveOpticalDebugMode: resolveFingerFluidOpticalDebugMode(requestedOpticalDebugMode),
+    requestedParticleShiftStrength,
+    effectiveParticleShiftStrength: resolveFingerFluidParticleShiftStrength(requestedParticleShiftStrength),
+    requestedSupportFriction,
+    effectiveSupportFriction: resolveFingerFluidSupportFriction(requestedSupportFriction),
+    requestedChemistryDiffusion,
+    effectiveChemistryDiffusion: resolveFingerFluidChemistryDiffusion(requestedChemistryDiffusion),
+    requestedCapillaryStrength,
+    effectiveCapillaryStrength: resolveFingerFluidCapillaryStrength(requestedCapillaryStrength),
+    requestedThinSheetVorticityAttenuation,
+    effectiveThinSheetVorticityAttenuation: resolveFingerFluidThinSheetVorticityAttenuation(requestedThinSheetVorticityAttenuation),
+    requestedFreeFlightViscosityBoost,
+    effectiveFreeFlightViscosityBoost: resolveFingerFluidFreeFlightViscosityBoost(requestedFreeFlightViscosityBoost),
+    requestedUnsupportedSheetStrength,
+    effectiveUnsupportedSheetStrength: resolveFingerFluidUnsupportedSheetStrength(requestedUnsupportedSheetStrength),
+    requestedMaxFluidSpeed,
+    effectiveMaxFluidSpeed: resolveFingerFluidMaxSpeed(requestedMaxFluidSpeed),
+    requestedAdaptiveDensity,
+    effectiveAdaptiveDensity: requestedAdaptiveDensity,
+    requestedParticleCount,
+    effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
+    requestedPressureIterations,
+    effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
+    requestedWitnessTargetStep,
+    effectiveWitnessTargetStep: requestedWitnessTargetStep,
+    requestedInletCutoffStep,
+    effectiveInletCutoffStep: resolveFingerFluidInletCutoffStep(requestedInletCutoffStep),
+    timeIntegrationContract: KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
+    fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+  };
+}
+let fingerFluidBenchState = createFingerFluidBenchState({
+  status: 'idle',
+  viewport: { width: 0, height: 0 },
+  basinFillRatio: 0.48,
+  activeRatio: 0.42,
+  frameTimeMsEstimate: fingerFluidBenchLastFrameMs,
+});
+window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneImportStatus = null;
@@ -8687,7 +8993,8 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute();
+    const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
+    const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
     updateHybridSplatOverlayFrame();
     const motionAgencyActive = updateMotionAgencyFrame(performance.now() / 1000);
     const motionDecisionActive = updateMotionDecisionFrame(performance.now() / 1000);
@@ -8696,7 +9003,7 @@ async function initScene() {
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
-    const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
+    const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
     if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
@@ -9253,6 +9560,12 @@ function setActiveTab(tabName) {
     fingerJuiceHostPanel.hidden = tabName !== 'finger-juice-host';
     if (tabName === 'finger-juice-host') requestAnimationFrame(drawFingerJuiceHostPreview);
   }
+  const fingerFluidBenchPanel = document.getElementById('finger-fluid-bench-operator-panel');
+  if (fingerFluidBenchPanel) {
+    fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench';
+    if (tabName === 'finger-fluid-bench') startFingerFluidBench();
+    else stopFingerFluidBench();
+  }
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
   if (fingerJuicePanel) {
     fingerJuicePanel.hidden = tabName !== 'finger-juice';
@@ -9684,6 +9997,795 @@ function reloadFingerJuiceTabFrame() {
   fingerJuiceFrame.dataset.src = FINGER_JUICE_STANDALONE_ROUTE;
   fingerJuiceFrame.src = FINGER_JUICE_STANDALONE_ROUTE;
   setInfo('Finger Juice primitive reloaded');
+}
+
+function updateFingerFluidBenchReadout() {
+  const state = fingerFluidBenchState;
+  const sourceEl = document.getElementById('finger-fluid-bench-source-schema');
+  if (!sourceEl) return;
+  sourceEl.textContent = state.source?.schema || BIG_PAPA_FLUID_SOURCE_SCHEMA;
+  document.getElementById('finger-fluid-bench-status').textContent = state.status || 'pending';
+  document.getElementById('finger-fluid-bench-solver').textContent = state.solver?.backend === 'webgpu_compute' ? 'WebGPU PBF 3D' : (state.solver?.backend || 'pending');
+  const requestedRendererModeLabel = state.renderer?.requestedMode || 'pending';
+  const effectiveRendererModeLabel = state.renderer?.effectiveMode || state.renderer?.backend || 'pending';
+  document.getElementById('finger-fluid-bench-renderer-requested').textContent = requestedRendererModeLabel;
+  document.getElementById('finger-fluid-bench-renderer').textContent = effectiveRendererModeLabel;
+  document.getElementById('finger-fluid-bench-active').textContent = (state.visual?.activeRatio ?? 0).toFixed(2);
+  document.getElementById('finger-fluid-bench-basin').textContent = (state.visual?.basinFillRatio ?? 0).toFixed(2);
+  document.getElementById('finger-fluid-bench-frame-ms').textContent = `${(state.solver?.frameTimeMsEstimate ?? 0).toFixed(1)} ms`;
+  document.getElementById('finger-fluid-bench-exports').textContent = state.compatibility?.lermsEventSchemas?.length ? 'juice-hit-event.v0' : 'pending';
+  const downgradeList = document.getElementById('finger-fluid-bench-downgrades');
+  downgradeList.innerHTML = '';
+  for (const downgrade of state.downgrades || []) {
+    const chip = document.createElement('span');
+    chip.className = 'finger-fluid-bench-chip';
+    chip.textContent = downgrade;
+    downgradeList.appendChild(chip);
+  }
+  document.getElementById('finger-fluid-bench-overlay-body').textContent = [
+    KAMINOS_FINGER_FLUID_BENCH_ROUTE,
+    state.source?.sourceTruthAuthority || 'synthetic source',
+    `${state.solver?.particleCount || 0} particles`,
+    state.config?.effectiveTruthScene || 'multi_regime_playground',
+    `${state.solver?.densityIterationCount || 0} density iterations`,
+    `${state.playgroundZoneDiagnostics?.occupiedZoneCount || 0}/6 regimes`,
+    `${state.interfaceCarrier?.activeCount || 0} interface records`,
+    state.downgrades?.[0] || 'no downgrade recorded',
+  ].join(' · ');
+  const pulseControlElement = document.getElementById('finger-fluid-bench-pulse-control');
+  const pulseControlReadout = state.runtime?.pulseControlReadout || null;
+  pulseControlElement.hidden = !pulseControlReadout;
+  pulseControlElement.textContent = pulseControlReadout?.text || '';
+  updateFingerFluidOracleCockpitState(state.runtime || {});
+}
+
+function replaceFingerFluidOracleUrl(nextUrl) {
+  const next = new URL(nextUrl, window.location.href);
+  window.history.replaceState(null, '', `${next.pathname}${next.search}${next.hash}`);
+}
+
+function updateFingerFluidOracleControlValue(control, value) {
+  const edit = updateFingerFluidOracleCockpitUrl({
+    url: window.location.href,
+    control,
+    value,
+  });
+  replaceFingerFluidOracleUrl(edit.url);
+  if (control === 'paused') {
+    fingerFluidBenchSimulationPaused = value === true;
+  }
+  if (control === 'fixedCamera' && value === true) {
+    const preset = fingerFluidOracleCockpitState?.requested?.resolutionPreset || 'baseline';
+    setFingerFluidBenchCameraForWitness(FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets[preset].camera);
+  }
+  updateFingerFluidOracleCockpitState(fingerFluidBenchSolver?.getDebugState?.() || fingerFluidBenchState.runtime || {});
+}
+
+function renderFingerFluidOracleCockpit() {
+  const panel = document.getElementById('finger-fluid-oracle-cockpit-panel');
+  if (!panel) return;
+  const active = isFingerFluidOracleCockpitRoute(new URLSearchParams(window.location.search));
+  panel.hidden = !active;
+  if (!active) return;
+  const state = fingerFluidOracleCockpitState || createFingerFluidOracleCockpitState({ url: window.location.href });
+  const requested = state.requested;
+  const setValue = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && el.value !== String(value)) el.value = String(value);
+  };
+  setValue('finger-fluid-oracle-resolution', requested.resolutionPreset);
+  setValue('finger-fluid-oracle-spacing', requested.particleSpacing);
+  setValue('finger-fluid-oracle-kernel', requested.kernelScale);
+  setValue('finger-fluid-oracle-flux', requested.sourceFlux);
+  setValue('finger-fluid-oracle-pressure', requested.pressureIterations);
+  setValue('finger-fluid-oracle-viscosity', requested.viscosity);
+  setValue('finger-fluid-oracle-cohesion', requested.cohesion);
+  setValue('finger-fluid-oracle-sheet-support', requested.unsupportedSheetStrength);
+  setValue('finger-fluid-oracle-replay', requested.replayId);
+  document.getElementById('finger-fluid-oracle-pause').textContent = requested.paused ? 'Resume' : 'Pause';
+  document.getElementById('finger-fluid-oracle-fixed-camera').textContent = requested.fixedCamera ? 'Fixed Cam' : 'Camera';
+  document.getElementById('finger-fluid-oracle-restart').disabled = !requested.restartRequired;
+  document.getElementById('finger-fluid-oracle-requested').textContent = state.display.requestedSummary;
+  document.getElementById('finger-fluid-oracle-effective').textContent = state.display.effectiveSummary;
+  document.getElementById('finger-fluid-oracle-route').textContent = state.effective.routeIdentity.waterfallContinuityContract;
+  document.getElementById('finger-fluid-oracle-unsupported').textContent = state.display.unsupportedSummary;
+  document.getElementById('finger-fluid-oracle-warning').textContent = [
+    state.operatorJudgment,
+    requested.restartRequired ? 'restart required for structural URL change' : '',
+  ].filter(Boolean).join(' | ');
+  const replayUrls = createFingerFluidOracleABReplayUrls({
+    url: window.location.href,
+    replayId: requested.replayId || 'waterfall-oracle',
+  });
+  document.getElementById('finger-fluid-oracle-low-url').href = replayUrls.low;
+  document.getElementById('finger-fluid-oracle-high-url').href = replayUrls.high;
+}
+
+function updateFingerFluidOracleCockpitState(runtime = {}) {
+  fingerFluidOracleCockpitState = createFingerFluidOracleCockpitState({
+    url: window.location.href,
+    effective: runtime,
+  });
+  renderFingerFluidOracleCockpit();
+  return fingerFluidOracleCockpitState;
+}
+
+async function restartFingerFluidBenchForOracleCockpit() {
+  const clearedUrl = clearFingerFluidOracleRestartRequired(window.location.href);
+  replaceFingerFluidOracleUrl(clearedUrl);
+  stopFingerFluidBench();
+  fingerFluidBenchSolver = null;
+  fingerFluidBenchSolverPromise = null;
+  fingerFluidBenchConfig = null;
+  fingerFluidOracleCockpitState = null;
+  await startFingerFluidBench();
+  return updateFingerFluidOracleCockpitState(fingerFluidBenchSolver?.getDebugState?.() || {});
+}
+
+async function resetFingerFluidBenchForOracleCockpit() {
+  const replayInput = document.getElementById('finger-fluid-oracle-replay');
+  const baseReplay = replayInput?.value || fingerFluidOracleCockpitState?.requested?.replayId || 'waterfall-oracle';
+  updateFingerFluidOracleControlValue('replayId', `${baseReplay}-reset`);
+  await restartFingerFluidBenchForOracleCockpit();
+}
+
+function installFingerFluidOracleCockpitControls() {
+  if (fingerFluidOracleCockpitControlsInstalled) return;
+  fingerFluidOracleCockpitControlsInstalled = true;
+  const bindings = [
+    ['finger-fluid-oracle-resolution', 'resolutionPreset'],
+    ['finger-fluid-oracle-spacing', 'particleSpacing'],
+    ['finger-fluid-oracle-kernel', 'kernelScale'],
+    ['finger-fluid-oracle-flux', 'sourceFlux'],
+    ['finger-fluid-oracle-pressure', 'pressureIterations'],
+    ['finger-fluid-oracle-viscosity', 'viscosity'],
+    ['finger-fluid-oracle-cohesion', 'cohesion'],
+    ['finger-fluid-oracle-sheet-support', 'unsupportedSheetStrength'],
+    ['finger-fluid-oracle-replay', 'replayId'],
+  ];
+  for (const [id, control] of bindings) {
+    const el = document.getElementById(id);
+    el?.addEventListener('change', () => updateFingerFluidOracleControlValue(control, el.value));
+  }
+  document.getElementById('finger-fluid-oracle-pause')?.addEventListener('click', () => {
+    const paused = !(fingerFluidOracleCockpitState?.requested?.paused === true);
+    updateFingerFluidOracleControlValue('paused', paused);
+  });
+  document.getElementById('finger-fluid-oracle-fixed-camera')?.addEventListener('click', () => {
+    const fixedCamera = !(fingerFluidOracleCockpitState?.requested?.fixedCamera === true);
+    updateFingerFluidOracleControlValue('fixedCamera', fixedCamera);
+  });
+  document.getElementById('finger-fluid-oracle-restart')?.addEventListener('click', () => {
+    restartFingerFluidBenchForOracleCockpit().catch(error => setInfo(error.message || String(error)));
+  });
+  document.getElementById('finger-fluid-oracle-reset')?.addEventListener('click', () => {
+    resetFingerFluidBenchForOracleCockpit().catch(error => setInfo(error.message || String(error)));
+  });
+}
+
+function ensureFingerFluidBenchCanvasSize(canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+  const width = Math.max(1, Math.floor(rect.width * pixelRatio));
+  const height = Math.max(1, Math.floor(rect.height * pixelRatio));
+  return { width, height };
+}
+
+function fingerFluidPyroCompositionRequested(params = new URLSearchParams(window.location.search)) {
+  return params.get('finger_fluid_pyro_composition') === '1';
+}
+
+function syncFingerFluidCompositionCamera() {
+  if (!fingerFluidPyroCompositionRequested() || !camera || !controls) return;
+  const { yaw, pitch, distance, target } = fingerFluidBenchCamera;
+  const cp = Math.cos(pitch);
+  camera.position.set(
+    target[0] + Math.sin(yaw) * cp * distance,
+    target[1] + Math.sin(pitch) * distance,
+    target[2] + Math.cos(yaw) * cp * distance,
+  );
+  camera.fov = 180 / 3.15;
+  camera.updateProjectionMatrix();
+  controls.target.set(target[0], target[1], target[2]);
+  controls.update();
+}
+
+function fingerFluidCompositionCameraState() {
+  return {
+    schema: 'kaminos.finger-fluid-composition-camera.v0',
+    controls: 'composition-camera-orbit-wheel-zoom-v0',
+    yaw: fingerFluidBenchCamera.yaw,
+    pitch: fingerFluidBenchCamera.pitch,
+    distance: fingerFluidBenchCamera.distance,
+    target: [...fingerFluidBenchCamera.target],
+  };
+}
+
+function setFingerFluidBenchCameraForWitness(nextCamera = {}) {
+  const yaw = Number(nextCamera.yaw);
+  const pitch = Number(nextCamera.pitch);
+  const distance = Number(nextCamera.distance);
+  const target = Array.isArray(nextCamera.target) ? nextCamera.target.slice(0, 3).map(Number) : [];
+  if (![yaw, pitch, distance, ...target].every(Number.isFinite) || target.length !== 3) {
+    throw new Error('Finger Fluid witness camera requires finite yaw, pitch, distance, and three-component target');
+  }
+  if (pitch < -0.2 || pitch > 1.25 || distance < 2.5 || distance > 14) {
+    throw new RangeError('Finger Fluid witness camera exceeds the operator orbit bounds');
+  }
+  fingerFluidBenchCamera = { yaw, pitch, distance, target };
+  syncFingerFluidCompositionCamera();
+  return fingerFluidCompositionCameraState();
+}
+
+function setFingerFluidPyroCompositionPilotEnabled(enabled) {
+  const receipt = volumePrototype.setLiquidFireSourcePilotEnabled(enabled === true);
+  fingerFluidPyroCompositionState.sourcePilotEnabled = receipt.enabled;
+  return receipt;
+}
+
+function advanceFingerFluidPyroCompositionSource(stepCount) {
+  if (fingerFluidPyroCompositionState.effectiveRoute !== 'same-device-liquid-contact-pyro-near-field-v0') return;
+  if (!fingerFluidPyroCompositionSourceTrajectoryEnabled) return;
+  const linear = Math.max(0, Math.min(1,
+    (Number(stepCount) - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP)
+      / (FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP),
+  ));
+  const progress = linear * linear * (3 - 2 * linear);
+  const position = FINGER_FLUID_PYRO_SOURCE_DRY_POSITION.map((start, axis) =>
+    start + (FINGER_FLUID_PYRO_SOURCE_WET_POSITION[axis] - start) * progress);
+  const updated = volumePrototype.updateVolumePrimitiveTransform(
+    fingerFluidPyroCompositionState.sourcePrimitiveId,
+    { position },
+  );
+  if (!updated) return;
+  fingerFluidPyroCompositionState.sourcePrimitivePosition = [...updated.transform.position];
+  fingerFluidPyroCompositionState.sourceTrajectoryProgress = progress;
+  fingerFluidPyroCompositionState.sourceTrajectoryStep = Number(stepCount);
+}
+
+function setFingerFluidPyroCompositionSourcePosition(position) {
+  if (!volumePrototype || !fingerFluidPyroCompositionState.sourcePrimitiveId) return null;
+  if (!Array.isArray(position) || position.length < 3 || position.slice(0, 3).some(value => !Number.isFinite(Number(value)))) {
+    throw new Error('Finger Fluid Pyro source position must contain three finite coordinates');
+  }
+  const updated = volumePrototype.updateVolumePrimitiveTransform(
+    fingerFluidPyroCompositionState.sourcePrimitiveId,
+    { position: position.slice(0, 3).map(Number) },
+  );
+  if (!updated) return null;
+  fingerFluidPyroCompositionSourceTrajectoryEnabled = false;
+  fingerFluidPyroCompositionState.sourcePrimitivePosition = [...updated.transform.position];
+  fingerFluidPyroCompositionState.sourceTrajectory = 'explicit-live-position-v0';
+  return {
+    sourcePrimitiveId: updated.id,
+    position: [...updated.transform.position],
+    simulationReset: false,
+  };
+}
+
+function installFingerFluidCompositionCameraControls(panel) {
+  if (!panel || panel.dataset.compositionCameraControls === 'installed') return;
+  panel.dataset.compositionCameraControls = 'installed';
+  let pointer = null;
+  panel.addEventListener('pointerdown', event => {
+    if (!fingerFluidPyroCompositionRequested() || event.target.closest('#finger-fluid-bench-overlay')) return;
+    pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    try { panel.setPointerCapture(event.pointerId); } catch { /* Synthetic witness input has no browser capture session. */ }
+  });
+  panel.addEventListener('pointermove', event => {
+    if (!pointer || pointer.id !== event.pointerId) return;
+    fingerFluidBenchCamera.yaw -= (event.clientX - pointer.x) * 0.006;
+    fingerFluidBenchCamera.pitch = Math.max(-0.2, Math.min(1.25, fingerFluidBenchCamera.pitch + (event.clientY - pointer.y) * 0.006));
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+  });
+  const releasePointer = event => {
+    if (pointer?.id === event.pointerId) pointer = null;
+  };
+  panel.addEventListener('pointerup', releasePointer);
+  panel.addEventListener('pointercancel', releasePointer);
+  panel.addEventListener('wheel', event => {
+    if (!fingerFluidPyroCompositionRequested() || event.target.closest('#finger-fluid-bench-overlay')) return;
+    event.preventDefault();
+    fingerFluidBenchCamera.distance = Math.max(4.0, Math.min(14, fingerFluidBenchCamera.distance * Math.exp(event.deltaY * 0.0012)));
+  }, { passive: false });
+}
+
+async function activateFingerFluidPyroComposition() {
+  if (!fingerFluidPyroCompositionRequested() || !fingerFluidBenchSolver?.available || !volumePrototype) return false;
+  if (fingerFluidPyroCompositionState.effectiveRoute === 'same-device-liquid-contact-pyro-near-field-v0') return true;
+  const descriptor = fingerFluidBenchSolver.getLiquidFireContactDescriptor();
+  fingerFluidPyroCompositionSourceTrajectoryEnabled = true;
+  const binding = volumePrototype.setLiquidFireContactDescriptor(descriptor);
+  const panel = document.getElementById('finger-fluid-bench-operator-panel');
+  const volumeCanvas = volumePrototype.canvasElement();
+  installFingerFluidCompositionCameraControls(panel);
+  panel.prepend(volumeCanvas);
+  panel.dataset.pyroComposition = 'active';
+  volumeCanvas.dataset.liquidFireComposition = 'true';
+  const compositionSourcePrimitive = createVolumePrimitiveFixture('fire_sphere');
+  compositionSourcePrimitive.id = 'finger-fluid-downstream-burner';
+  compositionSourcePrimitive.transform = {
+    ...compositionSourcePrimitive.transform,
+    position: [...FINGER_FLUID_PYRO_SOURCE_DRY_POSITION],
+  };
+  compositionSourcePrimitive.simulation = {
+    ...compositionSourcePrimitive.simulation,
+    sourceRadius: VOLUME_SCENE_PRESETS.tall_plume.inputRadius,
+    flowRate: VOLUME_SCENE_PRESETS.tall_plume.flowRate,
+  };
+  volumePrototype.setVolumePrimitives([compositionSourcePrimitive]);
+  volumePrototype.setLiquidFireContactTransferEnabled(true, { reason: 'physical-contact-from-start' });
+  setFingerFluidPyroCompositionPilotEnabled(false);
+  volumePrototype.setControls({
+    volumeScene: 'tall_plume',
+    ...VOLUME_SCENE_PRESETS.tall_plume,
+    resolution: 96,
+    renderScale: 0.85,
+    fireRenderMode: 'stock',
+    boundarySplatMode: 'learned',
+    quenchVapor: 0,
+  });
+  volumePrototype.setSelectiveHeadLiveRole('truthHigh');
+  volumePrototype.setSelectiveHeadLiveRenderComposition('smoke-raymarch-under-splats-v0');
+  syncFingerFluidCompositionCamera();
+  await volumePrototype.setActive(true);
+  fingerFluidPyroCompositionActivatedAtMs = performance.now();
+  fingerFluidPyroCompositionState = {
+    schema: 'kaminos.finger-fluid-pyro-composition.v0',
+    requestedRoute: 'finger_fluid_pyro_composition=1',
+    effectiveRoute: 'same-device-liquid-contact-pyro-near-field-v0',
+    requestedVolumeScene: 'tall_plume',
+    effectiveVolumeScene: volumePrototype.debugState().volumeScene,
+    requestedBoundarySplatMode: 'learned',
+    requestedLiveFieldRole: 'truthHigh',
+    requestedRenderComposition: 'smoke-raymarch-under-splats-v0',
+    camera: fingerFluidCompositionCameraState(),
+    preContactCaptureMinSimSteps: FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS,
+    contactPhase: 'physical-contact-awaiting-overlap',
+    contactTransferEnabled: true,
+    contactActivatedAtMs: fingerFluidPyroCompositionActivatedAtMs,
+    sourcePrimitiveId: compositionSourcePrimitive.id,
+    sourcePrimitivePosition: [...compositionSourcePrimitive.transform.position],
+    sourceWetPositionProvenance: FINGER_FLUID_PYRO_SOURCE_WET_POSITION_PROVENANCE,
+    sourceTrajectory: 'simulation-step-dry-ridge-to-obstacle-channel-v0',
+    sourceTrajectoryProgress: 0,
+    sourceTrajectoryStep: 0,
+    sourcePilotEnabled: false,
+    source: descriptor.schema,
+    sourcePacking: descriptor.packing,
+    sourceGeneration: descriptor.allocationGeneration,
+    sourceEpoch: descriptor.epoch,
+    sourceFrameHash: descriptor.sourceFrameHash,
+    sourceFrameId: descriptor.sourceFrameId,
+    receiverTransformId: binding.receiverTransformId,
+    consumer: binding.schema,
+    sameDevice: binding.sameDevice,
+  };
+  window.__kaminosFingerFluidPyroCompositionState = fingerFluidPyroCompositionState;
+  return true;
+}
+
+async function sampleFingerFluidPyroComposition() {
+  const consumer = await volumePrototype?.sampleLiquidFireContactConsumer?.();
+  const volume = volumePrototype?.debugState?.() || null;
+  const contactPhase = (consumer?.sourceContactWetness || 0) > 0
+    ? 'physical-contact-active'
+    : 'physical-contact-awaiting-overlap';
+  fingerFluidPyroCompositionState.contactPhase = contactPhase;
+  return {
+    ...fingerFluidPyroCompositionState,
+    contactPhase,
+    consumerWitness: consumer || null,
+    volume,
+    liquid: fingerFluidBenchSolver?.getDebugState?.() || null,
+    camera: fingerFluidCompositionCameraState(),
+    physicalTransferDispatchCount: volume?.liquidFireContactDispatchCount ?? 0,
+  };
+}
+
+async function requestFingerFluidBenchDiagnostics() {
+  if (!fingerFluidBenchSolver?.available) return null;
+  const diagnostics = await fingerFluidBenchSolver.requestDiagnostics();
+  if (fingerFluidBenchRunning) updateFingerFluidBenchReadout();
+  const runtime = fingerFluidBenchSolver.getDebugState();
+  return {
+    diagnosticsStepCount: diagnostics?.stepCount ?? null,
+    diagnosticsRequestCount: runtime.diagnosticsRequestCount,
+    diagnosticsCompletionCount: runtime.diagnosticsCompletionCount,
+    diagnosticsLastDurationMs: runtime.diagnosticsLastDurationMs,
+  };
+}
+
+function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebugMode = fingerFluidBenchConfig.effectiveOpticalDebugMode) {
+  if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for same-state renderer witness');
+  const effectiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
+  const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
+  const canvas = document.getElementById('finger-fluid-bench-canvas');
+  if (!canvas) throw new Error('Finger Fluid canvas missing for same-state renderer witness');
+  if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
+  fingerFluidBenchAnimationFrame = null;
+  fingerFluidBenchRunning = false;
+  fingerFluidBenchSolver.render({
+    width: canvas.clientWidth,
+    height: canvas.clientHeight,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+    rendererMode: effectiveRendererMode,
+    opticalDebugMode: effectiveOpticalDebugMode,
+    ...fingerFluidBenchCamera,
+  });
+  const runtime = fingerFluidBenchSolver.getDebugState();
+  if (fingerFluidBenchState?.renderer) {
+    fingerFluidBenchState.renderer.requestedMode = effectiveRendererMode;
+    fingerFluidBenchState.renderer.effectiveMode = runtime.effectiveRendererMode;
+    fingerFluidBenchState.renderer.requestedRenderer = runtime.requestedRenderer;
+    fingerFluidBenchState.renderer.effectiveRenderer = runtime.effectiveRenderer;
+    fingerFluidBenchState.renderer.fallbackReason = runtime.fallbackReason;
+    fingerFluidBenchState.renderer.identity = runtime.effectiveRenderer;
+    fingerFluidBenchState.renderer.sphereDebugRenderFrameCount = runtime.sphereDebugRenderFrameCount;
+    fingerFluidBenchState.renderer.screenSpaceSurfaceRenderFrameCount = runtime.screenSpaceSurfaceRenderFrameCount;
+    fingerFluidBenchState.renderer.screenSpaceRefractionRenderFrameCount = runtime.screenSpaceRefractionRenderFrameCount;
+    fingerFluidBenchState.renderer.requestedOpticalDebugMode = effectiveOpticalDebugMode;
+    fingerFluidBenchState.renderer.effectiveOpticalDebugMode = runtime.opticalDebugMode;
+  }
+  fingerFluidBenchState.runtime = runtime;
+  updateFingerFluidBenchReadout();
+  return {
+    schema: 'kaminos.finger-fluid.same-state-renderer-witness.v0',
+    requestedRendererMode: effectiveRendererMode,
+    effectiveRendererMode: runtime.effectiveRendererMode,
+    requestedRenderer: runtime.requestedRenderer,
+    effectiveRenderer: runtime.effectiveRenderer,
+    fallbackReason: runtime.fallbackReason,
+    stepCount: runtime.stepCount,
+    directRenderFrameCount: runtime.directRenderFrameCount,
+    sphereDebugRenderFrameCount: runtime.sphereDebugRenderFrameCount,
+    screenSpaceSurfaceRenderFrameCount: runtime.screenSpaceSurfaceRenderFrameCount,
+    screenSpaceRefractionRenderFrameCount: runtime.screenSpaceRefractionRenderFrameCount,
+    requestedOpticalDebugMode: effectiveOpticalDebugMode,
+    effectiveOpticalDebugMode: runtime.opticalDebugMode,
+    supportPresentationEvidence: runtime.supportPresentationEvidence,
+    screenSpaceSurfaceEvidence: runtime.screenSpaceSurfaceEvidence,
+    refractionEvidence: runtime.refractionEvidence,
+  };
+}
+
+function resumeFingerFluidBenchAfterWitness() {
+  if (!fingerFluidBenchSolver?.available || fingerFluidBenchAnimationFrame) return;
+  fingerFluidBenchRunning = true;
+  drawFingerFluidBenchFrame.lastNow = performance.now() - 16.7;
+  fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
+}
+
+function drawFingerFluidBenchFrame(now = performance.now()) {
+  const canvas = document.getElementById('finger-fluid-bench-canvas');
+  const panel = document.getElementById('finger-fluid-bench-operator-panel');
+  if (!canvas || !panel || panel.hidden || !fingerFluidBenchRunning) {
+    fingerFluidBenchAnimationFrame = null;
+    return;
+  }
+  const frameStart = performance.now();
+  syncFingerFluidCompositionCamera();
+  const { width, height } = ensureFingerFluidBenchCanvasSize(canvas);
+  const t = (now - fingerFluidBenchFrameStartedAt) * 0.001;
+  if (!fingerFluidBenchSolver?.available) {
+    fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
+    return;
+  }
+  if (!fingerFluidBenchSimulationPaused) {
+    fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
+    const submittedState = fingerFluidBenchSolver.getDebugState();
+    if (fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+      && submittedState.stepCount >= fingerFluidBenchConfig.effectiveWitnessTargetStep) {
+      fingerFluidBenchSimulationPaused = true;
+    }
+  }
+  drawFingerFluidBenchFrame.lastNow = now;
+  fingerFluidBenchSolver.render({
+    width: canvas.clientWidth,
+    height: canvas.clientHeight,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+    rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
+    opticalDebugMode: fingerFluidBenchConfig.effectiveOpticalDebugMode,
+    ...fingerFluidBenchCamera,
+  });
+  const gpuState = fingerFluidBenchSolver.getDebugState();
+  advanceFingerFluidPyroCompositionSource(volumePrototype.debugState().simStepCount);
+  gpuState.requestedColorMode = fingerFluidBenchConfig.requestedColorMode;
+  gpuState.effectiveColorMode = gpuState.colorMode;
+  gpuState.requestedTruthScene = fingerFluidBenchConfig.requestedTruthScene;
+  gpuState.effectiveTruthScene = gpuState.truthScene;
+  gpuState.requestedRendererMode = fingerFluidBenchConfig.requestedRendererMode;
+  gpuState.requestedOpticalDebugMode = fingerFluidBenchConfig.requestedOpticalDebugMode;
+  gpuState.effectiveOpticalDebugMode = gpuState.opticalDebugMode;
+  gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
+  gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
+  gpuState.requestedSupportFriction = fingerFluidBenchConfig.requestedSupportFriction;
+  gpuState.effectiveSupportFriction = gpuState.supportFriction;
+  gpuState.requestedChemistryDiffusion = fingerFluidBenchConfig.requestedChemistryDiffusion;
+  gpuState.effectiveChemistryDiffusion = gpuState.chemistryDiffusion;
+  gpuState.requestedCapillaryStrength = fingerFluidBenchConfig.requestedCapillaryStrength;
+  gpuState.effectiveCapillaryStrength = gpuState.capillaryStrength;
+  gpuState.requestedThinSheetVorticityAttenuation = fingerFluidBenchConfig.requestedThinSheetVorticityAttenuation;
+  gpuState.effectiveThinSheetVorticityAttenuation = gpuState.thinSheetVorticityAttenuation;
+  gpuState.requestedFreeFlightViscosityBoost = fingerFluidBenchConfig.requestedFreeFlightViscosityBoost;
+  gpuState.effectiveFreeFlightViscosityBoost = gpuState.freeFlightViscosityBoost;
+  gpuState.requestedParticleCount = fingerFluidBenchConfig.requestedParticleCount;
+  gpuState.effectiveParticleCount = gpuState.particleCount;
+  gpuState.requestedPressureIterations = fingerFluidBenchConfig.requestedPressureIterations;
+  gpuState.effectivePressureIterations = fingerFluidBenchConfig.effectivePressureIterations;
+  gpuState.requestedUnsupportedSheetStrength = fingerFluidBenchConfig.requestedUnsupportedSheetStrength;
+  gpuState.effectiveUnsupportedSheetStrength = fingerFluidBenchConfig.effectiveUnsupportedSheetStrength;
+  gpuState.requestedMaxFluidSpeed = fingerFluidBenchConfig.requestedMaxFluidSpeed;
+  gpuState.effectiveMaxFluidSpeed = gpuState.maxFluidSpeed;
+  gpuState.requestedAdaptiveDensity = fingerFluidBenchConfig.requestedAdaptiveDensity;
+  gpuState.effectiveAdaptiveDensity = gpuState.adaptiveDensity;
+  gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
+  gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
+  gpuState.witnessTargetAutoPaused = fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+    && fingerFluidBenchSimulationPaused
+    && gpuState.stepCount === fingerFluidBenchConfig.effectiveWitnessTargetStep;
+  gpuState.pulseControlReadout = fingerFluidBenchConfig.effectiveInletCutoffStep !== null
+    || fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+    ? createFingerFluidPulseControlReadout({
+        stepCount: gpuState.stepCount,
+        inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
+        witnessTargetStep: fingerFluidBenchConfig.effectiveWitnessTargetStep,
+        paused: fingerFluidBenchSimulationPaused,
+      })
+    : null;
+  gpuState.oracleCockpitAdapterSchema = fingerFluidBenchConfig.oracleCockpitRequested ? FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.schema : null;
+  if (fingerFluidBenchConfig.oracleCockpitRequested) {
+    gpuState.requestedOracleCockpitConfig = fingerFluidBenchConfig.oracleCockpitRequested;
+  }
+  gpuState.timeIntegrationContract = KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT;
+  gpuState.fixedTimeStepSeconds = KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS;
+  fingerFluidBenchLastFrameMs = performance.now() - frameStart;
+  fingerFluidBenchState = createFingerFluidBenchState({
+    status: 'running',
+    viewport: { width, height },
+    timeSeconds: gpuState.stepCount * KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+    basinFillRatio: 0.44,
+    activeRatio: 0.34,
+    frameTimeMsEstimate: gpuState.lastFrameCpuMs || fingerFluidBenchLastFrameMs,
+    solverBackend: gpuState.solver_backend,
+    renderBackend: gpuState.render_backend,
+    rendererIdentity: gpuState.effectiveRenderer,
+    requestedRendererMode: gpuState.requestedRendererMode,
+    effectiveRendererMode: gpuState.effectiveRendererMode,
+    requestedRenderer: gpuState.requestedRenderer,
+    effectiveRenderer: gpuState.effectiveRenderer,
+    rendererFallbackReason: gpuState.fallbackReason,
+    rendererSurface: gpuState.effectiveRendererMode === 'sphere_debug'
+      ? 'direct_webgpu_particle_sphere_billboards_debug_in_kaminos_viewport'
+      : gpuState.effectiveRendererMode === 'screen_space_refraction'
+        ? 'screen_space_scene_color_snell_fresnel_beer_lambert_refraction'
+        : 'screen_space_particle_depth_optical_thickness_smooth_normals_fresnel_absorption',
+    particleCount: gpuState.particleCount,
+    gridDimensions: gpuState.gridDimensions,
+    neighborGridContract: gpuState.neighborGridContract,
+    densityContract: gpuState.densityContract,
+    boundaryPressureContract: gpuState.boundaryPressureContract,
+    supportFrictionContract: gpuState.supportFrictionContract,
+    supportFriction: gpuState.supportFriction,
+    energyLedgerContract: gpuState.energyLedgerContract,
+    energyLedger: gpuState.energyLedger,
+    vorticityConfinementContract: gpuState.vorticityConfinementContract,
+    freeSurfaceContract: gpuState.freeSurfaceContract,
+    restStateContract: gpuState.restStateContract,
+    supportTransportContract: gpuState.supportTransportContract,
+    topologyContract: gpuState.topologyContract,
+    particleShiftContract: gpuState.particleShiftContract,
+    particleShiftStrength: gpuState.particleShiftStrength,
+    particleShiftPassCount: gpuState.particleShiftPassCount,
+    chemistryContract: gpuState.chemistryContract,
+    chemistryDiffusion: gpuState.chemistryDiffusion,
+    chemistryDiffusionPassCount: gpuState.chemistryDiffusionPassCount,
+    waterfallContinuityContract: gpuState.waterfallContinuityContract,
+    capillaryStrength: gpuState.capillaryStrength,
+    thinSheetVorticityAttenuation: gpuState.thinSheetVorticityAttenuation,
+    freeFlightViscosityBoost: gpuState.freeFlightViscosityBoost,
+    unsupportedSheetContract: gpuState.unsupportedSheetContract,
+    unsupportedSheetStrength: gpuState.unsupportedSheetStrength,
+    sheetSupportPassCount: gpuState.sheetSupportPassCount,
+    colorMode: gpuState.colorMode,
+    config: fingerFluidBenchConfig,
+    playgroundContract: gpuState.playgroundContract,
+    interfaceCarrierSchema: gpuState.interfaceCarrierSchema,
+    obstacleContract: gpuState.obstacleContract,
+    stepCount: gpuState.stepCount,
+    linkedCellGridBuildCount: gpuState.linkedCellGridBuildCount,
+    densityIterationCount: gpuState.densityIterationCount,
+    vorticityPassCount: gpuState.vorticityPassCount,
+    postProjectionGridRefreshCount: gpuState.postProjectionGridRefreshCount,
+    freeSurfaceClassificationPassCount: gpuState.freeSurfaceClassificationPassCount,
+    surfaceCohesionPassCount: gpuState.surfaceCohesionPassCount,
+    interfaceCompactionPassCount: gpuState.interfaceCompactionPassCount,
+    directRenderFrameCount: gpuState.directRenderFrameCount,
+    sphereDebugRenderFrameCount: gpuState.sphereDebugRenderFrameCount,
+    screenSpaceSurfaceRenderFrameCount: gpuState.screenSpaceSurfaceRenderFrameCount,
+    screenSpaceRefractionRenderFrameCount: gpuState.screenSpaceRefractionRenderFrameCount,
+    requestedOpticalDebugMode: gpuState.requestedOpticalDebugMode,
+    effectiveOpticalDebugMode: gpuState.effectiveOpticalDebugMode,
+    opticalTransportRoute: gpuState.opticalTransportRoute,
+    supportGeometryCount: gpuState.playground?.supportGeometryCount,
+    playground: gpuState.playground,
+    playgroundZoneDiagnostics: gpuState.playgroundZoneDiagnostics,
+    laminarInletDiagnostics: gpuState.laminarInletDiagnostics,
+    waterfallContinuityDiagnostics: gpuState.waterfallContinuityDiagnostics,
+    interfaceCarrier: gpuState.interfaceCarrier,
+    activeExtent3d: gpuState.diagnostics?.activeExtent3d || null,
+  });
+  fingerFluidBenchState.runtime = gpuState;
+  updateFingerFluidBenchReadout();
+  fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
+}
+
+async function startFingerFluidBench() {
+  fingerFluidBenchRunning = true;
+  if (!fingerFluidBenchSolverPromise) {
+    const canvas = document.getElementById('finger-fluid-bench-canvas');
+    try {
+      fingerFluidBenchConfig = fingerFluidBenchConfigFromRoute();
+      if (fingerFluidBenchConfig.effectiveTruthScene === 'laminar_inlets') {
+        fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
+      }
+      if (fingerFluidBenchConfig.effectiveTruthScene === 'waterfall_resolution_oracle') {
+        const camera = fingerFluidBenchConfig.waterfallOracleConfig.camera;
+        fingerFluidBenchCamera = { ...camera, target: [...camera.target] };
+      }
+      if (fingerFluidBenchConfig.oracleCockpitRequested) {
+        fingerFluidBenchSimulationPaused = fingerFluidBenchConfig.oracleCockpitRequested.paused;
+        if (fingerFluidBenchConfig.oracleCockpitRequested.fixedCamera) {
+          const camera = FINGER_FLUID_ORACLE_COCKPIT_ADAPTER.presets[fingerFluidBenchConfig.effectiveWaterfallOraclePreset].camera;
+          fingerFluidBenchCamera = { ...camera, target: [...camera.target] };
+        }
+      }
+    } catch (error) {
+      fingerFluidBenchState = createFingerFluidBenchState({
+        status: 'error',
+        solverBackend: 'config_rejected',
+        renderBackend: 'config_rejected',
+        downgrades: [`finger_fluid_route_config_rejected:${error.message || String(error)}`],
+      });
+      fingerFluidBenchState.runtime = { available: false, configError: error.message || String(error) };
+      updateFingerFluidBenchReadout();
+      return;
+    }
+    fingerFluidBenchState = createFingerFluidBenchState({ status: 'loading', solverBackend: 'loading', renderBackend: 'loading' });
+    updateFingerFluidBenchReadout();
+    fingerFluidBenchSolverPromise = createWebGPUFingerFluidSolver({
+      canvas,
+      particleCount: fingerFluidBenchConfig.effectiveParticleCount,
+      densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
+      substeps: 1,
+      truthScene: fingerFluidBenchConfig.effectiveTruthScene,
+      colorMode: fingerFluidBenchConfig.effectiveColorMode,
+      rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
+      opticalDebugMode: fingerFluidBenchConfig.effectiveOpticalDebugMode,
+      particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
+      supportFriction: fingerFluidBenchConfig.effectiveSupportFriction,
+      chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
+      capillaryStrength: fingerFluidBenchConfig.effectiveCapillaryStrength,
+      thinSheetVorticityAttenuation: fingerFluidBenchConfig.effectiveThinSheetVorticityAttenuation,
+      freeFlightViscosityBoost: fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
+      unsupportedSheetStrength: fingerFluidBenchConfig.effectiveUnsupportedSheetStrength,
+      maxFluidSpeed: fingerFluidBenchConfig.effectiveMaxFluidSpeed,
+      adaptiveDensity: fingerFluidBenchConfig.effectiveAdaptiveDensity,
+      inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
+      waterfallOraclePreset: fingerFluidBenchConfig.effectiveWaterfallOraclePreset,
+      transparentBackground: fingerFluidPyroCompositionRequested(),
+    });
+    fingerFluidBenchSolver = await fingerFluidBenchSolverPromise;
+    if (!fingerFluidBenchSolver.available) {
+      fingerFluidBenchState = createFingerFluidBenchState({
+        status: 'error',
+        solverBackend: fingerFluidBenchSolver.solver_backend,
+        renderBackend: fingerFluidBenchSolver.render_backend,
+        downgrades: [`webgpu_solver_unavailable_no_fallback_accepted:${fingerFluidBenchSolver.reason}`],
+      });
+      fingerFluidBenchState.runtime = {
+        available: false,
+        reason: fingerFluidBenchSolver.reason,
+        requestedParticleCount: fingerFluidBenchSolver.requestedParticleCount
+          ?? fingerFluidBenchConfig.requestedParticleCount,
+        effectiveParticleCount: fingerFluidBenchSolver.effectiveParticleCount ?? null,
+        particleAllocationCapacity: fingerFluidBenchSolver.particleAllocationCapacity || null,
+        particleAllocationPreflight: fingerFluidBenchSolver.particleAllocationPreflight || null,
+      };
+      updateFingerFluidBenchReadout();
+      return;
+    }
+    await activateFingerFluidPyroComposition();
+  }
+  await activateFingerFluidPyroComposition();
+  if (!fingerFluidBenchAnimationFrame && fingerFluidBenchRunning) {
+    fingerFluidBenchFrameStartedAt = performance.now();
+    drawFingerFluidBenchFrame.lastNow = performance.now() - 16.7;
+    fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
+  }
+}
+
+function stopFingerFluidBench() {
+  fingerFluidBenchRunning = false;
+  if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
+  fingerFluidBenchAnimationFrame = null;
+}
+
+function kaminosFingerFluidBenchDebugState() {
+  return fingerFluidBenchState;
+}
+
+function initKaminosFingerFluidBenchRoute() {
+  if (fingerFluidBenchRouteInitialized) return;
+  fingerFluidBenchRouteInitialized = true;
+  window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
+  window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
+  window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
+  window.kaminosFingerFluidBenchRenderCurrentStateForWitness = renderFingerFluidBenchCurrentStateForWitness;
+  window.kaminosFingerFluidBenchResumeAfterWitness = resumeFingerFluidBenchAfterWitness;
+  window.kaminosFingerFluidBenchSetSimulationPausedForWitness = paused => {
+    fingerFluidBenchSimulationPaused = paused === true;
+    const runtime = fingerFluidBenchSolver?.getDebugState?.() || null;
+    if (runtime && fingerFluidBenchState?.runtime) {
+      fingerFluidBenchState.runtime.pulseControlReadout = fingerFluidBenchConfig.effectiveInletCutoffStep !== null
+        || fingerFluidBenchConfig.effectiveWitnessTargetStep !== null
+        ? createFingerFluidPulseControlReadout({
+            stepCount: runtime.stepCount,
+            inletCutoffStep: fingerFluidBenchConfig.effectiveInletCutoffStep,
+            witnessTargetStep: fingerFluidBenchConfig.effectiveWitnessTargetStep,
+            paused: fingerFluidBenchSimulationPaused,
+          })
+        : null;
+      updateFingerFluidBenchReadout();
+    }
+    return {
+      paused: fingerFluidBenchSimulationPaused,
+      stepCount: runtime?.stepCount ?? null,
+    };
+  };
+  window.kaminosFingerFluidBenchSetCameraForWitness = setFingerFluidBenchCameraForWitness;
+  window.kaminosFingerFluidOracleCockpitDebugState = () => fingerFluidOracleCockpitState || updateFingerFluidOracleCockpitState(fingerFluidBenchState.runtime || {});
+  window.__kaminosFingerFluidOracleCockpitDebugState = window.kaminosFingerFluidOracleCockpitDebugState;
+  window.restartFingerFluidBenchForOracleCockpit = restartFingerFluidBenchForOracleCockpit;
+  window.kaminosFingerFluidPyroCompositionDebugState = () => ({
+    ...fingerFluidPyroCompositionState,
+    volume: volumePrototype?.debugState?.() || null,
+  });
+  window.kaminosFingerFluidPyroSetSimulationPaused = paused => volumePrototype.setSimulationPaused(paused === true);
+  window.kaminosFingerFluidPyroSetPilotEnabled = enabled => setFingerFluidPyroCompositionPilotEnabled(enabled);
+  window.kaminosFingerFluidPyroSetSourcePosition = position => setFingerFluidPyroCompositionSourcePosition(position);
+  window.kaminosFingerFluidPyroCompositionSample = sampleFingerFluidPyroComposition;
+  window.kaminosFingerFluidPyroVolumeSample = () => volumePrototype.sampleFrame();
+  window.kaminosFingerFluidCompositionCameraState = fingerFluidCompositionCameraState;
+  const canvas = document.getElementById('finger-fluid-bench-canvas');
+  let pointer = null;
+  canvas?.addEventListener('pointerdown', event => {
+    pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas?.addEventListener('pointermove', event => {
+    if (!pointer || pointer.id !== event.pointerId) return;
+    fingerFluidBenchCamera.yaw -= (event.clientX - pointer.x) * 0.006;
+    fingerFluidBenchCamera.pitch = Math.max(-0.2, Math.min(1.25, fingerFluidBenchCamera.pitch + (event.clientY - pointer.y) * 0.006));
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+  });
+  canvas?.addEventListener('pointerup', event => { if (pointer?.id === event.pointerId) pointer = null; });
+  canvas?.addEventListener('wheel', event => {
+    event.preventDefault();
+    fingerFluidBenchCamera.distance = Math.max(4.0, Math.min(14, fingerFluidBenchCamera.distance * Math.exp(event.deltaY * 0.0012)));
+  }, { passive: false });
+  updateFingerFluidBenchReadout();
+  installFingerFluidOracleCockpitControls();
+  updateFingerFluidOracleCockpitState(fingerFluidBenchState.runtime || {});
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('kaminos_finger_fluid_bench') === '1') {
+    setActiveTab('finger-fluid-bench');
+    setInfo(isFingerFluidOracleCockpitRoute(params)
+      ? 'Finger Fluid waterfall oracle cockpit route active'
+      : 'Finger Fluid bench route active: native WebGPU 3D PBF simulation');
+  }
 }
 
 function initKaminosFingerJuiceHostRoute() {
@@ -17624,6 +18726,7 @@ async function initKaminosVolumeRoute() {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
+    transparentCanvas: fingerFluidPyroCompositionRequested(),
   });
   window.__kaminosVolumePrototype = volumePrototype;
   volumeBridge?.dispose?.();
@@ -17636,6 +18739,14 @@ async function initKaminosVolumeRoute() {
   }
 
   volumePrototype.setControls(readVolumeControls());
+  void activateFingerFluidPyroComposition().catch(error => {
+    fingerFluidPyroCompositionState = {
+      ...fingerFluidPyroCompositionState,
+      effectiveRoute: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Finger fluid / Pyro composition activation failed:', error);
+  });
 
   const rayBudgetPresetOwnedControls = new Set([
     'volume-steps',
@@ -20997,6 +22108,7 @@ window.addEventListener('keydown', e => {
 
 // --- Init ---
 grInit();
+initKaminosFingerFluidBenchRoute();
 initKaminosFingerJuiceHostRoute();
 initScene().then(() => {
   initEnvButtons();
@@ -21053,6 +22165,7 @@ initScene().then(() => {
   initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
+  initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 }).catch(err => {
@@ -21065,6 +22178,7 @@ initScene().then(() => {
     console.error('volume route init failed after scene init failure:', err);
   });
   initWorldChambersRoute();
+  initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });

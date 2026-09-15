@@ -1,0 +1,90 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Kaminos worker phase browser smoke</title>
+<body data-status="pending">
+<pre id="result">pending</pre>
+<script type="module">
+import {
+  WEBGPU_WORKER_PHASE_PROGRESS_SCHEMA,
+  WEBGPU_WORKER_PHASE_RESULT_SCHEMA,
+  runWebGpuWorkerPhase,
+} from "../src/index.js";
+
+const workerSource = `
+self.onmessage = event => {
+  const request = event.data;
+  const identity = {
+    executionId: request.executionId,
+    operationId: request.operationId,
+    moduleId: request.moduleId,
+  };
+  self.postMessage({
+    schema: "${WEBGPU_WORKER_PHASE_PROGRESS_SCHEMA}",
+    ...identity,
+    sequence: 0,
+    progress: { completed: 1, total: 1 },
+  });
+  const input = new Uint8Array(request.payload.bytes);
+  const output = new Uint8Array([...input].reverse());
+  self.postMessage({
+    schema: "${WEBGPU_WORKER_PHASE_RESULT_SCHEMA}",
+    ...identity,
+    status: "completed",
+    output: output.buffer,
+  }, [output.buffer]);
+};
+`;
+
+const workerUrl = URL.createObjectURL(new Blob([workerSource], {
+  type: "text/javascript",
+}));
+const input = new Uint8Array([1, 2, 3, 4]);
+
+try {
+  const { output, report } = await runWebGpuWorkerPhase({
+    executionId: "browser-smoke-1",
+    operationId: "reverse-bytes",
+    moduleId: "kaminos.worker-phase.browser-smoke.v0",
+    createWorker() {
+      return {
+        worker: new Worker(workerUrl),
+        identity: {
+          moduleId: "kaminos.worker-phase.browser-smoke.v0",
+          workerType: "classic",
+          source: "blob:browser-smoke",
+        },
+      };
+    },
+    payload: { bytes: input.buffer },
+    transfer: [input.buffer],
+    timeoutMs: 2000,
+    validateOutput(value) {
+      if (!(value instanceof ArrayBuffer)) {
+        throw new Error("browser smoke expected an ArrayBuffer");
+      }
+      return new Uint8Array(value);
+    },
+  });
+
+  const result = {
+    status: report.status,
+    phase: report.phase,
+    transferOwnership: report.transferOwnership,
+    transferredInputByteLength: input.byteLength,
+    output: [...output],
+    progressCount: report.progress.length,
+    cleanup: report.cleanup,
+  };
+  document.body.dataset.status = "passed";
+  document.querySelector("#result").textContent = JSON.stringify(result);
+} catch (error) {
+  document.body.dataset.status = "failed";
+  document.querySelector("#result").textContent = JSON.stringify({
+    name: error?.name,
+    message: error?.message,
+    report: error?.workerPhaseReport,
+  });
+} finally {
+  URL.revokeObjectURL(workerUrl);
+}
+</script>
