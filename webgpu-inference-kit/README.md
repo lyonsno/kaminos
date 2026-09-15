@@ -86,14 +86,18 @@ Kaminos separates common runtime machinery from model implementation and product
 
 ## One Runtime, Different Models
 
-Kaminos is already used across substantially different browser-native inference workloads:
+The kit connects a growing family of browser model ports: recover a scene's geometry, generate a textured object, turn an image into Gaussian splats, or animate a character from a text prompt. Each port brings its own model implementation and adopts shared runtime facilities where they serve its workload.
 
-| Port | Execution shape | Reusable route state | Useful work boundaries | Output | Current kit adoption |
-| --- | --- | --- | --- | --- | --- |
-| [MoGe](https://github.com/lyonsno/moge-webgpu) | Feed-forward image inference | Weights, pipelines, reusable tensors | Encoder, decoder, output phases | Depth, normals, and point map | Tensor, kernel, runtime, and route primitives |
-| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Iterative motion generation | Model weights and diffusion resources | Diffusion steps and major phases | Skeletal motion | Runtime and route primitives around browser diffusion, with external text embedding |
-| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Multi-stage image-to-geometry inference | Vision, reconstruction, decoding, and baking resources | Backbone, postprocessor, decoder, texture baking | Textured GLB mesh | Cooperative orchestration and model-owned bounded work |
-| [SHARP](https://github.com/lyonsno/sharp-webgpu) | Long image-to-splat inference | Image encoder, depth, Gaussian decoder, and output resources | Encoder blocks, depth phases, decoder ranges, output batches | Gaussian splat scene | Cooperative orchestration, scheduling, shared-device foreground opportunities, and route composition |
+| Model Port | What You Can Build | Integration |
+| --- | --- | --- |
+| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth maps, surface normals, and interactive point clouds from a single image | Shared GPU and route helpers, with cooperative transformer-block submissions and separate decoder and readback boundaries. |
+| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Textured, UV-unwrapped GLB meshes from a single image | Cooperative GPU duties across reconstruction and baking, bounded in-flight submissions, reusable scratch memory, and worker offload. |
+| [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground opportunities, staged output construction, and shared tensor-comparison helpers for port development. |
+| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding with kit-compatible route reporting. Text embeddings come from an external server; deeper runtime integration is in development. |
+
+These ports also provide concrete examples to build from. MoGe exposes cooperative boundaries around an existing feed-forward pipeline. SF3D combines GPU computation with CPU and worker stages; its tested monolithic and cooperative paths produce byte-identical GLB output. SHARP demonstrates long-running inference alongside a continuously rendering application on the same GPU.
+
+**In development: SAM image-and-prompt segmentation.** The in-tree port is integrating persistent model resources, cached image features, shared model-package loading, and queued semantic requests. That integration remains on a development branch while its updated serving path undergoes live validation.
 
 Ports can adopt a common application-facing shape:
 
