@@ -41,7 +41,7 @@ shared WebGPU device -> depth / splat / mesh / motion outputs
 | Port | Browser-native route | Kit adoption |
 | --- | --- | --- |
 | [SHARP WebGPU](https://github.com/lyonsno/sharp-webgpu) | image to 1.18M Gaussian splats | cooperative orchestration, scheduling, shared-device foreground opportunities, route composition |
-| [SF3D WebGPU](https://github.com/lyonsno/sf3d-webgpu) | image to textured GLB mesh | cooperative orchestration and model-owned bounded work |
+| [SF3D WebGPU](https://github.com/lyonsno/sf3d-webgpu) | image to textured GLB mesh | cooperative orchestration on every long boundary, bounded-prefix completion, scratch arena, resource caches, parity primitives, worker-offloaded CPU phases, shared-device foreground cadence |
 | [MoGe WebGPU](https://github.com/lyonsno/moge-webgpu) | image to depth, normals, and point map | tensor, kernel, runtime, and route primitives |
 | [Kimodo WebGPU](https://github.com/lyonsno/kimodo-webgpu) | prompt to skeletal motion | runtime and route primitives around browser diffusion, with text embedding declared as an external backend |
 
