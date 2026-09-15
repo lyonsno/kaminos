@@ -118,7 +118,7 @@ function startFire(sharedGpuContext) {
   // Current fire pipeline: learned boundary-splat fire authority over smoke
   // raymarch (the main app's composition), enabled by tall_plume +
   // boundarySplatMode 'learned'. raymarch-only-v0 was the legacy diagnostic.
-  prototype.setSelectiveHeadLiveRenderComposition('smoke-raymarch-under-splats-v0');
+  prototype.setSelectiveHeadLiveRenderComposition('raymarch-only-v0');
   // The learned splat fire renders from the selective-head live capture; the
   // main app seats this role before activation (index.html init order).
   prototype.setSelectiveHeadLiveRole('truthHigh');
