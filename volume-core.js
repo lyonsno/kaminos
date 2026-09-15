@@ -4929,7 +4929,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
-    let directSupport = directCellOpticalSupport(p);
+    var directSupport = 1.0;
+    if (!fullGridCapture && occupancySkipStrength > 0.0) {
+      directSupport = directCellOpticalSupport(p);
+    }
     if (!fullGridCapture && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
       let emptyCellAdvance = mix(

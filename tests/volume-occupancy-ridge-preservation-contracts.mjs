@@ -22,7 +22,7 @@ function assertOccupancyRidgeContract(source) {
 
   assert.match(
     raymarch,
-    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*let directSupport = directCellOpticalSupport\(p\);/,
+    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*var directSupport = 1\.0;[\s\S]*if \(!fullGridCapture && occupancySkipStrength > 0\.0\) \{\s*directSupport = directCellOpticalSupport\(p\);/,
     'occupancy strength is available at the conservative empty-cell decision',
   );
   assert.match(
