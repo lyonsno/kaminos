@@ -76,7 +76,7 @@ function controllerFixture() {
   };
   const context = {
     document, URLSearchParams,
-    window: { location: { search: '' }, setTimeout() {}, clearTimeout() {}, setInterval() { return 1; }, clearInterval() {} },
+    window: { location: { search: `?commit=${'a'.repeat(40)}` }, setTimeout() {}, clearTimeout() {}, setInterval() { return 1; }, clearInterval() {} },
     Image: class {
       constructor() { this.naturalWidth = 800; this.naturalHeight = 600; pendingImages.push(this); }
     },
@@ -104,6 +104,8 @@ function controllerFixture() {
   } };
 }
 const { context, elements, pendingImages, loadRuntime } = controllerFixture();
+assert.equal(new URL(elements.get('sam-mask-runtime-frame').src, 'http://localhost/').searchParams.get('commit'), 'a'.repeat(40),
+  'the serving realm must receive the same commit identity as the registered workbench');
 assert.equal(elements.get('run-segmentation').disabled, true, 'run must wait for the selected image to load');
 loadRuntime();
 pendingImages[0].onload();

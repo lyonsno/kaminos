@@ -194,7 +194,9 @@ function waitForRuntime() {
       }
       resolve(runtime);
     }, { once: true });
-    runtimeFrame.src = `./sam-mask-island-serving.html?autorun=0&manifest=${encodeURIComponent(manifestUrl)}`;
+    const runtimeParams = new URLSearchParams({ autorun: '0', manifest: manifestUrl });
+    if (params.has('commit')) runtimeParams.set('commit', params.get('commit'));
+    runtimeFrame.src = `./sam-mask-island-serving.html?${runtimeParams}`;
   }).then(runtime => {
     runtimeAvailable = true;
     if (selectedImage) {
