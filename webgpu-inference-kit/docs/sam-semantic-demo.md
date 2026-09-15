@@ -44,10 +44,10 @@ The optional witness exercises the real UI and preserves route identity, output 
 
 ```sh
 node tools/sam-semantic-mask-workbench-witness.mjs \
-  --url http://127.0.0.1:18596/ \
+  --url "$(node -p \"require('/absolute/path/sam-route.json').effectiveUrl\")" \
   --out /absolute/path/sam-positive.png \
   --report /absolute/path/sam-witness.json \
   --negative-control
 ```
 
-The witness launches Chrome and performs GPU inference. Run it when the device is available. `--timeout-ms` is optional and caller-owned; there is no default model-execution timeout. Reference parity uses `smokes/sam-mask-island-parity.html` and the separate parity tools, not the interactive workbench's request path.
+The witness requires the exact registered URL from the server receipt, not the root redirect. It launches Chrome and performs GPU inference. Run it when the device is available. `--timeout-ms` is optional and caller-owned; there is no default model-execution timeout. Reference parity uses `smokes/sam-mask-island-parity.html` and the separate parity tools, not the interactive workbench's request path.

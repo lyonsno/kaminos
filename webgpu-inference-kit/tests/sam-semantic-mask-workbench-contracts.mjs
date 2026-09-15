@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 
 const html = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.html', import.meta.url), 'utf8');
 const workbench = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.js', import.meta.url), 'utf8');
@@ -47,5 +48,62 @@ assert.match(runner, /outputAuthority:\s*['"]actual-webgpu-readback['"]/, 'runti
 assert.match(runner, /verificationState:\s*['"]not-attached['"]/, 'execution-only dynamic work must not counterfeit parity passage');
 assert.match(runner, /selectedCandidateCount\s*===\s*0[\s\S]*new Uint32Array/, 'runtime must not render candidate zero after an empty selection');
 assert.match(runner, /if \(verificationAttached\)[\s\S]*WebGPU parity mismatch/, 'reference mismatch gates must remain load-bearing when verification is attached');
+
+// Exercise the actual page controller with explicitly deferred image loads.
+const elements = new Map();
+const pendingImages = [];
+function element() {
+  const context = { clearCount: 0, clearRect() { this.clearCount += 1; }, drawImage() {} };
+  return {
+    dataset: {}, children: [], textContent: '', disabled: false, value: '',
+    append(child) { this.children.push(child); },
+    querySelectorAll() { return this.children; },
+    setAttribute() {}, addEventListener() {},
+    getContext() { return context; },
+  };
+}
+const document = {
+  getElementById(id) {
+    if (!elements.has(id)) elements.set(id, element());
+    return elements.get(id);
+  },
+  createElement: element,
+};
+const context = {
+  document, URLSearchParams,
+  window: { location: { search: '' }, setTimeout() {}, clearTimeout() {} },
+  Image: class {
+    constructor() { this.naturalWidth = 800; this.naturalHeight = 600; pendingImages.push(this); }
+  },
+  console,
+};
+runInNewContext(`${workbench}\nglobalThis.controller = { selectSample, runMask, samples: SAMPLE_IMAGES };`, context);
+assert.equal(elements.get('run-segmentation').disabled, true, 'run must wait for the selected image to load');
+pendingImages[0].onload();
+await Promise.resolve();
+await Promise.resolve();
+assert.equal(elements.get('run-segmentation').disabled, false);
+for (const id of ['effective-route', 'output-authority', 'candidate-evidence', 'foreground-evidence']) elements.get(id).textContent = 'previous result';
+const clearCount = elements.get('mask-canvas').getContext().clearCount;
+const firstSelection = context.controller.selectSample(context.controller.samples[1]);
+assert.equal(elements.get('run-segmentation').disabled, true);
+assert.ok(elements.get('mask-canvas').getContext().clearCount > clearCount, 'changing samples clears the old raw mask');
+for (const id of ['effective-route', 'output-authority', 'candidate-evidence', 'foreground-evidence']) {
+  assert.notEqual(elements.get(id).textContent, 'previous result', `${id} cannot describe the previous sample`);
+}
+const secondSelection = context.controller.selectSample(context.controller.samples[2]);
+pendingImages[1].onload();
+await firstSelection;
+assert.equal(elements.get('run-segmentation').disabled, true, 'stale image completion must not enable the newer sample');
+pendingImages[2].onload();
+await secondSelection;
+assert.equal(elements.get('run-segmentation').disabled, false);
+assert.equal(elements.get('prompt-input').value, 'person');
+const failedSelection = context.controller.selectSample(context.controller.samples[1]);
+pendingImages[3].onerror();
+await failedSelection;
+assert.equal(elements.get('workbench-status').dataset.state, 'failed');
+assert.equal(elements.get('run-segmentation').disabled, true, 'failed image load cannot run against the previous image');
+assert.ok(elements.get('sample-picker').children.every(button => !button.disabled), 'another sample remains selectable after failure');
 
 console.log('sam semantic mask workbench contracts passed');

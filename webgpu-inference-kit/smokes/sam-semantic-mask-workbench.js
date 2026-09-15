@@ -44,6 +44,7 @@ let selectedImage = null;
 let activeInvocationId = null;
 let positiveMaskFingerprint = null;
 let runtimeReady = null;
+let sampleLoadVersion = 0;
 
 function setStatus(state, text) {
   statusRoot.dataset.state = state;
@@ -197,6 +198,7 @@ function waitForRuntime() {
 }
 
 async function runMask(controlKind = 'positive') {
+  if (!selectedImage || runButton.disabled) return;
   const promptText = controlKind === 'negative-control'
     ? 'a purple submarine with zebra stripes'
     : promptInput.value.trim();
@@ -252,19 +254,36 @@ async function runMask(controlKind = 'positive') {
 }
 
 async function selectSample(sample) {
+  const loadVersion = ++sampleLoadVersion;
   selectedSample = sample;
+  selectedImage = null;
+  positiveMaskFingerprint = null;
+  setBusy(true);
   promptInput.value = sample.prompt;
   for (const button of samplePicker.querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(button.dataset.sampleId === sample.id));
   }
   setStatus('running', 'Loading sample');
-  selectedImage = await loadImage(sample.file);
-  drawSource(selectedImage);
-  positiveMaskFingerprint = null;
-  setBusy(false);
+  for (const canvas of [sourceCanvas, overlayCanvas, maskCanvas]) {
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  }
+  for (const id of ['effective-route', 'output-authority', 'candidate-evidence', 'foreground-evidence', 'source-meta', 'mask-meta']) {
+    document.getElementById(id).textContent = 'Not run';
+  }
   document.getElementById('overlay-meta').textContent = 'No output';
   document.getElementById('control-evidence').textContent = 'Not run';
-  setStatus('idle', 'Sample loaded');
+  try {
+    const image = await loadImage(sample.file);
+    if (loadVersion !== sampleLoadVersion) return;
+    selectedImage = image;
+    drawSource(image);
+    setBusy(false);
+    setStatus('idle', 'Sample loaded');
+  } catch (error) {
+    if (loadVersion !== sampleLoadVersion) return;
+    for (const button of samplePicker.querySelectorAll('button')) button.disabled = false;
+    setStatus('failed', error.message);
+  }
 }
 
 for (const sample of SAMPLE_IMAGES) {
