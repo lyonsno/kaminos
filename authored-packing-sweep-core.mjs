@@ -1831,7 +1831,9 @@ function measureCarrierContact(left, right) {
   const intersects = maximumPenetration > AUTHORED_PACKING_CONTACT_TOLERANCE;
   return {
     intersects,
-    signedGap:intersects
+    // Admission tolerance classifies negligible overlap; it does not create
+    // geometric clearance for a solver to spend against this contact.
+    signedGap:maximumPenetration > 0
       ? -maximumPenetration
       : Number.isFinite(nearestSeparatedGap)
         ? nearestSeparatedGap

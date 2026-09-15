@@ -1,0 +1,209 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-same-page-screenshot-v1",
+    "effective": "independent-headless-same-page-screenshot-v1",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777233,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://localhost:8793/artifacts/packing-source-gap-repair-0915/mild-visual/index.html?state=start",
+    "outputPath": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-source-gap-repair-0915/mild-visual/start.png",
+    "reportPath": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-source-gap-repair-0915/mild-visual/start-capture.json",
+    "viewport": {
+      "width": 1400,
+      "height": 1000
+    },
+    "captureTimeoutMs": 30000,
+    "cleanupGraceMs": 1000,
+    "domDatasetKeys": [
+      "witnessRenderComplete",
+      "witnessRenderFrame",
+      "witnessState",
+      "witnessBundle",
+      "witnessCarrier",
+      "witnessRoute",
+      "witnessCaptureBatch"
+    ],
+    "captureBatchIdentity": {
+      "sha256": "556501bc381f8aad434dc53275d9adf0edf88e33221174bf31d30817dc7304c3"
+    },
+    "pathEncoding": "absolute-runtime-paths"
+  },
+  "process": {
+    "pid": 22779,
+    "processGroupId": 22779,
+    "detachedProcessGroup": true,
+    "exit": {
+      "code": 143,
+      "signal": null
+    },
+    "cleanup": {
+      "processGroupId": 22779,
+      "graceMs": 1000,
+      "groupPresentBefore": true,
+      "actions": [
+        {
+          "signal": "SIGTERM",
+          "result": "sent"
+        }
+      ],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-same-page-headless-3YjQdq"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3495,
+    "retainedBytes": 3495,
+    "truncated": false,
+    "tail": "\nDevTools listening on ws://127.0.0.1:64386/devtools/browser/41f246ec-d20c-4eac-a329-26c761b2278c\n[0915/115640.996563:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0915/115641.045068:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400497800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/115641.183819:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://localhost:8793/artifacts/packing-source-gap-repair-0915/mild-visual/index.html?state=start (0)\n[0915/115641.183926:INFO:CONSOLE:0] \"[.WebGL-0x13400497800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-source-gap-repair-0915/mild-visual/index.html?state=start (0)\n[0915/115641.184494:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400497800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/115641.192663:INFO:CONSOLE:0] \"[.WebGL-0x13400497800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-source-gap-repair-0915/mild-visual/index.html?state=start (0)\n[0915/115641.193303:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400497800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/115641.202758:INFO:CONSOLE:0] \"[.WebGL-0x13400497800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-source-gap-repair-0915/mild-visual/index.html?state=start (0)\n[0915/115641.203480:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400497800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0915/115641.211350:INFO:CONSOLE:0] \"[.WebGL-0x13400497800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://localhost:8793/artifacts/packing-source-gap-repair-0915/mild-visual/index.html?state=start (0)\n[0915/115641.413323:ERROR:content/browser/network_service_instance_impl.cc:618] Network service crashed or was terminated, restarting service.\n[0915/115641.413711:ERROR:content/browser/gpu/gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=15\n[0915/115641.413716:WARNING:content/browser/gpu/gpu_process_host.cc:1479] The GPU process has crashed 1 time(s)\n[0915/115641.428736:ERROR:base/apple/mach_port_rendezvous_mac.cc:256] bootstrap_look_up org.chromium.Chromium.MachPortRendezvousServer.1: Unknown service name (1102)\n[0915/115641.428936:ERROR:base/memory/shared_memory_switch.cc:261] No rendezvous client, terminating process (parent died?)\n[0915/115641.436999:ERROR:base/apple/mach_port_rendezvous_mac.cc:256] bootstrap_look_up org.chromium.Chromium.MachPortRendezvousServer.1: Permission denied (1100)\n[0915/115641.437218:ERROR:base/memory/shared_memory_switch.cc:261] No rendezvous client, terminating process (parent died?)\n"
+  },
+  "primaryOutput": {
+    "path": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-source-gap-repair-0915/mild-visual/start.png",
+    "sizeBytes": 178814,
+    "sha256": "aa670b26d405283d580d1d905c7c22be770a73eba4b0b1bd33ae78af2ff90c25",
+    "png": {
+      "width": 1400,
+      "height": 1000,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 47,
+      "idatBytes": 178229
+    },
+    "visualSignal": {
+      "width": 1400,
+      "height": 1000,
+      "pixelCount": 1400000,
+      "nonUniformPixels": 243463,
+      "minimumChannel": 13,
+      "maximumChannel": 255,
+      "channelRange": 242,
+      "admission": "nonblank-v0"
+    }
+  },
+  "frameReceipt": {
+    "status": "complete",
+    "route": "same-cdp-page-frame-v0",
+    "targetId": "50D9EACF07102D9F93B5E2E8F81E2A93",
+    "targetType": "page",
+    "requestedUrl": "http://localhost:8793/artifacts/packing-source-gap-repair-0915/mild-visual/index.html?state=start",
+    "dataset": {
+      "witnessRenderComplete": "true",
+      "witnessRenderFrame": "11",
+      "witnessState": "start",
+      "witnessBundle": "556501bc381f8aad434dc53275d9adf0edf88e33221174bf31d30817dc7304c3",
+      "witnessCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+      "witnessRoute": "experimental-packing-trajectory-v0",
+      "witnessCaptureBatch": "556501bc381f8aad434dc53275d9adf0edf88e33221174bf31d30817dc7304c3"
+    },
+    "renderComplete": "true",
+    "renderFrame": "11",
+    "captureBatchIdentitySha256": "556501bc381f8aad434dc53275d9adf0edf88e33221174bf31d30817dc7304c3",
+    "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+  },
+  "domReceipt": null,
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "same-page-frame-captured",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777233,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-source-gap-repair-0915/mild-visual/start.png",
+      "sizeBytes": 178814,
+      "sha256": "aa670b26d405283d580d1d905c7c22be770a73eba4b0b1bd33ae78af2ff90c25",
+      "png": {
+        "width": 1400,
+        "height": 1000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 47,
+        "idatBytes": 178229
+      },
+      "visualSignal": {
+        "width": 1400,
+        "height": 1000,
+        "pixelCount": 1400000,
+        "nonUniformPixels": 243463,
+        "minimumChannel": 13,
+        "maximumChannel": 255,
+        "channelRange": 242,
+        "admission": "nonblank-v0"
+      }
+    },
+    "frameReceipt": {
+      "status": "complete",
+      "route": "same-cdp-page-frame-v0",
+      "targetId": "50D9EACF07102D9F93B5E2E8F81E2A93",
+      "targetType": "page",
+      "requestedUrl": "http://localhost:8793/artifacts/packing-source-gap-repair-0915/mild-visual/index.html?state=start",
+      "dataset": {
+        "witnessRenderComplete": "true",
+        "witnessRenderFrame": "11",
+        "witnessState": "start",
+        "witnessBundle": "556501bc381f8aad434dc53275d9adf0edf88e33221174bf31d30817dc7304c3",
+        "witnessCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+        "witnessRoute": "experimental-packing-trajectory-v0",
+        "witnessCaptureBatch": "556501bc381f8aad434dc53275d9adf0edf88e33221174bf31d30817dc7304c3"
+      },
+      "renderComplete": "true",
+      "renderFrame": "11",
+      "captureBatchIdentitySha256": "556501bc381f8aad434dc53275d9adf0edf88e33221174bf31d30817dc7304c3",
+      "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+    }
+  }
+}

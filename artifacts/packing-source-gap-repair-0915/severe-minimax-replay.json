@@ -1,0 +1,21 @@
+{
+  "schema": "kaminos.diagnostic-severe-minimax-replay.v0",
+  "sourceProblem": "severe/problem.json",
+  "sourceStep": "severe/step-002.json",
+  "sourceStepSha256": "18c00240f700bbb61834adce6e18ddf93b3e75cf64e23ba732317ec676a2d7cd",
+  "evaluator": "evaluateAuthoredPackingExactResidualState",
+  "vectorRule": "step.start.vector[j] + scale * step.solver.minimax.x[j]",
+  "claim": "Offline diagnostic, not accepted into the saved trajectory. No optimizer or acceptance-rule change.",
+  "initialPair": 8.506025809610756,
+  "initialBone": 5.812467441841391,
+  "familyRegressionTolerance": 1e-12,
+  "evaluations": [
+    {"scale":1,"pair":9.740144652291953,"bone":5.812467441843762,"rawVolume":0.6931409628758964,"regressions":["pairwisePenetration","skeletalPenetration"]},
+    {"scale":0.5,"pair":9.045560862380517,"bone":5.812467441842577,"rawVolume":0.6935944980447791,"regressions":["pairwisePenetration","skeletalPenetration"]},
+    {"scale":0.25,"pair":8.698498880726168,"bone":5.812467441841982,"rawVolume":0.6938212656292193,"regressions":["pairwisePenetration"]},
+    {"scale":0.125,"pair":8.525026105563128,"bone":5.812467441841687,"rawVolume":0.6939346494214396,"regressions":["pairwisePenetration"]},
+    {"scale":0.0625,"pair":8.438304363918819,"bone":5.812467441841538,"rawVolume":0.6939913413175498,"regressions":[]},
+    {"scale":0.015625,"pair":8.48255317533016,"bone":5.812467441841427,"rawVolume":0.6940338602396328,"regressions":[]}
+  ],
+  "allEvaluations": {"compartmentEscape":0,"endpointDrift":0,"admittedVolumeError":0}
+}

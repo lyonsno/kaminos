@@ -1,0 +1,175 @@
+{
+  "status": "experiment-completed",
+  "runId": "450d3bb9-edbe-4b78-869f-9dd2d70004be",
+  "started": "2026-09-15T15:52:11.088Z",
+  "finished": "2026-09-15T15:54:51.329Z",
+  "provenance": {
+    "runId": "450d3bb9-edbe-4b78-869f-9dd2d70004be",
+    "started": "2026-09-15T15:52:11.088Z",
+    "variant": "mild",
+    "requestedRoute": "experimental-source-gap-authored-inequality-trajectory",
+    "effectiveRoute": "experimental-source-gap-authored-inequality-trajectory",
+    "sourceFiles": {
+      "authored-packing-sweep-core.mjs": "473586c5549148c3ea6d6e355c0cee62b65ab13576c1b98e92ed745b52062a19",
+      "packing-inequality-step.mjs": "c0ce79ade72a2ba9aeadfa3242b5d0086239d70bd9892cf902face44a46e9fb4",
+      "tools/packing-inequality-subproblem.py": "853b3e922d76b9b8af2d86ddd435cb2d14ef2bf168769341cf1118e0d3d2d834",
+      "tools/packing-inequality-trajectory.mjs": "0015453082ae206da900002bacc143e0b2746b2302323027515b675e17d6c603"
+    },
+    "manifestSha256": "0b7fd5374edaa70dc38c68d0da41e67a9df56dadc0cb2c29199e1ce8fbe991fb",
+    "problemSha256": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+    "requestedSteps": 8,
+    "config": {
+      "radius": 2,
+      "finiteDifferenceStep": 0.001,
+      "translationBounds": [
+        -50,
+        50
+      ],
+      "backtrackingScales": [
+        1,
+        0.5,
+        0.25,
+        0.125,
+        0.0625,
+        0.03125,
+        0.015625,
+        0.0078125,
+        0.00390625,
+        0.001953125,
+        0.0009765625,
+        0.00048828125,
+        0.000244140625,
+        0.0001220703125,
+        0.00006103515625,
+        0.000030517578125,
+        0.0000152587890625,
+        0.00000762939453125,
+        0.000003814697265625,
+        0.0000019073486328125,
+        9.5367431640625e-7,
+        4.76837158203125e-7,
+        2.384185791015625e-7,
+        1.1920928955078125e-7,
+        5.960464477539063e-8,
+        2.9802322387695312e-8,
+        1.4901161193847656e-8,
+        7.450580596923828e-9,
+        3.725290298461914e-9,
+        1.862645149230957e-9,
+        9.313225746154785e-10
+      ],
+      "python": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/.venv-packing/bin/python"
+    },
+    "initialization": "canonical restoration-to-reference bridge; zero sine coefficients, not unmodified authored mesh",
+    "objective": "minimize pairwise overlap; do not worsen skeletal/compartment/endpoint/admitted-volume residuals"
+  },
+  "termination": "pair-objective-zero-with-bone-residual",
+  "attemptedSteps": 3,
+  "acceptedSteps": 3,
+  "evaluationCount": 205,
+  "start": {
+    "pairwisePenetration": 2.294736030859558,
+    "skeletalPenetration": 2.053948773653694,
+    "rawPairwisePenetration": 2.294736030859558,
+    "rawSkeletalPenetration": 2.053948773653694,
+    "compartmentEscape": 0,
+    "endpointDrift": 0,
+    "maximumRelativeVolumeError": 0,
+    "rawMaximumRelativeVolumeError": 0.20652377983729972
+  },
+  "selected": {
+    "pairwisePenetration": 0,
+    "skeletalPenetration": 2.0095369741714677,
+    "rawPairwisePenetration": 3.552713678800501e-14,
+    "rawSkeletalPenetration": 2.0095369741714677,
+    "compartmentEscape": 0,
+    "endpointDrift": 0,
+    "maximumRelativeVolumeError": 0,
+    "rawMaximumRelativeVolumeError": 0.2062033087172342
+  },
+  "displacement": [
+    {
+      "constructionId": "muscle-1",
+      "maximumNodeDisplacement": 1.7601939493770629
+    },
+    {
+      "constructionId": "muscle-2",
+      "maximumNodeDisplacement": 0.5537305977197049
+    },
+    {
+      "constructionId": "tendon-1",
+      "maximumNodeDisplacement": 0.09023384160731197
+    },
+    {
+      "constructionId": "muscle-3",
+      "maximumNodeDisplacement": 2.5767950737216876
+    },
+    {
+      "constructionId": "muscle-4",
+      "maximumNodeDisplacement": 0.15263981404900093
+    },
+    {
+      "constructionId": "tendon-2",
+      "maximumNodeDisplacement": 0.15068839272932166
+    }
+  ],
+  "history": [
+    {
+      "step": 1,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 0.7228571185294745,
+        "skeletalPenetration": 2.053945938313344,
+        "rawPairwisePenetration": 0.7228571185294745,
+        "rawSkeletalPenetration": 2.053945938313344,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.2065237652435732
+      },
+      "evaluationCount": 68,
+      "selectedScale": 1
+    },
+    {
+      "step": 2,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 0.00006156078934616005,
+        "skeletalPenetration": 2.0095369741714677,
+        "rawPairwisePenetration": 0.00006156078934616005,
+        "rawSkeletalPenetration": 2.0095369741714677,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.2062033087172342
+      },
+      "evaluationCount": 68,
+      "selectedScale": 1
+    },
+    {
+      "step": 3,
+      "status": "improved",
+      "metrics": {
+        "pairwisePenetration": 0,
+        "skeletalPenetration": 2.0095369741714677,
+        "rawPairwisePenetration": 3.552713678800501e-14,
+        "rawSkeletalPenetration": 2.0095369741714677,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "rawMaximumRelativeVolumeError": 0.2062033087172342
+      },
+      "evaluationCount": 68,
+      "selectedScale": 1
+    }
+  ],
+  "artifacts": {
+    "problem.json": "a3e6825f537d6fbeca95d7e5ee3cd5bea403523960c6c8b9f31a23e7c64a53f7",
+    "provenance.json": "27a5af2c2cd25a32cf2a4f61b7b4c6f2d57bf42448a27caff3a8c4da829036cb",
+    "start.json": "b0a8c51afbfac3a4b439ce58e51b2340597835c41905f6d4de3ef91a55765807",
+    "step-001.json": "4728aab500ecea161f1995f6debf565735cbada1f379e0f00c113545679907bd",
+    "step-002.json": "4e38767ecb7a676e89fba6276aa28f3e84301bda386848c2bc429d90619a50b3",
+    "step-003.json": "5245bdc345c551adfa863fa47556dd869d0355d528bd17e58af1693f879b0cc6",
+    "selected.json": "1f967efc5263fae3f43c90ad37cd02f5490cb5fcc89c1a935f0ea24825032e76"
+  }
+}

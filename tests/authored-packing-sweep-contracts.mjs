@@ -1688,13 +1688,13 @@ test('authored exact residual admission does not resurrect a sub-tolerance non-c
     'the problem admission and exact-contact classifier must consume one tolerance law',
   );
   assert.equal(rawBoneRow.intersects, false);
-  assert.ok(rawBoneRow.signedGap >= 0);
+  assert.equal(rawBoneRow.signedGap, -rawBoneRow.maximumPenetration);
   assert.ok(rawBoneRow.maximumPenetration > 0);
   assert.ok(
     rawBoneRow.maximumPenetration < problem.admission.exactContactTolerance,
     'the raw SAT overlap must remain below the authority-bearing exact-contact tolerance',
   );
-  assert.ok(solverBoneRow.signedGap >= 0);
+  assert.equal(solverBoneRow.signedGap, -rawBoneRow.maximumPenetration);
   assert.equal(
     state.exactContact.summary.admittedMaximumSkeletalPenetration,
     0,
@@ -1708,7 +1708,7 @@ test('authored exact residual admission does not resurrect a sub-tolerance non-c
   );
 });
 
-test('authored exact search enriches its working set when a useful candidate crosses a clear bone row', async () => {
+test('authored exact search includes a sub-tolerance bone contact in its initial working set', async () => {
   const manifest = await fixture();
   const clean = variant(manifest, 'clean-reference');
   const mild = variant(manifest, 'mild-interpenetration');
@@ -1759,7 +1759,9 @@ test('authored exact search enriches its working set when a useful candidate cro
   const blockingBone = start.rows.find(
     row => row.key === 'bone:central-bone|muscle-2',
   );
-  assert.ok(blockingBone.signedGap > 0, 'the blocking bone row must start clear');
+  assert.equal(blockingBone.signedGap, -blockingBone.maximumPenetration);
+  assert.ok(blockingBone.maximumPenetration > 0 && blockingBone.maximumPenetration < problem.admission.exactContactTolerance);
+  assert.equal(start.metrics.skeletalPenetration, 0, 'negligible overlap remains admitted');
 
   const requestedConfig = authoredPacking.createAuthoredPackingExactResidualStepConfig();
   assert.equal(
@@ -1780,17 +1782,16 @@ test('authored exact search enriches its working set when a useful candidate cro
   const row = trajectory.work.rows[0];
   assert.equal(row.accepted, true);
   assert.ok(row.work, 'the exact trajectory row must preserve step-local work custody');
-  assert.ok(row.work.guardRowExchanges.length > 0);
   assert.equal(
     trajectory.work.evaluationCount,
     row.work.evaluationCount + trajectory.work.selectedStateEvaluationCount,
     'the exact trajectory must preserve reconcilable step-local and terminal work accounting',
   );
   assert.ok(
-    row.work.guardRowExchanges.some(exchange =>
+    !row.work.guardRowExchanges.some(exchange =>
       exchange.addedConstraintKeys.includes('bone:central-bone|muscle-2')
     ),
-    'the nonlinear candidate that crosses the clear authored bone must promote that row into direction construction',
+    'an already-present bone contact must not require discovery through a false-clearance candidate',
   );
   assert.ok(
     row.directionConstruction.activeRows.some(

@@ -1,0 +1,60 @@
+{
+  "runId": "450d3bb9-edbe-4b78-869f-9dd2d70004be",
+  "started": "2026-09-15T15:52:11.088Z",
+  "variant": "mild",
+  "requestedRoute": "experimental-source-gap-authored-inequality-trajectory",
+  "effectiveRoute": "experimental-source-gap-authored-inequality-trajectory",
+  "sourceFiles": {
+    "authored-packing-sweep-core.mjs": "473586c5549148c3ea6d6e355c0cee62b65ab13576c1b98e92ed745b52062a19",
+    "packing-inequality-step.mjs": "c0ce79ade72a2ba9aeadfa3242b5d0086239d70bd9892cf902face44a46e9fb4",
+    "tools/packing-inequality-subproblem.py": "853b3e922d76b9b8af2d86ddd435cb2d14ef2bf168769341cf1118e0d3d2d834",
+    "tools/packing-inequality-trajectory.mjs": "0015453082ae206da900002bacc143e0b2746b2302323027515b675e17d6c603"
+  },
+  "manifestSha256": "0b7fd5374edaa70dc38c68d0da41e67a9df56dadc0cb2c29199e1ce8fbe991fb",
+  "problemSha256": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+  "requestedSteps": 8,
+  "config": {
+    "radius": 2,
+    "finiteDifferenceStep": 0.001,
+    "translationBounds": [
+      -50,
+      50
+    ],
+    "backtrackingScales": [
+      1,
+      0.5,
+      0.25,
+      0.125,
+      0.0625,
+      0.03125,
+      0.015625,
+      0.0078125,
+      0.00390625,
+      0.001953125,
+      0.0009765625,
+      0.00048828125,
+      0.000244140625,
+      0.0001220703125,
+      0.00006103515625,
+      0.000030517578125,
+      0.0000152587890625,
+      0.00000762939453125,
+      0.000003814697265625,
+      0.0000019073486328125,
+      9.5367431640625e-7,
+      4.76837158203125e-7,
+      2.384185791015625e-7,
+      1.1920928955078125e-7,
+      5.960464477539063e-8,
+      2.9802322387695312e-8,
+      1.4901161193847656e-8,
+      7.450580596923828e-9,
+      3.725290298461914e-9,
+      1.862645149230957e-9,
+      9.313225746154785e-10
+    ],
+    "python": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/.venv-packing/bin/python"
+  },
+  "initialization": "canonical restoration-to-reference bridge; zero sine coefficients, not unmodified authored mesh",
+  "objective": "minimize pairwise overlap; do not worsen skeletal/compartment/endpoint/admitted-volume residuals"
+}
