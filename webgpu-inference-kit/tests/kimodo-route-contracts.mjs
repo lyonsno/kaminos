@@ -264,4 +264,78 @@ assert.throws(
   assert.match(doc, /369/);
 }
 
+// --- Transport durability and route binding (r3 findings) ------------------
+// The law must survive serialization (descriptor + trusted registry, not a
+// bare function), its loss must fail loud, and {route} must BIND the
+// classifier to the receipt's route identity.
+
+{
+  const roundTripped = JSON.parse(JSON.stringify(route));
+  assert.equal(validateRouteDefinition(roundTripped).ok, true,
+    'a JSON round-tripped Kimodo route with its law descriptor stays valid');
+
+  const badReceipt = JSON.parse(JSON.stringify(receipt));
+  badReceipt.outputs[0].shape = [90, 77, 3];
+  badReceipt.outputs[1].shape = [1];
+  const rtEvidence = classifyWebGpuRouteReceiptEvidence(badReceipt, { route: roundTripped });
+  assert.equal(rtEvidence.authoritative, false,
+    'the law survives a JSON round-trip of the route definition');
+
+  const cloned = structuredClone(route);
+  assert.equal(validateRouteDefinition(cloned).ok, true,
+    'route definitions must be structured-cloneable');
+  assert.equal(classifyWebGpuRouteReceiptEvidence(badReceipt, { route: cloned }).authoritative, false);
+
+  const lawless = JSON.parse(JSON.stringify(route));
+  delete lawless.outputArtifactLaw;
+  const lawlessVerdict = validateRouteDefinition(lawless);
+  assert.equal(lawlessVerdict.ok, false,
+    'a Kimodo definition that lost its required law must be rejected, not silently lawless');
+  assert.match(lawlessVerdict.errors.join('\n'), /artifact law/i);
+  const lawlessEvidence = classifyWebGpuRouteReceiptEvidence(badReceipt, { route: lawless });
+  assert.equal(lawlessEvidence.authoritative, false,
+    'a lawless route cannot confer authority');
+}
+
+{
+  // Route-identity binding: a mismatched route must yield a legible
+  // route-mismatch, not wrong-law application or silent authority.
+  const { createMogeDepthNormalRouteDefinition } = await import('../src/index.js');
+  const mogeRoute = createMogeDepthNormalRouteDefinition();
+  const badReceipt = JSON.parse(JSON.stringify(receipt));
+  badReceipt.outputs[0].shape = [90, 77, 3];
+  badReceipt.outputs[1].shape = [1];
+  const mismatch = classifyWebGpuRouteReceiptEvidence(badReceipt, { route: mogeRoute });
+  assert.equal(mismatch.authoritative, false,
+    'a mismatched validator-less route must not confer authority');
+  assert.match((mismatch.reasons ?? []).join('\n'), /route/i);
+
+  const inverse = classifyWebGpuRouteReceiptEvidence(
+    { ...JSON.parse(JSON.stringify(receipt)), requestedRouteId: mogeRoute.routeId, effectiveRouteId: mogeRoute.routeId },
+    { route });
+  assert.equal(inverse.authoritative, false);
+  assert.match((inverse.reasons ?? []).join('\n'), /route/i,
+    'the inverse mismatch names the route identity, not shape law of the wrong contract');
+
+  const conflicting = classifyWebGpuRouteReceiptEvidence(receipt,
+    { route, expectedRouteId: mogeRoute.routeId });
+  assert.equal(conflicting.authoritative, false,
+    'a conflicting expectedRouteId and route.routeId cannot both be satisfied');
+}
+
+{
+  // Route-bound receipt authority: the advertised assertion must have a
+  // route-aware form that rejects the disavowed pair.
+  const badReceipt = JSON.parse(JSON.stringify(receipt));
+  badReceipt.outputs[0].shape = [90, 77, 3];
+  badReceipt.outputs[1].shape = [1];
+  assert.throws(() => assertAuthoritativeRouteReceipt(badReceipt, route),
+    /somaJoints shape|artifact law/i,
+    'route-bound assertion must reject the disavowed pair');
+  assert.doesNotThrow(() => assertAuthoritativeRouteReceipt(receipt, route));
+  // The generic (route-less) form is envelope authority ONLY — a documented
+  // narrowing this test records deliberately.
+  assert.doesNotThrow(() => assertAuthoritativeRouteReceipt(badReceipt));
+}
+
 console.log('kimodo route contracts passed');

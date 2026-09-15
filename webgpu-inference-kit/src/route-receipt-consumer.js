@@ -1,3 +1,8 @@
+import { artifactLawRef, requiredArtifactLawRef, resolveArtifactLaw } from './artifact-law-registry.js';
+
+function requiresLaw(routeId) {
+  return requiredArtifactLawRef(routeId) != null;
+}
 import {
   validateWebGpuBackendIdentity,
 } from './gpu-environment.js';
@@ -188,16 +193,33 @@ function baseClassification(receipt, options = {}) {
 
 export function classifyWebGpuRouteReceiptEvidence(receipt, options = {}) {
   const base = baseClassification(receipt, options);
-  // Route-aware artifact law: when the caller supplies the route definition,
-  // its outputArtifactValidator participates in the authority decision — a
-  // receipt whose outputs violate the route's semantic invariants is not
-  // authoritative evidence, whatever the generic envelope says.
-  if (options.route?.outputArtifactValidator && Array.isArray(receipt?.outputs)) {
-    const law = options.route.outputArtifactValidator(receipt.outputs);
-    if (!law.ok) {
+  // Route-aware authority: supplying { route } BINDS the classification to
+  // that route's identity and semantic law. Identity mismatch is decided
+  // FIRST (so the wrong contract's shape law never masquerades as the
+  // causal error), then the law resolves through the trusted registry — an
+  // unresolvable or missing-required law cannot confer authority.
+  if (options.route) {
+    const route = options.route;
+    const routeId = route.routeId;
+    const demote = (reason) => {
       base.classification = 'invalid';
       base.authoritative = false;
-      base.reasons = [...(base.reasons || []), ...law.errors.map((e) => `outputs: ${e}`)];
+      base.reasons = [...(base.reasons || []), reason];
+    };
+    if (options.expectedRouteId && options.expectedRouteId !== routeId) {
+      demote(`route-mismatch: expectedRouteId ${options.expectedRouteId} conflicts with supplied route ${routeId}`);
+    } else if (receipt?.requestedRouteId !== routeId || receipt?.effectiveRouteId !== routeId) {
+      demote(`route-mismatch: receipt route ${receipt?.requestedRouteId ?? 'absent'}/${receipt?.effectiveRouteId ?? 'absent'} does not match supplied route ${routeId}`);
+    } else if (route.outputArtifactLaw != null || requiresLaw(routeId)) {
+      const validator = resolveArtifactLaw(route.outputArtifactLaw);
+      if (!validator) {
+        demote(`artifact law ${artifactLawRef(route.outputArtifactLaw) ?? 'missing'} for route ${routeId} cannot be resolved — cannot verify, cannot authorize`);
+      } else if (Array.isArray(receipt?.outputs)) {
+        const law = validator(receipt.outputs);
+        if (!law.ok) {
+          law.errors.forEach((e) => demote(`outputs: ${e}`));
+        }
+      }
     }
   }
   const scheduler = receipt?.runtime?.scheduler || null;

@@ -1,3 +1,4 @@
+import { artifactLawRef, resolveArtifactLaw } from './artifact-law-registry.js';
 export const WEBGPU_ROUTE_RECEIPT_SCHEMA = 'kaminos.webgpu-route-receipt.v0';
 
 function clone(value) {
@@ -121,7 +122,24 @@ export function validateRouteReceipt(receipt) {
   return { ok: errors.length === 0, errors };
 }
 
-export function assertAuthoritativeRouteReceipt(receipt) {
+export function assertAuthoritativeRouteReceipt(receipt, route = null) {
+  // With a route: authority is ROUTE-BOUND — identity must match and the
+  // route's artifact law (resolved through the trusted registry) must pass.
+  // Without one, this asserts GENERIC ENVELOPE authority only; consumers of
+  // routes that carry semantic laws (e.g. Kimodo) must pass the route.
+  if (route != null) {
+    if (receipt?.requestedRouteId !== route.routeId || receipt?.effectiveRouteId !== route.routeId) {
+      throw new Error(`route-mismatch: receipt route ${receipt?.requestedRouteId ?? 'absent'} does not match ${route.routeId}`);
+    }
+    if (route.outputArtifactLaw != null) {
+      const validator = resolveArtifactLaw(route.outputArtifactLaw);
+      if (!validator) {
+        throw new Error(`artifact law ${artifactLawRef(route.outputArtifactLaw) ?? 'malformed'} is not registered — cannot verify, cannot authorize`);
+      }
+      const law = validator(receipt?.outputs ?? []);
+      if (!law.ok) throw new Error(law.errors[0]);
+    }
+  }
   const result = validateRouteReceipt(receipt);
   if (!result.ok) {
     throw new Error(`invalid route receipt: ${result.errors.join('; ')}`);

@@ -1,4 +1,5 @@
 import { defineWebGpuRoute } from './route-boundary.js';
+import { registerArtifactLaw, requireArtifactLaw } from './artifact-law-registry.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -167,6 +168,14 @@ export function validateKimodoOutputArtifacts(outputs) {
   return { ok: errors.length === 0, errors };
 }
 
+// The law is registered in the trusted registry and REQUIRED for this route
+// id: any Kimodo definition that loses its descriptor (JSON round-trip,
+// manual construction) fails validateRouteDefinition rather than silently
+// shedding its semantics.
+export const KIMODO_OUTPUT_ARTIFACT_LAW = Object.freeze({ id: 'kimodo-soma30-shape-law', version: 1 });
+registerArtifactLaw(KIMODO_OUTPUT_ARTIFACT_LAW.id, KIMODO_OUTPUT_ARTIFACT_LAW.version, validateKimodoOutputArtifacts);
+requireArtifactLaw(KIMODO_TEXT_TO_MOTION_ROUTE_ID, KIMODO_OUTPUT_ARTIFACT_LAW.id, KIMODO_OUTPUT_ARTIFACT_LAW.version);
+
 function assertKimodoOutputShapes(outputs) {
   const verdict = validateKimodoOutputArtifacts(outputs);
   if (!verdict.ok) throw new Error(verdict.errors[0]);
@@ -230,7 +239,7 @@ export function createKimodoTextToMotionRouteDefinition(input = {}) {
       { role: 'filmstrip', required: false, artifactRequired: true, hashRequired: true },
     ],
     requiredFeatures: input.requiredFeatures || [],
-    outputArtifactValidator: validateKimodoOutputArtifacts,
+    outputArtifactLaw: KIMODO_OUTPUT_ARTIFACT_LAW,
     requiredStages: routeMetadata.requiredStages,
     timingSource: routeMetadata.timingSource,
     scheduler: input.scheduler || createDefaultKimodoScheduler(),
