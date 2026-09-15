@@ -9942,8 +9942,8 @@ export function createKaminosVolumePrototype({
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = { GRID: gridSize, LEAN_STOCK_RAYMARCH: false };
-    const leanStockRenderPipelineConstants = { GRID: gridSize, LEAN_STOCK_RAYMARCH: true };
+    const renderPipelineConstants = { GRID: gridSize, LEAN_STOCK_RAYMARCH: false, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0 };
+    const leanStockRenderPipelineConstants = { GRID: gridSize, LEAN_STOCK_RAYMARCH: true, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0 };
     const computePipelineConstants = { GRID: gridSize };
     const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
       label,

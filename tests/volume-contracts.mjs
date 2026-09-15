@@ -2320,3 +2320,9 @@ assert.match(core, /boundarySplatFallbackRaymarchFireSuppression\(/, 'an unavail
 assert.match(core, /let shellVisibilityBody = clamp\(shellMask \* fireVisualAuthority \* shellWrinkle \* fireSnuffDamping/, 'shell visibility weight is built from a step-invariant carrier body');
 assert.match(core, /shellColor \* shellRenderMode \* smoothstep\(0\.020, 0\.520, shellVisibilityBody\)/, 'shell color enters the accumulation gated by the step-invariant body, not by per-step shellAlpha');
 assert.doesNotMatch(core, /local = local \+ shellColor \* shellRenderMode \* smoothstep\(0\.002, 0\.060, shellAlpha\)/, 'the old rayStepOpacity-scaled shellAlpha visibility gate must not return');
+
+// The transparent-canvas override must actually reach pipeline creation:
+// the WGSL default is 0.0 (opaque), and a constants object without it
+// silently buries the composited Three scene behind an opaque volume canvas.
+assert.match(core, /renderPipelineConstants = \{[^}]*TRANSPARENT_CANVAS: transparentCanvas \? 1 : 0/, 'raymarch pipeline constants carry the transparent-canvas override');
+assert.match(core, /leanStockRenderPipelineConstants = \{[^}]*TRANSPARENT_CANVAS: transparentCanvas \? 1 : 0/, 'lean raymarch pipeline constants carry the transparent-canvas override');
