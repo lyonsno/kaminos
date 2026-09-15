@@ -99,9 +99,11 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   let m = max(r.material, vec4<f32>(0.0));
   let f = max(r.fireLayer, vec4<f32>(0.0));
   let d = max(r.microLayer, vec4<f32>(0.0));
-  // Rendering temperature from transported heat/combustion only, not velocity,
-  // curl or the detail-noise phase. Cold advected material stops emitting.
-  let energy = m.y*0.65 + f.x + f.y*0.35 + f.z*0.40 + d.z*0.55;
+  // The simulation transports heat in material.y. Flame, ember, flame-detail
+  // and lick carriers describe appearance/support, not additional heat units.
+  // Summing them reheated cold detail and flattened temperature distinctions.
+  // Kelvin remains a renderer calibration of this dimensionless heat field.
+  let energy = m.y;
   let activity = 1.0-exp(-energy*1.6);
   // Mode 2's temperature is the hot ceiling, and spread is cooling below it.
   // Brightness therefore cannot hide a much hotter, unlabelled half-spread.

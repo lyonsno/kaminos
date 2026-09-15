@@ -23,6 +23,10 @@ assert.equal(hotSootAt(1, 1, 1, 0, Math.max), 0, 'no transported soot means no h
 assert.equal(hotSootAt(0, 1, 1, 1, Math.max), 0);
 assert.equal(hotSootAt(1, 0, 1, 1, Math.max), 0);
 assert.equal(hotSootAt(1, 1, 0, 1, Math.max), 0);
+const energyExpression = EMISSIVE_TRANSPORT_WGSL.match(/let energy = ([^;]+);/)[1];
+const energyAt = new Function('m', 'f', 'd', `return ${energyExpression}`);
+assert.equal(energyAt({y:0}, {x:1,y:1,z:1}, {z:1}), 0, 'decorative flame/ember/lick carriers are not transported heat');
+assert.ok(energyAt({y:1}, {x:0,y:0,z:0}, {z:0}) > 0);
 // Production-linked shader contract, not just the CPU reference: channel-wise
 // shoulder and selection must remain on the actual camera path. Existing native
 // captures establish compilation/output; this narrow guard protects the formula.
