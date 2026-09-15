@@ -1,7 +1,5 @@
 export const WEBGPU_PARITY_COMPARISON_SCHEMA = 'kaminos.webgpu-parity-comparison.v0';
 export const WEBGPU_PARITY_CAPTURE_SCHEMA = 'kaminos.webgpu-parity-capture.v0';
-export const WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA = 'kaminos.webgpu-parity-capture-chunk.v0';
-export const WEBGPU_PARITY_CAPTURE_MANIFEST_SCHEMA = 'kaminos.webgpu-parity-capture-manifest.v0';
 
 const TYPED_ARRAYS = new Map([
   ['Int8Array', Int8Array],
@@ -23,10 +21,6 @@ const INTEGER_TYPED_ARRAYS = new Set([
   'Int32Array',
   'Uint32Array',
 ]);
-
-const PLATFORM_BYTE_ORDER = new Uint8Array(new Uint16Array([0x0102]).buffer)[0] === 0x02
-  ? 'little-endian'
-  : 'big-endian';
 
 function isPlainObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -299,27 +293,29 @@ export function compareWebGpuParityArrays(actual, reference, options = {}) {
   });
 }
 
-function cloneCapture(capture) {
-  return Object.freeze({
-    ...capture,
-    shape: capture.shape == null ? null : Object.freeze([...capture.shape]),
-    values: capture.values.slice(),
-  });
-}
-
 export function createWebGpuParityCaptureRegistry({ runId } = {}) {
   requireIdentity('runId', runId);
   const captures = new Map();
+
+  function requireCapture(stageId) {
+    requireIdentity('stageId', stageId);
+    const capture = captures.get(stageId);
+    if (!capture) throw new Error(`capture ${stageId} is missing from run ${runId}`);
+    return capture;
+  }
+
   return Object.freeze({
     runId,
     capture(stageId, values, metadata = {}) {
       requireIdentity('stageId', stageId);
       const typedArrayConstructor = requireNumericTypedArray('values', values);
+      if (values.length === 0) throw new RangeError('capture values must not be empty');
       if (!isPlainObject(metadata)) throw new TypeError('capture metadata must be an object');
       if (captures.has(stageId)) throw new Error(`capture ${stageId} already exists for run ${runId}`);
-      const shape = normalizeShape(metadata.shape, values.length);
-      const layout = metadata.layout == null ? null : requireIdentity('layout', metadata.layout);
-      const capture = {
+      const { shape: suppliedShape, layout: suppliedLayout } = metadata;
+      const shape = normalizeShape(suppliedShape, values.length);
+      const layout = suppliedLayout == null ? null : requireIdentity('layout', suppliedLayout);
+      const description = Object.freeze({
         schema: WEBGPU_PARITY_CAPTURE_SCHEMA,
         runId,
         stageId,
@@ -328,289 +324,40 @@ export function createWebGpuParityCaptureRegistry({ runId } = {}) {
         byteLength: values.byteLength,
         shape,
         layout,
-        values: values.slice(),
-      };
-      captures.set(stageId, capture);
-      return cloneCapture(capture);
+      });
+      captures.set(stageId, { description, values: values.slice() });
+      return description;
     },
-    get(stageId) {
+    describe(stageId) {
       requireIdentity('stageId', stageId);
-      const capture = captures.get(stageId);
-      return capture == null ? null : cloneCapture(capture);
+      return captures.get(stageId)?.description ?? null;
     },
-    has(stageId) {
+    compare(stageId, reference, options = {}) {
+      const capture = requireCapture(stageId);
+      if (!isPlainObject(options)) throw new TypeError('options must be an object');
+      return Object.freeze({
+        ...compareWebGpuParityArrays(capture.values, reference, { ...options, stageId }),
+        runId,
+      });
+    },
+    readBytes(stageId, { byteOffset, byteLength } = {}) {
+      const { values } = requireCapture(stageId);
+      if (!Number.isSafeInteger(byteOffset) || byteOffset < 0
+        || !Number.isSafeInteger(byteLength) || byteLength < 0
+        || byteOffset > values.byteLength || byteLength > values.byteLength - byteOffset) {
+        throw new RangeError('byte range must be inside the captured tensor');
+      }
+      return new Uint8Array(values.buffer, values.byteOffset + byteOffset, byteLength).slice();
+    },
+    release(stageId) {
       requireIdentity('stageId', stageId);
-      return captures.has(stageId);
+      return captures.delete(stageId);
+    },
+    clear() {
+      captures.clear();
     },
     stageIds() {
       return Object.freeze([...captures.keys()]);
     },
-  });
-}
-
-function bytesToBase64(bytes) {
-  let binary = '';
-  const block = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += block) {
-    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + block, bytes.length)));
-  }
-  return btoa(binary);
-}
-
-function base64ToBytes(payload) {
-  if (typeof payload !== 'string' || payload.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(payload)) {
-    throw new TypeError('payloadBase64 must be canonical base64');
-  }
-  const binary = atob(payload);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-  if (bytesToBase64(bytes) !== payload) throw new TypeError('payloadBase64 must be canonical base64');
-  return bytes;
-}
-
-async function sha256Hex(bytes) {
-  if (!globalThis.crypto?.subtle) throw new Error('Web Crypto subtle.digest is required');
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function createCaptureManifest(fields, chunkPlan) {
-  return {
-    schema: WEBGPU_PARITY_CAPTURE_MANIFEST_SCHEMA,
-    captureSchema: WEBGPU_PARITY_CAPTURE_SCHEMA,
-    runId: fields.runId,
-    stageId: fields.stageId,
-    typedArrayConstructor: fields.typedArrayConstructor,
-    elementCount: fields.elementCount,
-    totalByteLength: fields.totalByteLength,
-    shape: fields.shape,
-    layout: fields.layout,
-    byteOrder: fields.byteOrder,
-    chunkCount: chunkPlan.length,
-    chunkPlan,
-    tensorSha256: fields.tensorSha256,
-  };
-}
-
-async function digestCaptureManifest(manifest) {
-  return sha256Hex(new TextEncoder().encode(JSON.stringify(manifest)));
-}
-
-export async function encodeWebGpuParityCaptureChunks(capture, options = {}) {
-  if (!isPlainObject(capture) || capture.schema !== WEBGPU_PARITY_CAPTURE_SCHEMA) {
-    throw new TypeError(`capture.schema must be ${WEBGPU_PARITY_CAPTURE_SCHEMA}`);
-  }
-  if (!isPlainObject(options)) throw new TypeError('options must be an object');
-  const captureSchema = capture.schema;
-  const runId = requireIdentity('capture.runId', capture.runId);
-  const stageId = requireIdentity('capture.stageId', capture.stageId);
-  const values = capture.values;
-  const typedArrayConstructor = requireNumericTypedArray('capture.values', values);
-  if (typedArrayConstructor !== capture.typedArrayConstructor) {
-    throw new TypeError('capture typedArrayConstructor must match values');
-  }
-  const elementCount = capture.elementCount;
-  const byteLength = capture.byteLength;
-  if (elementCount !== values.length || byteLength !== values.byteLength) {
-    throw new RangeError('capture elementCount and byteLength must match values');
-  }
-  const shape = normalizeShape(capture.shape, values.length);
-  const layout = capture.layout == null ? null : requireIdentity('capture.layout', capture.layout);
-  const chunkByteLength = options.chunkByteLength ?? 18 * 1024 * 1024;
-  if (!Number.isSafeInteger(chunkByteLength) || chunkByteLength <= 0) {
-    throw new TypeError('chunkByteLength must be a positive safe integer');
-  }
-  const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength).slice();
-  if (bytes.byteLength === 0) throw new RangeError('capture values must not be empty');
-  const chunkCount = Math.ceil(bytes.byteLength / chunkByteLength);
-  const chunkPlan = Object.freeze(Array.from({ length: chunkCount }, (_, chunkIndex) => {
-    const byteOffset = chunkIndex * chunkByteLength;
-    return Object.freeze({
-      chunkIndex,
-      byteOffset,
-      byteLength: Math.min(chunkByteLength, bytes.byteLength - byteOffset),
-    });
-  }));
-  // Every authority-bearing field is copied before the first await. The
-  // asynchronous digest sequence must never re-read caller-owned state.
-  const snapshot = Object.freeze({
-    captureSchema,
-    runId,
-    stageId,
-    typedArrayConstructor,
-    elementCount,
-    byteLength,
-    shape,
-    layout,
-    byteOrder: PLATFORM_BYTE_ORDER,
-    bytes,
-    chunkPlan,
-  });
-  const tensorSha256 = await sha256Hex(snapshot.bytes);
-  const captureManifest = createCaptureManifest({
-    runId: snapshot.runId,
-    stageId: snapshot.stageId,
-    typedArrayConstructor: snapshot.typedArrayConstructor,
-    elementCount: snapshot.elementCount,
-    totalByteLength: snapshot.byteLength,
-    shape: snapshot.shape,
-    layout: snapshot.layout,
-    byteOrder: snapshot.byteOrder,
-    tensorSha256,
-  }, snapshot.chunkPlan);
-  const captureSha256 = await digestCaptureManifest(captureManifest);
-  const chunks = [];
-  for (const plan of snapshot.chunkPlan) {
-    const { chunkIndex, byteOffset, byteLength } = plan;
-    const payload = snapshot.bytes.subarray(byteOffset, byteOffset + byteLength);
-    chunks.push(Object.freeze({
-      schema: WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA,
-      captureSchema: snapshot.captureSchema,
-      runId: snapshot.runId,
-      stageId: snapshot.stageId,
-      typedArrayConstructor: snapshot.typedArrayConstructor,
-      elementCount: snapshot.elementCount,
-      totalByteLength: snapshot.byteLength,
-      shape: snapshot.shape,
-      layout: snapshot.layout,
-      byteOrder: snapshot.byteOrder,
-      chunkIndex,
-      chunkCount,
-      byteOffset,
-      byteLength,
-      payloadBase64: bytesToBase64(payload),
-      payloadSha256: await sha256Hex(payload),
-      tensorSha256,
-      captureSha256,
-    }));
-  }
-  return Object.freeze(chunks);
-}
-
-function requireEqualMetadata(chunk, first, field, index) {
-  const actual = JSON.stringify(chunk[field]);
-  const expected = JSON.stringify(first[field]);
-  if (actual !== expected) throw new Error(`chunk ${index} ${field} must match chunk 0`);
-}
-
-export async function decodeWebGpuParityCaptureChunks(chunks, options = {}) {
-  if (!Array.isArray(chunks) || chunks.length === 0) throw new TypeError('chunks must be a non-empty array');
-  if (!isPlainObject(options)) throw new TypeError('options must be an object');
-  if (!isPlainObject(options.expectedCapture)) {
-    throw new TypeError('expectedCapture with runId and stageId is required');
-  }
-  const expectedCapture = options.expectedCapture;
-  requireIdentity('expectedCapture.runId', expectedCapture.runId);
-  requireIdentity('expectedCapture.stageId', expectedCapture.stageId);
-  const first = chunks[0];
-  if (!isPlainObject(first) || first.schema !== WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA) {
-    throw new TypeError(`chunk schema must be ${WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA}`);
-  }
-  if (first.captureSchema !== WEBGPU_PARITY_CAPTURE_SCHEMA) {
-    throw new TypeError(`capture schema must be ${WEBGPU_PARITY_CAPTURE_SCHEMA}`);
-  }
-  requireIdentity('chunk runId', first.runId);
-  requireIdentity('chunk stageId', first.stageId);
-  if (first.runId !== expectedCapture.runId) {
-    throw new Error(`runId must match expected ${expectedCapture.runId}`);
-  }
-  if (first.stageId !== expectedCapture.stageId) {
-    throw new Error(`stageId must match expected ${expectedCapture.stageId}`);
-  }
-  if (!Number.isSafeInteger(first.chunkCount) || first.chunkCount <= 0 || first.chunkCount !== chunks.length) {
-    throw new RangeError('chunk count must match the declared chunkCount');
-  }
-  const Constructor = TYPED_ARRAYS.get(first.typedArrayConstructor);
-  if (!Constructor) throw new TypeError('typedArrayConstructor is unsupported');
-  if (
-    expectedCapture.typedArrayConstructor != null
-    && first.typedArrayConstructor !== expectedCapture.typedArrayConstructor
-  ) {
-    throw new Error('typedArrayConstructor must match expectedCapture');
-  }
-  if (!Number.isSafeInteger(first.totalByteLength) || first.totalByteLength <= 0) {
-    throw new RangeError('totalByteLength must be a positive safe integer');
-  }
-  if (!Number.isSafeInteger(first.elementCount) || first.elementCount <= 0) {
-    throw new RangeError('elementCount must be a positive safe integer');
-  }
-  if (first.totalByteLength !== first.elementCount * Constructor.BYTES_PER_ELEMENT) {
-    throw new RangeError('totalByteLength must match elementCount and typed array width');
-  }
-  if (first.byteOrder !== PLATFORM_BYTE_ORDER) {
-    throw new Error(`byteOrder ${first.byteOrder} cannot be decoded on this ${PLATFORM_BYTE_ORDER} host`);
-  }
-  const shape = normalizeShape(first.shape, first.elementCount);
-  if (expectedCapture.shape != null) {
-    const expectedShape = normalizeShape(expectedCapture.shape, first.elementCount);
-    if (JSON.stringify(shape) !== JSON.stringify(expectedShape)) {
-      throw new Error('shape must match expectedCapture');
-    }
-  }
-  if (first.layout != null) requireIdentity('chunk layout', first.layout);
-  if (Object.hasOwn(expectedCapture, 'layout')) {
-    if (expectedCapture.layout != null) requireIdentity('expectedCapture.layout', expectedCapture.layout);
-    if (first.layout !== expectedCapture.layout) throw new Error('layout must match expectedCapture');
-  }
-  const output = new Uint8Array(first.totalByteLength);
-  let nextByteOffset = 0;
-
-  const commonFields = [
-    'captureSchema', 'runId', 'stageId', 'typedArrayConstructor', 'elementCount',
-    'totalByteLength', 'shape', 'layout', 'byteOrder', 'chunkCount', 'tensorSha256',
-    'captureSha256',
-  ];
-  const chunkPlan = [];
-  for (const [index, chunk] of chunks.entries()) {
-    if (!isPlainObject(chunk) || chunk.schema !== WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA) {
-      throw new TypeError(`chunk ${index} has the wrong schema`);
-    }
-    for (const field of commonFields) requireEqualMetadata(chunk, first, field, index);
-    if (chunk.chunkIndex !== index) throw new Error(`chunks must be ordered; chunkIndex ${index} expected`);
-    if (chunk.byteOffset !== nextByteOffset) throw new Error('chunk byte offsets must be contiguous');
-    if (!Number.isSafeInteger(chunk.byteLength) || chunk.byteLength <= 0) {
-      throw new RangeError('chunk byteLength must be a positive safe integer');
-    }
-    chunkPlan.push(Object.freeze({
-      chunkIndex: chunk.chunkIndex,
-      byteOffset: chunk.byteOffset,
-      byteLength: chunk.byteLength,
-    }));
-    const payload = base64ToBytes(chunk.payloadBase64);
-    if (payload.byteLength !== chunk.byteLength) throw new RangeError('chunk payload byteLength mismatch');
-    if (await sha256Hex(payload) !== chunk.payloadSha256) throw new Error('chunk payload digest mismatch');
-    if (nextByteOffset + payload.byteLength > output.byteLength) {
-      throw new RangeError('chunk payload exceeds totalByteLength');
-    }
-    output.set(payload, nextByteOffset);
-    nextByteOffset += payload.byteLength;
-  }
-  if (nextByteOffset !== output.byteLength) throw new RangeError('chunk payloads do not cover totalByteLength');
-  if (await sha256Hex(output) !== first.tensorSha256) throw new Error('tensor digest mismatch');
-  const captureManifest = createCaptureManifest({
-    runId: first.runId,
-    stageId: first.stageId,
-    typedArrayConstructor: first.typedArrayConstructor,
-    elementCount: first.elementCount,
-    totalByteLength: first.totalByteLength,
-    shape,
-    layout: first.layout ?? null,
-    byteOrder: first.byteOrder,
-    tensorSha256: first.tensorSha256,
-  }, chunkPlan);
-  if (await digestCaptureManifest(captureManifest) !== first.captureSha256) {
-    throw new Error('capture digest mismatch');
-  }
-
-  return Object.freeze({
-    schema: WEBGPU_PARITY_CAPTURE_SCHEMA,
-    runId: first.runId,
-    stageId: first.stageId,
-    typedArrayConstructor: first.typedArrayConstructor,
-    elementCount: first.elementCount,
-    byteLength: first.totalByteLength,
-    shape,
-    layout: first.layout ?? null,
-    values: new Constructor(output.buffer),
   });
 }

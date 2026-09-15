@@ -11,14 +11,10 @@ export {
 } from './tensor-manifest.js';
 
 export {
-  WEBGPU_PARITY_CAPTURE_CHUNK_SCHEMA,
-  WEBGPU_PARITY_CAPTURE_MANIFEST_SCHEMA,
   WEBGPU_PARITY_CAPTURE_SCHEMA,
   WEBGPU_PARITY_COMPARISON_SCHEMA,
   compareWebGpuParityArrays,
   createWebGpuParityCaptureRegistry,
-  decodeWebGpuParityCaptureChunks,
-  encodeWebGpuParityCaptureChunks,
 } from './parity-primitives.js';
 
 export {

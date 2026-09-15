@@ -91,19 +91,18 @@ try {
   assert.equal(browserResult.requestedModuleUrl, browserResult.effectiveModuleUrl);
   assert.equal(browserResult.runId, 'kaminos-parity-browser-smoke');
   assert.equal(browserResult.stageId, 'decoder.fusion');
-  assert.equal(browserResult.chunkCount, 4);
+  assert.deepEqual(browserResult.remainingStages, []);
   assert.deepEqual(browserResult.values, [1, 2, 3, 5]);
   assert.equal(browserResult.comparison.sourceElementCount, 4);
   assert.equal(browserResult.comparison.comparedElementCount, 4);
-  assert.match(browserResult.tensorSha256, /^[a-f0-9]{64}$/);
-  assert.match(browserResult.captureSha256, /^[a-f0-9]{64}$/);
+  assert.equal(browserResult.comparison.metrics.maxAbsoluteError, 1);
   report = {
     ...report,
     status: 'succeeded',
     effectiveRoute: requestedRoute,
     effectiveModule: 'src/index.js',
     failurePhase: null,
-    lastTrustworthyEvidence: 'comparison serialized after verified chunk round trip',
+    lastTrustworthyEvidence: 'private capture compared, exported, and released',
     browserResult,
     error: null,
   };

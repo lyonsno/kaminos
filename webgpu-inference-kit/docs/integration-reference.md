@@ -334,71 +334,61 @@ adapter and product-route obligations.
 
 ## Localize Numerical Drift
 
-Capture model-selected intermediate tensors and compare them with an external
-reference without making the runtime understand the model's stage graph:
+Keep captured tensors next to the model and compare them against a reference
+in the same JavaScript environment:
 
 ```js
-import {
-  compareWebGpuParityArrays,
-  createWebGpuParityCaptureRegistry,
-  decodeWebGpuParityCaptureChunks,
-  encodeWebGpuParityCaptureChunks,
-} from "@kaminos/webgpu-inference-kit";
+import { createWebGpuParityCaptureRegistry } from "@kaminos/webgpu-inference-kit";
 
 const captures = createWebGpuParityCaptureRegistry({ runId: invocationId });
 captures.capture("decoder.fusion", await readDecoderFusion(), {
   shape: [1, 256, 96, 96],
   layout: "NCHW",
 });
-
-const chunks = await encodeWebGpuParityCaptureChunks(
-  captures.get("decoder.fusion"),
-  { chunkByteLength: 18 * 1024 * 1024 },
-);
-
-// `chunks` can cross a browser automation or worker boundary. The receiver
-// verifies run, stage, ordering, byte coverage, per-chunk digests, and the
-// complete tensor digest before exposing the reconstructed values.
-const captured = await decodeWebGpuParityCaptureChunks(chunks, {
-  expectedCapture: {
-    runId: invocationId,
-    stageId: "decoder.fusion",
-    typedArrayConstructor: "Float32Array",
-    shape: [1, 256, 96, 96],
-    layout: "NCHW",
-  },
-});
-
-const comparison = compareWebGpuParityArrays(captured.values, referenceValues, {
-  stageId: captured.stageId,
+const comparison = captures.compare("decoder.fusion", referenceValues, {
   sampling: { mode: "stride", stride: 4, offset: 0 },
 });
+
+// Optional raw export: ask for one range at a time.
+const description = captures.describe("decoder.fusion");
+const bytes = captures.readBytes("decoder.fusion", {
+  byteOffset: 0,
+  byteLength: description.byteLength,
+});
+captures.release("decoder.fusion");
+captures.clear();
 ```
 
-Comparison is exhaustive unless the caller explicitly supplies a deterministic
-stride. Native floating comparison accepts `Float32Array`, which is the scalar
-domain produced by WebGPU `f32` tensors. Decode FP16 storage into exactly
-represented `Float32Array` values before calling the comparator. Integer typed
-arrays compare under an explicit `integer-exact` mode. Actual and reference
-arrays must use the same constructor; `Float64Array` is rejected because this
-API is not a general binary64 statistics package. Positive and negative zero
-are numerically equal for exact-match accounting.
+Capture copies values once into private storage and returns frozen metadata.
+Type and byte counts are derived from those values. Descriptions contain no
+tensor reference; byte-range reads return independent copies. Comparisons run
+against the retained tensor and include the run and stage identities. Create
+one registry per invocation and clear it when its diagnostic work is complete.
 
-Results retain source and compared element counts, the effective sample plan,
-effective comparison type and normalization, value summaries, exact mismatch
-count, maximum and RMS error, relative L2 error, and cosine similarity. The
-effective normalization is currently always `none`: representation conversion
-belongs to the model adapter and must happen before comparison. Unequal lengths,
-mixed constructors, selected non-finite values, empty selections, invalid
-shapes, non-finite metrics, unsupported representations, and transport identity
-or integrity failures reject instead of producing a persuasive partial result.
+For arrays already available together, call
+`compareWebGpuParityArrays(actual, reference, options)` directly. Comparisons
+are exhaustive unless the caller explicitly selects a stride. Results retain
+the full source count, compared count, sample plan, effective type, summaries,
+exact mismatch count, maximum and RMS error, relative L2 error, and cosine
+similarity. Floating tensors use `Float32Array`; decode FP16 storage into
+float32 first. Integers use exact mismatch accounting, and both inputs must
+have matching constructors. Non-finite selected values, unequal lengths,
+empty selections, and unsupported Float64 inputs reject. Signed zeros compare
+equal. A nonzero error against an all-zero reference has an explicit infinite
+relative-error status.
 
-The model port owns stage names, hook placement, GPU readback timing, shape and
-layout meaning, convention alignment, and the tolerance used for its parity
-claim. For example, normalization changes, equivalent quaternion signs, border
-exclusion, and final mesh or splat interpretation belong beside the model that
-defines those semantics. The kit owns the comparison and transport mechanics;
-it does not infer model equivalence from a generic threshold.
+The model adapter owns GPU readback timing, stage shapes and conventions,
+reference loading, browser transfer, and tolerances. Keep normal comparisons
+in the page and return their small results. Export raw byte ranges when needed;
+the adapter verifies the requested run, stage, offsets, lengths, and transfer
+completion. Preserve original source cardinality when sampling: a comparison
+of pre-sampled arrays describes those arrays, not an exhaustive comparison of
+the original tensors.
+
+SHARP's adapter demonstrates reference injection and optional raw export through
+Chrome's debugging connection. Model-specific transforms, such as image
+normalization, interior-only comparisons, PLY field conversion, and equivalent
+quaternion signs, stay beside SHARP.
 
 ## Build Runtime Primitives
 
