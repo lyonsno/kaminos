@@ -587,7 +587,8 @@ export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
             let buffer;
             try {
               throwIfAborted(flightSignal);
-              buffer = input.route.runtime.createBuffer({
+              const createBuffer = input.route.runtime.createManagedBuffer || input.route.runtime.createBuffer;
+              buffer = createBuffer.call(input.route.runtime, {
                 label: `${plan.manifest.modelId}@${plan.manifest.revision}:${allocation.allocationId}:chunks`,
                 size: allocation.byteLength,
                 usage: allocation.usage,

@@ -148,6 +148,25 @@ assert.deepEqual(plan.chunkIds, ['encoder-0', 'encoder-1', 'decoder-0', 'decoder
 assert.equal(plan.totalSourceByteLength, 32);
 assert.equal(plan.largestChunkByteLength, 8);
 assert.equal(Object.isFrozen(plan), true);
+
+const sharedFixture = deviceFixture();
+const sharedSession = await createWebGpuInferenceSession({ sessionId: 'chunk-owner-retirement', device: sharedFixture.device, adapterName: 'chunk-fixture' });
+const creator = await sharedSession.registerRoute({ routeId: 'chunk-creator' });
+const survivor = await sharedSession.registerRoute({ routeId: 'chunk-survivor' });
+const sharedSources = Object.fromEntries(Object.entries(chunkBytes).map(([id, bytes]) => [id, new Blob([bytes])]));
+const creatorLease = await creator.loadModelResourceChunksFromSources({ plan, sources: sharedSources });
+const survivorLease = await survivor.loadModelResourceChunksFromSources({ plan, sources: sharedSources });
+assert.strictEqual(creatorLease.allocations[0].buffer, survivorLease.allocations[0].buffer);
+creatorLease.release();
+sharedSession.unregisterRoute(creator.routeId);
+assert.deepEqual(sharedFixture.buffers.map(buffer => buffer.destroyCount), [0, 0],
+  'unregistering the creator must not destroy weights still leased by another route');
+assert.equal(sharedSession.snapshot().residency.activeLeaseCount, 2);
+survivorLease.release();
+sharedSession.unregisterRoute(survivor.routeId);
+sharedSession.close();
+assert.deepEqual(sharedFixture.buffers.map(buffer => buffer.destroyCount), [1, 1],
+  'final residency teardown must destroy each shared chunk allocation exactly once');
 assert.equal(Object.isFrozen(plan.allocations[0].chunks), true);
 assert.deepEqual(validateWebGpuModelResourceChunkPlan(plan), { ok: true, errors: [] });
 assert.notEqual(plan.allocations[0].resourceId, manifest.allocations[0].resourceId);
