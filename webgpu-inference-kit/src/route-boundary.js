@@ -206,6 +206,13 @@ export function defineWebGpuRoute(input) {
     requiredFeatures: Array.isArray(input.requiredFeatures) ? [...input.requiredFeatures].map(String).sort() : [],
     requiredStages: Array.isArray(input.requiredStages) ? [...input.requiredStages] : [],
     timingSource: input.timingSource || 'queue-submit-wait',
+    // Optional route-owned artifact law (e.g. the Kimodo shape law): applied
+    // by request validation, worker-result validation, and route-aware
+    // evidence classification, so a route's semantic invariants are
+    // reachable from every boundary that confers authority.
+    outputArtifactValidator: typeof input.outputArtifactValidator === 'function'
+      ? input.outputArtifactValidator
+      : null,
     scheduler: clone(input.scheduler || null),
     backpressure: clone(input.backpressure || null),
     worker: clone(input.worker || null),
@@ -343,6 +350,10 @@ export function validateRouteInvocationRequest(request, route) {
   if (routeResult.ok) {
     validateArtifacts(errors, request.inputs, route.inputRoles, 'inputs', { requireHash: true });
     validateArtifacts(errors, request.outputs, route.outputRoles, 'outputs', { requireHash: false });
+    if (route.outputArtifactValidator) {
+      const law = route.outputArtifactValidator(request.outputs);
+      if (!law.ok) errors.push(...law.errors.map((e) => `outputs: ${e}`));
+    }
   }
 
   if (request.scheduler != null) {
@@ -427,6 +438,10 @@ export function validateRouteWorkerResult(result, route) {
 
   if (routeResult.ok && Array.isArray(result.outputs)) {
     validateArtifacts(errors, result.outputs, route.outputRoles, 'outputs', { requireHash: true });
+    if (route.outputArtifactValidator) {
+      const law = route.outputArtifactValidator(result.outputs);
+      if (!law.ok) errors.push(...law.errors.map((e) => `outputs: ${e}`));
+    }
   } else if (!Array.isArray(result.outputs)) {
     errors.push('outputs must be an array');
   }

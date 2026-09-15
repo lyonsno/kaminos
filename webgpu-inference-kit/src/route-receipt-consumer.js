@@ -188,6 +188,18 @@ function baseClassification(receipt, options = {}) {
 
 export function classifyWebGpuRouteReceiptEvidence(receipt, options = {}) {
   const base = baseClassification(receipt, options);
+  // Route-aware artifact law: when the caller supplies the route definition,
+  // its outputArtifactValidator participates in the authority decision — a
+  // receipt whose outputs violate the route's semantic invariants is not
+  // authoritative evidence, whatever the generic envelope says.
+  if (options.route?.outputArtifactValidator && Array.isArray(receipt?.outputs)) {
+    const law = options.route.outputArtifactValidator(receipt.outputs);
+    if (!law.ok) {
+      base.classification = 'invalid';
+      base.authoritative = false;
+      base.reasons = [...(base.reasons || []), ...law.errors.map((e) => `outputs: ${e}`)];
+    }
+  }
   const scheduler = receipt?.runtime?.scheduler || null;
   const backpressure = receipt?.runtime?.backpressure || null;
   const schedulerVerification = normalizeNestedSchedulerVerification(receipt?.runtime?.schedulerVerification || null);

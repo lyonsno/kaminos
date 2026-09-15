@@ -114,8 +114,10 @@ export async function createWebGpuInferenceSession(input = {}) {
         adapterName: input.adapterName,
         browser: input.browser || globalThis.navigator?.userAgent || null,
         requestedFeatures: input.requestedFeatures || [],
-        effectiveFeatures: input.effectiveFeatures || device.features || [],
-        limits: input.limits || device.limits || {},
+        // Absent capture stays absent — see gpu-environment.js; [] is only
+        // lawful when explicitly observed.
+        effectiveFeatures: input.effectiveFeatures ?? device.features ?? undefined,
+        limits: input.limits ?? device.limits ?? undefined,
         timestampQuery: input.timestampQuery || 'unavailable',
       }),
     };

@@ -309,6 +309,7 @@ export {
   KIMODO_TEXT_TO_MOTION_ROUTE_ID,
   createKimodoTextToMotionRouteDefinition,
   createKimodoTextToMotionRouteReceipt,
+  validateKimodoOutputArtifacts,
 } from './kimodo-route.js';
 
 export {

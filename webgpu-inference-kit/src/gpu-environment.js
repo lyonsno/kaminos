@@ -76,8 +76,16 @@ export function requestBrowserWebGpuDevice(gpu, options = {}) {
       adapterName: options.adapterName || adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter',
       browser: options.browser || globalThis.navigator?.userAgent || null,
       requestedFeatures: deviceRequest.requiredFeatures,
-      effectiveFeatures: device?.features || deviceRequest.requiredFeatures,
-      limits: device?.limits || adapter.limits,
+      // Only the device's own feature capture is evidence of enabled
+      // features. Requested features are what we asked for, not what we
+      // got: substituting them (or []) converts a MISSING observation into
+      // a false authoritative claim. Absent stays absent and fails loud.
+      effectiveFeatures: device?.features ?? undefined,
+      // Same law as features: adapter-supported limits are not evidence of
+      // the device's effective limits. Absent capture stays absent — the
+      // identity then fails validation loudly instead of presenting
+      // support values as observed device state.
+      limits: device?.limits ?? undefined,
       timestampQuery: deviceRequest.timestampQuery,
     });
 
@@ -97,7 +105,12 @@ export function createWebGpuBackendIdentity(input) {
     adapterName: input.adapterName || null,
     browser: input.browser || null,
     requestedFeatures: featureList(input.requestedFeatures),
-    features: featureList(input.effectiveFeatures || input.features),
+    // Absent and empty are different observations: a zero-feature device
+    // truthfully captures [], while forgetting to capture at all yields
+    // undefined and fails validation downstream.
+    features: (input.effectiveFeatures != null || input.features != null)
+      ? featureList(input.effectiveFeatures || input.features)
+      : undefined,
     limits: copyLimits(input.limits),
     timestampQuery: input.timestampQuery || 'unavailable',
   };
@@ -112,8 +125,8 @@ export function validateWebGpuBackendIdentity(identity) {
   if (identity.kind !== 'webgpu-local') errors.push('kind must be webgpu-local');
   if (identity.runtime !== 'browser') errors.push('runtime must be browser');
   if (!isNonEmptyString(identity.adapterName)) errors.push('adapterName must be a non-empty string');
-  if (!Array.isArray(identity.features) || identity.features.length === 0) {
-    errors.push('features must be a non-empty array');
+  if (!Array.isArray(identity.features)) {
+    errors.push('features must be an array (empty is lawful for a zero-feature device)');
   }
   if (!identity.limits || typeof identity.limits !== 'object' || Object.keys(identity.limits).length === 0) {
     errors.push('limits must be a non-empty object');

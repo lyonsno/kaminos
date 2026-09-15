@@ -1074,7 +1074,7 @@ The runtime helpers are the lowest useful layer. Route helpers sit above them so
 - `defineWebGpuRoute(input)`, `createWebGpuRouteRegistry(routes)`, `createRouteInvocationRequest(route, input)`, `createRouteWorkerResult(route, input)`, and validators define worker-executable browser-local inference routes.
 - `createMogeDepthNormalRouteDefinition(input)` and `createMogeDepthNormalRouteReceipt(input)` define the MoGE source-image to depth/normal/pointmap route.
 - `createSharpImageToSplatRouteDefinition(input)` and `createSharpImageToSplatRouteReceipt(input)` define the SHARP source-image to splat candidate/depth/metadata route.
-- `createKimodoTextToMotionRouteDefinition(input)` and `createKimodoTextToMotionRouteReceipt(input)` define the Kimodo text-prompt to SOMA77 joints/motion-clip route.
+- `createKimodoTextToMotionRouteDefinition(input)` and `createKimodoTextToMotionRouteReceipt(input)` define the Kimodo text-prompt to motion route as shipped by the browser port: `soma-joints` output `[frames, 30, 3]` (30-joint SOMA skeleton, duration-dependent frame count at 30 fps) and a `motion-clip` output of `[frames, 369]` motion-feature rows, with an optional filmstrip. The receipt factory enforces the trailing dimensions and the shared frame count; the frame count itself is variable.
 - `createSf3dImageToMeshRouteDefinition(input)` and `createSf3dImageToMeshRouteReceipt(input)` define the Stable Fast 3D source-image to mesh/albedo/normal route.
 
 These route definitions are not meant to trap future ports into MoGE/SHARP/Kimodo/SF3D. They are examples of the current shared grammar: route id, input roles, output roles, backend kind, model identity, kernel/stage identity, scheduler posture, and output artifacts.
