@@ -182,6 +182,25 @@ function renderChunkTelemetry(sched, worstGapMs, gaps = []) {
     ? `frames ${xs.length} · p50 ${pick(0.5).toFixed(1)}ms · p95 ${pick(0.95).toFixed(1)}ms · >34ms: ${over(34)} · >50ms: ${over(50)}`
     : 'no frame samples';
   panel.innerHTML = `<div style="color:#9a958a;margin-bottom:3px">worst frame gap this run: <b style="color:${worstGapMs > 34 ? '#e06c5a' : '#79c98f'}">${worstGapMs.toFixed(0)}ms</b><br>${dist}<br>${waits.length} chunks · worst queue waits:</div>${rows}`;
+  // Persist: HUD results must survive tab close / box restart.
+  try {
+    localStorage.setItem('mogeLiveFlameLastRun', JSON.stringify({
+      at: new Date().toISOString(), worstGapMs, dist, waits: waits.slice(0, 5), html: panel.innerHTML,
+    }));
+  } catch { /* storage unavailable: display-only */ }
+}
+
+// Restore the previous run's telemetry on load, clearly labeled as historical.
+function restoreLastRunTelemetry() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('mogeLiveFlameLastRun') || 'null');
+    if (!saved?.html) return;
+    const panel = document.createElement('div');
+    panel.id = 'chunk-telemetry';
+    panel.style.cssText = 'margin-top:10px;border-top:1px solid #2a2a33;padding-top:8px;font-size:0.72rem;';
+    panel.innerHTML = `<div style="color:#d9a04a;margin-bottom:3px">previous run (${new Date(saved.at).toLocaleString()}):</div>${saved.html}`;
+    document.getElementById('hud').appendChild(panel);
+  } catch { /* ignore */ }
 }
 
 function paintDepth(result) {
@@ -242,6 +261,7 @@ async function runInference(inference) {
 
 // --- Boot ---
 (async () => {
+  restoreLastRunTelemetry();
   startFrameMonitor();
   const gpu = await createSharedGpu();
   window.__sharedGpuDevice = gpu.device;
