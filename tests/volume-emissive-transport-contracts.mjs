@@ -14,6 +14,15 @@ assert.ok(Math.abs(linearLuminance(thermalRadianceRGB(1900)) - 1) < 1e-6);
 assert.ok(linearLuminance(thermalRadianceRGB(2400)) > 10);
 assert.ok(linearLuminance(thermalRadianceRGB(800)) < 1e-7);
 const matrix = cameraWhiteBalance(4000);
+// Material regression only: a heat/front carrier without transported soot
+// must not manufacture incandescent particles. This is not image acceptance.
+const hotSootExpression = EMISSIVE_TRANSPORT_WGSL.match(/let hotSoot = ([^;]+);/)[1]
+  .replaceAll('u.physical_fire.w', 'thermalStrength');
+const hotSootAt = new Function('coverage', 'sootYield', 'thermalStrength', 'smokeAmount', 'max', `return ${hotSootExpression}`);
+assert.equal(hotSootAt(1, 1, 1, 0, Math.max), 0, 'no transported soot means no hot-soot extinction/emission');
+assert.equal(hotSootAt(0, 1, 1, 1, Math.max), 0);
+assert.equal(hotSootAt(1, 0, 1, 1, Math.max), 0);
+assert.equal(hotSootAt(1, 1, 0, 1, Math.max), 0);
 // Production-linked shader contract, not just the CPU reference: channel-wise
 // shoulder and selection must remain on the actual camera path. Existing native
 // captures establish compilation/output; this narrow guard protects the formula.

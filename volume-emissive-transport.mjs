@@ -111,7 +111,10 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   // Mode 2 has one named smoke coefficient scale; the old Smoke slider was
   // a multiplier for a separately painted radiance/alpha path, not this material.
   let smokeAmount = (m.x+d.x*0.50+m.w*0.08) * max(0.0, u.viewport_steps_density.w);
-  let hotSoot = max(0.0, coverage) * sootYield * u.physical_fire.w * (0.35+smokeAmount*0.65);
+  // Boundary coverage locates the material; it is not itself a supply of soot.
+  // Use the transported soot proxy without a positive density floor. The
+  // clean reaction spectrum can still emit where this thermal population is zero.
+  let hotSoot = max(0.0, coverage) * sootYield * u.physical_fire.w * smokeAmount;
   let smokeExtinction = smokeAmount * u.emissive_material.x * smokeVisible;
   let scattering = smokeExtinction * u.emissive_material.y;
   let absorption = hotSoot + smokeExtinction-scattering;
