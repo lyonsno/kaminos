@@ -3019,7 +3019,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=transparent-const-0915';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=directional-receiver-0915';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -9260,25 +9260,46 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 
   // Trilinear sample of the 32^3 lattice through its 2D tile atlas. The
   // lattice spans the raymarch's [-1,1]^3 shared-camera world box.
-  const latticeUvw = worldPositionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
-  const sliceCoord = latticeUvw.z.mul(atlasGrid).sub(0.5);
-  const slice0 = floor(sliceCoord).clamp(float(0.0), atlasGrid.sub(1.0));
-  const slice1 = slice0.add(1.0).clamp(float(0.0), atlasGrid.sub(1.0));
-  const sliceMix = sliceCoord.sub(slice0).clamp(0.0, 1.0);
-  const inTileTexel = latticeUvw.xy.mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
-  const atlasUvForSlice = (sliceIndex) => {
-    const tileX = mod(sliceIndex, atlasTilesX);
-    const tileY = floor(sliceIndex.div(atlasTilesX));
-    return vec2(
-      tileX.mul(atlasGrid).add(inTileTexel.x),
-      tileY.mul(atlasGrid).add(inTileTexel.y)
-    ).mul(atlasTexelSize);
+  const sampleLatticeAt = (positionNode) => {
+    const uvw = positionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+    const sliceCoord = uvw.z.mul(atlasGrid).sub(0.5);
+    const slice0 = floor(sliceCoord).clamp(float(0.0), atlasGrid.sub(1.0));
+    const slice1 = slice0.add(1.0).clamp(float(0.0), atlasGrid.sub(1.0));
+    const sliceMix = sliceCoord.sub(slice0).clamp(0.0, 1.0);
+    const inTileTexel = uvw.xy.mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+    const atlasUvForSlice = (sliceIndex) => {
+      const tileX = mod(sliceIndex, atlasTilesX);
+      const tileY = floor(sliceIndex.div(atlasTilesX));
+      return vec2(
+        tileX.mul(atlasGrid).add(inTileTexel.x),
+        tileY.mul(atlasGrid).add(inTileTexel.y)
+      ).mul(atlasTexelSize);
+    };
+    return mix(
+      atlasTextureNode.sample(atlasUvForSlice(slice0)),
+      atlasTextureNode.sample(atlasUvForSlice(slice1)),
+      sliceMix
+    );
   };
-  const latticeSample = mix(
-    atlasTextureNode.sample(atlasUvForSlice(slice0)),
-    atlasTextureNode.sample(atlasUvForSlice(slice1)),
-    sliceMix
+  const latticeUvw = worldPositionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+  const latticeSample = sampleLatticeAt(worldPositionNode);
+
+  // Directional shading: the irradiance field's luminance gradient points
+  // toward the fire, so central differences over one lattice cell recover the
+  // incident light direction at every receiver pixel. Shading with true
+  // N.L against this direction replaces the earlier camera-facing stand-in,
+  // which lit surfaces by screen orientation instead of the fire-to-surface
+  // vector (operator-reported as proximity glow with no above/below response).
+  const lumaWeights = vec3(0.2126, 0.7152, 0.0722);
+  const gradientEps = float(2.0 / 32.0);
+  const lumaAt = (positionNode) => sampleLatticeAt(positionNode).rgb.dot(lumaWeights);
+  const latticeGradient = vec3(
+    lumaAt(worldPositionNode.add(vec3(gradientEps, 0.0, 0.0))).sub(lumaAt(worldPositionNode.sub(vec3(gradientEps, 0.0, 0.0)))),
+    lumaAt(worldPositionNode.add(vec3(0.0, gradientEps, 0.0))).sub(lumaAt(worldPositionNode.sub(vec3(0.0, gradientEps, 0.0)))),
+    lumaAt(worldPositionNode.add(vec3(0.0, 0.0, gradientEps))).sub(lumaAt(worldPositionNode.sub(vec3(0.0, 0.0, gradientEps))))
   );
+  const gradientLength = latticeGradient.length();
+  const lightDirection = latticeGradient.div(gradientLength.max(1e-6));
 
   // Outside the lattice box, attenuate continuously with exterior distance so
   // nearby receivers keep light while the far scene falls off.
@@ -9290,12 +9311,20 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 
   const backgroundMask = float(1.0).sub(step(float(0.999), depthSampleNode));
   const normalSampleNode = sceneNormalNode.sample(viewportUV).rgb.normalize();
-  const facingResponse = normalSampleNode.z.abs().mul(0.65).add(0.35);
+  // The prepass stores view-space normals; rotate into world space with the
+  // scene camera's world matrix (w = 0 keeps it a pure rotation).
+  const worldNormalNode = sceneCameraWorldMatrix.mul(vec4(normalSampleNode, 0.0)).xyz.normalize();
+  // Half-wrapped N.L keeps soft fill on grazing surfaces while giving the
+  // above/below/beside response; where the gradient is too weak to trust
+  // (deep outside the field, or dead-flat regions) fall back to isotropic.
+  const wrappedNdotL = worldNormalNode.dot(lightDirection).mul(0.5).add(0.5).pow(2.0);
+  const gradientConfidence = gradientLength.smoothstep(0.00002, 0.0005);
+  const directionalResponse = mix(float(1.0), wrappedNdotL.mul(0.9).add(0.1), gradientConfidence);
   const materialResponse = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
   const receiverSignal = latticeSample.rgb
     .mul(exteriorFalloff)
     .mul(backgroundMask)
-    .mul(facingResponse)
+    .mul(directionalResponse)
     .mul(materialResponse)
     .mul(fireLightFieldStrength);
   const compositeOutput = baseOutputNode.add(vec4(receiverSignal, 0.0));
@@ -9310,7 +9339,13 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   } else if (debugView === 'lattice') {
     outputNode = vec4(latticeSample.rgb.mul(4.0), 1.0);
   } else if (debugView === 'mask') {
-    outputNode = vec4(backgroundMask, facingResponse, exteriorFalloff, 1.0);
+    outputNode = vec4(backgroundMask, directionalResponse, exteriorFalloff, 1.0);
+  } else if (debugView === 'direction') {
+    // Incident light direction as RGB (world axes mapped [-1,1] -> [0,1]),
+    // alpha-carried confidence; geometry only.
+    outputNode = vec4(lightDirection.mul(0.5).add(vec3(0.5)).mul(backgroundMask).mul(gradientConfidence), 1.0);
+  } else if (debugView === 'ndotl') {
+    outputNode = vec4(vec3(wrappedNdotL.mul(backgroundMask)), 1.0);
   } else if (debugView === 'atlas') {
     outputNode = vec4(atlasTextureNode.sample(viewportUV).rgb.mul(4.0), 1.0);
   } else if (debugView === 'groundtest') {

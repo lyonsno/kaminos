@@ -2326,3 +2326,13 @@ assert.doesNotMatch(core, /local = local \+ shellColor \* shellRenderMode \* smo
 // silently buries the composited Three scene behind an opaque volume canvas.
 assert.match(core, /renderPipelineConstants = \{[^}]*TRANSPARENT_CANVAS: transparentCanvas \? 1 : 0/, 'raymarch pipeline constants carry the transparent-canvas override');
 assert.match(core, /leanStockRenderPipelineConstants = \{[^}]*TRANSPARENT_CANVAS: transparentCanvas \? 1 : 0/, 'lean raymarch pipeline constants carry the transparent-canvas override');
+
+// Receiver shading is directional: incident light direction comes from the
+// irradiance-field luminance gradient and shades true N.L against the
+// world-space scene normal. The earlier camera-facing stand-in lit surfaces
+// by screen orientation, producing proximity glow with no above/below
+// response to the fire's actual position.
+assert.match(index, /latticeGradient = vec3\(/, 'receiver recovers incident direction from the lattice luminance gradient');
+assert.match(index, /worldNormalNode = sceneCameraWorldMatrix\.mul\(vec4\(normalSampleNode, 0\.0\)\)/, 'receiver rotates the prepass view-space normal into world space for shading');
+assert.match(index, /worldNormalNode\.dot\(lightDirection\)/, 'receiver shades with N.L against the recovered fire direction');
+assert.doesNotMatch(index, /facingResponse = normalSampleNode\.z\.abs\(\)/, 'the camera-facing shading stand-in must not return');
