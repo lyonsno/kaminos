@@ -82,14 +82,17 @@ function startFrameMonitor() {
 
 // Bonfire scene preset (mirrors the main app's VOLUME_SCENE_PRESETS.bonfire_plume;
 // without these emission/appearance values the sim runs but produces no visible flame).
-const BONFIRE_CONTROLS = {
-  volumeScene: 'bonfire_plume',
-  density: 4.80, fire: 0.95, radiance: 1.90, absorption: 1.45, glow: 1.05,
-  smoke: 2.80, curl: 3.40, microdetail: 2.50, interfaceShred: 1.85, fireLicks: 4.25,
-  projection: 0.85, speed: 5.00, inputRadius: 0.16, flowRate: 0.24, fireScale: 0.78,
-  detailScale: 2.75, plumeHeight: 2.20, windStrength: 0, windAngle: 0, windHeight: 0.15,
+const FLAME_CONTROLS = {
+  // tall_plume is the gate for the current fire pipeline (bonfire_plume runs
+  // the legacy path). Values mirror the main app's VOLUME_SCENE_PRESETS.tall_plume.
+  volumeScene: 'tall_plume',
+  density: 6.00, fire: 1.15, radiance: 3.00, absorption: 2.00, glow: 1.20,
+  smoke: 2.80, curl: 3.80, microdetail: 2.50, interfaceShred: 1.20, fireLicks: 5.00,
+  projection: 0.90, speed: 5.00, inputRadius: 0.08, flowRate: 0.45, fireScale: 0.35,
+  detailScale: 3.20, plumeHeight: 2.20, windStrength: 0, windAngle: 0, windHeight: 0.15,
   canonicalSpread: 1.00, canonicalCenterline: 1.00, canonicalBodyBalance: 0.00,
-  resolution: 96, renderScale: 0.85, fireRenderMode: 'stock',
+  resolution: 96, renderScale: 0.85, fireRenderMode: 'stock', boundarySplatMode: 'learned',
+  quenchVapor: 0,
 };
 
 // --- Fire volume on the shared device ---
@@ -104,7 +107,7 @@ function startFire(sharedGpuContext) {
     viewport: document.getElementById('viewport'),
     camera,
     controls,
-    getControls: () => ({ ...BONFIRE_CONTROLS }),
+    getControls: () => ({ ...FLAME_CONTROLS }),
     onStatus: status => {
       hud('hud-fire').textContent = status.error
         ? `error: ${status.error}` : (status.backend || status.phase || 'unknown');
@@ -112,10 +115,10 @@ function startFire(sharedGpuContext) {
     },
     sharedGpuContext,
   });
-  // Default composition renders raymarch smoke only and delegates fire to the
-  // learned-splat path, which this minimal page does not feed; take the full
-  // fire raymarch authority so the flame itself is visible.
-  prototype.setSelectiveHeadLiveRenderComposition('raymarch-only-v0');
+  // Current fire pipeline: learned boundary-splat fire authority over smoke
+  // raymarch (the main app's composition), enabled by tall_plume +
+  // boundarySplatMode 'learned'. raymarch-only-v0 was the legacy diagnostic.
+  prototype.setSelectiveHeadLiveRenderComposition('smoke-raymarch-under-splats-v0');
   prototype.setActive(true);
   window.__flameVolumePrototype = prototype;
   return prototype;
