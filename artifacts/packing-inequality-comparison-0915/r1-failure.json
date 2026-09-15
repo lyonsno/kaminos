@@ -1,0 +1,6 @@
+{
+  "status": "failed",
+  "phase": "validate-reconstructed-state",
+  "started": "2026-09-15T14:16:22.604Z",
+  "error": "Error: authored exact residual initial carrier lineage mismatch\n    at validateAuthoredPackingExactResidualProblem (file:///private/tmp/kaminos-packer-constrained-step-comparison-0915/authored-packing-sweep-core.mjs:2049:11)\n    at Module.evaluateAuthoredPackingExactResidualState (file:///private/tmp/kaminos-packer-constrained-step-comparison-0915/authored-packing-sweep-core.mjs:2208:3)\n    at file:///private/tmp/kaminos-packer-constrained-step-comparison-0915/tools/packing-inequality-comparison.mjs:49:24"
+}

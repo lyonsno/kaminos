@@ -1,0 +1,209 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-same-page-screenshot-v1",
+    "effective": "independent-headless-same-page-screenshot-v1",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777233,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://localhost:8793/artifacts/packing-inequality-comparison-0915/visual/index.html?state=start",
+    "outputPath": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-inequality-comparison-0915/visual/start.png",
+    "reportPath": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-inequality-comparison-0915/visual/start-capture.json",
+    "viewport": {
+      "width": 1400,
+      "height": 1000
+    },
+    "captureTimeoutMs": 30000,
+    "cleanupGraceMs": 1000,
+    "domDatasetKeys": [
+      "witnessRenderComplete",
+      "witnessRenderFrame",
+      "witnessState",
+      "witnessBundle",
+      "witnessCarrier",
+      "witnessRoute",
+      "witnessCaptureBatch"
+    ],
+    "captureBatchIdentity": {
+      "sha256": "257fa7e1841f4a7a0f99ec79799e9179884def5e378cb403c6222df9081eb339"
+    },
+    "pathEncoding": "absolute-runtime-paths"
+  },
+  "process": {
+    "pid": 47908,
+    "processGroupId": 47908,
+    "detachedProcessGroup": true,
+    "exit": {
+      "code": 143,
+      "signal": null
+    },
+    "cleanup": {
+      "processGroupId": 47908,
+      "graceMs": 1000,
+      "groupPresentBefore": true,
+      "actions": [
+        {
+          "signal": "SIGTERM",
+          "result": "sent"
+        }
+      ],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-same-page-headless-Ax6yML"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3057,
+    "retainedBytes": 3057,
+    "truncated": false,
+    "tail": "\nDevTools listening on ws://127.0.0.1:51730/devtools/browser/a22c2f31-a6b0-457f-ad6f-599c6e83ad10\n[0915/102730.057883:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0915/102730.124024:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x134004d6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/102730.304226:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://localhost:8793/artifacts/packing-inequality-comparison-0915/visual/index.html?state=start (0)\n[0915/102730.304308:INFO:CONSOLE:0] \"[.WebGL-0x134004d6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-inequality-comparison-0915/visual/index.html?state=start (0)\n[0915/102730.304525:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x134004d6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/102730.320865:INFO:CONSOLE:0] \"[.WebGL-0x134004d6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-inequality-comparison-0915/visual/index.html?state=start (0)\n[0915/102730.321583:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x134004d6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0915/102730.335727:INFO:CONSOLE:0] \"[.WebGL-0x134004d6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://localhost:8793/artifacts/packing-inequality-comparison-0915/visual/index.html?state=start (0)\n[0915/102730.336406:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x134004d6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0915/102730.355505:INFO:CONSOLE:0] \"[.WebGL-0x134004d6c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://localhost:8793/artifacts/packing-inequality-comparison-0915/visual/index.html?state=start (0)\n[0915/102730.621193:ERROR:content/browser/gpu/gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=15\n[0915/102730.621214:WARNING:content/browser/gpu/gpu_process_host.cc:1479] The GPU process has crashed 1 time(s)\n[0915/102730.680501:ERROR:base/apple/mach_port_rendezvous_mac.cc:256] bootstrap_look_up org.chromium.Chromium.MachPortRendezvousServer.1: Permission denied (1100)\n[0915/102730.681161:ERROR:base/memory/shared_memory_switch.cc:261] No rendezvous client, terminating process (parent died?)\n"
+  },
+  "primaryOutput": {
+    "path": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-inequality-comparison-0915/visual/start.png",
+    "sizeBytes": 169392,
+    "sha256": "7cff7a71e0c8bb554c0699d96ae4bcaea4370e93fc6b1c9ca849f8fe073387ca",
+    "png": {
+      "width": 1400,
+      "height": 1000,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 45,
+      "idatBytes": 168831
+    },
+    "visualSignal": {
+      "width": 1400,
+      "height": 1000,
+      "pixelCount": 1400000,
+      "nonUniformPixels": 269286,
+      "minimumChannel": 13,
+      "maximumChannel": 255,
+      "channelRange": 242,
+      "admission": "nonblank-v0"
+    }
+  },
+  "frameReceipt": {
+    "status": "complete",
+    "route": "same-cdp-page-frame-v0",
+    "targetId": "54C22FDB9F0FF1053B40C2B9634A053F",
+    "targetType": "page",
+    "requestedUrl": "http://localhost:8793/artifacts/packing-inequality-comparison-0915/visual/index.html?state=start",
+    "dataset": {
+      "witnessRenderComplete": "true",
+      "witnessRenderFrame": "9",
+      "witnessState": "start",
+      "witnessBundle": "257fa7e1841f4a7a0f99ec79799e9179884def5e378cb403c6222df9081eb339",
+      "witnessCarrier": "3293e902e48317a6399c7b8d845eb3e501261c5c61befd8d79edb4737ae0db05",
+      "witnessRoute": "experimental-packing-inequality-comparison-v0",
+      "witnessCaptureBatch": "257fa7e1841f4a7a0f99ec79799e9179884def5e378cb403c6222df9081eb339"
+    },
+    "renderComplete": "true",
+    "renderFrame": "9",
+    "captureBatchIdentitySha256": "257fa7e1841f4a7a0f99ec79799e9179884def5e378cb403c6222df9081eb339",
+    "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+  },
+  "domReceipt": null,
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "same-page-frame-captured",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777233,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/packing-inequality-comparison-0915/visual/start.png",
+      "sizeBytes": 169392,
+      "sha256": "7cff7a71e0c8bb554c0699d96ae4bcaea4370e93fc6b1c9ca849f8fe073387ca",
+      "png": {
+        "width": 1400,
+        "height": 1000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 45,
+        "idatBytes": 168831
+      },
+      "visualSignal": {
+        "width": 1400,
+        "height": 1000,
+        "pixelCount": 1400000,
+        "nonUniformPixels": 269286,
+        "minimumChannel": 13,
+        "maximumChannel": 255,
+        "channelRange": 242,
+        "admission": "nonblank-v0"
+      }
+    },
+    "frameReceipt": {
+      "status": "complete",
+      "route": "same-cdp-page-frame-v0",
+      "targetId": "54C22FDB9F0FF1053B40C2B9634A053F",
+      "targetType": "page",
+      "requestedUrl": "http://localhost:8793/artifacts/packing-inequality-comparison-0915/visual/index.html?state=start",
+      "dataset": {
+        "witnessRenderComplete": "true",
+        "witnessRenderFrame": "9",
+        "witnessState": "start",
+        "witnessBundle": "257fa7e1841f4a7a0f99ec79799e9179884def5e378cb403c6222df9081eb339",
+        "witnessCarrier": "3293e902e48317a6399c7b8d845eb3e501261c5c61befd8d79edb4737ae0db05",
+        "witnessRoute": "experimental-packing-inequality-comparison-v0",
+        "witnessCaptureBatch": "257fa7e1841f4a7a0f99ec79799e9179884def5e378cb403c6222df9081eb339"
+      },
+      "renderComplete": "true",
+      "renderFrame": "9",
+      "captureBatchIdentitySha256": "257fa7e1841f4a7a0f99ec79799e9179884def5e378cb403c6222df9081eb339",
+      "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+    }
+  }
+}

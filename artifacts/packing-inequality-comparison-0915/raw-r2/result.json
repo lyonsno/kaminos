@@ -1,0 +1,297 @@
+{
+  "status": "comparison-completed",
+  "provenance": {
+    "started": "2026-09-15T14:18:29.625Z",
+    "route": "experimental-same-state-inequality-comparison",
+    "sourceHtml": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/artifacts/authored-packing-exact-repeated-convergence-v0/index.html",
+    "sourceHtmlSha256": "4c24dc655870d93be1585a673ae84d4fa1152c127da1175399a36404f4119cd5",
+    "historicalInitialCarrierSha256": "f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391",
+    "reconstructedCarrierSha256": "f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391",
+    "startVector": [
+      1.8915822046322175,
+      0.0698253562508968,
+      0.805485883285687,
+      0.5668992335856478,
+      -0.02409896117973401,
+      -1.27729502819462,
+      0.6140666651683938,
+      0.36500229731250894,
+      2.9645145101335992,
+      -2.0444277602716503,
+      -0.06553002350901106,
+      -0.6870324081908173,
+      -0.49920051041907,
+      0.053103677793420075,
+      0.49797474815712506,
+      -0.008826549297800966,
+      -0.016885957574312264,
+      -0.20162912973510574
+    ],
+    "maximumReconstructionError": 7.160723346098895e-15,
+    "note": "Recovered saved late-state coordinates as sine-basis coefficients relative to canonical original bridge. Both algorithms use the unchanged canonical problem and original volume allowance. Reconstruction and residual errors checked explicitly; no historical metadata identity asserted.",
+    "baselineConfig": {
+      "activeSetPolicy": "family-maximum-relative-band",
+      "activationMargin": 0,
+      "algorithm": "active-row-minimum-norm-common-descent-trust-region-v0",
+      "candidateEnumeration": "canonical",
+      "convexSolverIterationBudget": 10000,
+      "convexSolverTolerance": 1e-12,
+      "directionalDerivativeTolerance": 1e-10,
+      "familyRegressionTolerance": 1e-12,
+      "finiteDifferenceStep": 0.001,
+      "guardRowPolicy": "candidate-crossing-clear-rows",
+      "improvementTolerance": 1e-12,
+      "relativeActivationBand": 0.01,
+      "translationBounds": [
+        -50,
+        50
+      ],
+      "trustRegionRadii": [
+        2,
+        1,
+        0.5,
+        0.25,
+        0.125,
+        0.0625,
+        0.03125,
+        0.015625,
+        0.0078125,
+        0.00390625,
+        0.001953125,
+        0.0009765625,
+        0.00048828125,
+        0.000244140625,
+        0.0001220703125,
+        0.00006103515625,
+        0.000030517578125,
+        0.0000152587890625,
+        0.00000762939453125,
+        0.000003814697265625,
+        0.0000019073486328125,
+        9.5367431640625e-7,
+        4.76837158203125e-7,
+        2.384185791015625e-7,
+        1.1920928955078125e-7,
+        5.960464477539063e-8,
+        2.9802322387695312e-8,
+        1.4901161193847656e-8,
+        7.450580596923828e-9,
+        3.725290298461914e-9,
+        1.862645149230957e-9
+      ]
+    },
+    "candidateConfig": {
+      "radius": 2,
+      "finiteDifferenceStep": 0.001,
+      "translationBounds": [
+        -50,
+        50
+      ],
+      "backtrackingScales": [
+        1,
+        0.5,
+        0.25,
+        0.125,
+        0.0625,
+        0.03125,
+        0.015625,
+        0.0078125,
+        0.00390625,
+        0.001953125,
+        0.0009765625,
+        0.00048828125,
+        0.000244140625,
+        0.0001220703125,
+        0.00006103515625,
+        0.000030517578125,
+        0.0000152587890625,
+        0.00000762939453125,
+        0.000003814697265625,
+        0.0000019073486328125,
+        9.5367431640625e-7,
+        4.76837158203125e-7,
+        2.384185791015625e-7,
+        1.1920928955078125e-7,
+        5.960464477539063e-8,
+        2.9802322387695312e-8,
+        1.4901161193847656e-8,
+        7.450580596923828e-9,
+        3.725290298461914e-9,
+        1.862645149230957e-9,
+        9.313225746154785e-10
+      ],
+      "python": "/private/tmp/kaminos-packer-constrained-step-comparison-0915/.venv-packing/bin/python"
+    }
+  },
+  "finished": "2026-09-15T14:20:02.905Z",
+  "start": {
+    "pairwisePenetration": 0.031615494722519344,
+    "skeletalPenetration": 0,
+    "rawPairwisePenetration": 0.031615494722519344,
+    "rawSkeletalPenetration": 4.495923633385246e-10,
+    "compartmentEscape": 0,
+    "endpointDrift": 0,
+    "maximumRelativeVolumeError": 0,
+    "rawMaximumRelativeVolumeError": 0.1970001222577586
+  },
+  "baseline": {
+    "status": "active-row-trust-region-step-accepted",
+    "metrics": {
+      "pairwisePenetration": 0.031025096029782873,
+      "skeletalPenetration": 0,
+      "rawPairwisePenetration": 0.031025096029782873,
+      "rawSkeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "rawMaximumRelativeVolumeError": 0.1970001222577588
+    },
+    "displacement": [
+      {
+        "constructionId": "muscle-1",
+        "maximumNodeDisplacement": 7.105427357601002e-15
+      },
+      {
+        "constructionId": "muscle-2",
+        "maximumNodeDisplacement": 0.0014379403316463477
+      },
+      {
+        "constructionId": "tendon-1",
+        "maximumNodeDisplacement": 3.66205343881779e-15
+      },
+      {
+        "constructionId": "muscle-3",
+        "maximumNodeDisplacement": 3.66205343881779e-15
+      },
+      {
+        "constructionId": "muscle-4",
+        "maximumNodeDisplacement": 4.440892098500626e-16
+      },
+      {
+        "constructionId": "tendon-2",
+        "maximumNodeDisplacement": 0.0013217506830894158
+      }
+    ]
+  },
+  "candidate": {
+    "status": "improved",
+    "metrics": {
+      "pairwisePenetration": 0.03161549425141885,
+      "skeletalPenetration": 0,
+      "rawPairwisePenetration": 0.03161549425141885,
+      "rawSkeletalPenetration": 7.723919281943381e-10,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "rawMaximumRelativeVolumeError": 0.1970001222577586
+    },
+    "displacement": [
+      {
+        "constructionId": "muscle-1",
+        "maximumNodeDisplacement": 5.796408695205872e-10
+      },
+      {
+        "constructionId": "muscle-2",
+        "maximumNodeDisplacement": 3.4691080676254814e-10
+      },
+      {
+        "constructionId": "tendon-1",
+        "maximumNodeDisplacement": 0
+      },
+      {
+        "constructionId": "muscle-3",
+        "maximumNodeDisplacement": 5.87886469604215e-10
+      },
+      {
+        "constructionId": "muscle-4",
+        "maximumNodeDisplacement": 0
+      },
+      {
+        "constructionId": "tendon-2",
+        "maximumNodeDisplacement": 3.667618355651792e-10
+      }
+    ],
+    "evaluationCount": 68,
+    "solver": {
+      "scipyVersion": "1.18.1",
+      "minimax": {
+        "success": true,
+        "message": "Optimization terminated successfully",
+        "iterations": 2,
+        "x": [
+          0.03221425747563278,
+          0.001726847294960093,
+          0.021734055799875526,
+          -0.016019351969213284,
+          0.001721109038765529,
+          0.016805146462351345,
+          0,
+          0,
+          0,
+          -0.03737838111347072,
+          -0.0012200421650215955,
+          -0.012563627723979865,
+          0,
+          0,
+          0,
+          -0.0010731576797337868,
+          -0.0020756391052254635,
+          -0.02450167341122598,
+          2.220446049250313e-16
+        ],
+        "minimumSlack": -1.3877787807814457e-17,
+        "norm": 0.06494130375533474
+      },
+      "minimumNorm": {
+        "success": true,
+        "message": "Optimization terminated successfully",
+        "iterations": 1,
+        "x": [
+          0.03221425747563278,
+          0.001726847294960093,
+          0.021734055799875526,
+          -0.016019351969213284,
+          0.001721109038765529,
+          0.016805146462351345,
+          0,
+          0,
+          0,
+          -0.03737838111347072,
+          -0.0012200421650215955,
+          -0.012563627723979865,
+          0,
+          0,
+          0,
+          -0.0010731576797337868,
+          -0.0020756391052254635,
+          -0.02450167341122598,
+          2.220446049250313e-16
+        ],
+        "minimumSlack": -1.3877787807814457e-17,
+        "norm": 0.06494130375533474
+      },
+      "status": "solved",
+      "direction": [
+        0.03221425747563278,
+        0.001726847294960093,
+        0.021734055799875526,
+        -0.016019351969213284,
+        0.001721109038765529,
+        0.016805146462351345,
+        0,
+        0,
+        0,
+        -0.03737838111347072,
+        -0.0012200421650215955,
+        -0.012563627723979865,
+        0,
+        0,
+        0,
+        -0.0010731576797337868,
+        -0.0020756391052254635,
+        -0.02450167341122598
+      ],
+      "stderr": ""
+    }
+  }
+}
