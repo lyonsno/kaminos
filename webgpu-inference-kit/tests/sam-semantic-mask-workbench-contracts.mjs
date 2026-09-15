@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { setImmediate as settle } from 'node:timers/promises';
 
 const html = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.html', import.meta.url), 'utf8');
 const workbench = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.js', import.meta.url), 'utf8');
@@ -50,38 +51,63 @@ assert.match(runner, /selectedCandidateCount\s*===\s*0[\s\S]*new Uint32Array/, '
 assert.match(runner, /if \(verificationAttached\)[\s\S]*WebGPU parity mismatch/, 'reference mismatch gates must remain load-bearing when verification is attached');
 
 // Exercise the actual page controller with explicitly deferred image loads.
-const elements = new Map();
-const pendingImages = [];
-function element() {
-  const context = { clearCount: 0, clearRect() { this.clearCount += 1; }, drawImage() {} };
-  return {
-    dataset: {}, children: [], textContent: '', disabled: false, value: '',
-    append(child) { this.children.push(child); },
-    querySelectorAll() { return this.children; },
-    setAttribute() {}, addEventListener() {},
-    getContext() { return context; },
+function controllerFixture() {
+  const elements = new Map();
+  const pendingImages = [];
+  function element() {
+    const context = {
+      clearCount: 0, clearRect() { this.clearCount += 1; }, drawImage() {},
+      createImageData(width, height) { return { data: new Uint8ClampedArray(width * height * 4) }; }, putImageData() {},
+    };
+    return {
+      dataset: {}, children: [], listeners: {}, textContent: '', disabled: false, value: '',
+      append(child) { this.children.push(child); },
+      querySelectorAll() { return this.children; },
+      setAttribute() {}, addEventListener(name, callback) { this.listeners[name] = callback; },
+      getContext() { return context; },
+    };
+  }
+  const document = {
+    getElementById(id) {
+      if (!elements.has(id)) elements.set(id, element());
+      return elements.get(id);
+    },
+    createElement: element,
   };
+  const context = {
+    document, URLSearchParams,
+    window: { location: { search: '' }, setTimeout() {}, clearTimeout() {}, setInterval() { return 1; }, clearInterval() {} },
+    Image: class {
+      constructor() { this.naturalWidth = 800; this.naturalHeight = 600; pendingImages.push(this); }
+    },
+    console: { error() {} }, performance: { now: () => 1 }, crypto: { randomUUID: () => `invocation-${++sequence}` },
+  };
+  let sequence = 0;
+  let output;
+  const runtime = {
+    failNext: false,
+    async runSam3Invocation(url, input) {
+      if (this.failNext) throw new Error('intentional rerun failure');
+      output = {
+        invocationId: input.invocationId, outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
+        receiptChain: Array(10).fill({}), effectiveRouteId: 'fixture-route', imageCache: { status: 'miss' },
+        width: 2, height: 2, mask: [1, 0, 0, 0], selectedCandidateCount: 1, foregroundPixelCount: 1, selectedMaskIndex: 0, selectedScore: 0.9,
+      };
+    },
+    samMaskIslandVisualOutput: () => output,
+  };
+  runInNewContext(`${workbench}\nglobalThis.controller = { selectSample, runMask, samples: SAMPLE_IMAGES };`, context);
+  return { context, elements, pendingImages, runtime, loadRuntime(value = runtime) {
+    const frame = elements.get('sam-mask-runtime-frame');
+    frame.contentWindow = value;
+    frame.listeners.load();
+  } };
 }
-const document = {
-  getElementById(id) {
-    if (!elements.has(id)) elements.set(id, element());
-    return elements.get(id);
-  },
-  createElement: element,
-};
-const context = {
-  document, URLSearchParams,
-  window: { location: { search: '' }, setTimeout() {}, clearTimeout() {} },
-  Image: class {
-    constructor() { this.naturalWidth = 800; this.naturalHeight = 600; pendingImages.push(this); }
-  },
-  console,
-};
-runInNewContext(`${workbench}\nglobalThis.controller = { selectSample, runMask, samples: SAMPLE_IMAGES };`, context);
+const { context, elements, pendingImages, loadRuntime } = controllerFixture();
 assert.equal(elements.get('run-segmentation').disabled, true, 'run must wait for the selected image to load');
+loadRuntime();
 pendingImages[0].onload();
-await Promise.resolve();
-await Promise.resolve();
+await settle();
 assert.equal(elements.get('run-segmentation').disabled, false);
 for (const id of ['effective-route', 'output-authority', 'candidate-evidence', 'foreground-evidence']) elements.get(id).textContent = 'previous result';
 const clearCount = elements.get('mask-canvas').getContext().clearCount;
@@ -105,5 +131,31 @@ await failedSelection;
 assert.equal(elements.get('workbench-status').dataset.state, 'failed');
 assert.equal(elements.get('run-segmentation').disabled, true, 'failed image load cannot run against the previous image');
 assert.ok(elements.get('sample-picker').children.every(button => !button.disabled), 'another sample remains selectable after failure');
+
+const rerun = controllerFixture();
+rerun.loadRuntime();
+rerun.pendingImages[0].onload();
+await settle();
+await rerun.context.controller.runMask();
+assert.equal(rerun.elements.get('workbench-status').dataset.state, 'complete');
+assert.equal(rerun.elements.get('run-negative-control').disabled, false);
+const priorClears = rerun.elements.get('mask-canvas').getContext().clearCount;
+rerun.runtime.failNext = true;
+rerun.elements.get('prompt-input').value = 'different prompt';
+await rerun.context.controller.runMask();
+assert.equal(rerun.elements.get('workbench-status').dataset.state, 'failed');
+assert.equal(rerun.elements.get('run-negative-control').disabled, true, 'failed positive rerun must invalidate the prior positive control');
+assert.ok(rerun.elements.get('mask-canvas').getContext().clearCount > priorClears, 'failed rerun cannot retain the previous raw mask');
+assert.equal(rerun.elements.get('candidate-evidence').textContent, 'Not run');
+assert.equal(rerun.elements.get('control-evidence').textContent, 'Not run');
+
+const failedRuntime = controllerFixture();
+failedRuntime.loadRuntime({});
+await settle();
+assert.equal(failedRuntime.elements.get('workbench-status').dataset.state, 'failed');
+failedRuntime.pendingImages[0].onload();
+await settle();
+assert.equal(failedRuntime.elements.get('workbench-status').dataset.state, 'failed', 'image success must not overwrite runtime failure');
+assert.equal(failedRuntime.elements.get('run-segmentation').disabled, true);
 
 console.log('sam semantic mask workbench contracts passed');

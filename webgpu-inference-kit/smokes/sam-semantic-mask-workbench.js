@@ -44,6 +44,8 @@ let selectedImage = null;
 let activeInvocationId = null;
 let positiveMaskFingerprint = null;
 let runtimeReady = null;
+let runtimeAvailable = false;
+let runtimeFailure = null;
 let sampleLoadVersion = 0;
 
 function setStatus(state, text) {
@@ -52,8 +54,8 @@ function setStatus(state, text) {
 }
 
 function setBusy(busy) {
-  runButton.disabled = busy;
-  negativeButton.disabled = busy || positiveMaskFingerprint === null;
+  runButton.disabled = busy || !selectedImage || !runtimeAvailable || runtimeFailure !== null;
+  negativeButton.disabled = busy || positiveMaskFingerprint === null || runButton.disabled;
   promptInput.disabled = busy;
   for (const button of samplePicker.querySelectorAll('button')) button.disabled = busy;
 }
@@ -193,6 +195,18 @@ function waitForRuntime() {
       resolve(runtime);
     }, { once: true });
     runtimeFrame.src = `./sam-mask-island-serving.html?autorun=0&manifest=${encodeURIComponent(manifestUrl)}`;
+  }).then(runtime => {
+    runtimeAvailable = true;
+    if (selectedImage) {
+      setBusy(false);
+      setStatus('idle', 'Sample loaded');
+    }
+    return runtime;
+  }, error => {
+    runtimeFailure = error;
+    setBusy(false);
+    setStatus('failed', error.message);
+    throw error;
   });
   return runtimeReady;
 }
@@ -209,6 +223,13 @@ async function runMask(controlKind = 'positive') {
   }
 
   const invocationId = crypto.randomUUID();
+  if (controlKind === 'positive') positiveMaskFingerprint = null;
+  drawSource(selectedImage);
+  maskCanvas.getContext('2d').clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+  for (const id of ['effective-route', 'output-authority', 'candidate-evidence', 'foreground-evidence', 'control-evidence', 'mask-meta']) {
+    document.getElementById(id).textContent = 'Not run';
+  }
+  document.getElementById('overlay-meta').textContent = 'No output';
   activeInvocationId = invocationId;
   setBusy(true);
   setStatus('running', 'Initializing browser route');
@@ -245,6 +266,7 @@ async function runMask(controlKind = 'positive') {
       : `Mask complete · ${elapsedSeconds}s`;
     setStatus(evidenceState, resultText);
   } catch (error) {
+    positiveMaskFingerprint = null;
     setStatus('failed', String(error?.message || error));
     console.error(error);
   } finally {
@@ -263,7 +285,7 @@ async function selectSample(sample) {
   for (const button of samplePicker.querySelectorAll('button')) {
     button.setAttribute('aria-pressed', String(button.dataset.sampleId === sample.id));
   }
-  setStatus('running', 'Loading sample');
+  setStatus(runtimeFailure ? 'failed' : 'running', runtimeFailure?.message || 'Loading sample');
   for (const canvas of [sourceCanvas, overlayCanvas, maskCanvas]) {
     canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
   }
@@ -278,11 +300,12 @@ async function selectSample(sample) {
     selectedImage = image;
     drawSource(image);
     setBusy(false);
-    setStatus('idle', 'Sample loaded');
+    setStatus(runtimeFailure ? 'failed' : runtimeAvailable ? 'idle' : 'running',
+      runtimeFailure?.message || (runtimeAvailable ? 'Sample loaded' : 'Initializing browser route'));
   } catch (error) {
     if (loadVersion !== sampleLoadVersion) return;
     for (const button of samplePicker.querySelectorAll('button')) button.disabled = false;
-    setStatus('failed', error.message);
+    setStatus('failed', runtimeFailure?.message || error.message);
   }
 }
 
