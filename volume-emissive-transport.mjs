@@ -95,6 +95,14 @@ fn emissionIntegral(sigma: f32, ds: f32) -> f32 {
   if (tau < 0.001) { return ds*(1.0-tau*0.5+tau*tau/6.0); }
   return (1.0-exp(-tau))/sigma;
 }
+fn emissiveHeatSource(m: vec4<f32>, f: vec4<f32>, d: vec4<f32>, transported: bool) -> f32 {
+  if (!transported) { return m.y*0.65 + f.x + f.y*0.35 + f.z*0.40 + d.z*0.55; }
+  return m.y;
+}
+fn emissiveSootPopulation(coverage: f32, sootYield: f32, strength: f32, smokeAmount: f32, transported: bool) -> f32 {
+  if (!transported) { return max(0.0, coverage) * sootYield * strength * (0.35+smokeAmount*0.65); }
+  return max(0.0, coverage) * sootYield * strength * smokeAmount;
+}
 fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f32) -> EmissiveMaterial {
   let m = max(r.material, vec4<f32>(0.0));
   let f = max(r.fireLayer, vec4<f32>(0.0));
@@ -103,7 +111,8 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   // and lick carriers describe appearance/support, not additional heat units.
   // Summing them reheated cold detail and flattened temperature distinctions.
   // Kelvin remains a renderer calibration of this dimensionless heat field.
-  let energy = m.y;
+  let transported = u.emissive_material.w > 0.5;
+  let energy = emissiveHeatSource(m, f, d, transported);
   let activity = 1.0-exp(-energy*1.6);
   // Mode 2's temperature is the hot ceiling, and spread is cooling below it.
   // Brightness therefore cannot hide a much hotter, unlabelled half-spread.
@@ -116,7 +125,7 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   // Boundary coverage locates the material; it is not itself a supply of soot.
   // Use the transported soot proxy without a positive density floor. The
   // clean reaction spectrum can still emit where this thermal population is zero.
-  let hotSoot = max(0.0, coverage) * sootYield * u.physical_fire.w * smokeAmount;
+  let hotSoot = emissiveSootPopulation(coverage, sootYield, u.physical_fire.w, smokeAmount, transported);
   let smokeExtinction = smokeAmount * u.emissive_material.x * smokeVisible;
   let scattering = smokeExtinction * u.emissive_material.y;
   let absorption = hotSoot + smokeExtinction-scattering;

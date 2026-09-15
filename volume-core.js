@@ -11889,10 +11889,11 @@ export function createKaminosVolumePrototype({
       emissiveWhiteMatrix = cameraWhiteBalance(whiteKelvin);
       emissiveWhiteKelvin = whiteKelvin;
     }
+    const transportedEmissiveMaterial = (controlsSnapshot.physicalMaterialLaw ?? 0) === 1;
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
-      controlsSnapshot.physicalAmbient ?? 0.02, 0,
+      controlsSnapshot.physicalAmbient ?? 0.02, transportedEmissiveMaterial ? 1 : 0,
       ...emissiveWhiteMatrix[0], 0, ...emissiveWhiteMatrix[1], 0, ...emissiveWhiteMatrix[2], 0,
       0,0,0,0,
     ], EMISSIVE_UNIFORM_OFFSET);
@@ -11903,7 +11904,9 @@ export function createKaminosVolumePrototype({
       inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-ordinary-beauty-boundary-fire-without-diagnostic-residual-splat-or-caller-presentation' : null,
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
       displayTransform: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
-      temperatureAuthority: physicalColorMode === 2 ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'render-only-heat-proxy-to-kelvin',
+      materialLawRequested: physicalColorMode === 2 ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
+      materialLawEffective: physicalColorMode === 2 && physicalColorEffective ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
+      temperatureAuthority: physicalColorMode === 2 ? (transportedEmissiveMaterial ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'mixed-heat-flame-ember-detail-lick-to-kelvin') : 'render-only-heat-proxy-to-kelvin',
       temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
       cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],
       paletteAuthority: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-reference-planck-power-plus-approximate-reaction-spectrum' : 'thermal-lut-plus-clean-palette-no-pyro-repaint') : 'legacy',

@@ -1417,6 +1417,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-physical-mode-val">0</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Material law</span>
+        <select id="volume-physical-material-law" class="select-input"><option value="0">Original mixed carriers (replay)</option><option value="1">Transported heat + soot</option></select>
+        <span class="slider-val" id="volume-physical-material-law-val">0</span>
+      </div>
+      <span class="slider-help">Old presets retain the original material law. Transported heat + soot is an explicit alternative: detail carriers no longer add heat and boundary coverage no longer supplies a minimum soot density. Recalibrate Peak soot K, Kelvin spread and Hot soot density when switching; settings are not automatically retuned.</span>
+      <div class="slider-row">
         <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
         <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
         <span class="slider-val" id="volume-physical-temperature-val">1900</span>
@@ -12071,6 +12077,7 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
+  { key: 'physicalMaterialLaw', id: 'volume-physical-material-law', param: 'volume_physical_material_law', min: 0, max: 1, continuous: false, decimals: 0 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
@@ -17603,7 +17610,7 @@ function updateVolumeControlLabels() {
     input.title = physicalBoundaryColor ? 'Legacy color control; use the Boundary Fire color section' : '';
   }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') && field.key !== 'physicalColorMode')) {
-    const newMaterialControl = ['physicalWhiteBalance','physicalSmokeExtinction','physicalSmokeAlbedo','physicalAmbient'].includes(field.key);
+    const newMaterialControl = ['physicalMaterialLaw','physicalWhiteBalance','physicalSmokeExtinction','physicalSmokeAlbedo','physicalAmbient'].includes(field.key);
     document.getElementById(field.id).disabled = !physicalBoundaryColor || (newMaterialControl && c.physicalColorMode !== 2);
   }
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
@@ -17867,7 +17874,8 @@ function refreshVolumeReadout() {
   const s = volumePrototype.debugState();
   if (s.physicalColor?.requested === 'emissive-transport-v2') {
     document.getElementById('volume-physical-mode-val').textContent = s.physicalColor.effective === 'emissive-transport-v2'
-      ? 'active: emissive v2' : `inactive: ${s.physicalColor.inactiveReason || 'unverified route'}`;
+      ? (s.physicalColor.materialLawEffective === 'transported-heat-soot-v1' ? 'active: transported' : 'active: v2 replay')
+      : `inactive: ${s.physicalColor.inactiveReason || 'unverified route'}`;
   }
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);
   syncVolumePresentationControls(s.volumePresentationReceipt);
