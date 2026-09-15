@@ -98,6 +98,7 @@ function assertBonfireSourcePeriodicityBoundary(source) {
     'mix',
     'pow',
     'smoothstep',
+    'step',
     'vec3',
     'vec4',
   ]);

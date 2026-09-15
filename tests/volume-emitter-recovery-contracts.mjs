@@ -53,6 +53,12 @@ const prototype = {
       family: descriptor?.family ?? 'cluster',
       sourceLaw: descriptor?.sourceLaw ?? 'legacy-volume',
       sourceDepth: descriptor?.sourceDepth ?? 0.04,
+      inletProfile: descriptor?.inletProfile ?? 'plug',
+      momentumLinked: descriptor?.momentumLinked ?? true,
+      inletVelocity: descriptor?.inletVelocity ?? 0.04,
+      effectiveInletVelocity: descriptor?.effectiveInletVelocity ?? 0.04,
+      shearWidthCells: descriptor?.shearWidthCells ?? 3,
+      edgeEntrainment: descriptor?.edgeEntrainment ?? 0.65,
       coordinateSpace: descriptor ? 'volume-local' : 'none',
       count: descriptor ? 1 : 0,
     };
@@ -84,7 +90,7 @@ assert.equal(ringRuntime.effective.sourceCount, 1);
 const analyticInjectionShader = core.match(/const ANALYTIC_EMITTER_INJECTION_WGSL = \/\* wgsl \*\/[\s\S]*?\n`;/)?.[0] || '';
 assert.match(analyticInjectionShader, /torusSignedDistance/, 'bounded injection pass evaluates Ring from an analytic torus distance');
 assert.match(analyticInjectionShader, /smoothstep\([^\n]+cellWidth/, 'analytic support uses a grid-aware compact antialias transition');
-assert.match(analyticInjectionShader, /support <= 0\.0/, 'analytic support exits exactly outside the compact boundary');
+assert.match(analyticInjectionShader, /chemicalSupport <= 0\.0 && axialWeight <= 0\.0 && edgeWeight <= 0\.0/, 'analytic support exits exactly outside the bounded chemistry and momentum regions');
 assert.doesNotMatch(analyticInjectionShader, /\bfor\s*\(/, 'fixed analytic morphology remains O(1) per dispatched support cell');
 assert.doesNotMatch(
   analyticInjectionShader,
@@ -99,7 +105,7 @@ assert.doesNotMatch(
 assert.match(core, /fn externalEmitterInfluence\([\s\S]*?for \(var i:/, 'the generic segment carrier remains available for real arbitrary trails');
 
 const syncControls = cockpit.match(/const syncControls = event => \{[\s\S]*?\n  };/)?.[0] || '';
-assert.match(cockpit, /const emitterMorphologyControls = new Set\(\['emitter-assay-family', 'volume-emitter-source-law', 'volume-emitter-source-depth', 'volume-input-radius', 'volume-flow-rate'\]\)/, 'only source-law and morphology-bearing controls update the compact descriptor');
+assert.match(cockpit, /const emitterMorphologyControls = new Set\(\[[\s\S]*?'emitter-assay-family'[\s\S]*?'volume-emitter-inlet-profile'[\s\S]*?'volume-emitter-edge-entrainment'[\s\S]*?'volume-speed'[\s\S]*?\]\)/, 'only source-boundary and morphology-bearing controls update the compact descriptor');
 assert.match(cockpit, /if \(emitterMorphologyControls\.has\(event\?\.target\?\.id\)\) \{\s*applyVolumeEmitterFamilyRuntimeToCockpit\(controlsSnapshot\);/, 'every morphology edit republishes the requested/effective source receipt, including inactive Cluster mode');
 assert.match(
   syncControls,

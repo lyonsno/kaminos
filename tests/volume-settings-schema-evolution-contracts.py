@@ -174,6 +174,21 @@ def main():
     ]
 
     retired = legacy_payload()
+    with tempfile.TemporaryDirectory() as temporary:
+        for field in ("controlCount", "rendererControlCount", "presentationControlCount"):
+            for missing in (True, False):
+                incomplete = copy.deepcopy(normalized)
+                if missing:
+                    del incomplete[field]
+                else:
+                    incomplete[field] = None
+                try:
+                    serve.write_volume_settings_preset(Path(temporary), "Invalid count", incomplete, {}, SCHEMA)
+                except ValueError as error:
+                    assert field in str(error)
+                else:
+                    raise AssertionError(f"write synthesized missing/null {field}")
+        assert not list(Path(temporary).iterdir()), "rejected writes leave no artifacts"
     retired["domControls"]["volume-retired-raymarch"] = {
         "id": "volume-retired-raymarch",
         "param": "volume_retired_raymarch",
@@ -193,6 +208,37 @@ def main():
         "param": "volume_retired_raymarch",
         "value": 0.625,
     }]
+
+    with tempfile.TemporaryDirectory() as temporary:
+        stale_client_store = Path(temporary)
+        stale_client_payload = copy.deepcopy(normalized)
+        stale_client_payload["domControls"]["volume-retired-raymarch"] = copy.deepcopy(
+            retired["domControls"]["volume-retired-raymarch"]
+        )
+        stale_client_payload["controlCount"] += 1
+        stale_client_payload["route"] += "&volume_retired_raymarch=0.625"
+        stale_write = serve.write_volume_settings_preset(
+            stale_client_store,
+            "Unsaved basin from stale cockpit",
+            stale_client_payload,
+            {"kind": "stale-browser-contract"},
+            SCHEMA,
+        )
+        assert stale_write["requested"]["controlCount"] == SCHEMA["controlCount"] + 1
+        assert stale_write["effective"]["controlCount"] == SCHEMA["controlCount"]
+        assert stale_write["schemaProjection"]["retiredControlsStripped"] == [{
+            "axis": "basin",
+            "id": "volume-retired-raymarch",
+            "param": "volume_retired_raymarch",
+            "value": 0.625,
+        }]
+        stale_document = serve.read_volume_settings_preset(
+            stale_client_store,
+            stale_write["effective"]["presetId"],
+            SCHEMA,
+        )
+        assert "volume-retired-raymarch" not in stale_document["preset"]["domControls"]
+        assert "volume_retired_raymarch=" not in stale_document["preset"]["route"]
 
     wrong_retired_id = copy.deepcopy(retired)
     wrong_retired_id["domControls"]["volume-retired-raymarch"]["id"] = "volume-wrong-id"

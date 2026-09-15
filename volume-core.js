@@ -1,3 +1,6 @@
+import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
+export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY,
   BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL,
@@ -32,6 +35,7 @@ import {
   normalizeVolumeScene,
   volumeSceneReceipt,
 } from './volume-scene-ontology.mjs';
+import { VOLUME_EMITTER_FIELD_COMMIT_WGSL } from './volume-emitter-basis.mjs';
 import { resolveVolumeCoreEmitterSource } from './volume-emitter-runtime.mjs';
 import {
   auditLayerCoefficientLiveUnionPopulation,
@@ -1412,6 +1416,7 @@ const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedura
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
 const MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED = 'retired-periodic-bonfire-macro-forces-v0';
 const MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED = 'retired-periodic-scalar-advection-slip-v0';
+const MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY = 'retired-microdetail-transport-slip-v0';
 const MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED = 'retired-periodic-detail-force-basis-v0';
 const MAIN_FLUID_PERIODIC_ENTRAINMENT_SWAY_STRATEGY_RETIRED = 'retired-periodic-entrainment-sway-v0';
 const MAIN_FLUID_EXTERNAL_CARRIER_HIDDEN_FLICKER_STRATEGY_RETIRED = 'retired-hidden-external-emitter-flicker-v0';
@@ -1574,6 +1579,12 @@ const ANALYTIC_EMITTER_SOURCE_LAW_MODE = Object.freeze({
   'shallow-primary': 1,
 });
 
+const ANALYTIC_EMITTER_INLET_PROFILE_MODE = Object.freeze({
+  plug: 0,
+  'resolved-shear': 1,
+  'edge-entrained': 2,
+});
+
 function analyticEmitterVec3(value, label) {
   if (!Array.isArray(value) || value.length !== 3 || value.some(component => !Number.isFinite(Number(component)))) {
     throw new Error(`${label} must be a finite vec3`);
@@ -1614,6 +1625,10 @@ function normalizeAnalyticEmitterDescriptor(descriptor) {
   if (!Object.hasOwn(ANALYTIC_EMITTER_SOURCE_LAW_MODE, sourceLaw)) {
     throw new Error(`unsupported analytic emitter source law: ${sourceLaw || 'missing-source-law'}`);
   }
+  const inletProfile = String(descriptor.inletProfile ?? 'plug');
+  if (!Object.hasOwn(ANALYTIC_EMITTER_INLET_PROFILE_MODE, inletProfile)) {
+    throw new Error(`unsupported analytic emitter inlet profile: ${inletProfile || 'missing-inlet-profile'}`);
+  }
   const axis = normalizeAnalyticEmitterVec3(descriptor.axis, 'analytic emitter axis');
   const supportAxis = orthonormalAnalyticEmitterSupportAxis(axis, descriptor.supportAxis);
   const normalized = {
@@ -1628,6 +1643,12 @@ function normalizeAnalyticEmitterDescriptor(descriptor) {
     velocitySpeed: clampFinite(descriptor.velocitySpeed, 0, 3, 0.22),
     sourceLaw,
     sourceDepth: clampFinite(descriptor.sourceDepth, 0.006, 0.36, 0.04),
+    inletProfile,
+    momentumLinked: descriptor.momentumLinked === undefined ? true : Boolean(descriptor.momentumLinked),
+    inletVelocity: clampFinite(descriptor.inletVelocity, 0, 1, 0.04),
+    effectiveInletVelocity: clampFinite(descriptor.effectiveInletVelocity, 0, 12, 0.04),
+    shearWidthCells: clampFinite(descriptor.shearWidthCells, 0.5, 8, 3),
+    edgeEntrainment: clampFinite(descriptor.edgeEntrainment, 0, 2, 0.65),
     chemistry: {
       smoke: clampFinite(chemistry.smoke, 0, 3, 0),
       heat: clampFinite(chemistry.heat, 0, 4, 0),
@@ -1714,7 +1735,10 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize) {
   if (descriptor === null || descriptor === undefined) return inactive;
   const normalized = normalizeAnalyticEmitterDescriptor(descriptor);
   const cellWidth = 2 / grid;
-  const halfExtent = analyticEmitterComponentwiseHalfExtent(normalized, cellWidth * 0.5);
+  const edgeMargin = normalized.inletProfile === 'edge-entrained'
+    ? normalized.shearWidthCells * cellWidth
+    : 0;
+  const halfExtent = analyticEmitterComponentwiseHalfExtent(normalized, cellWidth * 0.5 + edgeMargin);
   const center = normalized.family === 'nozzle'
     ? normalized.origin.map((component, index) => component + normalized.axis[index] * (
       normalized.sourceLaw === 'shallow-primary' ? normalized.sourceDepth * 0.5 : normalized.extent * 0.5
@@ -1744,7 +1768,7 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize) {
   };
 }
 
-function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds, speed) {
+export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds) {
   floats.fill(0);
   if (!descriptor || !dispatch.active) return;
   const familyMode = ANALYTIC_EMITTER_FAMILY_MODE[descriptor.family] || 0;
@@ -1768,11 +1792,16 @@ function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatc
   floats[17] = descriptor.chemistry.heat;
   floats[18] = descriptor.chemistry.fuel;
   floats[19] = descriptor.chemistry.flame;
-  floats[20] = Number.isFinite(Number(speed)) ? Number(speed) : 1;
+  floats[20] = descriptor.transportSpeed;
   floats[21] = ANALYTIC_EMITTER_SOURCE_LAW_MODE[descriptor.sourceLaw] || 0;
   floats[22] = descriptor.sourceDepth;
-  words.set([...dispatch.cellMin, dispatch.grid], 24);
-  words.set([...dispatch.cellExtent, 0], 28);
+  floats[23] = descriptor.edgeEntrainment;
+  floats[24] = ANALYTIC_EMITTER_INLET_PROFILE_MODE[descriptor.inletProfile] || 0;
+  floats[25] = descriptor.momentumLinked ? 0 : 1;
+  floats[26] = descriptor.effectiveInletVelocity;
+  floats[27] = descriptor.shearWidthCells;
+  words.set([...dispatch.cellMin, dispatch.grid], 28);
+  words.set([...dispatch.cellExtent, 0], 32);
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -2207,6 +2236,14 @@ struct Uniforms {
   reserved_source_extension_3: vec4<f32>,
   reserved_source_extension_4: vec4<f32>,
   artistic_motion_controls: vec4<f32>,
+  physical_fire: vec4<f32>,
+  physical_display: vec4<f32>,
+  thermal_color_lut: array<vec4<f32>, ${THERMAL_LUT_COUNT}>,
+  emissive_material: vec4<f32>,
+  emissive_white_r: vec4<f32>,
+  emissive_white_g: vec4<f32>,
+  emissive_white_b: vec4<f32>,
+  emissive_reserved: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -2953,13 +2990,6 @@ fn transportedDetailDirection(material: vec4<f32>, fireLayer: vec4<f32>, microLa
   return direction / max(length(direction), 0.0001);
 }
 
-fn transportedScalarSlip(velocity: vec3<f32>, heat: f32, smoke: f32, flame: f32) -> vec3<f32> {
-  let lateralFlow = vec3<f32>(velocity.z, velocity.y * 0.16, -velocity.x);
-  let scalarSkew = vec3<f32>(heat - smoke * 0.52, flame - heat * 0.38, smoke - flame * 0.34);
-  let direction = lateralFlow + cross(velocity, scalarSkew) * 0.34 + scalarSkew * 0.08;
-  return direction / max(length(direction), 0.0001);
-}
-
 fn tallPlumeTransitionBandStagger(contourBreakup: f32, materialDetail: f32, microSmoke: f32, interfaceShred: f32, flameDetail: f32, frontTopology: f32) -> f32 {
   return clamp(
     0.58
@@ -3042,15 +3072,9 @@ fn bonfireReferenceConfinementForce(c: vec3<i32>, smoke: f32, heat: f32, flame: 
   return (confinement * 0.074 + frontShear * 0.018) * carrier * frontEnergy * clamp(strength, 0.0, 1.5);
 }
 
-fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32, microdetailRiseDirection: f32) -> vec4<f32> {
+fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, flame: f32, microdetailRiseDirection: f32) -> vec4<f32> {
   let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055) * microdetailRiseDirection, 0.0);
-  let proceduralTransportSlip = step(0.5, u.artistic_motion_controls.w);
-  var slip = vec3<f32>(0.0);
-  if (proceduralTransportSlip > 0.5) {
-    let rawSlip = transportedScalarSlip(velocity, heat, smoke, flame) * (0.18 + heat * 0.12 + smoke * 0.06);
-    slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
-  }
-  let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);
+  let backCell = cell - (velocity + lift) * (1.44 + speed * 0.28);
   return sampleFluidSlot(backCell, 3u);
 }
 
@@ -3367,6 +3391,9 @@ fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
   return vec2<f32>(max(max(sx.x, sy.x), sz.x), min(min(sx.y, sy.y), sz.y));
 }
 
+${PHYSICAL_COLOR_WGSL}
+${EMISSIVE_TRANSPORT_WGSL}
+
 fn fireColor(temp: f32) -> vec3<f32> {
   let ember = vec3<f32>(0.70, 0.10, 0.018);
   let orange = vec3<f32>(1.0, 0.38, 0.055);
@@ -3463,28 +3490,6 @@ fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
 
 fn segmentOpacity(opticalDepth: f32, maxOpacity: f32) -> f32 {
   return min(1.0 - exp(-max(0.0, opticalDepth)), maxOpacity);
-}
-
-fn raymarchOccupancySignal(
-  density: f32,
-  smoke: f32,
-  heat: f32,
-  temp: f32,
-  flame: f32,
-  microTextureSignal: f32,
-  velMag: f32,
-  extinction: f32
-) -> f32 {
-  let body = density * 0.44 + smoke * 0.38 + extinction * 0.28;
-  let fire = temp * 0.24 + flame * 0.28 + heat * 0.16;
-  let detail = microTextureSignal * 0.20 + velMag * 0.32;
-  return clamp(body + fire + detail, 0.0, 1.8);
-}
-
-fn occupancySkipStepScale(occupancy: f32, occupancySkipStrength: f32, adaptiveRays: f32) -> f32 {
-  let emptySpan = 1.0 - smoothstep(0.012, 0.135, occupancy);
-  let adaptiveAssist = mix(1.45, 3.20, clamp(adaptiveRays, 0.0, 1.0));
-  return clamp(1.0 + emptySpan * clamp(occupancySkipStrength, 0.0, 1.0) * adaptiveAssist, 1.0, 4.60);
 }
 
 fn raymarchEarlyTermination(transmittance: f32) -> bool {
@@ -3705,15 +3710,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let microdetailRiseDirection = bonfireThermalRiseDirection;
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
-  let bonfireZeroMeanMicrodetailSlipGain = bonfireScene * (1.0 - explicitWindAuthority) * 0.58;
-  let bonfireLocalMicrodetailSlipGain = mix(1.0, max(explicitWindAuthority, bonfireZeroMeanMicrodetailSlipGain), bonfireScene);
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
   let localMaterial = readSlot(cellI, 1u);
   var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
   var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayerRiseDirection);
-  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireLocalMicrodetailSlipGain, microdetailRiseDirection);
+  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
   var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
@@ -5043,6 +5046,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
+  if (u.physical_fire.x > 0.5) { color = vec3<f32>(0.0); }
   var structuralATransmittance = 1.0;
   var structuralAColor = vec3<f32>(0.004, 0.005, 0.006);
   var controlTransmittance = 1.0;
@@ -5084,10 +5088,16 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
+    let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     let directSupport = directCellOpticalSupport(p);
     if (!fullGridCapture && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
-      t = t + min(cellExit + 0.0001, max(0.0001, endT - t));
+      let emptyCellAdvance = mix(
+        dtBase,
+        max(dtBase, cellExit + 0.0001),
+        occupancySkipStrength
+      );
+      t = t + min(emptyCellAdvance, max(0.0001, endT - t));
       continue;
     }
     var reconstructed: FlowReconstructionSample;
@@ -5120,7 +5130,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
-    let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
@@ -5148,11 +5157,13 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       2.4
     );
     let temp = mix(mix(rawTemp, bonfireEmissionTemperature, bonfireRenderScene) * fireGain, 0.0, canonicalSmokeOnlyRender);
-    let smoke = mix(
+    let legacySmoke = mix(
       (smokeDensity + microBodyContribution * 0.70) * smoothstep(0.03, 0.92, y) * u.fire_smoke_curl_speed.y,
       smokeDensity * canonicalSmokeContent * u.fire_smoke_curl_speed.y,
       canonicalSmokeOnlyRender
     );
+    // Retired Smoke strength must not change adaptive sample placement in mode 2.
+    let smoke = select(legacySmoke, smokeDensity, u.physical_fire.x > 1.5);
     let rawExtinction = smokeRadianceExtinction(smokeDensity, microSmoke, interfaceShred, materialDetail, absorptionGain);
     let tallPlumeRenderTransitionContour = clamp(0.70 + microTextureSignal * 0.12 + velMag * 0.18 + materialDetail * 0.06, 0.44, 1.20);
     let tallPlumeRenderTransitionStagger = tallPlumeTransitionBandStagger(tallPlumeRenderTransitionContour, materialDetail, microSmoke, interfaceShred, flameDetail, combustionFrontTopology);
@@ -5164,12 +5175,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       * smoothstep(0.54, 1.18, tallPlumeRenderTransitionStagger)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
-    let occupancy = raymarchOccupancySignal(density, smoke, heat, temp, flame, microTextureSignal, velMag, extinction) + tallPlumeTransitionWisps;
-    let emptySpanScale = occupancySkipStepScale(occupancy, occupancySkipStrength, adaptiveRays);
-    if (!fullGridCapture && emptySpanScale > 1.08) {
-      t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
-      continue;
-    }
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
@@ -5313,6 +5318,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let inspectBoundaryFireMask = 1.0 - step(0.5, abs(shellInspectMode - 9.0));
     let boundarySurfaceMode = clamp(inspectBoundaryMask + inspectBoundaryFireMask, 0.0, 1.0);
     var boundaryCandidate = 0.0;
+    var boundaryMaterialSupport = 0.0;
     var boundaryFireColor = vec3<f32>(0.0);
     if (boundarySurfaceMode > 0.5) {
       let boundarySupportWeights = vec4<f32>(shellThermalGain, shellReactionGain, shellFrontGain, shellEdgeGain);
@@ -5387,6 +5393,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       );
       let boundaryFireErosion = clamp(boundaryFireTopologyErosion * (curlActivity * 0.36 + edgeSupport * 0.34 + divSupport * 0.18 + boundaryFireTipGate * 0.48), 0.0, 0.92);
       let boundaryRaw = clamp(boundarySupportEffective * boundaryGradientGate * boundaryCoreGate * boundaryTopology, 0.0, 2.0);
+      boundaryMaterialSupport = max(0.0, boundarySupportEffective * boundaryGradientGate * boundaryCoreGate * boundaryTopology)
+        * mix(1.0, clamp(boundaryFireRidgeEffective + boundaryFireTipGate * boundaryFireTipBreakup, 0.0, 1.0), 0.62)
+        * (1.0 - boundaryFireErosion);
       let boundaryScalar = clamp(pow(clamp(boundaryRaw * boundaryContrast, 0.0, 1.8), boundaryGamma) * boundaryOpacity, 0.0, 1.65);
       boundaryCandidate = mix(boundaryScalar, boundaryScalar * mix(1.0, clamp(boundaryFireRidgeEffective + boundaryFireTipGate * boundaryFireTipBreakup, 0.0, 1.0), 0.62) * (1.0 - boundaryFireErosion), inspectBoundaryFireMask);
       let cleanBurnGate = smoothstep(0.006, 0.34, reactionSupport + frontSupport * 0.38) * (1.0 - smoothstep(0.20, 0.86, sootSupport * boundaryFireSootYield));
@@ -5395,6 +5404,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       let sootThermalBase = fireColor((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) * max(0.18, boundaryFireThermalWarmth));
       let sootThermalColor = mix(sootThermalBase, boundaryFireSootEndpoint * 1.55, clamp(sootMaturity * boundaryFireSootYellowing, 0.0, 1.0));
       boundaryFireColor = mix(cleanFuelColor, sootThermalColor, sootMaturity) * boundaryFireLuma;
+      if (u.physical_fire.x > 0.5 && u.physical_fire.x < 1.5) {
+        // A rendering-only heat-to-Kelvin mapping; never writes fluid fields.
+        let thermalCoordinate = clamp((rawTemp + heat * 0.28 + flameDetail * 0.42 + frontSupport * 0.28) / 2.4, 0.0, 1.0);
+        let kelvin = u.physical_fire.y + (thermalCoordinate - 0.5) * u.physical_fire.z;
+        let cleanChroma = boundaryFireCleanEndpoint / max(dot(boundaryFireCleanEndpoint, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.000001);
+        boundaryFireColor = thermalColor(kelvin) * sootMaturity * u.physical_fire.w
+          + cleanChroma * cleanBurnGate * u.physical_display.x;
+      }
       if (boundarySidecarView > 0.5) {
         let boundarySidecarCoverage = boundarySidecarDebugSample.y;
         let boundarySidecarProximity = clamp(max(boundarySidecarDebugSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarDebugSample.z * 0.58)), 0.0, 1.8);
@@ -5973,11 +5990,27 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    let standardRadianceContribution = alpha * local
+    var standardRadianceContribution = alpha * local
       + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene)
       + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority
       + shellSmokeBacklight * selectiveRaymarchFireAuthority
       + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight);
+    var standardExtinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    if (u.physical_fire.x > 1.5) {
+      // Boundary Fire has its own material support; shellAmount belongs to
+      // the separate topology-shell renderer (many valid basins set it to 0).
+      let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
+      let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
+      let sigma = medium.absorption + medium.scattering;
+      let emission = medium.emission + medium.scattering * incidentAt(p);
+      standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
+      standardExtinctionStep = sigma * localDt;
+    } else if (u.physical_fire.x > 0.5) {
+      // Retain the existing support/extinction; replace color authority only.
+      // Pyro pigments and legacy pale repaints are excluded from this arm.
+      standardRadianceContribution = fireAlpha * boundaryFireColor
+        + visibleSmokeAlpha * smokeCol * visibleSmokeAuthority;
+    }
     let directFlameSupervisionContribution = stockRenderMode * directFlameCandidateAlpha * directFlameUnitEmission;
     color = color + trans * mix(standardRadianceContribution, directFlameSupervisionContribution, supervisionFireOnlyTarget);
     let residualFeatureWeight = trans * rayStepOpacity;
@@ -5986,7 +6019,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     residualFireAuthority = residualFireAuthority + residualFeatureWeight * clamp(pyroRawCurrentFire * 1.05 + fireMix * 0.90 + pyroFireEventCarrier * 0.55, 0.0, 3.5);
     residualInterfaceAuthority = residualInterfaceAuthority + residualFeatureWeight * clamp(pyroInterfaceSignal * 0.85 + pyroBiteAlphaBoost * 0.36 + flameDetail * 0.18 + fireLick * 0.16, 0.0, 3.5);
     residualSmokeAuthority = residualSmokeAuthority + residualFeatureWeight * clamp(smoke * 0.55 + rawExtinction * 0.38 + microSmoke * 0.32 + pyroFoldExtinctionBoost * 0.18, 0.0, 3.0);
-    let standardExtinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     let directFlameSupervisionExtinction = clamp(directFlameCandidateAlpha * 0.54, 0.0, 0.34);
     let structuralAEmissionCoefficient = directFlameCandidateAlpha * directFlameUnitEmission;
     let structuralAExtinctionCoefficient = clamp(directFlameCandidateAlpha * 0.54, 0.0, 0.34);
@@ -6148,8 +6180,15 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   var grade = exposed * (0.80 + 0.18 * vignette);
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
-  let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
-
+  var current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  if (u.physical_fire.x > 0.5) {
+    if (u.physical_fire.x > 1.5) {
+      current = emissiveCamera(color);
+    } else {
+      current = physicalDisplay(color, u.physical_display.y, u.physical_display.z);
+    }
+    current = mix(current, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
+  }
   let residualFeature = vec4<f32>(
     clamp(1.0 - exp(-residualRadianceAuthority * 0.72), 0.0, 1.0),
     clamp(1.0 - exp(-residualFireAuthority * 0.82), 0.0, 1.0),
@@ -6218,6 +6257,7 @@ struct AnalyticEmitterInjectionUniforms {
   geometry: vec4<f32>,
   chemistry: vec4<f32>,
   transport: vec4<f32>,
+  inlet_controls: vec4<f32>,
   cell_min_grid: vec4<u32>,
   cell_extent: vec4<u32>,
 };
@@ -6264,6 +6304,32 @@ fn torusSignedDistance(p: vec3<f32>, origin: vec3<f32>, axis: vec3<f32>, ringRad
   return length(vec2<f32>(radialError, axial)) - tubeRadius;
 }
 
+fn apertureSignedDistance(
+  p: vec3<f32>,
+  origin: vec3<f32>,
+  axis: vec3<f32>,
+  supportAxis: vec3<f32>,
+  radius: f32,
+  extent: f32,
+  familyMode: u32
+) -> f32 {
+  let relative = p - origin;
+  let axial = dot(relative, axis);
+  let planar = relative - axis * axial;
+  if (familyMode == 1u || familyMode == 2u) {
+    return length(planar) - radius;
+  }
+  if (familyMode == 3u) {
+    let secondaryAxis = cross(axis, supportAxis);
+    let d = abs(vec2<f32>(
+      dot(relative, supportAxis),
+      dot(relative, secondaryAxis)
+    )) - vec2<f32>(extent * 0.5, radius);
+    return length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0);
+  }
+  return abs(length(planar) - extent) - radius;
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   if (any(localId >= emitter.cell_extent.xyz)) { return; }
@@ -6277,56 +6343,92 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   let supportAxis = emitter.support_radius.xyz;
   let radius = max(0.006, emitter.support_radius.w);
   let extent = max(0.012, emitter.geometry.x);
-  var signedDistance = 1.0;
+  var geometrySignedDistance = 1.0;
   if (familyMode == 1u) {
     let halfSpan = axis * extent * 0.5;
-    signedDistance = capsuleSignedDistance(p, origin - halfSpan, origin + halfSpan, radius);
+    geometrySignedDistance = capsuleSignedDistance(p, origin - halfSpan, origin + halfSpan, radius);
   } else if (familyMode == 2u) {
-    signedDistance = cylinderSignedDistance(p, origin, axis, radius, extent);
+    geometrySignedDistance = cylinderSignedDistance(p, origin, axis, radius, extent);
   } else if (familyMode == 3u) {
-    signedDistance = ribbonSignedDistance(p, origin, axis, supportAxis, radius, extent);
+    geometrySignedDistance = ribbonSignedDistance(p, origin, axis, supportAxis, radius, extent);
   } else if (familyMode == 4u) {
-    signedDistance = torusSignedDistance(p, origin, axis, extent, radius);
+    geometrySignedDistance = torusSignedDistance(p, origin, axis, extent, radius);
   }
   let cellWidth = 2.0 / f32(GRID);
   let sourceLaw = emitter.transport.y;
   let sourceDepth = max(0.006, emitter.transport.z);
-  if (sourceLaw >= 0.5) {
-    let axialFromOrigin = dot(p - origin, axis);
-    var inletSignedDistance = abs(axialFromOrigin) - sourceDepth * 0.5;
-    if (familyMode == 2u) {
-      inletSignedDistance = max(-axialFromOrigin, axialFromOrigin - sourceDepth);
-    }
-    signedDistance = max(signedDistance, inletSignedDistance);
+  var sourceSignedDistance = geometrySignedDistance;
+  let axialFromOrigin = dot(p - origin, axis);
+  var inletSignedDistance = abs(axialFromOrigin) - sourceDepth * 0.5;
+  if (familyMode == 2u) {
+    inletSignedDistance = max(-axialFromOrigin, axialFromOrigin - sourceDepth);
   }
-  let support = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, signedDistance);
-  if (support <= 0.0) { return; }
-  let weight = support * max(0.0, emitter.axis_strength.w);
+  let inletDepthSupport = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, inletSignedDistance);
+  if (sourceLaw >= 0.5) {
+    sourceSignedDistance = max(geometrySignedDistance, inletSignedDistance);
+  }
+  let chemicalSupport = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, sourceSignedDistance);
+  let apertureDistance = apertureSignedDistance(p, origin, axis, supportAxis, radius, extent, familyMode);
+  let profileMode = u32(max(0.0, floor(emitter.inlet_controls.x + 0.5)));
+  let profileWidth = max(0.5, emitter.inlet_controls.w) * cellWidth;
+  var axialWeight = chemicalSupport;
+  if (profileMode >= 1u) {
+    axialWeight = inletDepthSupport * smoothstep(0.0, profileWidth, max(0.0, -apertureDistance));
+  }
+  var edgeWeight = 0.0;
+  if (profileMode == 2u) {
+    edgeWeight = inletDepthSupport * (1.0 - smoothstep(0.0, profileWidth, abs(apertureDistance)));
+  }
+  if (chemicalSupport <= 0.0 && axialWeight <= 0.0 && edgeWeight <= 0.0) { return; }
+  let chemistryWeight = chemicalSupport * max(0.0, emitter.axis_strength.w);
   let chemistry = emitter.chemistry;
   let detail = max(0.0, emitter.geometry.z);
   let base = cellIndex(cell) * SLOTS_PER_CELL;
-  var velocityDensity = fluid[base];
-  var material = fluid[base + 1u];
-  var fireLayer = fluid[base + 2u];
-  var microLayer = fluid[base + 3u];
-  let velocity = axis * emitter.geometry.y * weight;
+  let previousVelocityDensity = fluid[base];
+  let previousMaterial = fluid[base + 1u];
+  let previousFireLayer = fluid[base + 2u];
+  let previousMicroLayer = fluid[base + 3u];
+  var material = previousMaterial;
+  var fireLayer = previousFireLayer;
+  var microLayer = previousMicroLayer;
+  let effectiveInletVelocity = emitter.inlet_controls.z;
+  var axialVelocity = axis * effectiveInletVelocity * axialWeight;
+  var entrainmentVelocity = vec3<f32>(0.0);
+  if (profileMode == 2u && edgeWeight > 0.0) {
+    let normalStep = cellWidth * 0.5;
+    let gradient = vec3<f32>(
+      apertureSignedDistance(p + vec3<f32>(normalStep, 0.0, 0.0), origin, axis, supportAxis, radius, extent, familyMode)
+        - apertureSignedDistance(p - vec3<f32>(normalStep, 0.0, 0.0), origin, axis, supportAxis, radius, extent, familyMode),
+      apertureSignedDistance(p + vec3<f32>(0.0, normalStep, 0.0), origin, axis, supportAxis, radius, extent, familyMode)
+        - apertureSignedDistance(p - vec3<f32>(0.0, normalStep, 0.0), origin, axis, supportAxis, radius, extent, familyMode),
+      apertureSignedDistance(p + vec3<f32>(0.0, 0.0, normalStep), origin, axis, supportAxis, radius, extent, familyMode)
+        - apertureSignedDistance(p - vec3<f32>(0.0, 0.0, normalStep), origin, axis, supportAxis, radius, extent, familyMode)
+    );
+    var apertureNormal = supportAxis;
+    let gradientLength = length(gradient);
+    if (gradientLength > 0.00001) {
+      apertureNormal = gradient / gradientLength;
+    }
+    let transportedAxialSpeed = max(0.0, dot(previousVelocityDensity.xyz, axis));
+    entrainmentVelocity = -apertureNormal * transportedAxialSpeed * edgeWeight * max(0.0, emitter.transport.w);
+  }
   let injectedVelocity = clamp(
-    velocityDensity.xyz + velocity * (0.18 + emitter.transport.x * 0.036),
+    previousVelocityDensity.xyz + axialVelocity + entrainmentVelocity,
     vec3<f32>(-0.34),
     vec3<f32>(0.52)
   );
-  material.x = max(material.x, chemistry.x * weight * 0.76);
-  material.y = max(material.y, chemistry.y * weight * 0.92);
-  material.z = max(material.z, chemistry.z * weight * 0.72);
+  material.x = max(material.x, chemistry.x * chemistryWeight * 0.76);
+  material.y = max(material.y, chemistry.y * chemistryWeight * 0.92);
+  material.z = max(material.z, chemistry.z * chemistryWeight * 0.72);
   if (sourceLaw < 0.5) {
-    material.w = max(material.w, detail * weight * 0.90);
-    fireLayer.x = max(fireLayer.x, chemistry.w * weight);
-    fireLayer.y = max(fireLayer.y, chemistry.w * weight * 0.42);
-    fireLayer.z = max(fireLayer.z, detail * weight * 0.82);
-    microLayer.x = max(microLayer.x, detail * weight * 0.72);
-    microLayer.y = max(microLayer.y, detail * weight * 0.42 + chemistry.w * weight * 0.12);
-    microLayer.z = max(microLayer.z, chemistry.w * weight * 0.60);
-    microLayer.w = max(microLayer.w, chemistry.w * weight * 0.22);
+    material.w = max(material.w, detail * chemistryWeight * 0.90);
+    fireLayer.x = max(fireLayer.x, chemistry.w * chemistryWeight);
+    fireLayer.y = max(fireLayer.y, chemistry.w * chemistryWeight * 0.42);
+    fireLayer.z = max(fireLayer.z, detail * chemistryWeight * 0.82);
+    microLayer.x = max(microLayer.x, detail * chemistryWeight * 0.72);
+    microLayer.y = max(microLayer.y, detail * chemistryWeight * 0.42 + chemistry.w * chemistryWeight * 0.12);
+    microLayer.z = max(microLayer.z, chemistry.w * chemistryWeight * 0.60);
+    microLayer.w = max(microLayer.w, chemistry.w * chemistryWeight * 0.22);
   }
   material = clamp(material, vec4<f32>(0.0), vec4<f32>(2.2, 2.4, 1.8, 1.8));
   fireLayer = clamp(fireLayer, vec4<f32>(0.0), vec4<f32>(2.4, 2.0, 1.8, 1.8));
@@ -6339,11 +6441,16 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
       + microLayer.z * 0.05
       + material.z * 0.10
   ), 0.0, 2.2);
-  let injectedDensity = select(velocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
-  fluid[base] = vec4<f32>(injectedVelocity, injectedDensity);
-  fluid[base + 1u] = material;
-  fluid[base + 2u] = fireLayer;
-  fluid[base + 3u] = microLayer;
+  let injectedDensity = select(previousVelocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
+  let candidateVelocityDensity = vec4<f32>(injectedVelocity, injectedDensity);
+  let candidateMaterial = material;
+  let candidateFireLayer = fireLayer;
+  let candidateMicroLayer = microLayer;
+${VOLUME_EMITTER_FIELD_COMMIT_WGSL}
+  fluid[base] = committedVelocityDensity;
+  fluid[base + 1u] = committedMaterial;
+  fluid[base + 2u] = committedFireLayer;
+  fluid[base + 3u] = committedMicroLayer;
 }
 `;
 
@@ -7748,7 +7855,8 @@ export function createKaminosVolumePrototype({
   const productModelMatrix = new THREE.Matrix4();
   const productViewProj = new THREE.Matrix4();
   const productLocalCameraPosition = new THREE.Vector3();
-  const uniforms = new Float32Array(384);
+  const uniforms = new Float32Array(PHYSICAL_COLOR_UNIFORM_FLOATS);
+  uniforms.set(THERMAL_LUT, 376);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
   let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
@@ -7842,6 +7950,8 @@ export function createKaminosVolumePrototype({
     backend: 'inactive',
     retiredRaymarchControls: initialControlRetirement.retiredRaymarchControls,
     retiredRaymarchControlReceiptLifetime: RETIRED_RAYMARCH_CONTROL_RECEIPT_LIFETIME,
+    proceduralTransportSlip: false,
+    microdetailTransportSlipRetirementIdentity: MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY,
     active: false,
     width: 0,
     height: 0,
@@ -7956,8 +8066,21 @@ export function createKaminosVolumePrototype({
     analyticEmitterFamily: 'cluster',
     analyticEmitterRequestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
     analyticEmitterRequestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
+    analyticEmitterRequestedInletProfile: String(controlsSnapshot.emitterInletProfile ?? 'plug'),
+    analyticEmitterRequestedMomentumLinked: controlsSnapshot.emitterMomentumLinked === undefined
+      ? true
+      : Boolean(controlsSnapshot.emitterMomentumLinked),
+    analyticEmitterRequestedInletVelocity: Number(controlsSnapshot.emitterInletVelocity ?? 0.04),
+    analyticEmitterRequestedShearWidthCells: Number(controlsSnapshot.emitterShearWidthCells ?? 3),
+    analyticEmitterRequestedEdgeEntrainment: Number(controlsSnapshot.emitterEdgeEntrainment ?? 0.65),
     analyticEmitterSourceLaw: 'inactive',
     analyticEmitterSourceDepth: null,
+    analyticEmitterInletProfile: 'inactive',
+    analyticEmitterMomentumLinked: null,
+    analyticEmitterInletVelocity: null,
+    analyticEmitterEffectiveInletVelocity: null,
+    analyticEmitterShearWidthCells: null,
+    analyticEmitterEdgeEntrainment: null,
     fixedSourceDephase: controlsSnapshot.fixedSourceDephase !== false,
     analyticEmitterCoordinateSpace: 'none',
     analyticEmitterCount: 0,
@@ -8350,6 +8473,9 @@ export function createKaminosVolumePrototype({
   let pressureProjectPipeline = null;
   let pressureProjectTieredPipeline = null;
   let boundarySidecarBuildPipeline = null;
+  let emissiveLightField = null;
+  let emissiveWhiteKelvin = null;
+  let emissiveWhiteMatrix = null;
   let boundarySplatCompactPipeline = null;
   let boundarySplatFinalizePipeline = null;
   let boundarySplatRenderPipeline = null;
@@ -8436,7 +8562,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatShader = null;
   let uniformBuffer = null;
   let analyticEmitterInjectionUniformBuffer = null;
-  const analyticEmitterInjectionUniformData = new ArrayBuffer(32 * Float32Array.BYTES_PER_ELEMENT);
+  const analyticEmitterInjectionUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
   const analyticEmitterInjectionUniformFloats = new Float32Array(analyticEmitterInjectionUniformData);
   const analyticEmitterInjectionUniformWords = new Uint32Array(analyticEmitterInjectionUniformData);
   let volumePresentationControlsBuffer = null;
@@ -8658,8 +8784,21 @@ export function createKaminosVolumePrototype({
       family: analyticEmitterDescriptor?.family || 'cluster',
       requestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
       requestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
+      requestedInletProfile: String(controlsSnapshot.emitterInletProfile ?? 'plug'),
+      requestedMomentumLinked: controlsSnapshot.emitterMomentumLinked === undefined
+        ? true
+        : Boolean(controlsSnapshot.emitterMomentumLinked),
+      requestedInletVelocity: Number(controlsSnapshot.emitterInletVelocity ?? 0.04),
+      requestedShearWidthCells: Number(controlsSnapshot.emitterShearWidthCells ?? 3),
+      requestedEdgeEntrainment: Number(controlsSnapshot.emitterEdgeEntrainment ?? 0.65),
       sourceLaw: analyticEmitterDescriptor ? analyticEmitterDescriptor.sourceLaw : 'inactive',
       sourceDepth: analyticEmitterDescriptor ? analyticEmitterDescriptor.sourceDepth : null,
+      inletProfile: analyticEmitterDescriptor ? analyticEmitterDescriptor.inletProfile : 'inactive',
+      momentumLinked: analyticEmitterDescriptor ? analyticEmitterDescriptor.momentumLinked : null,
+      inletVelocity: analyticEmitterDescriptor ? analyticEmitterDescriptor.inletVelocity : null,
+      effectiveInletVelocity: analyticEmitterDescriptor ? analyticEmitterDescriptor.effectiveInletVelocity : null,
+      shearWidthCells: analyticEmitterDescriptor ? analyticEmitterDescriptor.shearWidthCells : null,
+      edgeEntrainment: analyticEmitterDescriptor ? analyticEmitterDescriptor.edgeEntrainment : null,
       coordinateSpace: analyticEmitterDescriptor ? 'volume-local' : 'none',
       count: analyticEmitterDescriptor ? 1 : 0,
       frameId: analyticEmitterDescriptor?.frameId || null,
@@ -8673,8 +8812,19 @@ export function createKaminosVolumePrototype({
     state.analyticEmitterFamily = receipt.family;
     state.analyticEmitterRequestedSourceLaw = receipt.requestedSourceLaw;
     state.analyticEmitterRequestedSourceDepth = receipt.requestedSourceDepth;
+    state.analyticEmitterRequestedInletProfile = receipt.requestedInletProfile;
+    state.analyticEmitterRequestedMomentumLinked = receipt.requestedMomentumLinked;
+    state.analyticEmitterRequestedInletVelocity = receipt.requestedInletVelocity;
+    state.analyticEmitterRequestedShearWidthCells = receipt.requestedShearWidthCells;
+    state.analyticEmitterRequestedEdgeEntrainment = receipt.requestedEdgeEntrainment;
     state.analyticEmitterSourceLaw = receipt.sourceLaw;
     state.analyticEmitterSourceDepth = receipt.sourceDepth;
+    state.analyticEmitterInletProfile = receipt.inletProfile;
+    state.analyticEmitterMomentumLinked = receipt.momentumLinked;
+    state.analyticEmitterInletVelocity = receipt.inletVelocity;
+    state.analyticEmitterEffectiveInletVelocity = receipt.effectiveInletVelocity;
+    state.analyticEmitterShearWidthCells = receipt.shearWidthCells;
+    state.analyticEmitterEdgeEntrainment = receipt.edgeEntrainment;
     state.analyticEmitterCoordinateSpace = receipt.coordinateSpace;
     state.analyticEmitterCount = receipt.count;
     state.analyticEmitterFrameId = receipt.frameId;
@@ -9003,6 +9153,8 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    emissiveLightField?.destroy();
+    emissiveLightField = null;
     selectiveHeadLiveRuntime?.destroy();
     selectiveHeadLiveRuntime = null;
     selectiveHeadLiveBindGroups = null;
@@ -9119,6 +9271,7 @@ export function createKaminosVolumePrototype({
         { binding: 10, resource: { buffer: boundarySidecarBuffer } },
         { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
         { binding: 12, resource: { buffer: captureRows } },
+        { binding: 15, resource: { buffer: emissiveLightField.incident } },
       ],
     });
   }
@@ -10151,6 +10304,7 @@ export function createKaminosVolumePrototype({
       };
     }
     ensureNonRidgeOpticalCaptureBuffers();
+    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridSize}^3 ${index}`,
@@ -10359,6 +10513,7 @@ export function createKaminosVolumePrototype({
       context.configure({
         device,
         format,
+        colorSpace: 'srgb',
         alphaMode: transparentCanvas ? 'premultiplied' : 'opaque',
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
       });
@@ -10543,6 +10698,7 @@ export function createKaminosVolumePrototype({
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'storage' },
         },
+        { binding: 15, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
       ],
     });
     analyticEmitterInjectionBindGroupLayout = device.createBindGroupLayout({
@@ -11891,7 +12047,6 @@ export function createKaminosVolumePrototype({
       analyticEmitterDescriptor,
       analyticEmitterDispatch,
       renderPhaseTimeMs * 0.001,
-      controlsSnapshot.speed,
     );
     device.queue.writeBuffer(
       analyticEmitterInjectionUniformBuffer,
@@ -11901,7 +12056,51 @@ export function createKaminosVolumePrototype({
     uniforms[364] = controlsSnapshot.artisticSwirl === false ? 0 : 1;
     uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
     uniforms[366] = controlsSnapshot.proceduralDetailForces === false ? 0 : 1;
-    uniforms[367] = controlsSnapshot.proceduralTransportSlip === false ? 0 : 1;
+    uniforms[367] = 0;
+    const physicalColorMode = controlsSnapshot.physicalColorMode ?? 0;
+    const physicalColorRequested = physicalColorMode > 0;
+    const ordinaryEmissiveRoute = productFrameOwner !== 'caller'
+      && volumePresentationModeEffective === 'beauty'
+      && uniforms[312] === 0 && !appearanceDecompositionActive()
+      && !browserResidualRequested()
+      && normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'off'
+      && uniforms[316] === 0;
+    const physicalColorEffective = physicalColorRequested && fireRenderModeName === 'inspect' && boundaryFireInspectActive
+      && (physicalColorMode === 1 || ordinaryEmissiveRoute);
+    uniforms[368] = physicalColorEffective ? physicalColorMode : 0;
+    uniforms[369] = controlsSnapshot.physicalTemperature ?? 1900;
+    uniforms[370] = controlsSnapshot.physicalTemperatureSpread ?? 900;
+    uniforms[371] = controlsSnapshot.physicalThermalStrength ?? 1;
+    uniforms[372] = controlsSnapshot.physicalCleanStrength ?? 0.08;
+    uniforms[373] = controlsSnapshot.physicalExposureEV ?? 0;
+    uniforms[374] = controlsSnapshot.physicalHighlightKnee ?? 0.6;
+    uniforms[375] = 0;
+    const whiteKelvin = controlsSnapshot.physicalWhiteBalance ?? 4000;
+    if (whiteKelvin !== emissiveWhiteKelvin) {
+      emissiveWhiteMatrix = cameraWhiteBalance(whiteKelvin);
+      emissiveWhiteKelvin = whiteKelvin;
+    }
+    uniforms.set([
+      controlsSnapshot.physicalSmokeExtinction ?? 2,
+      controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
+      controlsSnapshot.physicalAmbient ?? 0.02, 0,
+      ...emissiveWhiteMatrix[0], 0, ...emissiveWhiteMatrix[1], 0, ...emissiveWhiteMatrix[2], 0,
+      0,0,0,0,
+    ], EMISSIVE_UNIFORM_OFFSET);
+    const physicalModel = physicalColorMode === 2 ? 'emissive-transport-v2' : 'thermal-reaction-v1';
+    state.physicalColor = {
+      requested: physicalColorRequested ? physicalModel : 'legacy',
+      effective: physicalColorEffective ? physicalModel : 'legacy',
+      inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-ordinary-beauty-boundary-fire-without-diagnostic-residual-splat-or-caller-presentation' : null,
+      workingSpace: 'linear-srgb', outputSpace: 'srgb',
+      displayTransform: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
+      temperatureAuthority: physicalColorMode === 2 ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'render-only-heat-proxy-to-kelvin',
+      temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
+      cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],
+      paletteAuthority: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-reference-planck-power-plus-approximate-reaction-spectrum' : 'thermal-lut-plus-clean-palette-no-pyro-repaint') : 'legacy',
+      whiteBalanceKelvin: whiteKelvin,
+      material: physicalColorMode === 2 ? { thermalControl: 'hot-soot-optical-density', smokeExtinction: uniforms[EMISSIVE_UNIFORM_OFFSET], scatteringAlbedo: uniforms[EMISSIVE_UNIFORM_OFFSET+1], ambientRadiance: uniforms[EMISSIVE_UNIFORM_OFFSET+2] } : null,
+    };
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
@@ -11961,7 +12160,8 @@ export function createKaminosVolumePrototype({
     state.artisticSwirl = uniforms[364] >= 0.5;
     state.phasedSway = uniforms[365] >= 0.5;
     state.proceduralDetailForces = uniforms[366] >= 0.5;
-    state.proceduralTransportSlip = uniforms[367] >= 0.5;
+    state.proceduralTransportSlip = false;
+    state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
     state.fixedSourceDephase = uniforms[344] >= 0.5;
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -15234,6 +15434,10 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    if (uniforms[368] > 1.5) {
+      emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
+      state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
+    }
     const pass = encoder.beginRenderPass({
       label,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
@@ -15250,6 +15454,25 @@ export function createKaminosVolumePrototype({
     pass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
+  }
+
+  async function sampleEmissiveLightProfile() {
+    if (uniforms[368] !== 2 || !timestampQueriesAvailable()) return { ok: false, reason: 'emissive-mode-or-gpu-timestamps-unavailable' };
+    const query = device.createQuerySet({ type: 'timestamp', count: 2 });
+    const resolved = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    const readback = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'same-state emissive lighting cost' });
+      emissiveLightField.encode(encoder, currentFluid, { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 });
+      encoder.resolveQuerySet(query,0,2,resolved,0);
+      encoder.copyBufferToBuffer(resolved,0,readback,0,16);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const times = new BigUint64Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      if (times[0] === 0n || times[1] <= times[0]) return { ok:false, reason:'missing-or-invalid-lighting-timestamps', timestamps:Array.from(times,String) };
+      return { ok:true, scope:'incident-light-compute-only-not-camera-or-frame', ms:Number(times[1]-times[0])/1e6, timestamps:Array.from(times,String), grid:EMISSIVE_LIGHT_GRID, simStepCount:state.simStepCount, effectiveRoute:state.effectiveRoute, physicalColor:state.physicalColor, backend:state.backend };
+    } finally { query.destroy(); resolved.destroy(); readback.destroy(); }
   }
 
   function encodeProductSmokeRaymarch(encoder, colorView, sceneDepthView, bindGroup) {
@@ -19633,6 +19856,10 @@ export function createKaminosVolumePrototype({
         gridOverlay: state.gridOverlay,
         adaptiveRaymarch: state.adaptiveRaymarch,
         occupancySkip: state.occupancySkip,
+        occupancyAcceleration: {
+          identity: 'conservative-empty-native-support-cells-v1',
+          strength: state.occupancySkip,
+        },
         fireScale: state.fireScale,
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
@@ -20003,6 +20230,10 @@ export function createKaminosVolumePrototype({
       gridOverlay: state.gridOverlay,
       adaptiveRaymarch: state.adaptiveRaymarch,
       occupancySkip: state.occupancySkip,
+      occupancyAcceleration: {
+        identity: 'conservative-empty-native-support-cells-v1',
+        strength: state.occupancySkip,
+      },
       ...retiredRaymarchControlReceiptPayload(state),
       fireScale: state.fireScale,
       detailScale: state.detailScale,
@@ -21547,10 +21778,18 @@ export function createKaminosVolumePrototype({
       state.artisticSwirl = controlsSnapshot.artisticSwirl !== false;
       state.phasedSway = controlsSnapshot.phasedSway !== false;
       state.proceduralDetailForces = controlsSnapshot.proceduralDetailForces !== false;
-      state.proceduralTransportSlip = controlsSnapshot.proceduralTransportSlip !== false;
+      state.proceduralTransportSlip = false;
+      state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
       state.fixedSourceDephase = controlsSnapshot.fixedSourceDephase !== false;
       state.analyticEmitterRequestedSourceLaw = String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume');
       state.analyticEmitterRequestedSourceDepth = Number(controlsSnapshot.emitterSourceDepth ?? 0.04);
+      state.analyticEmitterRequestedInletProfile = String(controlsSnapshot.emitterInletProfile ?? 'plug');
+      state.analyticEmitterRequestedMomentumLinked = controlsSnapshot.emitterMomentumLinked === undefined
+        ? true
+        : Boolean(controlsSnapshot.emitterMomentumLinked);
+      state.analyticEmitterRequestedInletVelocity = Number(controlsSnapshot.emitterInletVelocity ?? 0.04);
+      state.analyticEmitterRequestedShearWidthCells = Number(controlsSnapshot.emitterShearWidthCells ?? 3);
+      state.analyticEmitterRequestedEdgeEntrainment = Number(controlsSnapshot.emitterEdgeEntrainment ?? 0.65);
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
@@ -21654,6 +21893,7 @@ export function createKaminosVolumePrototype({
       if (signature === analyticEmitterDescriptorSignature) return analyticEmitterReceipt();
       const previousFamily = analyticEmitterDescriptor?.family || null;
       const previousSourceLaw = analyticEmitterDescriptor?.sourceLaw || null;
+      const previousInletProfile = analyticEmitterDescriptor?.inletProfile || null;
       analyticEmitterDescriptor = normalized;
       analyticEmitterDescriptorSignature = signature;
       updateAnalyticEmitterDebug();
@@ -21661,10 +21901,17 @@ export function createKaminosVolumePrototype({
         && state.coreEmitterSourceMode === 'analytic-only'
         && previousFamily
         && normalized?.family
-        && (previousFamily !== normalized.family || previousSourceLaw !== normalized.sourceLaw)) {
+        && (previousFamily !== normalized.family
+          || previousSourceLaw !== normalized.sourceLaw
+          || previousInletProfile !== normalized.inletProfile)) {
+        const resetReason = previousFamily !== normalized.family
+          ? 'analytic-emitter-family-change'
+          : (previousSourceLaw !== normalized.sourceLaw
+            ? 'analytic-emitter-source-law-change'
+            : 'analytic-emitter-inlet-profile-change');
         rebuildFluidState(
           gridSize,
-          previousFamily !== normalized.family ? 'analytic-emitter-family-change' : 'analytic-emitter-source-law-change',
+          resetReason,
         );
       }
       return analyticEmitterReceipt();
@@ -22150,6 +22397,7 @@ export function createKaminosVolumePrototype({
     controlledStepFrame,
     controlledStepSequence,
     captureSelectiveHeadLiveFrame,
+    sampleEmissiveLightProfile,
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,

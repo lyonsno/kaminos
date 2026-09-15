@@ -482,7 +482,7 @@ for (const routeName of [
 ]) {
   assert.match(index, new RegExp(routeName), `Pyro route parser accepts ${routeName}`);
 }
-const volumeSyncControlLoop = index.match(/for \(const id of \[([\s\S]*?'volume-canonical-body-balance'[\s\S]*?)\]\) \{\s*document\.getElementById\(id\)\.addEventListener\('input', syncControls\)/);
+const volumeSyncControlLoop = index.match(/for \(const id of \[([\s\S]*?'volume-canonical-body-balance'[\s\S]*?)\]\) \{\s*document\.getElementById\(id\)\?\.addEventListener\('input', syncControls\)/);
 assert.ok(volumeSyncControlLoop, 'Volume cockpit has one explicit syncControls listener list for slider/select controls');
 for (const id of ['volume-pyro-flow-radiance', 'volume-pyro-flow-spikes']) {
   assert.match(volumeSyncControlLoop[1], new RegExp(`'${id}'`), `Flow control ${id} triggers syncControls instead of becoming a stale display-only knob`);
@@ -632,7 +632,16 @@ assert.match(index, /id="volume-steps"[^>]+value="96"/, 'smoke route defaults to
 assert.match(index, /id="volume-adaptive-rays"/, 'Volume tab exposes adaptive raymarch sampling control');
 assert.match(index, /volume_adaptive_rays/, 'URL route can override adaptive raymarch sampling');
 assert.match(index, /adaptiveRays/, 'Volume controls carry adaptive raymarch sampling into the renderer');
-assert.match(index, /id="volume-occupancy-skip"/, 'Volume tab exposes occupancy/importance skipping control');
+assert.match(
+  index,
+  /Empty-Space Acceleration[\s\S]*id="volume-occupancy-skip"/,
+  'Volume tab exposes conservative empty-space acceleration under the compatible occupancy key',
+);
+assert.match(
+  index,
+  /supported reconstructed samples are always evaluated and composited/,
+  'the empty-space acceleration control explains that supported ridge samples cannot be skipped',
+);
 assert.match(index, /volume_occupancy_skip/, 'URL route can override occupancy/importance skipping');
 assert.match(index, /occupancySkip/, 'Volume controls carry occupancy/importance skip strength into the renderer');
 assert.doesNotMatch(index, /volume_(?:majorant|temporal)|volume_history_clamp/, 'Volume routes do not retain retired raymarch controls');
@@ -1090,9 +1099,10 @@ assert.match(core, /raymarchInterest/, 'raymarch computes local sample interest 
 assert.match(core, /adaptiveRayStepScale/, 'raymarch adapts step distance instead of only changing alpha');
 assert.match(core, /raymarchEarlyTermination/, 'raymarch exposes named early-termination behavior');
 assert.match(core, /occupancy_controls/, 'volume uniforms carry occupancy/importance skip controls separately from adaptive rays');
-assert.match(core, /raymarchOccupancySignal/, 'raymarch computes a named low-occupancy signal before expensive shading');
-assert.match(core, /occupancySkipStepScale/, 'raymarch can skip/coarsen low-occupancy spans before spending dense samples');
-assert.match(core, /occupancySkipStrength/, 'shader gives occupancy skipping an explicit bounded strength');
+assert.match(core, /directCellOpticalSupport/, 'raymarch conservatively proves native cells empty before occupancy acceleration');
+assert.match(core, /emptyCellAdvance = mix\([\s\S]*dtBase[\s\S]*directCellExitDistance|directCellExitDistance\(p, rd\)[\s\S]*emptyCellAdvance = mix\([\s\S]*dtBase/, 'occupancy skip interpolates between ordinary sampling and empty-cell boundary traversal');
+assert.match(core, /occupancySkipStrength/, 'shader gives conservative empty-cell acceleration an explicit bounded strength');
+assert.doesNotMatch(core, /occupancySkipStepScale/, 'low reconstructed occupancy cannot discard optically supported ridge samples');
 assert.match(core, /state\.occupancySkip/, 'debug state exposes effective occupancy skip strength');
 assert.match(core, /state\.frontFieldReadIndex/, 'debug state exposes the current front topology read buffer index');
 assert.match(core, /state\.frontFieldWriteIndex/, 'debug state exposes the current front topology write buffer index');
@@ -1555,8 +1565,7 @@ assert.match(core, /state\.bonfireReferenceConfinement/, 'debug state exposes re
 assert.match(core, /bonfireScalarSymmetryBlend/, 'zero-wind bonfire scalar symmetry is a named support blend, not the primary transport mechanism');
 assert.match(core, /bonfireLocalLateralTransportGain/, 'zero-wind bonfire convection preserves local lateral circulation instead of killing horizontal transport');
 assert.match(core, /bonfireLocalLateralForceGain/, 'zero-wind bonfire detail forces preserve bounded local lateral motion for convection');
-assert.match(core, /bonfireZeroMeanMicrodetailSlipGain/, 'zero-wind bonfire procedural microdetail transport has a named bounded local slip floor');
-assert.match(core, /bonfireLocalMicrodetailSlipGain/, 'the remaining operator-gated analytic slip identifies its microdetail-only authority');
+assert.doesNotMatch(core, /bonfireZeroMeanMicrodetailSlipGain|bonfireLocalMicrodetailSlipGain/, 'bonfire transport does not preserve a private microdetail slip path');
 assert.match(core, /csDivergencePressure/, 'bonfire plume needs a staged divergence pass instead of only in-line velocity heuristics');
 assert.match(core, /csPressureJacobi/, 'bonfire plume needs pressure iterations before projection, not just a one-sample divergence gradient');
 assert.match(core, /csProjectPressure/, 'bonfire plume needs a projection pass after all forces/source terms are applied');
@@ -1573,7 +1582,7 @@ assert.doesNotMatch(core, /bonfireNoWindSymmetryBlend = bonfireScene \* \(1\.0 -
 assert.match(core, /bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain/, 'bonfire lateral advection preserves local zero-wind transport while separate damping controls net drift');
 assert.match(core, /thermalAdvection\(cell, advectVelocity, speed, localMaterial\.y, thermalAdvectionRiseDirection\)/, 'bonfire thermal scalar advection must use transported velocity and heat lift without analytic lateral slip');
 assert.match(core, /fireLayerAdvection\(cell, advectVelocity, speed, localMaterial\.y, fireLayerRiseDirection\)/, 'bonfire fire-layer advection must use transported velocity and heat lift without analytic lateral slip');
-assert.match(core, /transportedMicrodetailAdvection\(cell, advectVelocity, speed, localMaterial\.y, localMaterial\.x, fireLayer\.x, bonfireLocalMicrodetailSlipGain, microdetailRiseDirection\)/, 'the separate procedural microdetail transport slip must route through its named microdetail-only gate');
+assert.match(core, /transportedMicrodetailAdvection\(cell, advectVelocity, speed, localMaterial\.y, fireLayer\.x, microdetailRiseDirection\)/, 'microdetail transport follows resolved velocity and its existing thermal lift without a separate slip vector');
 assert.match(core, /bonfireDetailLateralDamping = bonfireLocalLateralForceGain/, 'bonfire detail-force lateral authority preserves local zero-wind convection');
 assert.match(core, /isBonfireInitialScene/, 'initial fluid seed detects bonfire scene for centered no-wind reset state');
 assert.match(core, /seedLateralVelocity = isBonfireInitialScene \? 0 : 0\.11/, 'bonfire reset seed must not start with hidden swirl velocity');

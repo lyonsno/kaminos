@@ -1,3 +1,5 @@
+import { migrateRetiredVolumeSettingsPresetDocument, validateRetiredVolumeControlInventory } from './volume-retired-control-migration.mjs';
+
 export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-preset-schema-v2';
 export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
   'splat-only': Object.freeze({ role: 'truthHigh', composition: 'splat-only-v0' }),
@@ -113,6 +115,7 @@ function validatePresetSchema(schema) {
     || new Set(allControls.map(entry => entry.param)).size !== allControls.length) {
     throw new Error('settings preset auxiliary control schema inventory is invalid');
   }
+  validateRetiredVolumeControlInventory(schema);
   return schema;
 }
 
@@ -165,6 +168,8 @@ export function validateVolumeSettingsPresetSourceIdentity(requestedSource, effe
 
 export function validateVolumeSettingsPresetDocument(document, requestedPresetRef = null, rawSchema = null) {
   const schema = validatePresetSchema(rawSchema);
+  const retirementMigration = migrateRetiredVolumeSettingsPresetDocument(document, schema);
+  document = retirementMigration.document;
   if (!document || document.identity !== 'kaminos-volume-settings-preset-artifact-v2') {
     throw new Error('settings preset artifact identity mismatch');
   }
@@ -318,6 +323,12 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     presentationControlCount: presentationEntries.length,
     routeEntries: Object.freeze([...presetRoute.searchParams].map(entry => Object.freeze([...entry]))),
     routeVolumeEntries: Object.freeze(routeVolumeEntries.map(entry => Object.freeze([...entry]))),
+    retirementMigration: Object.freeze({
+      identity: 'kaminos.volume.retired-control-migration.v1',
+      applied: retirementMigration.applied,
+      removedControlIds: Object.freeze([...retirementMigration.removedControlIds]),
+      removedRouteParams: Object.freeze([...retirementMigration.removedRouteParams]),
+    }),
   });
 }
 

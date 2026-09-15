@@ -1,7 +1,65 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 190,
+  "controlCount": 205,
   "controls": [
+    { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
+    { "key": "volume-physical-smoke-extinction", "param": "volume_physical_smoke_extinction", "tagName": "INPUT", "type": "range", "additiveDefault": "2" },
+    { "key": "volume-physical-smoke-albedo", "param": "volume_physical_smoke_albedo", "tagName": "INPUT", "type": "range", "additiveDefault": "0.35" },
+    { "key": "volume-physical-ambient", "param": "volume_physical_ambient", "tagName": "INPUT", "type": "range", "additiveDefault": "0.02" },
+    {
+      "key": "volume-physical-mode",
+      "param": "volume_physical_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "0",
+      "allowedValues": [
+        "0",
+        "1",
+        "2"
+      ]
+    },
+    {
+      "key": "volume-physical-temperature",
+      "param": "volume_physical_temperature",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "1900"
+    },
+    {
+      "key": "volume-physical-spread",
+      "param": "volume_physical_spread",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "900"
+    },
+    {
+      "key": "volume-physical-thermal",
+      "param": "volume_physical_thermal",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "1"
+    },
+    {
+      "key": "volume-physical-clean",
+      "param": "volume_physical_clean",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.08"
+    },
+    {
+      "key": "volume-physical-exposure",
+      "param": "volume_physical_exposure",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0"
+    },
+    {
+      "key": "volume-physical-knee",
+      "param": "volume_physical_knee",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.6"
+    },
     {
       "key": "volume-scene",
       "param": "volume_scene",
@@ -30,6 +88,41 @@
       "additiveDefault": 0.04
     },
     {
+      "key": "volume-emitter-inlet-profile",
+      "param": "volume_emitter_inlet_profile",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "plug"
+    },
+    {
+      "key": "volume-emitter-momentum-linked",
+      "param": "volume_emitter_momentum_linked",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-emitter-inlet-velocity",
+      "param": "volume_emitter_inlet_velocity",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.04
+    },
+    {
+      "key": "volume-emitter-shear-width",
+      "param": "volume_emitter_shear_width_cells",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 3
+    },
+    {
+      "key": "volume-emitter-edge-entrainment",
+      "param": "volume_emitter_edge_entrainment",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.65
+    },
+    {
       "key": "volume-fixed-source-dephase",
       "param": "volume_fixed_source_dephase",
       "tagName": "INPUT",
@@ -53,13 +146,6 @@
     {
       "key": "volume-procedural-detail-forces",
       "param": "volume_procedural_detail_forces",
-      "tagName": "INPUT",
-      "type": "checkbox",
-      "additiveDefault": true
-    },
-    {
-      "key": "volume-procedural-transport-slip",
-      "param": "volume_procedural_transport_slip",
       "tagName": "INPUT",
       "type": "checkbox",
       "additiveDefault": true
@@ -1155,6 +1241,13 @@
     }
   ],
   "retiredControls": [
+    {
+      "axis": "domControls",
+      "key": "volume-procedural-transport-slip",
+      "param": "volume_procedural_transport_slip",
+      "tagName": "INPUT",
+      "type": "checkbox"
+    },
     {
       "axis": "domControls",
       "key": "volume-majorant-skip",

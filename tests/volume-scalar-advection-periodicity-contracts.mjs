@@ -73,10 +73,10 @@ function assertScalarAdvectionPeriodicityBoundary(source) {
     /state\.scalarAdvectionPeriodicSlipEvaluationsPerCell = scalarAdvectionPeriodicSlipEvaluationsPerCell;/,
     'the public runtime state must carry the zero-work count',
   );
-  assert.match(
+  assert.doesNotMatch(
     source,
-    /bonfireLocalMicrodetailSlipGain/,
-    'the remaining operator-gated analytic transport slip must identify its microdetail-only authority',
+    /bonfireLocalMicrodetailSlipGain|transportedScalarSlip/,
+    'scalar advection must not preserve a separate microdetail transport-slip exception',
   );
   assert.doesNotMatch(
     source,

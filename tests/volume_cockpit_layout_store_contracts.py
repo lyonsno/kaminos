@@ -114,6 +114,17 @@ def main():
         assert active["layoutId"] == "retired-layout"
         assert active["contentHash"] == retired_artifact["contentHash"]
 
+        stale_client_layout = sample_layout()
+        stale_client_layout["layoutId"] = "stale-client-layout"
+        stale_client_layout["label"] = "Stale Client Layout"
+        stale_client_layout["groups"][0]["controlIds"].append("volume-procedural-transport-slip")
+        stale_write = serve.write_volume_cockpit_layout(layout_store, stale_client_layout, activate=True)
+        assert stale_write["schemaProjection"]["retiredControlsStripped"] == [
+            {"groupId": "primary-controls", "id": "volume-procedural-transport-slip"},
+        ]
+        stale_loaded = serve.read_volume_cockpit_layout(layout_store, "stale-client-layout")
+        assert "volume-procedural-transport-slip" not in stale_loaded["layout"]["groups"][0]["controlIds"]
+
         edited_projection = projected_retired["layout"]
         edited_projection["label"] = "Retired Layout Explicitly Edited"
         edited = serve.write_volume_cockpit_layout(layout_store, edited_projection, activate=True)

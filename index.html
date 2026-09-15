@@ -1445,6 +1445,63 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="color" class="volume-color-swatch" id="volume-reaction-boundary-fire-soot-color" value="#ffc460">
         <span class="slider-val" id="volume-reaction-boundary-fire-soot-color-val">#ffc460</span>
       </div>
+      <div class="volume-control-section-title">Boundary Fire color</div>
+      <span class="slider-help">Emissive transport: temperature sets Planck spectrum and power; soot density sets emitting/absorbing material; fresh reaction fronts add spectral blue. Smoke scatters a coarse same-frame light field. Camera white balance and EV resolve linear HDR once. Render-only Kelvin, not a combustion solver. Legacy and Thermal + reaction remain replayable. Radiance, Glow, palette swatches and legacy exposure do not grade the new model.</span>
+      <div class="slider-row">
+        <span class="slider-label">Color model</span>
+        <select id="volume-physical-mode" class="select-input"><option value="0">Legacy</option><option value="1">Thermal + reaction (previous)</option><option value="2">Emissive transport</option></select>
+        <span class="slider-val" id="volume-physical-mode-val">0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
+        <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
+        <span class="slider-val" id="volume-physical-temperature-val">1900</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Kelvin spread</span>
+        <input type="range" id="volume-physical-spread" min="0" max="5200" step="any" value="900">
+        <span class="slider-val" id="volume-physical-spread-val">900</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" id="volume-physical-thermal-label">Thermal emission</span>
+        <input type="range" id="volume-physical-thermal" min="0" max="20" step="any" value="1">
+        <span class="slider-val" id="volume-physical-thermal-val">1</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Clean emission</span>
+        <input type="range" id="volume-physical-clean" min="0" max="5" step="any" value="0.08">
+        <span class="slider-val" id="volume-physical-clean-val">0.08</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Exposure EV</span>
+        <input type="range" id="volume-physical-exposure" min="-8" max="8" step="any" value="0">
+        <span class="slider-val" id="volume-physical-exposure-val">0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Peak linear RGB where highlight rolloff starts; stronger highlights gradually approach white.">Highlight knee</span>
+        <input type="range" id="volume-physical-knee" min="0.1" max="0.95" step="any" value="0.6">
+        <span class="slider-val" id="volume-physical-knee-val">0.6</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Camera white K</span>
+        <input type="range" id="volume-physical-white" min="2500" max="10000" step="any" value="4000">
+        <span class="slider-val" id="volume-physical-white-val">4000</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Smoke extinction</span>
+        <input type="range" id="volume-physical-smoke-extinction" min="0" max="10" step="any" value="2">
+        <span class="slider-val" id="volume-physical-smoke-extinction-val">2</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Smoke albedo</span>
+        <input type="range" id="volume-physical-smoke-albedo" min="0" max="1" step="any" value="0.35">
+        <span class="slider-val" id="volume-physical-smoke-albedo-val">0.35</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Ambient light</span>
+        <input type="range" id="volume-physical-ambient" min="0" max="1" step="any" value="0.02">
+        <span class="slider-val" id="volume-physical-ambient-val">0.02</span>
+      </div>
       <div class="volume-retired-control-state" data-volume-retired-control-state="atlas-capture" hidden>
       <div class="volume-control-section-title">Atlas capture</div>
       <div class="slider-row">
@@ -1587,6 +1644,35 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-emitter-source-depth" data-volume-settings-param="volume_emitter_source_depth" min="0.006" max="0.24" step="any" value="0.04">
       <span class="slider-val" id="volume-emitter-source-depth-val">0.040</span>
     </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Inlet profile</span>
+      <select id="volume-emitter-inlet-profile" data-volume-settings-param="volume_emitter_inlet_profile" class="select-input">
+        <option value="plug">Plug</option>
+        <option value="resolved-shear">Resolved shear</option>
+        <option value="edge-entrained">Edge entrained</option>
+      </select>
+      <span class="slider-val" id="volume-emitter-inlet-profile-val">plug</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Link momentum to flow</span>
+      <input type="checkbox" id="volume-emitter-momentum-linked" data-volume-settings-param="volume_emitter_momentum_linked" checked>
+      <span class="slider-val" id="volume-emitter-momentum-linked-val">on</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Inlet Δv (field/step)</span>
+      <input type="range" id="volume-emitter-inlet-velocity" data-volume-settings-param="volume_emitter_inlet_velocity" min="0" max="1" step="any" value="0.04">
+      <span class="slider-val" id="volume-emitter-inlet-velocity-val">0.0400</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Shear width (cells)</span>
+      <input type="range" id="volume-emitter-shear-width" data-volume-settings-param="volume_emitter_shear_width_cells" min="0.5" max="8" step="any" value="3">
+      <span class="slider-val" id="volume-emitter-shear-width-val">3.0</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Edge entrainment (×)</span>
+      <input type="range" id="volume-emitter-edge-entrainment" data-volume-settings-param="volume_emitter_edge_entrainment" min="0" max="2" step="any" value="0.65">
+      <span class="slider-val" id="volume-emitter-edge-entrainment-val">0.65</span>
+    </div>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
       <input type="checkbox" id="volume-fixed-source-dephase" data-volume-settings-param="volume_fixed_source_dephase" checked>
@@ -1607,11 +1693,6 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-label">Procedural detail forces</span>
       <input type="checkbox" id="volume-procedural-detail-forces" checked>
       <span class="slider-val" id="volume-procedural-detail-forces-val">on</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
-      <span class="slider-label">Procedural transport slip</span>
-      <input type="checkbox" id="volume-procedural-transport-slip" checked>
-      <span class="slider-val" id="volume-procedural-transport-slip-val">on</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="presentation-exposure">
       <span class="slider-label">Exposure</span>
@@ -1733,7 +1814,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
     </div>
     <div class="slider-row">
-      <span class="slider-label">Occupancy Skip</span>
+      <span class="slider-label" title="Advances through conservatively empty native-support cells; supported reconstructed samples are always evaluated and composited.">Empty-Space Acceleration</span>
       <input type="range" id="volume-occupancy-skip" min="0" max="1" step="0.05" value="0.35">
       <span class="slider-val" id="volume-occupancy-skip-val">0.35</span>
     </div>
@@ -2938,7 +3019,11 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=latest-fire-compose-0902b';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
-import { VOLUME_EMITTER_SOURCE_LAWS } from './volume-emitter-basis.mjs';
+import {
+  VOLUME_EMITTER_INLET_PROFILES,
+  VOLUME_EMITTER_SOURCE_LAWS,
+  resolveVolumeEmitterInletVelocity,
+} from './volume-emitter-basis.mjs';
 import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
 import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contract.mjs';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
@@ -13406,6 +13491,17 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
+  { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
+  { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
+  { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
+  { key: 'physicalSmokeAlbedo', id: 'volume-physical-smoke-albedo', param: 'volume_physical_smoke_albedo', min: 0, max: 1, continuous: true, decimals: 2 },
+  { key: 'physicalAmbient', id: 'volume-physical-ambient', param: 'volume_physical_ambient', min: 0, max: 1, continuous: true, decimals: 3 },
+  { key: 'physicalTemperature', id: 'volume-physical-temperature', param: 'volume_physical_temperature', min: 800, max: 6000, continuous: true, decimals: 0 },
+  { key: 'physicalTemperatureSpread', id: 'volume-physical-spread', param: 'volume_physical_spread', min: 0, max: 5200, continuous: true, decimals: 0 },
+  { key: 'physicalThermalStrength', id: 'volume-physical-thermal', param: 'volume_physical_thermal', min: 0, max: 20, continuous: true, decimals: 2 },
+  { key: 'physicalCleanStrength', id: 'volume-physical-clean', param: 'volume_physical_clean', min: 0, max: 5, continuous: true, decimals: 3 },
+  { key: 'physicalExposureEV', id: 'volume-physical-exposure', param: 'volume_physical_exposure', min: -8, max: 8, continuous: true, decimals: 2 },
+  { key: 'physicalHighlightKnee', id: 'volume-physical-knee', param: 'volume_physical_knee', min: 0.1, max: 0.95, continuous: true, decimals: 2 },
   { key: 'reactionBoundaryGradient', id: 'volume-reaction-boundary-gradient', param: 'volume_reaction_boundary_gradient', min: 0, max: 4, step: 0.05, decimals: 2 },
   { key: 'reactionBoundarySupportThermal', id: 'volume-reaction-boundary-support-thermal', param: 'volume_reaction_boundary_support_thermal', min: 0, max: 2, step: 0.02, decimals: 2 },
   { key: 'reactionBoundarySupportReaction', id: 'volume-reaction-boundary-support-reaction', param: 'volume_reaction_boundary_support_reaction', min: 0, max: 2, step: 0.02, decimals: 2 },
@@ -13503,7 +13599,6 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['artisticSwirl', 'volume_artistic_swirl'],
   ['phasedSway', 'volume_phased_sway'],
   ['proceduralDetailForces', 'volume_procedural_detail_forces'],
-  ['proceduralTransportSlip', 'volume_procedural_transport_slip'],
   ['volumeExposure', 'volume_exposure'],
   ['density', 'volume_density'],
   ['fire', 'volume_fire'],
@@ -14591,6 +14686,7 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
+    if (field.key === 'physicalColorMode') continue; // Route-aware status owns this label.
     if (!label || !Number.isFinite(value)) continue;
     label.textContent = value.toFixed(field.decimals);
   }
@@ -18529,6 +18625,16 @@ function backOffVolumeLegacyPyroControls(controls) {
   };
 }
 
+function linkedVolumeEmitterInletVelocity() {
+  return resolveVolumeEmitterInletVelocity({
+    momentumLinked: true,
+    sourceStrength: parseFloat(document.getElementById('volume-flow-rate').value),
+    velocitySpeed: 0.22,
+    transportSpeed: parseFloat(document.getElementById('volume-speed').value),
+    inletVelocity: parseFloat(document.getElementById('volume-emitter-inlet-velocity').value),
+  }).linkedInletVelocity;
+}
+
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
@@ -18574,10 +18680,10 @@ function readVolumeControls() {
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
+    ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked,
-    proceduralTransportSlip: document.getElementById('volume-procedural-transport-slip').checked,
     volumeExposure: parseFloat(document.getElementById('volume-exposure').value),
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
@@ -18605,6 +18711,11 @@ function readVolumeControls() {
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
     emitterSourceLaw: document.getElementById('volume-emitter-source-law').value,
     emitterSourceDepth: parseFloat(document.getElementById('volume-emitter-source-depth').value),
+    emitterInletProfile: document.getElementById('volume-emitter-inlet-profile').value,
+    emitterMomentumLinked: document.getElementById('volume-emitter-momentum-linked').checked,
+    emitterInletVelocity: parseFloat(document.getElementById('volume-emitter-inlet-velocity').value),
+    emitterShearWidthCells: parseFloat(document.getElementById('volume-emitter-shear-width').value),
+    emitterEdgeEntrainment: parseFloat(document.getElementById('volume-emitter-edge-entrainment').value),
     fixedSourceDephase: document.getElementById('volume-fixed-source-dephase').checked,
     reactionLiveView,
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
@@ -18852,7 +18963,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
   document.getElementById('volume-procedural-detail-forces-val').textContent = c.proceduralDetailForces ? 'on' : 'off';
-  document.getElementById('volume-procedural-transport-slip-val').textContent = c.proceduralTransportSlip ? 'on' : 'off';
   document.getElementById('volume-exposure-val').textContent = c.volumeExposure.toFixed(2);
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
@@ -18885,11 +18995,40 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-family-val').textContent = document.getElementById('emitter-assay-family').value;
   document.getElementById('volume-emitter-source-law-val').textContent = c.emitterSourceLaw;
   document.getElementById('volume-emitter-source-depth-val').textContent = c.emitterSourceDepth.toFixed(3);
+  document.getElementById('volume-emitter-inlet-profile-val').textContent = c.emitterInletProfile;
+  document.getElementById('volume-emitter-momentum-linked-val').textContent = c.emitterMomentumLinked ? 'on' : 'off';
+  document.getElementById('volume-emitter-inlet-velocity-val').textContent = c.emitterInletVelocity.toFixed(4);
+  document.getElementById('volume-emitter-shear-width-val').textContent = c.emitterShearWidthCells.toFixed(1);
+  document.getElementById('volume-emitter-edge-entrainment-val').textContent = c.emitterEdgeEntrainment.toFixed(2);
   document.getElementById('volume-fixed-source-dephase-val').textContent = c.fixedSourceDephase ? 'on' : 'off';
   document.getElementById('volume-reaction-boundary-fire-clean-color-val').textContent = c.reactionBoundaryFireCleanColor;
   document.getElementById('volume-reaction-boundary-fire-soot-color-val').textContent = c.reactionBoundaryFireSootColor;
   document.getElementById('volume-fire-render-mode-val').textContent = c.fireRenderMode;
   document.getElementById('volume-shell-inspect-mode-val').textContent = c.shellInspectMode;
+  const physicalBoundaryColor = c.physicalColorMode > 0 && c.fireRenderMode === 'inspect' && c.shellInspectMode === 'boundary_fire';
+  document.getElementById('volume-physical-mode-val').textContent = c.physicalColorMode > 0 ? (physicalBoundaryColor ? (c.physicalColorMode === 1 ? 'active' : 'requested') : 'inactive route') : 'legacy';
+  document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? 'Hot soot density' : 'Thermal emission';
+  document.getElementById('volume-physical-temperature-label').textContent = c.physicalColorMode === 2 ? 'Peak soot K' : 'Thermal K';
+  document.getElementById('volume-reaction-boundary-fire-clean-color').disabled = physicalBoundaryColor && c.physicalColorMode === 2;
+  for (const id of ['volume-reaction-boundary-contrast','volume-reaction-boundary-gamma','volume-reaction-boundary-opacity','volume-smoke']) {
+    const input = document.getElementById(id);
+    input.disabled = physicalBoundaryColor && c.physicalColorMode === 2;
+    input.title = input.disabled ? 'Legacy rendering control; Emissive transport uses Hot soot density and Smoke extinction' : '';
+  }
+  for (const id of ['volume-radiance', 'volume-glow']) {
+    const input = document.getElementById(id);
+    input.disabled = c.fireRenderMode !== 'stock';
+    input.title = input.disabled ? 'Stock renderer only; inactive in this route' : '';
+  }
+  for (const id of ['volume-reaction-boundary-fire-clean-blue', 'volume-reaction-boundary-fire-yellow', 'volume-reaction-boundary-fire-warmth', 'volume-reaction-boundary-fire-luma', 'volume-reaction-boundary-fire-soot-color', 'volume-exposure']) {
+    const input = document.getElementById(id);
+    input.disabled = physicalBoundaryColor;
+    input.title = physicalBoundaryColor ? 'Legacy color control; use the Boundary Fire color section' : '';
+  }
+  for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') && field.key !== 'physicalColorMode')) {
+    const newMaterialControl = ['physicalWhiteBalance','physicalSmokeExtinction','physicalSmokeAlbedo','physicalAmbient'].includes(field.key);
+    document.getElementById(field.id).disabled = !physicalBoundaryColor || (newMaterialControl && c.physicalColorMode !== 2);
+  }
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
   document.getElementById('volume-shell-width-val').textContent = c.shellWidth.toFixed(2);
   document.getElementById('volume-shell-thermal-val').textContent = c.shellThermal.toFixed(2);
@@ -19133,8 +19272,15 @@ for (const button of document.querySelectorAll('[data-raymarch-smoke-presentatio
 
 function renderVolumeEmitterReceipt(receipt) {
   if (!receipt) return;
-  document.getElementById('volume-emitter-requested').textContent = `${receipt.requested.family} / ${receipt.requested.sourceLaw} / ${receipt.requested.sourceDepth}`;
-  document.getElementById('volume-emitter-effective').textContent = `${receipt.effective.family} / ${receipt.effective.sourceLaw} / ${receipt.effective.sourceDepth}`;
+  const formatVolumeEmitterInletVelocity = value => Number(value).toFixed(4);
+  const requestedMomentum = receipt.requested.momentumLinked
+    ? `linked ${formatVolumeEmitterInletVelocity(receipt.effective.effectiveInletVelocity)}`
+    : formatVolumeEmitterInletVelocity(receipt.requested.inletVelocity);
+  const effectiveMomentum = receipt.effective.momentumLinked
+    ? `linked ${formatVolumeEmitterInletVelocity(receipt.effective.effectiveInletVelocity)}`
+    : formatVolumeEmitterInletVelocity(receipt.effective.effectiveInletVelocity);
+  document.getElementById('volume-emitter-requested').textContent = `${receipt.requested.family} / ${receipt.requested.sourceLaw} / ${receipt.requested.inletProfile} / ${requestedMomentum}`;
+  document.getElementById('volume-emitter-effective').textContent = `${receipt.effective.family} / ${receipt.effective.sourceLaw} / ${receipt.effective.inletProfile} / ${effectiveMomentum}`;
   document.getElementById('volume-emitter-carrier').textContent = `${receipt.effective.sourceMode} / ${receipt.effective.sourceCount} / ${receipt.effective.coordinateSpace}`;
   document.getElementById('volume-emitter-fallback').textContent = receipt.fallbackUsed ? 'yes' : 'no';
 }
@@ -19142,6 +19288,10 @@ function renderVolumeEmitterReceipt(receipt) {
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  if (s.physicalColor?.requested === 'emissive-transport-v2') {
+    document.getElementById('volume-physical-mode-val').textContent = s.physicalColor.effective === 'emissive-transport-v2'
+      ? 'active: emissive v2' : `inactive: ${s.physicalColor.inactiveReason || 'unverified route'}`;
+  }
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);
   syncVolumePresentationControls(s.volumePresentationReceipt);
   syncRaymarchSmokePresentationControls(s.raymarchSmokePresentationReceipt);
@@ -19436,6 +19586,21 @@ async function initKaminosVolumeRoute() {
   const routeEmitterSourceDepth = Number(params.get('volume_emitter_source_depth'));
   if (params.has('volume_emitter_source_depth') && Number.isFinite(routeEmitterSourceDepth)) {
     document.getElementById('volume-emitter-source-depth').value = String(Math.max(0.006, Math.min(0.24, routeEmitterSourceDepth)));
+  }
+  const routeEmitterInletVelocity = Number(params.get('volume_emitter_inlet_velocity'));
+  if (params.has('volume_emitter_inlet_velocity') && Number.isFinite(routeEmitterInletVelocity)) {
+    document.getElementById('volume-emitter-inlet-velocity').value = String(Math.max(0, Math.min(1, routeEmitterInletVelocity)));
+  }
+  const routeEmitterShearWidth = Number(params.get('volume_emitter_shear_width_cells'));
+  if (params.has('volume_emitter_shear_width_cells') && Number.isFinite(routeEmitterShearWidth)) {
+    document.getElementById('volume-emitter-shear-width').value = String(Math.max(0.5, Math.min(8, routeEmitterShearWidth)));
+  }
+  const routeEmitterEdgeEntrainment = Number(params.get('volume_emitter_edge_entrainment'));
+  if (params.has('volume_emitter_edge_entrainment') && Number.isFinite(routeEmitterEdgeEntrainment)) {
+    document.getElementById('volume-emitter-edge-entrainment').value = String(Math.max(0, Math.min(2, routeEmitterEdgeEntrainment)));
+  }
+  if (params.has('volume_emitter_momentum_linked')) {
+    setVolumeControlValue('volume-emitter-momentum-linked', params.get('volume_emitter_momentum_linked'));
   }
   if (params.has('volume_fixed_source_dephase')) {
     setVolumeControlValue('volume-fixed-source-dephase', params.get('volume_fixed_source_dephase'));
@@ -19907,17 +20072,22 @@ async function initKaminosVolumeRoute() {
   const routeExternalEmitters = params.get('volume_external_emitters') || '';
   const requestedEmitterFamily = params.get('volume_emitter_family') || 'cluster';
   const requestedEmitterSourceLaw = params.get('volume_emitter_source_law') || 'legacy-volume';
+  const requestedEmitterInletProfile = params.get('volume_emitter_inlet_profile') || 'plug';
   if (!VOLUME_RUNTIME_EMITTER_FAMILIES.includes(requestedEmitterFamily)) {
     throw new Error(`unsupported volume_emitter_family route: ${requestedEmitterFamily}`);
   }
   if (!VOLUME_EMITTER_SOURCE_LAWS.includes(requestedEmitterSourceLaw)) {
     throw new Error(`unsupported volume_emitter_source_law route: ${requestedEmitterSourceLaw}`);
   }
+  if (!VOLUME_EMITTER_INLET_PROFILES.includes(requestedEmitterInletProfile)) {
+    throw new Error(`unsupported volume_emitter_inlet_profile route: ${requestedEmitterInletProfile}`);
+  }
   if (routeExternalEmitters && requestedEmitterFamily !== 'cluster') {
     throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${requestedEmitterFamily}`);
   }
   document.getElementById('emitter-assay-family').value = requestedEmitterFamily;
   document.getElementById('volume-emitter-source-law').value = requestedEmitterSourceLaw;
+  document.getElementById('volume-emitter-inlet-profile').value = requestedEmitterInletProfile;
   if (params.has('volume_artistic_swirl')) {
     setVolumeControlValue('volume-artistic-swirl', params.get('volume_artistic_swirl'));
   }
@@ -19926,9 +20096,6 @@ async function initKaminosVolumeRoute() {
   }
   if (params.has('volume_procedural_detail_forces')) {
     setVolumeControlValue('volume-procedural-detail-forces', params.get('volume_procedural_detail_forces'));
-  }
-  if (params.has('volume_procedural_transport_slip')) {
-    setVolumeControlValue('volume-procedural-transport-slip', params.get('volume_procedural_transport_slip'));
   }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
@@ -20131,9 +20298,25 @@ async function initKaminosVolumeRoute() {
     'volume-radiance',
     'volume-absorption',
   ]);
-  const emitterMorphologyControls = new Set(['emitter-assay-family', 'volume-emitter-source-law', 'volume-emitter-source-depth', 'volume-input-radius', 'volume-flow-rate']);
+  const emitterMorphologyControls = new Set([
+    'emitter-assay-family',
+    'volume-emitter-source-law',
+    'volume-emitter-source-depth',
+    'volume-emitter-inlet-profile',
+    'volume-emitter-momentum-linked',
+    'volume-emitter-inlet-velocity',
+    'volume-emitter-shear-width',
+    'volume-emitter-edge-entrainment',
+    'volume-input-radius',
+    'volume-flow-rate',
+    'volume-speed',
+  ]);
   const syncControls = event => {
     if (event?.target?.id === 'volume-render-scale' && event.isTrusted === true) adoptVolumeRenderScaleSliderValue();
+    if (event?.target?.id === 'volume-emitter-momentum-linked'
+      && event.target.checked === false) {
+      document.getElementById('volume-emitter-inlet-velocity').value = String(linkedVolumeEmitterInletVelocity());
+    }
     if (event?.target?.id === 'volume-scene') {
       applyVolumeScenePreset(event.target.value);
     } else if (event?.target?.id) {
@@ -20163,13 +20346,22 @@ async function initKaminosVolumeRoute() {
     setVolumeRenderScaleControlValue(nextValue);
     syncControls({ target: document.getElementById('volume-render-scale-full') });
   });
-  for (const id of ['volume-emitter-source-law', 'volume-emitter-source-depth', 'volume-fixed-source-dephase']) {
+  for (const id of [
+    'volume-emitter-source-law',
+    'volume-emitter-source-depth',
+    'volume-emitter-inlet-profile',
+    'volume-emitter-momentum-linked',
+    'volume-emitter-inlet-velocity',
+    'volume-emitter-shear-width',
+    'volume-emitter-edge-entrainment',
+    'volume-fixed-source-dephase',
+  ]) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
-  for (const id of ['volume-scene', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-procedural-transport-slip', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
-    document.getElementById(id).addEventListener('input', syncControls);
-    document.getElementById(id).addEventListener('change', syncControls);
+  for (const id of ['volume-scene', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+    document.getElementById(id)?.addEventListener('input', syncControls);
+    document.getElementById(id)?.addEventListener('change', syncControls);
   }
   document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);

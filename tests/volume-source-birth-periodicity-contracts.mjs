@@ -59,13 +59,13 @@ assert.match(
 );
 assert.match(
   commonTallCanonicalSourceBirth,
-  /let\s+sourceStartupDephase\s*=\s*sourceSpatialDephase\s*\*\s*sourceStartupAuthority;/,
-  'the first static dephasing channel must pass through transported-state startup authority',
+  /let\s+sourceStartupDephase\s*=\s*sourceSpatialDephase\s*\*\s*sourceStartupAuthority\s*\*\s*fixedSourceDephase;/,
+  'the first static dephasing channel must pass through transported-state startup authority and its explicit ablation gate',
 );
 assert.match(
   commonTallCanonicalSourceBirth,
-  /let\s+sourceStartupDephaseB\s*=\s*sourceSpatialDephaseB\s*\*\s*sourceStartupAuthority;/,
-  'the second static dephasing channel must pass through transported-state startup authority',
+  /let\s+sourceStartupDephaseB\s*=\s*sourceSpatialDephaseB\s*\*\s*sourceStartupAuthority\s*\*\s*fixedSourceDephase;/,
+  'the second static dephasing channel must pass through transported-state startup authority and its explicit ablation gate',
 );
 const staticDephaseDefinitions = sourceBetween(
   commonTallCanonicalSourceBirth,

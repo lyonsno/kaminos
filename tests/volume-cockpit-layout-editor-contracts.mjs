@@ -4,10 +4,16 @@ import { join } from 'node:path';
 
 const root = join(import.meta.dirname, '..');
 const layoutSource = readFileSync(join(root, 'volume-cockpit-layout.mjs'), 'utf8');
+const retiredMigrationSource = readFileSync(join(root, 'volume-retired-control-migration.mjs'), 'utf8');
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const schema = JSON.parse(readFileSync(join(root, 'volume-settings-preset-schema-v2.json'), 'utf8'));
 const layoutModule = await import('../volume-cockpit-layout.mjs');
-const executableLayoutSource = layoutSource.replace(
+const executableLayoutSource = layoutSource
+  .replace(
+    "import { migrateRetiredVolumeCockpitLayoutDocument } from './volume-retired-control-migration.mjs';",
+    retiredMigrationSource,
+  )
+  .replace(
   'class VolumeCockpitLayoutEditor {',
   'export class VolumeCockpitLayoutEditor {',
 );
@@ -276,6 +282,7 @@ function createExecutableEditor({ store, sourceDefault }) {
   const Editor = executableLayoutModule.VolumeCockpitLayoutEditor;
   const editor = Object.create(Editor.prototype);
   Object.assign(editor, {
+    schema: { retiredControls: [] },
     authorableControlIds: ['control-a', 'control-b'],
     sourceDefault: structuredClone(sourceDefault),
     layout: null,
@@ -377,6 +384,40 @@ assert.equal(historicalStore.activeLayoutId, 'historical-layout', 'startup prese
 historicalEditor.layout.label = 'Historical layout explicitly edited';
 await historicalEditor.save();
 assert.equal(historicalStore.layoutWrites.length, 1, 'an explicit edit is the first historical-layout content write');
+
+const retiredHistoricalLayout = layoutDocument(
+  'retired-historical-layout',
+  'Retired historical layout',
+  ['retired-control', 'control-a', 'control-b'],
+);
+const retiredHistoricalStore = createLayoutStore({
+  layouts: [retiredHistoricalLayout],
+  activeLayoutId: retiredHistoricalLayout.layoutId,
+});
+const retiredHistoricalEditor = createExecutableEditor({
+  store: retiredHistoricalStore,
+  sourceDefault: sourceDefaultLayout,
+});
+retiredHistoricalEditor.schema.retiredControls = [{
+  axis: 'domControls',
+  key: 'retired-control',
+  param: 'volume_retired_control',
+  tagName: 'INPUT',
+  type: 'checkbox',
+}];
+const retiredHistoricalReceipt = await retiredHistoricalEditor.initialize();
+assert.equal(retiredHistoricalReceipt.storedLayoutLoaded, true);
+assert.deepEqual(retiredHistoricalReceipt.retiredControlIds, ['retired-control']);
+assert.deepEqual(
+  retiredHistoricalEditor.layout.groups.flatMap(group => group.controlIds),
+  ['control-a', 'control-b'],
+  'cockpit initialization removes only the schema-declared retired control and retains every active control',
+);
+assert.equal(
+  retiredHistoricalStore.layoutWrites.length,
+  0,
+  'startup receipts the projected historical layout without overwriting its immutable source artifact',
+);
 
 firstEditor.layout.label = 'Layout B edited';
 await firstEditor.save();
