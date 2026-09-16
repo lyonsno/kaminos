@@ -275,6 +275,12 @@ function controlCluster(control) {
   const nodes = [row];
   const help = row.nextElementSibling;
   if (help?.classList?.contains('slider-help')) nodes.push(help);
+  // The gamut and preset buttons edit the same ray budget. Keep their existing
+  // DOM/handlers with Steps across default, stored, and edited layouts.
+  if (control.id === 'volume-steps') {
+    const budget = control.ownerDocument?.getElementById('volume-ray-budget-section');
+    if (budget) nodes.push(budget);
+  }
   return nodes;
 }
 

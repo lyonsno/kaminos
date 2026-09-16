@@ -6,8 +6,13 @@ const source = readFileSync(new URL('../volume-cockpit-layout.mjs', import.meta.
 const migration = readFileSync(new URL('../volume-retired-control-migration.mjs', import.meta.url), 'utf8');
 const executable = source.replace(
   "import { migrateRetiredVolumeCockpitLayoutDocument } from './volume-retired-control-migration.mjs';", migration,
-) + '\nexport { buildSourceDefaultLayout };';
+) + '\nexport { buildSourceDefaultLayout, controlCluster };';
 const layout = await import(`data:text/javascript;base64,${Buffer.from(executable).toString('base64')}`);
+const budgetRow = { nextElementSibling: null };
+const budgetTool = { id: 'volume-ray-budget-section' };
+assert.deepEqual(layout.controlCluster({ id: 'volume-steps', closest: () => budgetRow,
+  ownerDocument: { getElementById: id => id === budgetTool.id ? budgetTool : null },
+}), [budgetRow, budgetTool], 'ray budget companion must move with its step control on every layout apply');
 const ids = ['volume-density', 'volume-flow-rate', 'volume-physical-mode',
   'volume-physical-thermal', 'volume-reaction-boundary-fire-soot', 'volume-steps', 'future-control'];
 const controls = ids.map(id => ({ id, closest() { return null; } }));
