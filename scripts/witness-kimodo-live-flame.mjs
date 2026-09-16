@@ -37,6 +37,12 @@ try{
     const resource=new URL(response.url());
     if(resource.origin!==new URL(url).origin||resource.pathname.startsWith('/api/')||resource.pathname.endsWith('/kimodo.bin'))return;
     const file=decodeURIComponent(resource.pathname.slice(1))||'index.html';
+    // These selector documents unload before CDP can reliably retain bodies.
+    // They own no runtime claim: admit the final URL/preset and actual loaded
+    // host/producer instead. Keep their request identity without a byte claim.
+    if(['kimodo-elfinblue.html','sf3d-elfinblue.html'].includes(file)){
+      (report.entryRequests??=[]).push({url:response.url(),status:response.status(),authority:'navigation-only'});return;
+    }
     if(!/\.(?:html|js|mjs|css|json|wgsl|glsl)$/.test(file))return;
     responses.push((async()=>{
       const record={path:file,status:response.status()};report.resources.push(record);

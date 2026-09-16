@@ -29,4 +29,5 @@ for(const resource of resources){
 }
 assert.throws(()=>verifyIdentity({...input,resources:[]}));
 assert.throws(()=>verifyIdentity({...input,weightsHash:'wrong'}));
+assert.throws(()=>verifyIdentity({...input,resources:[...resources,{path:'missing-body.js',error:'body unavailable'}]}),'missing bodies must fail before generation');
 console.log('Observed motion/counter replay and adversarial identity/export controls pass');
