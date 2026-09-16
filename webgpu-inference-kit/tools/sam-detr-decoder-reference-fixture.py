@@ -3,7 +3,6 @@ import argparse
 import hashlib
 import inspect
 import json
-import subprocess
 from pathlib import Path
 
 import mlx.core as mx
@@ -11,12 +10,16 @@ import numpy as np
 from mlx.utils import tree_flatten
 from mlx_vlm.models.sam3.config import DETRDecoderConfig
 from mlx_vlm.models.sam3.decoder import DETRDecoder
+from sam_mlx_reference_identity import capture_reference_source
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--reference-root", required=True)
     args = parser.parse_args()
+    source = Path(inspect.getfile(DETRDecoder)).resolve()
+    source_code = capture_reference_source(source, args.reference_root)
     mx.set_default_device(mx.cpu)
     mx.random.seed(916)
     config = DETRDecoderConfig(hidden_size=8, num_attention_heads=2,
@@ -68,10 +71,10 @@ def main():
                 fixture[f"{prefix}Layer{i}{suffix.title()}"] = weight(f"{module}.layer{i}.{suffix}")
     fixture["shape"] = dict(batch=1, channels=8, heads=2, layerCount=2, mlpHidden=12,
                             queryTokens=2, promptTokens=3, spatialTokens=6, sineFeatures=4, height=2, width=3)
-    source = Path(inspect.getfile(DETRDecoder)).resolve()
-    commit = subprocess.check_output(["git", "-C", str(source.parent), "rev-parse", "HEAD"], text=True).strip()
+    commit = source_code["commit"]
     result = {
         "provenance": {"sourceCommit": commit, "sourceFile": "mlx_vlm/models/sam3/decoder.py",
+                       "sourceCode": source_code,
                        "sourceSha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                        "backend": "mlx-cpu", "dtype": "float32", "seed": 916,
                        "claim": "Small actual-reference decoder replay; not trained-model segmentation accuracy"},

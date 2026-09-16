@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import argparse
 import hashlib
+import inspect
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +15,7 @@ from PIL import Image
 from mlx_vlm.models.sam3.position import compute_axial_cis
 from mlx_vlm.models.sam3.processing_sam3 import Sam3Processor
 from sam_mlx_model_loader import load_sam3_model
+from sam_mlx_reference_identity import capture_reference_source
 
 
 ROUTE_ID = "sam3.detr-encoder.phase-program.webgpu-local.v0"
@@ -75,6 +78,7 @@ def parse_args():
 
 
 def run_reference(model, image, prompt, resolution):
+    source_code = capture_reference_source(inspect.getfile(type(model)))
     processor = Sam3Processor(image_size=resolution)
     pixel_values = mx.array(processor.preprocess_image(image)["pixel_values"])
     text = processor.preprocess_text(prompt)
@@ -194,6 +198,7 @@ def run_reference(model, image, prompt, resolution):
     target_area = 0.45 * logits.shape[-1] * logits.shape[-2]
     selected = int(np.lexsort((np.arange(scores.size), -scores, np.abs(positive_area - target_area)))[0])
     return {
+        "reference_source": source_code,
         "encoder_src": np.array(src, dtype=np.float32),
         "patch_embeddings": np.array(patch_embeddings, dtype=np.float32),
         "vit_prefix_hidden_states": np.array(vit_prefix_hidden_states, dtype=np.float32),
@@ -368,7 +373,7 @@ def main():
     add_detr_encoder_weights(weight_entries, out_dir, params, shape["layerCount"])
     add_downstream_weights(weight_entries, out_dir, params, len(ref["composed_features"]))
 
-    reference = {"model": {"id": args.model, "snapshot": snapshot_id(model_path), "role": "mlx-reference-upstream"}, "weights": {"file": "model.safetensors", "path": str(weights_path), "sha256": weights_sha}, "framework": {"name": "mlx-vlm", "root": str(Path(os.environ.get("KAMINOS_MLX_VLM_ROOT", Path.cwd())).resolve()), "execution": "uv-run"}}
+    reference = {"model": {"id": args.model, "snapshot": snapshot_id(model_path), "role": "mlx-reference-upstream"}, "weights": {"file": "model.safetensors", "path": str(weights_path), "sha256": weights_sha}, "framework": {"name": "mlx-vlm", "root": ref["reference_source"]["root"], "sourceCode": ref["reference_source"], "execution": sys.executable, "device": str(mx.default_device())}}
     manifest = {
         "schema": SCHEMA,
         "routeId": ROUTE_ID,

@@ -1,0 +1,22 @@
+{
+  "commit": "1ecf1ecdd28af102eded679be0daa5c76ab2a068",
+  "files": {
+    "mlx_vlm/models/base.py": "4f915923c591faf4b25603b5b5cab4511296a37c7d141553506e6b0760a03a41",
+    "mlx_vlm/models/sam3/__init__.py": "bf412263929a5394bbeadb2f76b858be1c84ec7180cfabbd8e5a2aca3ab394f0",
+    "mlx_vlm/models/sam3/annotators.py": "d85dc91e7a130c245cb7b9f559578273d493aab4bceffe3a7d96894350611b16",
+    "mlx_vlm/models/sam3/config.py": "7d60169406c78eca1fb93ecf0b65ccc51e87429cf5d4ffce9464ba3ff039cff9",
+    "mlx_vlm/models/sam3/decoder.py": "4cde18db0e1162f09dd9a9899bb0485d592026fa64c8980c1f105cf6b6c74dbb",
+    "mlx_vlm/models/sam3/encoder.py": "e9793d5cff91fed4fafde43be9d4b438134cf8e9b773ad68d1ab6b14e58e422c",
+    "mlx_vlm/models/sam3/generate.py": "d2a3ec4df45642351e2973855904f90925443726f44bb261058dfc5e2ef6f27c",
+    "mlx_vlm/models/sam3/geometry.py": "bcb1ff5dea15c2da5400317f3e35d144f16ee34f4742fb27274c0609a50ddc2e",
+    "mlx_vlm/models/sam3/position.py": "6fde977fbfc93af0e1ba5d8d6dd0b3d8e2bc61a5c133d2d1ef57346caa3395a2",
+    "mlx_vlm/models/sam3/processing_sam3.py": "2dcfaf85b11f1da3d4c9437b22849a9d63a1818c898ea1d92103bb5b433614ec",
+    "mlx_vlm/models/sam3/sam3.py": "d87e3d6401e3102b19e2f719836d9ea82517f9bde15059ef6614572eb8d1de72",
+    "mlx_vlm/models/sam3/sam_components.py": "d8ab3cf80cada40956d483126519d1596b3ea1647b75c634528961ca8e49905a",
+    "mlx_vlm/models/sam3/segmentation.py": "7529991357325c5120311caa95ac85faa11232a685e46f512369545888739c65",
+    "mlx_vlm/models/sam3/text_encoder.py": "43903d2125fde7eab921a254730766ac1314163a614ff2fcfa7ce878a1d0c29f",
+    "mlx_vlm/models/sam3/tracker.py": "d06833ccb6dd92acac6d21fa2f88d5c3e79fe49f4128f35ed1f32552642484cd",
+    "mlx_vlm/models/sam3/vision.py": "d83623823709ce3369fedb88db0923c71a7043f8df25bb98dd12580544e39fd0",
+    "mlx_vlm/utils.py": "0959896be30b30a77bfdae13f61fb8c21e57de2eb6b6071771e19de082e7a977"
+  }
+}

@@ -493,7 +493,14 @@ def main():
     reference = {
         "model": {"id": args.model, "snapshot": encoder_tool.snapshot_id(model_path), "role": "mlx-reference-upstream"},
         "weights": {"file": "model.safetensors", "path": str(weights_path), "sha256": weights_sha},
-        "framework": {"name": "mlx-vlm", "root": str(Path(os.environ.get("KAMINOS_MLX_VLM_ROOT", Path.cwd())).resolve()), "execution": "uv-run"},
+        "framework": {"name": "mlx-vlm", "root": ref["reference_source"]["root"], "sourceCode": ref["reference_source"], "execution": encoder_tool.sys.executable, "device": str(mx.default_device())},
+        "sam3Semantics": {
+            "globalGrid": [shape["patchHeight"], shape["patchWidth"]],
+            "globalCoordinateScale": shape["visionWindowSize"] / shape["patchHeight"],
+            "windowCoordinateScale": 1,
+            "boxRpbCoordinates": "index/size",
+            "referencePointOutputActivation": "linear",
+        } if include_image_vit_block_stack else None,
     }
     legacy_detector_stack_tolerances = {
         "pixelValuesMaxAbsDiff": 0.000001,

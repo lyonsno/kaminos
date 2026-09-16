@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
+import { assertSam3SourceCode, assertSam3ReferenceIdentity } from '../tools/sam-reference-identity.mjs';
 
 import {
   SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
@@ -143,6 +144,35 @@ assert.deepEqual(Array.from(oracle.referenceBoxes), [0.5, 0.5, 0.5, 0.5]);
 assert.deepEqual(Array.from(oracle.presenceLogits), [0]);
 
 const reference = JSON.parse(readFileSync(new URL('./fixtures/sam-detr-decoder-mlx-cpu.json', import.meta.url)));
+assert.equal(reference.provenance.sourceCode?.clean, true, 'reference fixture must prove clean effective source');
+assert.equal(reference.provenance.sourceCommit, '1ecf1ecdd28af102eded679be0daa5c76ab2a068');
+assert.equal(reference.provenance.sourceSha256, '4cde18db0e1162f09dd9a9899bb0485d592026fa64c8980c1f105cf6b6c74dbb');
+assert.equal(reference.provenance.backend, 'mlx-cpu');
+assert.equal(reference.provenance.dtype, 'float32');
+assert.equal(reference.provenance.seed, 916);
+assertSam3SourceCode(reference.provenance.sourceCode);
+for (const change of [undefined, { ...reference.provenance.sourceCode, clean: false },
+  { ...reference.provenance.sourceCode, commit: '0'.repeat(40) },
+  { ...reference.provenance.sourceCode, files: {} }]) {
+  assert.throws(() => assertSam3SourceCode(change), /SAM reference/);
+}
+const referenceManifest = {
+  reference: { framework: { name: 'mlx-vlm', root: reference.provenance.sourceCode.root, sourceCode: reference.provenance.sourceCode },
+    sam3Semantics: { globalGrid: [16, 16], globalCoordinateScale: 1.5, windowCoordinateScale: 1, boxRpbCoordinates: 'index/size', referencePointOutputActivation: 'linear' } },
+  shape: { patchHeight: 16, patchWidth: 16, visionWindowSize: 24 }, imageVitBlockStack: {},
+};
+assertSam3ReferenceIdentity(referenceManifest);
+for (const mutate of [m => { delete m.reference.framework.sourceCode; },
+  m => { m.reference.framework.root = '/wrong'; },
+  m => { delete m.reference.sam3Semantics; },
+  m => { m.reference.sam3Semantics.globalCoordinateScale = 1; },
+  m => { m.reference.sam3Semantics.referencePointOutputActivation = 'relu'; }]) {
+  const changed = structuredClone(referenceManifest); mutate(changed);
+  assert.throws(() => assertSam3ReferenceIdentity(changed), /SAM reference/);
+}
+const additive = structuredClone(referenceManifest);
+additive.reference.sam3Semantics.futureDiagnostic = true;
+assertSam3ReferenceIdentity(additive);
 const referenceInput = Object.fromEntries(Object.entries(reference.input).map(([key, value]) => [key,
   key === 'shape' ? value : key === 'layers'
     ? value.map(layer => Object.fromEntries(Object.entries(layer).map(([name, data]) => [name, new Float32Array(data)])))

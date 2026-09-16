@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { assertSam3ReferenceIdentity } from './sam-reference-identity.mjs';
 import {
   createSam3DualInvocationEvidence,
   resolveSam3BrowserPackageManifestSync,
@@ -518,7 +519,8 @@ function assertImageVitBlockStackEvidence(state) {
   if (!report.vitBlockStackHiddenStatesTensorSha256 || !report.vitBlockStackHiddenStatesOutput?.sha256 || !report.vitBlockStackHiddenStatesOutput?.artifactId || !report.blockStackWeightsSha256) throw new Error('imageVitBlockStack edge identity missing');
   if (report.layerRange?.firstGlobalLayerIndex !== report.firstGlobalLayerIndex || report.firstGlobalLayerIndex !== 7) throw new Error('imageVitBlockStack first global layer identity missing');
   if (isFullBackbone && (report.fullBackbone !== true || report.layerRange?.fullBackbone !== true || report.finalLayerIndex !== 31 || report.layerRange?.endLayerIndex !== 31)) throw new Error('imageVitBlockStack full-backbone layer identity missing');
-  if (report.windowPartition?.rule !== 'MLX window partition/pad/crop for non-global layers' || report.globalAttention?.firstGlobalLayerIndex !== 7 || report.rope?.rule !== 'SAM3 2D axial pairwise RoPE; window RoPE for non-global layers, actual-grid global RoPE for global layers' || report.layerNorm?.eps !== 0.000001 || report.mlp?.activation !== 'gelu') throw new Error('imageVitBlockStack reference boundary metadata missing');
+  assertSam3ReferenceIdentity(packetManifest);
+  if (report.windowPartition?.rule !== 'MLX window partition/pad/crop for non-global layers' || report.globalAttention?.firstGlobalLayerIndex !== 7 || report.layerNorm?.eps !== 0.000001 || report.mlp?.activation !== 'gelu') throw new Error('imageVitBlockStack reference boundary metadata missing');
   if (report.parity?.vitBlockStackHiddenStatesMaxAbsDiff > 0.01 || report.parity?.imageVitBlockStackCpuMaxAbsDiff > 0.01 || report.parity?.vitFirstGlobalHiddenStatesMaxAbsDiff > 0.01 || (isFullBackbone && report.parity?.vitBackboneHiddenStatesMaxAbsDiff > 0.01)) throw new Error('imageVitBlockStack parity mismatch');
   if (report.nonClaims?.remainingViTBlocks !== !isFullBackbone || report.nonClaims?.browserLocalFpnNeck !== true || report.nonClaims?.browserProducedDetrFpnInputs !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imageVitBlockStack bounded non-claims missing');
   return report;
@@ -715,6 +717,7 @@ function writeReport(extra = {}) {
     preDecoderCheckpointEvidence: lastState?.preDecoderCheckpointEvidence || null,
     parity: lastState?.parity || null,
     tolerances: packetManifest?.tolerances || null,
+    reference: packetManifest?.reference || null,
     effectiveToleranceBudgetSource: effectiveToleranceBudgetSource(),
     detectorStack: detectorStackReport(lastState),
     imagePreprocess: imagePreprocessReport(lastState),
@@ -943,9 +946,11 @@ async function main() {
     if (secondOracleDir) generateOraclePacket(secondOracleDir, secondPrompt, secondSourceImage);
     const rootManifest = JSON.parse(readFileSync(join(oracleDir, 'tensor-manifest.json'), 'utf8'));
     ({ manifest: packetManifest, evidence: packageInvocationEvidence } = resolvePacketManifest(rootManifest));
+    if (isVitBlockStackPacketMode(packetMode) || packetMode === DETECTOR_STACK_PACKET_MODE) assertSam3ReferenceIdentity(packetManifest);
     if (secondOracleDir) {
       const secondRootManifest = JSON.parse(readFileSync(join(secondOracleDir, 'tensor-manifest.json'), 'utf8'));
       ({ manifest: secondPacketManifest, evidence: secondPackageInvocationEvidence } = resolvePacketManifest(secondRootManifest, secondOracleDir));
+      if (isVitBlockStackPacketMode(packetMode) || packetMode === DETECTOR_STACK_PACKET_MODE) assertSam3ReferenceIdentity(secondPacketManifest);
       if (packageInvocationEvidence?.packageId !== secondPackageInvocationEvidence?.packageId) {
         throw new Error('second invocation changed model package identity');
       }

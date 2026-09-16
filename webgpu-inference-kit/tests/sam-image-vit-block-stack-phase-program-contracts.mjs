@@ -7,6 +7,8 @@ const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', impo
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const stackExporter = readFileSync(new URL('../tools/sam-detr-stack-mlx-packet.py', import.meta.url), 'utf8');
 const encoderExporter = readFileSync(new URL('../tools/sam-detr-encoder-mlx-packet.py', import.meta.url), 'utf8');
+assert.match(witness, /assertSam3ReferenceIdentity\(packetManifest\)/, 'real stack verification must validate effective reference source');
+assert.match(stackExporter, /globalCoordinateScale/, 'reference evidence must state global RoPE coordinate scale');
 assert.match(smokeJs, /interpolateRope:\s*true/, 'SAM detector must enable reference global RoPE scaling');
 assert.match(smokeJs, /ropePretrainGridSize:\s*manifest.shape.visionWindowSize/, 'SAM detector scales global coordinates by window size over actual grid');
 assert.match(encoderExporter, /scale=backbone.config.window_size \/ patch_h/, 'manual checkpoint capture must match the real backbone RoPE');
