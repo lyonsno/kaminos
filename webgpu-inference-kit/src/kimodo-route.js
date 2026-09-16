@@ -146,8 +146,14 @@ export function validateKimodoOutputArtifacts(outputs) {
   let joints;
   let clip;
   if (Array.isArray(outputs)) {
-    joints = outputs.find((o) => o?.role === 'soma-joints');
-    clip = outputs.find((o) => o?.role === 'motion-clip');
+    // Duplicate required roles are ambiguous evidence, not first-match-wins:
+    // an emitter that accidentally doubles a role must fail loud.
+    const jointsAll = outputs.filter((o) => o?.role === 'soma-joints');
+    const clipAll = outputs.filter((o) => o?.role === 'motion-clip');
+    if (jointsAll.length > 1) errors.push(`exactly one soma-joints artifact required, found ${jointsAll.length}`);
+    if (clipAll.length > 1) errors.push(`exactly one motion-clip artifact required, found ${clipAll.length}`);
+    joints = jointsAll[0];
+    clip = clipAll[0];
   } else {
     joints = outputs?.somaJoints;
     clip = outputs?.motionClip;

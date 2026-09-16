@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  createWebGpuBackendIdentity,
   createWebGpuInferenceSession,
   createWebGpuInferenceRuntime,
   requestBrowserWebGpuDevice,
@@ -127,6 +128,40 @@ function fakeGpu({ deviceFeatures }) {
   });
   assert.equal(validateWebGpuBackendIdentity(runtime.backendIdentity).ok, false,
     'runtime must not substitute adapter limits for missing device capture');
+}
+
+// Amended contract note (unbuild review, finding 2): 'explicitly observed
+// empty is lawful' applies to FEATURES only — a zero-feature device is
+// WebGPU-spec-legal. Limits are different physics: every real device
+// reports limits, so an empty limits observation is never a lawful
+// identity, whether absent or explicitly {}. Both fail loud, deliberately.
+
+{
+  const identity = createWebGpuBackendIdentity({
+    adapterName: 'Fake Adapter', browser: 'test',
+    requestedFeatures: [], effectiveFeatures: [],
+    limits: {}, timestampQuery: 'unavailable',
+  });
+  assert.equal(validateWebGpuBackendIdentity(identity).ok, false,
+    'an explicitly empty limits object is not a lawful identity');
+}
+
+{
+  const device = {
+    features: new Set(),
+    limits: {},
+    queue: { submit() {}, onSubmittedWorkDone: async () => {} },
+    lost: new Promise(() => {}),
+  };
+  const { backendIdentity } = await requestBrowserWebGpuDevice(
+    { requestAdapter: async () => ({ features: new Set(), limits, info: {}, requestDevice: async () => device }) },
+    { timestampQuery: 'disable' });
+  assert.equal(validateWebGpuBackendIdentity(backendIdentity).ok, false,
+    'browser acquisition of a device reporting empty limits fails validation');
+  const runtime = await createWebGpuInferenceRuntime({ device, adapterName: 'fake', routeId: 'test.absence.v0' });
+  assert.equal(validateWebGpuBackendIdentity(runtime.backendIdentity).ok, false);
+  const session = await createWebGpuInferenceSession({ device, adapterName: 'fake', sessionId: 'test-empty-limits' });
+  assert.equal(validateWebGpuBackendIdentity(session.backendIdentity).ok, false);
 }
 
 console.log('feature capture absence contracts passed');

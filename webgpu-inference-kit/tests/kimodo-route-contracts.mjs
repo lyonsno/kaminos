@@ -231,6 +231,24 @@ assert.throws(
     'array-form verification rejects the disavowed pair');
   assert.equal(validateKimodoOutputArtifacts(receipt.outputs).ok, true,
     'a factory-minted receipt verifies clean');
+  // Duplicate required roles are ambiguous, not first-match-wins: a
+  // cooperative emitter that accidentally doubles a role must fail loud
+  // whichever occurrence is lawful.
+  assert.equal(validateKimodoOutputArtifacts([
+    { role: 'soma-joints', shape: [120, 30, 3] },
+    { role: 'soma-joints', shape: [90, 77, 3] },
+    { role: 'motion-clip', shape: [120, 369] },
+  ]).ok, false, 'valid-then-invalid duplicate soma-joints must fail');
+  assert.equal(validateKimodoOutputArtifacts([
+    { role: 'soma-joints', shape: [90, 77, 3] },
+    { role: 'soma-joints', shape: [120, 30, 3] },
+    { role: 'motion-clip', shape: [120, 369] },
+  ]).ok, false, 'invalid-then-valid duplicate soma-joints must fail');
+  assert.equal(validateKimodoOutputArtifacts([
+    { role: 'soma-joints', shape: [120, 30, 3] },
+    { role: 'motion-clip', shape: [120, 369] },
+    { role: 'motion-clip', shape: [90, 369] },
+  ]).ok, false, 'duplicate motion-clip with conflicting frames must fail');
   assert.equal(validateKimodoOutputArtifacts({
     somaJoints: { shape: [120, 30, 3] }, motionClip: { shape: [120, 369] },
   }).ok, true, 'keyed-form verification accepts lawful shapes');
