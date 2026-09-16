@@ -18695,12 +18695,14 @@ async function initKaminosVolumeRoute() {
     },
   });
   window.__kaminosVolumePrototype = volumePrototype;
-  // Optional composition-module seam: ?composition_module_url=<module> loads
-  // an ES module after the volume prototype exists and calls its
-  // mountComposition({ prototype, params }). Absent param: no-op. Used to
-  // compose long-running inference (e.g. MoGe) into the live app route.
+  // Optional composition-module seam: a URL HASH entry
+  // #composition_module_url=<module> (hash, not query — settings routes are
+  // contract-validated and reject unexpected query parameters) loads an ES
+  // module after the volume prototype exists and calls its
+  // mountComposition({ prototype, params }). Absent: no-op. Used to compose
+  // long-running inference (e.g. MoGe) into the live app route.
   {
-    const compositionModuleUrl = new URLSearchParams(window.location.search).get('composition_module_url');
+    const compositionModuleUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('composition_module_url');
     if (compositionModuleUrl) {
       import(compositionModuleUrl)
         .then(mod => {
