@@ -137,7 +137,7 @@ export function restoreLastRunTelemetry() {
 }
 
 
-export function paintDepth(result) {
+export async function paintDepth(result) {
   const canvas = document.getElementById('depth-canvas');
   canvas.width = result.width; canvas.height = result.height;
   const ctx = canvas.getContext('2d');
@@ -145,7 +145,10 @@ export function paintDepth(result) {
   let dMin = Infinity, dMax = -Infinity;
   for (const d of result.depth) if (isFinite(d)) { dMin = Math.min(dMin, d); dMax = Math.max(dMax, d); }
   const span = Math.max(dMax - dMin, 1e-6);
+  // Row-banded with yields so the paint does not stall the host's frame.
+  const band = 48 * result.width;
   for (let i = 0; i < result.depth.length; i++) {
+    if (i && i % band === 0) await new Promise(r => setTimeout(r, 0));
     const t = 1 - (result.depth[i] - dMin) / span;
     img.data[i * 4] = 255 * Math.min(1, Math.max(0, 1.5 - Math.abs(4 * t - 3)));
     img.data[i * 4 + 1] = 255 * Math.min(1, Math.max(0, 1.5 - Math.abs(4 * t - 2)));
@@ -185,7 +188,7 @@ export async function runInference(inference) {
     hud('hud-sched').textContent = sched ? `${sched.status} / ${sched.classification}` : 'missing';
     hud('hud-sched').className = `v ${sched?.status === 'verified' ? 'good' : 'warn'}`;
     renderChunkTelemetry(sched, state.worstGapDuringInference, state.inferenceGaps);
-    paintDepth(result);
+    await paintDepth(result);
   } catch (e) {
     state.inferring = false;
     hud('hud-infer').textContent = `error: ${e.message}`;
