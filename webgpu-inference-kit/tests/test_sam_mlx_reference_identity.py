@@ -1,16 +1,30 @@
 import hashlib
+import ast
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from sam_mlx_reference_identity import capture_reference_source
 
 
 class ReferenceIdentityTests(unittest.TestCase):
+    def test_detector_export_framework_expression(self):
+        source_path = Path(os.environ.get("SAM_EXPORTER_TEST_SOURCE", Path(__file__).resolve().parents[1] / "tools/sam-detr-stack-mlx-packet.py"))
+        tree = ast.parse(source_path.read_text())
+        main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
+        reference = next(node.value for node in main.body if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "reference" for target in node.targets))
+        framework = next(value for key, value in zip(reference.keys, reference.values) if isinstance(key, ast.Constant) and key.value == "framework")
+        source = {"root": "/observed/source", "commit": "observed", "clean": True}
+        encoder = SimpleNamespace(sys=SimpleNamespace(executable="/effective/python"), mx=SimpleNamespace(default_device=lambda: "Device(cpu, 0)"))
+        actual = eval(compile(ast.Expression(framework), str(source_path), "eval"), {"encoder_tool": encoder, "ref": {"reference_source": source}})
+        self.assertEqual(actual, {"name": "mlx-vlm", "root": source["root"], "sourceCode": source, "execution": "/effective/python", "device": "Device(cpu, 0)"})
+
     def test_effective_source_and_rejections(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
