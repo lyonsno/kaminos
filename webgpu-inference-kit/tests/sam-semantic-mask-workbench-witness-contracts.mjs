@@ -4,8 +4,68 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { runInNewContext } from 'node:vm';
+import { readCompleteChunkedJsonEvidence } from '../src/chunked-json-evidence.js';
 
 const witness = readFileSync(new URL('../tools/sam-semantic-mask-workbench-witness.mjs', import.meta.url), 'utf8');
+
+// Run the actual transport functions without launching Chrome or loading a model.
+const transportSource = witness.slice(witness.indexOf('async function connectCdp('), witness.indexOf('async function settleForVisualCapture('));
+class TestSocket extends EventTarget {
+  static latest;
+  constructor() {
+    super();
+    TestSocket.latest = this;
+    queueMicrotask(() => this.dispatchEvent(new Event('open')));
+  }
+  send() {}
+  close() { this.dispatchEvent(new Event('close')); }
+}
+const { connectCdp, evaluate } = new Function('WebSocket', 'timeoutMs', 'readCompleteChunkedJsonEvidence', 'randomUUID',
+  `${transportSource}; return { connectCdp, evaluate };`)(TestSocket, null, readCompleteChunkedJsonEvidence, randomUUID);
+for (const event of ['close', 'error']) {
+  const cdp = await connectCdp('fixture://cdp');
+  let settled = 0;
+  const requests = [cdp.request('Runtime.evaluate'), cdp.request('Page.captureScreenshot')]
+    .map(request => request.catch(error => { settled += 1; return error; }));
+  TestSocket.latest.dispatchEvent(new Event(event));
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(settled, 2, `CDP ${event} must reject every pending request without an execution timeout`);
+  for (const error of await Promise.all(requests)) assert.match(error.message, /CDP.*(closed|error|failed)/);
+  await assert.rejects(cdp.request('Runtime.evaluate'), /CDP.*(closed|error|failed)/);
+}
+
+const payload = { imageCache: { resources: 'x'.repeat(2 * 1024 * 1024) }, tail: 'must survive beyond the first chunk' };
+const browser = { payload };
+const progress = [];
+let evaluations = 0;
+const fixtureCdp = { async request(method, params) {
+  assert.equal(method, 'Runtime.evaluate');
+  evaluations += 1;
+  const value = await runInNewContext(params.expression, browser);
+  if (JSON.stringify(value).length > 1100000) throw new Error('fixture bulk CDP payload rejected');
+  return { result: { value } };
+} };
+const transferred = await evaluate(fixtureCdp, 'payload', { chunked: true, onProgress: value => progress.push(value) });
+assert.equal(JSON.stringify(transferred), JSON.stringify(payload), 'all evidence, including the tail, must survive transport');
+assert.ok(evaluations > 3, 'large evidence must cross the actual chunked transfer path');
+assert.equal(progress.at(-1).passed, true);
+assert.equal(progress.at(-1).completedCharacters, JSON.stringify(payload).length);
+assert.deepEqual(Object.keys(browser), ['payload'], 'temporary browser snapshot must be released after transfer');
+
+let reads = 0;
+const brokenBrowser = { payload };
+const interruptedProgress = [];
+await assert.rejects(evaluate({ async request(method, params) {
+  reads += 1;
+  if (reads === 3) throw new Error('CDP closed during chunk read');
+  return { result: { value: await runInNewContext(params.expression, brokenBrowser) } };
+} }, 'payload', { chunked: true, onProgress: value => interruptedProgress.push(value) }), /CDP closed/);
+assert.equal(interruptedProgress.at(-1).passed, false, 'partial transfer cannot look complete');
+assert.ok(interruptedProgress.at(-1).completedCharacters > 0, 'partial progress must remain available for the failure report');
+assert.deepEqual(Object.keys(brokenBrowser), ['payload'], 'interrupted transfer must attempt snapshot cleanup');
 
 for (const argument of ['url', 'out', 'report', 'debug-port', 'timeout-ms', 'prompt', 'expect-empty', 'negative-control', 'negative-out']) {
   assert.match(witness, new RegExp(`['"]${argument}['"]`), `witness must expose --${argument}`);
@@ -33,6 +93,10 @@ assert.match(witness, /!values\[['"]expect-empty['"]\][^]*selectedCandidateCount
 assert.match(witness, /!values\[['"]expect-empty['"]\][^]*canvases\.source\.checksum\s*===\s*canvases\.overlay\.checksum/, 'ordinary positive witness must require a visible mask-overlay delta');
 assert.match(witness, /run-negative-control/, 'optional negative witness must activate the visible operator control');
 assert.match(witness, /negativeControl/, 'report must preserve negative-control output separately from the positive witness');
+assert.match(witness, /report\.visualEvidence = await evaluate\(cdp, canvasInspectionExpression\(\), \{\s*chunked: true/, 'positive output must use the tested complete transport');
+assert.match(witness, /negativeVisualEvidence = await evaluate\(cdp, canvasInspectionExpression\(\), \{\s*chunked: true/, 'negative output must use the tested complete transport');
+assert.match(witness, /report\.evidenceTransport\.positive = progress/, 'positive partial progress must reach the failure report');
+assert.match(witness, /report\.evidenceTransport\.negative = progress/, 'negative partial progress must reach the failure report');
 assert.match(witness, /negativeOutput\.imageCache\?\.status\s*!==\s*['"]hit['"]/, 'same-page negative witness must require authenticated image-feature reuse');
 assert.match(witness, /Different from positive|Empty as expected/, 'negative control must fail unless it differs from the positive mask or selects nothing');
 assert.match(witness, /registrationState[^]*mounted/, 'witness must reject an unmounted or projected route');

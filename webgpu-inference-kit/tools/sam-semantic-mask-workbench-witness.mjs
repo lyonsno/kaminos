@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { randomUUID } from 'node:crypto';
+import { readCompleteChunkedJsonEvidence } from '../src/chunked-json-evidence.js';
 
 const { values } = parseArgs({
   options: {
@@ -50,6 +52,7 @@ const report = {
     positive: null,
     negative: null,
   },
+  evidenceTransport: { positive: null, negative: null },
   failurePhase: 'route-registration',
   error: null,
   startedAt: new Date().toISOString(),
@@ -82,14 +85,28 @@ async function fetchJson(url) {
 
 async function connectCdp(webSocketUrl) {
   const socket = new WebSocket(webSocketUrl);
+  let failure = null;
+  let nextId = 0;
+  const pending = new Map();
+  const fail = error => {
+    failure ||= error;
+    for (const { rejectRequest, timer } of pending.values()) {
+      if (timer) clearTimeout(timer);
+      rejectRequest(failure);
+    }
+    pending.clear();
+  };
+  socket.addEventListener('close', event => fail(new Error(`CDP WebSocket closed (${event.code ?? 'unknown'}): ${event.reason || 'no reason'}`)));
+  socket.addEventListener('error', () => fail(new Error('CDP WebSocket error')));
   await new Promise((resolveOpen, rejectOpen) => {
     socket.addEventListener('open', resolveOpen, { once: true });
     socket.addEventListener('error', () => rejectOpen(new Error('CDP WebSocket failed to open')), { once: true });
+    socket.addEventListener('close', () => rejectOpen(failure), { once: true });
   });
-  let nextId = 0;
-  const pending = new Map();
   socket.addEventListener('message', event => {
-    const message = JSON.parse(event.data);
+    let message;
+    try { message = JSON.parse(event.data); }
+    catch (error) { fail(new Error(`CDP invalid message: ${error.message}`)); return; }
     if (!message.id || !pending.has(message.id)) return;
     const { resolveRequest, rejectRequest, timer } = pending.get(message.id);
     pending.delete(message.id);
@@ -98,18 +115,45 @@ async function connectCdp(webSocketUrl) {
     else resolveRequest(message.result);
   });
   const request = (method, params = {}) => new Promise((resolveRequest, rejectRequest) => {
+    if (failure) { rejectRequest(failure); return; }
     const id = ++nextId;
     const timer = timeoutMs === null ? null : setTimeout(() => {
       pending.delete(id);
       rejectRequest(new Error(`CDP ${method} exceeded caller timeout ${timeoutMs}ms`));
     }, timeoutMs);
     pending.set(id, { resolveRequest, rejectRequest, timer });
-    socket.send(JSON.stringify({ id, method, params }));
+    try { socket.send(JSON.stringify({ id, method, params })); }
+    catch (error) { fail(error); }
   });
   return { socket, request };
 }
 
-async function evaluate(cdp, expression) {
+async function evaluate(cdp, expression, { chunked = false, onProgress = () => {} } = {}) {
+  if (chunked) {
+    const storageKey = `__samWorkbenchEvidence_${randomUUID().replaceAll('-', '')}`;
+    try {
+      const metadata = await evaluate(cdp, `(async value => {
+        const payload = JSON.stringify(await value);
+        if (!payload) throw new Error('visual evidence is missing');
+        globalThis[${JSON.stringify(storageKey)}] = { transportId: ${JSON.stringify(storageKey)}, payload };
+        return { transportId: ${JSON.stringify(storageKey)}, totalCharacters: payload.length };
+      })(${expression})`);
+      const result = await readCompleteChunkedJsonEvidence({
+        metadata,
+        chunkCharacters: 1048576,
+        readChunk: ({ offset, length }) => evaluate(cdp, `(() => {
+          const stored = globalThis[${JSON.stringify(storageKey)}];
+          if (!stored) return null;
+          return { transportId: stored.transportId, totalCharacters: stored.payload.length,
+            offset: ${offset}, payload: stored.payload.slice(${offset}, ${offset + length}) };
+        })()`),
+        onProgress,
+      });
+      return result.value;
+    } finally {
+      await evaluate(cdp, `delete globalThis[${JSON.stringify(storageKey)}]`).catch(() => {});
+    }
+  }
   const result = await cdp.request('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
   if (result.exceptionDetails) throw new Error(`browser evaluation failed: ${result.exceptionDetails.text}`);
   return result.result?.value;
@@ -378,7 +422,11 @@ try {
   report.failurePhase = 'visual-inspection';
   await settleForVisualCapture();
   report.workbench = terminal;
-  report.visualEvidence = await evaluate(cdp, canvasInspectionExpression());
+  writeReport();
+  report.visualEvidence = await evaluate(cdp, canvasInspectionExpression(), {
+    chunked: true,
+    onProgress: progress => { report.evidenceTransport.positive = progress; },
+  });
   const { output, canvases } = report.visualEvidence;
   if (output?.outputAuthority !== 'actual-webgpu-readback') throw new Error(`output authority is ${output?.outputAuthority || 'missing'}`);
   if (output.verificationState !== 'not-attached') throw new Error(`dynamic verification state is ${output.verificationState || 'missing'}`);
@@ -421,7 +469,11 @@ try {
     })()`), 'SAM3 negative-control execution');
     if (negativeTerminal.state === 'failed') throw new Error(`negative control failed: ${negativeTerminal.text}`);
     await settleForVisualCapture();
-    const negativeVisualEvidence = await evaluate(cdp, canvasInspectionExpression());
+    writeReport();
+    const negativeVisualEvidence = await evaluate(cdp, canvasInspectionExpression(), {
+      chunked: true,
+      onProgress: progress => { report.evidenceTransport.negative = progress; },
+    });
     const negativeOutput = negativeVisualEvidence.output;
     if (negativeOutput?.outputAuthority !== 'actual-webgpu-readback') throw new Error(`negative output authority is ${negativeOutput?.outputAuthority || 'missing'}`);
     if (negativeOutput.verificationState !== 'not-attached') throw new Error(`negative verification state is ${negativeOutput.verificationState || 'missing'}`);
