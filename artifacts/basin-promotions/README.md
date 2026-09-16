@@ -1,5 +1,7 @@
 # Basin Promotions
 
+For an agent setting up fire alongside model inference, start with [Load an exported basin for a cooperative inference smoke](../../docs/basin-presets-for-inference-smokes.md). It covers both plain preset JSON and the promotion mount below, including effective-renderer and shared-device checks.
+
 This directory is the repository-visible exchange surface for authored Kaminos
 fire basins. Each stable handle owns immutable revision packages and one movable
 current channel:
