@@ -395,13 +395,18 @@ function buildSourceDefaultLayout(authorableControls) {
 
 // Disabled is the existing runtime's availability contract. Never remove an
 // input: preset import/export and the layout editor still own all its values.
-export function volumeCockpitModeAvailability(c, controlIds = []) {
+export function volumeCockpitModeAvailability(c, controlIds = [], physicalColor = null) {
   const boundary = c.fireRenderMode === 'inspect' && ['boundary', 'boundary_fire'].includes(c.shellInspectMode);
   const ordinary = (c.boundarySidecarView || 'off') === 'off'
     && (c.boundarySplatMode || 'off') === 'off' && (c.volumeResidualMode || 'off') === 'off';
-  const physical = c.physicalColorMode > 0 && boundary && c.shellInspectMode === 'boundary_fire'
+  // Without a renderer this is only an editing preview of the request. Once
+  // available, its receipt owns every effective-route/fallback decision.
+  const previewPhysical = c.physicalColorMode > 0 && boundary && c.shellInspectMode === 'boundary_fire'
     && (c.physicalColorMode === 1 || ordinary);
-  const emissive = physical && c.physicalColorMode === 2;
+  const physical = physicalColor
+    ? ['thermal-reaction-v1', 'emissive-transport-v2'].includes(physicalColor.effective)
+    : previewPhysical;
+  const emissive = physicalColor ? physicalColor.effective === 'emissive-transport-v2' : physical && c.physicalColorMode === 2;
   const availability = {};
   const set = (ids, active, reason) => {
     for (const id of ids) availability[`volume-${id}`] = active ? '' : reason;
@@ -436,6 +441,17 @@ export function volumeCockpitModeAvailability(c, controlIds = []) {
     && !['volume-pyro-detail', 'volume-pyro-compare'].includes(id)).map(id => id.slice(7)),
   !emissive, 'Legacy pyro transfer is replaced by emissive transport.');
   return availability;
+}
+
+export function syncVolumeCockpitModeAvailability(documentRef, c, physicalColor = null) {
+  const pyroIds = [...documentRef.querySelectorAll('input[id^="volume-pyro-"], select[id^="volume-pyro-"]')].map(input => input.id);
+  for (const [id, inactiveReason] of Object.entries(volumeCockpitModeAvailability(c, pyroIds, physicalColor))) {
+    const input = documentRef.getElementById(id);
+    if (!input) continue;
+    input.disabled = Boolean(inactiveReason);
+    input.title = inactiveReason;
+  }
+  syncVolumeCockpitControlVisibility(documentRef);
 }
 
 export function syncVolumeCockpitControlVisibility(documentRef) {

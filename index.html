@@ -3048,7 +3048,7 @@ import {
   collectVolumeCockpitControlElements,
   initializeVolumeCockpitLayout,
   syncVolumeCockpitControlVisibility,
-  volumeCockpitModeAvailability,
+  syncVolumeCockpitModeAvailability,
 } from './volume-cockpit-layout.mjs';
 import {
   createVolumeBasinDriveSessionRecorder,
@@ -18700,12 +18700,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-physical-mode-val').textContent = c.physicalColorMode > 0 ? (physicalBoundaryColor ? (c.physicalColorMode === 1 ? 'active' : 'requested') : 'inactive route') : 'legacy';
   document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? 'Hot soot density' : 'Thermal emission';
   document.getElementById('volume-physical-temperature-label').textContent = c.physicalColorMode === 2 ? 'Peak soot K' : 'Thermal K';
-  for (const [id, inactiveReason] of Object.entries(volumeCockpitModeAvailability(c,
-    [...document.querySelectorAll('input[id^="volume-pyro-"], select[id^="volume-pyro-"]')].map(input => input.id)))) {
-    const input = document.getElementById(id);
-    input.disabled = Boolean(inactiveReason);
-    input.title = inactiveReason;
-  }
+  syncVolumeCockpitModeAvailability(document, c, volumePrototype?.debugState?.()?.physicalColor);
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
   document.getElementById('volume-shell-width-val').textContent = c.shellWidth.toFixed(2);
   document.getElementById('volume-shell-thermal-val').textContent = c.shellThermal.toFixed(2);
@@ -18934,6 +18929,7 @@ for (const button of document.querySelectorAll('[data-volume-presentation-mode]'
     window.__kaminosVolumePresentationReceipt = receipt || null;
     syncVolumePresentationControls(receipt);
     syncRaymarchSmokePresentationControls();
+    refreshVolumeReadout();
     window._kaminosDirty?.();
   });
 }
@@ -18966,6 +18962,7 @@ function renderVolumeEmitterReceipt(receipt) {
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
   if (s.physicalColor?.requested === 'emissive-transport-v2') {
     document.getElementById('volume-physical-mode-val').textContent = s.physicalColor.effective === 'emissive-transport-v2'
       ? (s.physicalColor.materialLawEffective === 'transported-heat-soot-v1' ? 'active: transported' : 'active: v2 replay')

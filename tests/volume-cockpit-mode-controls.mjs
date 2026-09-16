@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const source = readFileSync(new URL('../volume-cockpit-layout.mjs', import.meta.url), 'utf8');
 const migration = readFileSync(new URL('../volume-retired-control-migration.mjs', import.meta.url), 'utf8');
@@ -51,4 +52,40 @@ for (const override of [{ boundarySidecarView: 'ridge' }, { boundarySplatMode: '
 }
 assert.ok(layout.volumeCockpitModeAvailability({ ...emissive, boundarySidecarSource: 'live' })['volume-boundary-sidecar-blur']);
 assert.ok(layout.volumeCockpitModeAvailability({ ...emissive, boundarySidecarSource: 'override' })['volume-boundary-sidecar-ridge']);
+// Renderer receipts outrank the requested mode, regardless of why it fell back.
+for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentation']) {
+  const fallback = layout.volumeCockpitModeAvailability(emissive, [...knownIds], {
+    requested: 'emissive-transport-v2', effective: 'legacy', inactiveReason,
+  });
+  assert.equal(fallback['volume-reaction-boundary-gamma'], '', `${inactiveReason}: effective legacy gamma must return`);
+  assert.ok(fallback['volume-physical-thermal'], `${inactiveReason}: unused emission control must disappear`);
+}
+// Exercise the actual readout's receipt-to-DOM integration without starting a
+// GPU. These are UI fixtures, not evidence that a native renderer was executed.
+const nodes = new Map([...knownIds].map(id => [id, { id, value: `preserved:${id}`, dataset: {}, disabled: false }]));
+const rows = ['volume-reaction-boundary-gamma', 'volume-physical-thermal'].map(id => ({
+  dataset: {}, style: {}, querySelectorAll: () => [Object.assign(nodes.get(id), { closest: () => null })],
+}));
+const root = { querySelectorAll: selector => selector === '.slider-row' ? rows : [] };
+const doc = {
+  getElementById: id => id === 'volume-primary-control-root' ? root : nodes.get(id),
+  querySelectorAll: () => [],
+};
+const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const start = index.indexOf('function refreshVolumeReadout() {');
+const hook = index.slice(start + 'function refreshVolumeReadout() {'.length,
+  index.indexOf("  if (s.physicalColor?.requested", start));
+const savedValues = [...nodes.values()].map(input => input.value);
+for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentation']) {
+  for (const effective of ['emissive-transport-v2', 'legacy', 'emissive-transport-v2']) {
+    vm.runInNewContext(`(function(){${hook}})()`, {
+      volumePrototype: { debugState: () => ({ physicalColor: { requested: 'emissive-transport-v2', effective, inactiveReason } }) },
+      readVolumeControls: () => emissive, document: doc,
+      syncVolumeCockpitModeAvailability: layout.syncVolumeCockpitModeAvailability,
+    });
+    assert.equal(rows[0].dataset.volumeModeHidden, String(effective !== 'legacy'));
+    assert.equal(rows[1].dataset.volumeModeHidden, String(effective === 'legacy'));
+    assert.deepEqual([...nodes.values()].map(input => input.value), savedValues);
+  }
+}
 console.log('volume cockpit mode controls: pass');
