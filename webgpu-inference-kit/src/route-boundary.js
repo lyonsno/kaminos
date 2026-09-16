@@ -223,6 +223,7 @@ export function validateRouteDefinition(route) {
   requireString(errors, route.routeId, 'routeId');
   if (route.backendKind !== 'webgpu-local') errors.push('backendKind must be webgpu-local');
 
+
   if (!route.model || typeof route.model !== 'object') {
     errors.push('model must be an object');
   } else {
@@ -326,6 +327,7 @@ export function createRouteInvocationRequest(route, input) {
     createdAt: input.createdAt || new Date().toISOString(),
   };
 }
+
 
 export function validateRouteInvocationRequest(request, route) {
   const errors = [];

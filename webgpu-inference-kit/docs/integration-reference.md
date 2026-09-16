@@ -41,7 +41,7 @@ shared WebGPU device -> depth / splat / mesh / motion outputs
 | Port | Browser-native route | Kit adoption |
 | --- | --- | --- |
 | [SHARP WebGPU](https://github.com/lyonsno/sharp-webgpu) | image to 1.18M Gaussian splats | cooperative orchestration, scheduling, shared-device foreground opportunities, route composition |
-| [SF3D WebGPU](https://github.com/lyonsno/sf3d-webgpu) | image to textured GLB mesh | cooperative orchestration and model-owned bounded work |
+| [SF3D WebGPU](https://github.com/lyonsno/sf3d-webgpu) | image to textured GLB mesh | cooperative orchestration on every long boundary, bounded-prefix completion, scratch arena, resource caches, parity primitives, worker-offloaded CPU phases, shared-device foreground cadence |
 | [MoGe WebGPU](https://github.com/lyonsno/moge-webgpu) | image to depth, normals, and point map | tensor, kernel, runtime, and route primitives |
 | [Kimodo WebGPU](https://github.com/lyonsno/kimodo-webgpu) | prompt to skeletal motion | runtime and route primitives around browser diffusion, with text embedding declared as an external backend |
 
@@ -1074,7 +1074,7 @@ The runtime helpers are the lowest useful layer. Route helpers sit above them so
 - `defineWebGpuRoute(input)`, `createWebGpuRouteRegistry(routes)`, `createRouteInvocationRequest(route, input)`, `createRouteWorkerResult(route, input)`, and validators define worker-executable browser-local inference routes.
 - `createMogeDepthNormalRouteDefinition(input)` and `createMogeDepthNormalRouteReceipt(input)` define the MoGE source-image to depth/normal/pointmap route.
 - `createSharpImageToSplatRouteDefinition(input)` and `createSharpImageToSplatRouteReceipt(input)` define the SHARP source-image to splat candidate/depth/metadata route.
-- `createKimodoTextToMotionRouteDefinition(input)` and `createKimodoTextToMotionRouteReceipt(input)` define the Kimodo text-prompt to SOMA77 joints/motion-clip route.
+- `createKimodoTextToMotionRouteDefinition(input)` and `createKimodoTextToMotionRouteReceipt(input)` define the Kimodo text-prompt to motion route as shipped by the browser port: `soma-joints` output `[frames, 30, 3]` (30-joint SOMA skeleton, duration-dependent frame count at 30 fps) and a `motion-clip` output of `[frames, 369]` motion-feature rows, with an optional filmstrip. The shape law is enforced where receipts are MINTED: the factory throws on the old fictional shapes, mismatched frame counts, and malformed ranks. Consumers who receive Kimodo receipts from outside the factory and want independent verification call the exported `validateKimodoOutputArtifacts(receipt.outputs)` directly. `assertAuthoritativeRouteReceipt(receipt)` and the evidence classifier assert generic envelope authority; route-specific semantic laws are deliberately not woven into the generic authority machinery — the kit's consumers are cooperative in-process code, and JavaScript offers no in-process security boundary that such machinery could actually enforce.
 - `createSf3dImageToMeshRouteDefinition(input)` and `createSf3dImageToMeshRouteReceipt(input)` define the Stable Fast 3D source-image to mesh/albedo/normal route.
 
 These route definitions are not meant to trap future ports into MoGE/SHARP/Kimodo/SF3D. They are examples of the current shared grammar: route id, input roles, output roles, backend kind, model identity, kernel/stage identity, scheduler posture, and output artifacts.

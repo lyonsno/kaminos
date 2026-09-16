@@ -90,14 +90,14 @@ The kit connects a growing family of browser model ports: recover a scene's geom
 
 | Model Port | What You Can Build | Integration |
 | --- | --- | --- |
-| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth maps, surface normals, and interactive point clouds from a single image | Shared GPU and route helpers, with cooperative transformer-block submissions and separate decoder and readback boundaries. |
-| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Textured, UV-unwrapped GLB meshes from a single image | Cooperative GPU duties across reconstruction and baking, bounded in-flight submissions, reusable scratch memory, and worker offload. |
-| [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground opportunities, staged output construction, and shared tensor-comparison helpers for port development. |
-| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding with kit-compatible route reporting. Text embeddings come from an external server; deeper runtime integration is in development. |
+| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth maps, surface normals, and interactive point clouds from a single image | Shared device helpers, cooperative encoder and decoder work, bounded in-flight submissions, reusable GPU buffers, and a library build for embedding in a host application. |
+| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Textured, UV-unwrapped GLB meshes from a single image | Cooperative reconstruction and baking, bounded in-flight submissions, reusable scratch memory, worker offload, and a callable producer that can use the application's GPU device. |
+| [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground rendering, staged output construction, and shared tensor-comparison helpers for port development. |
+| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding, bounded GPU submissions, reusable model resources, and a host-callable producer with rendering opportunities between transformer passes. Text embeddings come from an external server. |
 
-These ports also provide concrete examples to build from. MoGe exposes cooperative boundaries around an existing feed-forward pipeline. SF3D combines GPU computation with CPU and worker stages; its tested monolithic and cooperative paths produce byte-identical GLB output. SHARP demonstrates long-running inference alongside a continuously rendering application on the same GPU.
+These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
 
-**In development: SAM image-and-prompt segmentation.** The in-tree port is integrating persistent model resources, cached image features, shared model-package loading, and queued semantic requests. That integration remains on a development branch while its updated serving path undergoes live validation.
+**In development: SAM image-and-prompt segmentation.** The in-tree port combines shared model-package loading, persistent model resources, cached image features, and queued semantic requests. Its browser serving path produces masks and reuses image features across prompts; concurrent foreground rendering is the next integration target.
 
 Ports can adopt a common application-facing shape:
 
@@ -120,11 +120,15 @@ The runtime schedules those model duties so the browser can regain useful foregr
 
 Ports can begin with direct execution and introduce cooperative boundaries where measurement shows that a phase is hostile to foreground responsiveness. The [advanced integration reference](./docs/integration-reference.md) covers scheduling policy, adaptive duty sizing, completion behavior, foreground opportunity donation, resources, multi-route admission, and runtime telemetry.
 
-## Proven On A Long-Running Product Route
+## Inference Alongside Rendering
 
-In one measured product firing on an M4 Max in Chrome, SHARP generated `1,179,648` Gaussian splats over `185.3s` while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across `21,818` foreground frame intervals, p95 and p99 were `9.3ms` and `10.0ms`; `40` intervals exceeded `33.3ms`.
+In one measured run on an M4 Max in Chrome, **SHARP generated 1,179,648 Gaussian splats in 185.3 seconds** while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across 21,818 foreground frame intervals, p95 and p99 were 9.3ms and 10.0ms; 40 intervals exceeded 33.3ms.
 
-That firing demonstrates the runtime's central product target directly: long local inference sharing one browser and GPU with a continuously rendering application, while producing the complete model output and preserving measured foreground cadence.
+**Stable Fast 3D generated a complete textured GLB in 41.9 seconds** while servicing 3,644 test host frames through the kit's shared-device foreground interlock. Page frame intervals had a p99 of 9.7ms and a maximum of 92.4ms. The GLB was byte-identical to the monolithic route's output.
+
+SF3D also runs alongside Kaminos' live flame in an experimental host integration. That integration currently uses separate devices on the same GPU; coordinated shared-device rendering is the next step toward recovering throughput under the full rendering workload.
+
+Together, these examples show how model ports can expose useful scheduling boundaries, preserve their outputs, and make room for the application around them.
 
 ## Continue Porting
 

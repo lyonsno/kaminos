@@ -309,7 +309,9 @@ export {
   KIMODO_TEXT_TO_MOTION_ROUTE_ID,
   createKimodoTextToMotionRouteDefinition,
   createKimodoTextToMotionRouteReceipt,
+  validateKimodoOutputArtifacts,
 } from './kimodo-route.js';
+
 
 export {
   SF3D_IMAGE_TO_MESH_ROUTE_ID,
