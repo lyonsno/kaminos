@@ -2347,3 +2347,9 @@ assert.match(core, /metaTexture: irradianceMetaTexture/, 'light field export han
 assert.match(index, /farVector = fireCenterWorld\.sub\(worldPositionNode\)/, 'receiver builds the radial vector from the reduced fire center');
 assert.match(index, /farDistanceSq\.mul\(2\.5\)\.add\(0\.25\)/, 'far term falls off with squared distance, softened at the flame core');
 assert.match(index, /nearSignal\.add\(farSignal\)/, 'near-field and far-field compose additively before masking');
+
+// Operator light controls live in the Assets tab: a test-geometry toggle and
+// a photographic stops gain (2^stops) on the receiver strength.
+assert.match(index, /id="fire-light-test-scene-toggle"/, 'Assets tab exposes the fire-light test geometry toggle');
+assert.match(index, /id="fire-light-gain-stops"/, 'Assets tab exposes the light gain slider in stops');
+assert.match(index, /baseStrength \* Math\.pow\(2, passState\.gainStops \|\| 0\)/, 'receiver strength applies the stops gain as a power of two');
