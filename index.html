@@ -9599,6 +9599,34 @@ async function initScene() {
   groundPlane.receiveShadow = true;
   scene.add(groundPlane);
 
+  // Fire-light geometry witness set (route volume_light_field_test_scene=1):
+  // neutral primitives at the positions that exercise the light field -
+  // a pillar beside the flame (vertical falloff), a sphere hung above it
+  // (under-lighting), a cube on the floor at distance (contact + falloff),
+  // a wall behind (gradient screen), and a small sphere near the base.
+  // Neutral matte albedo so received light color reads honestly.
+  if (isFireLightFieldRoute() && new URLSearchParams(window.location.search).get('volume_light_field_test_scene') === '1') {
+    const witnessMat = new THREE.MeshStandardMaterial({ color: 0xb8b4ac, roughness: 0.9, metalness: 0.0 });
+    const witnessSet = [
+      { geo: new THREE.BoxGeometry(0.35, 2.0, 0.35), position: [1.6, -0.85 + 1.0, 0] },
+      { geo: new THREE.SphereGeometry(0.3, 48, 32), position: [0, 1.7, 0] },
+      { geo: new THREE.BoxGeometry(0.4, 0.4, 0.4), position: [-1.7, -0.85 + 0.2, 0.6] },
+      { geo: new THREE.BoxGeometry(4.4, 2.6, 0.12), position: [0, -0.85 + 1.3, -2.2] },
+      { geo: new THREE.SphereGeometry(0.18, 48, 32), position: [0.85, -0.55, 0.4] },
+    ];
+    for (const entry of witnessSet) {
+      const mesh = new THREE.Mesh(entry.geo, witnessMat);
+      mesh.position.set(...entry.position);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+    }
+    // Frame the whole tableau so the route is one-click; orbit still works.
+    camera.position.set(3.0, 1.1, 4.6);
+    controls.target.set(0.1, 0.2, -0.4);
+    controls.update();
+  }
+
   // Key light for shadows
   const keyLight = new THREE.DirectionalLight(0xffffff, 0.5);
   keyLight.position.set(3, 5, 4);
