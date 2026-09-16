@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const cockpit = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const initialTabActivation = cockpit.indexOf("if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');");
+assert.ok(initialTabActivation >= 0, 'volume routes select the volume tab at startup');
+for (const declaration of ['let fingerFluidBenchRunning = false;', 'let fingerFluidBenchAnimationFrame = null;']) {
+  const initialization = cockpit.indexOf(declaration);
+  assert.ok(initialization >= 0 && initialization < initialTabActivation,
+    `initial tab activation must follow ${declaration}: switching tabs stops the liquid bench`);
+}
 const binding = name => {
   const match = core.match(new RegExp('@group\\((\\d+)\\) @binding\\((\\d+)\\) var<storage, [^>]+> ' + name + ':'));
   assert.ok(match, `GPU binding exists for ${name}`);

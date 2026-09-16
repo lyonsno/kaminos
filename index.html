@@ -3177,7 +3177,6 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
-if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
 const publishVolumeCockpitLayoutPhase = phase => {
   window.__kaminosVolumeCockpitLayoutReceipt = {
@@ -9980,6 +9979,8 @@ function setActiveTab(tabName) {
 
 window.__kaminosSetActiveTab = setActiveTab;
 window.__kaminosActiveTab = () => document.querySelector('.tab.active[data-tab]')?.dataset.tab || null;
+// Tab switching also stops inactive benches; initialize their state first.
+if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
 function currentWorldChambersDebugState() {
   return worldChamberDebugState(worldChambersRegistry);
