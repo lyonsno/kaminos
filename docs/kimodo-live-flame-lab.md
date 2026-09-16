@@ -47,6 +47,7 @@ CPU checks:
 node tests/kimodo-flame-evidence-contracts.mjs
 node tests/kimodo-motion-frame.mjs
 node tests/kimodo-witness-terminal.mjs
+node tests/kimodo-witness-watchdog.mjs
 node tests/kimodo-flame-witness-failures.mjs /absolute/kimodo-webgpu
 ```
 
@@ -58,17 +59,21 @@ and a terminal `report.json` even on preflight failure. The caller chooses the
 output directory and optional URL:
 
 ```sh
-GREENROOM_BIN=/absolute/gpu-greenroom node scripts/witness-kimodo-live-flame.mjs /absolute/kimodo-webgpu /absolute/evidence http://127.0.0.1:8096/kimodo-elfinblue.html
+GREENROOM_BIN=/absolute/gpu-greenroom node scripts/witness-kimodo-live-flame.mjs /absolute/kimodo-webgpu /absolute/evidence http://127.0.0.1:8096/kimodo-elfinblue.html <expected-host-40hex-commit> <expected-producer-40hex-commit>
 ```
 
-The witness runs 6 seconds of motion at 100 steps without a generation
-deadline; its renewable lease stays live until browser termination. Runtime observations, public
+The witness runs 6 seconds of motion at 100 steps, with the operator's
+10-minute overall browser-work deadline and 120-second producer/load/download
+no-progress detector. A stalled page is aborted/closed, its last trustworthy
+telemetry is retained, and its renewable lease is released. These witness-only
+timers do not limit the interactive product UI. Runtime observations, public
 landing disposition and measured results belong in the run's evidence
 report; this document does not imply the lab branch is merged.
 ## Evidence admission
 
-The browser witness requires a clean, committed host checkout and a build at
-that exact commit. Its effective source proof hashes actual browser response
+The browser witness requires explicit caller-owned expected host/producer
+commits, a clean committed host checkout and a build at those exact revisions.
+The pins are not inferred from the build being tested. Its effective source proof hashes actual browser response
 bytes against that Git tree and the build manifest, including loaded bundles
 and all three support assets. Temporary redirect selectors carry navigation
 identity only; the admitted final URL, preset and loaded runtime carry the

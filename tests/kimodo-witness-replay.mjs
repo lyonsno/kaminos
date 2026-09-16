@@ -19,7 +19,7 @@ const expected=report.evidence.source,resources=[];
 for(const [name,value] of Object.entries(expected.assets))if(name!=='kimodo.bin')resources.push({path:`artifacts/kimodo-live-flame/assets/${name}`,sha256:value.sha256,expectedSha256:value.sha256});
 for(const [name,hash] of Object.entries(expected.bundles))resources.push({path:`artifacts/kimodo-live-flame/lib/${name}`,sha256:hash,expectedSha256:hash});
 for(const name of ['index.html','kimodo-live-flame-inject.mjs','volume-core.js'])resources.push({path:name,sha256:'synthetic-host',expectedSha256:'synthetic-host'});
-const input={expected,effective:structuredClone(expected),resources,weightsHash:expected.assets['kimodo.bin'].sha256,url:report.effectiveUrl};
+const input={expected,effective:structuredClone(expected),resources,weightsHash:expected.assets['kimodo.bin'].sha256,url:report.effectiveUrl,expectedHostCommit:expected.hostCommit,expectedProducerCommit:expected.sourceCommit};
 assert.equal(verifyIdentity(input).status,'verified');
 for(const key of ['sourceCommit','hostCommit'])assert.throws(()=>verifyIdentity({...input,effective:{...expected,[key]:'wrong'}}));
 assert.throws(()=>verifyIdentity({...input,url:report.effectiveUrl.replace('settings_preset=vsp-','settings_preset=wrong-')}));
@@ -30,4 +30,6 @@ for(const resource of resources){
 assert.throws(()=>verifyIdentity({...input,resources:[]}));
 assert.throws(()=>verifyIdentity({...input,weightsHash:'wrong'}));
 assert.throws(()=>verifyIdentity({...input,resources:[...resources,{path:'missing-body.js',error:'body unavailable'}]}),'missing bodies must fail before generation');
+const substituted={...expected,hostCommit:'self-consistent-wrong-host',sourceCommit:'self-consistent-wrong-producer'};
+assert.throws(()=>verifyIdentity({...input,expected:substituted,effective:substituted}),'self-consistent substituted checkout must not satisfy caller pins');
 console.log('Observed motion/counter replay and adversarial identity/export controls pass');

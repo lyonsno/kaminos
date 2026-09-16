@@ -88,7 +88,7 @@ export async function mountComposition({prototype, params} = {}) {
       state.source=await resp.json();if(state.source.status!=='built')throw new Error('Kimodo library build incomplete');
       const gpu=await initGPU();device=gpu.device;
       producer=await createKimodoProducer({...gpu,assetBase:'./artifacts/kimodo-live-flame/assets',embedUrl:$('embed').value,
-        onLoadProgress:({loaded,total})=>{$('stage').textContent=`loading weights · ${(loaded/1048576).toFixed(0)} MiB`;if(total)$('progress').value=100*loaded/total;}});
+        onLoadProgress:({loaded,total})=>{state.loadProgress={loaded,total};$('stage').textContent=`loading weights · ${(loaded/1048576).toFixed(0)} MiB`;if(total)$('progress').value=100*loaded/total;}});
       if(producer.identity.model.weightsHash!==state.source.assets['kimodo.bin'].sha256)throw new Error('Loaded weights differ from source manifest');
       state.producerIdentity=producer.identity;state.status='loaded';baselineIndex=state.samples.length;sample();
       $('stage').textContent='model loaded · flame-only baseline';$('progress').value=0;$('run').disabled=false;$('load').textContent='Model loaded';
