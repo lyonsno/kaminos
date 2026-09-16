@@ -3038,7 +3038,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=sexy-main-compose-0916';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=lightfield-hash-0916';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -3073,15 +3073,28 @@ let sharedGpu = null;
 let sharedGpuFailureReason = null;
 let fireLightFieldPass = null;
 
-function isFireLightFieldRoute(params = new URLSearchParams(window.location.search)) {
+// Fire light-field route params may ride the URL HASH as well as the query:
+// settings-preset routes are contract-validated and reject unexpected
+// volume_* query parameters, so on basin routes the light field is enabled
+// the same way the composition-module seam is (#volume_light_field=1&...).
+// Hash entries override query entries.
+function fireLightFieldRouteParams() {
+  const merged = new URLSearchParams(window.location.search);
+  for (const [key, value] of new URLSearchParams(window.location.hash.replace(/^#/, ''))) {
+    if (key.startsWith('volume_light_field')) merged.set(key, value);
+  }
+  return merged;
+}
+
+function isFireLightFieldRoute(params = fireLightFieldRouteParams()) {
   return params.get('volume_light_field') === '1';
 }
 
-function isFireLightFieldIsolateRoute(params = new URLSearchParams(window.location.search)) {
+function isFireLightFieldIsolateRoute(params = fireLightFieldRouteParams()) {
   return params.get('volume_light_field_isolate') === '1';
 }
 
-function isFireLightFieldTimingRoute(params = new URLSearchParams(window.location.search)) {
+function isFireLightFieldTimingRoute(params = fireLightFieldRouteParams()) {
   return params.get('volume_light_field_timing') === '1';
 }
 import {
@@ -9238,7 +9251,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const FIRE_LIGHT_FIELD_PASS_IDENTITY = 'world-position-fire-light-field-receiver-pass-v0';
   const FIRE_LIGHT_FIELD_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
   const FIRE_LIGHT_FIELD_MASK_AUTHORITY = 'scene-prepass-depth-world-position-normal-material-v0';
-  const routeParams = new URLSearchParams(window.location.search);
+  const routeParams = fireLightFieldRouteParams();
   const blackAtlasTexture = sharedGpu.device.createTexture({
     label: 'kaminos fire light field black atlas placeholder',
     size: { width: 1, height: 1, depthOrArrayLayers: 1 },
@@ -9675,7 +9688,7 @@ async function initScene() {
     if (fireLightGainVal) fireLightGainVal.textContent = `${stops >= 0 ? '+' : ''}${stops.toFixed(2)}`;
     fireLightFieldPass?.setGainStops?.(stops);
   });
-  if (new URLSearchParams(window.location.search).get('volume_light_field_test_scene') === '1') {
+  if (fireLightFieldRouteParams().get('volume_light_field_test_scene') === '1') {
     setFireLightWitnessScene(true);
     if (fireLightWitnessToggle) fireLightWitnessToggle.checked = true;
     // Frame the whole tableau so the route is one-click; orbit still works.
@@ -19004,9 +19017,9 @@ function readVolumeControls() {
     oracleActivityVorticity: parseFloat(document.getElementById('volume-oracle-activity-vorticity').value),
     oracleActivityMaterial: parseFloat(document.getElementById('volume-oracle-activity-material').value),
     lookFreeze: parseFloat(document.getElementById('volume-look-freeze').value),
-    fireLightField: new URLSearchParams(window.location.search).get('volume_light_field') === '1',
+    fireLightField: fireLightFieldRouteParams().get('volume_light_field') === '1',
     fireProbe: parseInt(new URLSearchParams(window.location.search).get('volume_fire_probe') || '', 10) || 0,
-    fireLightFieldGrid: parseInt(new URLSearchParams(window.location.search).get('volume_light_field_grid') || '', 10) || undefined,
+    fireLightFieldGrid: parseInt(fireLightFieldRouteParams().get('volume_light_field_grid') || '', 10) || undefined,
     reactionHeatMin: parseFloat(document.getElementById('volume-reaction-heat-min').value),
     reactionHeatMax: parseFloat(document.getElementById('volume-reaction-heat-max').value),
     reactionFuelMin: parseFloat(document.getElementById('volume-reaction-fuel-min').value),

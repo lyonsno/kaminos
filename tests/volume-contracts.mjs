@@ -2353,3 +2353,11 @@ assert.match(index, /nearSignal\.add\(farSignal\)/, 'near-field and far-field co
 assert.match(index, /id="fire-light-test-scene-toggle"/, 'Assets tab exposes the fire-light test geometry toggle');
 assert.match(index, /id="fire-light-gain-stops"/, 'Assets tab exposes the light gain slider in stops');
 assert.match(index, /baseStrength \* Math\.pow\(2, passState\.gainStops \|\| 0\)/, 'receiver strength applies the stops gain as a power of two');
+
+// Light-field route params ride the URL hash on basin/settings-preset routes,
+// mirroring the composition-module seam: those routes reject unexpected
+// volume_* query parameters, so query-only reading would make the light field
+// unreachable on exactly the composed routes that need it.
+assert.match(index, /function fireLightFieldRouteParams\(\)[\s\S]*?window\.location\.hash/, 'light-field route params merge the URL hash');
+assert.match(index, /function isFireLightFieldRoute\(params = fireLightFieldRouteParams\(\)\)/, 'light-field route detection reads the merged params');
+assert.doesNotMatch(index, /isFireLightFieldIsolateRoute\(params = new URLSearchParams\(window\.location\.search\)\)/, 'no light-field helper reads the query alone');
