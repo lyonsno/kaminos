@@ -54,6 +54,14 @@ export async function loadMoge(gpu) {
   hud('hud-weights').textContent = inference.useRealWeights
     ? `real (${inference.weightsSource || 'local'})` : 'STUB — not authoritative';
   hud('hud-weights').className = `v ${inference.useRealWeights ? 'good' : 'bad'}`;
+  // Warm-up run (discarded): first visible run is then steady state.
+  if (inference.useRealWeights) {
+    hud('hud-infer').textContent = 'warming up (discarded run)…';
+    hud('hud-infer').className = 'v warn';
+    const warm = await inference.warmUp();
+    hud('hud-infer').textContent = warm ? `warm (${(warm.warmUpMs / 1000).toFixed(1)}s warm-up)` : 'idle';
+    hud('hud-infer').className = 'v';
+  }
   window.__mogeInference = inference;
   return inference;
 }
