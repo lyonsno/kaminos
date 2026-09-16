@@ -18733,7 +18733,8 @@ async function initKaminosVolumeRoute() {
   // #composition_module_url=<module> (hash, not query — settings routes are
   // contract-validated and reject unexpected query parameters) loads an ES
   // module after the volume prototype exists and calls its
-  // mountComposition({ prototype, params }). Absent: no-op.
+  // mountComposition({ prototype, params }). Absent: no-op. Used to compose
+  // long-running inference (e.g. MoGe) into the live app route.
   {
     const compositionModuleUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('composition_module_url');
     if (compositionModuleUrl) {
