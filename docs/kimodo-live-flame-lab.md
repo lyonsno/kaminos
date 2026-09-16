@@ -15,7 +15,8 @@ KIMODO_WEBGPU_CHECKOUT=/absolute/kimodo-webgpu bash serve-kimodo-elfinblue.sh 80
 
 The Kimodo checkout needs installed npm dependencies and its normal converted
 `public/kimodo.bin`. Start its existing `tools/embed_server.py` on port 8098
-using the normal Kimodo environment. Open
+using the normal Kimodo environment and
+`--allow-origin http://127.0.0.1:8096` (match the lab port if changed). Open
 `http://127.0.0.1:8096/kimodo-elfinblue.html`, select **Load Kimodo**, let the
 flame run briefly for a baseline, then **Generate motion**. Prompt, duration,
 and step count are editable. Cancel uses the producer's AbortSignal contract.

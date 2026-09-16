@@ -38,8 +38,8 @@ try{
   await page.waitForFunction(()=>window.__kimodoLiveFlame?.runs.length===1,{timeout:15000});
   // Capture one in-progress frame after sampling begins; preserve terminal even if this fails.
   try{
-    await page.waitForFunction(()=>window.__kimodoLiveFlame?.telemetry?.progress?.step>=5,{timeout:120000});
-    await page.screenshot({path:path.join(output,'during.png')});
+    await page.waitForFunction(()=>window.__kimodoLiveFlame?.telemetry?.progress?.step>=5 || window.__kimodoLiveFlame?.runs[0]?.status!=='running',{timeout:120000});
+    if(await page.evaluate(()=>window.__kimodoLiveFlame.runs[0].status==='running'))await page.screenshot({path:path.join(output,'during.png')});
   }catch(error){report.captureError=error.message;}
   await page.waitForFunction(()=>window.__kimodoLiveFlame?.runs[0]?.status!=='running',{timeout:600000});
   report.evidence=await page.evaluate(()=>window.__kimodoLiveFlame);
@@ -48,7 +48,7 @@ try{
   report.phase='terminal';await page.screenshot({path:path.join(output,'complete.png')});
   // Exercise actual exported motion via the same download used by the operator.
   const cdp=await page.createCDPSession();await cdp.send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:path.resolve(output)});
-  await page.click('#kimodo-motion-download');await new Promise(r=>setTimeout(r,1000));
+  if(await page.$eval('#kimodo-motion-download',el=>!el.disabled)){await page.click('#kimodo-motion-download');await new Promise(r=>setTimeout(r,1000));}
 }catch(error){report.status='failed';report.failurePhase=report.phase;report.error={message:error.message,stack:error.stack};
   if(browser){const pages=await browser.pages().catch(()=>[]);const page=pages.at(-1);if(page){report.evidence=await page.evaluate(()=>window.__kimodoLiveFlame??null).catch(()=>null);await page.screenshot({path:path.join(output,'failure.png')}).catch(()=>{});}}
 }finally{
