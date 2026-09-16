@@ -1,5 +1,4 @@
 import { defineWebGpuRoute } from './route-boundary.js';
-import { registerArtifactLaw, requireArtifactLaw } from './artifact-law-registry.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -128,18 +127,19 @@ function createDefaultKimodoBackpressure() {
   });
 }
 
-// The route's shape law, enforced where receipts are minted: joints are
-// [frames, 30, 3] and the motion clip is [frames, 369] with the SAME positive
-// frame count. The frame count itself is duration-dependent and free; the
-// trailing dimensions and the cross-output equality are not. Without this
-// gate the disavowed [90, 77, 3]/[1] fiction still classified authoritative.
 /**
- * Single source of the shape law, reachable from every authority boundary:
- * the minting factory throws through it, and the route definition carries it
- * as outputArtifactValidator so the generic request/worker-result/evidence
- * machinery applies it wherever authority is conferred. Accepts either the
- * factory's keyed form ({somaJoints, motionClip}) or an artifact array with
- * role fields (the shape the generic validators hold).
+ * The Kimodo shape law, enforced where receipts are MINTED: the factory
+ * below throws through it, so no factory-built receipt can carry the old
+ * fictional shapes. Consumers who receive receipts from outside the factory
+ * and want independent verification call this directly on receipt.outputs.
+ *
+ * Deliberately NOT wired into the generic route/receipt authority machinery:
+ * the kit's consumers are cooperative in-process code, and JavaScript has no
+ * in-process security boundary — a caller who could forge a route object
+ * could equally monkey-patch any enforcement layer. Enforcement lives at
+ * minting; verification is one exported function call. Accepts the factory's
+ * keyed form ({somaJoints, motionClip}) or an artifact array with role
+ * fields (the shape receipts carry).
  */
 export function validateKimodoOutputArtifacts(outputs) {
   const errors = [];
@@ -167,14 +167,6 @@ export function validateKimodoOutputArtifacts(outputs) {
   }
   return { ok: errors.length === 0, errors };
 }
-
-// The law is registered in the trusted registry and REQUIRED for this route
-// id: any Kimodo definition that loses its descriptor (JSON round-trip,
-// manual construction) fails validateRouteDefinition rather than silently
-// shedding its semantics.
-export const KIMODO_OUTPUT_ARTIFACT_LAW = Object.freeze({ id: 'kimodo-soma30-shape-law', version: 1 });
-registerArtifactLaw(KIMODO_OUTPUT_ARTIFACT_LAW.id, KIMODO_OUTPUT_ARTIFACT_LAW.version, validateKimodoOutputArtifacts);
-requireArtifactLaw(KIMODO_TEXT_TO_MOTION_ROUTE_ID, KIMODO_OUTPUT_ARTIFACT_LAW.id, KIMODO_OUTPUT_ARTIFACT_LAW.version);
 
 function assertKimodoOutputShapes(outputs) {
   const verdict = validateKimodoOutputArtifacts(outputs);
@@ -239,7 +231,6 @@ export function createKimodoTextToMotionRouteDefinition(input = {}) {
       { role: 'filmstrip', required: false, artifactRequired: true, hashRequired: true },
     ],
     requiredFeatures: input.requiredFeatures || [],
-    outputArtifactLaw: KIMODO_OUTPUT_ARTIFACT_LAW,
     requiredStages: routeMetadata.requiredStages,
     timingSource: routeMetadata.timingSource,
     scheduler: input.scheduler || createDefaultKimodoScheduler(),

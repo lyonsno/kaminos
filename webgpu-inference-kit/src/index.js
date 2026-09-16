@@ -306,21 +306,12 @@ export {
 } from './sharp-route.js';
 
 export {
-  KIMODO_OUTPUT_ARTIFACT_LAW,
   KIMODO_TEXT_TO_MOTION_ROUTE_ID,
   createKimodoTextToMotionRouteDefinition,
   createKimodoTextToMotionRouteReceipt,
   validateKimodoOutputArtifacts,
 } from './kimodo-route.js';
 
-export {
-  artifactLawRef,
-  registerArtifactLaw,
-  requireArtifactLaw,
-  requiredArtifactLawRef,
-  resolveArtifactLaw,
-  resolveEffectiveLaw,
-} from './artifact-law-registry.js';
 
 export {
   SF3D_IMAGE_TO_MESH_ROUTE_ID,

@@ -1,8 +1,3 @@
-import { artifactLawRef, requiredArtifactLawRef, resolveArtifactLaw, resolveEffectiveLaw } from './artifact-law-registry.js';
-
-function requiresLaw(routeId) {
-  return requiredArtifactLawRef(routeId) != null;
-}
 import {
   validateWebGpuBackendIdentity,
 } from './gpu-environment.js';
@@ -193,38 +188,6 @@ function baseClassification(receipt, options = {}) {
 
 export function classifyWebGpuRouteReceiptEvidence(receipt, options = {}) {
   const base = baseClassification(receipt, options);
-  // Route-aware authority: supplying { route } BINDS the classification to
-  // that route's identity and semantic law. Identity mismatch is decided
-  // FIRST (so the wrong contract's shape law never masquerades as the
-  // causal error), then the law resolves through the trusted registry — an
-  // unresolvable or missing-required law cannot confer authority.
-  if (options.route) {
-    const route = options.route;
-    const routeId = route.routeId;
-    const demote = (reason) => {
-      base.classification = 'invalid';
-      base.authoritative = false;
-      base.reasons = [...(base.reasons || []), reason];
-    };
-    if (options.expectedRouteId && options.expectedRouteId !== routeId) {
-      demote(`route-mismatch: expectedRouteId ${options.expectedRouteId} conflicts with supplied route ${routeId}`);
-    } else if (receipt?.requestedRouteId !== routeId || receipt?.effectiveRouteId !== routeId) {
-      demote(`route-mismatch: receipt route ${receipt?.requestedRouteId ?? 'absent'}/${receipt?.effectiveRouteId ?? 'absent'} does not match supplied route ${routeId}`);
-    } else {
-      // Requirement-first: the registry decides which law governs this
-      // route id; a carried descriptor is checked against it, never
-      // substituted for it.
-      const effective = resolveEffectiveLaw(route);
-      if (effective.errors.length) {
-        effective.errors.forEach((e) => demote(e));
-      } else if (effective.validator && Array.isArray(receipt?.outputs)) {
-        const law = effective.validator(receipt.outputs);
-        if (!law.ok) {
-          law.errors.forEach((e) => demote(`outputs: ${e}`));
-        }
-      }
-    }
-  }
   const scheduler = receipt?.runtime?.scheduler || null;
   const backpressure = receipt?.runtime?.backpressure || null;
   const schedulerVerification = normalizeNestedSchedulerVerification(receipt?.runtime?.schedulerVerification || null);

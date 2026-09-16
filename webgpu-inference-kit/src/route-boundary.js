@@ -12,13 +12,6 @@ export const WEBGPU_ROUTE_DEFINITION_SCHEMA = 'kaminos.webgpu-route-definition.v
 export const WEBGPU_ROUTE_REQUEST_SCHEMA = 'kaminos.webgpu-route-request.v0';
 export const WEBGPU_ROUTE_RESULT_SCHEMA = 'kaminos.webgpu-route-result.v0';
 
-import {
-  artifactLawRef,
-  requiredArtifactLawRef,
-  resolveArtifactLaw,
-  resolveEffectiveLaw,
-} from './artifact-law-registry.js';
-
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
@@ -213,14 +206,6 @@ export function defineWebGpuRoute(input) {
     requiredFeatures: Array.isArray(input.requiredFeatures) ? [...input.requiredFeatures].map(String).sort() : [],
     requiredStages: Array.isArray(input.requiredStages) ? [...input.requiredStages] : [],
     timingSource: input.timingSource || 'queue-submit-wait',
-    // Optional route-owned artifact law as a SERIALIZABLE descriptor
-    // ({ id, version }); the executable validator resolves through the
-    // trusted artifact-law registry. Applied by request validation,
-    // worker-result validation, route-bound receipt assertion, and
-    // route-aware evidence classification, and it survives structured
-    // clone / JSON round-trips — losing a required descriptor fails
-    // validation loudly instead of silently shedding the law.
-    outputArtifactLaw: clone(input.outputArtifactLaw || null),
     scheduler: clone(input.scheduler || null),
     backpressure: clone(input.backpressure || null),
     worker: clone(input.worker || null),
@@ -238,22 +223,6 @@ export function validateRouteDefinition(route) {
   requireString(errors, route.routeId, 'routeId');
   if (route.backendKind !== 'webgpu-local') errors.push('backendKind must be webgpu-local');
 
-  const requiredLaw = requiredArtifactLawRef(route.routeId);
-  const carriedLaw = artifactLawRef(route.outputArtifactLaw);
-  if (requiredLaw) {
-    if (!carriedLaw) {
-      errors.push(`route ${route.routeId} requires artifact law ${requiredLaw} but carries none — a definition that lost its law cannot confer authority`);
-    } else if (carriedLaw !== requiredLaw) {
-      errors.push(`route ${route.routeId} requires artifact law ${requiredLaw} but carries ${carriedLaw}`);
-    }
-  }
-  if (route.outputArtifactLaw != null) {
-    if (!carriedLaw) {
-      errors.push('outputArtifactLaw must be { id, version } when present');
-    } else if (!resolveArtifactLaw(route.outputArtifactLaw)) {
-      errors.push(`artifact law ${carriedLaw} is not registered in this runtime — cannot verify, cannot authorize`);
-    }
-  }
 
   if (!route.model || typeof route.model !== 'object') {
     errors.push('model must be an object');
@@ -360,19 +329,6 @@ export function createRouteInvocationRequest(route, input) {
 }
 
 
-function applyOutputArtifactLaw(errors, route, artifacts, path) {
-  // Requirement-first through the registry: a route object that lost or
-  // swapped its descriptor cannot bypass the law its route id requires.
-  const effective = resolveEffectiveLaw(route);
-  if (effective.errors.length) {
-    errors.push(...effective.errors.map((e) => `${path}: ${e}`));
-    return;
-  }
-  if (!effective.validator) return; // no requirement, no carried law
-  const law = effective.validator(artifacts);
-  if (!law.ok) errors.push(...law.errors.map((e) => `${path}: ${e}`));
-}
-
 export function validateRouteInvocationRequest(request, route) {
   const errors = [];
   const routeResult = validateRouteDefinition(route);
@@ -389,7 +345,6 @@ export function validateRouteInvocationRequest(request, route) {
   if (routeResult.ok) {
     validateArtifacts(errors, request.inputs, route.inputRoles, 'inputs', { requireHash: true });
     validateArtifacts(errors, request.outputs, route.outputRoles, 'outputs', { requireHash: false });
-    applyOutputArtifactLaw(errors, route, request.outputs, 'outputs');
   }
 
   if (request.scheduler != null) {
@@ -474,7 +429,6 @@ export function validateRouteWorkerResult(result, route) {
 
   if (routeResult.ok && Array.isArray(result.outputs)) {
     validateArtifacts(errors, result.outputs, route.outputRoles, 'outputs', { requireHash: true });
-    applyOutputArtifactLaw(errors, route, result.outputs, 'outputs');
   } else if (!Array.isArray(result.outputs)) {
     errors.push('outputs must be an array');
   }
