@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Kimodo × Elfinblue live flame</title>
+<body style="background:#08080a;color:#e8e4da;font:16px system-ui;padding:2rem">
+<p id="status">Opening the authored Elfinblue flame with Kimodo…</p>
+<script type="module">
+try {
+  // Preserve SF3D's complete authored route; change only the injected module.
+  const response = await fetch('./sf3d-elfinblue.html');
+  if (!response.ok) throw new Error(`Flame reference unavailable: ${response.status}`);
+  const source = new DOMParser().parseFromString(await response.text(), 'text/html');
+  const refresh = source.querySelector('meta[http-equiv="refresh"]')?.content;
+  const target = refresh?.match(/url=(.*)$/i)?.[1];
+  if (!target) throw new Error('Flame reference has no entry route');
+  const url = new URL(target, location.href);
+  if (url.origin !== location.origin || !url.searchParams.has('settings_preset')) throw new Error('Unexpected flame reference route');
+  url.hash = new URLSearchParams({composition_module_url:'./kimodo-live-flame-inject.mjs'}).toString();
+  location.replace(url);
+} catch (error) { document.getElementById('status').textContent = error.message; }
+</script>
