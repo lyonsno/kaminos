@@ -2,6 +2,7 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
+import {createRequire} from 'node:module';
 
 const [kimodoRoot, output, url='http://127.0.0.1:8096/kimodo-elfinblue.html'] = process.argv.slice(2);
 if(!kimodoRoot||!output)throw new Error('Usage: node scripts/witness-kimodo-live-flame.mjs <kimodo-checkout> <output-directory> [url]');
@@ -17,7 +18,8 @@ try{
   // Claim failure stops launch; no inference may run after a refused claim.
   report.leaseClaim=execFileSync(greenroom,['lease','claim','--lease-id',leaseId,'--owner','marionette-gut-splicer','--agent-id','marionette-flame-witness','--repo-root',process.cwd(),'--pid',String(process.pid),'--effective-route',url,'--backend','metal','--device','apple-gpu','--profile','browser-smoke','--supports-checkpoints','--ttl-seconds','900'],{encoding:'utf8'});
   lease=true;report.phase='browser-launch';await persist();
-  const {default:puppeteer}=await import(pathToFileURL(path.join(kimodoRoot,'node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js')));
+  const resolve=createRequire(path.join(path.resolve(kimodoRoot),'package.json'));
+  const {default:puppeteer}=await import(pathToFileURL(resolve.resolve('puppeteer-core')));
   browser=await puppeteer.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:false,args:['--enable-unsafe-webgpu','--use-angle=metal','--no-sandbox','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   const page=await browser.newPage();await page.setViewport({width:1440,height:1000,deviceScaleFactor:1});
   page.on('pageerror',e=>report.errors.push(e.message));
