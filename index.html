@@ -3019,7 +3019,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=directional-receiver-0915';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=far-field-0915';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -9240,8 +9240,26 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 
   const routeStrength = parseFloat(routeParams.get('volume_light_field_strength') ?? '');
   const baseStrength = Number.isFinite(routeStrength) ? Math.max(0, routeStrength) : 1.0;
+  const routeFarStrength = parseFloat(routeParams.get('volume_light_field_far') ?? '');
+  const baseFarStrength = Number.isFinite(routeFarStrength) ? Math.max(0, routeFarStrength) : 1.0;
   const debugView = routeParams.get('volume_light_field_debug') || '';
   const fireLightFieldStrength = uniform(0.0);
+  const farFieldStrength = uniform(baseFarStrength);
+  const blackMetaTexture = sharedGpu.device.createTexture({
+    label: 'kaminos fire light field black meta placeholder',
+    size: { width: 2, height: 1, depthOrArrayLayers: 1 },
+    format: 'rgba16float',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const metaExternalTexture = new THREE.ExternalTexture(blackMetaTexture);
+  metaExternalTexture.image = { width: 2, height: 1, depth: 1 };
+  metaExternalTexture.format = THREE.RGBAFormat;
+  metaExternalTexture.type = THREE.HalfFloatType;
+  metaExternalTexture.colorSpace = THREE.NoColorSpace;
+  metaExternalTexture.minFilter = THREE.NearestFilter;
+  metaExternalTexture.magFilter = THREE.NearestFilter;
+  metaExternalTexture.generateMipmaps = false;
+  const metaTextureNode = texture(metaExternalTexture);
   const isolateMix = uniform(isFireLightFieldIsolateRoute(routeParams) ? 1.0 : 0.0);
   const atlasGrid = uniform(32.0);
   const atlasTilesX = uniform(8.0);
@@ -9321,10 +9339,29 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const gradientConfidence = gradientLength.smoothstep(0.00002, 0.0005);
   const directionalResponse = mix(float(1.0), wrappedNdotL.mul(0.9).add(0.1), gradientConfidence);
   const materialResponse = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
-  const receiverSignal = latticeSample.rgb
+
+  // Analytic far field: the diffusion lattice only carries light ~4 cells
+  // from the flame body, which reads as a flashlight pointing straight up.
+  // The producer reduces the live field to centroid/power/color each frame
+  // (fire-irradiance-far-field-meta-v0); receivers add a true 1/r^2 radial
+  // term from that center, N.L shaded and NOT clipped to the lattice box,
+  // so side walls and out-of-box geometry receive real fire light.
+  const metaCore = metaTextureNode.sample(vec2(0.25, 0.5));
+  const metaColor = metaTextureNode.sample(vec2(0.75, 0.5));
+  const fireCenterWorld = metaCore.xyz.mul(2.0).sub(vec3(1.0));
+  const firePower = metaCore.w;
+  const farVector = fireCenterWorld.sub(worldPositionNode);
+  const farDistanceSq = farVector.dot(farVector);
+  const farDirection = farVector.div(farDistanceSq.sqrt().max(1e-5));
+  const farNdotL = worldNormalNode.dot(farDirection).mul(0.5).add(0.5).pow(2.0);
+  const farRadial = firePower.mul(0.006).div(farDistanceSq.mul(2.5).add(0.25));
+  const farSignal = metaColor.rgb.mul(farRadial).mul(farNdotL).mul(farFieldStrength);
+
+  const nearSignal = latticeSample.rgb
     .mul(exteriorFalloff)
+    .mul(directionalResponse);
+  const receiverSignal = nearSignal.add(farSignal)
     .mul(backgroundMask)
-    .mul(directionalResponse)
     .mul(materialResponse)
     .mul(fireLightFieldStrength);
   const compositeOutput = baseOutputNode.add(vec4(receiverSignal, 0.0));
@@ -9346,6 +9383,8 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     outputNode = vec4(lightDirection.mul(0.5).add(vec3(0.5)).mul(backgroundMask).mul(gradientConfidence), 1.0);
   } else if (debugView === 'ndotl') {
     outputNode = vec4(vec3(wrappedNdotL.mul(backgroundMask)), 1.0);
+  } else if (debugView === 'far') {
+    outputNode = vec4(farSignal.mul(4.0).mul(backgroundMask), 1.0);
   } else if (debugView === 'atlas') {
     outputNode = vec4(atlasTextureNode.sample(viewportUV).rgb.mul(4.0), 1.0);
   } else if (debugView === 'groundtest') {
@@ -9438,7 +9477,14 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
       const adoptionKey = `${lightField.generation}:${lightField.atlasWidth}x${lightField.atlasHeight}`;
       if (passState.adoptionKey !== adoptionKey) {
         atlasTextureNode.value = makeAdoptedAtlasTexture(lightField.atlasTexture, lightField.atlasWidth, lightField.atlasHeight);
+        if (lightField.metaTexture) {
+          const adoptedMeta = makeAdoptedAtlasTexture(lightField.metaTexture, lightField.metaWidth, lightField.metaHeight);
+          adoptedMeta.minFilter = THREE.NearestFilter;
+          adoptedMeta.magFilter = THREE.NearestFilter;
+          metaTextureNode.value = adoptedMeta;
+        }
         passState.adoptionKey = adoptionKey;
+        passState.farFieldIdentity = lightField.farFieldIdentity ?? null;
         atlasGrid.value = lightField.grid;
         atlasTilesX.value = lightField.tilesX;
         atlasTexelSize.value.set(1 / lightField.atlasWidth, 1 / lightField.atlasHeight);

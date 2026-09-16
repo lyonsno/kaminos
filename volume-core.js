@@ -2298,6 +2298,7 @@ struct NonRidgeOpticalCaptureRow {
 @group(1) @binding(1) var<storage, read_write> irradianceDst: array<vec4<f32>>;
 @group(1) @binding(2) var<storage, read> irradianceSrc: array<vec4<f32>>;
 @group(1) @binding(3) var irradianceAtlasOut: texture_storage_2d<rgba16float, write>;
+@group(1) @binding(4) var irradianceMetaOut: texture_storage_2d<rgba16float, write>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -3637,6 +3638,62 @@ fn csIrradianceResolve(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let cell = vec3<u32>(gid.x % IRRADIANCE_GRID, gid.y % IRRADIANCE_GRID, slice);
   textureStore(irradianceAtlasOut, vec2<i32>(gid.xy), irradianceSrc[irradianceIndex(cell)]);
+}
+
+// Analytic far-field reduce: collapse the live lattice to its luminance
+// centroid, total power, and mean color so receivers can add a true 1/r^2
+// radial term beyond the diffusion shell. The 4-round axis diffusion carries
+// light only ~4 cells laterally, which reads as a flashlight pointed straight
+// up; this reduce is the far-field's source of truth and flickers with the
+// same advancing field. Identity: fire-irradiance-far-field-meta-v0.
+var<workgroup> irradianceReduceLum: array<f32, 64>;
+var<workgroup> irradianceReducePos: array<vec3<f32>, 64>;
+var<workgroup> irradianceReduceColor: array<vec3<f32>, 64>;
+
+@compute @workgroup_size(64)
+fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
+  let cellCount = IRRADIANCE_GRID * IRRADIANCE_GRID * IRRADIANCE_GRID;
+  var lumSum = 0.0;
+  var posSum = vec3<f32>(0.0);
+  var colorSum = vec3<f32>(0.0);
+  for (var i = tid; i < cellCount; i = i + 64u) {
+    let sample = irradianceSrc[i];
+    let lum = dot(max(sample.rgb, vec3<f32>(0.0)), vec3<f32>(0.2126, 0.7152, 0.0722));
+    let cell = vec3<f32>(
+      f32(i % IRRADIANCE_GRID),
+      f32((i / IRRADIANCE_GRID) % IRRADIANCE_GRID),
+      f32(i / (IRRADIANCE_GRID * IRRADIANCE_GRID))
+    );
+    lumSum = lumSum + lum;
+    posSum = posSum + cell * lum;
+    colorSum = colorSum + max(sample.rgb, vec3<f32>(0.0));
+  }
+  irradianceReduceLum[tid] = lumSum;
+  irradianceReducePos[tid] = posSum;
+  irradianceReduceColor[tid] = colorSum;
+  workgroupBarrier();
+  var stride = 32u;
+  while (stride > 0u) {
+    if (tid < stride) {
+      irradianceReduceLum[tid] = irradianceReduceLum[tid] + irradianceReduceLum[tid + stride];
+      irradianceReducePos[tid] = irradianceReducePos[tid] + irradianceReducePos[tid + stride];
+      irradianceReduceColor[tid] = irradianceReduceColor[tid] + irradianceReduceColor[tid + stride];
+    }
+    workgroupBarrier();
+    stride = stride / 2u;
+  }
+  if (tid == 0u) {
+    let totalLum = irradianceReduceLum[0];
+    let centroidUvw = select(
+      vec3<f32>(0.5),
+      (irradianceReducePos[0] / max(totalLum, 1e-6) + vec3<f32>(0.5)) / f32(IRRADIANCE_GRID),
+      totalLum > 1e-5
+    );
+    let colorTotal = irradianceReduceColor[0];
+    let colorLum = max(dot(colorTotal, vec3<f32>(0.2126, 0.7152, 0.0722)), 1e-6);
+    textureStore(irradianceMetaOut, vec2<i32>(0, 0), vec4<f32>(centroidUvw, totalLum));
+    textureStore(irradianceMetaOut, vec2<i32>(1, 0), vec4<f32>(colorTotal / colorLum, 1.0));
+  }
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -8517,6 +8574,8 @@ export function createKaminosVolumePrototype({
   let boundarySidecarReadBindGroups = [];
   let irradianceLatticeBuffers = null;
   let irradianceAtlasTexture = null;
+  let irradianceMetaTexture = null;
+  let irradianceAnalyticPipeline = null;
   let irradianceBindGroups = null;
   let irradianceLatticeBindGroupLayout = null;
   let irradiancePipelineLayout = null;
@@ -12751,8 +12810,11 @@ export function createKaminosVolumePrototype({
   function destroyFireIrradianceResources() {
     if (irradianceLatticeBuffers) for (const buffer of irradianceLatticeBuffers) buffer?.destroy?.();
     irradianceAtlasTexture?.destroy?.();
+    irradianceMetaTexture?.destroy?.();
     irradianceLatticeBuffers = null;
     irradianceAtlasTexture = null;
+    irradianceMetaTexture = null;
+    irradianceAnalyticPipeline = null;
     irradianceBindGroups = null;
     irradianceSeedPipeline = null;
     irradiancePropagatePipeline = null;
@@ -12782,12 +12844,19 @@ export function createKaminosVolumePrototype({
       format: 'rgba16float',
       usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
     });
+    irradianceMetaTexture = device.createTexture({
+      label: 'kaminos fire-irradiance-far-field-meta-v0',
+      size: { width: 2, height: 1, depthOrArrayLayers: 1 },
+      format: 'rgba16float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
     irradianceLatticeBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fire irradiance lattice bind group layout',
       entries: [
         { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 3, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '2d' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '2d' } },
       ],
     });
     irradiancePipelineLayout = device.createPipelineLayout({
@@ -12795,6 +12864,7 @@ export function createKaminosVolumePrototype({
       bindGroupLayouts: [boundarySidecarReadBindGroupLayout, irradianceLatticeBindGroupLayout],
     });
     const atlasView = irradianceAtlasTexture.createView();
+    const metaView = irradianceMetaTexture.createView();
     irradianceBindGroups = [0, 1].map(index => device.createBindGroup({
       label: `kaminos fire irradiance lattice bind group dst${index}`,
       layout: irradianceLatticeBindGroupLayout,
@@ -12802,6 +12872,7 @@ export function createKaminosVolumePrototype({
         { binding: 1, resource: { buffer: irradianceLatticeBuffers[index] } },
         { binding: 2, resource: { buffer: irradianceLatticeBuffers[1 - index] } },
         { binding: 3, resource: atlasView },
+        { binding: 4, resource: metaView },
       ],
     }));
     const irradiancePipelineConstants = { GRID: gridSize, IRRADIANCE_GRID: irradianceGridSize };
@@ -12819,6 +12890,11 @@ export function createKaminosVolumePrototype({
       label: `kaminos fire irradiance resolve ${irradianceGridSize}^3 atlas`,
       layout: irradiancePipelineLayout,
       compute: { module: shader, entryPoint: 'csIrradianceResolve', constants: irradiancePipelineConstants },
+    });
+    irradianceAnalyticPipeline = device.createComputePipeline({
+      label: `kaminos fire irradiance far-field reduce ${irradianceGridSize}^3`,
+      layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csIrradianceAnalytic', constants: irradiancePipelineConstants },
     });
     irradianceResourcesKey = key;
     irradianceAtlasGeneration += 1;
@@ -12881,6 +12957,12 @@ export function createKaminosVolumePrototype({
       1
     );
     resolvePass.end();
+    const analyticPass = encoder.beginComputePass({ label: 'kaminos fire irradiance far-field reduce pass' });
+    analyticPass.setPipeline(irradianceAnalyticPipeline);
+    analyticPass.setBindGroup(0, readBindGroup);
+    analyticPass.setBindGroup(1, resolveReadGroup);
+    analyticPass.dispatchWorkgroups(1, 1, 1);
+    analyticPass.end();
     state.fireLightFieldEffective = true;
     state.fireLightFieldReason = null;
     state.fireLightFieldPropagationRounds = FIRE_IRRADIANCE_PROPAGATION_ROUNDS;
@@ -12919,7 +13001,7 @@ export function createKaminosVolumePrototype({
       canvasAuthority: false,
     };
     if (!requested) {
-      return { ...base, status: 'inactive', reason: 'fire-light-field-route-not-requested', atlasTexture: null };
+      return { ...base, status: 'inactive', reason: 'fire-light-field-route-not-requested', atlasTexture: null, metaTexture: null };
     }
     if (!gpuInitialized || !irradianceAtlasTexture || !state.fireLightFieldEffective) {
       return {
@@ -12927,9 +13009,19 @@ export function createKaminosVolumePrototype({
         status: 'unavailable',
         reason: state.fireLightFieldReason || 'fire-light-field-not-built-yet',
         atlasTexture: null,
+        metaTexture: null,
       };
     }
-    return { ...base, status: 'effective', reason: null, atlasTexture: irradianceAtlasTexture };
+    return {
+      ...base,
+      status: 'effective',
+      reason: null,
+      atlasTexture: irradianceAtlasTexture,
+      metaTexture: irradianceMetaTexture,
+      metaWidth: 2,
+      metaHeight: 1,
+      farFieldIdentity: 'fire-irradiance-far-field-meta-v0',
+    };
   }
 
   async function sampleFireLightFieldGpuProfile() {

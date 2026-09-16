@@ -2336,3 +2336,14 @@ assert.match(index, /latticeGradient = vec3\(/, 'receiver recovers incident dire
 assert.match(index, /worldNormalNode = sceneCameraWorldMatrix\.mul\(vec4\(normalSampleNode, 0\.0\)\)/, 'receiver rotates the prepass view-space normal into world space for shading');
 assert.match(index, /worldNormalNode\.dot\(lightDirection\)/, 'receiver shades with N.L against the recovered fire direction');
 assert.doesNotMatch(index, /facingResponse = normalSampleNode\.z\.abs\(\)/, 'the camera-facing shading stand-in must not return');
+
+// Far-field radiance: the diffusion lattice carries light only ~4 cells from
+// the flame, so side geometry beyond the shell went dark (the flashlight-up
+// report). The producer reduces the live field to centroid/power/color and
+// the receiver adds a true 1/r^2 radial term from it, unclipped by the box.
+assert.match(core, /fn csIrradianceAnalytic/, 'producer reduces the lattice to far-field meta each frame');
+assert.match(core, /fire-irradiance-far-field-meta-v0/, 'far-field meta carries a stable identity');
+assert.match(core, /metaTexture: irradianceMetaTexture/, 'light field export hands consumers the far-field meta texture');
+assert.match(index, /farVector = fireCenterWorld\.sub\(worldPositionNode\)/, 'receiver builds the radial vector from the reduced fire center');
+assert.match(index, /farDistanceSq\.mul\(2\.5\)\.add\(0\.25\)/, 'far term falls off with squared distance, softened at the flame core');
+assert.match(index, /nearSignal\.add\(farSignal\)/, 'near-field and far-field compose additively before masking');
