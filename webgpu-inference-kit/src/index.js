@@ -319,6 +319,7 @@ export {
   requireArtifactLaw,
   requiredArtifactLawRef,
   resolveArtifactLaw,
+  resolveEffectiveLaw,
 } from './artifact-law-registry.js';
 
 export {

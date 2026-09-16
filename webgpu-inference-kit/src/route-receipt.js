@@ -1,4 +1,4 @@
-import { artifactLawRef, resolveArtifactLaw } from './artifact-law-registry.js';
+import { artifactLawRef, resolveArtifactLaw, resolveEffectiveLaw } from './artifact-law-registry.js';
 export const WEBGPU_ROUTE_RECEIPT_SCHEMA = 'kaminos.webgpu-route-receipt.v0';
 
 function clone(value) {
@@ -131,12 +131,12 @@ export function assertAuthoritativeRouteReceipt(receipt, route = null) {
     if (receipt?.requestedRouteId !== route.routeId || receipt?.effectiveRouteId !== route.routeId) {
       throw new Error(`route-mismatch: receipt route ${receipt?.requestedRouteId ?? 'absent'} does not match ${route.routeId}`);
     }
-    if (route.outputArtifactLaw != null) {
-      const validator = resolveArtifactLaw(route.outputArtifactLaw);
-      if (!validator) {
-        throw new Error(`artifact law ${artifactLawRef(route.outputArtifactLaw) ?? 'malformed'} is not registered — cannot verify, cannot authorize`);
-      }
-      const law = validator(receipt?.outputs ?? []);
+    // Requirement-first through the registry: a lawless or wrong-law route
+    // object with a law-requiring route id cannot confer authority.
+    const effective = resolveEffectiveLaw(route);
+    if (effective.errors.length) throw new Error(effective.errors[0]);
+    if (effective.validator) {
+      const law = effective.validator(receipt?.outputs ?? []);
       if (!law.ok) throw new Error(law.errors[0]);
     }
   }

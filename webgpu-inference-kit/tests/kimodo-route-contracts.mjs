@@ -338,4 +338,63 @@ assert.throws(
   assert.doesNotThrow(() => assertAuthoritativeRouteReceipt(badReceipt));
 }
 
+// --- At-cap closure: required-law-by-route-id + sealed registry -----------
+// The at-cap review demonstrated two bypasses: (1) a hand-built lawless
+// route object with the Kimodo route id passed the route-bound authority
+// APIs (they applied only whatever descriptor the caller carried), and
+// (2) a duplicate registerArtifactLaw call replaced the canonical
+// validator. Required-law resolution is now centralized and canonical
+// bindings are sealed.
+
+{
+  const { registerArtifactLaw, requireArtifactLaw, KIMODO_OUTPUT_ARTIFACT_LAW } = await import('../src/index.js');
+  const badReceipt = JSON.parse(JSON.stringify(receipt));
+  badReceipt.outputs[0].shape = [90, 77, 3];
+  badReceipt.outputs[1].shape = [1];
+
+  // (1a) Lawless route object with the Kimodo id: route-bound assertion
+  // must resolve the REQUIRED law by route id and reject.
+  const lawlessRoute = { routeId: KIMODO_TEXT_TO_MOTION_ROUTE_ID };
+  assert.throws(() => assertAuthoritativeRouteReceipt(badReceipt, lawlessRoute),
+    /somaJoints shape|artifact law/i,
+    'a lawless route object must not bypass the required Kimodo law');
+
+  // (1b) Same through the classifier.
+  const lawlessEvidence = classifyWebGpuRouteReceiptEvidence(badReceipt, { route: lawlessRoute });
+  assert.equal(lawlessEvidence.authoritative, false,
+    'classifier must resolve the required law by route id');
+
+  // (1c) A route object carrying the WRONG descriptor under the Kimodo id
+  // must be rejected for the mismatch, not have its carried law honored.
+  registerArtifactLaw('permissive-law-for-test', 1, () => ({ ok: true, errors: [] }));
+  const wrongLawRoute = {
+    routeId: KIMODO_TEXT_TO_MOTION_ROUTE_ID,
+    outputArtifactLaw: { id: 'permissive-law-for-test', version: 1 },
+  };
+  assert.throws(() => assertAuthoritativeRouteReceipt(badReceipt, wrongLawRoute),
+    /required|somaJoints shape|artifact law/i,
+    'a carried descriptor cannot substitute for the required law');
+  const wrongLawEvidence = classifyWebGpuRouteReceiptEvidence(badReceipt, { route: wrongLawRoute });
+  assert.equal(wrongLawEvidence.authoritative, false);
+
+  // (2) Sealed canonical bindings: duplicate registration must throw...
+  assert.throws(() => registerArtifactLaw(
+    KIMODO_OUTPUT_ARTIFACT_LAW.id, KIMODO_OUTPUT_ARTIFACT_LAW.version,
+    () => ({ ok: true, errors: [] })),
+    /already registered|sealed/i,
+    'canonical law bindings must not be silently replaceable');
+  // ...and re-pointing a route requirement to a different law must throw,
+  // while idempotent same-ref re-registration of the requirement is lawful.
+  assert.throws(() => requireArtifactLaw(
+    KIMODO_TEXT_TO_MOTION_ROUTE_ID, 'permissive-law-for-test', 1),
+    /already requires|sealed/i);
+  assert.doesNotThrow(() => requireArtifactLaw(
+    KIMODO_TEXT_TO_MOTION_ROUTE_ID,
+    KIMODO_OUTPUT_ARTIFACT_LAW.id, KIMODO_OUTPUT_ARTIFACT_LAW.version));
+
+  // The canonical route + good receipt still hold authority end to end.
+  assert.doesNotThrow(() => assertAuthoritativeRouteReceipt(receipt, route));
+  assert.equal(classifyWebGpuRouteReceiptEvidence(receipt, { route }).authoritative, true);
+}
+
 console.log('kimodo route contracts passed');

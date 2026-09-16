@@ -16,6 +16,7 @@ import {
   artifactLawRef,
   requiredArtifactLawRef,
   resolveArtifactLaw,
+  resolveEffectiveLaw,
 } from './artifact-law-registry.js';
 
 function clone(value) {
@@ -360,13 +361,15 @@ export function createRouteInvocationRequest(route, input) {
 
 
 function applyOutputArtifactLaw(errors, route, artifacts, path) {
-  if (route?.outputArtifactLaw == null) return;
-  const validator = resolveArtifactLaw(route.outputArtifactLaw);
-  if (!validator) {
-    errors.push(`${path}: artifact law ${artifactLawRef(route.outputArtifactLaw) ?? 'malformed'} is not registered — cannot verify`);
+  // Requirement-first through the registry: a route object that lost or
+  // swapped its descriptor cannot bypass the law its route id requires.
+  const effective = resolveEffectiveLaw(route);
+  if (effective.errors.length) {
+    errors.push(...effective.errors.map((e) => `${path}: ${e}`));
     return;
   }
-  const law = validator(artifacts);
+  if (!effective.validator) return; // no requirement, no carried law
+  const law = effective.validator(artifacts);
   if (!law.ok) errors.push(...law.errors.map((e) => `${path}: ${e}`));
 }
 

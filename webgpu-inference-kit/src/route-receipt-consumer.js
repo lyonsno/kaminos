@@ -1,4 +1,4 @@
-import { artifactLawRef, requiredArtifactLawRef, resolveArtifactLaw } from './artifact-law-registry.js';
+import { artifactLawRef, requiredArtifactLawRef, resolveArtifactLaw, resolveEffectiveLaw } from './artifact-law-registry.js';
 
 function requiresLaw(routeId) {
   return requiredArtifactLawRef(routeId) != null;
@@ -210,12 +210,15 @@ export function classifyWebGpuRouteReceiptEvidence(receipt, options = {}) {
       demote(`route-mismatch: expectedRouteId ${options.expectedRouteId} conflicts with supplied route ${routeId}`);
     } else if (receipt?.requestedRouteId !== routeId || receipt?.effectiveRouteId !== routeId) {
       demote(`route-mismatch: receipt route ${receipt?.requestedRouteId ?? 'absent'}/${receipt?.effectiveRouteId ?? 'absent'} does not match supplied route ${routeId}`);
-    } else if (route.outputArtifactLaw != null || requiresLaw(routeId)) {
-      const validator = resolveArtifactLaw(route.outputArtifactLaw);
-      if (!validator) {
-        demote(`artifact law ${artifactLawRef(route.outputArtifactLaw) ?? 'missing'} for route ${routeId} cannot be resolved — cannot verify, cannot authorize`);
-      } else if (Array.isArray(receipt?.outputs)) {
-        const law = validator(receipt.outputs);
+    } else {
+      // Requirement-first: the registry decides which law governs this
+      // route id; a carried descriptor is checked against it, never
+      // substituted for it.
+      const effective = resolveEffectiveLaw(route);
+      if (effective.errors.length) {
+        effective.errors.forEach((e) => demote(e));
+      } else if (effective.validator && Array.isArray(receipt?.outputs)) {
+        const law = effective.validator(receipt.outputs);
         if (!law.ok) {
           law.errors.forEach((e) => demote(`outputs: ${e}`));
         }
