@@ -3428,6 +3428,25 @@ fn boundarySupportAtCell(c: vec3<i32>, supportWeights: vec4<f32>) -> f32 {
   return boundarySupportFromSlots(readSlot(c, 0u), readSlot(c, 1u), readSlot(c, 2u), readSlot(c, 3u), readFrontField(c), supportWeights);
 }
 
+fn boundaryRidgeFromStencil(center: f32, px: f32, nx: f32, py: f32, ny: f32, pz: f32, nz: f32, gain: f32, cut: f32) -> f32 {
+  if (u.boundary_sidecar_display.y < 0.5) {
+    let laplacian = abs(px + nx + py + ny + pz + nz - 6.0 * center);
+    return smoothstep(cut, cut + 0.14, laplacian * gain);
+  }
+  // Distance to the chosen support level in cells, without filtering the field.
+  let gx = (px - nx) * 0.5;
+  let gy = (py - ny) * 0.5;
+  let gz = (pz - nz) * 0.5;
+  let slope = sqrt(gx * gx + gy * gy + gz * gz);
+  if (slope <= 0.00000001) { return 0.0; }
+  let variation = abs(px - center) + abs(nx - center) + abs(py - center) + abs(ny - center) + abs(pz - center) + abs(nz - center);
+  let directionalChange = abs(px - nx) + abs(py - ny) + abs(pz - nz);
+  let monotonicity = clamp(directionalChange / max(variation, 0.00000001), 0.0, 1.0);
+  let distanceCells = abs(center - u.boundary_sidecar_display.z) / slope;
+  let profile = 1.0 - smoothstep(0.0, max(u.boundary_sidecar_display.w, 0.0001), distanceCells);
+  return clamp(profile * monotonicity * gain, 0.0, 1.0);
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) {
@@ -3452,10 +3471,9 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
   let neighborMax = max(max(max(px, nx), max(py, ny)), max(pz, nz));
   let boundarySidecarSupport = mix(center, neighborMean, blur * 0.45);
   let boundarySidecarGradient = clamp(length(vec3<f32>(px - nx, py - ny, pz - nz)) * 0.5, 0.0, 1.5);
-  let laplacian = abs(px + nx + py + ny + pz + nz - 6.0 * center);
   let ridgeGain = clamp(u.boundary_fire_structure.x, 0.0, 2.0) * clamp(u.boundary_sidecar_controls.w, 0.0, 2.0);
   let ridgeCut = clamp(u.boundary_fire_structure.y, 0.0, 0.55);
-  let boundarySidecarRidge = smoothstep(ridgeCut, ridgeCut + 0.14, laplacian * ridgeGain);
+  let boundarySidecarRidge = boundaryRidgeFromStencil(center, px, nx, py, ny, pz, nz, ridgeGain, ridgeCut);
   let boundarySidecarCoverage = clamp(
     max(boundarySidecarSupport, neighborMax * (0.34 + blur * 0.28))
       + smoothstep(0.014, 0.30, boundarySidecarGradient) * 0.28
@@ -5199,8 +5217,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
           boundarySupportPy - boundarySupportNy,
           boundarySupportPz - boundarySupportNz
         )) * (0.5 / boundaryCellStep);
-        let boundaryLaplacian = abs(boundarySupportPx + boundarySupportNx + boundarySupportPy + boundarySupportNy + boundarySupportPz + boundarySupportNz - 6.0 * boundarySupport);
-        let boundaryFireRidge = smoothstep(boundaryFireRidgeCut, boundaryFireRidgeCut + 0.14, boundaryLaplacian * boundaryFireRidgeGain);
+        let boundaryFireRidge = boundaryRidgeFromStencil(boundarySupport, boundarySupportPx, boundarySupportNx, boundarySupportPy, boundarySupportNy, boundarySupportPz, boundarySupportNz, boundaryFireRidgeGain, boundaryFireRidgeCut);
         boundarySupportEffective = boundarySupport;
         boundaryGradientEffective = boundaryGradient;
         boundaryFireRidgeEffective = boundaryFireRidge;
@@ -8724,6 +8741,12 @@ export function createKaminosVolumePrototype({
       blur: clampFinite(controls.blur ?? controlsSnapshot.boundarySidecarBlur, 0, 1, 0.45),
       stepWidth: clampFinite(controls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75),
       ridgeGain: clampFinite(controls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1),
+      ridgeExtractor: {
+        requested: Number(controlsSnapshot.ridgeExtractorMode) === 1 ? 'support-transition-v1' : 'absolute-curvature-v0',
+        effective: boundarySidecarSourceName === 'override' ? 'external-sidecar' : Number(controlsSnapshot.ridgeExtractorMode) === 1 ? 'support-transition-v1' : 'absolute-curvature-v0',
+        supportLevel: clampFinite(controlsSnapshot.ridgeSupportLevel, 0, 1.35, 0.2),
+        radiusCells: clampFinite(controlsSnapshot.ridgeRadiusCells, 0.25, 8, 1.5),
+      },
       grid: gridSize,
       bytes: boundarySidecarBufferBytes(gridSize),
       built: state.boundarySidecarBuilt,
@@ -11807,9 +11830,9 @@ export function createKaminosVolumePrototype({
     uniforms[312] = boundarySidecarViewValue(boundarySidecarViewName);
     const selectiveCompositionRequest = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
     const selectiveCompositionDefinition = selectiveCompositionRequest.definition;
-    uniforms[313] = 0;
-    uniforms[314] = 0;
-    uniforms[315] = 0;
+    uniforms[313] = Number(controlsSnapshot.ridgeExtractorMode) === 1 ? 1 : 0;
+    uniforms[314] = clampFinite(controlsSnapshot.ridgeSupportLevel, 0, 1.35, 0.2);
+    uniforms[315] = clampFinite(controlsSnapshot.ridgeRadiusCells, 0.25, 8, 1.5);
     uniforms[316] = effectiveSelectiveHeadRaymarchFireSuppression();
     uniforms[317] = selectiveCompositionDefinition.raymarch ? 1 : 0;
     uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;

@@ -1,7 +1,10 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 206,
+  "controlCount": 209,
   "controls": [
+    { "key": "volume-ridge-extractor-mode", "param": "volume_ridge_extractor_mode", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
+    { "key": "volume-ridge-support-level", "param": "volume_ridge_support_level", "tagName": "INPUT", "type": "range", "additiveDefault": "0.2" },
+    { "key": "volume-ridge-radius-cells", "param": "volume_ridge_radius_cells", "tagName": "INPUT", "type": "range", "additiveDefault": "1.5" },
     { "key": "volume-physical-material-law", "param": "volume_physical_material_law", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
     { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
     { "key": "volume-physical-smoke-extinction", "param": "volume_physical_smoke_extinction", "tagName": "INPUT", "type": "range", "additiveDefault": "2" },

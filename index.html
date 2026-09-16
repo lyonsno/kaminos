@@ -1355,7 +1355,24 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-sidecar-ridge-val">1.00</span>
       </div>
       <div class="slider-row">
-        <span class="slider-label">Ridge select</span>
+        <span class="slider-label">Ridge formation</span>
+        <select id="volume-ridge-extractor-mode">
+          <option value="0">Curvature</option>
+          <option value="1">Support transition</option>
+        </select>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Band level</span>
+        <input type="range" id="volume-ridge-support-level" min="0" max="1.35" step="0.005" value="0.2">
+        <span class="slider-val" id="volume-ridge-support-level-val">0.200</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Band radius (cells)</span>
+        <input type="range" id="volume-ridge-radius-cells" min="0.25" max="8" step="0.05" value="1.5">
+        <span class="slider-val" id="volume-ridge-radius-cells-val">1.50</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" id="volume-reaction-boundary-fire-ridge-label">Ridge select</span>
         <input type="range" id="volume-reaction-boundary-fire-ridge" min="0" max="2" step="0.02" value="1.76">
         <span class="slider-val" id="volume-reaction-boundary-fire-ridge-val">1.76</span>
       </div>
@@ -12077,6 +12094,9 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
+  { key: 'ridgeExtractorMode', id: 'volume-ridge-extractor-mode', param: 'volume_ridge_extractor_mode', min: 0, max: 1, decimals: 0 },
+  { key: 'ridgeSupportLevel', id: 'volume-ridge-support-level', param: 'volume_ridge_support_level', min: 0, max: 1.35, decimals: 3 },
+  { key: 'ridgeRadiusCells', id: 'volume-ridge-radius-cells', param: 'volume_ridge_radius_cells', min: 0.25, max: 8, decimals: 2 },
   { key: 'physicalMaterialLaw', id: 'volume-physical-material-law', param: 'volume_physical_material_law', min: 0, max: 1, continuous: false, decimals: 0 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
@@ -13277,6 +13297,11 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
     if (!label || !Number.isFinite(value)) continue;
     label.textContent = value.toFixed(field.decimals);
   }
+  const transitionRidge = controlsSnapshot.ridgeExtractorMode === 1;
+  document.getElementById('volume-ridge-support-level').disabled = !transitionRidge;
+  document.getElementById('volume-ridge-radius-cells').disabled = !transitionRidge;
+  document.getElementById('volume-reaction-boundary-fire-ridge-cut').disabled = transitionRidge;
+  document.getElementById('volume-reaction-boundary-fire-ridge-label').textContent = transitionRidge ? 'Ridge strength' : 'Ridge select';
 }
 
 function applyCanonicalVolumeMacroPreset(name) {
@@ -17386,6 +17411,9 @@ function readVolumeControls() {
     boundarySidecarBlur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
     boundarySidecarWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
     boundarySidecarRidge: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
+    ridgeExtractorMode: Number(document.getElementById('volume-ridge-extractor-mode').value),
+    ridgeSupportLevel: Number(document.getElementById('volume-ridge-support-level').value),
+    ridgeRadiusCells: Number(document.getElementById('volume-ridge-radius-cells').value),
     fireRenderMode: reactionLiveView !== 'off' ? 'inspect' : document.getElementById('volume-fire-render-mode').value,
     shellInspectMode: reactionLiveView !== 'off' ? reactionLiveView : document.getElementById('volume-shell-inspect-mode').value,
     shellAmount: parseFloat(document.getElementById('volume-shell-amount').value),
