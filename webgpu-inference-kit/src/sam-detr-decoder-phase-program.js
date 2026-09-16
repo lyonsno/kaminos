@@ -543,7 +543,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let box_base = (batch * dims.query_tokens + query) * 4u;
   let center = select(reference_boxes[box_base], reference_boxes[box_base + 1u], dims.coord_axis == 1u);
   let size = select(reference_boxes[box_base + 2u], reference_boxes[box_base + 3u], dims.coord_axis == 1u);
-  let coord = (f32(axis_index) + 0.5) / f32(dims.axis_tokens);
+  let coord = f32(axis_index) / f32(dims.axis_tokens);
   let delta0 = log_delta(coord - (center - size / 2.0));
   let delta1 = log_delta(coord - (center + size / 2.0));
   axis_hidden[index] = max(layer1_bias[channel] + delta0 * layer1_weight[channel * 2u] + delta1 * layer1_weight[channel * 2u + 1u], 0.0);
@@ -925,7 +925,7 @@ function computeRpb(referenceBoxes, shared, shape) {
       const xBounds = [cx - w / 2, cx + w / 2];
       const yBounds = [cy - h / 2, cy + h / 2];
       for (let y = 0; y < shape.height; y += 1) {
-        const yCoord = (y + 0.5) / shape.height;
+        const yCoord = y / shape.height;
         const yDelta = yBounds.map(bound => {
           const scaled = (yCoord - bound) * 8;
           return Math.sign(scaled) * Math.log2(Math.abs(scaled) + 1) / logBase;
@@ -933,7 +933,7 @@ function computeRpb(referenceBoxes, shared, shape) {
         const yHidden = linearAll(new Float32Array(yDelta), 1, 2, shape.channels, shared.boxRpbYLayer1Weight, shared.boxRpbYLayer1Bias, true);
         const yBias = linearAll(yHidden, 1, shape.channels, shape.heads, shared.boxRpbYLayer2Weight, shared.boxRpbYLayer2Bias);
         for (let x = 0; x < shape.width; x += 1) {
-          const xCoord = (x + 0.5) / shape.width;
+          const xCoord = x / shape.width;
           const xDelta = xBounds.map(bound => {
             const scaled = (xCoord - bound) * 8;
             return Math.sign(scaled) * Math.log2(Math.abs(scaled) + 1) / logBase;
@@ -997,7 +997,7 @@ export function createSam3DetrDecoderPhaseProgramCpuOracle(input) {
   for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
     const layer = layers[layerIndex];
     const sine = encodeBoxes(referenceBoxes, shape);
-    const queryPos = linearAll(linearAll(sine, queryTokenCount, shape.channels * 2, shape.channels, shared.refPointHeadLayer1Weight, shared.refPointHeadLayer1Bias, true), queryTokenCount, shape.channels, shape.channels, shared.refPointHeadLayer2Weight, shared.refPointHeadLayer2Bias, true);
+    const queryPos = linearAll(linearAll(sine, queryTokenCount, shape.channels * 2, shape.channels, shared.refPointHeadLayer1Weight, shared.refPointHeadLayer1Bias, true), queryTokenCount, shape.channels, shape.channels, shared.refPointHeadLayer2Weight, shared.refPointHeadLayer2Bias);
     queryPosPresence.fill(0);
     for (let b = 0; b < shape.batch; b += 1) queryPosPresence.set(queryPos.slice(b * shape.queryTokens * shape.channels, (b + 1) * shape.queryTokens * shape.channels), (b * (shape.queryTokens + 1) + 1) * shape.channels);
     const hiddenPlusPos = addArrays(hiddenStates, queryPosPresence);
@@ -1399,7 +1399,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       const k = suffix => `layer${layerIndex}${suffix}`;
       addKernel(k('Sine'), SINE_BOX_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:sine', 'storage'), bindUniform('decoderDims')]);
       addKernel(k('Ref1'), LINEAR_RELU_WGSL, [bindTensor('tensor:sine'), bindTensor('tensor:refPointHeadLayer1Weight'), bindTensor('tensor:refPointHeadLayer1Bias'), bindTensor('tensor:refPointHidden', 'storage'), bindUniform('sineLinearDims')]);
-      addKernel(k('Ref2'), LINEAR_RELU_WGSL, [bindTensor('tensor:refPointHidden'), bindTensor('tensor:refPointHeadLayer2Weight'), bindTensor('tensor:refPointHeadLayer2Bias'), bindTensor('tensor:queryPos', 'storage'), bindUniform('queryLinearDims')]);
+      addKernel(k('Ref2'), LINEAR_WGSL, [bindTensor('tensor:refPointHidden'), bindTensor('tensor:refPointHeadLayer2Weight'), bindTensor('tensor:refPointHeadLayer2Bias'), bindTensor('tensor:queryPos', 'storage'), bindUniform('queryLinearDims')]);
       addKernel(k('PadPos'), PAD_QUERY_POS_WGSL, [bindTensor('tensor:queryPos'), bindTensor('tensor:queryPosPadded', 'storage'), bindUniform('decoderDims')]);
       addKernel(k('RpbXHidden'), RPB_AXIS_HIDDEN_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxRpbXLayer1Weight'), bindTensor('tensor:boxRpbXLayer1Bias'), bindTensor('tensor:rpbXHidden', 'storage'), bindUniform('rpbXDims')]);
       addKernel(k('RpbYHidden'), RPB_AXIS_HIDDEN_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxRpbYLayer1Weight'), bindTensor('tensor:boxRpbYLayer1Bias'), bindTensor('tensor:rpbYHidden', 'storage'), bindUniform('rpbYDims')]);

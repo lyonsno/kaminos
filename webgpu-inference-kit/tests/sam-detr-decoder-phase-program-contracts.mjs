@@ -142,4 +142,19 @@ assert.ok(Math.abs(oracle.lastHs[1] - 1) < 0.00001, `lastHs[1] ${oracle.lastHs[1
 assert.deepEqual(Array.from(oracle.referenceBoxes), [0.5, 0.5, 0.5, 0.5]);
 assert.deepEqual(Array.from(oracle.presenceLogits), [0]);
 
+const reference = JSON.parse(readFileSync(new URL('./fixtures/sam-detr-decoder-mlx-cpu.json', import.meta.url)));
+const referenceInput = Object.fromEntries(Object.entries(reference.input).map(([key, value]) => [key,
+  key === 'shape' ? value : key === 'layers'
+    ? value.map(layer => Object.fromEntries(Object.entries(layer).map(([name, data]) => [name, new Float32Array(data)])))
+    : new Float32Array(value),
+]));
+const replay = createSam3DetrDecoderPhaseProgramCpuOracle(referenceInput);
+for (const [name, expected] of Object.entries(reference.expected)) {
+  assert.equal(replay[name].length, expected.length);
+  const maxError = Math.max(...expected.map((value, index) => Math.abs(value - replay[name][index])));
+  assert.ok(maxError < 0.00001, `${name}: MLX CPU reference error ${maxError}`);
+}
+assert.match(routeSource, /let coord = f32\(axis_index\) \/ f32\(dims.axis_tokens\)/, 'GPU BoxRPB uses cell corners');
+assert.match(routeSource, /addKernel\(k\('Ref2'\), LINEAR_WGSL/, 'reference-point output projection preserves negative coordinates');
+
 console.log('sam DETR decoder phase-program contracts passed');

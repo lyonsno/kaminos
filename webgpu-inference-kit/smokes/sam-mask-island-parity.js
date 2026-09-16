@@ -510,6 +510,8 @@ function imageVitBlockStackShape(manifest) {
     layerNormEps: manifest.shape.visionLayerNormEps,
     ropeTheta: manifest.shape.visionRopeTheta,
     startLayerIndex: manifest.shape.vitBlockStackStartLayerIndex ?? 0,
+    interpolateRope: true,
+    ropePretrainGridSize: manifest.shape.visionWindowSize,
     endLayerIndex: manifest.shape.vitBlockStackEndLayerIndex ?? manifest.shape.firstGlobalLayerIndex,
     firstGlobalLayerIndex: manifest.shape.firstGlobalLayerIndex,
     finalLayerIndex: manifest.shape.vitBackboneFinalLayerIndex ?? manifest.shape.vitBlockStackEndLayerIndex ?? manifest.shape.firstGlobalLayerIndex,

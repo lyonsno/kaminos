@@ -6,6 +6,11 @@ const routeSourceUrl = new URL('../src/sam-image-vit-block-stack-phase-program.j
 const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const stackExporter = readFileSync(new URL('../tools/sam-detr-stack-mlx-packet.py', import.meta.url), 'utf8');
+const encoderExporter = readFileSync(new URL('../tools/sam-detr-encoder-mlx-packet.py', import.meta.url), 'utf8');
+assert.match(smokeJs, /interpolateRope:\s*true/, 'SAM detector must enable reference global RoPE scaling');
+assert.match(smokeJs, /ropePretrainGridSize:\s*manifest.shape.visionWindowSize/, 'SAM detector scales global coordinates by window size over actual grid');
+assert.match(encoderExporter, /scale=backbone.config.window_size \/ patch_h/, 'manual checkpoint capture must match the real backbone RoPE');
+assert.match(encoderExporter, /fpn_features = det.vision_encoder.neck\(vit_backbone_hidden_states\)/, 'FPN reference must consume the same captured backbone');
 
 assert.match(packageJson.scripts.test, /sam-image-vit-block-stack-phase-program-contracts\.mjs/, 'default test must include portable SAM3 image ViT block-stack contracts');
 assert.equal(existsSync(routeSourceUrl), true, 'SAM3 image ViT block-stack route source must exist');

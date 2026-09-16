@@ -100,6 +100,7 @@ def run_reference(model, image, prompt, resolution):
             patch_h,
             patch_w,
             theta=backbone.config.rope_theta,
+            scale=backbone.config.window_size / patch_h,
         )
     else:
         global_rope_cos = backbone._rope_global_cos
@@ -120,7 +121,7 @@ def run_reference(model, image, prompt, resolution):
         if layer_index == first_global_layer_index:
             vit_first_global_hidden_states = vit_backbone_hidden_states
             vit_block_stack_hidden_states = vit_backbone_hidden_states
-    fpn_features = det.vision_encoder(pixel_values)
+    fpn_features = det.vision_encoder.neck(vit_backbone_hidden_states)
     fpn_pos = [det._pos_enc(feat) for feat in fpn_features]
     fpn_trimmed = fpn_features[:-1]
     fpn_pos_trimmed = fpn_pos[:-1]
