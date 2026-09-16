@@ -1466,6 +1466,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-physical-mode-val">0</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Material law</span>
+        <select id="volume-physical-material-law" class="select-input"><option value="0">Original mixed carriers (replay)</option><option value="1">Transported heat + soot</option></select>
+        <span class="slider-val" id="volume-physical-material-law-val">0</span>
+      </div>
+      <span class="slider-help">Old presets retain the original material law. Transported heat + soot is an explicit alternative: detail carriers no longer add heat and boundary coverage no longer supplies a minimum soot density. Recalibrate Peak soot K, Kelvin spread and Hot soot density when switching; settings are not automatically retuned.</span>
+      <div class="slider-row">
         <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
         <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
         <span class="slider-val" id="volume-physical-temperature-val">1900</span>
@@ -3032,7 +3038,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=far-field-0915';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=sexy-main-compose-0916';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -3204,11 +3210,6 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
-// Declared ahead of the early volume-tab activation: setActiveTab reaches
-// stopFingerFluidBench, whose bench state otherwise sits later in the module.
-let fingerFluidBenchAnimationFrame = null;
-let fingerFluidBenchRunning = false;
-if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
 const publishVolumeCockpitLayoutPhase = phase => {
   window.__kaminosVolumeCockpitLayoutReceipt = {
@@ -3341,10 +3342,12 @@ let fingerJuiceHostState = {
 };
 let fingerJuiceHostRouteInitialized = false;
 let fingerFluidBenchRouteInitialized = false;
+let fingerFluidBenchAnimationFrame = null;
 let fingerFluidBenchFrameStartedAt = performance.now();
 let fingerFluidBenchLastFrameMs = 26.5;
 let fingerFluidBenchSolver = null;
 let fingerFluidBenchSolverPromise = null;
+let fingerFluidBenchRunning = false;
 let fingerFluidBenchSimulationPaused = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
@@ -10461,6 +10464,8 @@ function setActiveTab(tabName) {
 
 window.__kaminosSetActiveTab = setActiveTab;
 window.__kaminosActiveTab = () => document.querySelector('.tab.active[data-tab]')?.dataset.tab || null;
+// Tab switching also stops inactive benches; initialize their state first.
+if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
 function currentWorldChambersDebugState() {
   return worldChamberDebugState(worldChambersRegistry);
@@ -13660,6 +13665,7 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
+  { key: 'physicalMaterialLaw', id: 'volume-physical-material-law', param: 'volume_physical_material_law', min: 0, max: 1, continuous: false, decimals: 0 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
@@ -19195,7 +19201,7 @@ function updateVolumeControlLabels() {
     input.title = physicalBoundaryColor ? 'Legacy color control; use the Boundary Fire color section' : '';
   }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') && field.key !== 'physicalColorMode')) {
-    const newMaterialControl = ['physicalWhiteBalance','physicalSmokeExtinction','physicalSmokeAlbedo','physicalAmbient'].includes(field.key);
+    const newMaterialControl = ['physicalMaterialLaw','physicalWhiteBalance','physicalSmokeExtinction','physicalSmokeAlbedo','physicalAmbient'].includes(field.key);
     document.getElementById(field.id).disabled = !physicalBoundaryColor || (newMaterialControl && c.physicalColorMode !== 2);
   }
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
@@ -19459,7 +19465,8 @@ function refreshVolumeReadout() {
   const s = volumePrototype.debugState();
   if (s.physicalColor?.requested === 'emissive-transport-v2') {
     document.getElementById('volume-physical-mode-val').textContent = s.physicalColor.effective === 'emissive-transport-v2'
-      ? 'active: emissive v2' : `inactive: ${s.physicalColor.inactiveReason || 'unverified route'}`;
+      ? (s.physicalColor.materialLawEffective === 'transported-heat-soot-v1' ? 'active: transported' : 'active: v2 replay')
+      : `inactive: ${s.physicalColor.inactiveReason || 'unverified route'}`;
   }
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);
   syncVolumePresentationControls(s.volumePresentationReceipt);
@@ -20459,6 +20466,14 @@ async function initKaminosVolumeRoute() {
   }
 
   applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
+  void activateFingerFluidPyroComposition().catch(error => {
+    fingerFluidPyroCompositionState = {
+      ...fingerFluidPyroCompositionState,
+      effectiveRoute: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Finger fluid / Pyro composition activation failed:', error);
+  });
 
   const rayBudgetPresetOwnedControls = new Set([
     'volume-steps',

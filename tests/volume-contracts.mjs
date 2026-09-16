@@ -650,7 +650,7 @@ assert.match(core, /retiredRaymarchControls/, 'runtime state receipts every stri
 assert.match(core, /uniforms\[19\]\s*=\s*0\s*;/, 'ordinary product shaders receive explicit zero render-time authority');
 assert.match(core, /uniforms\[47\]\s*=\s*0\s*;/, 'reserved render controls receive explicit zero frame-cycle authority');
 assert.match(core, /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs\s*\*\s*0\.001/, 'look freeze pins time only for explicit analytic-emitter temporal descriptors');
-assert.match(core, /if \(advanceSim && !sampleLookFreeze\) \{[\s\S]*encodeSim\(encoder\)/, 'sampleFrame does not advance simulation while look freeze is active');
+assert.match(core, /if \(advanceSim && !sampleLookFreeze && !simulationPaused\) \{[\s\S]*encodeSim\(encoder\)/, 'sampleFrame does not advance simulation while look freeze is active');
 assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes emitter scale control');
 assert.match(index, /<span class="slider-label">Emitter Scale<\/span>\s*<input type="range" id="volume-fire-scale"/, 'Fire Scale is labeled by its honest emitter/source role');
 assert.match(index, /volume_fire_scale/, 'URL route can override emitter scale');
@@ -2325,7 +2325,7 @@ assert.doesNotMatch(core, /local = local \+ shellColor \* shellRenderMode \* smo
 // the WGSL default is 0.0 (opaque), and a constants object without it
 // silently buries the composited Three scene behind an opaque volume canvas.
 assert.match(core, /renderPipelineConstants = \{[^}]*TRANSPARENT_CANVAS: transparentCanvas \? 1 : 0/, 'raymarch pipeline constants carry the transparent-canvas override');
-assert.match(core, /leanStockRenderPipelineConstants = \{[^}]*TRANSPARENT_CANVAS: transparentCanvas \? 1 : 0/, 'lean raymarch pipeline constants carry the transparent-canvas override');
+assert.match(core, /leanStockRenderPipelineConstants = \{ \.\.\.renderPipelineConstants|leanStockRenderPipelineConstants = \{[^}]*TRANSPARENT_CANVAS: transparentCanvas \? 1 : 0/, 'lean raymarch pipeline constants carry the transparent-canvas override (directly or by spreading the base constants)');
 
 // Receiver shading is directional: incident light direction comes from the
 // irradiance-field luminance gradient and shades true N.L against the

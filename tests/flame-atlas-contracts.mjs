@@ -28,11 +28,19 @@ test("generated-worlds README and flame screening room public claims agree", () 
   const motion = manifest.media.filter(({ path: mediaPath }) => mediaPath.endsWith(".mp4"));
   const compositions = motion.filter(({ presentation }) => presentation === "composition");
   const studies = motion.filter(({ presentation }) => presentation === "study");
-  assert.equal(motion.length, 10);
-  assert.equal(compositions.length, 4);
-  assert.equal(studies.length, 6);
+  assert.equal(motion.length, 12);
+  assert.equal(compositions.length, 5);
+  assert.equal(studies.length, 7);
   assert.equal(compositions.filter(({ primary }) => primary).length, 1);
-  assert.equal(new Set(motion.map(({ role }) => role)).size, 10);
+  assert.equal(new Set(motion.map(({ role }) => role)).size, 12);
+  assert.ok(
+    compositions.some(({ role }) => role === "blue wide ignition and extinction"),
+    "the wide blue burn must remain a complete composition",
+  );
+  assert.ok(
+    studies.some(({ role }) => role === "blue vertical morphology"),
+    "the vertical blue-violet passage must remain a morphology study",
+  );
 
   for (const media of manifest.media) {
     assert.equal(sha256(media.path), media.sha256, `${media.path} must match its public hash`);
@@ -46,8 +54,8 @@ test("generated-worlds README and flame screening room public claims agree", () 
     assert.match(html, new RegExp(`poster=["']${posterPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));
   }
 
-  assert.match(rootReadme, /docs\/flame-atlas\/assets\/live-webgpu-combustion\.gif/);
-  assert.match(rootReadme, /\[Live Combustion\]\(docs\/flame-atlas\/\)/);
+  assert.match(rootReadme, /docs\/flame-atlas\/assets\/conventional-fire-hero\.png/);
+  assert.match(rootReadme, /\[Live Combustion\]\(https:\/\/lyonsno\.github\.io\/kaminos\/\)/);
   assert.match(rootReadme, /^> A browser-native workbench for making generated worlds live\.$/m);
   assert.match(rootReadme, /\*\*Generated beings\*\*/);
   assert.match(rootReadme, /\*\*Live materials\*\*/);
@@ -55,7 +63,10 @@ test("generated-worlds README and flame screening room public claims agree", () 
   assert.match(rootReadme, /\*\*A world kiln\*\*/);
   assert.match(rootReadme, /Generated creatures can preserve deliberate morphology\s+through generative transformation and return to mechanical control\./);
   assert.doesNotMatch(rootReadme, /Generated beings retain identity, structure, and handles after inference/i);
-  assert.match(html, /<a href=["']\.\.\/\.\.\/["']>Kaminos<\/a>/);
+  assert.match(
+    html,
+    /<a href=["']https:\/\/github\.com\/lyonsno\/kaminos["']>Kaminos<\/a>/,
+  );
   assert.doesNotMatch(html, /href=["']\.\.\/\.\.\/README\.md["']/);
   assert.match(atlasReadme, /capture-manifest\.json/);
   assert.match(manifest.claim_boundary, /no simulator frame-rate or quality-tier claim/i);
@@ -67,4 +78,25 @@ test("generated-worlds README and flame screening room public claims agree", () 
   assert.doesNotMatch(publicCopy, /\b(?:96|128|160)\s*(?:\^?3|³)\b/i);
   assert.match(publicCopy, /captured directly from the live browser runtime/i);
   assert.doesNotMatch(html, /<video\b[^>]*\sautoplay(?:\s|>)/i);
+});
+
+test("flame boutique deploys as the narrow Kaminos Pages artifact", () => {
+  const workflowPath = ".github/workflows/flame-atlas-pages.yml";
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, workflowPath)),
+    `${workflowPath} must exist before the boutique URL can be public`,
+  );
+
+  const workflow = read(workflowPath);
+  const rootReadme = read("README.md");
+  const atlasReadme = read("docs/flame-atlas/README.md");
+  const html = read("docs/flame-atlas/index.html");
+
+  assert.match(workflow, /actions\/upload-pages-artifact@v3/);
+  assert.match(workflow, /actions\/deploy-pages@v4/);
+  assert.match(workflow, /path:\s*docs\/flame-atlas/);
+  assert.doesNotMatch(workflow, /path:\s*["']?\.["']?\s*$/m);
+  assert.match(rootReadme, /https:\/\/lyonsno\.github\.io\/kaminos\//);
+  assert.match(atlasReadme, /https:\/\/lyonsno\.github\.io\/kaminos\//);
+  assert.match(html, /<link rel="canonical" href="https:\/\/lyonsno\.github\.io\/kaminos\/">/);
 });

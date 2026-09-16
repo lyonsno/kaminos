@@ -1,7 +1,8 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 205,
+  "controlCount": 206,
   "controls": [
+    { "key": "volume-physical-material-law", "param": "volume_physical_material_law", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
     { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
     { "key": "volume-physical-smoke-extinction", "param": "volume_physical_smoke_extinction", "tagName": "INPUT", "type": "range", "additiveDefault": "2" },
     { "key": "volume-physical-smoke-albedo", "param": "volume_physical_smoke_albedo", "tagName": "INPUT", "type": "range", "additiveDefault": "0.35" },

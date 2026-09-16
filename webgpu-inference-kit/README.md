@@ -92,7 +92,7 @@ Kaminos is already used across substantially different browser-native inference 
 | --- | --- | --- | --- | --- | --- |
 | [MoGe](https://github.com/lyonsno/moge-webgpu) | Feed-forward image inference | Weights, pipelines, reusable tensors | Encoder, decoder, output phases | Depth, normals, and point map | Tensor, kernel, runtime, and route primitives |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Iterative motion generation | Model weights and diffusion resources | Diffusion steps and major phases | Skeletal motion | Runtime and route primitives around browser diffusion, with external text embedding |
-| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Multi-stage image-to-geometry inference | Vision, reconstruction, decoding, and baking resources | Backbone, postprocessor, decoder, texture baking | Textured GLB mesh | Cooperative orchestration and model-owned bounded work |
+| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Multi-stage image-to-geometry inference | Vision, reconstruction, decoding, and baking resources | Backbone blocks, two-stream attention tiles, postprocessor channel ranges, texture-bake texel batches, CPU phases on workers | Textured GLB mesh | Cooperative orchestration on every long boundary, bounded-prefix completion, scratch arena, resource caches, parity primitives, and shared-device foreground cadence |
 | [SHARP](https://github.com/lyonsno/sharp-webgpu) | Long image-to-splat inference | Image encoder, depth, Gaussian decoder, and output resources | Encoder blocks, depth phases, decoder ranges, output batches | Gaussian splat scene | Cooperative orchestration, scheduling, shared-device foreground opportunities, and route composition |
 
 Ports can adopt a common application-facing shape:
@@ -116,11 +116,15 @@ The runtime schedules those model duties so the browser can regain useful foregr
 
 Ports can begin with direct execution and introduce cooperative boundaries where measurement shows that a phase is hostile to foreground responsiveness. The [advanced integration reference](./docs/integration-reference.md) covers scheduling policy, adaptive duty sizing, completion behavior, foreground opportunity donation, resources, multi-route admission, and runtime telemetry.
 
-## Proven On A Long-Running Product Route
+Using a Kaminos fire basin as the foreground workload? Follow [Load an exported basin for a cooperative inference smoke](../docs/basin-presets-for-inference-smokes.md) for preset installation, exact-look verification, and the separate shared-device/frame-scheduling connection. Loading a preset alone does not configure cooperative inference.
+
+## Proven On Long-Running Product Routes
 
 In one measured product firing on an M4 Max in Chrome, SHARP generated `1,179,648` Gaussian splats over `185.3s` while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across `21,818` foreground frame intervals, p95 and p99 were `9.3ms` and `10.0ms`; `40` intervals exceeded `33.3ms`.
 
 That firing demonstrates the runtime's central product target directly: long local inference sharing one browser and GPU with a continuously rendering application, while producing the complete model output and preserving measured foreground cadence.
+
+In a second measured product firing on the same M4 Max in Chrome, [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) generated a complete textured GLB (`9,988` vertices, `1024²` albedo and normal maps) over `39.8s` while a same-page WebGPU contender completed `72,097` compute submissions on the same device. Across `4,768` foreground frame intervals, p95 and p99 were `9.9ms` and `10.3ms`; `1` interval exceeded `33.3ms`. Every long GPU boundary ran as cooperative duties (fixed backbone blocks, two-stream attention tiles, bounded-prefix postprocessor channel ranges, texture-bake texel batches over a scratch arena) and every CPU phase ran on a model-owned worker, and the GLB was byte-identical to the route's uncontended single-submit output. The witness (`npm run smoke:product-route -- --contend` in the SF3D repo) records the effective route, the contender's completed submissions, per-stage frame-gap attribution, and the output hash.
 
 ## Continue Porting
 
