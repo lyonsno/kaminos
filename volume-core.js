@@ -3599,6 +3599,31 @@ fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
   var accum = vec3<f32>(0.0);
   var weightAccum = 0.0;
   var cellCount = 0.0;
+  if (u.physical_fire.x > 1.5) {
+    // Emissive-transport basins zero the legacy radiance/glow gains and draw
+    // the flame from the emissive material law, so seed the lattice from that
+    // same law (Sexy's emissiveMaterial on the reconstructed field with live
+    // boundary support), white-balanced and exposed like the camera arm, so
+    // scene light carries the flame's displayed color and brightness.
+    let carriers = max(u.topology_shell_carriers, vec4<f32>(0.0));
+    let smokeVisible = 1.0 - u.boundary_fire_display.z;
+    let exposure = exp2(u.physical_display.y) * 0.35;
+    for (var k = 0u; k < 8u; k = k + 1u) {
+      let offset = (vec3<f32>(f32(k & 1u), f32((k >> 1u) & 1u), f32((k >> 2u) & 1u)) + vec3<f32>(0.5)) * 0.5;
+      let p = (vec3<f32>(gid) + offset) * (2.0 / f32(IRRADIANCE_GRID)) - vec3<f32>(1.0);
+      let r = sampleWorldFlowReconstructionRaw(p);
+      let coverage = liveBoundarySupportAt(p, carriers);
+      let medium = emissiveMaterial(r, coverage, smokeVisible);
+      let e = medium.emission;
+      let balanced = vec3<f32>(dot(u.emissive_white_r.xyz, e), dot(u.emissive_white_g.xyz, e), dot(u.emissive_white_b.xyz, e));
+      let exposed = max(balanced, vec3<f32>(0.0)) * exposure;
+      let lum = dot(exposed, vec3<f32>(0.2126, 0.7152, 0.0722));
+      accum = accum + exposed * 0.125;
+      weightAccum = weightAccum + smoothstep(0.0005, 0.02, lum) * 0.125;
+    }
+    irradianceDst[irradianceIndex(gid)] = vec4<f32>(accum, weightAccum);
+    return;
+  }
   for (var z = brickStart.z; z < min(brickEnd.z, GRID); z = z + 1u) {
     for (var y = brickStart.y; y < min(brickEnd.y, GRID); y = y + 1u) {
       for (var x = brickStart.x; x < min(brickEnd.x, GRID); x = x + 1u) {

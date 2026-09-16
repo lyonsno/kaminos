@@ -2361,3 +2361,10 @@ assert.match(index, /baseStrength \* Math\.pow\(2, passState\.gainStops \|\| 0\)
 assert.match(index, /function fireLightFieldRouteParams\(\)[\s\S]*?window\.location\.hash/, 'light-field route params merge the URL hash');
 assert.match(index, /function isFireLightFieldRoute\(params = fireLightFieldRouteParams\(\)\)/, 'light-field route detection reads the merged params');
 assert.doesNotMatch(index, /isFireLightFieldIsolateRoute\(params = new URLSearchParams\(window\.location\.search\)\)/, 'no light-field helper reads the query alone');
+
+// On emissive-transport basins the legacy radiance/glow gains are zero and
+// the flame comes from the emissive material law; the irradiance seed must
+// follow that law or the light field is silently dark on exactly those basins
+// (observed: black isolate view on elfinblue-fuckeryyy).
+assert.match(core, /fn csIrradianceSeed[\s\S]*?if \(u\.physical_fire\.x > 1\.5\) \{[\s\S]*?emissiveMaterial\(r, coverage, smokeVisible\)/, 'irradiance seed follows the emissive material law when emissive transport is active');
+assert.match(core, /fn csIrradianceSeed[\s\S]*?exp2\(u\.physical_display\.y\)/, 'emissive-seeded light carries the basin exposure');
