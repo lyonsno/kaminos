@@ -201,6 +201,8 @@ canvas { display: block; }
 .volume-layout-group-grip { touch-action: none; cursor: grab !important; }
 .volume-layout-dragging { opacity: 0.46; outline: 1px dashed #5f8490; }
 .volume-layout-group-body[hidden] { display: none; }
+[data-volume-mode-hidden="true"] { display: none !important; }
+.volume-layout-editing .slider-row[data-volume-mode-inactive="true"] { opacity: 0.5; }
 .volume-layout-editing .volume-layout-groups { min-height: 36px; }
 .volume-layout-editing .volume-layout-group-body:not([hidden]) { min-height: 24px; }
 .slider-label { font-size: 10px; color: #666; min-width: 60px; user-select: none; -webkit-user-select: none; }
@@ -1098,7 +1100,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
       <div class="volume-cockpit-layout-toolbar-row">
         <select id="volume-cockpit-layout-select" data-volume-layout-control aria-label="Saved cockpit layout"></select>
-        <button id="volume-cockpit-layout-new" type="button">New</button>
+        <button id="volume-cockpit-layout-new" type="button" title="Create an organized layout without overwriting your current layout or changing the basin">Organized copy</button>
         <button id="volume-cockpit-layout-edit" type="button" aria-pressed="false">Edit layout</button>
       </div>
       <div class="volume-cockpit-layout-toolbar-row">
@@ -3045,6 +3047,8 @@ import {
 import {
   collectVolumeCockpitControlElements,
   initializeVolumeCockpitLayout,
+  syncVolumeCockpitControlVisibility,
+  volumeCockpitModeAvailability,
 } from './volume-cockpit-layout.mjs';
 import {
   createVolumeBasinDriveSessionRecorder,
@@ -18696,25 +18700,11 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-physical-mode-val').textContent = c.physicalColorMode > 0 ? (physicalBoundaryColor ? (c.physicalColorMode === 1 ? 'active' : 'requested') : 'inactive route') : 'legacy';
   document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? 'Hot soot density' : 'Thermal emission';
   document.getElementById('volume-physical-temperature-label').textContent = c.physicalColorMode === 2 ? 'Peak soot K' : 'Thermal K';
-  document.getElementById('volume-reaction-boundary-fire-clean-color').disabled = physicalBoundaryColor && c.physicalColorMode === 2;
-  for (const id of ['volume-reaction-boundary-contrast','volume-reaction-boundary-gamma','volume-reaction-boundary-opacity','volume-smoke']) {
+  for (const [id, inactiveReason] of Object.entries(volumeCockpitModeAvailability(c,
+    [...document.querySelectorAll('input[id^="volume-pyro-"], select[id^="volume-pyro-"]')].map(input => input.id)))) {
     const input = document.getElementById(id);
-    input.disabled = physicalBoundaryColor && c.physicalColorMode === 2;
-    input.title = input.disabled ? 'Legacy rendering control; Emissive transport uses Hot soot density and Smoke extinction' : '';
-  }
-  for (const id of ['volume-radiance', 'volume-glow']) {
-    const input = document.getElementById(id);
-    input.disabled = c.fireRenderMode !== 'stock';
-    input.title = input.disabled ? 'Stock renderer only; inactive in this route' : '';
-  }
-  for (const id of ['volume-reaction-boundary-fire-clean-blue', 'volume-reaction-boundary-fire-yellow', 'volume-reaction-boundary-fire-warmth', 'volume-reaction-boundary-fire-luma', 'volume-reaction-boundary-fire-soot-color', 'volume-exposure']) {
-    const input = document.getElementById(id);
-    input.disabled = physicalBoundaryColor;
-    input.title = physicalBoundaryColor ? 'Legacy color control; use the Boundary Fire color section' : '';
-  }
-  for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') && field.key !== 'physicalColorMode')) {
-    const newMaterialControl = ['physicalMaterialLaw','physicalWhiteBalance','physicalSmokeExtinction','physicalSmokeAlbedo','physicalAmbient'].includes(field.key);
-    document.getElementById(field.id).disabled = !physicalBoundaryColor || (newMaterialControl && c.physicalColorMode !== 2);
+    input.disabled = Boolean(inactiveReason);
+    input.title = inactiveReason;
   }
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
   document.getElementById('volume-shell-width-val').textContent = c.shellWidth.toFixed(2);
@@ -18820,6 +18810,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-canonical-centerline-val').textContent = c.canonicalCenterline.toFixed(2);
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
   syncCanonicalVolumeControlVisibility(c.volumeScene);
+  syncVolumeCockpitControlVisibility(document);
   syncRayBudgetGamutFromControls();
 }
 

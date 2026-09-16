@@ -333,13 +333,42 @@ function sourceGroupForControl(control, looseIndex) {
   };
 }
 
+// Presentation only: IDs, DOM nodes, values, preset schema and authored layouts
+// remain unchanged. Unknown controls keep their source grouping.
+const ORGANIZED_GROUPS = [
+  ['renderer', 'Renderer & emission model', /^volume-(physical-mode|fire-render-mode|shell-inspect-mode|reaction-live-view)$/],
+  ['flame', 'Flame color & exposure', /^volume-(physical-(material-law|temperature|spread|thermal|clean|exposure|knee|white)|reaction-boundary-fire-(soot|clean-blue|yellow|warmth|luma|clean-color|soot-color)|reaction-boundary-(contrast|gamma|opacity)|exposure|radiance|glow)$/],
+  ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density|smoke|absorption)$/],
+  ['structure', 'Combustion-front structure', /^volume-(boundary-sidecar-source|boundary-sidecar-width|reaction-boundary-(gradient|cut|softness|core-reject|topology|curl|divergence)|reaction-boundary-fire-(ridge|ridge-cut|tip|erosion))$/],
+  ['support', 'Support field & baked ridge', /^volume-(reaction-boundary-support-.+|boundary-sidecar-(blur|ridge))$/],
+  ['detail', 'Flame detail', /^volume-(fire|fire-scale|detail-scale|microdetail|interface-shred|fire-licks)$/],
+  ['budget', 'Raymarch budget', /^volume-(steps|adaptive-rays|occupancy-skip|render-scale)$/],
+  ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
+  ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|procedural-detail-forces|pyro-detail)$/],
+  ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|boundary-splat-.+|flow-kernel-.+|residual-.+|grid-overlay|flow-debug|oracle-.+|pyro-compare|look-freeze)$/],
+  ['shell', 'Shell renderer', /^volume-shell-.+/],
+  ['capture', 'Capture extractor', /^volume-reaction-.+/],
+  ['pyro', 'Legacy pyro appearance', /^volume-pyro-.+/],
+];
+
 function buildSourceDefaultLayout(authorableControls) {
+  const organized = ORGANIZED_GROUPS.map(([id, label]) => ({
+    id: `organized-${id}`, label, surface: 'primary',
+    collapsed: ['support', 'detail', 'simulation', 'diagnostics', 'shell', 'capture', 'pyro'].includes(id),
+    controlIds: [],
+  }));
+  const remaining = [];
+  for (const control of authorableControls) {
+    const index = ORGANIZED_GROUPS.findIndex(([, , pattern]) => pattern.test(control.id));
+    if (index < 0) remaining.push(control);
+    else organized[index].controlIds.push(control.id);
+  }
   const groups = [];
   let looseIndex = 0;
   let previousContainer = null;
   let currentGroup = null;
   let currentToken = null;
-  for (const control of authorableControls) {
+  for (const control of remaining) {
     const container = control.closest('[data-volume-collapsible-group], [data-volume-control-section]');
     if (!container && previousContainer !== null) looseIndex += 1;
     if (!container && looseIndex === 0) looseIndex = 1;
@@ -360,8 +389,80 @@ function buildSourceDefaultLayout(authorableControls) {
     identity: VOLUME_COCKPIT_LAYOUT_IDENTITY,
     layoutId: 'source-default',
     label: 'Source default',
-    groups,
+    groups: [...organized.filter(group => group.controlIds.length), ...groups],
   };
+}
+
+// Disabled is the existing runtime's availability contract. Never remove an
+// input: preset import/export and the layout editor still own all its values.
+export function volumeCockpitModeAvailability(c, controlIds = []) {
+  const boundary = c.fireRenderMode === 'inspect' && ['boundary', 'boundary_fire'].includes(c.shellInspectMode);
+  const ordinary = (c.boundarySidecarView || 'off') === 'off'
+    && (c.boundarySplatMode || 'off') === 'off' && (c.volumeResidualMode || 'off') === 'off';
+  const physical = c.physicalColorMode > 0 && boundary && c.shellInspectMode === 'boundary_fire'
+    && (c.physicalColorMode === 1 || ordinary);
+  const emissive = physical && c.physicalColorMode === 2;
+  const availability = {};
+  const set = (ids, active, reason) => {
+    for (const id of ids) availability[`volume-${id}`] = active ? '' : reason;
+  };
+  set(['reaction-boundary-contrast', 'reaction-boundary-gamma', 'reaction-boundary-opacity', 'smoke', 'absorption'],
+    !emissive, 'Legacy transfer; emissive transport uses hot soot density and smoke extinction.');
+  set(['reaction-boundary-fire-clean-color'], !emissive, 'Emissive transport uses its reaction spectrum.');
+  set(['radiance', 'glow'], c.fireRenderMode === 'stock', 'Stock renderer only.');
+  set(['reaction-boundary-fire-clean-blue', 'reaction-boundary-fire-yellow', 'reaction-boundary-fire-warmth',
+    'reaction-boundary-fire-luma', 'reaction-boundary-fire-soot-color', 'exposure'], !physical,
+  'Legacy color; use the selected emission model controls.');
+  set(['physical-temperature', 'physical-spread', 'physical-thermal', 'physical-clean', 'physical-exposure', 'physical-knee'],
+    physical, 'Requires an active thermal or emissive boundary-fire route.');
+  set(['physical-material-law', 'physical-white', 'physical-smoke-extinction', 'physical-smoke-albedo', 'physical-ambient'],
+    emissive, 'Emissive transport only.');
+  // These uniforms are replaced by the corresponding boundary controls, not
+  // combined with them. Keep values for switching back to the shell renderer.
+  set(['shell-thermal', 'shell-reaction', 'shell-front', 'shell-edge', 'shell-core-suppress',
+    'shell-bite', 'shell-curl', 'shell-divergence', 'shell-smoke', 'shell-luma', 'shell-exposure'],
+  !boundary, 'Boundary rendering uses the combustion-front controls instead.');
+  const sidecar = (c.boundarySidecarSource || 'live') !== 'live'
+    || (c.boundarySidecarView || 'off') !== 'off' || (c.boundarySplatMode || 'off') !== 'off';
+  set(['boundary-sidecar-blur', 'boundary-sidecar-ridge'], sidecar && c.boundarySidecarSource !== 'override',
+    'Generated baked/mixed structure only; live and imported fields do not use these bake settings.');
+  set(['boundary-sidecar-width'], (c.boundarySidecarSource || 'live') !== 'live'
+    && (c.boundarySplatMode || 'off') === 'off', 'Baked/mixed/imported raymarch structure only.');
+  set(['boundary-splat-radius', 'boundary-splat-sharpness'], (c.boundarySplatMode || 'off') !== 'off',
+    'Splat raster only.');
+  // The emissive branch replaces the legacy pyro radiance/extinction result
+  // (volume-core raymarchVolume). Keep its detail producer and compare selector.
+  set(controlIds.filter(id => id.startsWith('volume-pyro-')
+    && !['volume-pyro-detail', 'volume-pyro-compare'].includes(id)).map(id => id.slice(7)),
+  !emissive, 'Legacy pyro transfer is replaced by emissive transport.');
+  return availability;
+}
+
+export function syncVolumeCockpitControlVisibility(documentRef) {
+  const editing = documentRef.getElementById('volume-cockpit-layout-toolbar')?.dataset.editing === 'true';
+  for (const rootId of VOLUME_COCKPIT_CONTROL_ROOT_IDS) {
+    const root = documentRef.getElementById(rootId);
+    if (!root) continue;
+    for (const row of root.querySelectorAll('.slider-row')) {
+      const controls = [...row.querySelectorAll(VOLUME_CONTROL_SELECTOR)]
+        .filter(control => control.id && !control.closest('[data-volume-cockpit-layout-ui]'));
+      if (!controls.length) continue;
+      const inactive = controls.every(control => control.disabled);
+      row.dataset.volumeModeHidden = String(inactive && !editing);
+      row.dataset.volumeModeInactive = String(inactive);
+      row.title = inactive ? controls.map(control => control.title).filter(Boolean).join(' ') : '';
+      // A scene's own visibility remains authoritative; do not overwrite it.
+      const help = row.nextElementSibling;
+      if (help?.classList?.contains('slider-help')) {
+        help.dataset.volumeModeHidden = String((inactive && !editing) || row.style.display === 'none');
+      }
+    }
+    for (const shell of root.querySelectorAll('.volume-layout-group-shell')) {
+      const rows = [...shell.querySelectorAll('.slider-row')];
+      shell.dataset.volumeModeHidden = String(!editing && rows.length > 0 && rows.every(row =>
+        row.dataset.volumeModeHidden === 'true' || row.style.display === 'none'));
+    }
+  }
 }
 
 function ensureGroupHost(documentRef, surface) {
@@ -374,7 +475,9 @@ function ensureGroupHost(documentRef, surface) {
     host = documentRef.createElement('div');
     host.className = 'volume-layout-groups';
     host.dataset.volumeLayoutSurface = surface;
-    root.append(host);
+    const toolbar = root.querySelector(':scope > .volume-cockpit-layout-toolbar');
+    if (toolbar) toolbar.after(host);
+    else root.append(host);
   }
   return host;
 }
@@ -644,6 +747,7 @@ class VolumeCockpitLayoutEditor {
       label.readOnly = !this.editing;
       label.tabIndex = this.editing ? 0 : -1;
     }
+    syncVolumeCockpitControlVisibility(this.document);
   }
 
   actions() {
@@ -717,10 +821,11 @@ class VolumeCockpitLayoutEditor {
       }
     }
     for (const legacy of this.document.querySelectorAll('[data-volume-control-section], [data-volume-collapsible-group]')) {
-      if (!legacy.querySelector(VOLUME_CONTROL_SELECTOR)) legacy.hidden = true;
+      if (![...legacy.querySelectorAll(VOLUME_CONTROL_SELECTOR)].some(isAuthorableControl)) legacy.hidden = true;
     }
     this.toolbar['volume-cockpit-layout-name'].value = this.layout.label;
     this.toolbar['volume-cockpit-layout-select'].value = this.layout.layoutId;
+    syncVolumeCockpitControlVisibility(this.document);
   }
 
   installPointerGrip(grip, item) {
@@ -837,7 +942,7 @@ class VolumeCockpitLayoutEditor {
   async createLayout() {
     const copy = cloneDocument(this.sourceDefault);
     copy.layoutId = `layout-${Date.now().toString(36)}`;
-    copy.label = 'New layout';
+    copy.label = 'Organized controls';
     this.layout = copy;
     this.apply();
     await this.save();
