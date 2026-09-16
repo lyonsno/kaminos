@@ -9354,7 +9354,11 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const farDistanceSq = farVector.dot(farVector);
   const farDirection = farVector.div(farDistanceSq.sqrt().max(1e-5));
   const farNdotL = worldNormalNode.dot(farDirection).mul(0.5).add(0.5).pow(2.0);
-  const farRadial = firePower.mul(0.006).div(farDistanceSq.mul(2.5).add(0.25));
+  // Soft-saturate the radial term (Reinhard) so a large bright fire raises
+  // the wash sublinearly instead of flooding the scene flat: falloff shape
+  // survives because the compression is monotonic in the raw term.
+  const farRadialRaw = firePower.mul(0.006).div(farDistanceSq.mul(2.5).add(0.25));
+  const farRadial = farRadialRaw.div(farRadialRaw.mul(1.5).add(1.0));
   const farSignal = metaColor.rgb.mul(farRadial).mul(farNdotL).mul(farFieldStrength);
 
   const nearSignal = latticeSample.rgb
