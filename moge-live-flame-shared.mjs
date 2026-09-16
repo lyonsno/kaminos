@@ -1,0 +1,189 @@
+/**
+ * moge-live-flame-shared.mjs — pieces shared by the standalone shared-device
+ * composition page (moge-live-flame-core.mjs) and the in-app injection module
+ * (moge-live-flame-inject.mjs): HUD state, frame monitor, MoGe load/run, depth
+ * painting, and on-device chunk telemetry with persistence.
+ */
+import { MoGeInference } from './lib/moge-inference.js';
+
+export const hud = id => document.getElementById(id);
+export const state = {
+  frameIntervals: [],
+  framesDuringInference: 0,
+  worstGapDuringInference: 0,
+  inferenceGaps: [],
+  inferring: false,
+  lastRouteResult: null,
+};
+
+// --- Shared GPUDevice: union of pyro-volume and inference requirements ---
+
+export function startFrameMonitor() {
+  let last = performance.now();
+  const tick = now => {
+    const dt = now - last;
+    state.frameIntervals.push(dt);
+    if (state.frameIntervals.length > 600) state.frameIntervals.shift();
+    if (state.inferring) {
+      state.framesDuringInference++;
+      state.inferenceGaps.push(dt);
+      if (dt > state.worstGapDuringInference) state.worstGapDuringInference = dt;
+    }
+    last = now;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  setInterval(() => {
+    const xs = [...state.frameIntervals].sort((a, b) => a - b);
+    if (!xs.length) return;
+    const p95 = xs[Math.floor(0.95 * xs.length)];
+    hud('hud-p95').textContent = `${p95.toFixed(1)}ms`;
+    hud('hud-p95').className = `v ${p95 < 20 ? 'good' : p95 < 34 ? 'warn' : 'bad'}`;
+  }, 500);
+}
+
+// Bonfire scene preset (mirrors the main app's VOLUME_SCENE_PRESETS.bonfire_plume;
+// without these emission/appearance values the sim runs but produces no visible flame).
+
+export async function loadMoge(gpu) {
+  const inference = new MoGeInference(gpu);
+  await inference.init((received, total) => {
+    const pct = total ? Math.round((received / total) * 100) : 0;
+    hud('hud-weights').textContent = `loading ${pct}%`;
+  });
+  hud('hud-weights').textContent = inference.useRealWeights
+    ? `real (${inference.weightsSource || 'local'})` : 'STUB — not authoritative';
+  hud('hud-weights').className = `v ${inference.useRealWeights ? 'good' : 'bad'}`;
+  window.__mogeInference = inference;
+  return inference;
+}
+
+
+export async function fetchTestImageData() {
+  const img = new Image();
+  img.src = './fixtures/moge-live-flame-source.png';
+  try {
+    await img.decode();
+  } catch {
+    // Fallback: synthesize a gradient test card so the button still works
+    // without the fixture; the receipt records the artifact identity either way.
+    const c = document.createElement('canvas');
+    c.width = c.height = 518;
+    const ctx = c.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 518, 518);
+    g.addColorStop(0, '#7a4a2a'); g.addColorStop(1, '#1a2a3a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 518, 518);
+    ctx.fillStyle = '#c8b89a'; ctx.beginPath(); ctx.arc(259, 300, 120, 0, 7); ctx.fill();
+    return ctx.getImageData(0, 0, 518, 518);
+  }
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  return ctx.getImageData(0, 0, img.width, img.height);
+}
+
+// On-device chunk telemetry: THIS browser's run is the measurement of record
+// (headless harness frame numbers are compositor-quantized and only relative).
+
+export function renderChunkTelemetry(sched, worstGapMs, gaps = []) {
+  let panel = document.getElementById('chunk-telemetry');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'chunk-telemetry';
+    panel.style.cssText = 'margin-top:10px;border-top:1px solid #2a2a33;padding-top:8px;font-size:0.72rem;';
+    document.getElementById('hud').appendChild(panel);
+  }
+  const waits = (sched?.eventTrace?.events || [])
+    .filter(e => e.kind === 'queue-work-done-end' || e.kind === 'readback-wait-end')
+    .map(e => ({ label: e.chunk || (Number.isFinite(e.firstBlock) ? `blocks ${e.firstBlock}-${e.lastBlock}` : e.phase), waitMs: e.waitMs ?? 0 }))
+    .sort((a, b) => b.waitMs - a.waitMs);
+  const rows = waits.slice(0, 5).map(w =>
+    `<div style="display:flex;justify-content:space-between"><span style="color:#9a958a">${w.label}</span><span>${w.waitMs.toFixed(0)}ms</span></div>`).join('');
+  const xs = [...gaps].sort((a, b) => a - b);
+  const pick = q => xs.length ? xs[Math.min(xs.length - 1, Math.floor(q * xs.length))] : 0;
+  const over = t => gaps.filter(g => g > t).length;
+  const dist = xs.length
+    ? `frames ${xs.length} · p50 ${pick(0.5).toFixed(1)}ms · p95 ${pick(0.95).toFixed(1)}ms · >34ms: ${over(34)} · >50ms: ${over(50)}`
+    : 'no frame samples';
+  panel.innerHTML = `<div style="color:#9a958a;margin-bottom:3px">worst frame gap this run: <b style="color:${worstGapMs > 34 ? '#e06c5a' : '#79c98f'}">${worstGapMs.toFixed(0)}ms</b><br>${dist}<br>${waits.length} chunks · worst queue waits:</div>${rows}`;
+  // Persist: HUD results must survive tab close / box restart.
+  try {
+    localStorage.setItem('mogeLiveFlameLastRun', JSON.stringify({
+      at: new Date().toISOString(), worstGapMs, dist, waits: waits.slice(0, 5), html: panel.innerHTML,
+    }));
+  } catch { /* storage unavailable: display-only */ }
+}
+
+// Restore the previous run's telemetry on load, clearly labeled as historical.
+export function restoreLastRunTelemetry() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('mogeLiveFlameLastRun') || 'null');
+    if (!saved?.html) return;
+    const panel = document.createElement('div');
+    panel.id = 'chunk-telemetry';
+    panel.style.cssText = 'margin-top:10px;border-top:1px solid #2a2a33;padding-top:8px;font-size:0.72rem;';
+    panel.innerHTML = `<div style="color:#d9a04a;margin-bottom:3px">previous run (${new Date(saved.at).toLocaleString()}):</div>${saved.html}`;
+    document.getElementById('hud').appendChild(panel);
+  } catch { /* ignore */ }
+}
+
+
+export function paintDepth(result) {
+  const canvas = document.getElementById('depth-canvas');
+  canvas.width = result.width; canvas.height = result.height;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(result.width, result.height);
+  let dMin = Infinity, dMax = -Infinity;
+  for (const d of result.depth) if (isFinite(d)) { dMin = Math.min(dMin, d); dMax = Math.max(dMax, d); }
+  const span = Math.max(dMax - dMin, 1e-6);
+  for (let i = 0; i < result.depth.length; i++) {
+    const t = 1 - (result.depth[i] - dMin) / span;
+    img.data[i * 4] = 255 * Math.min(1, Math.max(0, 1.5 - Math.abs(4 * t - 3)));
+    img.data[i * 4 + 1] = 255 * Math.min(1, Math.max(0, 1.5 - Math.abs(4 * t - 2)));
+    img.data[i * 4 + 2] = 255 * Math.min(1, Math.max(0, 1.5 - Math.abs(4 * t - 1)));
+    img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  document.getElementById('depth-panel').style.display = 'block';
+}
+
+
+export async function runInference(inference) {
+  const imageData = await fetchTestImageData();
+  hud('hud-infer').textContent = 'running (cooperative)…';
+  hud('hud-infer').className = 'v warn';
+  state.framesDuringInference = 0;
+  state.worstGapDuringInference = 0;
+  state.inferenceGaps = [];
+  state.inferring = true;
+  const t0 = performance.now();
+  try {
+    const result = await inference.run(imageData, {
+      scheduler: {
+        mode: 'cooperative', yieldMs: 0, vitBlockChunkSize: 1,
+        splitVitBlocks: true, splitDecoderResBlocks: true,
+        pacing: 'bounded-prefix', maxInFlightChunks: 1,
+      },
+    });
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+    state.inferring = false;
+    state.lastRouteResult = result.routeResult || null;
+    hud('hud-infer').textContent = `done in ${elapsed}s`;
+    hud('hud-infer').className = 'v good';
+    hud('hud-frames').textContent = String(state.framesDuringInference);
+    hud('hud-frames').className = `v ${state.framesDuringInference > 30 ? 'good' : 'warn'}`;
+    const sched = result.schedulerVerificationReceipt;
+    hud('hud-sched').textContent = sched ? `${sched.status} / ${sched.classification}` : 'missing';
+    hud('hud-sched').className = `v ${sched?.status === 'verified' ? 'good' : 'warn'}`;
+    renderChunkTelemetry(sched, state.worstGapDuringInference, state.inferenceGaps);
+    paintDepth(result);
+  } catch (e) {
+    state.inferring = false;
+    hud('hud-infer').textContent = `error: ${e.message}`;
+    hud('hud-infer').className = 'v bad';
+    throw e;
+  }
+}
+
+// --- Boot ---
