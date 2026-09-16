@@ -3618,7 +3618,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     activeManifestUrl = manifestUrl;
     setStatus('load-oracle-packet');
     const rootManifest = await fetchJson(manifestUrl);
-    const { manifest, evidence: packageInvocationEvidence } = await resolveBrowserManifest(rootManifest, { includeVerification: verificationAttached });
+    const { manifest, modelPackage, evidence: packageInvocationEvidence } = await resolveBrowserManifest(rootManifest, { includeVerification: verificationAttached });
     if (!verificationAttached) {
       const promptText = String(invocationOptions.promptText || '').trim();
       const sourceImage = invocationOptions.sourceImage;
@@ -3674,7 +3674,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     let modelSession = null;
     if (!verificationAttached) {
       const modelPackageRuntime = createSam3BrowserModelPackageRuntime({
-        manifest,
+        manifest: modelPackage,
         loadUint8: entry => staticArtifactCache.fetchArray(resolveManifestFile(entry.file), Uint8Array),
       });
       modelSession = await servingResources.modelSession(modelPackageRuntime, { commit: params.get('commit') || null });

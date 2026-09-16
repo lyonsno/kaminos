@@ -19,7 +19,7 @@ const modelPackage = {
   staticWeights: { role: 'reference-upstream', sha256: 'sha256:weights' },
   shape: { batch: 1 },
   claims: { fullSam3BrowserExecution: false },
-  weights: [{ role: 'weight', file: 'weight.bin', sha256: 'sha256:weight' }],
+  weights: [{ role: 'weight', file: 'weight.bin', sha256: `sha256:${'a'.repeat(64)}`, byteLength: 4 }],
 };
 modelPackage.packageId = await identity(
   kit.SAM3_BROWSER_PACKAGE_CONTRACT.modelPackagePrefix,
@@ -83,6 +83,26 @@ assert.equal(detached.evidence.verification.requestedRef.file, 'verification-mus
 assert.equal(Object.hasOwn(detached.manifest, 'tensors'), false);
 assert.equal(detached.manifest.packageId, modelPackage.packageId);
 assert.equal(detached.manifest.invocationId, invocation.invocationId);
+
+// Exercise the serving caller's actual handoff, not a separately assembled package.
+const servingSource = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
+const resolutionStatement = servingSource.match(/const \{[^;]+\} = await resolveBrowserManifest\(rootManifest,[^;]+;/)?.[0];
+const packageStatement = servingSource.match(/const modelPackageRuntime = createSam3BrowserModelPackageRuntime\(\{[\s\S]*?\n\s*\}\);/)?.[0];
+assert.ok(resolutionStatement && packageStatement, 'serving bootstrap statements must be exercised');
+const bootstrap = new (Object.getPrototypeOf(async function () {}).constructor)(
+  'rootManifest', 'resolveBrowserManifest', 'createSam3BrowserModelPackageRuntime',
+  'staticArtifactCache', 'resolveManifestFile',
+  `const verificationAttached = false; ${resolutionStatement} ${packageStatement} return { manifest, modelPackageRuntime };`,
+);
+const composed = await bootstrap(root, () => detached, kit.createSam3BrowserModelPackageRuntime,
+  { fetchArray: async () => new Uint8Array(4) }, file => file);
+assert.equal(composed.manifest.schema, root.schema, 'execution manifest retains route identity');
+assert.deepEqual(composed.modelPackageRuntime.manifest, modelPackage, 'resident owner receives the authenticated model artifact');
+assert.equal(Object.hasOwn(composed.modelPackageRuntime.manifest, 'prompt'), false, 'invocation fields must not enter the static model package');
+assert.equal(composed.modelPackageRuntime.modelPackage.staticArtifacts.length, 1);
+assert.equal((await composed.modelPackageRuntime.loadUint8(modelPackage.weights[0])).byteLength, 4);
+assert.throws(() => kit.createSam3BrowserModelPackageRuntime({ manifest: detached.manifest, loadUint8() {} }),
+  /model package schema/, 'flattened execution manifests remain inadmissible as model packages');
 
 const detachedArtifactCache = kit.createSam3BrowserStaticArtifactCache({
   async fetchArrayBuffer() { throw new Error('serving bootstrap must not fetch during configuration'); },

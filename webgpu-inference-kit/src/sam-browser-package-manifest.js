@@ -445,7 +445,7 @@ function composeResolution(root, modelPackage, invocation, verification, effecti
           ...(root.verification ? { requestedRef: { ...root.verification } } : {}),
         },
   };
-  return { manifest, evidence };
+  return { manifest, modelPackage, evidence };
 }
 
 function isSplitManifest(root) {
