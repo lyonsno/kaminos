@@ -9631,7 +9631,12 @@ async function initScene() {
   let fireLightWitnessGroup = null;
   const setFireLightWitnessScene = (enabled) => {
     if (enabled && !fireLightWitnessGroup) {
-      const witnessMat = new THREE.MeshStandardMaterial({ color: 0xb8b4ac, roughness: 0.9, metalness: 0.0 });
+      // Light-meter spec: mid-dark albedo and near-zero environment response,
+      // so the hemisphere/IBL ambience leaves headroom and added firelight
+      // reads as a visible warm delta instead of clipping an already-white
+      // surface (operator report: blown out even at zero stops).
+      const witnessMat = new THREE.MeshStandardMaterial({ color: 0x4a4a48, roughness: 0.95, metalness: 0.0 });
+      witnessMat.envMapIntensity = 0.05;
       const witnessSet = [
         { geo: new THREE.BoxGeometry(0.35, 2.0, 0.35), position: [1.6, -0.85 + 1.0, 0] },
         { geo: new THREE.SphereGeometry(0.3, 48, 32), position: [0, 1.7, 0] },
