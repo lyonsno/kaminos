@@ -18729,6 +18729,27 @@ async function initKaminosVolumeRoute() {
     transparentCanvas: fingerFluidPyroCompositionRequested(),
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  // Optional composition-module seam: a URL HASH entry
+  // #composition_module_url=<module> (hash, not query — settings routes are
+  // contract-validated and reject unexpected query parameters) loads an ES
+  // module after the volume prototype exists and calls its
+  // mountComposition({ prototype, params }). Absent: no-op.
+  {
+    const compositionModuleUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('composition_module_url');
+    if (compositionModuleUrl) {
+      import(compositionModuleUrl)
+        .then(mod => {
+          if (typeof mod.mountComposition !== 'function') {
+            throw new Error('composition module did not export mountComposition');
+          }
+          return mod.mountComposition({ prototype: volumePrototype, params: new URLSearchParams(window.location.search) });
+        })
+        .catch(error => {
+          console.error('composition module failed:', error);
+          setInfo(`Composition module: ${error.message}`);
+        });
+    }
+  }
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;
