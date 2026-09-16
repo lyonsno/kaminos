@@ -12,9 +12,9 @@ const persist=()=>writeFile(path.join(output,'report.json'),JSON.stringify(repor
 await persist();
 let browser, interval, lease;
 const greenroom=process.env.GREENROOM_BIN;
-if(!greenroom)throw new Error('GREENROOM_BIN must name the inspected Greenroom CLI');
 const leaseId=`kimodo-flame-${process.pid}`;
 try{
+  if(!greenroom)throw new Error('GREENROOM_BIN must name the inspected Greenroom CLI');
   // Claim failure stops launch; no inference may run after a refused claim.
   report.leaseClaim=execFileSync(greenroom,['lease','claim','--lease-id',leaseId,'--owner','marionette-gut-splicer','--agent-id','marionette-flame-witness','--repo-root',process.cwd(),'--pid',String(process.pid),'--effective-route',url,'--backend','metal','--device','apple-gpu','--profile','browser-smoke','--supports-checkpoints','--ttl-seconds','900'],{encoding:'utf8'});
   lease=true;report.phase='browser-launch';await persist();
