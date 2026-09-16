@@ -10,7 +10,7 @@
  */
 import * as THREE from 'three';
 import { createKaminosVolumePrototype } from './volume-core.js';
-import { MoGeInference, INFERENCE_LIMIT_KEYS } from './lib/moge-inference.js';
+import { MoGeInference, INFERENCE_LIMIT_KEYS, borrowedDeviceBackendIdentity } from './lib/moge-inference.js';
 
 const hud = id => document.getElementById(id);
 const state = {
@@ -38,20 +38,14 @@ async function createSharedGpu() {
   }
   const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
   const device = await adapter.requestDevice({ requiredFeatures, requiredLimits });
-  const info = adapter.info || {};
   return {
     adapter,
     device,
-    backendIdentity: {
-      kind: 'webgpu-local',
-      runtime: 'browser',
-      adapterName: info.description || [info.vendor, info.architecture].filter(Boolean).join(' ') || 'unknown-webgpu-adapter',
-      browser: navigator.userAgent,
-      requestedFeatures: requiredFeatures,
-      features: [...(device.features || [])].map(String),
-      limits: requiredLimits,
-      timestampQuery: requiredFeatures.length ? 'requested' : 'unavailable',
-    },
+    // Kit shared-helper identity for the borrowed/shared device (the kit's
+    // gpu-environment owns identity shape and validation semantics).
+    backendIdentity: borrowedDeviceBackendIdentity({
+      adapter, device, requestedFeatures: requiredFeatures,
+    }),
   };
 }
 
