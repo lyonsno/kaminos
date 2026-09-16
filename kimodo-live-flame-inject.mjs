@@ -1,7 +1,7 @@
 import { createKimodoProducer, KIMODO_DEFAULT_MAX_IN_FLIGHT_DUTIES } from './artifacts/kimodo-live-flame/lib/producer.js';
 import { initGPU } from './artifacts/kimodo-live-flame/lib/gpu.js';
 import { createFrontendTelemetry, KIMODO_ROUTE_ID } from './artifacts/kimodo-live-flame/lib/telemetry.js';
-import { summarizeFlameSpan, compositionVerdict } from './lib/kimodo-flame-evidence.mjs';
+import { summarizeFlameSpan, compositionVerdict, motionFrame } from './lib/kimodo-flame-evidence.mjs';
 
 const $ = id => document.getElementById(`kimodo-${id}`);
 const download = (name, value) => {
@@ -51,7 +51,7 @@ export async function mountComposition({prototype, params} = {}) {
     const canvas=$('motion'), ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle='#7d98b0';ctx.font='22px system-ui';
     if (!motion) {ctx.fillText('Generated motion will play here',25,185);return;}
-    const frame=Math.floor((now-playbackStart)/1000*motion.fps)%motion.numFrames;
+    const frame=motionFrame(now,playbackStart,motion.fps,motion.numFrames);
     const joints=motion.joints[frame], center=joints[0];
     const project=([x,y,z])=>[330+((x-center[0])*.85+(z-center[2])*.53)*130,295-y*130];
     ctx.strokeStyle='#71cfff';ctx.lineWidth=4;ctx.beginPath();

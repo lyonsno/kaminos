@@ -63,3 +63,18 @@ The witness runs 6 seconds of motion at 100 steps, with the existing
 minute-scale 10-minute generation deadline. Runtime observations, public
 landing disposition and measured results belong in the run's evidence
 report; this document does not imply the lab branch is merged.
+# Evidence admission
+
+The browser witness requires a clean, committed host checkout and a build at
+that exact commit. Its effective source proof hashes actual browser response
+bytes against that Git tree and the build manifest, including loaded bundles
+and all three support assets. The producer's receipt-bound weights hash covers
+the consumed binary. It also checks the admitted Elfinblue preset receipt.
+The witness verifies a new CDP-completed motion download against both terminal
+output digests, dimensions and generation identity. A useful generation may
+still leave the overall witness failed.
+
+Coexistence means both flame counters advance within each of three equal-time
+portions of inference. This is temporal coverage, not a smoothness guarantee;
+all samples and page cadence distributions are retained. Page cadence is not
+GPU execution timing. A renewable Greenroom lease covers the browser run.

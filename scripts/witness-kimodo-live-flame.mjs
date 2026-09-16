@@ -1,13 +1,14 @@
-import {mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, writeFile, readFile, readdir} from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
+import {sha256,verifyIdentity,verifyMotion,ELFINBLUE_PRESET,PRESET_AUTHORITY} from '../lib/kimodo-witness-contracts.mjs';
 
 const [kimodoRoot, output, url='http://127.0.0.1:8096/kimodo-elfinblue.html'] = process.argv.slice(2);
 if(!kimodoRoot||!output)throw new Error('Usage: node scripts/witness-kimodo-live-flame.mjs <kimodo-checkout> <output-directory> [url]');
 await mkdir(output,{recursive:true});
-const report={schema:'kimodo.flame-browser-witness.v1',status:'started',phase:'preflight',url,startedAt:new Date().toISOString(),errors:[],console:[],hostCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()};
+const report={schema:'kimodo.flame-browser-witness.v1',status:'started',phase:'preflight',url,startedAt:new Date().toISOString(),errors:[],console:[],resources:[]};
 const persist=()=>writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2)+'\n');
 await persist();
 let browser, interval, lease;
@@ -15,20 +16,51 @@ const greenroom=process.env.GREENROOM_BIN;
 const leaseId=`kimodo-flame-${process.pid}`;
 try{
   if(!greenroom)throw new Error('GREENROOM_BIN must name the inspected Greenroom CLI');
+  report.hostCommit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  if(execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim())throw new Error('Witness host source must be committed');
+  const expected=JSON.parse(await readFile('artifacts/kimodo-live-flame/manifest.json','utf8'));
+  if(expected.hostCommit!==report.hostCommit)throw new Error('Rebuild library manifest at the current host commit');
+  if(expected.sourceCommit!==execFileSync('git',['-C',kimodoRoot,'rev-parse','HEAD'],{encoding:'utf8'}).trim())throw new Error('Build/source checkout mismatch');
+  const resolve=createRequire(path.join(path.resolve(kimodoRoot),'package.json'));
+  report.driver={entry:resolve.resolve('puppeteer-core'),version:JSON.parse(await readFile(resolve.resolve('puppeteer-core/package.json'),'utf8')).version};
+  const {default:puppeteer}=await import(pathToFileURL(report.driver.entry));
+  report.expected=expected;
   // Claim failure stops launch; no inference may run after a refused claim.
   report.leaseClaim=execFileSync(greenroom,['lease','claim','--lease-id',leaseId,'--owner','marionette-gut-splicer','--agent-id','marionette-flame-witness','--repo-root',process.cwd(),'--pid',String(process.pid),'--effective-route',url,'--backend','metal','--device','apple-gpu','--profile','browser-smoke','--supports-checkpoints','--ttl-seconds','900'],{encoding:'utf8'});
   lease=true;report.phase='browser-launch';await persist();
-  const resolve=createRequire(path.join(path.resolve(kimodoRoot),'package.json'));
-  const {default:puppeteer}=await import(pathToFileURL(resolve.resolve('puppeteer-core')));
+  interval=setInterval(()=>{try{execFileSync(greenroom,['lease','renew',leaseId,'--ttl-seconds','900'],{encoding:'utf8'});}catch(error){report.errors.push(`lease renewal failed: ${error.message}`);void browser?.close();}},60000);
   browser=await puppeteer.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:false,args:['--enable-unsafe-webgpu','--use-angle=metal','--no-sandbox','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   const page=await browser.newPage();await page.setViewport({width:1440,height:1000,deviceScaleFactor:1});
+  await page.setCacheEnabled(false);
+  const responses=[];
+  page.on('response',response=>{
+    const resource=new URL(response.url());
+    if(resource.origin!==new URL(url).origin||resource.pathname.startsWith('/api/')||resource.pathname.endsWith('/kimodo.bin'))return;
+    const file=decodeURIComponent(resource.pathname.slice(1))||'index.html';
+    if(!/\.(?:html|js|mjs|css|json|wgsl|glsl)$/.test(file))return;
+    responses.push((async()=>{
+      const record={path:file,status:response.status()};report.resources.push(record);
+      try{
+        record.sha256=sha256(await response.buffer());
+        if(file.startsWith('artifacts/kimodo-live-flame/assets/'))record.expectedSha256=expected.assets[path.basename(file)]?.sha256;
+        else if(file.startsWith('artifacts/kimodo-live-flame/lib/'))record.expectedSha256=expected.bundles[path.basename(file)];
+        else if(file==='artifacts/kimodo-live-flame/manifest.json')record.expectedSha256=sha256(await readFile(file));
+        else record.expectedSha256=sha256(execFileSync('git',['show',`${report.hostCommit}:${file}`],{maxBuffer:Infinity}));
+        if(record.sha256!==record.expectedSha256)record.error='served bytes differ from expected source';
+      }catch(error){record.error=error.message;}
+    })());
+  });
   page.on('pageerror',e=>report.errors.push(e.message));
   page.on('console',msg=>{if(msg.type()==='error'||msg.type()==='warn')report.console.push({type:msg.type(),text:msg.text()});});
   report.phase='page-load';await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
   await page.waitForFunction(()=>window.__kimodoLiveFlame?.samples.some(s=>s.active&&s.frameCount>5),{timeout:120000});
   report.phase='weights';await persist();await page.click('#kimodo-load');
-  await page.waitForFunction(()=>['loaded','failed'].includes(window.__kimodoLiveFlame?.status),{timeout:600000});
+  await page.waitForFunction(()=>['loaded','failed'].includes(window.__kimodoLiveFlame?.status),{timeout:0});
   if(await page.evaluate(()=>window.__kimodoLiveFlame.status)!=='loaded')throw new Error(await page.evaluate(()=>JSON.stringify(window.__kimodoLiveFlame.lastError)));
+  // Fail substituted routes before spending an inference run.
+  await Promise.all(responses);
+  const loaded=await page.evaluate(()=>window.__kimodoLiveFlame);
+  verifyIdentity({expected,effective:loaded.source,resources:report.resources,weightsHash:loaded.producerIdentity?.model?.weightsHash,url:page.url()});
   report.phase='baseline';await persist();
   await new Promise(r=>setTimeout(r,5000));
   await page.screenshot({path:path.join(output,'baseline.png')});
@@ -41,14 +73,34 @@ try{
     await page.waitForFunction(()=>window.__kimodoLiveFlame?.telemetry?.progress?.step>=5 || window.__kimodoLiveFlame?.runs[0]?.status!=='running',{timeout:120000});
     if(await page.evaluate(()=>window.__kimodoLiveFlame.runs[0].status==='running'))await page.screenshot({path:path.join(output,'during.png')});
   }catch(error){report.captureError=error.message;}
-  await page.waitForFunction(()=>window.__kimodoLiveFlame?.runs[0]?.status!=='running',{timeout:600000});
+  await page.waitForFunction(()=>window.__kimodoLiveFlame?.runs[0]?.status!=='running',{timeout:0});
+  await page.waitForFunction(()=>document.querySelector('#kimodo-stage')?.textContent.startsWith('succeeded')||window.__kimodoLiveFlame.status!=='succeeded',{timeout:15000});
   report.evidence=await page.evaluate(()=>window.__kimodoLiveFlame);
   report.effectiveUrl=page.url();
-  report.status=report.evidence.runs[0].status==='coexistence-observed'&&report.errors.length===0?'passed':'failed';
-  report.phase='terminal';await page.screenshot({path:path.join(output,'complete.png')});
+  report.phase='identity';await persist();await Promise.all(responses);
+  if(report.resources.some(r=>r.error))throw new Error('Served-resource identity failed; see resources');
+  report.presetReceipt=await page.evaluate(()=>window.__kaminosVolumeSettingsPresetReceipt);
+  if(report.presetReceipt?.presetId!==ELFINBLUE_PRESET||report.presetReceipt?.sourcePresetAuthority!==PRESET_AUTHORITY)throw new Error('Effective flame preset receipt mismatch');
+  report.identity=verifyIdentity({expected,effective:report.evidence.source,resources:report.resources,weightsHash:report.evidence.producerIdentity?.model?.weightsHash,url:report.effectiveUrl});
+  await page.screenshot({path:path.join(output,'complete.png')});
   // Exercise actual exported motion via the same download used by the operator.
-  const cdp=await page.createCDPSession();await cdp.send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:path.resolve(output)});
-  if(await page.$eval('#kimodo-motion-download',el=>!el.disabled)){await page.click('#kimodo-motion-download');await new Promise(r=>setTimeout(r,1000));}
+  report.phase='motion-export';await persist();
+  const downloadDir=path.join(output,'downloads');await mkdir(downloadDir); // Reuse is an error: stale artifacts cannot pass.
+  const before=await readdir(downloadDir);
+  const cdp=await browser.target().createCDPSession();await cdp.send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:path.resolve(downloadDir),eventsEnabled:true});
+  let download;
+  const completed=new Promise((resolve,reject)=>{
+    cdp.on('Browser.downloadWillBegin',event=>{download=event;});
+    cdp.on('Browser.downloadProgress',event=>{if(event.guid===download?.guid){if(event.state==='completed')resolve();if(event.state==='canceled')reject(new Error('Motion download canceled'));}});
+    browser.once('disconnected',()=>reject(new Error('Browser disconnected before download completion')));
+  });
+  if(await page.$eval('#kimodo-motion-download',el=>el.disabled))throw new Error('No motion export available');
+  await page.click('#kimodo-motion-download');await completed;
+  const files=(await readdir(downloadDir)).filter(f=>!before.includes(f));
+  if(files.length!==1||files[0]!==download.suggestedFilename||files[0].endsWith('.crdownload'))throw new Error('Motion download incomplete or ambiguous');
+  const file=path.join(downloadDir,files[0]);report.motionExport={...verifyMotion(await readFile(file),report.evidence.runs[0]),path:file,downloadGuid:download.guid};
+  report.status=report.evidence.runs[0].status==='coexistence-observed'&&report.errors.length===0&&report.identity?.status==='verified'&&report.motionExport?.status==='verified'?'passed':'failed';
+  report.phase='terminal';
 }catch(error){report.status='failed';report.failurePhase=report.phase;report.error={message:error.message,stack:error.stack};
   if(browser){const pages=await browser.pages().catch(()=>[]);const page=pages.at(-1);if(page){report.evidence=await page.evaluate(()=>window.__kimodoLiveFlame??null).catch(()=>null);await page.screenshot({path:path.join(output,'failure.png')}).catch(()=>{});}}
 }finally{
