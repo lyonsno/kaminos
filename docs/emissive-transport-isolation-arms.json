@@ -1,0 +1,6 @@
+[
+  {"id":"warm","mode":2,"temperature":2300,"ev":0,"profile":true,"controls":{"volume-physical-thermal":1.5,"volume-physical-spread":600,"volume-physical-clean":0.08,"volume-physical-smoke-extinction":2,"volume-physical-smoke-albedo":0.6,"volume-physical-ambient":0.2}},
+  {"id":"bright","mode":2,"temperature":2300,"ev":1.5},
+  {"id":"legacy-display-inactive","equalTo":"bright","mode":2,"temperature":2300,"ev":1.5,"controls":{"volume-reaction-boundary-contrast":1.5,"volume-reaction-boundary-gamma":0.35,"volume-reaction-boundary-opacity":0,"volume-smoke":2.8}},
+  {"id":"clean","mode":2,"temperature":2200,"ev":1.5,"controls":{"volume-physical-thermal":0.08,"volume-physical-clean":0.5}}
+]

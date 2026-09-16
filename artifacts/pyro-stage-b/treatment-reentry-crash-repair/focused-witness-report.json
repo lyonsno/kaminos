@@ -1,0 +1,756 @@
+{
+  "schema": "kaminos.pyro.full-support-cockpit-witness.v0",
+  "status": "passed",
+  "requestedRoute": "http://127.0.0.1:18243/volume-selective-head-live.html?volume_scene=tall_plume&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=1.05&volume_reaction_boundary_support_thermal=0.98&volume_reaction_boundary_support_reaction=1&volume_reaction_boundary_support_front=0.66&volume_reaction_boundary_support_interface=0.78&volume_reaction_boundary_cut=0.365&volume_reaction_boundary_softness=0.135&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=0.96&volume_reaction_boundary_curl=1.18&volume_reaction_boundary_divergence=0.22&volume_reaction_boundary_contrast=0.6&volume_reaction_boundary_gamma=3&volume_reaction_boundary_opacity=3&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.92&volume_reaction_boundary_fire_ridge=1.52&volume_reaction_boundary_fire_ridge_cut=0.145&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0.3&volume_reaction_boundary_fire_clean_blue=0.3&volume_reaction_boundary_fire_soot=0.64&volume_reaction_boundary_fire_yellow=0.44&volume_reaction_boundary_fire_warmth=0.16&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_density=0.35&volume_fire=2.25&volume_radiance=0&volume_absorption=1&volume_glow=0&volume_smoke=0.1&volume_curl=1.15&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.9&volume_fire_scale=1.3&volume_detail_scale=0.45&volume_plume_height=0.9&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.49&volume_flow_rate=0.85&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_residual_model_url=&volume_resolution=160&volume_majorant_grid=24&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_quality_reason=tiger-positive-full-flame-appearance-corpus-r11&role=truthHigh&composition=raymarch-only-v0&warmup_steps=0&volume_presentation=beauty&volume_raymarch_smoke=on",
+  "effectiveRoute": "http://127.0.0.1:18788/volume-selective-head-live.html?volume_scene=tall_plume&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=1.05&volume_reaction_boundary_support_thermal=0.98&volume_reaction_boundary_support_reaction=1&volume_reaction_boundary_support_front=0.66&volume_reaction_boundary_support_interface=0.78&volume_reaction_boundary_cut=0.365&volume_reaction_boundary_softness=0.135&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=0.96&volume_reaction_boundary_curl=1.18&volume_reaction_boundary_divergence=0.22&volume_reaction_boundary_contrast=0.6&volume_reaction_boundary_gamma=3&volume_reaction_boundary_opacity=3&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.92&volume_reaction_boundary_fire_ridge=1.52&volume_reaction_boundary_fire_ridge_cut=0.145&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0.3&volume_reaction_boundary_fire_clean_blue=0.3&volume_reaction_boundary_fire_soot=0.64&volume_reaction_boundary_fire_yellow=0.44&volume_reaction_boundary_fire_warmth=0.16&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_density=0.35&volume_fire=2.25&volume_radiance=0&volume_absorption=1&volume_glow=0&volume_smoke=0.1&volume_curl=1.15&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.9&volume_fire_scale=1.3&volume_detail_scale=0.45&volume_plume_height=0.9&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.49&volume_flow_rate=0.85&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_residual_model_url=&volume_resolution=160&volume_majorant_grid=24&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_quality_reason=tiger-positive-full-flame-appearance-corpus-r11&role=truthHigh&composition=splat-only-v0&warmup_steps=0&volume_presentation=beauty&volume_raymarch_smoke=off&full_support_source=analytical-exact&full_support_source_field_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2Fstate%2Fcoefficient-state-120-source-field-manifest.json&full_support_source_fluid=%2Fscratch%2Ffull-support-stage-a-18788%2Fstate%2Fcoefficient-state-120-fluid.f32&full_support_source_front=%2Fscratch%2Ffull-support-stage-a-18788%2Fstate%2Fcoefficient-state-120-front.f32&full_support_exact_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2Fexact%2Fruntime-overlay.json&full_support_baseline_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2Fbaseline%2Fruntime-overlay.json&full_support_flow_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2Fflow%2Fruntime-overlay.json&full_support_stage_b_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2FstageB%2Fpyro-cockpit-manifest.json&full_support_stage_b_manifest_sha256=bc86516f468c9ce9b5306f8cc533819ab65453e5766f9e45ac696bca4d867732&full_support_stage_b_acceptance=%2Fscratch%2Ffull-support-stage-a-18788%2FstageBAcceptance%2Facceptance.json&full_support_stage_b_acceptance_sha256=2657e117c9e3513e3dc3f01e2c2275cb022ab483cbb89fbd12791b1553afcd9a",
+  "bootstrap": {
+    "schema": "kaminos.pyro.full-support-cockpit-bootstrap.v0",
+    "status": "effective",
+    "sourceManifestUrl": "/scratch/full-support-stage-a-18788/state/coefficient-state-120-source-field-manifest.json",
+    "sourceManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+    "imported": {
+      "ok": true,
+      "schema": "kaminos.volume.full-field-import.v0",
+      "identity": "checksum-addressed-fluid-front-import-v0",
+      "status": "applied",
+      "failurePhase": null,
+      "sessionId": "full-field-import-mrqtu4d3-6r73zhu9",
+      "initializationAuthority": "checksum-addressed-live-replay-resume-v0",
+      "filterIdentity": "exact-field-live-replay-application-v0",
+      "layoutIdentity": "fluid-front-grid-x-fastest-y-then-z-f32-v0",
+      "grid": 160,
+      "source": {
+        "identity": "coefficient-state-120",
+        "authority": "checksum-addressed-held-out-coefficient-state-v0"
+      },
+      "sourceManifestPath": "/scratch/full-support-stage-a-18788/state/coefficient-state-120-source-field-manifest.json",
+      "sourceManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+      "receiverInitialSimStepCount": 120,
+      "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+      "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+      "fluidByteLength": 262144000,
+      "frontByteLength": 16384000,
+      "fluidChunkCount": 131,
+      "frontChunkCount": 16,
+      "pressureState": "zeroed-before-first-receiver-step",
+      "pingPongState": "both-read-write-buffers-identical",
+      "temporalHistory": "reset",
+      "renderLoopPaused": true,
+      "activeBeforeImport": false,
+      "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple"
+    },
+    "resumed": {
+      "ok": true,
+      "schema": "kaminos.volume.full-field-import.v0",
+      "identity": "checksum-addressed-native-render-loop-replay-v0",
+      "status": "running",
+      "failurePhase": null,
+      "sessionId": "full-field-import-mrqtu4d3-6r73zhu9",
+      "playbackRequested": "live",
+      "playbackEffective": "live",
+      "initializationAuthority": "checksum-addressed-live-replay-resume-v0",
+      "filterIdentity": "exact-field-live-replay-application-v0",
+      "sourceSimStepCount": 120,
+      "before": {
+        "frameCount": 120,
+        "simStepCount": 120
+      },
+      "renderLoopPaused": false,
+      "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "resumedAtMs": 6480.800000011921
+    },
+    "uploaded": [
+      {
+        "kind": "fluid",
+        "byteLength": 262144000,
+        "chunkCount": 131
+      },
+      {
+        "kind": "front",
+        "byteLength": 16384000,
+        "chunkCount": 16
+      }
+    ],
+    "presentedState": {
+      "simStepCount": 120,
+      "lookFreeze": 1,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0"
+    },
+    "sourceReceipt": {
+      "schema": "kaminos.pyro.full-support-stage-a-receipt.v0",
+      "status": "effective",
+      "requestedSource": "analytical-exact",
+      "effectiveSource": "analytical-exact",
+      "requestedDeposition": "flow-tangent-five-tap-bilinear-v0",
+      "effectiveDeposition": "flow-tangent-five-tap-bilinear-v0",
+      "requestedTransport": "per-splat-self-extinction-additive-rgb-v0",
+      "effectiveTransport": "per-splat-self-extinction-additive-rgb-v0",
+      "rowCount": 1899742,
+      "overflowCount": 0,
+      "fallbackUsed": false,
+      "sourceAudit": {
+        "ok": true,
+        "identity": "boundary-splat-live-union-source-hash-audit-v0",
+        "authority": "effective-imported-fluid-front-plus-derived-sidecar-majorant-sha256-v0",
+        "status": "matched",
+        "failurePhase": null,
+        "reason": null,
+        "expectedSourceHashes": {
+          "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+          "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+          "boundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+          "majorantSha256": "0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1"
+        },
+        "effectiveSourceHashes": {
+          "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+          "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+          "boundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+          "majorantSha256": "0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1"
+        },
+        "sourceManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+        "fullFieldImportSessionId": "full-field-import-mrqtu4d3-6r73zhu9",
+        "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "backend": "WebGPU:apple",
+        "grid": 160,
+        "majorantGrid": 24,
+        "frameCount": 177,
+        "simStepCount": 120
+      },
+      "failures": []
+    }
+  },
+  "stageBReceipt": {
+    "schema": "kaminos.pyro.stage-b-cockpit-consumer-receipt.v0",
+    "status": "effective",
+    "disabledReason": null,
+    "requestedTreatment": "matched-optical-recurrence-v0",
+    "effectiveTreatment": "matched-optical-recurrence-v0",
+    "requestedManifestUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/pyro-cockpit-manifest.json",
+    "effectiveManifestUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/pyro-cockpit-manifest.json",
+    "requestedManifestSha256": "bc86516f468c9ce9b5306f8cc533819ab65453e5766f9e45ac696bca4d867732",
+    "effectiveManifestSha256": "bc86516f468c9ce9b5306f8cc533819ab65453e5766f9e45ac696bca4d867732",
+    "acceptanceState": "accepted",
+    "presentationAuthority": "producer-capture-media-v0",
+    "producerCapture": {
+      "id": "matched-optical",
+      "path": "optical-orbit.mp4",
+      "mediaType": "video/mp4",
+      "bytes": 74081,
+      "sha256": "dd6133a5135d5fc21378670f2cde90d2af0695c22e2415f382e19ea2e9fc74df",
+      "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+      "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+      "requestedRoute": "matched-optical-recurrence-v0",
+      "effectiveRoute": "matched-optical-recurrence-v0",
+      "loadStatus": "loaded",
+      "loadFallbackUsed": false
+    },
+    "requestedAcceptanceUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageBAcceptance/acceptance.json",
+    "effectiveAcceptanceUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageBAcceptance/acceptance.json",
+    "requestedAcceptanceSha256": "2657e117c9e3513e3dc3f01e2c2275cb022ab483cbb89fbd12791b1553afcd9a",
+    "effectiveAcceptanceSha256": "2657e117c9e3513e3dc3f01e2c2275cb022ab483cbb89fbd12791b1553afcd9a",
+    "fallbackUsed": false,
+    "resourceState": "complete",
+    "authority": {
+      "producer": "radiance-transfer-producer-v0",
+      "sourceCommit": "8509882187d87a8dd31d1fac9f8d9bde98f74444",
+      "requestedRoute": "/volume-selective-head-live.html",
+      "effectiveWrapperRoute": "exact-basin-selective-head-live-v0",
+      "effectiveRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "fallbackReason": null,
+      "candidateCount": 147389,
+      "capacity": 262144,
+      "overflowCount": 0,
+      "lockedAxes": [
+        "support",
+        "candidate-membership",
+        "candidate-count",
+        "positions",
+        "covariance",
+        "radius",
+        "sharpness",
+        "coefficients",
+        "learned-attributes",
+        "authored-layers",
+        "simulator-state",
+        "raymarch-target",
+        "camera-orbit"
+      ],
+      "mutableAxes": [
+        "presentation-view",
+        "difference-gain",
+        "debug-view"
+      ],
+      "evidenceAuthority": "producer-evidence-accepted",
+      "visualQuality": "operator-unseen",
+      "operatorScope": "operator-exploration-pending",
+      "decisionBearing": false,
+      "acceptanceCustodian": "pyro-radiance-transfer-bailiff",
+      "acceptanceHead": "10150e6ab96a9bdca8d78514a6e77b727f1c398a",
+      "acceptanceReportSha256": "c4e28bf87917493192f80c44b6323288b6056badf7fb1288c75a1b0d0e0ae1f8"
+    },
+    "viewSockets": {
+      "target": "raymarch-target-v0",
+      "treatment": "matched-optical-recurrence-v0",
+      "difference": "target-minus-treatment-v0",
+      "ridge": "ridge-layer-isolation-v0",
+      "nonRidge": "non-ridge-layer-isolation-v0",
+      "combined": "ridge-plus-non-ridge-v0",
+      "debug": "depth-bin-optical-debug-v0"
+    },
+    "authoredFork": {
+      "outputPath": "authored-forks/matched-optical-recurrence.json",
+      "originalWitnessImmutable": true,
+      "writeMode": "create-new",
+      "writes": [
+        "authored-controls",
+        "route-state-identities",
+        "visual-notes",
+        "artifact-pointers",
+        "original-to-authored-control-delta"
+      ]
+    },
+    "resources": [
+      {
+        "id": "original-presentation",
+        "path": "presentation-orbit.mp4",
+        "mediaType": "video/mp4",
+        "bytes": 101476,
+        "sha256": "832471ca0c902c235bee7bc5b6e0cf35ad61d9cd7a634690c0dbac82ba4c6982",
+        "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/presentation-orbit.mp4",
+        "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/presentation-orbit.mp4",
+        "requestedRoute": "matched-presentation-v0",
+        "effectiveRoute": "matched-presentation-v0",
+        "loadStatus": "loaded",
+        "loadFallbackUsed": false
+      },
+      {
+        "id": "presentation-contact-sheet",
+        "path": "presentation-contact-sheet.png",
+        "mediaType": "image/png",
+        "bytes": 2066935,
+        "sha256": "fcf87b599565143dfb709f569af42db4a78b72648994f25c8190a86ffc1ba4a5",
+        "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/presentation-contact-sheet.png",
+        "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/presentation-contact-sheet.png",
+        "requestedRoute": "matched-presentation-v0",
+        "effectiveRoute": "matched-presentation-v0",
+        "loadStatus": "loaded",
+        "loadFallbackUsed": false
+      },
+      {
+        "id": "matched-optical",
+        "path": "optical-orbit.mp4",
+        "mediaType": "video/mp4",
+        "bytes": 74081,
+        "sha256": "dd6133a5135d5fc21378670f2cde90d2af0695c22e2415f382e19ea2e9fc74df",
+        "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+        "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+        "requestedRoute": "matched-optical-recurrence-v0",
+        "effectiveRoute": "matched-optical-recurrence-v0",
+        "loadStatus": "loaded",
+        "loadFallbackUsed": false
+      },
+      {
+        "id": "optical-contact-sheet",
+        "path": "optical-contact-sheet.png",
+        "mediaType": "image/png",
+        "bytes": 1859421,
+        "sha256": "18cc98a6ab85f11a1baf5a72ea44474d90db7c2a8b5adf92db4094faed5a790c",
+        "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-contact-sheet.png",
+        "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-contact-sheet.png",
+        "requestedRoute": "matched-optical-recurrence-v0",
+        "effectiveRoute": "matched-optical-recurrence-v0",
+        "loadStatus": "loaded",
+        "loadFallbackUsed": false
+      }
+    ],
+    "passes": {
+      "requested": [
+        "manifest-validation",
+        "resource-binding",
+        "resource-load-verification"
+      ],
+      "applied": [
+        "manifest-validation",
+        "resource-binding",
+        "resource-load-verification",
+        "acceptance-validation"
+      ],
+      "rendererRequested": false,
+      "rendererEncoded": false,
+      "rendererApplied": false,
+      "producerMediaRequested": true,
+      "producerMediaApplied": true
+    },
+    "failures": [],
+    "producerMediaReceipt": {
+      "identity": "producer-capture-media-v0",
+      "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+      "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+      "sha256": "dd6133a5135d5fc21378670f2cde90d2af0695c22e2415f382e19ea2e9fc74df",
+      "mediaType": "video/mp4",
+      "fallbackReason": null
+    },
+    "treatmentApplication": {
+      "requestCount": 1,
+      "effectiveApplicationCount": 1,
+      "joinedInFlightCount": 0,
+      "mediaSourceResetCount": 1,
+      "reusedExistingMediaCount": 0,
+      "inFlight": false,
+      "reusedExistingMedia": false
+    }
+  },
+  "stageBTreatmentReentryReceipt": {
+    "concurrentStatuses": [
+      "effective",
+      "effective",
+      "effective",
+      "effective",
+      "effective",
+      "effective",
+      "effective",
+      "effective"
+    ],
+    "finalReceipt": {
+      "schema": "kaminos.pyro.stage-b-cockpit-consumer-receipt.v0",
+      "status": "effective",
+      "disabledReason": null,
+      "requestedTreatment": "matched-optical-recurrence-v0",
+      "effectiveTreatment": "matched-optical-recurrence-v0",
+      "requestedManifestUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/pyro-cockpit-manifest.json",
+      "effectiveManifestUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/pyro-cockpit-manifest.json",
+      "requestedManifestSha256": "bc86516f468c9ce9b5306f8cc533819ab65453e5766f9e45ac696bca4d867732",
+      "effectiveManifestSha256": "bc86516f468c9ce9b5306f8cc533819ab65453e5766f9e45ac696bca4d867732",
+      "acceptanceState": "accepted",
+      "presentationAuthority": "producer-capture-media-v0",
+      "producerCapture": {
+        "id": "matched-optical",
+        "path": "optical-orbit.mp4",
+        "mediaType": "video/mp4",
+        "bytes": 74081,
+        "sha256": "dd6133a5135d5fc21378670f2cde90d2af0695c22e2415f382e19ea2e9fc74df",
+        "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+        "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+        "requestedRoute": "matched-optical-recurrence-v0",
+        "effectiveRoute": "matched-optical-recurrence-v0",
+        "loadStatus": "loaded",
+        "loadFallbackUsed": false
+      },
+      "requestedAcceptanceUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageBAcceptance/acceptance.json",
+      "effectiveAcceptanceUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageBAcceptance/acceptance.json",
+      "requestedAcceptanceSha256": "2657e117c9e3513e3dc3f01e2c2275cb022ab483cbb89fbd12791b1553afcd9a",
+      "effectiveAcceptanceSha256": "2657e117c9e3513e3dc3f01e2c2275cb022ab483cbb89fbd12791b1553afcd9a",
+      "fallbackUsed": false,
+      "resourceState": "complete",
+      "authority": {
+        "producer": "radiance-transfer-producer-v0",
+        "sourceCommit": "8509882187d87a8dd31d1fac9f8d9bde98f74444",
+        "requestedRoute": "/volume-selective-head-live.html",
+        "effectiveWrapperRoute": "exact-basin-selective-head-live-v0",
+        "effectiveRendererRoute": "native-3d-compute-fluid-raymarch-v0",
+        "backend": "WebGPU:apple",
+        "fallbackReason": null,
+        "candidateCount": 147389,
+        "capacity": 262144,
+        "overflowCount": 0,
+        "lockedAxes": [
+          "support",
+          "candidate-membership",
+          "candidate-count",
+          "positions",
+          "covariance",
+          "radius",
+          "sharpness",
+          "coefficients",
+          "learned-attributes",
+          "authored-layers",
+          "simulator-state",
+          "raymarch-target",
+          "camera-orbit"
+        ],
+        "mutableAxes": [
+          "presentation-view",
+          "difference-gain",
+          "debug-view"
+        ],
+        "evidenceAuthority": "producer-evidence-accepted",
+        "visualQuality": "operator-unseen",
+        "operatorScope": "operator-exploration-pending",
+        "decisionBearing": false,
+        "acceptanceCustodian": "pyro-radiance-transfer-bailiff",
+        "acceptanceHead": "10150e6ab96a9bdca8d78514a6e77b727f1c398a",
+        "acceptanceReportSha256": "c4e28bf87917493192f80c44b6323288b6056badf7fb1288c75a1b0d0e0ae1f8"
+      },
+      "viewSockets": {
+        "target": "raymarch-target-v0",
+        "treatment": "matched-optical-recurrence-v0",
+        "difference": "target-minus-treatment-v0",
+        "ridge": "ridge-layer-isolation-v0",
+        "nonRidge": "non-ridge-layer-isolation-v0",
+        "combined": "ridge-plus-non-ridge-v0",
+        "debug": "depth-bin-optical-debug-v0"
+      },
+      "authoredFork": {
+        "outputPath": "authored-forks/matched-optical-recurrence.json",
+        "originalWitnessImmutable": true,
+        "writeMode": "create-new",
+        "writes": [
+          "authored-controls",
+          "route-state-identities",
+          "visual-notes",
+          "artifact-pointers",
+          "original-to-authored-control-delta"
+        ]
+      },
+      "resources": [
+        {
+          "id": "original-presentation",
+          "path": "presentation-orbit.mp4",
+          "mediaType": "video/mp4",
+          "bytes": 101476,
+          "sha256": "832471ca0c902c235bee7bc5b6e0cf35ad61d9cd7a634690c0dbac82ba4c6982",
+          "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/presentation-orbit.mp4",
+          "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/presentation-orbit.mp4",
+          "requestedRoute": "matched-presentation-v0",
+          "effectiveRoute": "matched-presentation-v0",
+          "loadStatus": "loaded",
+          "loadFallbackUsed": false
+        },
+        {
+          "id": "presentation-contact-sheet",
+          "path": "presentation-contact-sheet.png",
+          "mediaType": "image/png",
+          "bytes": 2066935,
+          "sha256": "fcf87b599565143dfb709f569af42db4a78b72648994f25c8190a86ffc1ba4a5",
+          "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/presentation-contact-sheet.png",
+          "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/presentation-contact-sheet.png",
+          "requestedRoute": "matched-presentation-v0",
+          "effectiveRoute": "matched-presentation-v0",
+          "loadStatus": "loaded",
+          "loadFallbackUsed": false
+        },
+        {
+          "id": "matched-optical",
+          "path": "optical-orbit.mp4",
+          "mediaType": "video/mp4",
+          "bytes": 74081,
+          "sha256": "dd6133a5135d5fc21378670f2cde90d2af0695c22e2415f382e19ea2e9fc74df",
+          "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+          "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+          "requestedRoute": "matched-optical-recurrence-v0",
+          "effectiveRoute": "matched-optical-recurrence-v0",
+          "loadStatus": "loaded",
+          "loadFallbackUsed": false
+        },
+        {
+          "id": "optical-contact-sheet",
+          "path": "optical-contact-sheet.png",
+          "mediaType": "image/png",
+          "bytes": 1859421,
+          "sha256": "18cc98a6ab85f11a1baf5a72ea44474d90db7c2a8b5adf92db4094faed5a790c",
+          "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-contact-sheet.png",
+          "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-contact-sheet.png",
+          "requestedRoute": "matched-optical-recurrence-v0",
+          "effectiveRoute": "matched-optical-recurrence-v0",
+          "loadStatus": "loaded",
+          "loadFallbackUsed": false
+        }
+      ],
+      "passes": {
+        "requested": [
+          "manifest-validation",
+          "resource-binding",
+          "resource-load-verification"
+        ],
+        "applied": [
+          "manifest-validation",
+          "resource-binding",
+          "resource-load-verification",
+          "acceptance-validation"
+        ],
+        "rendererRequested": false,
+        "rendererEncoded": false,
+        "rendererApplied": false,
+        "producerMediaRequested": true,
+        "producerMediaApplied": true
+      },
+      "failures": [],
+      "producerMediaReceipt": {
+        "identity": "producer-capture-media-v0",
+        "requestedUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+        "effectiveUrl": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+        "sha256": "dd6133a5135d5fc21378670f2cde90d2af0695c22e2415f382e19ea2e9fc74df",
+        "mediaType": "video/mp4",
+        "fallbackReason": null
+      },
+      "treatmentApplication": {
+        "requestCount": 10,
+        "effectiveApplicationCount": 1,
+        "joinedInFlightCount": 7,
+        "mediaSourceResetCount": 1,
+        "reusedExistingMediaCount": 2,
+        "inFlight": false,
+        "reusedExistingMedia": true
+      }
+    }
+  },
+  "browserProcessTelemetry": {
+    "beforeReentry": {
+      "rootPid": 11675,
+      "alive": true,
+      "rssKb": 5435328,
+      "processCount": 9,
+      "processes": [
+        {
+          "pid": 11675,
+          "ppid": 11664,
+          "rssKb": 250448,
+          "command": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --enable-unsafe-webgpu --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --remote-debugging-port=50093 --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --window-size=1800,1000 --no-first-run --no-default-browser-check about:blank"
+        },
+        {
+          "pid": 11679,
+          "ppid": 11675,
+          "rssKb": 1715616,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=gpu-process --headless=new --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --gpu-preferences=UAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAAOAAAAAAAAAADAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAABgAAAAAAAAAGAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708988185955192 --seatbelt-client=28"
+        },
+        {
+          "pid": 11680,
+          "ppid": 11675,
+          "rssKb": 94256,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708989122997041 --seatbelt-client=22"
+        },
+        {
+          "pid": 11681,
+          "ppid": 11675,
+          "rssKb": 66128,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708990060038890 --seatbelt-client=36"
+        },
+        {
+          "pid": 11684,
+          "ppid": 11675,
+          "rssKb": 2889296,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=6 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164541264413 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708991934122588 --seatbelt-client=74"
+        },
+        {
+          "pid": 11687,
+          "ppid": 11675,
+          "rssKb": 101456,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --extension-process --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=10 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164541572716 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708995682289984 --seatbelt-client=106"
+        },
+        {
+          "pid": 11706,
+          "ppid": 11675,
+          "rssKb": 87472,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=26 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164544842531 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190709010674959568 --seatbelt-client=124"
+        },
+        {
+          "pid": 11707,
+          "ppid": 11675,
+          "rssKb": 120864,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --extension-process --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=27 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164544843955 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190709011612001417 --seatbelt-client=125"
+        },
+        {
+          "pid": 11709,
+          "ppid": 11675,
+          "rssKb": 109792,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --extension-process --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=28 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164544928689 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190709012549043266 --seatbelt-client=149"
+        }
+      ]
+    },
+    "afterReentry": {
+      "rootPid": 11675,
+      "alive": true,
+      "rssKb": 5314464,
+      "processCount": 8,
+      "processes": [
+        {
+          "pid": 11675,
+          "ppid": 11664,
+          "rssKb": 249888,
+          "command": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --headless=new --enable-unsafe-webgpu --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --remote-debugging-port=50093 --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --window-size=1800,1000 --no-first-run --no-default-browser-check about:blank"
+        },
+        {
+          "pid": 11679,
+          "ppid": 11675,
+          "rssKb": 1715872,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=gpu-process --headless=new --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --gpu-preferences=UAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAAOAAAAAAAAAADAAAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAAABgAAAAAAAAAGAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708988185955192 --seatbelt-client=28"
+        },
+        {
+          "pid": 11680,
+          "ppid": 11675,
+          "rssKb": 94192,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708989122997041 --seatbelt-client=22"
+        },
+        {
+          "pid": 11681,
+          "ppid": 11675,
+          "rssKb": 66160,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708990060038890 --seatbelt-client=36"
+        },
+        {
+          "pid": 11684,
+          "ppid": 11675,
+          "rssKb": 2889632,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=6 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164541264413 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708991934122588 --seatbelt-client=74"
+        },
+        {
+          "pid": 11687,
+          "ppid": 11675,
+          "rssKb": 101456,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --extension-process --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=10 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164541572716 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190708995682289984 --seatbelt-client=106"
+        },
+        {
+          "pid": 11706,
+          "ppid": 11675,
+          "rssKb": 87472,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=26 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164544842531 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190709010674959568 --seatbelt-client=124"
+        },
+        {
+          "pid": 11709,
+          "ppid": 11675,
+          "rssKb": 109792,
+          "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.128/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer) --type=renderer --noerrdialogs --user-data-dir=/tmp/kaminos-full-support-cockpit-witness-11664-1784406965982 --extension-process --disable-background-timer-throttling --enable-unsafe-webgpu --remote-debugging-port=50093 --lang=en-US --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=28 --time-ticks-at-unix-epoch=-1784242425084555 --launch-time-ticks=164544928689 --shared-files --field-trial-handle=1718379636,r,42281255904435921,16691001896783799295,262144 --disable-features=PaintHolding --variations-seed-version --pseudonymization-salt-handle=1935764596,r,10506546028650631719,1167044062534837491,4 --trace-process-track-uuid=3190709012549043266 --seatbelt-client=149"
+        }
+      ]
+    }
+  },
+  "producerMediaVisualState": {
+    "readyState": 4,
+    "videoWidth": 314,
+    "videoHeight": 242,
+    "duration": 3.5,
+    "currentTime": 1.558144,
+    "mediaTime": 1.666667,
+    "presentedFrames": 9,
+    "minimumFrameTime": 1.6666666666666667,
+    "paused": true,
+    "currentSrc": "http://127.0.0.1:18788/scratch/full-support-stage-a-18788/stageB/optical-orbit.mp4",
+    "hidden": false,
+    "mediaRect": {
+      "left": 380,
+      "top": 0,
+      "width": 1032,
+      "height": 1000
+    },
+    "mediaDisplay": "grid",
+    "mediaVisibility": "visible",
+    "mediaOpacity": "1",
+    "mediaZIndex": "4",
+    "topmostElementId": "volume-stage-b-producer-video",
+    "occlusionProbeIds": [
+      "volume-stage-b-producer-video",
+      "volume-stage-b-producer-video",
+      "volume-stage-b-producer-video",
+      "volume-stage-b-producer-video",
+      "volume-stage-b-producer-video"
+    ],
+    "videoPixelStats": {
+      "pixelCount": 75988,
+      "litPixelCount": 46316,
+      "minimumLuma": 0,
+      "maximumLuma": 114.59479999999999,
+      "meanLuma": 25.115792964679265,
+      "lumaVariance": 1061.107430898712
+    }
+  },
+  "sourceSweep": "bootstrap-only",
+  "sourceReceipts": [
+    {
+      "requestedSource": "analytical-exact",
+      "sourceReceipt": {
+        "schema": "kaminos.pyro.full-support-stage-a-receipt.v0",
+        "status": "effective",
+        "requestedSource": "analytical-exact",
+        "effectiveSource": "analytical-exact",
+        "requestedDeposition": "flow-tangent-five-tap-bilinear-v0",
+        "effectiveDeposition": "flow-tangent-five-tap-bilinear-v0",
+        "requestedTransport": "per-splat-self-extinction-additive-rgb-v0",
+        "effectiveTransport": "per-splat-self-extinction-additive-rgb-v0",
+        "rowCount": 1899742,
+        "overflowCount": 0,
+        "fallbackUsed": false,
+        "sourceAudit": {
+          "ok": true,
+          "identity": "boundary-splat-live-union-source-hash-audit-v0",
+          "authority": "effective-imported-fluid-front-plus-derived-sidecar-majorant-sha256-v0",
+          "status": "matched",
+          "failurePhase": null,
+          "reason": null,
+          "expectedSourceHashes": {
+            "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+            "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+            "boundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+            "majorantSha256": "0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1"
+          },
+          "effectiveSourceHashes": {
+            "fluidSha256": "98d1d0650d67fcdf32f2fc7f5c353bac5355f7df01f45d1e0211c51eb02a7620",
+            "frontSha256": "27491552ce2c0294125d35658c3dd47289c91d0d068909c0c244e5167d7c7e35",
+            "boundarySidecarSha256": "33a6943c6a2cb644f244d5edeeb544dbce52d0cef98e3fb9d705abd49b941216",
+            "majorantSha256": "0b73c83d00b34d7fd2176f3d0709800b5b9a6617f04c736a359c3d30b2d71da1"
+          },
+          "sourceManifestSha256": "2841b79f3ae625bba8b7f36f2b5f7ae40755814b95214a2607a95b3390456483",
+          "fullFieldImportSessionId": "full-field-import-mrqtu4d3-6r73zhu9",
+          "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+          "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+          "backend": "WebGPU:apple",
+          "grid": 160,
+          "majorantGrid": 24,
+          "frameCount": 177,
+          "simStepCount": 120
+        },
+        "failures": []
+      },
+      "state": {
+        "simStepCount": 120,
+        "lookFreeze": 1,
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0"
+      },
+      "admissionAuthority": "bootstrap-source-already-effective"
+    }
+  ],
+  "screenshotPath": "artifacts/pyro-stage-b/treatment-reentry-crash-repair/focused-cockpit-reentry-survival.png",
+  "elapsedMs": 22922.694375,
+  "browserEventAudit": {
+    "status": "clean",
+    "observedEventCount": 1,
+    "rejectedEventCount": 0
+  },
+  "browserEvents": [
+    {
+      "method": "Runtime.consoleAPICalled",
+      "params": {
+        "type": "log",
+        "args": [
+          {
+            "type": "string",
+            "value": "WebGPU renderer initialized, backend:"
+          },
+          {
+            "type": "string",
+            "value": "WebGPUBackend"
+          }
+        ],
+        "executionContextId": 4,
+        "timestamp": 1784406966997.527,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "initScene",
+              "scriptId": "8",
+              "url": "http://127.0.0.1:18788/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=rgb_upscale_basin_0711&volume_resolution=160&volume_majorant_grid=24&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.92&volume_render_scale=1&volume_density=0.35&volume_fire=2.25&volume_radiance=0&volume_absorption=1&volume_glow=0&volume_smoke=0.1&volume_curl=1.15&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.9&volume_fire_scale=1.3&volume_detail_scale=0.45&volume_plume_height=0.9&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.49&volume_flow_rate=0.85&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_quality_reason=tiger-positive-full-flame-appearance-corpus-r11&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=1.05&volume_reaction_boundary_support_thermal=0.98&volume_reaction_boundary_support_reaction=1&volume_reaction_boundary_support_front=0.66&volume_reaction_boundary_support_interface=0.78&volume_reaction_boundary_cut=0.365&volume_reaction_boundary_softness=0.135&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=0.96&volume_reaction_boundary_curl=1.18&volume_reaction_boundary_divergence=0.22&volume_reaction_boundary_contrast=0.6&volume_reaction_boundary_gamma=3&volume_reaction_boundary_opacity=3&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_reaction_boundary_fire_ridge=1.52&volume_reaction_boundary_fire_ridge_cut=0.145&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0.3&volume_reaction_boundary_fire_clean_blue=0.3&volume_reaction_boundary_fire_soot=0.64&volume_reaction_boundary_fire_yellow=0.44&volume_reaction_boundary_fire_warmth=0.16&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_residual_model_url=&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_presentation=beauty&volume_raymarch_smoke=off&full_support_source=analytical-exact&full_support_source_field_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2Fstate%2Fcoefficient-state-120-source-field-manifest.json&full_support_source_fluid=%2Fscratch%2Ffull-support-stage-a-18788%2Fstate%2Fcoefficient-state-120-fluid.f32&full_support_source_front=%2Fscratch%2Ffull-support-stage-a-18788%2Fstate%2Fcoefficient-state-120-front.f32&full_support_exact_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2Fexact%2Fruntime-overlay.json&full_support_baseline_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2Fbaseline%2Fruntime-overlay.json&full_support_flow_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2Fflow%2Fruntime-overlay.json&full_support_stage_b_manifest=%2Fscratch%2Ffull-support-stage-a-18788%2FstageB%2Fpyro-cockpit-manifest.json&full_support_stage_b_manifest_sha256=bc86516f468c9ce9b5306f8cc533819ab65453e5766f9e45ac696bca4d867732&full_support_stage_b_acceptance=%2Fscratch%2Ffull-support-stage-a-18788%2FstageBAcceptance%2Facceptance.json&full_support_stage_b_acceptance_sha256=2657e117c9e3513e3dc3f01e2c2275cb022ab483cbb89fbd12791b1553afcd9a",
+              "lineNumber": 8670,
+              "columnNumber": 10
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

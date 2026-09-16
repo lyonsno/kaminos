@@ -1,0 +1,380 @@
+{
+  "identity": "kaminos.volume.intrinsic-presentation-witness.v0",
+  "status": "failed",
+  "failurePhase": "evidence-validation",
+  "error": "AssertionError [ERR_ASSERTION]: restored Beauty pixels do not match same-state Beauty\n+ actual - expected\n\n+ 'f01eec8af4a4280b02361311bad019b7826bbd6fcce425442bc099f82dd1a3bc'\n- '9368db66da35452dbb17f1dabf53b002dfadf24e2b47fd3c4c766b3353e3d5b0'\n\n    at volume-intrinsic-presentation-witness.mjs:337:10",
+  "requestedUrl": "http://127.0.0.1:18780/volume-selective-head-live.html?volume_scene=tall_plume&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=0.4&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=1.02&volume_reaction_boundary_support_front=0.34&volume_reaction_boundary_support_interface=0.62&volume_reaction_boundary_cut=0&volume_reaction_boundary_softness=0.45&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=1.12&volume_reaction_boundary_divergence=1&volume_reaction_boundary_contrast=0.45&volume_reaction_boundary_gamma=1.2&volume_reaction_boundary_opacity=2.2&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=1.46&volume_reaction_boundary_fire_ridge=0.94&volume_reaction_boundary_fire_ridge_cut=0&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0.48&volume_reaction_boundary_fire_soot=0.66&volume_reaction_boundary_fire_yellow=0.26&volume_reaction_boundary_fire_warmth=0.08&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_density=0.35&volume_fire=2.65&volume_radiance=0&volume_absorption=0&volume_glow=0&volume_smoke=0.1&volume_curl=1.6&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.93&volume_detail_scale=0.45&volume_plume_height=1.1&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.08&volume_flow_rate=0.7&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_residual_model_url=&volume_resolution=160&volume_majorant_grid=24&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_quality_reason=operator-settings-only-capture&settings_preset=vsp-6a66b498d5402c54bf3260b9446db103ff55a8fc18e851916b3c3b5206a216f8&settings_preset_authority=shared-volume-settings-preset-v2&volume_presentation=beauty&warmup_steps=0&role=truthHigh&composition=smoke-raymarch-under-splats-v0",
+  "lastTrustworthyEvidence": {
+    "admitted": {
+      "location": "http://127.0.0.1:18780/volume-selective-head-live.html?volume_scene=tall_plume&volume_pyro_compare=base&volume_reaction_live_view=boundary_fire&volume_reaction_boundary_gradient=0.4&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=1.02&volume_reaction_boundary_support_front=0.34&volume_reaction_boundary_support_interface=0.62&volume_reaction_boundary_cut=0&volume_reaction_boundary_softness=0.45&volume_reaction_boundary_core_reject=1&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=1.12&volume_reaction_boundary_divergence=1&volume_reaction_boundary_contrast=0.45&volume_reaction_boundary_gamma=1.2&volume_reaction_boundary_opacity=2.2&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_radius=0.98&volume_boundary_splat_sharpness=12&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=1.46&volume_reaction_boundary_fire_ridge=0.94&volume_reaction_boundary_fire_ridge_cut=0&volume_reaction_boundary_fire_tip=2&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0.48&volume_reaction_boundary_fire_soot=0.66&volume_reaction_boundary_fire_yellow=0.26&volume_reaction_boundary_fire_warmth=0.08&volume_reaction_boundary_fire_luma=5&volume_reaction_heat_min=0&volume_reaction_heat_max=0.42&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.071&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.16&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.07&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=3.1&volume_density=0.35&volume_fire=2.65&volume_radiance=0&volume_absorption=0&volume_glow=0&volume_smoke=0.1&volume_curl=1.6&volume_microdetail=2.5&volume_interface_shred=5&volume_fire_licks=5&volume_projection=1.5&volume_speed=5&volume_fire_scale=0.93&volume_detail_scale=0.45&volume_plume_height=1.1&volume_wind_strength=1.25&volume_wind_angle=-65&volume_wind_height=-0.8&volume_input_radius=0.08&volume_flow_rate=0.7&volume_steps=160&volume_adaptive_rays=0&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_residual_mode=webgpu-direct-residual&volume_residual_strength=0&volume_residual_feature_debug=0&volume_residual_model_url=&volume_resolution=160&volume_majorant_grid=24&volume_grid_overlay=0&volume_flow_debug=0&volume_fire_render_mode=inspect&volume_shell_inspect_mode=&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_curl=0.25&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=1.95&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0.4&volume_oracle_activity_vorticity=3&volume_oracle_activity_material=0&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pyro_interface_focus=0&volume_pyro_fire_mode=stock&volume_pyro_flame_paint=0&volume_pyro_stock_mix=1&volume_pyro_flame_luma=1&volume_pyro_flame_core_color=%23ffae00&volume_pyro_flame_edge_color=%23ff4d00&volume_look_freeze=0&volume_pyro_flow_bite=0&volume_pyro_flow_border=0&volume_pyro_flow_teeth=0&volume_pyro_flow_rise=0&volume_pyro_flow_fire_lock=1&volume_pyro_flow_luma=1&volume_pyro_flow_radiance=0&volume_pyro_flow_spikes=0&volume_pyro_flow_cool_color=%23ff6400&volume_pyro_flow_hot_color=%23ff320f&volume_pyro_radiance=0&volume_pyro_radiance_gate=1&volume_pyro_radiance_spill=0&volume_pyro_radiance_warmth=0&volume_pyro_radiance_hue=0.5&volume_pyro_radiance_chroma=0&volume_pyro_radiance_luma=1&volume_pyro_radiance_cool_color=%23eb0000&volume_pyro_radiance_warm_color=%23ffcd75&volume_pyro_radiance_source=fire&volume_pyro_radiance_height=0&volume_pyro_radiance_border=0&volume_pyro_radiance_teeth=0&volume_pyro_radiance_rise=0&volume_pyro_radiance_fire_lock=1&volume_pyro_edge_bite=0&volume_pyro_bite_border=0&volume_pyro_bite_teeth=0&volume_pyro_bite_wake=0&volume_pyro_bite_height=0&volume_pyro_bite_fire_lock=1&volume_pyro_bite_core=0&volume_pyro_bite_core_cut=1&volume_pyro_bite_rim=0&volume_pyro_bite_rim_cut=1&volume_pyro_bite_after=0&volume_pyro_bite_after_cut=1&volume_pyro_bite_heat=0&volume_pyro_bite_chroma=0&volume_pyro_bite_luma=1&volume_pyro_bite_ember_color=%23ff6600&volume_pyro_bite_hot_color=%23ff4000&volume_pyro_smoke_fold=0&volume_pyro_fold_border=0&volume_pyro_fold_wake=0&volume_pyro_wake_lift=0&volume_pyro_wake_warmth=0&volume_pyro_wake_luma=1&volume_pyro_wake_shadow_color=%23384c50&volume_pyro_wake_ember_color=%23b06a2a&volume_pyro_diagnostic_paint=0&volume_pyro_carrier_view=normal&volume_pyro_overdrive=1&volume_pressure_mode=global-p3&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.61&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.34&volume_canonical_spread=1&volume_canonical_centerline=1&volume_canonical_body_balance=0&volume_quality_reason=operator-settings-only-capture&settings_preset=vsp-6a66b498d5402c54bf3260b9446db103ff55a8fc18e851916b3c3b5206a216f8&settings_preset_authority=shared-volume-settings-preset-v2&volume_presentation=beauty&warmup_steps=0&role=truthHigh&composition=smoke-raymarch-under-splats-v0",
+      "wrapperRoute": "exact-basin-selective-head-live-v0",
+      "wrapperStatus": "running",
+      "wrapperError": null,
+      "requestedRole": "truthHigh",
+      "effectiveRole": "truthHigh",
+      "requestedComposition": "smoke-raymarch-under-splats-v0",
+      "effectiveComposition": "smoke-raymarch-under-splats-v0",
+      "active": true,
+      "backend": "WebGPU:apple",
+      "error": null,
+      "requestedRoute": "kaminos_volume_smoke=1",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "sourceSettingsPreset": {
+        "presetId": "vsp-6a66b498d5402c54bf3260b9446db103ff55a8fc18e851916b3c3b5206a216f8",
+        "sourcePresetAuthority": "shared-volume-settings-preset-v2",
+        "controlCount": 186,
+        "schemaIdentity": "kaminos-volume-settings-preset-schema-v2",
+        "storePath": "/Users/noahlyons/.local/share/kaminos/volume-settings-presets"
+      }
+    },
+    "evidence": {
+      "sourceSettingsPreset": {
+        "requestedPresetRef": "vsp-6a66b498d5402c54bf3260b9446db103ff55a8fc18e851916b3c3b5206a216f8",
+        "presetId": "vsp-6a66b498d5402c54bf3260b9446db103ff55a8fc18e851916b3c3b5206a216f8",
+        "label": "raymarch_hero_basin_thin_plume_refined",
+        "contentHash": "sha256:6a66b498d5402c54bf3260b9446db103ff55a8fc18e851916b3c3b5206a216f8",
+        "storePath": "/Users/noahlyons/.local/share/kaminos/volume-settings-presets",
+        "schemaIdentity": "kaminos-volume-settings-preset-schema-v2",
+        "sourcePresetAuthority": "shared-volume-settings-preset-v2",
+        "controlCount": 186
+      },
+      "requestedRoute": "kaminos_volume_smoke=1",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "wrapperRoute": "exact-basin-selective-head-live-v0",
+      "requestedRole": "truthHigh",
+      "effectiveRole": "truthHigh",
+      "requestedComposition": "smoke-raymarch-under-splats-v0",
+      "effectiveComposition": "smoke-raymarch-under-splats-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "sameStateCaptureId": "intrinsic-presentation-f68-s68",
+      "before": {
+        "frameCount": 68,
+        "simStepCount": 68,
+        "temporalHistoryResetCount": 20,
+        "controlsHash": "4904d83ef2bb5b9b5920e48fe6dd09b425247dde23b826ee6ae9cf81b2c15faf",
+        "cameraHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0"
+      },
+      "after": {
+        "frameCount": 68,
+        "simStepCount": 68,
+        "temporalHistoryResetCount": 20,
+        "controlsHash": "4904d83ef2bb5b9b5920e48fe6dd09b425247dde23b826ee6ae9cf81b2c15faf",
+        "cameraHash": "5d20c917cf1dd8c58a3e5b00a77b604ca330cac831187759b3a248a0b85fd3f0"
+      },
+      "beauty": {
+        "mode": "beauty",
+        "receipt": {
+          "identity": "volume-presentation-mode-receipt-v0",
+          "requestedMode": "beauty",
+          "effectiveMode": "beauty",
+          "fallbackReason": null,
+          "targetIdentity": "authored-beauty-renderer-v0",
+          "effectiveRayQuality": {
+            "raySteps": 160,
+            "adaptiveRays": 0,
+            "renderScale": 1
+          },
+          "temporalHistoryContribution": "authored-control",
+          "authoredControlsMutated": false,
+          "simulationAdvanced": false,
+          "simulationReset": false,
+          "cameraMutated": false,
+          "passes": {
+            "raymarch": "authored-beauty-renderer-v0",
+            "splats": "authored-control",
+            "residual": "authored-control",
+            "featureCapture": "authored-control",
+            "smoke": "authored-control"
+          }
+        },
+        "durationMs": 723.7000000029802,
+        "sample": {
+          "width": 1060,
+          "height": 817,
+          "frameCount": 68,
+          "simStepCount": 68,
+          "volumeReconstructionStyle": "smoke-raymarch-under-splats-v0",
+          "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+          "prototypeIdentity": "kaminos-volume-prototype-v0",
+          "backend": "WebGPU:apple",
+          "boundarySplatMode": "learned",
+          "boundarySplatFeatureCaptureRequested": false,
+          "boundarySplatFeatureCaptureEffective": false,
+          "boundarySplatFallbackReason": null,
+          "boundarySplatInstanceCount": 23911,
+          "boundarySplatCandidateCount": 23911,
+          "volumePresentationReceipt": {
+            "identity": "volume-presentation-mode-receipt-v0",
+            "requestedMode": "beauty",
+            "effectiveMode": "beauty",
+            "fallbackReason": null,
+            "targetIdentity": "authored-beauty-renderer-v0",
+            "effectiveRayQuality": {
+              "raySteps": 160,
+              "adaptiveRays": 0,
+              "renderScale": 1
+            },
+            "temporalHistoryContribution": "authored-control",
+            "authoredControlsMutated": false,
+            "simulationAdvanced": false,
+            "simulationReset": false,
+            "cameraMutated": false,
+            "passes": {
+              "raymarch": "authored-beauty-renderer-v0",
+              "splats": "authored-control",
+              "residual": "authored-control",
+              "featureCapture": "authored-control",
+              "smoke": "authored-control"
+            },
+            "application": {
+              "identity": "volume-presentation-applied-pass-receipt-v0",
+              "effectiveMode": "beauty",
+              "targetIdentity": "authored-beauty-renderer-v0",
+              "compositionEffective": "smoke-raymarch-under-splats-v0",
+              "raymarchEncoded": true,
+              "raymarchApplied": true,
+              "splatsEncoded": true,
+              "splatsApplied": true,
+              "residualApplied": false,
+              "featureCaptureApplied": false,
+              "smokeContribution": "authored-control",
+              "fallbackReason": null
+            }
+          },
+          "selectiveHeadLivePassReceipt": {
+            "identity": "selective-head-live-render-pass-receipt-v0",
+            "composition": "smoke-raymarch-under-splats-v0",
+            "compositionAuthority": "smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+            "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchFireAuthority": 0,
+            "raymarchEncoded": true,
+            "raymarchApplied": true,
+            "splatEncoded": true,
+            "splatApplied": true,
+            "fallbackReason": null
+          }
+        },
+        "pixelHash": "9368db66da35452dbb17f1dabf53b002dfadf24e2b47fd3c4c766b3353e3d5b0",
+        "metrics": {
+          "litPixels": 161699,
+          "alphaPixels": 866020,
+          "meanLuma": 13.934527656100396,
+          "nonblank": true
+        }
+      },
+      "intrinsic": {
+        "mode": "intrinsic",
+        "receipt": {
+          "identity": "volume-presentation-mode-receipt-v0",
+          "requestedMode": "intrinsic",
+          "effectiveMode": "intrinsic",
+          "fallbackReason": null,
+          "targetIdentity": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+          "effectiveRayQuality": {
+            "raySteps": 160,
+            "adaptiveRays": 0,
+            "renderScale": 1
+          },
+          "temporalHistoryContribution": "suppressed",
+          "authoredControlsMutated": false,
+          "simulationAdvanced": false,
+          "simulationReset": false,
+          "cameraMutated": false,
+          "passes": {
+            "raymarch": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+            "splats": "off",
+            "residual": "off",
+            "featureCapture": "off",
+            "smoke": "suppressed"
+          }
+        },
+        "durationMs": 952.6000000089407,
+        "sample": {
+          "width": 1060,
+          "height": 817,
+          "frameCount": 68,
+          "simStepCount": 68,
+          "volumeReconstructionStyle": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+          "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+          "prototypeIdentity": "kaminos-volume-prototype-v0",
+          "backend": "WebGPU:apple",
+          "boundarySplatMode": "learned",
+          "boundarySplatFeatureCaptureRequested": false,
+          "boundarySplatFeatureCaptureEffective": false,
+          "boundarySplatFallbackReason": null,
+          "boundarySplatInstanceCount": 23911,
+          "boundarySplatCandidateCount": 23911,
+          "volumePresentationReceipt": {
+            "identity": "volume-presentation-mode-receipt-v0",
+            "requestedMode": "intrinsic",
+            "effectiveMode": "intrinsic",
+            "fallbackReason": null,
+            "targetIdentity": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+            "effectiveRayQuality": {
+              "raySteps": 160,
+              "adaptiveRays": 0,
+              "renderScale": 1
+            },
+            "temporalHistoryContribution": "suppressed",
+            "authoredControlsMutated": false,
+            "simulationAdvanced": false,
+            "simulationReset": false,
+            "cameraMutated": false,
+            "passes": {
+              "raymarch": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+              "splats": "off",
+              "residual": "off",
+              "featureCapture": "off",
+              "smoke": "suppressed"
+            },
+            "application": {
+              "identity": "volume-presentation-applied-pass-receipt-v0",
+              "effectiveMode": "intrinsic",
+              "targetIdentity": "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0",
+              "compositionEffective": "raymarch-only-v0",
+              "raymarchEncoded": true,
+              "raymarchApplied": true,
+              "splatsEncoded": false,
+              "splatsApplied": false,
+              "residualApplied": false,
+              "featureCaptureApplied": false,
+              "smokeContribution": "suppressed",
+              "fallbackReason": null
+            }
+          },
+          "selectiveHeadLivePassReceipt": {
+            "identity": "selective-head-live-render-pass-receipt-v0",
+            "composition": "smoke-raymarch-under-splats-v0",
+            "compositionAuthority": "smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+            "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchFireAuthority": 0,
+            "raymarchEncoded": true,
+            "raymarchApplied": true,
+            "splatEncoded": true,
+            "splatApplied": true,
+            "fallbackReason": null
+          }
+        },
+        "pixelHash": "c21872f7136b0e7c9a7c853492ef9c62aa299760df0e8ba7f327869e4dad6fe9",
+        "metrics": {
+          "litPixels": 100143,
+          "alphaPixels": 866020,
+          "meanLuma": 5.176028039473133,
+          "nonblank": true
+        }
+      },
+      "beautyRestored": {
+        "mode": "beauty",
+        "receipt": {
+          "identity": "volume-presentation-mode-receipt-v0",
+          "requestedMode": "beauty",
+          "effectiveMode": "beauty",
+          "fallbackReason": null,
+          "targetIdentity": "authored-beauty-renderer-v0",
+          "effectiveRayQuality": {
+            "raySteps": 160,
+            "adaptiveRays": 0,
+            "renderScale": 1
+          },
+          "temporalHistoryContribution": "authored-control",
+          "authoredControlsMutated": false,
+          "simulationAdvanced": false,
+          "simulationReset": false,
+          "cameraMutated": false,
+          "passes": {
+            "raymarch": "authored-beauty-renderer-v0",
+            "splats": "authored-control",
+            "residual": "authored-control",
+            "featureCapture": "authored-control",
+            "smoke": "authored-control"
+          }
+        },
+        "durationMs": 945.2999999970198,
+        "sample": {
+          "width": 1060,
+          "height": 817,
+          "frameCount": 68,
+          "simStepCount": 68,
+          "volumeReconstructionStyle": "smoke-raymarch-under-splats-v0",
+          "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+          "prototypeIdentity": "kaminos-volume-prototype-v0",
+          "backend": "WebGPU:apple",
+          "boundarySplatMode": "learned",
+          "boundarySplatFeatureCaptureRequested": false,
+          "boundarySplatFeatureCaptureEffective": false,
+          "boundarySplatFallbackReason": null,
+          "boundarySplatInstanceCount": 23911,
+          "boundarySplatCandidateCount": 23911,
+          "volumePresentationReceipt": {
+            "identity": "volume-presentation-mode-receipt-v0",
+            "requestedMode": "beauty",
+            "effectiveMode": "beauty",
+            "fallbackReason": null,
+            "targetIdentity": "authored-beauty-renderer-v0",
+            "effectiveRayQuality": {
+              "raySteps": 160,
+              "adaptiveRays": 0,
+              "renderScale": 1
+            },
+            "temporalHistoryContribution": "authored-control",
+            "authoredControlsMutated": false,
+            "simulationAdvanced": false,
+            "simulationReset": false,
+            "cameraMutated": false,
+            "passes": {
+              "raymarch": "authored-beauty-renderer-v0",
+              "splats": "authored-control",
+              "residual": "authored-control",
+              "featureCapture": "authored-control",
+              "smoke": "authored-control"
+            },
+            "application": {
+              "identity": "volume-presentation-applied-pass-receipt-v0",
+              "effectiveMode": "beauty",
+              "targetIdentity": "authored-beauty-renderer-v0",
+              "compositionEffective": "smoke-raymarch-under-splats-v0",
+              "raymarchEncoded": true,
+              "raymarchApplied": true,
+              "splatsEncoded": true,
+              "splatsApplied": true,
+              "residualApplied": false,
+              "featureCaptureApplied": false,
+              "smokeContribution": "authored-control",
+              "fallbackReason": null
+            }
+          },
+          "selectiveHeadLivePassReceipt": {
+            "identity": "selective-head-live-render-pass-receipt-v0",
+            "composition": "smoke-raymarch-under-splats-v0",
+            "compositionAuthority": "smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchAuthority": "smoke-raymarch-authority-broad-smoke-only-v0",
+            "splatAuthority": "splat-fire-authority-learned-boundary-sheets-v0",
+            "raymarchFireAuthority": 0,
+            "raymarchEncoded": true,
+            "raymarchApplied": true,
+            "splatEncoded": true,
+            "splatApplied": true,
+            "fallbackReason": null
+          }
+        },
+        "pixelHash": "f01eec8af4a4280b02361311bad019b7826bbd6fcce425442bc099f82dd1a3bc",
+        "metrics": {
+          "litPixels": 161699,
+          "alphaPixels": 866020,
+          "meanLuma": 13.934528481947375,
+          "nonblank": true
+        }
+      },
+      "restorationDelta": {
+        "maxChannelDelta": 1,
+        "meanAbsChannelDelta": 2.8867693586753195e-7,
+        "changedPixels": 1,
+        "changedPixelRatio": 0.0000011547077434701278
+      }
+    }
+  }
+}

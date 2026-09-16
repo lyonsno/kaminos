@@ -184,8 +184,8 @@ assert.match(
 );
 assert.match(
   html,
-  /id="volume-render-scale"[^>]*step="any"/,
-  'volume render scale route/control must not snap arbitrary low render scales such as 0.18 to coarse UI increments',
+  /id="volume-render-scale"[^>]*step="0\.001"/,
+  'volume render scale route/control preserves one-decimal-percentage increments such as 18.3%',
 );
 assert.match(
   html,

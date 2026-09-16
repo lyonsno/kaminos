@@ -225,7 +225,7 @@ assert.match(volumeSource, /1\.0\s*-\s*trans/, 'raymarch exports extinction-deri
 assert.match(volumeSource, /mix\(1\.0,\s*0\.0,\s*TRANSPARENT_CANVAS\)/, 'ray misses become transparent instead of clipping the lower liquid canvas');
 assert.match(volumeSource, /alphaMode:\s*transparentCanvas\s*\?\s*'premultiplied'\s*:\s*'opaque'/, 'only composition routes opt into browser alpha blending');
 assert.match(volumeSource, /setLiquidFireContactDescriptor\(descriptor/, 'Pyro exposes the sparse contact binding API');
-assert.match(volumeSource, /encodeSim\(encoder\);[\s\S]*encodeLiquidFireContactTransfer\(encoder\);[\s\S]*encodeSelectiveHeadLiveFields\(encoder\);[\s\S]*encodeMajorant\(encoder,/, 'liquid transfer is ordered after simulation and before selective-field majorant/render composition');
+assert.match(volumeSource, /encodeSim\(encoder\);[\s\S]*encodeLiquidFireContactTransfer\(encoder\);[\s\S]*encodeSelectiveHeadLiveFields\(encoder\);/, 'liquid transfer is ordered after simulation and before selective-field render composition');
 assert.match(volumeSource, /setPipeline\(liquidFireContactApplyPipeline\)[\s\S]*dispatchWorkgroups\(Math\.ceil\(gridCellCount\(gridSize\) \/ 64\)\)[\s\S]*setPipeline\(liquidFireContactFinalizePipeline\)[\s\S]*dispatchWorkgroups\(1\)/, 'a separate one-thread finalize dispatch runs after every apply workgroup');
 assert.match(volumeSource, /device\s*!==\s*descriptor\.device[\s\S]*same GPUDevice/, 'Pyro rejects a descriptor from another device');
 assert.match(indexSource, /finger_fluid_pyro_composition/, 'the composition route is explicit and inspectable');
@@ -259,15 +259,16 @@ const livePrimitiveTransformSource = volumeSource.match(/updateVolumePrimitiveTr
 assert.match(livePrimitiveTransformSource, /publishVolumePrimitiveState\(\)/, 'live source motion publishes its effective primitive transform');
 assert.match(livePrimitiveTransformSource, /writeLiquidFireContactParams\(\)/, 'live source motion keeps the physical contact neighborhood synchronized');
 assert.doesNotMatch(livePrimitiveTransformSource, /rebuildFluidState/, 'moving the burner cannot reset the established Pyro field');
-assert.match(volumeSource, /@group\(0\) @binding\(11\) var<storage, read> quenchSrc:\s*array<u32>/, 'Pyro simulation reads persistent fixed-point quench state');
-assert.match(volumeSource, /@group\(0\) @binding\(12\) var<storage, read_write> quenchDst:\s*array<u32>/, 'Pyro simulation transports persistent fixed-point quench state');
+assert.match(volumeSource, /@group\(0\) @binding\(13\) var<storage, read> quenchSrc:\s*array<u32>/, 'Pyro simulation reads persistent fixed-point quench state');
+assert.match(volumeSource, /@group\(0\) @binding\(14\) var<storage, read_write> quenchDst:\s*array<u32>/, 'Pyro simulation transports persistent fixed-point quench state');
 assert.match(volumeSource, /quenchBuffers\s*=\s*\[0,\s*1\]\.map/, 'Pyro allocates ping-ponged quench fields with the simulation state');
 assert.match(volumeSource, /let currentQuench\s*=\s*0/, 'quench ping-pong ownership is independent from projected fluid ownership');
 assert.match(volumeSource, /function fluidBindGroup\(fluidIndex\s*=\s*currentFluid,\s*quenchIndex\s*=\s*currentQuench\)/, 'fluid passes resolve all fluid/quench ownership combinations explicitly');
 assert.match(volumeSource, /currentQuench\s*=\s*1\s*-\s*currentQuench/, 'the main simulation advances quench ownership exactly once per step');
 assert.match(volumeSource, /liquidFireContactBindGroups\[currentFluid\s*\*\s*2\s*\+\s*currentQuench\]/, 'liquid transfer writes the independently current fluid and quench destinations');
 assert.match(volumeSource, /liquidFireContactBindGroups\.length\s*!==\s*4/, 'liquid transfer requires every fluid/quench ownership combination');
-const pressureProjectionSource = volumeSource.match(/function encodePressureProjection\(encoder\)[\s\S]*?\n\s*function encodeMajorant/)?.[0] || '';
+const pressureProjectionSource = volumeSource.match(/function encodePressureProjection\(encoder, options = \{\}\)[\s\S]*?\n  }\n/)?.[0] || '';
+assert.ok(pressureProjectionSource, 'pressure projection body is inspected');
 assert.doesNotMatch(pressureProjectionSource, /currentQuench\s*=/, 'pressure projection cannot advance or rewind quench ownership');
 assert.match(volumeSource, /gridCellCount\(gridSize\)\s*\+\s*LIQUID_FIRE_SOURCE_STATE_WORDS/, 'quench allocation reserves continuous source state without adding a storage buffer');
 assert.match(volumeSource, /let localQuenchSuppression\s*=\s*smoothstep/, 'simulator derives a continuous combustion suppression strength from persistent wetness');
