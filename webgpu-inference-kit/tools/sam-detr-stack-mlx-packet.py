@@ -493,7 +493,7 @@ def main():
     reference = {
         "model": {"id": args.model, "snapshot": encoder_tool.snapshot_id(model_path), "role": "mlx-reference-upstream"},
         "weights": {"file": "model.safetensors", "path": str(weights_path), "sha256": weights_sha},
-        "framework": {"name": "mlx-vlm", "root": ref["reference_source"]["root"], "sourceCode": ref["reference_source"], "execution": encoder_tool.sys.executable, "device": str(mx.default_device())},
+        "framework": {"name": "mlx-vlm", "root": ref["reference_source"]["root"], "sourceCode": ref["reference_source"], "execution": encoder_tool.sys.executable, "device": str(encoder_tool.mx.default_device())},
         "sam3Semantics": {
             "globalGrid": [shape["patchHeight"], shape["patchWidth"]],
             "globalCoordinateScale": shape["visionWindowSize"] / shape["patchHeight"],
