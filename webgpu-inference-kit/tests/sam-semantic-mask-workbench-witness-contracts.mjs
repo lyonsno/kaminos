@@ -9,6 +9,7 @@ import { runInNewContext } from 'node:vm';
 import { readCompleteChunkedJsonEvidence } from '../src/chunked-json-evidence.js';
 
 const witness = readFileSync(new URL('../tools/sam-semantic-mask-workbench-witness.mjs', import.meta.url), 'utf8');
+assert.match(witness, /'repeat-positive': \{ type: 'boolean'/, 'cold/warm exercise must expose a same-prompt repeat');
 const failureSource = witness.slice(witness.lastIndexOf('} catch (error) {') + '} catch (error) {'.length,
   witness.lastIndexOf('} finally {'));
 const failedReport = { failurePhase: 'visual-inspection', screenshot: null };
@@ -55,10 +56,29 @@ const inspectDocument = { createElement: () => ({ getContext: () => pixelContext
   if (id === 'sam-mask-runtime-frame') return { contentWindow: { samMaskIslandVisualOutput: () => visibleOutput } };
   return { width: 1, height: 1, dataset: {}, textContent: '', getContext: () => pixelContext };
 } };
-const observedVisual = runInNewContext(inspectExpression, { document: inspectDocument });
+let sourcePrepared = false;
+const inspectWindow = { samWorkbenchPrepareSourceCapture() { sourcePrepared = true; } };
+const originalCreateElement = inspectDocument.createElement;
+inspectDocument.createElement = () => {
+  assert.equal(sourcePrepared, true, 'source must redraw in the same task before canvas copying');
+  return originalCreateElement();
+};
+const observedVisual = runInNewContext(inspectExpression, { document: inspectDocument, window: inspectWindow });
 assert.equal(observedVisual.output.instances?.[0]?.index, 7, 'witness must retain non-top instance identity and raw mask');
 assert.deepEqual(Array.from(observedVisual.output.instances[0].mask), [1]);
 assert.deepEqual(Array.from(observedVisual.output.logits), [0.75], 'visible mask numerics must remain replayable');
+assert.throws(() => runInNewContext(inspectExpression, { document: inspectDocument,
+  window: { samWorkbenchPrepareSourceCapture() { throw new Error('capture device lost'); } } }), /capture device lost/);
+const warmValidationSource = witness.slice(witness.indexOf('function validateWarmOutput('), witness.indexOf('let chromeProcess ='));
+const validateWarmOutput = new Function(`${warmValidationSource}; return validateWarmOutput;`)();
+const coldOutput = { ...visibleOutput, outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
+  promptText: 'wheel', width: 1, height: 1, selectedCandidateCount: 1 };
+const warmOutput = { ...coldOutput, imageCache: { status: 'hit' } };
+validateWarmOutput(coldOutput, warmOutput);
+for (const patch of [{ imageCache: { status: 'miss' } }, { outputAuthority: 'fixture' }, { promptText: 'truck' },
+  { instances: [] }, { instances: [{ index: 7, mask: [0] }] }]) {
+  assert.throws(() => validateWarmOutput(coldOutput, { ...warmOutput, ...patch }), /warm/);
+}
 
 const outputGuards = witness.slice(witness.indexOf("  if (output?.outputAuthority !=="),
   witness.indexOf('  if (values.prompt !== undefined && output.promptText'));

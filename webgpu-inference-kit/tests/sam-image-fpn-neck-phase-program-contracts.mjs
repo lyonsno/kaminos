@@ -17,6 +17,8 @@ assert.equal(existsSync(routeSourceUrl), true, 'SAM3 image FPN-neck route source
 assert.equal(existsSync(packageResolverUrl), true, 'SAM3 browser package/invocation resolver source must exist');
 
 const routeSource = existsSync(routeSourceUrl) ? readFileSync(routeSourceUrl, 'utf8') : '';
+assert.doesNotMatch(routeSource.slice(routeSource.indexOf('export async function runSam3ImageFpnNeckPhaseProgramRoute')), /createSam\w*NeckPhaseProgramCpuOracle\(/,
+  'GPU serving must not execute CPU convolutions to obtain metadata');
 assert.match(routeSource, /SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID/, 'image FPN-neck route must export stable route identity');
 assert.match(routeSource, /sam3\.image-fpn-neck\.phase-program\.webgpu-local\.v0/, 'image FPN-neck route must name the WebGPU-local route id');
 assert.match(routeSource, /defineProgram/, 'image FPN-neck route must use the phase-program runtime');
@@ -431,6 +433,34 @@ assert.deepEqual(Array.from(oracle.fpnNeckFeatures[0]), Array.from(hiddenStates)
 assert.deepEqual(Array.from(oracle.fpnNeckFeatures[1]), Array.from(hiddenStates, value => value * 2), 'level-1 FPN neck should apply level-local projection');
 assert.deepEqual(Array.from(oracle.fpnNeckFeatures[2]), Array.from(hiddenStates, value => value * 3), 'level-2 FPN neck should apply level-local projection');
 assert.deepEqual(Array.from(oracle.fpnNeckFeatures[3]), [16], 'level-3 FPN neck should max-pool the backbone before level-local projection');
+const shapeFunctions = ['transposeConv2dOutShape', 'imageFpnNeckOutputLevels'].map(name => {
+  const match = routeSource.match(new RegExp(`function ${name}\\([^]*?\\n}`));
+  assert.ok(match, `missing ${name}`);
+  return match[0];
+}).join('\n');
+const metadataLevels = new Function(`${shapeFunctions}; return imageFpnNeckOutputLevels;`)();
+const metadataWeights = { levels: weights.levels.map(level => ({ ...level,
+  scaleLayers: level.scaleLayers.map(spec => ({ padding: 0, stride: 1, ...spec })),
+  proj1: { padding: 0, stride: 1, ...level.proj1 }, proj2: { padding: 0, stride: 1, ...level.proj2 },
+})) };
+for (const level of metadataWeights.levels) for (const spec of [...level.scaleLayers, level.proj1, level.proj2]) {
+  Object.defineProperty(spec, 'weight', { get() { throw new Error('metadata read tensor values'); } });
+  Object.defineProperty(spec, 'bias', { get() { throw new Error('metadata read tensor values'); } });
+}
+assert.deepEqual(metadataLevels(oracle.shape, metadataWeights), oracle.levels);
+assert.deepEqual(metadataLevels({ ...oracle.shape, levels: oracle.shape.levels.slice(0, 3) },
+  { levels: metadataWeights.levels.slice(0, 3) }), oracle.levels.slice(0, 3));
+assert.throws(() => metadataLevels({ ...oracle.shape, levels: oracle.shape.levels.map(level => ({ ...level, width: level.width + 1 })) }, metadataWeights), /output shape mismatch/);
+const scaledWeights = { levels: weights.levels.map((level, index) => ({ ...level,
+  scaleLayers: index === 0 ? [{ weight: new Float32Array(9).fill(1), bias: new Float32Array(1), kernelSize: 3, stride: 2, padding: 1, inChannels: 1, outChannels: 1 }] : [],
+})) };
+const scaledOracle = createSam3ImageFpnNeckPhaseProgramCpuOracle({ backboneHiddenStates: new Float32Array(12), weights: scaledWeights,
+  shape: { batch: 2, backboneHeight: 2, backboneWidth: 3, backboneChannels: 1, fpnHiddenSize: 1,
+    levels: [{ level: 0, scaleFactor: 2, height: 3, width: 5 }, { level: 1, scaleFactor: 1, height: 2, width: 3 },
+      { level: 2, scaleFactor: 1, height: 2, width: 3 }, { level: 3, scaleFactor: 0.5, height: 1, width: 1 }] } });
+assert.deepEqual(metadataLevels(scaledOracle.shape, { levels: scaledWeights.levels.map(level => ({ ...level,
+  proj1: { stride: 1, padding: 0, ...level.proj1 }, proj2: { stride: 1, padding: 0, ...level.proj2 },
+})) }), scaledOracle.levels, 'shape-only traversal preserves stride, padding, rectangular and batch geometry');
 
 const detrIngress = createSam3DetrImageIngressFromFpnFeatures({
   fpnNeckFeatures: [

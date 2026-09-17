@@ -36,6 +36,8 @@ const negativeButton = document.getElementById('run-negative-control');
 const statusRoot = document.getElementById('workbench-status');
 const statusText = document.getElementById('status-text');
 let sourceCanvas = document.getElementById('source-canvas');
+// Copying an idle WebGPU canvas after presentation can read a discarded texture.
+window.samWorkbenchPrepareSourceCapture = () => sourceRenderer?.drawNow();
 const overlayCanvas = document.getElementById('overlay-canvas');
 const maskCanvas = document.getElementById('mask-canvas');
 const instancePicker = document.getElementById('instance-picker');

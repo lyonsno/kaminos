@@ -16,6 +16,7 @@ const { values } = parseArgs({
     'prompt': { type: 'string' },
     'expect-empty': { type: 'boolean', default: false },
     'negative-control': { type: 'boolean', default: false },
+    'repeat-positive': { type: 'boolean', default: false },
     'exercise-foreground': { type: 'boolean', default: false },
     'negative-out': { type: 'string' },
     'chrome': { type: 'string', default: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
@@ -297,6 +298,7 @@ async function captureCompleteWorkbenchScreenshot(kind) {
 
 function canvasInspectionExpression() {
   return `(() => {
+    window.samWorkbenchPrepareSourceCapture();
     const summarize = id => {
       const canvas = document.getElementById(id);
       const copy = document.createElement('canvas');
@@ -357,6 +359,20 @@ function canvasInspectionExpression() {
       },
     };
   })()`;
+}
+
+function validateWarmOutput(cold, warm) {
+  if (warm?.outputAuthority !== 'actual-webgpu-readback' || warm.verificationState !== 'not-attached'
+      || warm.imageCache?.status !== 'hit') throw new Error('warm route lacks actual readback and authenticated image reuse');
+  if (warm.promptText !== cold.promptText || warm.width !== cold.width || warm.height !== cold.height
+      || warm.selectedCandidateCount !== cold.selectedCandidateCount || !Array.isArray(warm.instances)
+      || warm.instances.length !== cold.instances.length) throw new Error('warm result identity changed');
+  for (let index = 0; index < cold.instances.length; index += 1) {
+    const a = cold.instances[index], b = warm.instances[index];
+    if (a.index !== b.index || a.mask.length !== b.mask?.length || a.mask.some((value, pixel) => value !== b.mask[pixel])) {
+      throw new Error('warm retained masks changed');
+    }
+  }
 }
 
 let chromeProcess = null;
@@ -426,6 +442,7 @@ try {
       document.getElementById('source-canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 30 * (direction *= -1), cancelable: true }));
     }, 100);
   })()`);
+  const coldStarted = Date.now();
   const clicked = await evaluate(cdp, `(() => { const button = document.getElementById('run-segmentation'); button.click(); return true; })()`);
   if (!clicked) throw new Error('operator run control was not activated');
   const terminal = await waitUntil(async () => evaluate(cdp, `(() => {
@@ -435,6 +452,7 @@ try {
       ? { state: root.dataset.state, text: document.getElementById('status-text').textContent }
       : null;
   })()`), 'SAM3 workbench execution');
+  report.coldWallMilliseconds = Date.now() - coldStarted;
   if (terminal.state === 'failed') throw new Error(`workbench failed: ${terminal.text}`);
   if (values['exercise-foreground']) await evaluate(cdp, `(() => {
     clearInterval(window.__samForegroundExercise);
@@ -480,6 +498,36 @@ try {
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, Buffer.from(screenshot.data, 'base64'));
   report.screenshot = outPath;
+
+  if (values['repeat-positive']) {
+    report.failurePhase = 'warm-positive';
+    writeReport();
+    const started = Date.now();
+    const clicked = await evaluate(cdp, `(() => {
+      const button = document.getElementById('run-segmentation');
+      if (button.disabled) return false;
+      button.click(); return true;
+    })()`);
+    if (!clicked) throw new Error('warm positive control unavailable');
+    const warmTerminal = await waitUntil(async () => evaluate(cdp, `(() => {
+      const root = document.getElementById('workbench-status');
+      return !document.getElementById('run-segmentation').disabled && ['complete', 'warning', 'failed'].includes(root.dataset.state)
+        ? { state: root.dataset.state, text: document.getElementById('status-text').textContent } : null;
+    })()`), 'SAM3 warm-positive execution');
+    report.warmPositive = { workbench: warmTerminal, wallMilliseconds: Date.now() - started, visualEvidence: null };
+    writeReport();
+    if (warmTerminal.state === 'failed') throw new Error(`warm positive failed: ${warmTerminal.text}`);
+    await settleForVisualCapture();
+    report.warmPositive.visualEvidence = await evaluate(cdp, canvasInspectionExpression(), {
+      chunked: true, onProgress: progress => { report.evidenceTransport.warm = progress; },
+    });
+    validateWarmOutput(output, report.warmPositive.visualEvidence.output);
+    const warmScreenshot = await captureCompleteWorkbenchScreenshot('warm');
+    const warmPath = outPath.replace(/(\.[^.]+)?$/, '-warm$1');
+    writeFileSync(warmPath, Buffer.from(warmScreenshot.data, 'base64'));
+    report.warmPositive.screenshot = warmPath;
+    writeReport();
+  }
 
   if (values['negative-control']) {
     report.failurePhase = 'negative-control';

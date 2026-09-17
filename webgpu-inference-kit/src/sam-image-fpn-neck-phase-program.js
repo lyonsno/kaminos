@@ -808,6 +808,29 @@ function transposeConv2dOutShape(inShape, spec) {
   };
 }
 
+// Serving needs the oracle's shape checks, not its tensor evaluation.
+function imageFpnNeckOutputLevels(shape, weights) {
+  return weights.levels.map(level => {
+    let current = { height: shape.backboneHeight, width: shape.backboneWidth, channels: shape.backboneChannels };
+    for (const spec of level.scaleLayers) current = transposeConv2dOutShape(current, spec);
+    if (level.scaleLayers.length === 0 && shape.levels[level.level].scaleFactor <= 0.5) {
+      current = { ...current, height: Math.floor(current.height / 2), width: Math.floor(current.width / 2) };
+    }
+    for (const spec of [level.proj1, level.proj2]) {
+      current = {
+        height: Math.floor((current.height + 2 * spec.padding - spec.kernelSize) / spec.stride) + 1,
+        width: Math.floor((current.width + 2 * spec.padding - spec.kernelSize) / spec.stride) + 1,
+        channels: spec.outChannels,
+      };
+    }
+    const expected = shape.levels[level.level];
+    if (current.height !== expected.height || current.width !== expected.width || current.channels !== shape.fpnHiddenSize) {
+      throw new Error(`FPN level ${level.level} output shape mismatch`);
+    }
+    return { level: level.level, shape: [shape.batch, current.height, current.width, current.channels] };
+  });
+}
+
 export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || createSam3ImageFpnNeckPhaseProgramRouteDefinition({ kernel: input.kernel });
@@ -815,7 +838,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
   const backboneHiddenStatesArtifact = roleArtifact(input.request.inputs, 'vit-backbone-hidden-states');
   const weightsArtifact = roleArtifact(input.request.inputs, 'sam3-image-fpn-neck-weights');
   const { shape, backboneHiddenStates, weights } = validateImageFpnNeckInputs(input.tensors || {});
-  const oracleShapes = createSam3ImageFpnNeckPhaseProgramCpuOracle({ backboneHiddenStates, weights, shape }).levels;
+  const outputLevels = imageFpnNeckOutputLevels(shape, weights);
 
   const runtime = await createWebGpuInferenceRuntime({
     routeId: SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
@@ -1000,7 +1023,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       fpnNeckFeature1: await stage.readTensor(tensors.level1Feature),
       fpnNeckFeature2: await stage.readTensor(tensors.level2Feature),
       fpnNeckFeature3: await stage.readTensor(tensors.level3Feature),
-    }), { outputs: oracleShapes, outputRoles: ['fpn-neck-feature-0', 'fpn-neck-feature-1', 'fpn-neck-feature-2', 'fpn-neck-feature-3'] });
+    }), { outputs: outputLevels, outputRoles: ['fpn-neck-feature-0', 'fpn-neck-feature-1', 'fpn-neck-feature-2', 'fpn-neck-feature-3'] });
     const outputs = outputArtifacts(input.request, {
       fpnNeckFeature0: await sha256Hex(readback.fpnNeckFeature0),
       fpnNeckFeature1: await sha256Hex(readback.fpnNeckFeature1),
@@ -1098,9 +1121,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
   const weightsArtifact = roleArtifact(input.request.inputs, `sam31-${descriptor.branch}-neck-weights`);
   const { shape, backboneHiddenStates, weights } = validateImageFpnNeckInputs(input.tensors || {}, 3);
   assertSam31PropagationArchitecture(weights);
-  const oracle = descriptor.includePosition
-    ? createSam31TrackingNeckPhaseProgramCpuOracle({ branch: descriptor.branch, backboneHiddenStates, weights, shape })
-    : createSam31PropagationNeckPhaseProgramCpuOracle({ backboneHiddenStates, weights, shape });
+  const outputLevels = imageFpnNeckOutputLevels(shape, weights);
   const runtime = await createWebGpuInferenceRuntime({
     routeId: descriptor.routeId,
     runtimeLabel: input.runtimeLabel || `sam31-${descriptor.branch}-neck-phase-program`,
@@ -1285,7 +1306,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       for (let level = 0; level < 3; level += 1) values[`${descriptor.branch}Feature${level}`] = await stage.readTensor(tensors[`level${level}Feature`]);
       if (descriptor.includePosition) values[`${descriptor.branch}Position2`] = await stage.readTensor(tensors.position2);
       return values;
-    }, { outputs: oracle.levels, outputRoles: descriptor.outputRoles.map(output => output.role) });
+    }, { outputs: outputLevels, outputRoles: descriptor.outputRoles.map(output => output.role) });
     const outputShape = level => [shape.batch, shape.levels[level].height, shape.levels[level].width, shape.fpnHiddenSize];
     const outputs = {};
     for (let level = 0; level < 3; level += 1) {

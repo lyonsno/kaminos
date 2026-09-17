@@ -110,6 +110,14 @@ export async function createSamWorkbenchForeground({ device, canvas, image, onEr
   });
   return {
     setImage,
+    drawNow() {
+      if (closed) throw new Error('source viewport is closed');
+      if (failure) throw failure;
+      if (frame !== null) cancelFrame(frame);
+      demandAt ??= now();
+      draw();
+      if (failure) throw failure;
+    },
     async yield(metadata) { yieldCount += 1; return cooperativeYield(metadata); },
     evidence() { return { mode: 'shared-device-input-driven-source-render', yieldCount, demandYieldCount, failure: failure?.message || null,
       frames: events.slice(), authority: 'same-device-queue-submissions-not-presentation-or-frame-budget-verification' }; },

@@ -39,6 +39,8 @@ listeners.wheel({ preventDefault() {}, deltaY: -100 });
 frame();
 assert.ok(renderer.evidence().frames[1].zoom > 1);
 assert.equal(renderer.evidence().frames.length, 2);
+renderer.drawNow();
+assert.equal(submitCount, 3, 'capture must synchronously submit a fresh current canvas texture');
 failSubmit = true;
 listeners.wheel({ preventDefault() {}, deltaY: 100 });
 try { frame(); } catch {}
@@ -47,5 +49,6 @@ assert.match(notifiedFailure?.message || '', /foreground device lost/,
 await assert.rejects(() => renderer.yield({}), /foreground device lost/,
   'a foreground submission failure must remain visible at the next inference boundary');
 renderer.close();
+assert.throws(() => renderer.drawNow(), /closed/);
 assert.equal(destroyed, 2, 'renderer releases only its texture and uniform, not the shared device');
 console.log('sam workbench foreground contracts passed');
