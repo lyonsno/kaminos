@@ -9538,6 +9538,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     outputNode,
     renderShadows() { if(passState.effective) fireShadow.render(); },
     setShadowsEnabled(enabled) { return fireShadow.setEnabled(enabled); },
+    diagnoseShadows(anchors) { return fireShadow.diagnose(anchors,camera.position.toArray()); },
     update() {
       camera.updateMatrixWorld();
       sceneProjectionMatrixInverse.value.copy(camera.projectionMatrixInverse);
@@ -9841,6 +9842,7 @@ async function initScene() {
     ? fireLightFieldPass.setWitnessMute(muted)
     : { error: 'fire-light-field-pass-not-constructed' });
   window.kaminosFireLightFieldSetShadowsEnabled = enabled => fireLightFieldPass?.setShadowsEnabled(enabled);
+  window.kaminosFireShadowDiagnose = anchors => fireLightFieldPass.diagnoseShadows(anchors);
   window.kaminosFireLightFieldSetWitnessIsolate = isolate => (fireLightFieldPass
     ? fireLightFieldPass.setWitnessIsolate(isolate)
     : { error: 'fire-light-field-pass-not-constructed' });
