@@ -16199,7 +16199,62 @@ export function createKaminosVolumePrototype({
     return state.selectiveHeadLivePassReceipt;
   }
 
+  let foregroundRequester = null;
+  let foregroundPending = null;
+  let foregroundSequence = 0;
+
+  function setForegroundOpportunityRequester(requester) {
+    if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
+    if (foregroundPending) throw new Error('foreground frame is still pending');
+    if (productFrameOwner === 'caller') throw new Error('ordinary foreground service requires the prototype-owned renderer');
+    if (requester && (boundarySplatRequested() || browserResidualCanApply())) throw new Error('ordinary foreground service requires the ordinary raymarch route');
+    foregroundRequester = requester;
+    state.ordinaryForeground = {mode: requester ? 'producer-foreground-opportunities' : 'private-animation-loop', completedFrames: 0, lastReceipt: null};
+  }
+
   function render(now) {
+    if (!foregroundRequester) return renderOrdinaryFrame(now);
+    raf = 0;
+    if (!state.active || selectiveHeadLiveCapturePaused || foregroundPending) return;
+    const requestId = `ordinary-flame-frame-${++foregroundSequence}`;
+    const requester = foregroundRequester;
+    // Reserve before invoking the requester, which may service synchronously.
+    foregroundPending = {requestId};
+    Promise.resolve().then(() => {
+      const handle = requester({
+        requestId,
+        metadata: {renderer: 'ordinary-volume', frameCountBefore: state.frameCount, simStepCountBefore: state.simStepCount},
+        run(service) {
+          if (!state.active || requester !== foregroundRequester) throw new Error('ordinary foreground frame no longer active');
+          if (service.device !== device || service.queue !== device.queue || typeof service.submit !== 'function') {
+            throw new Error('ordinary foreground device/queue mismatch');
+          }
+          if (service.signal?.aborted) throw new Error('ordinary foreground frame aborted');
+          if (boundarySplatRequested() || browserResidualCanApply()) throw new Error('ordinary foreground route changed');
+          return renderOrdinaryFrame(performance.now(), service);
+        },
+      });
+      if (!handle?.completion) throw new Error('foreground requester did not return a completion handle');
+      foregroundPending = handle;
+      return handle.completion;
+    }).then(receipt => {
+      if (receipt?.status !== 'completed' || receipt.result?.status !== 'submitted') {
+        throw new Error(`ordinary foreground frame failed: ${receipt?.status || 'missing receipt'}`);
+      }
+      state.ordinaryForeground.completedFrames += 1;
+      state.ordinaryForeground.lastReceipt = receipt;
+    }).catch(error => {
+      state.active = false;
+      state.error = error?.message || String(error);
+      canvas.classList.remove('active');
+      emitStatus({phase: 'foreground-frame-error', error: state.error});
+    }).finally(() => {
+      foregroundPending = null;
+      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+    });
+  }
+
+  function renderOrdinaryFrame(now, foregroundService = null) {
     if (productFrameOwner === 'caller') {
       throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
     }
@@ -16379,7 +16434,8 @@ export function createKaminosVolumePrototype({
       if (!appearanceDecompositionActive()) {
       }
       encodeBoundarySplatTelemetry(encoder);
-      device.queue.submit([encoder.finish()]);
+      if (foregroundService) foregroundService.submit([encoder.finish()], {metadata: {renderer: 'ordinary-volume', simStepCount: state.simStepCount}});
+      else device.queue.submit([encoder.finish()]);
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       state.frameCount += 1;
       if (selectiveHeadLiveExactPause) {
@@ -16434,6 +16490,8 @@ export function createKaminosVolumePrototype({
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
       recordVolumeFrameTiming(now, performance.now() - cpuStart);
       if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
+      return {status: 'submitted', renderer: 'ordinary-volume', frameCount: state.frameCount, simStepCount: state.simStepCount, atMs: now,
+        authority: 'queue-submit-returned-not-gpu-completion-or-presentation'};
     } catch (err) {
       if (selectiveHeadLiveExactPause) {
         selectiveHeadLiveExactPause.resolve({
@@ -16458,8 +16516,9 @@ export function createKaminosVolumePrototype({
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
       emitStatus({ phase: 'render-error', error: state.error });
+      if (foregroundService) throw err;
     } finally {
-      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      if (!foregroundService && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     }
   }
 
@@ -22873,6 +22932,10 @@ export function createKaminosVolumePrototype({
         cancelAnimationFrame(raf);
         emitStatus({ phase: 'inactive' });
       }
+    },
+    setForegroundOpportunityRequester,
+    foregroundGpuContext() {
+      return {device, queue: device?.queue, active: state.active, renderer: boundarySplatRequested() || browserResidualCanApply() ? 'alternate-volume' : 'ordinary-volume', productFrameOwner};
     },
     debugState() {
       return {

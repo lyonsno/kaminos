@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>SF3D · ordinary shared-device flame</title>
+<p id="status">Opening the mounted elfinblue basin with ordinary scene depth and SF3D foreground service…</p>
+<script type="module">
+// Reuse the source-linked basin URL; do not fork its immutable controls.
+try {
+  const response = await fetch('./sf3d-elfinblue.html');
+  if (!response.ok) throw new Error(`basin entry HTTP ${response.status}`);
+  const document = new DOMParser().parseFromString(await response.text(), 'text/html');
+  const href = document.querySelector('a')?.getAttribute('href');
+  if (!href) throw new Error('mounted basin entry has no route');
+  const url = new URL(href, location.href);
+  const hash = new URLSearchParams(url.hash.slice(1));
+  hash.set('volume_light_field','1');
+  hash.set('volume_light_field_scene_depth','1');
+  hash.set('composition_module_url','./sf3d-live-flame-inject.mjs');
+  url.hash = hash.toString();
+  location.replace(url);
+} catch (error) {
+  document.getElementById('status').textContent = `Route unavailable: ${error.message}`;
+  window.__kaminosCompositionSetup = {status:'failed',phase:'entry-resolution',error:error.message};
+}
+</script>

@@ -14,12 +14,12 @@ const producerFactory = async options => {
   calls.push(options);
   return {device: options.device, deviceInjected: Boolean(options.device), resources: {weightsSource: 'fixture'}, kitVersion: '0.1.48'};
 };
-const invoke = new AsyncFunction('window','injectHud','startFrameMonitor','mirrorFireStatus','state','createSf3dProducer','WEIGHTS_URL','IMAGE_URL','loadImage','hud','runSf3d','createSharedDeviceSf3dProducer','snapshotSf3dSharedDevice','input',
+const invoke = new AsyncFunction('window','injectHud','startFrameMonitor','mirrorFireStatus','state','createSf3dProducer','WEIGHTS_URL','IMAGE_URL','loadImage','hud','runSf3d','createSharedDeviceSf3dProducer','snapshotSf3dSharedDevice','connectSf3dForeground','input',
   `${mountSource.replace('export ', '')}; return mountComposition(input);`);
 const run = input => invoke(window, () => {}, () => {}, () => {}, {}, producerFactory,
   './lib/sf3d/weights.bin', './fixtures/sf3d-demo-chair.png', async () => ({}), hud, () => {},
   async (...args) => (await import('../sf3d-host-device.mjs')).createSharedDeviceSf3dProducer(...args),
-  (...args) => host.snapshotSf3dSharedDevice(...args), input);
+  (...args) => host.snapshotSf3dSharedDevice(...args), () => {}, input);
 let host;
 // Baseline mount never calls the new helpers, and fails below on the actual
 // missing device forwarding, not an import error.
@@ -29,7 +29,7 @@ assert.equal(calls[0].device, device, 'mount must pass the exact host device int
 assert.equal(calls[0].adapter, sharedGpu.adapter);
 assert.equal(calls[0].commit, '0ff8dc4527ba5513f2f6a9f5a7a6497e710af691');
 assert.equal(window.__compositionRoute.deviceTopology, 'same-device');
-assert.equal(window.__compositionRoute.foregroundScheduling, 'independent-render-loops');
+assert.equal(window.__compositionRoute.foregroundScheduling, 'producer-foreground-opportunities');
 assert.equal(window.__compositionRoute.deviceReceipt.effectiveLimits.maxBufferSize, device.limits.maxBufferSize, 'effective device, not adapter capacity');
 calls = [];
 for (const bad of [null, {...sharedGpu, queue: {}}, {...sharedGpu, device: {...device, limits: {maxBufferSize: 268435456, maxStorageBufferBindingSize: 134217728}}}]) {
