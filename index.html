@@ -3072,6 +3072,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
 <script type="module">
 import * as THREE from 'three';
+import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
@@ -9423,6 +9424,10 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const metaCore = metaTextureNode.sample(vec2(0.25, 0.5));
   const metaColor = metaTextureNode.sample(vec2(0.75, 0.5));
   const fireCenterWorld = metaCore.xyz.mul(2.0).sub(vec3(1.0));
+  const fireShadow = createFireLightFieldShadow({renderer,scene,
+    sourceNode:fireCenterWorld,receiverNode:worldPositionNode,normalNode:worldNormalNode,
+    requested:routeParams.get('volume_light_field_shadows') === '1'});
+  const fireShadowVisibility = fireShadow.visibility;
   const firePower = metaCore.w;
   const farVector = fireCenterWorld.sub(worldPositionNode);
   const farDistanceSq = farVector.dot(farVector);
@@ -9439,6 +9444,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     .mul(exteriorFalloff)
     .mul(directionalResponse);
   const receiverSignal = nearSignal.add(farSignal)
+    .mul(fireShadowVisibility)
     .mul(backgroundMask)
     .mul(materialResponse)
     .mul(fireLightFieldStrength);
@@ -9530,6 +9536,8 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 
   return {
     outputNode,
+    renderShadows() { if(passState.effective) fireShadow.render(); },
+    setShadowsEnabled(enabled) { return fireShadow.setEnabled(enabled); },
     update() {
       camera.updateMatrixWorld();
       sceneProjectionMatrixInverse.value.copy(camera.projectionMatrixInverse);
@@ -9606,10 +9614,12 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
         strength: fireLightFieldStrength.value,
         isolateMix: isolateMix.value,
         atlasGrid: atlasGrid.value,
+        shadow: fireShadow.debugState(),
         sharedDeviceIdentity: sharedGpu?.identity ?? null,
       };
     },
     dispose() {
+      fireShadow.dispose();
       blackAtlasTexture.destroy?.();
     },
   };
@@ -9830,6 +9840,7 @@ async function initScene() {
   window.kaminosFireLightFieldSetWitnessMute = muted => (fireLightFieldPass
     ? fireLightFieldPass.setWitnessMute(muted)
     : { error: 'fire-light-field-pass-not-constructed' });
+  window.kaminosFireLightFieldSetShadowsEnabled = enabled => fireLightFieldPass?.setShadowsEnabled(enabled);
   window.kaminosFireLightFieldSetWitnessIsolate = isolate => (fireLightFieldPass
     ? fireLightFieldPass.setWitnessIsolate(isolate)
     : { error: 'fire-light-field-pass-not-constructed' });
@@ -9950,6 +9961,7 @@ async function initScene() {
 
   function renderSceneFrame() {
     const t0 = performance.now();
+    fireLightFieldPass?.renderShadows();
     renderPipeline.render();
     const frameMs = performance.now() - t0;
     fpsFrames++;
