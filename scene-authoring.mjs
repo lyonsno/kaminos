@@ -1,3 +1,4 @@
+import { normalizeBurner } from './annular-burner.mjs';
 export const COMPOSITION_SCHEMA = 'kaminos.stationary-flame-composition.v1';
 const clone = value => JSON.parse(JSON.stringify(value));
 
@@ -14,7 +15,9 @@ export function normalizeComposition(value) {
       throw new Error(`Unsupported composition route field: ${key}`);
     }
   }
-  return clone(value);
+  const result = clone(value);
+  if (value.burner != null) result.burner = normalizeBurner(value.burner);
+  return result;
 }
 
 export function normalizeSceneCapture(value) {

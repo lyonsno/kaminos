@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { normalizeBurner } from '../annular-burner.mjs';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const between = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
@@ -8,6 +9,7 @@ let intensity = 1;
 const gainControl = { value: '0' };
 const geometryControl = { checked: false };
 const context = vm.createContext({
+  burnerRecipe: null, normalizeBurner,
   volumePrototype: { debugState: () => ({ active: true }) }, activeSceneComposition: null,
   isFireLightFieldRoute: () => true, volumeCockpitLayoutReady: Promise.resolve(),
   buildVolumeSettingsPreset: () => ({ savedAt: new Date().toISOString(), domControls: { intensity }, rendererControls: {}, presentationControls: {}, route: 'exact' }),
@@ -26,6 +28,11 @@ assert.throws(unchanged, /changed/, 'changing light gain before pixels are sampl
 gainControl.value = '0';
 geometryControl.checked = true;
 assert.throws(unchanged, /changed/, 'test geometry must match the sampled picture');
+geometryControl.checked = false;
+context.burnerRecipe = { schema: 'kaminos.annular-burner.v1', ringCount: 24 };
+const burnerUnchanged = await vm.runInContext('collectSceneComposition()', context);
+context.burnerRecipe.ringCount = 8;
+assert.throws(burnerUnchanged, /changed/, 'burner edits before sampling must reject the earlier saved recipe');
 
 const empty = vm.createContext({ sceneObjects: [], volumePrimitives: [],
   volumePrototype: { debugState: () => ({ active: true }) }, isFireLightFieldRoute: () => false });
