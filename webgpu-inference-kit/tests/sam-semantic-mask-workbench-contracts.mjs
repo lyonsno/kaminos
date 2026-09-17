@@ -110,7 +110,7 @@ function controllerFixture() {
   };
   const context = {
     document, URLSearchParams,
-    window: { location: { search: `?commit=${'a'.repeat(40)}` }, addEventListener() {}, setTimeout() {}, clearTimeout() {}, setInterval() { return 1; }, clearInterval() {} },
+    window: { location: { search: `?commit=${'a'.repeat(40)}` }, addEventListener() {}, setTimeout() {}, clearTimeout() {}, setInterval(callback) { context.phaseTick = callback; return 1; }, clearInterval() {} },
     Image: class {
       constructor() { this.naturalWidth = 800; this.naturalHeight = 600; pendingImages.push(this); }
     },
@@ -122,6 +122,7 @@ function controllerFixture() {
     failNext: false,
     async runSam3Invocation(url, input) {
       if (this.failNext) throw new Error('intentional rerun failure');
+      if (this.completionGate) await this.completionGate;
       output = {
         invocationId: input.invocationId, outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
         receiptChain: Array(10).fill({}), effectiveRouteId: 'fixture-route', imageCache: { status: 'miss' },
@@ -133,6 +134,7 @@ function controllerFixture() {
       };
     },
     samMaskIslandVisualOutput: () => output,
+    samMaskIslandProgress: () => ({ status: 'run-mask' }),
   };
   context.foregroundModule = { async createSamWorkbenchForeground(options) {
     context.foregroundOptions = options;
@@ -214,6 +216,24 @@ idleFailure.context.foregroundOptions.onError?.(new Error('idle foreground submi
 assert.equal(idleFailure.elements.get('workbench-status').dataset.state, 'failed',
   'foreground-only failure after mask completion must immediately fail visible status');
 assert.equal(idleFailure.elements.get('run-segmentation').disabled, true);
+
+const activeFailure = controllerFixture();
+activeFailure.loadRuntime();
+activeFailure.pendingImages[0].onload();
+await settle();
+await activeFailure.runtime.sam3OnExecutionContext({ device: {} });
+let completeInvocation;
+activeFailure.runtime.completionGate = new Promise(resolve => { completeInvocation = resolve; });
+const activeRun = activeFailure.context.controller.runMask();
+await settle();
+activeFailure.context.foregroundOptions.onError(new Error('active foreground submission failed'));
+activeFailure.context.phaseTick();
+assert.equal(activeFailure.elements.get('workbench-status').dataset.state, 'failed',
+  'an in-flight phase status tick must not overwrite foreground failure');
+completeInvocation();
+await activeRun;
+assert.equal(activeFailure.elements.get('workbench-status').dataset.state, 'failed',
+  'late inference success must not overwrite foreground failure');
 
 const failedRuntime = controllerFixture();
 failedRuntime.loadRuntime({});

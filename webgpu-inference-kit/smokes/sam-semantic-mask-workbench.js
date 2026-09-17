@@ -331,7 +331,7 @@ async function runMask(controlKind = 'positive') {
     const runtime = await waitForRuntime();
     phaseTimer = window.setInterval(() => {
       const runtimeState = runtime.samMaskIslandProgress?.();
-      if (runtimeState?.status && activeInvocationId === invocationId) {
+      if (!runtimeFailure && runtimeState?.status && activeInvocationId === invocationId) {
         setStatus('running', runtimeState.status.replaceAll('-', ' '));
       }
     }, 250);
