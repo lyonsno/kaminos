@@ -9,6 +9,19 @@ import { runInNewContext } from 'node:vm';
 import { readCompleteChunkedJsonEvidence } from '../src/chunked-json-evidence.js';
 
 const witness = readFileSync(new URL('../tools/sam-semantic-mask-workbench-witness.mjs', import.meta.url), 'utf8');
+const failureSource = witness.slice(witness.lastIndexOf('} catch (error) {') + '} catch (error) {'.length,
+  witness.lastIndexOf('} finally {'));
+const failedReport = { failurePhase: 'visual-inspection', screenshot: null };
+const savedFrames = [];
+await new Function('report', 'error', 'chromeStderr', 'cdp', 'outPath', 'dirname', 'mkdirSync', 'writeFileSync',
+  'writeReport', 'console', 'process', 'Buffer', `return (async () => { ${failureSource} })();`)(
+  failedReport, new Error('one or more visible canvases are blank'), '',
+  { request: async method => { assert.equal(method, 'Page.captureScreenshot'); return { data: Buffer.from('frame').toString('base64') }; } },
+  '/tmp/failed-frame.png', () => '/tmp', () => {}, (path, bytes) => savedFrames.push({ path, bytes }),
+  () => {}, { error() {} }, {}, Buffer);
+assert.equal(failedReport.status, 'failed', 'capturing pixels must not promote the failed witness');
+assert.equal(failedReport.screenshot, '/tmp/failed-frame.png', 'a visual rejection must preserve the browser frame before teardown');
+assert.equal(savedFrames[0]?.bytes.toString(), 'frame');
 const inspectSource = witness.slice(witness.indexOf('function canvasInspectionExpression()'), witness.indexOf('let chromeProcess ='));
 const inspectExpression = new Function(`${inspectSource}; return canvasInspectionExpression();`)();
 const visibleOutput = { instances: [{ index: 7, score: 0.8, mask: new Uint32Array([1]), foregroundPixelCount: 1 }],

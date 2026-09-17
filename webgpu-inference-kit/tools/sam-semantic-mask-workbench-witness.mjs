@@ -528,6 +528,14 @@ try {
 } catch (error) {
   report.status = 'failed';
   report.error = String(error?.stack || error);
+  if (cdp && !report.screenshot) {
+    try {
+      const screenshot = await cdp.request('Page.captureScreenshot', { format: 'png', fromSurface: true });
+      mkdirSync(dirname(outPath), { recursive: true });
+      writeFileSync(outPath, Buffer.from(screenshot.data, 'base64'));
+      report.screenshot = outPath;
+    } catch (captureError) { report.screenshotError = String(captureError); }
+  }
   report.chromeStderr = chromeStderr.slice(-12000);
   report.completedAt = new Date().toISOString();
   writeReport();
