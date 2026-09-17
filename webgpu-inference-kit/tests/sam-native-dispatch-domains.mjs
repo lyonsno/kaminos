@@ -9,6 +9,24 @@ const kernelTokens = {
   'sam-mask-tail': 'mask-embedder-layer-0:maskEmbedderLayer0 mask-embedder-layer-1:maskEmbedderLayer1 mask-embedder-layer-2:maskEmbedderLayer2 instance-projection-1x1:instanceProjection decode-mask:decodeMask threshold-mask:thresholdMask',
 };
 
+const shaderClasses = {
+  'sam-detr-encoder': {
+    LAYERNORM: 'LayerNorm1 LayerNorm2 LayerNorm3', ADD: 'AddPos SelfResidual CrossResidual MlpResidual',
+    LINEAR: 'SelfQ SelfK SelfV SelfOutput CrossQ CrossK CrossV CrossOutput MlpFc2',
+    LINEAR_RELU: 'MlpFc1Relu', ATTENTION: 'SelfAttention', MASKED_ATTENTION: 'CrossAttention',
+  },
+  'sam-detr-decoder': {
+    LAYERNORM: 'SelfNorm TextNorm VisionNorm MlpNorm OutputNorm PresenceNorm',
+    ADD: 'AddPos SelfResidual TextAddPos TextResidual VisionAddPos VisionKeyAdd VisionResidual MlpResidual',
+    LINEAR: 'Ref2 SelfQ SelfK SelfV SelfOut TextQ TextK TextV TextOut VisionQ VisionK VisionV VisionOut Mlp2 BoxHead3',
+    LINEAR_RELU: 'Ref1 Mlp1 BoxHead1 BoxHead2', ATTENTION_MASKED: 'SelfAttn TextAttn', ATTENTION_BIAS: 'VisionAttn',
+    SINE_BOX: 'Sine', PAD_QUERY_POS: 'PadPos', RPB_AXIS_HIDDEN: 'RpbXHidden RpbYHidden', RPB_COMBINE: 'Rpb',
+    SLICE_QUERIES: 'SliceQuery', BOX_APPLY: 'BoxRefine', SLICE_PRESENCE: 'SlicePresence', PRESENCE_HEAD: 'PresenceHead',
+  },
+  'sam-pixel-decoder': { UPSAMPLE_ADD: 'upsampleAdd', CONV3X3: 'conv3x3_', GROUPNORM_STATS: 'groupnormStats', GROUPNORM_RELU: 'groupnormRelu' },
+  'sam-mask-tail': { LINEAR_RELU: 'maskEmbedderLayer0 maskEmbedderLayer1', LINEAR: 'maskEmbedderLayer2', INSTANCE_PROJECTION: 'instanceProjection', MASK_PROJECTION: 'decodeMask', THRESHOLD: 'thresholdMask' },
+};
+
 function expectedDomains(route, s, index) {
   const result = {};
   const add = (names, total, size = 64) => {
@@ -68,7 +86,7 @@ function checkProduction(route, source, shape, index = 0) {
       : route === 'sam-mask-tail' ? expression : evaluate(expression);
     assert.ok(!registeredShaders[kernel], `${route}: duplicate kernel ${kernel}`);
     assert.ok(shaders[shader], `${kernel}: missing shader ${shader}`);
-    registeredShaders[kernel] = shaders[shader];
+    registeredShaders[kernel] = { shaderName: shader, code: shaders[shader] };
   }
   for (const name of ['maskTailElementCount', 'maskElementCount', 'levelElementCount']) {
     const helper = source.match(new RegExp(`function ${name}\\([^]*?\\n}`));
@@ -94,6 +112,8 @@ function checkProduction(route, source, shape, index = 0) {
   bindings.workgroups = (total, device) => { logicalTotal = total; return workgroups(total, device); };
   const expected = expectedDomains(route, shape, index), observed = {};
   const tokens = Object.fromEntries(kernelTokens[route].split(' ').map(pair => pair.split(':')));
+  const expectedShaders = Object.fromEntries(Object.entries(shaderClasses[route]).flatMap(([shader, kernels]) => kernels.split(' ').map(kernel => [kernel, `${shader}_WGSL`])));
+  assert.deepEqual(Object.keys(expectedShaders).sort(), Object.values(tokens).sort(), `${route}: shader/domain coverage`);
   assert.deepEqual(Object.keys(tokens).sort(), Object.keys(expected).sort(), `${route}: kernel/domain coverage`);
   const phases = [...run.matchAll(/\{ name: (`[^`]+`|'[^']+'), kernel: (.+?), dispatch: (.+?), yieldAfter: true \}/g)];
   assert.equal(phases.length, [...run.matchAll(/dispatch:/g)].length, `${route}: every production dispatch must be inspected`);
@@ -108,7 +128,8 @@ function checkProduction(route, source, shape, index = 0) {
     const expectedKernel = route.startsWith('sam-detr-') ? `layer${index}${tokens[name]}`
       : route === 'sam-pixel-decoder' ? `${tokens[name]}${index}` : tokens[name];
     assert.equal(kernel, expectedKernel, `${fullName}: kernel identity`);
-    const workgroup = registeredShaders[kernel]?.match(/@workgroup_size\((\d+)\)/);
+    assert.equal(registeredShaders[kernel]?.shaderName, expectedShaders[tokens[name]], `${kernel}: registered shader identity`);
+    const workgroup = registeredShaders[kernel]?.code.match(/@workgroup_size\((\d+)\)/);
     assert.ok(workgroup, `${kernel}: registered workgroup size`);
     assert.equal(Number(workgroup[1]), expected[name].size, `${kernel}: workgroup class`);
     logicalTotal = undefined;
@@ -141,6 +162,11 @@ for (const route of ['sam-detr-encoder', 'sam-detr-decoder', 'sam-pixel-decoder'
         .replace('name: `detr-encoder-add-pos-${layerIndex}`, kernel: `${kernelBase}AddPos`, dispatch: workgroups(totalEncoder, input.device)', 'name: `detr-encoder-layernorm1-${layerIndex}`, kernel: `${kernelBase}AddPos`, dispatch: workgroups(spatialTokenCount, input.device)');
       assert.notEqual(swapped, source);
       assert.throws(() => checkProduction(route, swapped, shape), /kernel identity/);
+      const swappedRegistrations = source
+        .replace("addLinearKernel('LayerNorm1', LAYERNORM_WGSL", "addLinearKernel('AddPos', LAYERNORM_WGSL")
+        .replace("addLinearKernel('AddPos', ADD_WGSL", "addLinearKernel('LayerNorm1', ADD_WGSL");
+      assert.notEqual(swappedRegistrations, source);
+      assert.throws(() => checkProduction(route, swappedRegistrations, shape), /registered shader identity/);
       const wrongIndex = source.replace('detr-encoder-layernorm1-${layerIndex}', 'detr-encoder-layernorm1-99');
       assert.throws(() => checkProduction(route, wrongIndex, shape), /phase identity/);
       const wrongWorkgroup = source.replace('@workgroup_size(64)', '@workgroup_size(1)');
