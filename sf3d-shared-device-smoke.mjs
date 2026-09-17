@@ -6,6 +6,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {judgeSf3dSmoke} from './sf3d-host-device.mjs';
+import {verifyAuthoringServer} from './scene-authoring-witness-identity.mjs';
 const args = process.argv.slice(2);
 const arg = name => args[args.indexOf(name)+1];
 for (const flag of ['--url','--out','--puppeteer','--greenroom','--owner']) if (!args.includes(flag)) throw new Error(`required ${flag}`);
@@ -17,6 +18,8 @@ const greenroom = (...argv) => JSON.parse(execFileSync(arg('--greenroom'),argv,{
 let browser, page, lease, renewal, sampling;
 save();
 try {
+  report.phase='serving-identity';save();
+  report.serving=await verifyAuthoringServer({origin:new URL(arg('--url')).origin,repoRoot:process.cwd()});
   report.phase='lease-claim'; save();
   lease = greenroom('lease','claim','--owner',arg('--owner'),'--agent-id','sf3d-shared-device-smoke','--repo-root',process.cwd(),'--pid',String(process.pid),'--effective-route',`${arg('--url')} Chrome native Metal ordinary flame + SF3D shared device`,'--backend','webgpu','--device','apple-gpu','--profile','browser-smoke','--supports-checkpoints','--ttl-seconds','300');
   report.lease=lease; save();
@@ -37,7 +40,7 @@ try {
   await page.goto(arg('--url'),{waitUntil:'domcontentloaded'});
   report.phase='composition-mount';save();
   await page.waitForFunction(()=>window.__sf3dLiveFlameReady || window.__sf3dLiveFlame?.lastError || window.__kaminosCompositionSetup?.status==='failed');
-  report.preflight=await page.evaluate(()=>({url:location.href,route:window.__compositionRoute,setup:window.__kaminosCompositionSetup,error:window.__sf3dLiveFlame?.lastError,
+  report.preflight=await page.evaluate(()=>({url:location.href,route:window.__compositionRoute,setup:window.__kaminosCompositionSetup,error:window.__sf3dLiveFlame?.lastError,preset:window.__kaminosVolumeSettingsPresetReceipt,
     producer:window.__sf3dProducer?{backend:window.__sf3dProducer.backend,deviceInjected:window.__sf3dProducer.deviceInjected}:null,
     actualSameDevice:window.__sf3dProducer?.device===window.__kaminosVolumePrototype?.foregroundGpuContext?.().device,
     flame:window.__kaminosVolumePrototype?.debugState()}));
