@@ -108,7 +108,7 @@ try{
   await wait(page.waitForFunction(()=>window.__kimodoLiveFlame?.runs[0]?.status!=='running',{timeout:0}));
   await wait(page.waitForFunction(()=>document.querySelector('#kimodo-stage')?.textContent.startsWith('succeeded')||window.__kimodoLiveFlame.status!=='succeeded',{timeout:15000}));
   report.evidence=await wait(page.evaluate(()=>window.__kimodoLiveFlame));
-  if(expectedScheduling)report.scheduling=verifyFrameAdmission(report.evidence.runs[0],expectedScheduling);
+  if(expectedScheduling)report.scheduling=verifyFrameAdmission(report.evidence.runs[0],expectedScheduling,report.evidence.timeOrigin);
   report.effectiveUrl=page.url();
   report.phase='identity';await persist();await wait(Promise.all(responses));
   if(report.resources.some(r=>r.error))throw new Error('Served-resource identity failed; see resources');

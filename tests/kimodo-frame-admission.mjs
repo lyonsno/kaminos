@@ -29,14 +29,35 @@ for(const mutation of [s=>s.active=false,s=>s.visibility='hidden',s=>s.frameCoun
 }
 const baseline=fixture('telemetry-only');await baseline.pending;assert.equal(baseline.fences,0);assert.equal(baseline.events[0].status,'observed-only');
 assert.throws(()=>createFrameAdmission({mode:'typo',requestFrame(){},cancelFrame(){}}),/Unknown/);
-const valid={steps:1,scheduling:{mode:'frame-admission',events:[]},diagnostics:{clock:'performance.now',passes:[],submissionReport:{duties:[]}}};
+const pageTimeOrigin=1234;
+const valid={steps:1,scheduling:{mode:'frame-admission',events:[]},diagnostics:{clock:'performance.now',timeOrigin:pageTimeOrigin,passes:[],submissionReport:{duties:[]}}};
 for(const pass of ['cond-root','cond-body','uncond-root','uncond-body']){
   valid.scheduling.events.push({...f.events[0],pass,startedAtMs:4,queueDoneAtMs:5,endedAtMs:6});
   valid.diagnostics.passes.push({pass,dutyId:pass,encodeStartedAtMs:1,encodeEndedAtMs:2,admittedAtMs:3,boundaryEndedAtMs:7,readbackCompletedAtMs:8});
-  valid.diagnostics.submissionReport.duties.push({dutyId:pass,status:'completed'});
+  valid.diagnostics.submissionReport.duties.push({dutyId:pass,status:'completed',submitStartedAtMs:2,submitReturnedAtMs:2.5,submittedAtMs:2.5,completedAtMs:4.5,timingAuthority:'queue-work-done'});
 }
-assert.equal(verifyFrameAdmission(valid,'frame-admission').passes,4);
+assert.equal(verifyFrameAdmission(valid,'frame-admission',pageTimeOrigin).passes,4);
 for(const mutate of [r=>r.scheduling.mode='telemetry-only',r=>r.scheduling.events.pop(),r=>r.diagnostics.passes[0].dutyId='other',r=>r.scheduling.events[0].after.simStepCount=0,r=>r.diagnostics.passes[0].encodeEndedAtMs=NaN]){
-  const r=structuredClone(valid);mutate(r);assert.throws(()=>verifyFrameAdmission(r,'frame-admission'));
+  const r=structuredClone(valid);mutate(r);assert.throws(()=>verifyFrameAdmission(r,'frame-admission',pageTimeOrigin));
 }
+for(const field of ['submitStartedAtMs','submitReturnedAtMs','submittedAtMs','completedAtMs','timingAuthority']){
+  const r=structuredClone(valid);delete r.diagnostics.submissionReport.duties[0][field];
+  assert.throws(()=>verifyFrameAdmission(r,'frame-admission',pageTimeOrigin),`missing ${field} must not verify`);
+}
+for(const mutate of [r=>r.diagnostics.submissionReport.duties[0].timingAuthority='projected',
+  r=>r.diagnostics.submissionReport.duties[0].completedAtMs=5.5,
+  r=>r.diagnostics.submissionReport.duties[0].submittedAtMs=1,
+  r=>r.diagnostics.submissionReport.duties[0].submitReturnedAtMs=Infinity,
+  r=>r.diagnostics.timeOrigin=5678,r=>delete r.diagnostics.timeOrigin]){
+  const r=structuredClone(valid);mutate(r);assert.throws(()=>verifyFrameAdmission(r,'frame-admission',pageTimeOrigin));
+}
+assert.throws(()=>verifyFrameAdmission(valid,'frame-admission'));
+const observed=structuredClone(valid);observed.scheduling.mode='telemetry-only';
+for(const e of observed.scheduling.events){e.mode='telemetry-only';e.status='observed-only';delete e.queueDoneAtMs;}
+const baselineVerdict=verifyFrameAdmission(observed,'telemetry-only',pageTimeOrigin);
+assert.equal(baselineVerdict.foregroundQueueFence,false);
+assert.equal(baselineVerdict.authority,'page-clock-pass-and-duty-timing');
+const candidateVerdict=verifyFrameAdmission(valid,'frame-admission',pageTimeOrigin);
+assert.equal(candidateVerdict.foregroundQueueFence,true);
+assert.equal(candidateVerdict.authority,'page-clock-current-duty-queue-prefix-and-fresh-dual-counter');
 console.log('Frame admission: fence + fresh dual-counter advance, abort, hidden/reset/fallback, baseline and invalid mode pass');
