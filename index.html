@@ -1111,8 +1111,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-cockpit-layout-toolbar-row">
         <span id="volume-cockpit-layout-status" role="status" aria-live="polite">connecting…</span>
       </div>
-    </div>
-    <div class="volume-cockpit-layout-toolbar" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Detail force comparison">
+    <div class="volume-cockpit-layout-toolbar" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Detail force comparison" style="margin-top:10px">
       <label for="detail-force-isolation">Detail force comparison · session only</label>
       <div class="volume-cockpit-layout-toolbar-row">
         <select id="detail-force-isolation" aria-describedby="detail-force-isolation-note">
@@ -1127,8 +1126,9 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="only-detail">Only transported detail push</option>
         </select>
       </div>
-      <div id="detail-force-isolation-note" class="slider-help" role="status"></div>
-      <div class="slider-help">Changes new force injection, not existing velocity or material detail. Let old motion pass through before comparing. “Only” isolates terms inside Procedural detail forces; buoyancy and the rest of the solve remain. Reload restores All; this selection is not saved in the basin.</div>
+      <div id="detail-force-isolation-note" role="status" style="font-size:11px;line-height:1.4;color:#a7b4b8;margin-top:6px"></div>
+      <div style="font-size:11px;line-height:1.4;color:#a7b4b8;margin-top:6px">Changes new force injection, not existing velocity or material detail. Let old motion pass through before comparing. “Only” isolates terms inside Procedural detail forces; buoyancy and the rest of the solve remain. Reload restores All; this selection is not saved in the basin.</div>
+    </div>
     </div>
     <h2>Volume Renderer</h2>
     <div class="panel">
