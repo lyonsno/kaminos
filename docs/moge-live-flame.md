@@ -13,8 +13,9 @@ works. Both use the vendored library build `lib/moge-inference.js`
 | `moge-elfinblue.html` → app route + `#composition_module_url=./moge-live-flame-inject.mjs` | the real app route, driven by a mounted basin promotion package | same GPU, **two devices** (the app does not expose its device) | run MoGe against an exact basin/preset with the app's own control pipeline |
 
 Shared code (`moge-live-flame-shared.mjs`): frame monitor, MoGe load + warm-up,
-cooperative run, depth paint (row-banded), on-device chunk telemetry
-(persisted in `localStorage` across restarts).
+cooperative run, depth paint (row-banded), and on-device chunk telemetry.
+The vendored bundle is built from moge-webgpu `e9fc64b` (SHA256
+`f76f6c47f447661f83227929ba23de21d07aeafa00a7b607302bebda9c55e019`).
 
 ## Composition-module seam (index.html)
 
@@ -57,6 +58,30 @@ After each run the HUD shows worst frame gap, frame count, p50/p95 gap,
 counts over 34 ms and 50 ms, chunk count, and the five worst queue waits by
 chunk label. Headless-Chrome harness timings are compositor-quantized and only
 relative; the operator's on-device HUD is authoritative.
+
+Each button run, including failures, also saves an uncapped raw JSON capture
+through the existing `POST /api/volume-capture` endpoint into this checkout's
+`artifacts/volume-captures/`. The HUD shows the returned path only after a
+matching save response. It records frame timestamps since the preceding
+capture, input/inference/depth-paint phase boundaries, supported browser long
+tasks, visibility changes, requested scheduler settings, and the actual route
+result (whose nested scheduler receipt owns the event trace). Clock values are
+`performance.now()` milliseconds with the page's `timeOrigin`. The initial
+window includes labeled initialization/warm-up; later idle intervals are not
+fixed-duration controlled baselines. Long-task absence does not rule out CPU
+work below the browser's reporting threshold. Queue-fence spans are observed
+waiting intervals, not hardware GPU execution timestamps.
+
+`localStorage` retains only the latest **HUD summary**, not raw history. A failed
+file save is explicitly **NOT SAVED** and the full capture remains in
+`window.__mogeUnsavedCaptures`; keep the tab open for recovery. Closing the tab
+before a run finishes can also lose that unfinished run. This is per-run
+retention, not a crash-proof continuous journal. A missing committed image
+fixture now records an input failure rather than substituting a synthetic card.
+These timing captures are not volume-state snapshots: the generic endpoint's
+returned volume-witness command is not a MoGe replay instruction. Their route
+and browser metadata do not certify an immutable checkout; record the exercised
+source separately, as the existing owned-server probe does.
 
 ## Witnesses
 

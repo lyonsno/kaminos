@@ -14,14 +14,37 @@ export const state = {
   inferenceGaps: [],
   inferring: false,
   lastRouteResult: null,
+  frameTimes: [],
+  longTasks: [],
+  visibilityChanges: [],
+  phases: [],
+  unsavedCaptures: [],
+  lastCaptureEnd: performance.now(),
+  longTaskObserver: null,
 };
+
+function markPhase(phase) {
+  state.phases.push({ phase, atMs: performance.now() });
+}
+
+function collectLongTasks(entries) {
+  for (const entry of entries) state.longTasks.push({ startTime: entry.startTime, duration: entry.duration });
+}
 
 // --- Shared GPUDevice: union of pyro-volume and inference requirements ---
 
 export function startFrameMonitor() {
+  document.addEventListener('visibilitychange', () => {
+    state.visibilityChanges.push({ atMs: performance.now(), state: document.visibilityState });
+  });
+  if (globalThis.PerformanceObserver?.supportedEntryTypes?.includes('longtask')) {
+    state.longTaskObserver = new PerformanceObserver(list => collectLongTasks(list.getEntries()));
+    state.longTaskObserver.observe({ type: 'longtask' });
+  }
   let last = performance.now();
   const tick = now => {
     const dt = now - last;
+    state.frameTimes.push(now);
     state.frameIntervals.push(dt);
     if (state.frameIntervals.length > 600) state.frameIntervals.shift();
     if (state.inferring) {
@@ -46,6 +69,7 @@ export function startFrameMonitor() {
 // without these emission/appearance values the sim runs but produces no visible flame).
 
 export async function loadMoge(gpu) {
+  markPhase('initialization');
   const inference = new MoGeInference(gpu);
   await inference.init((received, total) => {
     const pct = total ? Math.round((received / total) * 100) : 0;
@@ -56,6 +80,7 @@ export async function loadMoge(gpu) {
   hud('hud-weights').className = `v ${inference.useRealWeights ? 'good' : 'bad'}`;
   // Warm-up run (discarded): first visible run is then steady state.
   if (inference.useRealWeights) {
+    markPhase('warm-up');
     hud('hud-infer').textContent = 'warming up (discarded run)…';
     hud('hud-infer').className = 'v warn';
     const warm = await inference.warmUp();
@@ -63,6 +88,7 @@ export async function loadMoge(gpu) {
     hud('hud-infer').className = 'v';
   }
   window.__mogeInference = inference;
+  markPhase('idle');
   return inference;
 }
 
@@ -70,20 +96,9 @@ export async function loadMoge(gpu) {
 export async function fetchTestImageData() {
   const img = new Image();
   img.src = './fixtures/moge-live-flame-source.png';
-  try {
-    await img.decode();
-  } catch {
-    // Fallback: synthesize a gradient test card so the button still works
-    // without the fixture; the receipt records the artifact identity either way.
-    const c = document.createElement('canvas');
-    c.width = c.height = 518;
-    const ctx = c.getContext('2d');
-    const g = ctx.createLinearGradient(0, 0, 518, 518);
-    g.addColorStop(0, '#7a4a2a'); g.addColorStop(1, '#1a2a3a');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 518, 518);
-    ctx.fillStyle = '#c8b89a'; ctx.beginPath(); ctx.arc(259, 300, 120, 0, 7); ctx.fill();
-    return ctx.getImageData(0, 0, 518, 518);
-  }
+  // This diagnosis uses a committed, replayable fixture; a missing fixture is
+  // an input failure, not permission to silently substitute another image.
+  await img.decode();
   const c = document.createElement('canvas');
   c.width = img.width; c.height = img.height;
   const ctx = c.getContext('2d');
@@ -161,25 +176,42 @@ export async function paintDepth(result) {
 
 
 export async function runInference(inference) {
-  const imageData = await fetchTestImageData();
-  hud('hud-infer').textContent = 'running (cooperative)…';
-  hud('hud-infer').className = 'v warn';
-  state.framesDuringInference = 0;
-  state.worstGapDuringInference = 0;
-  state.inferenceGaps = [];
-  state.inferring = true;
-  const t0 = performance.now();
+  const capture = {
+    kind: 'moge-frame-timing', runId: crypto.randomUUID(),
+    at: new Date().toISOString(), timeOrigin: performance.timeOrigin,
+    windowStartMs: state.lastCaptureEnd, url: location.href,
+    compositionRoute: structuredClone(window.__compositionRoute ?? null),
+    visibilityAtStart: document.visibilityState,
+    browser: { userAgent: globalThis.navigator?.userAgent, webdriver: globalThis.navigator?.webdriver },
+    input: { source: 'fixtures/moge-live-flame-source.png', status: 'unavailable' },
+    longTaskSupport: !!state.longTaskObserver,
+    routeResult: null, status: 'running',
+    requestedScheduler: {
+      mode: 'cooperative', yieldMs: 0, vitBlockChunkSize: 1,
+      splitVitBlocks: true, splitDecoderResBlocks: true,
+      pacing: 'bounded-prefix', maxInFlightChunks: 1,
+    },
+  };
+  state.lastRouteResult = null;
+  markPhase('image-input');
   try {
+    const imageData = await fetchTestImageData();
+    capture.input = { ...capture.input, status: 'decoded', width: imageData.width, height: imageData.height };
+    hud('hud-infer').textContent = 'running (cooperative)…';
+    hud('hud-infer').className = 'v warn';
+    state.framesDuringInference = 0;
+    state.worstGapDuringInference = 0;
+    state.inferenceGaps = [];
+    state.inferring = true;
+    const t0 = performance.now();
+    markPhase('inference');
     const result = await inference.run(imageData, {
-      scheduler: {
-        mode: 'cooperative', yieldMs: 0, vitBlockChunkSize: 1,
-        splitVitBlocks: true, splitDecoderResBlocks: true,
-        pacing: 'bounded-prefix', maxInFlightChunks: 1,
-      },
+      scheduler: capture.requestedScheduler,
     });
     const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
     state.inferring = false;
     state.lastRouteResult = result.routeResult || null;
+    capture.routeResult = state.lastRouteResult;
     hud('hud-infer').textContent = `done in ${elapsed}s`;
     hud('hud-infer').className = 'v good';
     hud('hud-frames').textContent = String(state.framesDuringInference);
@@ -188,12 +220,65 @@ export async function runInference(inference) {
     hud('hud-sched').textContent = sched ? `${sched.status} / ${sched.classification}` : 'missing';
     hud('hud-sched').className = `v ${sched?.status === 'verified' ? 'good' : 'warn'}`;
     renderChunkTelemetry(sched, state.worstGapDuringInference, state.inferenceGaps);
+    markPhase('depth-paint');
     await paintDepth(result);
+    // Include the first presented frame after CPU painting in the timing window.
+    await new Promise(requestAnimationFrame);
+    capture.status = 'complete';
+    markPhase('complete');
   } catch (e) {
+    capture.status = 'failed';
+    capture.failure = { phase: state.phases.at(-1)?.phase, message: String(e) };
     state.inferring = false;
     hud('hud-infer').textContent = `error: ${e.message}`;
     hud('hud-infer').className = 'v bad';
     throw e;
+  } finally {
+    collectLongTasks(state.longTaskObserver?.takeRecords() ?? []);
+    capture.windowEndMs = performance.now();
+    capture.visibilityAtEnd = document.visibilityState;
+    capture.frameTimes = state.frameTimes;
+    capture.longTasks = state.longTasks;
+    capture.visibilityChanges = state.visibilityChanges;
+    capture.phases = state.phases;
+    state.frameTimes = [];
+    state.longTasks = [];
+    state.visibilityChanges = [];
+    state.phases = [{ phase: 'idle', atMs: capture.windowEndMs }];
+    state.lastCaptureEnd = capture.windowEndMs;
+    await saveRunCapture(capture);
+  }
+}
+
+// Reuse Kaminos's existing file-in/file-out capture endpoint. The rolling HUD
+// and localStorage summary are presentation only; this is the uncapped raw run.
+async function saveRunCapture(capture) {
+  let panel = document.getElementById('moge-capture-status');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'moge-capture-status';
+    document.getElementById('hud').appendChild(panel);
+  }
+  panel.textContent = 'Saving raw timing…';
+  try {
+    const response = await fetch('/api/volume-capture', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...capture, name: `moge-${capture.runId}` }),
+    });
+    if (!response.ok) throw new Error(`capture HTTP ${response.status}`);
+    const saved = await response.json();
+    if (!saved.ok || !saved.relativePath || saved.document?.capture?.runId !== capture.runId) {
+      throw new Error('capture save returned no matching run');
+    }
+    const unsaved = state.unsavedCaptures.length;
+    panel.textContent = `Raw timing saved: ${saved.relativePath}`
+      + (unsaved ? ` · ${unsaved} earlier capture(s) NOT SAVED: keep this tab open.` : '');
+    panel.style.color = unsaved ? '#e06c5a' : '#79c98f';
+  } catch (error) {
+    state.unsavedCaptures.push(capture);
+    window.__mogeUnsavedCaptures = state.unsavedCaptures;
+    panel.textContent = `RAW TIMING NOT SAVED: ${error.message}. Keep this tab open; raw data is retained in memory.`;
+    panel.style.color = '#e06c5a';
   }
 }
 
