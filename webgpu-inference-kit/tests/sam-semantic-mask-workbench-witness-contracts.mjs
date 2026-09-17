@@ -22,6 +22,29 @@ await new Function('report', 'error', 'chromeStderr', 'cdp', 'outPath', 'dirname
 assert.equal(failedReport.status, 'failed', 'capturing pixels must not promote the failed witness');
 assert.equal(failedReport.screenshot, '/tmp/failed-frame.png', 'a visual rejection must preserve the browser frame before teardown');
 assert.equal(savedFrames[0]?.bytes.toString(), 'frame');
+const captureFailureReport = { failurePhase: 'visual-inspection', screenshot: null };
+const captureFailureProcess = {};
+const failureOrder = [];
+let persistedFailure;
+const primaryFailure = new Error('primary visual rejection');
+const secondaryFailure = new Error('CDP capture disconnected');
+const failureAndTeardown = witness.slice(witness.lastIndexOf('} catch (error) {'));
+await new Function('report', 'primaryFailure', 'chromeStderr', 'cdp', 'chromeProcess', 'outPath', 'dirname',
+  'mkdirSync', 'writeFileSync', 'writeReport', 'console', 'process', 'Buffer',
+  `return (async () => { try { throw primaryFailure; ${failureAndTeardown} })();`)(
+  captureFailureReport, primaryFailure, '',
+  { request: async () => { throw secondaryFailure; }, socket: { close: () => failureOrder.push('cdp-close') } },
+  { kill: signal => { assert.equal(signal, 'SIGTERM'); failureOrder.push('chrome-stop'); } },
+  '/tmp/failed-frame.png', () => '/tmp', () => {}, () => assert.fail('failed capture cannot write a frame'),
+  () => { persistedFailure = JSON.parse(JSON.stringify(captureFailureReport)); failureOrder.push('report'); },
+  { error() {} }, captureFailureProcess, Buffer);
+assert.equal(captureFailureReport.error, String(primaryFailure.stack));
+assert.equal(captureFailureReport.screenshotError, String(secondaryFailure));
+assert.equal(captureFailureReport.screenshot, null);
+assert.equal(captureFailureReport.status, 'failed');
+assert.deepEqual(persistedFailure, captureFailureReport, 'both errors must survive in the persisted report');
+assert.equal(captureFailureProcess.exitCode, 1);
+assert.deepEqual(failureOrder, ['report', 'cdp-close', 'chrome-stop']);
 const inspectSource = witness.slice(witness.indexOf('function canvasInspectionExpression()'), witness.indexOf('let chromeProcess ='));
 const inspectExpression = new Function(`${inspectSource}; return canvasInspectionExpression();`)();
 const visibleOutput = { instances: [{ index: 7, score: 0.8, mask: new Uint32Array([1]), foregroundPixelCount: 1 }],
