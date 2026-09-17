@@ -9883,6 +9883,7 @@ async function initScene() {
   let sceneRenderedForVolume = false;
   ordinarySceneDepthProvider = () => {
     if (!ordinaryDepthEnabled) return null;
+    if (!sharedGpu?.device) throw new Error('ordinary-scene-depth-shared-device-unavailable');
     // Own a current prepass before the ordinary volume frame encodes. Both
     // consumers share camera/device; the volume may render at lower resolution.
     syncViewportRendererSize();

@@ -17,4 +17,14 @@ assert.throws(()=>validateOrdinarySceneDepth(null,{device,camera}),/missing/);
 // disable scene antialiasing to make the consumer's binding convenient.
 assert.equal(validateOrdinarySceneDepth({device,camera,texture:{...texture,sampleCount:4}},{device,camera}).sampleCount,4);
 assert.throws(()=>validateOrdinarySceneDepth({device,camera,texture:{...texture,format:'rgba8unorm'}},{device,camera}),/format/);
+// Exercise the actual host provider before any prepass can submit: a failed
+// shared-device acquisition must report its own refusal, not a null dereference.
+const shell=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const providerBody=shell.match(/ordinarySceneDepthProvider = \(\) => \{([\s\S]*?)\n  };/)[1];
+let sceneRenders=0;
+const provider=new Function('ordinaryDepthEnabled','sharedGpu','camera','syncViewportRendererSize','fireLightFieldPass','renderSceneFrame','renderer','prePass',`let sceneRenderedForVolume=false;\n${providerBody}`);
+const invoke=enabled=>provider(enabled,null,{updateMatrixWorld(){}},()=>{},null,()=>{sceneRenders++;},{backend:{get:()=>({texture})}},{getTexture:()=>({})});
+assert.throws(()=>invoke(true),/ordinary-scene-depth-shared-device-unavailable/);
+assert.equal(sceneRenders,0,'unavailable shared device must refuse before rendering scene depth');
+assert.equal(invoke(false),null,'disabled depth does not require the shared device');
 console.log('ordinary scene-depth contracts passed');
