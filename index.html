@@ -9397,7 +9397,10 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     exteriorDistance.mul(exteriorDistance).mul(3.0).add(exteriorDistance.mul(1.5)).add(1.0)
   );
 
-  const backgroundMask = float(1.0).sub(step(float(0.999), depthSampleNode));
+  // Only the native clear depth is background. A .999 cutoff rejects real
+  // surfaces ~9.1 units away with this camera's .01/100 near/far planes,
+  // sweeping a false lighting boundary across the kiln during camera dolly.
+  const backgroundMask = float(1.0).sub(step(float(1.0), depthSampleNode));
   const normalSampleNode = sceneNormalNode.sample(viewportUV).rgb.normalize();
   // The prepass stores view-space normals; rotate into world space with the
   // scene camera's world matrix (w = 0 keeps it a pure rotation).
