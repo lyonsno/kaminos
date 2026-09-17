@@ -1112,6 +1112,24 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span id="volume-cockpit-layout-status" role="status" aria-live="polite">connecting…</span>
       </div>
     </div>
+    <div class="volume-cockpit-layout-toolbar" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Detail force comparison">
+      <label for="detail-force-isolation">Detail force comparison · session only</label>
+      <div class="volume-cockpit-layout-toolbar-row">
+        <select id="detail-force-isolation" aria-describedby="detail-force-isolation-note">
+          <option value="all">All forces — original behavior</option>
+          <option value="without-micro">Without micro-carrier push</option>
+          <option value="without-shred">Without interface shredding</option>
+          <option value="without-fine">Without fine-scale breakup</option>
+          <option value="only-micro">Only micro-carrier push</option>
+          <option value="only-shred">Only interface shredding</option>
+          <option value="only-fine">Only fine-scale breakup</option>
+          <option value="without-detail">Without transported detail push</option>
+          <option value="only-detail">Only transported detail push</option>
+        </select>
+      </div>
+      <div id="detail-force-isolation-note" class="slider-help" role="status"></div>
+      <div class="slider-help">Changes new force injection, not existing velocity or material detail. Let old motion pass through before comparing. “Only” isolates terms inside Procedural detail forces; buoyancy and the rest of the solve remain. Reload restores All; this selection is not saved in the basin.</div>
+    </div>
     <h2>Volume Renderer</h2>
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_volume_smoke=1</span></div>
@@ -3026,6 +3044,7 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=fire-actor-parity-0722';
+import { detailForceIsolationReceipt } from './volume-detail-force-isolation.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -18378,6 +18397,7 @@ function readVolumeControls() {
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked,
+    detailForceIsolation: document.getElementById('detail-force-isolation').value,
     volumeExposure: parseFloat(document.getElementById('volume-exposure').value),
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
@@ -18654,6 +18674,12 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
   document.getElementById('volume-procedural-detail-forces-val').textContent = c.proceduralDetailForces ? 'on' : 'off';
+  const forceComparison = detailForceIsolationReceipt(c);
+  document.getElementById('detail-force-isolation-note').textContent = !forceComparison.masterEnabled
+    ? 'Master switch is OFF: all four detail forces are disabled.'
+    : forceComparison.detailSuppressedByScene
+      ? 'Tall plume already suppresses transported detail push. Compare micro-carrier, shredding and fine breakup; Only transported detail therefore disables all four.'
+      : 'Master switch is ON. Comparison affects only the named force contributions.';
   document.getElementById('volume-exposure-val').textContent = c.volumeExposure.toFixed(2);
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
@@ -20039,6 +20065,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }
+  document.getElementById('detail-force-isolation').addEventListener('change', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-sidecar-source')?.addEventListener('input', syncControls);

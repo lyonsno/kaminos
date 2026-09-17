@@ -1,4 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { detailForceIsolationMask, detailForceIsolationReceipt } from './volume-detail-force-isolation.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
@@ -2180,7 +2181,7 @@ struct Uniforms {
   boundary_fire_palette_clean: vec4<f32>,
   boundary_fire_palette_soot: vec4<f32>,
   reserved_source_extension_0: vec4<f32>,
-  reserved_source_extension_1: vec4<f32>,
+  detail_force_isolation: vec4<f32>,
   reserved_source_extension_2: vec4<f32>,
   reserved_source_extension_3: vec4<f32>,
   reserved_source_extension_4: vec4<f32>,
@@ -4213,10 +4214,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let microLateral = vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping;
     let shredLateral = vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping;
     let fineBreakupLateral = vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping;
-    detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation;
-    microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation;
-    shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation;
-    fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
+    detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation * u.detail_force_isolation.x;
+    microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation * u.detail_force_isolation.y;
+    shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation * u.detail_force_isolation.z;
+    fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation * u.detail_force_isolation.w;
   }
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
   let projectionCorrection = vec3<f32>(0.0);
@@ -12243,6 +12244,7 @@ export function createKaminosVolumePrototype({
     );
     uniforms.fill(0, 344, 364);
     uniforms[344] = controlsSnapshot.fixedSourceDephase === false ? 0 : 1;
+    uniforms.set(detailForceIsolationMask(controlsSnapshot.detailForceIsolation), 348);
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,
@@ -12365,6 +12367,7 @@ export function createKaminosVolumePrototype({
     state.artisticSwirl = uniforms[364] >= 0.5;
     state.phasedSway = uniforms[365] >= 0.5;
     state.proceduralDetailForces = uniforms[366] >= 0.5;
+    state.detailForceIsolation = detailForceIsolationReceipt({ ...controlsSnapshot, volumeScene: state.volumeScene });
     state.proceduralTransportSlip = false;
     state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
     state.fixedSourceDephase = uniforms[344] >= 0.5;
@@ -19814,6 +19817,7 @@ export function createKaminosVolumePrototype({
         fireScale: state.fireScale,
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
+        detailForceIsolation: state.detailForceIsolation,
         tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         reactionFuelScale: state.reactionFuelScale,
@@ -20189,6 +20193,7 @@ export function createKaminosVolumePrototype({
       fireScale: state.fireScale,
       detailScale: state.detailScale,
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
+      detailForceIsolation: state.detailForceIsolation,
       tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       reactionFuelScale: state.reactionFuelScale,
@@ -21729,6 +21734,7 @@ export function createKaminosVolumePrototype({
       state.artisticSwirl = controlsSnapshot.artisticSwirl !== false;
       state.phasedSway = controlsSnapshot.phasedSway !== false;
       state.proceduralDetailForces = controlsSnapshot.proceduralDetailForces !== false;
+      state.detailForceIsolation = detailForceIsolationReceipt({ ...controlsSnapshot, volumeScene: state.volumeScene });
       state.proceduralTransportSlip = false;
       state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
       state.fixedSourceDephase = controlsSnapshot.fixedSourceDephase !== false;
