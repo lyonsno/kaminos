@@ -9,8 +9,8 @@
  * a run button, and receipts the HUD never upgrades.
  *
  * The host loads this module's buffer requirements before device acquisition
- * and injects its exact device at mount. The foreground-opportunity interlock
- * is NOT connected yet: sharing a device is distinct from frame scheduling.
+ * and injects its exact device at mount. Ordinary scene+volume frames run in
+ * producer-granted foreground opportunities on that device.
  * The HUD's independent rAF probe does not prove flame simulation advances.
  *
  * The producer is the SF3D library build vendored at ./lib/sf3d/ (code only;
@@ -18,7 +18,7 @@
  * serve-sf3d-elfinblue.sh).
  */
 import { createSf3dProducer } from './lib/sf3d/sf3d-producer.js';
-import { createSharedDeviceSf3dProducer, snapshotSf3dSharedDevice } from './sf3d-host-device.mjs';
+import { createSharedDeviceSf3dProducer, snapshotSf3dSharedDevice, connectSf3dForeground } from './sf3d-host-device.mjs';
 export { sharedGpuBufferRequirements } from './sf3d-host-device.mjs';
 
 const CANONICAL_DEMO_CHAIR_GLB_SHA256 = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
@@ -34,6 +34,8 @@ const state = {
   worstGapDuringInference: 0,
   lastResult: null,
   lastError: null,
+  foregroundFrames: [],
+  pendingOutput: null,
 };
 
 function injectHud() {
@@ -61,7 +63,8 @@ function injectHud() {
     <div class="sub" id="sf3d-topology">App fire route + SF3D image→mesh — device binding unverified; foreground scheduling unconnected</div>
     <div class="row"><span class="k">fire</span><span class="v" id="sf3d-fire">—</span></div>
     <div class="row"><span class="k">frame p95 (rolling)</span><span class="v" id="sf3d-p95">—</span></div>
-    <div class="row"><span class="k">frames during inference</span><span class="v" id="sf3d-frames">—</span></div>
+    <div class="row"><span class="k">rAF ticks during inference</span><span class="v" id="sf3d-frames">—</span></div>
+    <div class="row"><span class="k">ordinary serviced frames</span><span class="v" id="sf3d-flame-frames">—</span></div>
     <div class="row"><span class="k">worst gap during inference</span><span class="v" id="sf3d-worst">—</span></div>
     <div class="row"><span class="k">weights</span><span class="v" id="sf3d-weights">not loaded</span></div>
     <div class="row"><span class="k">inference</span><span class="v" id="sf3d-infer">idle</span></div>
@@ -130,7 +133,7 @@ function summarizeGaps(gaps) {
     over33_3: xs.filter(g => g > 33.3).length, over100: xs.filter(g => g > 100).length };
 }
 
-async function runSf3d(producer, image) {
+async function runSf3d(producer, image, host, prototype) {
   const button = hud('sf3d-run');
   button.disabled = true;
   state.inferring = true;
@@ -138,6 +141,11 @@ async function runSf3d(producer, image) {
   state.inferenceGaps = [];
   state.worstGapDuringInference = 0;
   state.lastError = null;
+  state.lastResult = null;
+  state.pendingOutput = null;
+  state.foregroundFrames = [];
+  const flameBefore = prototype.debugState();
+  let phase = 'inference';
   hud('sf3d-infer').textContent = 'running…';
   hud('sf3d-infer').className = 'v warn';
   hud('sf3d-progress').value = 0;
@@ -153,13 +161,14 @@ async function runSf3d(producer, image) {
       },
     });
     state.inferring = false;
+    const flameAfter = prototype.debugState();
     const wallMs = performance.now() - t0;
     const glbSha256 = await sha256Hex(result.glb);
     const canonical = glbSha256 === CANONICAL_DEMO_CHAIR_GLB_SHA256;
     const duties = ['dinov2-tokenizer', 'two-stream-backbone', 'post-processor', 'texture-bake']
       .map(k => result.cooperativeReports?.[k]?.submittedGpuDutyCount ?? '?');
     const gaps = summarizeGaps(state.inferenceGaps);
-    state.lastResult = Object.freeze({
+    const output = {
       runId, wallMs, glbSha256, canonical, glbBytes: result.glb.byteLength,
       numVertices: result.numVertices, numFaces: result.numFaces,
       duties: { 'dinov2-tokenizer': duties[0], 'two-stream-backbone': duties[1], 'post-processor': duties[2], 'texture-bake': duties[3] },
@@ -167,7 +176,10 @@ async function runSf3d(producer, image) {
       offloads: result.offloads,
       identity: result.identity,
       receiptValidation: result.receiptValidation,
-      foregroundOpportunityReport: { status: result.foregroundOpportunityReport?.status ?? null, requestCount: result.foregroundOpportunityReport?.requestCount ?? null },
+      foregroundOpportunityReport: result.foregroundOpportunityReport,
+      routeReceipt: result.receipt,
+      foregroundFrames: [...state.foregroundFrames],
+      flameProgress: {before:{frameCount:flameBefore.frameCount,simStepCount:flameBefore.simStepCount},after:{frameCount:flameAfter.frameCount,simStepCount:flameAfter.simStepCount}},
       framesDuringInference: state.framesDuringInference,
       inferenceGaps: gaps,
       deviceTopology: window.__compositionRoute.deviceTopology,
@@ -175,7 +187,13 @@ async function runSf3d(producer, image) {
       foregroundScheduling: window.__compositionRoute.foregroundScheduling,
       fireStatus: hud('sf3d-fire').textContent,
       glb: result.glb,
-    });
+    };
+    // Keep inference evidence/output even when persistence or host import fails.
+    state.pendingOutput = output;
+    phase = 'host-output-presentation';
+    const presentation = await host.presentGlb(result.glb, {runId,sha256:glbSha256});
+    state.lastResult = Object.freeze({...output,presentation});
+    state.pendingOutput = null;
     hud('sf3d-infer').textContent = `done in ${(wallMs / 1000).toFixed(1)}s · ${result.numVertices}v/${result.numFaces}f`;
     hud('sf3d-infer').className = 'v good';
     hud('sf3d-duties').textContent = duties.join(' / ');
@@ -192,7 +210,7 @@ async function runSf3d(producer, image) {
     };
   } catch (error) {
     state.inferring = false;
-    state.lastError = { message: error?.message || String(error), sf3dRun: error?.sf3dRun ?? null };
+    state.lastError = { phase, message: error?.message || String(error), sf3dRun: error?.sf3dRun ?? null };
     hud('sf3d-infer').textContent = `error: ${state.lastError.message}`.slice(0, 60);
     hud('sf3d-infer').className = 'v bad';
     console.error('SF3D run failed:', error);
@@ -202,7 +220,7 @@ async function runSf3d(producer, image) {
   }
 }
 
-export async function mountComposition({ prototype, params, sharedGpu } = {}) {
+export async function mountComposition({ prototype, params, sharedGpu, host } = {}) {
   injectHud();
   startFrameMonitor();
   mirrorFireStatus();
@@ -236,7 +254,15 @@ export async function mountComposition({ prototype, params, sharedGpu } = {}) {
     });
     window.__compositionRoute.deviceReceipt = snapshotSf3dSharedDevice(sharedGpu);
     window.__compositionRoute.deviceTopology = 'same-device';
-    hud('sf3d-topology').textContent = 'App fire route + SF3D — shared host device; independent render loops (foreground interlock unconnected)';
+    connectSf3dForeground(producer, prototype, host, receipt => {
+      if (state.inferring) {
+        state.foregroundFrames.push(receipt);
+        hud('sf3d-flame-frames').textContent = String(state.foregroundFrames.filter(row=>row.status==='completed').length);
+      }
+    });
+    window.__compositionRoute.foregroundScheduling = 'producer-foreground-opportunities';
+    window.__compositionRoute.renderer = 'ordinary-volume';
+    hud('sf3d-topology').textContent = 'Ordinary flame + SF3D — shared host device; foreground frame service connected';
   } catch (error) {
     state.lastError = { phase: 'producer-initialization', message: error?.message || String(error) };
     hud('sf3d-weights').textContent = `error: ${error.message}`.slice(0, 60);
@@ -253,7 +279,7 @@ export async function mountComposition({ prototype, params, sharedGpu } = {}) {
   const button = hud('sf3d-run');
   button.disabled = false;
   button.textContent = 'Run SF3D image → mesh (cooperative)';
-  button.onclick = () => runSf3d(producer, image);
+  button.onclick = () => runSf3d(producer, image, host, prototype);
   window.__sf3dLiveFlameReady = true;
   return { producer, image };
 }

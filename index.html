@@ -3114,6 +3114,7 @@ let compositionSetupError = null;
 const importCompositionModule = url => import(url);
 let fireLightFieldPass = null;
 let ordinarySceneDepthProvider = null;
+let compositionHost = null;
 
 // Fire light-field route params may ride the URL HASH as well as the query:
 // settings-preset routes are contract-validated and reject unexpected
@@ -9954,6 +9955,9 @@ async function initScene() {
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1';
   let sceneRenderedForVolume = false;
+  let foregroundServiceActive = false;
+  let insideForegroundFrame = false;
+  let sceneFrameCount = 0;
   ordinarySceneDepthProvider = () => {
     if (!ordinaryDepthEnabled) return null;
     if (!sharedGpu?.device) throw new Error('ordinary-scene-depth-shared-device-unavailable');
@@ -9979,6 +9983,7 @@ async function initScene() {
   function renderSceneFrame() {
     const t0 = performance.now();
     renderPipeline.render();
+    sceneFrameCount++;
     const frameMs = performance.now() - t0;
     fpsFrames++;
     const elapsed = performance.now() - fpsLast;
@@ -10008,7 +10013,7 @@ async function initScene() {
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
+    if (!foregroundServiceActive && mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
       if (!sceneRenderedForVolume) renderSceneFrame();
       sceneRenderedForVolume = false;
 
@@ -10016,6 +10021,37 @@ async function initScene() {
       needsRender = false;
     }
   }
+  compositionHost = {
+    device: renderer.backend.device,
+    setForegroundServiceActive(active) { foregroundServiceActive = Boolean(active); },
+    runForegroundFrame(run) {
+      if (!foregroundServiceActive || insideForegroundFrame) throw new Error('invalid foreground scene frame state');
+      insideForegroundFrame = true;
+      sceneRenderedForVolume = false;
+      try {
+        // The ordinary depth provider runs after the volume updates controls
+        // and camera, preserving identical camera state for prepass/raymarch.
+        const result = run();
+        if (!sceneRenderedForVolume) {
+          syncViewportRendererSize();
+          camera.updateMatrixWorld();
+          fireLightFieldPass?.update();
+          renderSceneFrame();
+        }
+        return {...result, sceneFrameCount, sceneAuthority:'three-render-returned-inside-service-not-presentation'};
+      } finally { insideForegroundFrame = false; }
+    },
+    async presentGlb(glb, {runId, sha256}) {
+      const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
+      const saved = await response.json();
+      if (!response.ok || saved.sha256 !== sha256) throw new Error(saved.error || 'generated mesh persistence hash mismatch');
+      const object = await showGLB(saved.source, {clear:false, metadata:{source:saved.source,type:'glb',fileName:`${sha256}.glb`,label:`SF3D chair · ${runId}`}});
+      const entry = sceneObjects.find(row => row.object === object);
+      if (!entry) throw new Error('SF3D output was not registered in the host scene');
+      window._kaminosDirty?.();
+      return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
+    },
+  };
   animate();
 }
 
@@ -20415,12 +20451,12 @@ async function initKaminosVolumeRoute() {
   // #composition_module_url=<module> (hash, not query — settings routes are
   // contract-validated and reject unexpected query parameters) loads an ES
   // module before GPU acquisition and mounts after the volume exists via
-  // mountComposition({ prototype, params, sharedGpu }). Absent: no-op. Used to compose
+  // mountComposition({ prototype, params, sharedGpu, host }). Absent: no-op. Used to compose
   // long-running inference (e.g. MoGe) into the live app route.
   {
     if (compositionModule) {
       window.__kaminosCompositionSetup.phase = 'mount';
-      Promise.resolve().then(() => compositionModule.mountComposition({ prototype: volumePrototype, params: new URLSearchParams(window.location.search), sharedGpu }))
+      Promise.resolve().then(() => compositionModule.mountComposition({ prototype: volumePrototype, params: new URLSearchParams(window.location.search), sharedGpu, host: compositionHost }))
         .then(() => { window.__kaminosCompositionSetup.status = 'mounted'; })
         .catch(error => {
           Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: String(error?.message || error)});
