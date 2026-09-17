@@ -1,0 +1,1 @@
+source: lyonsno/sf3d-webgpu cc/slow-injected-device-producer-0915 57544e7e5d87f7a25048dc2411f09e8f0708b3d6 clean; built 2026-09-16T04:07:38Z with vite.lib.config.js

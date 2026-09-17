@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.volume.basin-promotion-receipt.v1",
+  "status": "cockpit-exported-and-exact-mounted",
+  "handle": "big-raymarch-hero-flamebowl-cotangent-covariance",
+  "label": "big_raymarch_hero_flamebowl_cotangent_covariance",
+  "revision": "basinrev-f8b5c260315e69161fe05cf9c75cad01af42fe86c061f321038eda3f89237603",
+  "stableRef": "big-raymarch-hero-flamebowl-cotangent-covariance@basinrev-f8b5c260315e69161fe05cf9c75cad01af42fe86c061f321038eda3f89237603",
+  "source": {
+    "kaminosCommit": "cef86b64fd9d32155c6f255c7208f88be1e7bbae",
+    "settingsPresetId": "vsp-902ef7efc65170f032f01f9dfff7b8c776b64a01e6c80caf2c4ec97004b461e7",
+    "settingsPresetAuthority": "shared-volume-settings-preset-v2",
+    "loaderWitness": "../../latest-cotangent-preset-load-0717-v1/report.json"
+  },
+  "package": {
+    "schema": "kaminos.volume.basin-promotion-package.v1",
+    "relativePath": "revisions/basinrev-f8b5c260315e69161fe05cf9c75cad01af42fe86c061f321038eda3f89237603/package.json",
+    "sha256": "268bbe1d64daf031a283cac3cee7e4d22f1d6805ab8eda33e4a712c645f0242b"
+  },
+  "channel": {
+    "schema": "kaminos.volume.basin-promotion-channel.v1",
+    "relativePath": "current.json",
+    "currentRevision": "basinrev-f8b5c260315e69161fe05cf9c75cad01af42fe86c061f321038eda3f89237603"
+  },
+  "effective": {
+    "renderer": "exact-basin-selective-head-live-v0",
+    "backend": "WebGPU:apple",
+    "composition": "smoke-raymarch-under-splats-v0",
+    "rendererFallbackReason": null,
+    "compositionFallbackReason": null
+  },
+  "acceptance": {
+    "cockpitAction": "window.__kaminosExportBasinPromotionPackage",
+    "cockpitWitness": "passed",
+    "exactConsumerMount": "passed",
+    "relocatedRootRoundTrip": "passed"
+  },
+  "consumerCommand": "node volume-basin-promotion-package.mjs mount --channel artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/current.json --handle big-raymarch-hero-flamebowl-cotangent-covariance --revision basinrev-f8b5c260315e69161fe05cf9c75cad01af42fe86c061f321038eda3f89237603 --settings-store <consumer-settings-store> --origin <consumer-kaminos-origin> --out <consumer-mount.json>"
+}

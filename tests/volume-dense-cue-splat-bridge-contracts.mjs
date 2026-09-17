@@ -31,7 +31,7 @@ assert.match(core, /finishDebugBoundarySidecarOverride/, 'runtime exposes an exp
 assert.match(core, /sampleDeterministicReplayFrame/, 'runtime exposes a fixed-step GPU replay reset instead of relying on page reload timing');
 assert.match(core, /deterministic-replay-reset/, 'fixed-step replay records its reset phase');
 assert.match(core, /completedSteps/, 'fixed-step replay reports the number of GPU simulation steps actually submitted');
-assert.match(core, /controlsSignature:\s*temporalControlSignature\(controlsSnapshot\)/, 'fixed-step replay exposes the effective live control signature');
+assert.match(core, /controlsSignature:\s*effectiveControlsSignature\(controlsSnapshot\)/, 'fixed-step replay exposes the complete effective live control signature without retired temporal coupling');
 assert.match(core, /boundarySidecarSourceName\s*===\s*'override'/, 'runtime skips the baked sidecar pass only for an applied override');
 assert.match(core, /boundarySidecarOverrideReceipt/, 'runtime surfaces exact external source identity in debug evidence');
 assert.match(core, /boundarySplatRendererIdentity:\s*state\.boundarySplatRendererIdentity/, 'frozen canvas receipt exposes the effective splat renderer');
