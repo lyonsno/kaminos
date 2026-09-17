@@ -53,7 +53,7 @@ import {
   createSam3ScoringPhaseProgramRouteDefinition,
   createSam3SelectionPostprocessPhaseProgramCpuOracle,
   createSam3SelectionPostprocessPhaseProgramRouteDefinition,
-  runSam3MaskDecoderIslandRoute,
+  runSam3MaskDecoderIslandRoute as runSam3MaskDecoderIslandRouteRaw,
   runSam3MaskTailPhaseProgramRoute as runSam3MaskTailPhaseProgramRouteRaw,
   runSam3PixelDecoderPhaseProgramRoute as runSam3PixelDecoderPhaseProgramRouteRaw,
   runSam3PromptTextIngressPhaseProgramRoute as runSam3PromptTextIngressPhaseProgramRouteRaw,
@@ -81,6 +81,7 @@ const residentPhaseInput = input => ({
   readbackFormat: activeReadbackFormat,
   ...(activeResidentTensorResolver ? { residentTensorResolver: activeResidentTensorResolver } : {}),
 });
+const runSam3MaskDecoderIslandRoute = input => runSam3MaskDecoderIslandRouteRaw(residentPhaseInput(input));
 const runSam3MaskTailPhaseProgramRoute = input => runSam3MaskTailPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3PixelDecoderPhaseProgramRoute = input => runSam3PixelDecoderPhaseProgramRouteRaw(residentPhaseInput(input));
 const runSam3PromptTextIngressPhaseProgramRoute = input => runSam3PromptTextIngressPhaseProgramRouteRaw(residentPhaseInput(input));

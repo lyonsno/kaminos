@@ -227,10 +227,12 @@ assert.equal(calls.copies.length, 2);
 assert.equal(calls.submittedWorkDone, 3);
 
 const defaultModelDevice = makeFakeWebGpuDevice();
+const customYields = [];
 const defaultModelResult = await runSam3MaskDecoderIslandRoute({
   request,
   device: defaultModelDevice.device,
   queue: defaultModelDevice.queue,
+  yield: async metadata => { customYields.push(metadata.reason); },
   adapterName: 'Fake Apple WebGPU Adapter',
   browser: 'Node fake WebGPU',
   kernel: route.kernel,
@@ -241,6 +243,8 @@ const defaultModelResult = await runSam3MaskDecoderIslandRoute({
   },
 });
 assert.equal(defaultModelResult.receipt.model.revision, 'mlx-oracle-upstream-mask-island');
+assert.deepEqual(customYields, ['after-sam3-mask-island-upload', 'after-sam3-mask-projection-submit', 'after-sam3-threshold-submit'],
+  'island boundaries must reach the caller-supplied foreground yield');
 assert.equal(validateRouteWorkerResult(defaultModelResult, route).ok, true);
 assert.doesNotThrow(() => assertAuthoritativeRouteWorkerResult(defaultModelResult, route));
 

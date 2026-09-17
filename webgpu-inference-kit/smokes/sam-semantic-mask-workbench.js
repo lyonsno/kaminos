@@ -267,7 +267,14 @@ function waitForRuntime() {
         nextCanvas.height = sourceCanvas.height;
         nextCanvas.style.touchAction = 'none';
         nextCanvas.title = 'Zoom and pan source image';
-        const renderer = await createSamWorkbenchForeground({ device, canvas: nextCanvas, image: selectedImage });
+        const renderer = await createSamWorkbenchForeground({ device, canvas: nextCanvas, image: selectedImage,
+          onError(error) {
+            runtimeFailure = error;
+            positiveMaskFingerprint = null;
+            setStatus('failed', error.message);
+            setBusy(false);
+          },
+        });
         sourceCanvas.replaceWith(nextCanvas);
         sourceCanvas = nextCanvas;
         sourceRenderer = renderer;
@@ -340,6 +347,7 @@ async function runMask(controlKind = 'positive') {
       },
       verificationMode: 'execution-only',
     });
+    if (runtimeFailure) throw runtimeFailure;
     const output = runtime.samMaskIslandVisualOutput();
     validateRuntimeOutput(output, invocationId);
     showInstances(output);

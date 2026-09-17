@@ -24,6 +24,26 @@ assert.equal(observedVisual.output.instances?.[0]?.index, 7, 'witness must retai
 assert.deepEqual(Array.from(observedVisual.output.instances[0].mask), [1]);
 assert.deepEqual(Array.from(observedVisual.output.logits), [0.75], 'visible mask numerics must remain replayable');
 
+const outputGuards = witness.slice(witness.indexOf("  if (output?.outputAuthority !=="),
+  witness.indexOf('  if (values.prompt !== undefined && output.promptText'));
+const validOutput = {
+  outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
+  instances: [{ index: 7 }], selectedCandidateCount: 1,
+  foregroundScheduling: { mode: 'shared-device-input-driven-source-render', yieldCount: 2,
+    frames: [{ zoom: 1.03, afterYieldCount: 1 }] },
+};
+const checkOutput = output => runInNewContext(outputGuards, { output, values: { 'exercise-foreground': true } });
+checkOutput(validOutput);
+for (const [patch, expected] of [
+  [{ outputAuthority: 'fixture' }, /output authority/],
+  [{ instances: [] }, /partial retained instance/],
+  [{ foregroundScheduling: null }, /foreground exercise/],
+  [{ foregroundScheduling: { ...validOutput.foregroundScheduling, mode: 'separate-device-render' } }, /foreground exercise/],
+  [{ foregroundScheduling: { ...validOutput.foregroundScheduling, yieldCount: 0 } }, /foreground exercise/],
+  [{ foregroundScheduling: { ...validOutput.foregroundScheduling, frames: [] } }, /foreground exercise/],
+  [{ foregroundScheduling: { ...validOutput.foregroundScheduling, failure: 'device lost' } }, /foreground exercise/],
+]) assert.throws(() => checkOutput({ ...validOutput, ...patch }), expected);
+
 // Run the actual transport functions without launching Chrome or loading a model.
 const transportSource = witness.slice(witness.indexOf('async function connectCdp('), witness.indexOf('async function settleForVisualCapture('));
 class TestSocket extends EventTarget {

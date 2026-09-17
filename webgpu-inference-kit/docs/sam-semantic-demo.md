@@ -1,6 +1,6 @@
 # SAM Semantic Masks
 
-The demo accepts a sample image and text prompt, then displays the source, mask overlay, and raw mask. It executes the detector backbone, neck, prompt encoder, DETR encoder/decoder, scoring, selection, and mask tail in browser WebGPU. No MLX process participates in interactive requests.
+The demo accepts a sample image and text prompt, then displays the source, mask overlay, and raw mask. All retained instances are shown by default; the mask selector isolates an individual instance without rerunning inference. It executes the detector backbone, neck, prompt encoder, DETR encoder/decoder, scoring, selection, and mask tail in browser WebGPU. No MLX process participates in interactive requests.
 
 ## Prepare And Serve
 
@@ -21,6 +21,8 @@ node tools/sam-semantic-mask-workbench-server.mjs \
 
 Run these commands from `webgpu-inference-kit`. The sample root comes from Meta's SAM reference repository and must contain `truck.jpg`, `groceries.jpg`, and `test_image.jpg`. The exporter includes reference tensors for optional verification; the serving page does not acquire those tensors. CPU-only export is possible by setting MLX's default device to `mx.cpu` before invoking the exporter.
 
+For an experimental resolution not covered by the pinned calibration, add `--execution-only` to the exporter command and choose `--resolution` explicitly. That path preserves raw, identity-bound `referenceObservations` but publishes no attached verification or tolerance budget. A reference-parity invocation rejects such a packet before GPU acquisition. Export success alone establishes neither browser execution nor numerical accuracy at the new resolution.
+
 Open `http://127.0.0.1:18596/`. The server prints and optionally writes its effective route, checkout commit, mounted roots, and package/sample hashes. It does not automatically start inference. Use a WebGPU-capable Chromium browser, select a sample, enter a prompt, and run. A second prompt on the same image reuses its image features; changing the image recomputes the image path. An empty selection is a valid model result, not a substituted mask.
 
 ## Shared Runtime Composition
@@ -36,9 +38,11 @@ An embedding application may set `window.sam3InferenceSession` before importing 
 
 An optional `window.sam3CooperativeYield` callback is forwarded to the shared phase runtimes. Use the kit's `createCooperativeYield()` or a compatible application callback to service foreground work at the model's existing boundaries. A callback cannot preempt an already submitted dispatch. Queue composition and safe borrowed ownership are implemented; acceptable frame latency while rendering alongside full-model inference still requires a live measurement.
 
+The workbench installs that callback for an input-driven source viewport on SAM's exact device and queue. Wheel input zooms, dragging pans, and double-click resets the source view. Pending source draws participate through the kit's cooperative yield; idle boundaries do not manufacture rendering work. Mask overlays remain in original-image coordinates. Foreground failure is reported immediately in page status. This is cooperative boundary integration, not an adaptive frame-budget or preemptive scheduler.
+
 ## Evidence Boundary
 
-The current workbench package uses 224-pixel model input, not native-resolution quality. Historical positive and negative prompt controls establish useful prior evidence, not numerical or latency certification of each new checkout. No throughput or streaming-speed guarantee is made here.
+The previously inspected workbench package uses 224-pixel model input, not native-resolution quality. Higher-resolution export and the new foreground path require their own live witnesses. Historical positive and negative prompt controls establish useful prior evidence, not numerical or latency certification of each new checkout. No throughput or streaming-speed guarantee is made here.
 
 The optional witness exercises the real UI and preserves route identity, output identity, screenshots, timing, and a terminal failure report:
 
@@ -50,4 +54,4 @@ node tools/sam-semantic-mask-workbench-witness.mjs \
   --negative-control
 ```
 
-The witness requires the exact registered URL from the server receipt, not the root redirect. It launches Chrome and performs GPU inference. Run it when the device is available. `--timeout-ms` is optional and caller-owned; there is no default model-execution timeout. Reference parity uses `smokes/sam-mask-island-parity.html` and the separate parity tools, not the interactive workbench's request path.
+The witness requires the exact registered URL from the server receipt, not the root redirect. It launches Chrome and performs GPU inference. Run it when the device is available. Add `--exercise-foreground` to inject source-viewport input during inference and retain shared-device submission evidence; this does not certify presentation latency. The report preserves every retained binary mask and the selected mask's logits for offline numerical comparison. `--timeout-ms` is optional and caller-owned; there is no default model-execution timeout. Reference parity uses `smokes/sam-mask-island-parity.html` and the separate parity tools, not the interactive workbench's request path.

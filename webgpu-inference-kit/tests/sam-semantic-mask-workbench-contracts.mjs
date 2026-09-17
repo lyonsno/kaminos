@@ -6,6 +6,12 @@ import { setImmediate as settle } from 'node:timers/promises';
 const html = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.html', import.meta.url), 'utf8');
 const workbench = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.js', import.meta.url), 'utf8');
 const runner = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
+const wrapperSource = runner.slice(runner.indexOf('let activeResidentTensorResolver'), runner.indexOf('const SUPPORTED_ROUTE_IDS'));
+const foregroundYield = async () => {};
+const wrapperContext = { window: { sam3CooperativeYield: foregroundYield },
+  runSam3MaskDecoderIslandRoute: input => input, runSam3MaskDecoderIslandRouteRaw: input => input };
+runInNewContext(`${wrapperSource}\nglobalThis.islandInput = runSam3MaskDecoderIslandRoute({});`, wrapperContext);
+assert.equal(wrapperContext.islandInput.yield, foregroundYield, 'browser island caller must inject the foreground hook');
 
 for (const id of [
   'sample-picker',
@@ -86,7 +92,8 @@ function controllerFixture() {
       putImageData(pixels) { this.pixels = pixels; },
     };
     return {
-      dataset: {}, children: [], listeners: {}, textContent: '', disabled: false, value: '',
+      dataset: {}, children: [], listeners: {}, style: {}, textContent: '', disabled: false, value: '',
+      replaceWith() {},
       append(child) { this.children.push(child); },
       replaceChildren(...children) { this.children = children; },
       querySelectorAll() { return this.children; },
@@ -127,7 +134,12 @@ function controllerFixture() {
     },
     samMaskIslandVisualOutput: () => output,
   };
-  runInNewContext(`${workbench}\nglobalThis.controller = { selectSample, runMask, samples: SAMPLE_IMAGES };`, context);
+  context.foregroundModule = { async createSamWorkbenchForeground(options) {
+    context.foregroundOptions = options;
+    return { yield() {}, evidence() {}, setImage() {}, close() {} };
+  } };
+  const controllerSource = workbench.replace("await import('./sam-workbench-foreground.js')", 'globalThis.foregroundModule');
+  runInNewContext(`${controllerSource}\nglobalThis.controller = { selectSample, runMask, samples: SAMPLE_IMAGES };`, context);
   return { context, elements, pendingImages, runtime, loadRuntime(value = runtime) {
     const frame = elements.get('sam-mask-runtime-frame');
     frame.contentWindow = value;
@@ -190,6 +202,18 @@ assert.equal(rerun.elements.get('run-negative-control').disabled, true, 'failed 
 assert.ok(rerun.elements.get('mask-canvas').getContext().clearCount > priorClears, 'failed rerun cannot retain the previous raw mask');
 assert.equal(rerun.elements.get('candidate-evidence').textContent, 'Not run');
 assert.equal(rerun.elements.get('control-evidence').textContent, 'Not run');
+
+const idleFailure = controllerFixture();
+idleFailure.loadRuntime();
+idleFailure.pendingImages[0].onload();
+await settle();
+await idleFailure.runtime.sam3OnExecutionContext({ device: {} });
+await idleFailure.context.controller.runMask();
+assert.equal(idleFailure.elements.get('workbench-status').dataset.state, 'complete');
+idleFailure.context.foregroundOptions.onError?.(new Error('idle foreground submission failed'));
+assert.equal(idleFailure.elements.get('workbench-status').dataset.state, 'failed',
+  'foreground-only failure after mask completion must immediately fail visible status');
+assert.equal(idleFailure.elements.get('run-segmentation').disabled, true);
 
 const failedRuntime = controllerFixture();
 failedRuntime.loadRuntime({});

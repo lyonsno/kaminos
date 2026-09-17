@@ -4,7 +4,7 @@ import { createSamWorkbenchForeground } from '../smokes/sam-workbench-foreground
 
 globalThis.GPUBufferUsage = { UNIFORM: 64, COPY_DST: 8 };
 globalThis.GPUTextureUsage = { TEXTURE_BINDING: 4, COPY_DST: 2, RENDER_ATTACHMENT: 16 };
-let frame, time = 0, submitCount = 0, queueWaits = 0, destroyed = 0, failSubmit = false;
+let frame, time = 0, submitCount = 0, queueWaits = 0, destroyed = 0, failSubmit = false, notifiedFailure = null;
 const listeners = {};
 const context = { configure() {}, unconfigure() {}, getCurrentTexture: () => ({ createView: () => ({}) }) };
 const queue = { writeBuffer() {}, copyExternalImageToTexture() {},
@@ -21,6 +21,7 @@ const canvas = { getContext: () => context, addEventListener(name, callback) { l
   removeEventListener() {}, setPointerCapture() {}, getBoundingClientRect: () => ({ width: 100, height: 100 }),
 };
 const renderer = await createSamWorkbenchForeground({ device, canvas, image: { naturalWidth: 100, naturalHeight: 100 },
+  onError: error => { notifiedFailure = error; },
   format: 'rgba8unorm', now: () => time++, requestFrame(callback) { frame = callback; return 1; }, cancelFrame() {}, sleep: async () => {},
 });
 let settled = false;
@@ -41,6 +42,8 @@ assert.equal(renderer.evidence().frames.length, 2);
 failSubmit = true;
 listeners.wheel({ preventDefault() {}, deltaY: 100 });
 try { frame(); } catch {}
+assert.match(notifiedFailure?.message || '', /foreground device lost/,
+  'idle input failure must notify the controller before another inference boundary');
 await assert.rejects(() => renderer.yield({}), /foreground device lost/,
   'a foreground submission failure must remain visible at the next inference boundary');
 renderer.close();

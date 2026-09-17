@@ -2,7 +2,7 @@ import { createCooperativeYield } from '../src/index.js';
 
 // The source viewport and inference share one device and queue. Input creates
 // demand; idle phase boundaries retain the kit's ordinary event-loop yield.
-export async function createSamWorkbenchForeground({ device, canvas, image,
+export async function createSamWorkbenchForeground({ device, canvas, image, onError = () => {},
   now = () => performance.now(), requestFrame = callback => requestAnimationFrame(callback),
   cancelFrame = handle => cancelAnimationFrame(handle), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
   format = navigator.gpu.getPreferredCanvasFormat(),
@@ -58,6 +58,7 @@ export async function createSamWorkbenchForeground({ device, canvas, image,
     } catch (error) {
       failure = error;
       for (const waiter of frameWaiters) waiter.reject(error);
+      onError(error);
     } finally { frameWaiters = []; }
   }
 

@@ -451,6 +451,7 @@ export async function runSam3MaskDecoderIslandRoute(input = {}) {
     timingSource: 'queue-submit-wait',
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
+    yield: input.yield,
     now: input.now,
   });
   requireCommandEncoder(runtime.device);
