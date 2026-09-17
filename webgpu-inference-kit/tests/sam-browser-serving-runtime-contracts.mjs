@@ -86,6 +86,13 @@ assert.equal(detached.manifest.invocationId, invocation.invocationId);
 
 // Exercise the serving caller's actual handoff, not a separately assembled package.
 const servingSource = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
+const resolutionStart = servingSource.indexOf('    const { manifest, modelPackage, evidence: packageInvocationEvidence } = await resolveBrowserManifest');
+const resolutionBoundary = servingSource.slice(resolutionStart, servingSource.indexOf('    if (!verificationAttached)', resolutionStart));
+const attachVerification = new (Object.getPrototypeOf(async function () {}).constructor)(
+  'resolveBrowserManifest', `const rootManifest = {}; const verificationAttached = true; ${resolutionBoundary}`,
+);
+await assert.rejects(() => attachVerification(async () => detached), /verification.*not attached/i,
+  'reference-parity mode must reject a serving-only packet before GPU acquisition');
 const resolutionStatement = servingSource.match(/const \{[^;]+\} = await resolveBrowserManifest\(rootManifest,[^;]+;/)?.[0];
 const packageStatement = servingSource.match(/const modelPackageRuntime = createSam3BrowserModelPackageRuntime\(\{[\s\S]*?\n\s*\}\);/)?.[0];
 assert.ok(resolutionStatement && packageStatement, 'serving bootstrap statements must be exercised');

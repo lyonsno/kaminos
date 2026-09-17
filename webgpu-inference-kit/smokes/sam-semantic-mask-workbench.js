@@ -38,6 +38,7 @@ const statusText = document.getElementById('status-text');
 const sourceCanvas = document.getElementById('source-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
 const maskCanvas = document.getElementById('mask-canvas');
+const instancePicker = document.getElementById('instance-picker');
 
 let selectedSample = SAMPLE_IMAGES[0];
 let selectedImage = null;
@@ -47,6 +48,44 @@ let runtimeReady = null;
 let runtimeAvailable = false;
 let runtimeFailure = null;
 let sampleLoadVersion = 0;
+let currentOutput = null;
+
+function visibleInstances(output) {
+  return instancePicker.value === 'all'
+    ? output.instances
+    : output.instances.filter(instance => String(instance.index) === instancePicker.value);
+}
+
+function visibleMask(output) {
+  const mask = new Uint32Array(output.width * output.height);
+  for (const instance of visibleInstances(output)) {
+    for (let index = 0; index < mask.length; index += 1) mask[index] |= instance.mask[index];
+  }
+  return mask;
+}
+
+function clearInstances() {
+  currentOutput = null;
+  instancePicker.replaceChildren();
+  instancePicker.disabled = true;
+}
+
+function showInstances(output) {
+  currentOutput = output;
+  instancePicker.replaceChildren();
+  const all = document.createElement('option');
+  all.value = 'all';
+  all.textContent = `All instances (${output.instances.length})`;
+  instancePicker.append(all);
+  for (const instance of output.instances) {
+    const option = document.createElement('option');
+    option.value = String(instance.index);
+    option.textContent = `#${instance.index} - ${instance.score.toFixed(4)}`;
+    instancePicker.append(option);
+  }
+  instancePicker.value = 'all';
+  instancePicker.disabled = output.instances.length === 0;
+}
 
 function setStatus(state, text) {
   statusRoot.dataset.state = state;
@@ -100,13 +139,17 @@ function drawMaskOverlay(image, output) {
   maskLayer.height = output.height;
   const maskContext = maskLayer.getContext('2d');
   const pixels = maskContext.createImageData(output.width, output.height);
-  for (let index = 0; index < output.mask.length; index += 1) {
-    if (!output.mask[index]) continue;
-    const pixel = index * 4;
-    pixels.data[pixel] = 45;
-    pixels.data[pixel + 1] = 199;
-    pixels.data[pixel + 2] = 238;
-    pixels.data[pixel + 3] = 168;
+  const palette = [[45, 199, 238], [245, 176, 65], [218, 113, 190], [116, 216, 133]];
+  for (const instance of visibleInstances(output)) {
+    const color = palette[instance.index % palette.length];
+    for (let index = 0; index < instance.mask.length; index += 1) {
+      if (!instance.mask[index]) continue;
+      const pixel = index * 4;
+      pixels.data[pixel] = color[0];
+      pixels.data[pixel + 1] = color[1];
+      pixels.data[pixel + 2] = color[2];
+      pixels.data[pixel + 3] = 168;
+    }
   }
   maskContext.putImageData(pixels, 0, 0);
   context.imageSmoothingEnabled = false;
@@ -119,8 +162,9 @@ function drawRawMask(output) {
   maskCanvas.height = output.height;
   const context = maskCanvas.getContext('2d');
   const pixels = context.createImageData(output.width, output.height);
-  for (let index = 0; index < output.mask.length; index += 1) {
-    const on = Boolean(output.mask[index]);
+  const mask = visibleMask(output);
+  for (let index = 0; index < mask.length; index += 1) {
+    const on = Boolean(mask[index]);
     const pixel = index * 4;
     pixels.data[pixel] = on ? 224 : 12;
     pixels.data[pixel + 1] = on ? 247 : 15;
@@ -129,15 +173,22 @@ function drawRawMask(output) {
   }
   context.putImageData(pixels, 0, 0);
   document.getElementById('mask-meta').textContent = `${output.width} × ${output.height}`;
+  const foreground = mask.reduce((count, value) => count + (value ? 1 : 0), 0);
+  document.getElementById('foreground-evidence').textContent = `${foreground.toLocaleString()} / ${mask.length.toLocaleString()} px`;
+  document.getElementById('overlay-meta').textContent = instancePicker.value === 'all'
+    ? `${output.instances.length} instances` : `candidate ${instancePicker.value}`;
 }
 
 function maskFingerprint(output) {
   let hash = 2166136261;
-  for (const value of output.mask) {
-    hash ^= Number(value);
-    hash = Math.imul(hash, 16777619);
+  for (const instance of output.instances) {
+    hash = Math.imul(hash ^ instance.index, 16777619);
+    for (const value of instance.mask) {
+      hash ^= Number(value);
+      hash = Math.imul(hash, 16777619);
+    }
   }
-  return `${output.width}x${output.height}:${output.foregroundPixelCount}:${hash >>> 0}`;
+  return `${output.width}x${output.height}:${output.instances.length}:${hash >>> 0}`;
 }
 
 function updateEvidence(output, controlKind) {
@@ -148,11 +199,7 @@ function updateEvidence(output, controlKind) {
   document.getElementById('output-authority').textContent = `${output.outputAuthority} · ${output.verificationState}`;
   document.getElementById('candidate-evidence').textContent = output.selectedCandidateCount === 0
     ? 'No candidate kept'
-    : `#${output.selectedMaskIndex} · score ${Number(output.selectedScore).toFixed(4)}`;
-  document.getElementById('foreground-evidence').textContent = `${output.foregroundPixelCount.toLocaleString()} / ${(output.width * output.height).toLocaleString()} px`;
-  document.getElementById('overlay-meta').textContent = output.selectedCandidateCount === 0
-    ? 'Empty selection'
-    : `candidate ${output.selectedMaskIndex}`;
+    : `${output.instances.length} kept · top #${output.selectedMaskIndex} · ${Number(output.selectedScore).toFixed(4)}`;
 
   const fingerprint = maskFingerprint(output);
   if (controlKind === 'negative-control') {
@@ -176,6 +223,20 @@ function validateRuntimeOutput(output, invocationId) {
   if (output.invocationId !== activeInvocationId || output.invocationId !== invocationId) throw new Error('stale SAM3 invocation output rejected');
   if (!Number.isInteger(output.width) || !Number.isInteger(output.height) || output.width <= 0 || output.height <= 0) throw new Error('invalid mask dimensions');
   if (!output.mask || output.mask.length !== output.width * output.height) throw new Error('partial or blank mask payload');
+  if (!Array.isArray(output.instances) || output.instances.length !== output.selectedCandidateCount) throw new Error('partial instance payload');
+  const indices = new Set();
+  for (const instance of output.instances) {
+    if (!Number.isInteger(instance.index) || instance.index < 0 || indices.has(instance.index)) throw new Error('invalid or duplicate instance index');
+    indices.add(instance.index);
+    if (!Number.isFinite(instance.score) || instance.score < 0 || instance.score > 1) throw new Error('invalid instance score');
+    if (!instance.mask || instance.mask.length !== output.width * output.height) throw new Error('partial instance mask');
+    let foreground = 0;
+    for (const value of instance.mask) {
+      if (value !== 0 && value !== 1) throw new Error('invalid binary instance mask');
+      foreground += value;
+    }
+    if (foreground !== instance.foregroundPixelCount) throw new Error('instance foreground count mismatch');
+  }
   if (!Array.isArray(output.receiptChain) || output.receiptChain.length < 10) throw new Error('incomplete SAM3 composition receipt chain');
   if (!['miss', 'hit'].includes(output.imageCache?.status)) throw new Error(`invalid image-cache route: ${output.imageCache?.status || 'missing'}`);
   if (output.selectedCandidateCount === 0 && output.foregroundPixelCount !== 0) throw new Error('empty selection exposed a non-empty candidate mask');
@@ -225,6 +286,7 @@ async function runMask(controlKind = 'positive') {
   }
 
   const invocationId = crypto.randomUUID();
+  clearInstances();
   if (controlKind === 'positive') positiveMaskFingerprint = null;
   drawSource(selectedImage);
   maskCanvas.getContext('2d').clearRect(0, 0, maskCanvas.width, maskCanvas.height);
@@ -259,6 +321,7 @@ async function runMask(controlKind = 'positive') {
     });
     const output = runtime.samMaskIslandVisualOutput();
     validateRuntimeOutput(output, invocationId);
+    showInstances(output);
     drawMaskOverlay(selectedImage, output);
     drawRawMask(output);
     const evidenceState = updateEvidence(output, controlKind);
@@ -281,6 +344,7 @@ async function selectSample(sample) {
   const loadVersion = ++sampleLoadVersion;
   selectedSample = sample;
   selectedImage = null;
+  clearInstances();
   positiveMaskFingerprint = null;
   setBusy(true);
   promptInput.value = sample.prompt;
@@ -327,6 +391,11 @@ promptForm.addEventListener('submit', event => {
   runMask('positive');
 });
 negativeButton.addEventListener('click', () => runMask('negative-control'));
+instancePicker.addEventListener('change', () => {
+  if (!currentOutput || !selectedImage) return;
+  drawMaskOverlay(selectedImage, currentOutput);
+  drawRawMask(currentOutput);
+});
 
 selectSample(selectedSample).catch(error => setStatus('failed', error.message));
 waitForRuntime().catch(error => setStatus('failed', error.message));

@@ -50,6 +50,31 @@ assert.match(runner, /verificationState:\s*['"]not-attached['"]/, 'execution-onl
 assert.match(runner, /selectedCandidateCount\s*===\s*0[\s\S]*new Uint32Array/, 'runtime must not render candidate zero after an empty selection');
 assert.match(runner, /if \(verificationAttached\)[\s\S]*WebGPU parity mismatch/, 'reference mismatch gates must remain load-bearing when verification is attached');
 
+// Execute the actual readback-to-visual-output boundary, including non-top instances.
+const visualBoundary = runner.slice(runner.indexOf('    const selectionKeep = result.debugReadback.selectionKeep'), runner.indexOf('    if (verificationAttached && hasMaskOutput)'));
+const visualContext = {
+  result: { debugReadback: {
+    selectionKeep: new Uint32Array([1, 0, 1]),
+    selectionScores: new Float32Array([0.7, 0.1, 0.9]),
+    selectionBoxes: new Float32Array([0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 2, 2]),
+  }, receipt: { effectiveRouteId: 'fixture' } },
+  sam3TypedView: (Type, values) => values,
+  gpuBinary: new Uint32Array([1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1]),
+  gpuLogits: null, visualShape: { width: 2, height: 2 }, selectedMaskIndex: 2,
+  selectedMaskIndexSource: 'gpu', invocationId: 'current', manifest: {},
+  debugReadbackSamples: { selectedScore: [0.9] }, state: {}, verificationAttached: false,
+};
+runInNewContext(`${visualBoundary}\nglobalThis.output = visualOutput;`, visualContext);
+assert.deepEqual(Array.from(visualContext.output.instances || [], row => row.index), [0, 2],
+  'visual output must preserve every retained candidate, not only the top mask');
+assert.deepEqual(Array.from(visualContext.output.instances[0].mask), [1, 0, 0, 0]);
+assert.deepEqual(Array.from(visualContext.output.instances[1].mask), [0, 0, 0, 1]);
+assert.equal(visualContext.output.instances[0].foregroundPixelCount, 1);
+assert.deepEqual(Array.from(visualContext.output.instances[1].box), [1, 1, 2, 2]);
+visualContext.result.debugReadback.selectionKeep.fill(0);
+runInNewContext(`{ ${visualBoundary}\nglobalThis.emptyOutput = visualOutput; }`, visualContext);
+assert.equal(visualContext.emptyOutput.instances.length, 0, 'empty selection must expose no instances');
+
 // Exercise the actual page controller with explicitly deferred image loads.
 function controllerFixture() {
   const elements = new Map();
@@ -57,11 +82,13 @@ function controllerFixture() {
   function element() {
     const context = {
       clearCount: 0, clearRect() { this.clearCount += 1; }, drawImage() {},
-      createImageData(width, height) { return { data: new Uint8ClampedArray(width * height * 4) }; }, putImageData() {},
+      createImageData(width, height) { return { data: new Uint8ClampedArray(width * height * 4) }; },
+      putImageData(pixels) { this.pixels = pixels; },
     };
     return {
       dataset: {}, children: [], listeners: {}, textContent: '', disabled: false, value: '',
       append(child) { this.children.push(child); },
+      replaceChildren(...children) { this.children = children; },
       querySelectorAll() { return this.children; },
       setAttribute() {}, addEventListener(name, callback) { this.listeners[name] = callback; },
       getContext() { return context; },
@@ -91,7 +118,11 @@ function controllerFixture() {
       output = {
         invocationId: input.invocationId, outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
         receiptChain: Array(10).fill({}), effectiveRouteId: 'fixture-route', imageCache: { status: 'miss' },
-        width: 2, height: 2, mask: [1, 0, 0, 0], selectedCandidateCount: 1, foregroundPixelCount: 1, selectedMaskIndex: 0, selectedScore: 0.9,
+        width: 2, height: 2, mask: [1, 0, 0, 0], selectedCandidateCount: 2, foregroundPixelCount: 1, selectedMaskIndex: 0, selectedScore: 0.9,
+        instances: [
+          { index: 0, score: 0.9, box: [0, 0, 1, 1], mask: [1, 0, 0, 0], foregroundPixelCount: 1 },
+          { index: 2, score: 0.7, box: [1, 1, 2, 2], mask: [0, 0, 0, 1], foregroundPixelCount: 1 },
+        ],
       };
     },
     samMaskIslandVisualOutput: () => output,
@@ -141,6 +172,15 @@ await settle();
 await rerun.context.controller.runMask();
 assert.equal(rerun.elements.get('workbench-status').dataset.state, 'complete');
 assert.equal(rerun.elements.get('run-negative-control').disabled, false);
+assert.equal(rerun.elements.get('mask-canvas').getContext().pixels.data[12], 224,
+  'default raw view must include the non-top retained mask');
+const instancePicker = rerun.elements.get('instance-picker');
+assert.equal(instancePicker.children.length, 3, 'all instances plus each retained candidate must be selectable');
+instancePicker.value = '2';
+instancePicker.listeners.change();
+assert.equal(rerun.elements.get('mask-canvas').getContext().pixels.data[0], 12,
+  'selecting an instance must remove other masks from the raw view');
+assert.equal(rerun.elements.get('mask-canvas').getContext().pixels.data[12], 224);
 const priorClears = rerun.elements.get('mask-canvas').getContext().clearCount;
 rerun.runtime.failNext = true;
 rerun.elements.get('prompt-input').value = 'different prompt';

@@ -131,6 +131,7 @@
     .panel-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
     h2 { margin: 0; font-size: 13px; font-weight: 650; }
     .panel-meta { color: #778087; font-size: 11px; white-space: nowrap; }
+    #instance-picker { max-width: 100%; min-width: 0; height: 32px; background: #202428; color: #edf1f2; border: 1px solid #454b50; border-radius: 4px; font: inherit; font-size: 12px; }
 
     .canvas-stage {
       width: 100%;
@@ -222,7 +223,8 @@
         <div class="canvas-stage"><canvas id="source-canvas" width="900" height="600"></canvas></div>
       </article>
       <article class="visual-panel">
-        <div class="panel-heading"><h2>Selected mask</h2><span id="overlay-meta" class="panel-meta">No output</span></div>
+        <div class="panel-heading"><h2>Masks</h2><span id="overlay-meta" class="panel-meta">No output</span></div>
+        <select id="instance-picker" aria-label="Mask instance" disabled><option value="all">All instances</option></select>
         <div class="canvas-stage"><canvas id="overlay-canvas" width="900" height="600"></canvas></div>
       </article>
       <article class="visual-panel">

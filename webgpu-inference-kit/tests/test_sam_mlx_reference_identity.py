@@ -14,6 +14,41 @@ from sam_mlx_reference_identity import capture_reference_source
 
 
 class ReferenceIdentityTests(unittest.TestCase):
+    def test_uncalibrated_serving_export_keeps_reference_without_acceptance(self):
+        source_path = Path(__file__).resolve().parents[1] / "tools/sam-detr-stack-mlx-packet.py"
+        tree = ast.parse(source_path.read_text())
+        main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
+        boundary = [node for node in main.body if isinstance(node, ast.If)
+                    and isinstance(node.test, ast.Name) and node.test.id == "include_image_fpn_neck"][-1]
+        keys = ["model", "modelLoad", "staticWeights", "shape", "claims", "promptTokenizer", "imagePreprocess",
+                "imagePatchEmbed", "imageVitPrefix", "imageVitFirstBlock", "imageVitBlockStack", "imageFpnNeck",
+                "promptTextIngress", "weights", "prompt", "sourceImage", "postprocess", "reference",
+                "upstreamBoundaries", "toleranceBudgetSource", "toleranceCalibration", "tolerances",
+                "visualization", "tensors", "schema", "routeId", "mode", "boundary", "createdAt"]
+        artifacts = {}
+        def write(path, payload):
+            artifacts[path.name] = payload
+            return {"file": path.name, "schema": payload["schema"], "sha256": "observed"}
+        scope = {"include_image_fpn_neck": True, "manifest": dict.fromkeys(keys, {}),
+                 "args": SimpleNamespace(execution_only=True), "out_dir": Path("/fixture"),
+                 "tolerance_calibration": {"modelPackageId": "other-resolution"},
+                 "canonical_identity_json": json.dumps,
+                 "encoder_tool": SimpleNamespace(sha256_bytes=lambda value: hashlib.sha256(value).hexdigest()),
+                 "write_json_artifact": write,
+                 "SAM3_BROWSER_MODEL_PACKAGE_SCHEMA": "model", "SAM3_BROWSER_INVOCATION_SCHEMA": "invocation",
+                 "SAM3_BROWSER_VERIFICATION_SCHEMA": "verification"}
+        executable = compile(ast.Module(body=[boundary], type_ignores=[]), str(source_path), "exec")
+        exec(executable, scope)
+        self.assertNotIn("verification", scope["root_manifest"])
+        reference = artifacts[scope["root_manifest"]["referenceObservations"]["file"]]
+        self.assertEqual(reference["schema"], "kaminos.sam3-reference-observations.v0")
+        self.assertIsNone(reference["tolerances"])
+        self.assertIsNone(reference["toleranceCalibration"])
+        self.assertIn("tensors", reference)
+        scope["args"].execution_only = False
+        with self.assertRaisesRegex(ValueError, "calibration model package identity drift"):
+            exec(executable, scope)
+
     def test_detector_export_framework_expression(self):
         source_path = Path(os.environ.get("SAM_EXPORTER_TEST_SOURCE", Path(__file__).resolve().parents[1] / "tools/sam-detr-stack-mlx-packet.py"))
         tree = ast.parse(source_path.read_text())

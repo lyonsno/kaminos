@@ -3621,6 +3621,9 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     setStatus('load-oracle-packet');
     const rootManifest = await fetchJson(manifestUrl);
     const { manifest, modelPackage, evidence: packageInvocationEvidence } = await resolveBrowserManifest(rootManifest, { includeVerification: verificationAttached });
+    if (verificationAttached && packageInvocationEvidence && !packageInvocationEvidence.verification.attached) {
+      throw new Error('reference verification is not attached to this serving-only packet');
+    }
     if (!verificationAttached) {
       const promptText = String(invocationOptions.promptText || '').trim();
       const sourceImage = invocationOptions.sourceImage;
@@ -4405,6 +4408,23 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
         outputAuthority: 'actual-webgpu-readback',
         verificationState: 'not-attached',
       };
+      const instances = [];
+      if (selectionKeep) {
+        const scores = sam3TypedView(Float32Array, result.debugReadback.selectionScores);
+        const boxes = sam3TypedView(Float32Array, result.debugReadback.selectionBoxes);
+        if (scores.length !== selectionKeep.length || boxes.length !== selectionKeep.length * 4
+            || gpuBinary.length !== selectionKeep.length * maskElementCount) {
+          throw new Error('partial SAM3 instance readback');
+        }
+        for (let index = 0; index < selectionKeep.length; index += 1) {
+          if (!selectionKeep[index]) continue;
+          const mask = gpuBinary.slice(index * maskElementCount, (index + 1) * maskElementCount);
+          instances.push({
+            index, score: scores[index], box: Array.from(boxes.slice(index * 4, index * 4 + 4)), mask,
+            foregroundPixelCount: mask.reduce((count, value) => count + (value ? 1 : 0), 0),
+          });
+        }
+      }
       visualOutput = {
         schema: 'kaminos.sam3-semantic-mask-visual-output.v0',
         invocationId,
@@ -4420,6 +4440,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
         imageCache: result.imageCache,
         servingTimings: state.servingTimings,
         selectedCandidateCount,
+        instances,
         selectedMaskIndex: selectedCandidateCount === 0 ? null : selectedMaskIndex,
         selectedMaskIndexSource,
         selectedScore: selectedCandidateCount === 0 ? 0 : debugReadbackSamples.selectedScore?.[0] ?? null,

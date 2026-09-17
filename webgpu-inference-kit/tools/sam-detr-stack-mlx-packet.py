@@ -91,6 +91,7 @@ def parse_args():
     parser.add_argument("--prompt", required=True)
     parser.add_argument("--model", default="mlx-community/sam3-bf16")
     parser.add_argument("--resolution", type=int, default=224)
+    parser.add_argument("--execution-only", action="store_true", help="Export a serving package with raw reference observations, without attaching calibrated numerical acceptance. Requires --image-fpn-neck-ingress.")
     parser.add_argument("--include-scoring", action="store_true", help="Also export SAM3 dot-product scoring tensors and weights for composed browser execution.")
     parser.add_argument("--include-selection", action="store_true", help="Also export SAM3 score threshold/object-selection postprocess expectations.")
     parser.add_argument("--detector-stack", action="store_true", help="Export the canonical detector-stack witness packet with DETR, scoring, selection, and mask-tail expectations.")
@@ -103,7 +104,10 @@ def parse_args():
     parser.add_argument("--image-fpn-neck-ingress", action="store_true", help="Export detector-stack packet expectations for browser-local SAM3 full ViT backbone through detector-consumed FPN-neck features.")
     parser.add_argument("--score-threshold", type=float, default=0.5)
     parser.add_argument("--nms-iou-threshold", type=float, default=0.5)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.execution_only and not args.image_fpn_neck_ingress:
+        parser.error("--execution-only requires --image-fpn-neck-ingress")
+    return args
 
 
 def sigmoid(x):
@@ -703,7 +707,7 @@ def main():
             "packageId": f"sam3-model-package:{package_digest}",
             **package_contract,
         }
-        if tolerance_calibration["modelPackageId"] != model_package["packageId"]:
+        if not args.execution_only and tolerance_calibration["modelPackageId"] != model_package["packageId"]:
             raise ValueError("Gate U tolerance calibration model package identity drift")
         invocation_contract = {
             "prompt": manifest["prompt"],
@@ -734,8 +738,18 @@ def main():
             **{key: manifest[key] for key in ["schema", "routeId", "mode", "boundary", "createdAt"]},
             "modelPackage": write_json_artifact(out_dir / "sam3-model-package.json", model_package),
             "invocation": write_json_artifact(out_dir / "sam3-invocation.json", invocation),
-            "verification": write_json_artifact(out_dir / "sam3-verification.json", verification),
         }
+        if args.execution_only:
+            observations = {
+                **verification_contract,
+                "schema": "kaminos.sam3-reference-observations.v0",
+                "toleranceBudgetSource": "uncalibrated-reference-observations-only",
+                "toleranceCalibration": None,
+                "tolerances": None,
+            }
+            root_manifest["referenceObservations"] = write_json_artifact(out_dir / "sam3-reference-observations.json", observations)
+        else:
+            root_manifest["verification"] = write_json_artifact(out_dir / "sam3-verification.json", verification)
     else:
         root_manifest = manifest
     (out_dir / "tensor-manifest.json").write_text(json.dumps(root_manifest, indent=2), encoding="utf-8")
