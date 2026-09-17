@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { createLinearDispatch } from '../src/runtime-primitives.js';
+import './sam-native-dispatch-domains.mjs';
 
 import {
   SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
