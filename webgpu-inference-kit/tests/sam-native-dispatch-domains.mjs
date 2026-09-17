@@ -2,6 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createLinearDispatch } from '../src/runtime-primitives.js';
 
+const kernelTokens = {
+  'sam-detr-encoder': 'layernorm1:LayerNorm1 add-pos:AddPos self-q:SelfQ self-k:SelfK self-v:SelfV self-attention-softmax:SelfAttention self-output-linear:SelfOutput self-output-residual:SelfResidual layernorm2:LayerNorm2 cross-q:CrossQ cross-k:CrossK cross-v:CrossV cross-attention-softmax:CrossAttention cross-output-linear:CrossOutput cross-output-residual:CrossResidual layernorm3:LayerNorm3 mlp-fc1-relu:MlpFc1Relu mlp-fc2-linear:MlpFc2 mlp-fc2-residual:MlpResidual',
+  'sam-detr-decoder': 'sine-box-position:Sine ref-point-head-1:Ref1 ref-point-head:Ref2 pad-query-position:PadPos box-rpb-x-hidden:RpbXHidden box-rpb-y-hidden:RpbYHidden box-rpb:Rpb self-add-pos:AddPos self-q:SelfQ self-k:SelfK self-v:SelfV self-attention-softmax:SelfAttn self-output:SelfOut self-residual:SelfResidual self-layernorm:SelfNorm text-add-pos:TextAddPos text-q:TextQ text-k:TextK text-v:TextV text-attention-softmax:TextAttn text-output:TextOut text-residual:TextResidual text-layernorm:TextNorm vision-add-pos:VisionAddPos vision-q:VisionQ vision-key-add-pos:VisionKeyAdd vision-k:VisionK vision-v:VisionV vision-attention-softmax:VisionAttn vision-output:VisionOut vision-residual:VisionResidual vision-layernorm:VisionNorm mlp-fc1:Mlp1 mlp-fc2:Mlp2 mlp-residual:MlpResidual mlp:MlpNorm slice-query:SliceQuery output-layernorm:OutputNorm box-head-1:BoxHead1 box-head-2:BoxHead2 box-head-3:BoxHead3 box-refinement:BoxRefine slice-presence:SlicePresence presence-layernorm:PresenceNorm presence-head:PresenceHead',
+  'sam-pixel-decoder': 'upsample-add:upsampleAdd conv3x3:conv3x3_ groupnorm-stats:groupnormStats groupnorm-relu:groupnormRelu',
+  'sam-mask-tail': 'mask-embedder-layer-0:maskEmbedderLayer0 mask-embedder-layer-1:maskEmbedderLayer1 mask-embedder-layer-2:maskEmbedderLayer2 instance-projection-1x1:instanceProjection decode-mask:decodeMask threshold-mask:thresholdMask',
+};
+
 function expectedDomains(route, s, index) {
   const result = {};
   const add = (names, total, size = 64) => {
@@ -45,6 +52,24 @@ function checkProduction(route, source, shape, index = 0) {
   const run = source.slice(source.indexOf('export async function runSam3'));
   const bindings = { shape, index, layerIndex: index, input: { device: { limits: { maxComputeWorkgroupsPerDimension: 65535 } } } };
   const evaluate = code => new Function(...Object.keys(bindings), `return (${code});`)(...Object.values(bindings));
+  if (route === 'sam-detr-encoder') bindings.kernelBase = evaluate(run.match(/const kernelBase = ([^;]+);/)[1]);
+  if (route === 'sam-detr-decoder') bindings.k = evaluate(run.match(/const k = ([^;]+);/)[1]);
+  const shaders = {};
+  for (const [, name, expression] of source.matchAll(/const (\w+_WGSL) = (`[^]*?`|\w+_WGSL\.replace\([^\n]+\));/g)) {
+    shaders[name] = new Function(...Object.keys(shaders), `return ${expression};`)(...Object.values(shaders));
+  }
+  const registeredShaders = {};
+  const registrations = route === 'sam-detr-encoder' ? /addLinearKernel\('([^']+)', (\w+_WGSL),/g
+    : route === 'sam-detr-decoder' ? /addKernel\((k\('[^']+'\)), (\w+_WGSL),/g
+      : route === 'sam-pixel-decoder' ? /kernels\[(`[^`]+`)\] = \{ code: (\w+_WGSL),/g
+        : /\b(\w+): \{ code: (\w+_WGSL),/g;
+  for (const [, expression, shader] of run.matchAll(registrations)) {
+    const kernel = route === 'sam-detr-encoder' ? `${bindings.kernelBase}${expression}`
+      : route === 'sam-mask-tail' ? expression : evaluate(expression);
+    assert.ok(!registeredShaders[kernel], `${route}: duplicate kernel ${kernel}`);
+    assert.ok(shaders[shader], `${kernel}: missing shader ${shader}`);
+    registeredShaders[kernel] = shaders[shader];
+  }
   for (const name of ['maskTailElementCount', 'maskElementCount', 'levelElementCount']) {
     const helper = source.match(new RegExp(`function ${name}\\([^]*?\\n}`));
     if (helper) bindings[name] = evaluate(helper[0]);
@@ -68,13 +93,24 @@ function checkProduction(route, source, shape, index = 0) {
   const workgroups = new Function('createLinearDispatch', `${helper}; return workgroups;`)(createLinearDispatch);
   bindings.workgroups = (total, device) => { logicalTotal = total; return workgroups(total, device); };
   const expected = expectedDomains(route, shape, index), observed = {};
-  const phases = [...run.matchAll(/\{ name: (`[^`]+`|'[^']+'), kernel: [^\n]+?dispatch: (.+?), yieldAfter: true \}/g)];
+  const tokens = Object.fromEntries(kernelTokens[route].split(' ').map(pair => pair.split(':')));
+  assert.deepEqual(Object.keys(tokens).sort(), Object.keys(expected).sort(), `${route}: kernel/domain coverage`);
+  const phases = [...run.matchAll(/\{ name: (`[^`]+`|'[^']+'), kernel: (.+?), dispatch: (.+?), yieldAfter: true \}/g)];
   assert.equal(phases.length, [...run.matchAll(/dispatch:/g)].length, `${route}: every production dispatch must be inspected`);
-  for (const [, nameExpression, dispatchExpression] of phases) {
+  for (const [, nameExpression, kernelExpression, dispatchExpression] of phases) {
     const fullName = evaluate(nameExpression);
     const name = route === 'sam-mask-tail' ? fullName : fullName.replace(/^(detr-encoder|detr-decoder|pixel)-/, '').replace(/-\d+$/, '');
     assert.ok(expected[name], `${route}: unknown phase ${fullName}`);
     assert.ok(!observed[name], `${route}: duplicate ${fullName}`);
+    const prefix = route === 'sam-pixel-decoder' ? 'pixel' : route.slice(4);
+    assert.equal(fullName, route === 'sam-mask-tail' ? name : `${prefix}-${name}-${index}`, `${fullName}: phase identity`);
+    const kernel = evaluate(kernelExpression);
+    const expectedKernel = route.startsWith('sam-detr-') ? `layer${index}${tokens[name]}`
+      : route === 'sam-pixel-decoder' ? `${tokens[name]}${index}` : tokens[name];
+    assert.equal(kernel, expectedKernel, `${fullName}: kernel identity`);
+    const workgroup = registeredShaders[kernel]?.match(/@workgroup_size\((\d+)\)/);
+    assert.ok(workgroup, `${kernel}: registered workgroup size`);
+    assert.equal(Number(workgroup[1]), expected[name].size, `${kernel}: workgroup class`);
     logicalTotal = undefined;
     const dispatch = [].concat(evaluate(dispatchExpression));
     const { total, size } = expected[name];
@@ -100,6 +136,15 @@ for (const route of ['sam-detr-encoder', 'sam-detr-decoder', 'sam-pixel-decoder'
       assert.throws(() => checkProduction(route, bad, shape), /decode-mask: logical domain/);
     }
     if (route === 'sam-detr-encoder') {
+      const swapped = source
+        .replace('name: `detr-encoder-layernorm1-${layerIndex}`, kernel: `${kernelBase}LayerNorm1`, dispatch: workgroups(spatialTokenCount, input.device)', 'name: `detr-encoder-add-pos-${layerIndex}`, kernel: `${kernelBase}LayerNorm1`, dispatch: workgroups(totalEncoder, input.device)')
+        .replace('name: `detr-encoder-add-pos-${layerIndex}`, kernel: `${kernelBase}AddPos`, dispatch: workgroups(totalEncoder, input.device)', 'name: `detr-encoder-layernorm1-${layerIndex}`, kernel: `${kernelBase}AddPos`, dispatch: workgroups(spatialTokenCount, input.device)');
+      assert.notEqual(swapped, source);
+      assert.throws(() => checkProduction(route, swapped, shape), /kernel identity/);
+      const wrongIndex = source.replace('detr-encoder-layernorm1-${layerIndex}', 'detr-encoder-layernorm1-99');
+      assert.throws(() => checkProduction(route, wrongIndex, shape), /phase identity/);
+      const wrongWorkgroup = source.replace('@workgroup_size(64)', '@workgroup_size(1)');
+      assert.throws(() => checkProduction(route, wrongWorkgroup, shape), /workgroup class/);
       const bad = source.replace('workgroups(totalMlpHidden, input.device)', 'workgroups(totalEncoder, input.device)');
       assert.notEqual(bad, source);
       assert.throws(() => checkProduction(route, bad, shape), /mlp-fc1-relu-0: logical domain/);
