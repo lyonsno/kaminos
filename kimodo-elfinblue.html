@@ -14,6 +14,9 @@ try {
   if (!target) throw new Error('Flame reference has no entry route');
   const url = new URL(target, location.href);
   if (url.origin !== location.origin || !url.searchParams.has('settings_preset')) throw new Error('Unexpected flame reference route');
+  // The authored reference uses a root-relative host. A mounted lab must
+  // preserve its own code root while retaining every authored preset field.
+  url.pathname = new URL('./index.html', location.href).pathname;
   url.hash = new URLSearchParams({composition_module_url:'./kimodo-live-flame-inject.mjs'}).toString();
   location.replace(url);
 } catch (error) { document.getElementById('status').textContent = error.message; }
