@@ -1348,7 +1348,7 @@ function normalizeFireIrradianceGridSize(value) {
 // simulator. Native same-device GPU texture sharing is the implementation
 // ancestor; browser-canvas-to-Three CanvasTexture transport is the falsified
 // path and must not carry scene lighting.
-export async function requestKaminosSharedWebGpuDevice() {
+export async function requestKaminosSharedWebGpuDevice({ bufferRequirements = {} } = {}) {
   if (!navigator.gpu) throw new Error('WebGPU unavailable');
   const adapter = await navigator.gpu.requestAdapter({
     powerPreference: 'high-performance',
@@ -1378,11 +1378,33 @@ export async function requestKaminosSharedWebGpuDevice() {
     }
     requiredLimits[name] = required;
   }
+  // Composition requirements are known before any consumer receives the one
+  // device. Only the two buffer capacity limits are admitted by this seam.
+  if (!bufferRequirements || typeof bufferRequirements !== 'object' || Array.isArray(bufferRequirements)) {
+    throw new Error('invalid composition buffer requirements');
+  }
+  for (const [name, required] of Object.entries(bufferRequirements)) {
+    if (!['maxBufferSize', 'maxStorageBufferBindingSize'].includes(name)
+      || !Number.isSafeInteger(required) || required <= 0) {
+      throw new Error(`invalid composition buffer requirement ${name}`);
+    }
+    const available = Number(adapter.limits?.[name] || 0);
+    if (available < required) {
+      throw new Error(`WebGPU adapter ${name} ${available} is below composition buffer requirement ${required}`);
+    }
+    requiredLimits[name] = Math.max(requiredLimits[name] || 0, required);
+  }
   const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
   const device = await adapter.requestDevice({
     ...(Object.keys(requiredLimits).length ? { requiredLimits } : {}),
     ...(requiredFeatures.length ? { requiredFeatures } : {}),
   });
+  for (const [name, required] of Object.entries(bufferRequirements)) {
+    if (!(device.limits?.[name] >= required)) {
+      device.destroy();
+      throw new Error(`WebGPU effective device ${name} is below composition buffer requirement ${required}`);
+    }
+  }
   return {
     identity: KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY,
     authority: 'single-explicit-device-three-and-volume-v0',

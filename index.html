@@ -3161,6 +3161,9 @@ import {
 // volume simulator; seated in initScene before either consumer constructs.
 let sharedGpu = null;
 let sharedGpuFailureReason = null;
+let compositionModule = null;
+let compositionSetupError = null;
+const importCompositionModule = url => import(url);
 let fireLightFieldPass = null;
 let ordinarySceneDepthProvider = null;
 
@@ -9711,12 +9714,37 @@ async function initScene() {
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
+  // Load declarative requirements before constructing either GPU consumer.
+  // Module top levels must be inert; mount remains after volume construction.
+  const compositionModuleUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('composition_module_url');
+  compositionModule = null;
+  compositionSetupError = null;
+  window.__kaminosCompositionSetup = {moduleUrl: compositionModuleUrl, status: compositionModuleUrl ? 'pending' : 'absent', phase: 'module-load'};
   try {
-    sharedGpu = await requestKaminosSharedWebGpuDevice();
+    if (compositionModuleUrl) {
+      compositionModule = await importCompositionModule(compositionModuleUrl);
+      if (typeof compositionModule.mountComposition !== 'function') {
+        throw new Error('composition module did not export mountComposition');
+      }
+    }
+  } catch (error) {
+    compositionSetupError = error;
+    Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: String(error?.message || error)});
+    throw error;
+  }
+  const requiresSharedDevice = compositionModule?.sharedGpuBufferRequirements !== undefined;
+  window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
+  try {
+    sharedGpu = await requestKaminosSharedWebGpuDevice({bufferRequirements: requiresSharedDevice ? compositionModule.sharedGpuBufferRequirements : {}});
     sharedGpuFailureReason = null;
   } catch (error) {
     sharedGpu = null;
     sharedGpuFailureReason = String(error?.message || error);
+    if (requiresSharedDevice) {
+      compositionSetupError = error;
+      Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: sharedGpuFailureReason});
+      throw error;
+    }
     console.warn('Kaminos shared WebGPU device unavailable; falling back to independent devices:', sharedGpuFailureReason);
   }
   renderer = sharedGpu?.device
@@ -19909,6 +19937,7 @@ function reportKaminosVolumeRouteInitFailure(error) {
 }
 
 async function initKaminosVolumeRoute() {
+  if (compositionSetupError) throw compositionSetupError;
   const params = new URLSearchParams(window.location.search);
   await admitVolumeSettingsPresetRoute(params);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
@@ -20560,20 +20589,16 @@ async function initKaminosVolumeRoute() {
   // Optional composition-module seam: a URL HASH entry
   // #composition_module_url=<module> (hash, not query — settings routes are
   // contract-validated and reject unexpected query parameters) loads an ES
-  // module after the volume prototype exists and calls its
-  // mountComposition({ prototype, params }). Absent: no-op. Used to compose
+  // module before GPU acquisition and mounts after the volume exists via
+  // mountComposition({ prototype, params, sharedGpu }). Absent: no-op. Used to compose
   // long-running inference (e.g. MoGe) into the live app route.
   {
-    const compositionModuleUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('composition_module_url');
-    if (compositionModuleUrl) {
-      import(compositionModuleUrl)
-        .then(mod => {
-          if (typeof mod.mountComposition !== 'function') {
-            throw new Error('composition module did not export mountComposition');
-          }
-          return mod.mountComposition({ prototype: volumePrototype, params: new URLSearchParams(window.location.search) });
-        })
+    if (compositionModule) {
+      window.__kaminosCompositionSetup.phase = 'mount';
+      Promise.resolve().then(() => compositionModule.mountComposition({ prototype: volumePrototype, params: new URLSearchParams(window.location.search), sharedGpu }))
+        .then(() => { window.__kaminosCompositionSetup.status = 'mounted'; })
         .catch(error => {
+          Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: String(error?.message || error)});
           console.error('composition module failed:', error);
           setInfo(`Composition module: ${error.message}`);
         });

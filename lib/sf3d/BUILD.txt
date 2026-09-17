@@ -1,1 +1,5 @@
-source: lyonsno/sf3d-webgpu cc/slow-injected-device-producer-0915 57544e7e5d87f7a25048dc2411f09e8f0708b3d6 clean; built 2026-09-16T04:07:38Z with vite.lib.config.js
+source: lyonsno/sf3d-webgpu main 0ff8dc4527ba5513f2f6a9f5a7a6497e710af691 clean
+build: npm run build:lib (vite.lib.config.js), verified by the 2026-09-16 parent CPU/build return; vendored 2026-09-17
+sf3d-producer.js sha256: d3d40d3c1b3f9901ecc4d56ae3201bffd30625eef426af14c65ab762d01fd1f6
+Runtime commit identity is supplied explicitly by sf3d-host-device.mjs; the generic library build default is dev.
+Code and five generated workers only. weights.bin and tets/ are separately mounted, not included in this source copy.

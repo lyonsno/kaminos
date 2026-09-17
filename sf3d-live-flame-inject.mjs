@@ -8,17 +8,18 @@
  * moge-live-flame-inject.mjs: HUD with the independent frame-cadence witness,
  * a run button, and receipts the HUD never upgrades.
  *
- * Device topology, stated honestly: this app route does not expose its
- * GPUDevice, so SF3D acquires its own through its producer — SAME GPU, TWO
- * DEVICES. SF3D's fine cooperative duties (24 / 2,922 / 702 / 61 per run) are
- * what leaves room for the flame's submissions; the producer's same-device
- * foreground-opportunity interlock is not exercised here (no injected device).
+ * The host loads this module's buffer requirements before device acquisition
+ * and injects its exact device at mount. The foreground-opportunity interlock
+ * is NOT connected yet: sharing a device is distinct from frame scheduling.
+ * The HUD's independent rAF probe does not prove flame simulation advances.
  *
  * The producer is the SF3D library build vendored at ./lib/sf3d/ (code only;
  * weights.bin and tets/ are served from an SF3D checkout — see
  * serve-sf3d-elfinblue.sh).
  */
 import { createSf3dProducer } from './lib/sf3d/sf3d-producer.js';
+import { createSharedDeviceSf3dProducer, snapshotSf3dSharedDevice } from './sf3d-host-device.mjs';
+export { sharedGpuBufferRequirements } from './sf3d-host-device.mjs';
 
 const CANONICAL_DEMO_CHAIR_GLB_SHA256 = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
 const WEIGHTS_URL = './lib/sf3d/weights.bin';
@@ -57,7 +58,7 @@ function injectHud() {
   el.id = 'sf3d-hud';
   el.innerHTML = `
     <h1>SF3D × Live App Route</h1>
-    <div class="sub">Composition module: app fire route (this basin/preset) + SF3D image→mesh cooperative product route — same GPU, two devices</div>
+    <div class="sub" id="sf3d-topology">App fire route + SF3D image→mesh — device binding unverified; foreground scheduling unconnected</div>
     <div class="row"><span class="k">fire</span><span class="v" id="sf3d-fire">—</span></div>
     <div class="row"><span class="k">frame p95 (rolling)</span><span class="v" id="sf3d-p95">—</span></div>
     <div class="row"><span class="k">frames during inference</span><span class="v" id="sf3d-frames">—</span></div>
@@ -169,7 +170,9 @@ async function runSf3d(producer, image) {
       foregroundOpportunityReport: { status: result.foregroundOpportunityReport?.status ?? null, requestCount: result.foregroundOpportunityReport?.requestCount ?? null },
       framesDuringInference: state.framesDuringInference,
       inferenceGaps: gaps,
-      deviceTopology: 'same-gpu-two-devices',
+      deviceTopology: window.__compositionRoute.deviceTopology,
+      deviceReceipt: window.__compositionRoute.deviceReceipt,
+      foregroundScheduling: window.__compositionRoute.foregroundScheduling,
       fireStatus: hud('sf3d-fire').textContent,
       glb: result.glb,
     });
@@ -199,7 +202,7 @@ async function runSf3d(producer, image) {
   }
 }
 
-export async function mountComposition({ prototype, params } = {}) {
+export async function mountComposition({ prototype, params, sharedGpu } = {}) {
   injectHud();
   startFrameMonitor();
   mirrorFireStatus();
@@ -207,15 +210,21 @@ export async function mountComposition({ prototype, params } = {}) {
   window.__compositionRoute = {
     settingsPreset: params?.get('settings_preset') || null,
     settingsPresetAuthority: params?.get('settings_preset_authority') || null,
-    deviceTopology: 'same-gpu-two-devices',
+    deviceTopology: 'unverified',
+    deviceReceipt: null,
+    foregroundScheduling: 'independent-render-loops',
     producer: 'sf3d.image-to-mesh.webgpu-local.v0',
   };
   window.__sf3dLiveFlame = state;
+  window.__sf3dLiveFlameReady = false;
+  window.__sf3dProducer = null;
+  state.lastError = null;
+  state.lastResult = null;
 
-  // SF3D owns its device (no injected device on this app route); the app keeps its own.
+  // No producer-owned fallback device: this route requires the host context.
   let producer;
   try {
-    producer = await createSf3dProducer({
+    producer = await createSharedDeviceSf3dProducer(createSf3dProducer, sharedGpu, {
       weightsUrl: WEIGHTS_URL,
       onWeightsProgress: (received, total) => {
         if (total > 0) {
@@ -225,7 +234,11 @@ export async function mountComposition({ prototype, params } = {}) {
         }
       },
     });
+    window.__compositionRoute.deviceReceipt = snapshotSf3dSharedDevice(sharedGpu);
+    window.__compositionRoute.deviceTopology = 'same-device';
+    hud('sf3d-topology').textContent = 'App fire route + SF3D — shared host device; independent render loops (foreground interlock unconnected)';
   } catch (error) {
+    state.lastError = { phase: 'producer-initialization', message: error?.message || String(error) };
     hud('sf3d-weights').textContent = `error: ${error.message}`.slice(0, 60);
     hud('sf3d-weights').className = 'v bad';
     hud('sf3d-run').textContent = 'SF3D unavailable';
