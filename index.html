@@ -18677,6 +18677,8 @@ function updateVolumeControlLabels() {
   const forceComparison = detailForceIsolationReceipt(c);
   document.getElementById('detail-force-isolation-note').textContent = !forceComparison.masterEnabled
     ? 'Master switch is OFF: all four detail forces are disabled.'
+    : forceComparison.sceneGain === 0
+      ? 'Bonfire detail-force gain is ZERO: all four detail forces are disabled regardless of this selector.'
     : forceComparison.detailSuppressedByScene
       ? 'Tall plume already suppresses transported detail push. Compare micro-carrier, shredding and fine breakup; Only transported detail therefore disables all four.'
       : 'Master switch is ON. Comparison affects only the named force contributions.';
