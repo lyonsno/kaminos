@@ -631,6 +631,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #composition-label { min-width: 0; width: 100%; padding: 8px; border: 1px solid #444; border-radius: 4px; background: #242424; color: #eee; font: inherit; font-size: 12px; }
 .authoring-actions { display: flex; flex-wrap: wrap; gap: 5px; }
 .authoring-actions .btn { min-height: 32px; margin: 0; }
+.burner-fields { display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 7px 10px; align-items: center; padding: 10px 0; }
+.burner-fields label { font-size: 11px; color: #bbb; overflow-wrap: anywhere; }
+.burner-fields input { min-width: 0; width: 100%; box-sizing: border-box; }
+#burner-status { font-size: 11px; color: #d1ac73; overflow-wrap: anywhere; }
 #composition-capture { background: #204538; border-color: #4a7867; color: #e2f8ee; }
 #composition-status { font-size: 11px; line-height: 1.4; color: #a4c4b8; overflow-wrap: anywhere; }
 #composition-status[data-failed="true"] { color: #ffa18e; }
@@ -696,6 +700,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <label for="composition-ground-height">Ground height</label>
       <input id="composition-ground-height" type="number" step="0.05" value="-0.85" class="transform-input">
     </div>
+
+    <h2>Burner</h2>
+    <label class="import-mode"><input id="burner-enabled" type="checkbox"><span>Annular bed</span></label>
+    <div id="burner-controls" hidden>
+      <div class="burner-fields" id="burner-fields"></div>
+      <div class="slider-row"><label class="slider-label" for="burner-radius">Flame radius</label><input id="burner-radius" type="range"><span id="burner-radius-val" class="slider-val"></span></div>
+      <div class="slider-row"><label class="slider-label" for="burner-flow">Flow</label><input id="burner-flow" type="range"><span id="burner-flow-val" class="slider-val"></span></div>
+    </div>
+    <div id="burner-status" role="status"></div>
 
     <h2>Scene Objects</h2>
     <div class="panel">
@@ -3175,6 +3188,8 @@ import {
   planSceneRestore,
 } from './scene-persistence-core.js';
 import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
+import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
   FORGE_HOST_STATION_ATTENTION_SCHEMA,
@@ -3324,6 +3339,9 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let activeSceneComposition = null;
 let authoringBusy = false;
 let volumePrototype = null;
+let annularBurner = null;
+let burnerRecipe = null;
+let burnerError = null;
 let volumeBridge = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
@@ -9950,6 +9968,7 @@ async function initScene() {
 
   function renderSceneFrame() {
     const t0 = performance.now();
+    updateAnnularBurnerFrame(t0);
     renderPipeline.render();
     const frameMs = performance.now() - t0;
     fpsFrames++;
@@ -24662,6 +24681,7 @@ async function collectSceneComposition() {
     value.domControls, value.rendererControls, value.presentationControls, value.route,
     document.getElementById('fire-light-gain-stops').value,
     document.getElementById('fire-light-test-scene-toggle').checked,
+    burnerRecipe,
   ]);
   const savedFingerprint = fingerprint(preset);
   const assertUnchanged = () => {
@@ -24683,6 +24703,7 @@ async function collectSceneComposition() {
     flame: { presetId: receipt.effective.presetId, label: receipt.effective.label, stationary: true },
     route,
     lightGainStops: Number(document.getElementById('fire-light-gain-stops').value),
+    ...(burnerRecipe ? { burner: normalizeBurner(burnerRecipe) } : {}),
   };
   return assertUnchanged;
 }
@@ -24770,6 +24791,107 @@ document.getElementById('composition-ground-height').onchange = event => {
   window._kaminosDirty?.();
 };
 document.getElementById('composition-basins').onclick = () => setActiveTab('volume');
+
+const burnerFields = [
+  ['innerRadius', 'Inner radius', 'number', 0.005], ['outerRadius', 'Outer radius', 'number', 0.01],
+  ['ringCount', 'Ring count', 'number', 1], ['grooveFraction', 'Groove fraction', 'number', 0.01],
+  ['grooveDepth', 'Groove depth', 'number', 0.001], ['sectorCount', 'Sector count', 'number', 1],
+  ['thickness', 'Bed thickness', 'number', 0.005], ['rimHeight', 'Rim height', 'number', 0.005],
+  ['subdivisions', 'Subdivisions', 'number', 1], ['glow', 'Channel glow', 'number', 0.1],
+  ['coolingSeconds', 'Cooling seconds', 'number', 0.1], ['bedColor', 'Refractory', 'color'],
+  ['rimColor', 'Metal rim', 'color'], ['glowColor', 'Active channels', 'color'],
+];
+for (const [key, label, type, step] of burnerFields) {
+  const caption = document.createElement('label');
+  caption.htmlFor = `burner-${key}`;
+  caption.textContent = label;
+  const input = document.createElement('input');
+  input.id = caption.htmlFor;
+  input.type = type;
+  if (step) { input.step = step; input.min = '0'; }
+  input.className = 'transform-input';
+  input.onchange = () => {
+    try {
+      const next = { ...(burnerRecipe || BURNER_DEFAULTS) };
+      for (const [field, , fieldType] of burnerFields) {
+        const element = document.getElementById(`burner-${field}`);
+        next[field] = fieldType === 'color' ? element.value : element.valueAsNumber;
+      }
+      setAnnularBurner(next);
+    } catch (error) {
+      burnerError = error.message;
+      document.getElementById('burner-status').textContent = burnerError;
+      syncBurnerControls();
+    }
+  };
+  document.getElementById('burner-fields').append(caption, input);
+}
+
+function syncBurnerControls() {
+  document.getElementById('burner-enabled').checked = !!burnerRecipe;
+  document.getElementById('burner-controls').hidden = !burnerRecipe;
+  for (const [key] of burnerFields) document.getElementById(`burner-${key}`).value = (burnerRecipe || BURNER_DEFAULTS)[key];
+}
+
+function setAnnularBurner(value) {
+  const next = normalizeBurner(value);
+  const replacement = next ? createAnnularBurner(THREE, mergeGeometries, next) : null;
+  annularBurner?.dispose();
+  annularBurner = replacement;
+  burnerRecipe = next;
+  burnerError = null;
+  if (replacement) scene.add(replacement.group);
+  if (activeSceneComposition) {
+    if (next) activeSceneComposition.burner = next;
+    else delete activeSceneComposition.burner;
+  }
+  syncBurnerControls();
+  document.getElementById('burner-status').textContent = '';
+  window._kaminosDirty?.();
+  return burnerRecipe;
+}
+
+function updateAnnularBurnerFrame(now) {
+  if (!annularBurner) return;
+  const state = annularBurner.update(window.__kaminosVolumeEmitterReceipt, !!volumePrototype?.debugState?.().active, now);
+  const status = document.getElementById('burner-status');
+  const message = burnerError || (state.reason === 'ring-emitter-unavailable' ? 'No compatible ring emitter' : state.reason === 'emitter-outside-bed' ? 'Flame footprint extends beyond the bed' : '');
+  if (status.textContent !== message && !document.activeElement?.id?.startsWith('burner-')) status.textContent = message;
+  for (const [id, sourceId] of [['radius', 'volume-input-radius'], ['flow', 'volume-flow-rate']]) {
+    const input = document.getElementById(`burner-${id}`);
+    const source = document.getElementById(sourceId);
+    if (document.activeElement !== input) input.value = source.value;
+    document.getElementById(`burner-${id}-val`).textContent = Number(source.value).toFixed(2);
+  }
+}
+
+document.getElementById('burner-enabled').onchange = event => {
+  try {
+    if (event.target.checked && (!isFireLightFieldRoute() || !burnerSource(window.__kaminosVolumeEmitterReceipt))) {
+      throw new Error('Annular bed requires an active ordinary ring-flame composition');
+    }
+    setAnnularBurner(event.target.checked ? { ...BURNER_DEFAULTS } : null);
+  } catch (error) {
+    syncBurnerControls();
+    document.getElementById('burner-status').textContent = error.message;
+  }
+};
+for (const [id, sourceId] of [['radius', 'volume-input-radius'], ['flow', 'volume-flow-rate']]) {
+  const input = document.getElementById(`burner-${id}`);
+  const source = document.getElementById(sourceId);
+  for (const key of ['min', 'max', 'step', 'value']) input[key] = source[key];
+  input.oninput = event => {
+    source.value = event.target.value;
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+    window._kaminosDirty?.();
+  };
+}
+window.kaminosBurnerState = () => annularBurner?.debugState() || { effective: false, recipe: null, reason: 'disabled' };
+window.kaminosSetBurner = value => {
+  if (value && (!isFireLightFieldRoute() || !burnerSource(window.__kaminosVolumeEmitterReceipt))) throw new Error('Annular bed requires an ordinary ring-flame composition');
+  return setAnnularBurner(value);
+};
+
 document.getElementById('composition-library').onclick = () => {
   setActiveTab('greenroom');
   grBrowseScenes().then(() => document.getElementById('scenes-list').scrollIntoView({ block: 'start' }));
@@ -24914,6 +25036,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     return;
   }
   activeSceneComposition = restorePlan.composition;
+  setAnnularBurner(activeSceneComposition?.burner || null);
 
   setInfo('Loading scene...');
 
