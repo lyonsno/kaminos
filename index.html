@@ -3072,6 +3072,7 @@ import {
 let sharedGpu = null;
 let sharedGpuFailureReason = null;
 let fireLightFieldPass = null;
+let ordinarySceneDepthProvider = null;
 
 // Fire light-field route params may ride the URL HASH as well as the query:
 // settings-preset routes are contract-validated and reject unexpected
@@ -9878,10 +9879,42 @@ async function initScene() {
   renderer.domElement.addEventListener('wheel', markDirty);
   window._kaminosDirty = markDirty;
 
+  let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1';
+  let sceneRenderedForVolume = false;
+  ordinarySceneDepthProvider = () => {
+    if (!ordinaryDepthEnabled) return null;
+    // Own a current prepass before the ordinary volume frame encodes. Both
+    // consumers share camera/device; the volume may render at lower resolution.
+    syncViewportRendererSize();
+    camera.updateMatrixWorld();
+    fireLightFieldPass?.update();
+    renderSceneFrame();
+    sceneRenderedForVolume = true;
+    const texture = renderer.backend.get(prePass.getTexture('depth')).texture;
+    return {device:sharedGpu.device, camera, texture};
+  };
+  window.kaminosOrdinaryDepthSetEnabled = enabled => {
+    ordinaryDepthEnabled = Boolean(enabled); markDirty(); return ordinaryDepthEnabled;
+  };
+
   // FPS counter
   const fpsEl = document.getElementById('fps-counter');
   let fpsFrames = 0;
   let fpsLast = performance.now();
+
+  function renderSceneFrame() {
+    const t0 = performance.now();
+    renderPipeline.render();
+    const frameMs = performance.now() - t0;
+    fpsFrames++;
+    const elapsed = performance.now() - fpsLast;
+    if (elapsed >= 500) {
+      const fps = (fpsFrames / elapsed * 1000).toFixed(0);
+      fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
+      fpsFrames = 0;
+      fpsLast = performance.now();
+    }
+  }
 
   function animate() {
     requestAnimationFrame(animate);
@@ -9902,19 +9935,8 @@ async function initScene() {
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
     if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
-      const t0 = performance.now();
-
-      renderPipeline.render();
-
-      const frameMs = performance.now() - t0;
-      fpsFrames++;
-      const elapsed = performance.now() - fpsLast;
-      if (elapsed >= 500) {
-        const fps = (fpsFrames / elapsed * 1000).toFixed(0);
-        fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
-        fpsFrames = 0;
-        fpsLast = performance.now();
-      }
+      if (!sceneRenderedForVolume) renderSceneFrame();
+      sceneRenderedForVolume = false;
 
       if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive && !fireLightFieldActive) idleFrames++;
       needsRender = false;
@@ -20299,6 +20321,7 @@ async function initKaminosVolumeRoute() {
     },
     transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute(),
     sharedGpuContext: sharedGpu,
+    getSceneDepth: isFireLightFieldRoute() ? () => ordinarySceneDepthProvider?.() ?? null : null,
   });
   if (isFireLightFieldRoute()) {
     // Fire-to-scene lighting needs the live Three scene visible under the

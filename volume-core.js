@@ -1,4 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
@@ -5068,7 +5069,21 @@ fn productSceneDepthEndT(in: VSOut, ro: vec3<f32>, rd: vec3<f32>) -> f32 {
   return max(0.0, dot(depthWorld - ro, rd));
 }
 
-fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
+fn ordinarySceneDepthEndT(in: VSOut) -> f32 {
+  let dimensions = vec2<i32>(textureDimensions(productSceneDepth));
+  let uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(floor(uv * vec2<f32>(dimensions))), vec2<i32>(0), dimensions - vec2<i32>(1));
+  let depth = textureLoad(productSceneDepth, pixel, 0);
+  if (depth >= 0.999999) { return 1.0e6; }
+  let ndc = in.uv * 2.0 - vec2<f32>(1.0);
+  let world = u.invViewProj * vec4<f32>(ndc, depth, 1.0);
+  let farWorld = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
+  let ro = u.cameraPos_time.xyz;
+  let rd = normalize(farWorld.xyz / farWorld.w - ro);
+  return max(0.0, dot(world.xyz / world.w - ro, rd));
+}
+
+fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && nonRidgeOpticalCaptureHeader.mode >= 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
@@ -5080,7 +5095,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
-  if (!fullGridCapture && hit.y <= max(hit.x, 0.0)) {
+  if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
       vec4<f32>(vec3<f32>(0.004, 0.005, 0.006) * missAlpha, missAlpha),
@@ -5214,7 +5229,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
   let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
   let endT = select(min(hit.y, sceneDepthEndT), 2.0, fullGridCapture);
-  let dtBase = (endT - startT) / steps;
+  // Keep ordinary sample positions stable; clipping removes hidden samples,
+  // rather than resampling the visible fire at a different density.
+  let dtBase = (select(endT, select(hit.y, 2.0, fullGridCapture), preserveSamplePositions) - startT) / steps;
   let jitter = dtBase * 0.5;
   var t = startT + jitter;
   var trans = 1.0;
@@ -6383,7 +6400,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let result = raymarchVolume(in, 1.0e6);
+  let result = raymarchVolume(in, ordinarySceneDepthEndT(in), true);
   return result.color;
 }
 
@@ -6394,7 +6411,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
   let farWorldRaw = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorldRaw.xyz / farWorldRaw.w - nearWorldRaw.xyz / nearWorldRaw.w);
-  let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd));
+  let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd), false);
   let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
   let premultipliedRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
   return vec4<f32>(premultipliedRadiance, alpha);
@@ -6402,7 +6419,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
 
 @fragment
 fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
-  let result = raymarchVolume(in, 1.0e6);
+  let result = raymarchVolume(in, 1.0e6, false);
   var out: ResidualSourceOutput;
   out.color = result.color;
   out.residualFeature = result.residualFeature;
@@ -6411,7 +6428,7 @@ fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
 
 @fragment
 fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOutput {
-  let result = raymarchVolume(in, 1.0e6);
+  let result = raymarchVolume(in, 1.0e6, false);
   var out: OpticalTransportContributionOutput;
   out.sharedRidge = result.sharedRidgeContribution;
   out.sharedNonRidge = result.sharedNonRidgeContribution;
@@ -7998,6 +8015,7 @@ export function createKaminosVolumePrototype({
   getControls,
   onStatus,
   sharedGpuContext = null,
+  getSceneDepth = null,
   transparentCanvas = false,
   productFrameOwner = 'prototype',
   externalDevice = null,
@@ -8741,6 +8759,13 @@ export function createKaminosVolumePrototype({
   let analyticEmitterInjectionPipelineLayout = null;
   let productRaymarchDepthBindGroupLayout = null;
   let productRaymarchPipelineLayout = null;
+  let ordinarySceneDepthFallback = null;
+  let ordinarySceneDepthTexture = null;
+  let ordinarySceneDepthBindGroup = null;
+  let ordinaryMultisampleDepthLayout = null;
+  let ordinaryMultisamplePipelineLayout = null;
+  let ordinaryMultisampleShader = null;
+  const ordinaryDepthPipelines = new Map();
   let boundarySidecarPipelineLayout = null;
   let boundarySplatComputePipelineLayout = null;
   let boundarySplatRenderPipelineLayout = null;
@@ -10400,11 +10425,12 @@ export function createKaminosVolumePrototype({
       };
     }
     const renderPipelineConstants = { GRID: gridSize, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
+    ordinaryDepthPipelines.clear();
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
     const computePipelineConstants = { GRID: gridSize };
     const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
       label,
-      layout: pipelineLayout,
+      layout: productRaymarchPipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
       fragment: { module: shader, entryPoint: 'fs', constants, targets: [{ format: targetFormat }] },
       primitive: { topology: 'triangle-list' },
@@ -11186,6 +11212,22 @@ export function createKaminosVolumePrototype({
         visibility: GPUShaderStage.FRAGMENT,
         texture: { sampleType: 'depth' },
       }],
+    });
+    ordinaryMultisampleDepthLayout = device.createBindGroupLayout({
+      label:'ordinary scene MSAA depth layout', entries:[{binding:1,visibility:GPUShaderStage.FRAGMENT,
+        texture:{sampleType:'depth',multisampled:true}}],
+    });
+    ordinaryMultisamplePipelineLayout = device.createPipelineLayout({
+      label:'ordinary emissive MSAA depth pipeline layout',
+      bindGroupLayouts:[bindGroupLayout,ordinaryMultisampleDepthLayout],
+    });
+    ordinaryMultisampleShader = device.createShaderModule({label:'ordinary emissive MSAA scene-depth shader',
+      code:WGSL.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
+        .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',
+          `var depth = textureLoad(productSceneDepth, pixel, 0);
+           for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
+             depth = min(depth, textureLoad(productSceneDepth, pixel, sample));
+           }`),
     });
     boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} fluid-front read bind group layout`,
@@ -12058,6 +12100,16 @@ export function createKaminosVolumePrototype({
 
   function updateUniforms(now) {
     resize();
+    if (typeof getSceneDepth === 'function' && productFrameOwner === 'prototype') {
+      const source = getSceneDepth();
+      const texture = source === null ? null : validateOrdinarySceneDepth(source, {device, camera});
+      if (ordinarySceneDepthTexture !== texture) ordinarySceneDepthBindGroup = null;
+      ordinarySceneDepthTexture = texture;
+      state.ordinarySceneDepth = {requested: true, effective: Boolean(texture),
+        reason: texture ? null : 'host-disabled', width: texture?.width ?? null,
+        height: texture?.height ?? null, sampleCount: texture?.sampleCount ?? null, convention: 'webgpu-zero-one-top-down',
+        source: 'same-camera-same-device-scene-prepass'};
+    }
     camera.updateMatrixWorld();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (lookFreeze) {
@@ -15936,6 +15988,35 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    if (!ordinarySceneDepthFallback) {
+      ordinarySceneDepthFallback = device.createTexture({label:'ordinary depth unoccluded fallback',
+        size:[1,1], format:'depth32float', usage:GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT});
+      const clear = encoder.beginRenderPass({colorAttachments:[],depthStencilAttachment:{
+        view:ordinarySceneDepthFallback.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});
+      clear.end();
+    }
+    const multisampled = ordinarySceneDepthTexture?.sampleCount > 1;
+    if (!ordinarySceneDepthBindGroup) {
+      ordinarySceneDepthBindGroup = device.createBindGroup({label:'ordinary emissive scene depth',
+        layout:multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,entries:[{binding:1,
+          resource:(ordinarySceneDepthTexture || ordinarySceneDepthFallback).createView()}]});
+    }
+    let drawPipeline = selectRaymarchPipeline(targetPipeline);
+    if (multisampled) {
+      const basePipeline = drawPipeline;
+      if (!ordinaryDepthPipelines.has(basePipeline)) {
+        ordinaryDepthPipelines.set(basePipeline,device.createRenderPipeline({
+          label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:ordinaryMultisamplePipelineLayout,
+          vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
+          fragment:{module:ordinaryMultisampleShader,entryPoint:'fs',
+            constants:{GRID:gridSize,TRANSPARENT_CANVAS:transparentCanvas ? 1 : 0,
+              LEAN_STOCK_RAYMARCH:basePipeline === leanStockPipeline || basePipeline === leanStockReadbackPipeline},
+            targets:[{format:targetPipeline === readbackPipeline ? 'rgba8unorm' : format}]},
+          primitive:{topology:'triangle-list'},
+        }));
+      }
+      drawPipeline = ordinaryDepthPipelines.get(basePipeline);
+    }
     if (uniforms[368] > 1.5) {
       emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
       state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
@@ -15952,8 +16033,9 @@ export function createKaminosVolumePrototype({
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(selectRaymarchPipeline(targetPipeline));
+    pass.setPipeline(drawPipeline);
     pass.setBindGroup(0, options.bindGroup || fluidBindGroup());
+    pass.setBindGroup(1, ordinarySceneDepthBindGroup);
     pass.draw(3);
     pass.end();
   }
@@ -23003,6 +23085,7 @@ export function createKaminosVolumePrototype({
       fourArmHeldStateResidualGrid = null;
       clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
+      ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();
       fourArmHeldStateLinearTexture?.destroy();
