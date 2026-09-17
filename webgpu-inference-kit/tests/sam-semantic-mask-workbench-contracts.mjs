@@ -62,7 +62,7 @@ const visualContext = {
   gpuBinary: new Uint32Array([1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1]),
   gpuLogits: null, visualShape: { width: 2, height: 2 }, selectedMaskIndex: 2,
   selectedMaskIndexSource: 'gpu', invocationId: 'current', manifest: {},
-  debugReadbackSamples: { selectedScore: [0.9] }, state: {}, verificationAttached: false,
+  debugReadbackSamples: { selectedScore: [0.9] }, state: {}, window: {}, verificationAttached: false,
 };
 runInNewContext(`${visualBoundary}\nglobalThis.output = visualOutput;`, visualContext);
 assert.deepEqual(Array.from(visualContext.output.instances || [], row => row.index), [0, 2],
@@ -103,7 +103,7 @@ function controllerFixture() {
   };
   const context = {
     document, URLSearchParams,
-    window: { location: { search: `?commit=${'a'.repeat(40)}` }, setTimeout() {}, clearTimeout() {}, setInterval() { return 1; }, clearInterval() {} },
+    window: { location: { search: `?commit=${'a'.repeat(40)}` }, addEventListener() {}, setTimeout() {}, clearTimeout() {}, setInterval() { return 1; }, clearInterval() {} },
     Image: class {
       constructor() { this.naturalWidth = 800; this.naturalHeight = 600; pendingImages.push(this); }
     },
@@ -200,4 +200,5 @@ await settle();
 assert.equal(failedRuntime.elements.get('workbench-status').dataset.state, 'failed', 'image success must not overwrite runtime failure');
 assert.equal(failedRuntime.elements.get('run-segmentation').disabled, true);
 
+await import('./sam-workbench-foreground-contracts.mjs');
 console.log('sam semantic mask workbench contracts passed');

@@ -35,7 +35,7 @@ const runButton = document.getElementById('run-segmentation');
 const negativeButton = document.getElementById('run-negative-control');
 const statusRoot = document.getElementById('workbench-status');
 const statusText = document.getElementById('status-text');
-const sourceCanvas = document.getElementById('source-canvas');
+let sourceCanvas = document.getElementById('source-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
 const maskCanvas = document.getElementById('mask-canvas');
 const instancePicker = document.getElementById('instance-picker');
@@ -49,6 +49,7 @@ let runtimeAvailable = false;
 let runtimeFailure = null;
 let sampleLoadVersion = 0;
 let currentOutput = null;
+let sourceRenderer = null;
 
 function visibleInstances(output) {
   return instancePicker.value === 'all'
@@ -121,9 +122,14 @@ function setSourceCanvasSize(image) {
 
 function drawSource(image) {
   setSourceCanvasSize(image);
-  const context = sourceCanvas.getContext('2d');
-  context.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
-  context.drawImage(image, 0, 0, sourceCanvas.width, sourceCanvas.height);
+  if (sourceRenderer) {
+    sourceCanvas.style.visibility = 'visible';
+    sourceRenderer.setImage(image);
+  } else {
+    const context = sourceCanvas.getContext('2d');
+    context.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+    context.drawImage(image, 0, 0, sourceCanvas.width, sourceCanvas.height);
+  }
   const overlayContext = overlayCanvas.getContext('2d');
   overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
   overlayContext.drawImage(image, 0, 0, overlayCanvas.width, overlayCanvas.height);
@@ -253,6 +259,21 @@ function waitForRuntime() {
         reject(new Error('SAM3 runtime frame is missing invocation APIs'));
         return;
       }
+      runtime.sam3OnExecutionContext = async ({ device }) => {
+        const { createSamWorkbenchForeground } = await import('./sam-workbench-foreground.js');
+        const nextCanvas = document.createElement('canvas');
+        nextCanvas.id = 'source-canvas';
+        nextCanvas.width = sourceCanvas.width;
+        nextCanvas.height = sourceCanvas.height;
+        nextCanvas.style.touchAction = 'none';
+        nextCanvas.title = 'Zoom and pan source image';
+        const renderer = await createSamWorkbenchForeground({ device, canvas: nextCanvas, image: selectedImage });
+        sourceCanvas.replaceWith(nextCanvas);
+        sourceCanvas = nextCanvas;
+        sourceRenderer = renderer;
+        runtime.sam3CooperativeYield = renderer.yield;
+        runtime.sam3ForegroundEvidence = renderer.evidence;
+      };
       resolve(runtime);
     }, { once: true });
     const runtimeParams = new URLSearchParams({ autorun: '0', manifest: manifestUrl });
@@ -353,6 +374,7 @@ async function selectSample(sample) {
   }
   setStatus(runtimeFailure ? 'failed' : 'running', runtimeFailure?.message || 'Loading sample');
   for (const canvas of [sourceCanvas, overlayCanvas, maskCanvas]) {
+    if (canvas === sourceCanvas && sourceRenderer) { canvas.style.visibility = 'hidden'; continue; }
     canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
   }
   for (const id of ['effective-route', 'output-authority', 'candidate-evidence', 'foreground-evidence', 'source-meta', 'mask-meta']) {
@@ -396,6 +418,7 @@ instancePicker.addEventListener('change', () => {
   drawMaskOverlay(selectedImage, currentOutput);
   drawRawMask(currentOutput);
 });
+window.addEventListener('pagehide', () => sourceRenderer?.close(), { once: true });
 
 selectSample(selectedSample).catch(error => setStatus('failed', error.message));
 waitForRuntime().catch(error => setStatus('failed', error.message));

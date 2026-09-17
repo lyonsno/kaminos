@@ -9,6 +9,20 @@ import { runInNewContext } from 'node:vm';
 import { readCompleteChunkedJsonEvidence } from '../src/chunked-json-evidence.js';
 
 const witness = readFileSync(new URL('../tools/sam-semantic-mask-workbench-witness.mjs', import.meta.url), 'utf8');
+const inspectSource = witness.slice(witness.indexOf('function canvasInspectionExpression()'), witness.indexOf('let chromeProcess ='));
+const inspectExpression = new Function(`${inspectSource}; return canvasInspectionExpression();`)();
+const visibleOutput = { instances: [{ index: 7, score: 0.8, mask: new Uint32Array([1]), foregroundPixelCount: 1 }],
+  mask: new Uint32Array([1]), logits: new Float32Array([0.75]),
+  foregroundScheduling: { yieldCount: 2, frames: [{ zoom: 1.03 }] } };
+const pixelContext = { getImageData: () => ({ data: new Uint8Array([200, 200, 200, 255]) }), drawImage() {} };
+const inspectDocument = { createElement: () => ({ getContext: () => pixelContext }), getElementById(id) {
+  if (id === 'sam-mask-runtime-frame') return { contentWindow: { samMaskIslandVisualOutput: () => visibleOutput } };
+  return { width: 1, height: 1, dataset: {}, textContent: '', getContext: () => pixelContext };
+} };
+const observedVisual = runInNewContext(inspectExpression, { document: inspectDocument });
+assert.equal(observedVisual.output.instances?.[0]?.index, 7, 'witness must retain non-top instance identity and raw mask');
+assert.deepEqual(Array.from(observedVisual.output.instances[0].mask), [1]);
+assert.deepEqual(Array.from(observedVisual.output.logits), [0.75], 'visible mask numerics must remain replayable');
 
 // Run the actual transport functions without launching Chrome or loading a model.
 const transportSource = witness.slice(witness.indexOf('async function connectCdp('), witness.indexOf('async function settleForVisualCapture('));

@@ -198,16 +198,22 @@ const applicationSession = window.sam3InferenceSession || null;
 const servingResources = createSam3BrowserServingResources({
   deviceOwnership: applicationSession ? 'borrowed' : 'owned',
   async acquireExecutionContext() {
-    if (applicationSession) return {
-      adapter: applicationSession.adapter,
-      device: applicationSession.device,
-      inferenceSession: applicationSession,
-    };
-    setStatus('request-webgpu-adapter');
-    return requestBrowserWebGpuDevice(navigator.gpu, {
-      adapterOptions: { powerPreference: 'high-performance' },
-      label: 'sam3-semantic-workbench',
-    });
+    let context;
+    if (applicationSession) {
+      context = { adapter: applicationSession.adapter, device: applicationSession.device, inferenceSession: applicationSession };
+    } else {
+      setStatus('request-webgpu-adapter');
+      context = await requestBrowserWebGpuDevice(navigator.gpu, {
+        adapterOptions: { powerPreference: 'high-performance' }, label: 'sam3-semantic-workbench',
+      });
+    }
+    try {
+      await window.sam3OnExecutionContext?.(context);
+      return context;
+    } catch (error) {
+      if (!applicationSession) context.device.destroy();
+      throw error;
+    }
   },
 });
 window.addEventListener('pagehide', () => void servingResources.close(), { once: true });
@@ -4439,6 +4445,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
         reusedRouteIds: (result.reusedRouteReceipts || []).map(receipt => receipt.effectiveRouteId),
         imageCache: result.imageCache,
         servingTimings: state.servingTimings,
+        foregroundScheduling: window.sam3ForegroundEvidence?.() || null,
         selectedCandidateCount,
         instances,
         selectedMaskIndex: selectedCandidateCount === 0 ? null : selectedMaskIndex,

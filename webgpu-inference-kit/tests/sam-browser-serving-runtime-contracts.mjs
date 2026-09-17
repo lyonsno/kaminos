@@ -86,6 +86,15 @@ assert.equal(detached.manifest.invocationId, invocation.invocationId);
 
 // Exercise the serving caller's actual handoff, not a separately assembled package.
 const servingSource = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
+const servingCreation = servingSource.slice(servingSource.indexOf('const servingResources ='), servingSource.indexOf("window.addEventListener('pagehide'"));
+let foregroundDevice = null;
+const sharedDevice = { queue: {} };
+const createServing = new Function('createSam3BrowserServingResources', 'applicationSession', 'window',
+  `${servingCreation} return servingResources;`);
+const foregroundResources = createServing(kit.createSam3BrowserServingResources,
+  { adapter: {}, device: sharedDevice }, { sam3OnExecutionContext: async context => { foregroundDevice = context.device; } });
+await foregroundResources.executionContext();
+assert.strictEqual(foregroundDevice, sharedDevice, 'foreground renderer must receive the exact inference device before execution');
 const resolutionStart = servingSource.indexOf('    const { manifest, modelPackage, evidence: packageInvocationEvidence } = await resolveBrowserManifest');
 const resolutionBoundary = servingSource.slice(resolutionStart, servingSource.indexOf('    if (!verificationAttached)', resolutionStart));
 const attachVerification = new (Object.getPrototypeOf(async function () {}).constructor)(

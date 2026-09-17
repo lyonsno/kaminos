@@ -16,6 +16,7 @@ const { values } = parseArgs({
     'prompt': { type: 'string' },
     'expect-empty': { type: 'boolean', default: false },
     'negative-control': { type: 'boolean', default: false },
+    'exercise-foreground': { type: 'boolean', default: false },
     'negative-out': { type: 'string' },
     'chrome': { type: 'string', default: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
     'viewport-width': { type: 'string', default: '1500' },
@@ -46,6 +47,7 @@ const report = {
   workbench: null,
   visualEvidence: null,
   negativeControl: null,
+  foregroundExerciseRequested: values['exercise-foreground'],
   screenshot: null,
   requestedScreenshot: outPath,
   screenshotCompleteness: {
@@ -297,7 +299,11 @@ function canvasInspectionExpression() {
   return `(() => {
     const summarize = id => {
       const canvas = document.getElementById(id);
-      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      const copy = document.createElement('canvas');
+      copy.width = canvas.width; copy.height = canvas.height;
+      const copyContext = copy.getContext('2d');
+      copyContext.drawImage(canvas, 0, 0);
+      const pixels = copyContext.getImageData(0, 0, canvas.width, canvas.height).data;
       let nonTransparentPixels = 0;
       let brightPixels = 0;
       let checksum = 2166136261;
@@ -337,6 +343,10 @@ function canvasInspectionExpression() {
         selectedMaskIndex: output.selectedMaskIndex,
         selectedScore: output.selectedScore,
         foregroundPixelCount: output.foregroundPixelCount,
+        instances: output.instances?.map(instance => ({ ...instance, mask: Array.from(instance.mask) })),
+        mask: Array.from(output.mask || []),
+        logits: Array.from(output.logits || []),
+        foregroundScheduling: output.foregroundScheduling,
         width: output.width,
         height: output.height,
       } : null,
@@ -408,6 +418,14 @@ try {
   }
 
   report.failurePhase = 'workbench-run';
+  if (values['exercise-foreground']) await evaluate(cdp, `(() => {
+    let direction = 1;
+    window.__samForegroundExercise = setInterval(() => {
+      const runtime = document.getElementById('sam-mask-runtime-frame').contentWindow;
+      if (!runtime.sam3ForegroundEvidence) return;
+      document.getElementById('source-canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: 30 * (direction *= -1), cancelable: true }));
+    }, 100);
+  })()`);
   const clicked = await evaluate(cdp, `(() => { const button = document.getElementById('run-segmentation'); button.click(); return true; })()`);
   if (!clicked) throw new Error('operator run control was not activated');
   const terminal = await waitUntil(async () => evaluate(cdp, `(() => {
@@ -418,6 +436,10 @@ try {
       : null;
   })()`), 'SAM3 workbench execution');
   if (terminal.state === 'failed') throw new Error(`workbench failed: ${terminal.text}`);
+  if (values['exercise-foreground']) await evaluate(cdp, `(() => {
+    clearInterval(window.__samForegroundExercise);
+    document.getElementById('source-canvas').dispatchEvent(new MouseEvent('dblclick'));
+  })()`);
 
   report.failurePhase = 'visual-inspection';
   await settleForVisualCapture();
@@ -430,6 +452,14 @@ try {
   const { output, canvases } = report.visualEvidence;
   if (output?.outputAuthority !== 'actual-webgpu-readback') throw new Error(`output authority is ${output?.outputAuthority || 'missing'}`);
   if (output.verificationState !== 'not-attached') throw new Error(`dynamic verification state is ${output.verificationState || 'missing'}`);
+  if (!Array.isArray(output.instances) || output.instances.length !== output.selectedCandidateCount) throw new Error('partial retained instance evidence');
+  if (values['exercise-foreground']) {
+    const scheduling = output.foregroundScheduling;
+    if (scheduling?.mode !== 'shared-device-input-driven-source-render' || scheduling.failure
+        || !(scheduling.yieldCount > 0) || !scheduling.frames?.some(frame => frame.zoom > 1 && frame.afterYieldCount > 0)) {
+      throw new Error('foreground exercise lacks shared-device input-driven rendering during inference');
+    }
+  }
   if (values.prompt !== undefined && output.promptText !== values.prompt) throw new Error(`runtime prompt identity drift: ${output.promptText || 'missing'}`);
   if (output.imageCache?.status !== 'miss') throw new Error(`fresh image-cache route is ${output.imageCache?.status || 'missing'}, expected miss`);
   if (values['expect-empty'] && (output.selectedCandidateCount !== 0 || output.foregroundPixelCount !== 0)) {
