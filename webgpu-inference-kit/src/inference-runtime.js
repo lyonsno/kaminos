@@ -1112,6 +1112,8 @@ export async function createWebGpuInferenceRuntime(input = {}) {
         ];
         for (const dim of dispatch) {
           if (!Number.isInteger(dim) || dim < 1) throw new Error('dispatch dimensions must be positive integers');
+          const limit = device.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
+          if (dim > limit) throw new Error(`dispatch dimension ${dim} exceeds maxComputeWorkgroupsPerDimension ${limit}`);
         }
       } catch (error) {
         if (preparedCommandDuty) runtime.settleCommandDuty(preparedCommandDuty, {

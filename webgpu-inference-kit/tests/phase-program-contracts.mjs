@@ -305,4 +305,19 @@ assert.equal(profile.profile.stages[1].metadata.phaseName, 'readback-mask');
 assert.equal(profile.profile.stages[1].metadata.phaseIndex, 1);
 assert.equal(profile.profile.stages[1].metadata.phaseMetadata.readbacks[0], 'fakeBytes');
 
+const limitRuntime = await createWebGpuInferenceRuntime({
+  routeId: 'sam3.dispatch-limit-contract', device, queue, adapterName: 'Phase Adapter',
+  kernel: { profile: 'dispatch-limit-contract' }, requiredStages: [],
+});
+device.limits.maxComputeWorkgroupsPerDimension = 65535;
+for (const dispatch of [[65536], [1, 65536], [1, 1, 65536]]) {
+  const encoded = calls.commandEncoders.length;
+  const submitted = calls.submissions.length;
+  await assert.rejects(() => limitRuntime.runKernel(program.phases[0].kernel, { dispatch }), /maxComputeWorkgroupsPerDimension/);
+  assert.equal(calls.commandEncoders.length, encoded, 'illegal dispatch must fail before encoding');
+  assert.equal(calls.submissions.length, submitted, 'illegal dispatch must never submit');
+}
+device.limits.maxComputeWorkgroupsPerDimension = 70000;
+await limitRuntime.runKernel(program.phases[0].kernel, { dispatch: [70000] });
+assert.deepEqual(calls.dispatches.at(-1), { x: 70000, y: 1, z: 1 }, 'effective device capacity must not be capped at the default');
 console.log('phase program contracts passed');

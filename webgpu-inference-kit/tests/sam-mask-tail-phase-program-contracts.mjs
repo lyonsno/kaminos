@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
+import { createLinearDispatch } from '../src/runtime-primitives.js';
 
 import {
   SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
@@ -10,6 +11,27 @@ import {
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSource = readFileSync(new URL('../src/sam-mask-tail-phase-program.js', import.meta.url), 'utf8');
+
+for (const name of ['sam-detr-encoder', 'sam-detr-decoder', 'sam-pixel-decoder', 'sam-mask-tail']) {
+  const source = readFileSync(new URL(`../src/${name}-phase-program.js`, import.meta.url), 'utf8');
+  const helper = source.match(/function workgroups\([^]*?\n}/)[0];
+  const dispatchFor = new Function('createLinearDispatch', `${helper}; return workgroups;`)(createLinearDispatch);
+  for (const total of [256, 5184 * 2048, 201 * 5184 * 8, 288 * 288 * 256, 288 * 288 * 200]) {
+    const dispatch = [].concat(dispatchFor(total, { limits: { maxComputeWorkgroupsPerDimension: 65535 } }));
+    assert.ok(dispatch.every(n => n <= 65535), `${name}: native dispatch exceeds device limit for ${total} invocations`);
+    assert.ok(dispatch.reduce((n, d) => n * d, 64) >= total, `${name}: native dispatch must not truncate`);
+  }
+  assert.deepEqual(dispatchFor(65 * 64, { limits: { maxComputeWorkgroupsPerDimension: 64 } }), [9, 8]);
+  const kernels = [...source.matchAll(/@workgroup_size\(64\)\s+fn main\(([^]*?)\)\s*\{\s*let (?:index|token) = ([^;]+);/g)];
+  assert.equal(kernels.length, [...source.matchAll(/@workgroup_size\(64\)/g)].length, `${name}: inspect every linear shader`);
+  assert.ok(kernels.length > 0);
+  for (const [, parameters, index] of kernels) {
+    assert.match(parameters, /@builtin\(num_workgroups\) dispatch_grid/);
+    assert.match(index, /gid\.y \* dispatch_grid\.x \* 64u/);
+    assert.match(index, /gid\.z \* dispatch_grid\.x \* dispatch_grid\.y \* 64u/);
+  }
+  assert.doesNotMatch(source, /dispatch: \[workgroups\(/, `${name}: phase dispatch must use the complete grid`);
+}
 
 assert.match(packageJson.scripts.test, /sam-mask-tail-phase-program-contracts\.mjs/, 'default test must include portable mask-tail phase-program contracts');
 assert.ok(packageJson.scripts['test:live:sam-mask-tail']?.includes('sam-mask-tail-mlx-packet-contracts.mjs'), 'live mask-tail MLX packet contract must be explicit');

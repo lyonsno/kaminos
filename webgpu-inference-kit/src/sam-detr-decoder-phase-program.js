@@ -6,7 +6,7 @@ import {
   createRouteWorkerResult,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE, createLinearDispatch } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -46,8 +46,8 @@ struct LayerNormDims {
 @group(0) @binding(4) var<uniform> dims: LayerNormDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let token = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let token = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (token >= dims.total_tokens) { return; }
   let base = token * dims.channels;
   var mean = 0.0;
@@ -79,8 +79,8 @@ struct AddDims {
 @group(0) @binding(3) var<uniform> dims: AddDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   output_values[index] = a_values[index] + b_values[index];
 }
@@ -100,8 +100,8 @@ struct LinearDims {
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -129,8 +129,8 @@ struct LinearDims {
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -164,8 +164,8 @@ struct AttentionDims {
 @group(0) @binding(5) var<uniform> dims: AttentionDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.channels;
   let query = (index / dims.channels) % dims.query_tokens;
@@ -229,8 +229,8 @@ struct AttentionDims {
 @group(0) @binding(5) var<uniform> dims: AttentionDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.channels;
   let query = (index / dims.channels) % dims.query_tokens;
@@ -290,8 +290,8 @@ struct DecoderDims {
 @group(0) @binding(2) var<uniform> dims: DecoderDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * dims.query_tokens * dims.channels * 2u;
   if (index >= total) { return; }
   let feature = index % (dims.channels * 2u);
@@ -340,8 +340,8 @@ struct DecoderDims {
 @group(0) @binding(2) var<uniform> dims: DecoderDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * (dims.query_tokens + 1u) * dims.channels;
   if (index >= total) { return; }
   let channel = index % dims.channels;
@@ -376,8 +376,8 @@ struct DecoderDims {
 @group(0) @binding(2) var<uniform> dims: DecoderDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * dims.query_tokens * dims.channels;
   if (index >= total) { return; }
   let channel = index % dims.channels;
@@ -408,8 +408,8 @@ struct DecoderDims {
 @group(0) @binding(2) var<uniform> dims: DecoderDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * dims.channels;
   if (index >= total) { return; }
   let channel = index % dims.channels;
@@ -449,8 +449,8 @@ fn inverse_sigmoid(x: f32) -> f32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * dims.query_tokens * 4u;
   if (index >= total) { return; }
   output_boxes[index] = sigmoid(inverse_sigmoid(previous_boxes[index]) + box_delta[index]);
@@ -532,8 +532,8 @@ fn log_delta(value: f32) -> f32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * dims.query_tokens * dims.axis_tokens * dims.channels;
   if (index >= total) { return; }
   let channel = index % dims.channels;
@@ -576,8 +576,8 @@ struct DecoderDims {
 @group(0) @binding(7) var<uniform> dims: DecoderDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * dims.heads * (dims.query_tokens + 1u) * dims.spatial_tokens;
   if (index >= total) { return; }
   let spatial = index % dims.spatial_tokens;
@@ -1109,8 +1109,11 @@ export function createSam3DetrDecoderPhaseProgramRouteDefinition(input = {}) {
   });
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
+function workgroups(total, device) {
+  return createLinearDispatch(total, {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
 }
 
 async function sha256Hex(buffer) {
@@ -1443,54 +1446,54 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       addKernel(k('PresenceNorm'), LAYERNORM_WGSL, [bindTensor('tensor:presenceRaw'), bindTensor('tensor:presenceLayerNormWeight'), bindTensor('tensor:presenceLayerNormBias'), bindTensor('tensor:presenceNormed', 'storage'), bindUniform('presenceLayerNormDims')]);
       addKernel(k('PresenceHead'), PRESENCE_HEAD_WGSL, [bindTensor('tensor:presenceNormed'), bindTensor('tensor:presenceHeadLayer1Weight'), bindTensor('tensor:presenceHeadLayer1Bias'), bindTensor('tensor:presenceHeadLayer2Weight'), bindTensor('tensor:presenceHeadLayer2Bias'), bindTensor('tensor:presenceHeadLayer3Weight'), bindTensor('tensor:presenceHeadLayer3Bias'), bindTensor(`tensor:presenceLogits${layerIndex}`, 'storage'), bindUniform('decoderDims')]);
       phases.push(
-        { name: `detr-decoder-sine-box-position-${layerIndex}`, kernel: k('Sine'), dispatch: [workgroups(sineTotal)], yieldAfter: true },
-        { name: `detr-decoder-ref-point-head-1-${layerIndex}`, kernel: k('Ref1'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-        { name: `detr-decoder-ref-point-head-${layerIndex}`, kernel: k('Ref2'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
+        { name: `detr-decoder-sine-box-position-${layerIndex}`, kernel: k('Sine'), dispatch: workgroups(sineTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-ref-point-head-1-${layerIndex}`, kernel: k('Ref1'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-ref-point-head-${layerIndex}`, kernel: k('Ref2'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
         ...(input.includeIntermediateReadback === true && layerIndex === 0
           ? [{ name: 'debug-detr-decoder-layer-0-query-pos', readbacks: [{ name: 'queryPosLayer0', tensor: 'queryPos' }] }]
           : []),
-        { name: `detr-decoder-pad-query-position-${layerIndex}`, kernel: k('PadPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-box-rpb-x-hidden-${layerIndex}`, kernel: k('RpbXHidden'), dispatch: [workgroups(shape.batch * shape.queryTokens * shape.width * shape.channels)], yieldAfter: true },
-        { name: `detr-decoder-box-rpb-y-hidden-${layerIndex}`, kernel: k('RpbYHidden'), dispatch: [workgroups(shape.batch * shape.queryTokens * shape.height * shape.channels)], yieldAfter: true },
-        { name: `detr-decoder-box-rpb-${layerIndex}`, kernel: k('Rpb'), dispatch: [workgroups(rpbTotal)], yieldAfter: true },
+        { name: `detr-decoder-pad-query-position-${layerIndex}`, kernel: k('PadPos'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-rpb-x-hidden-${layerIndex}`, kernel: k('RpbXHidden'), dispatch: workgroups(shape.batch * shape.queryTokens * shape.width * shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-rpb-y-hidden-${layerIndex}`, kernel: k('RpbYHidden'), dispatch: workgroups(shape.batch * shape.queryTokens * shape.height * shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-rpb-${layerIndex}`, kernel: k('Rpb'), dispatch: workgroups(rpbTotal, input.device), yieldAfter: true },
         ...(input.includeIntermediateReadback === true && layerIndex === 0
           ? [{ name: 'debug-detr-decoder-layer-0-rpb', readbacks: [{ name: 'rpbLayer0Prefix', tensor: 'rpb', options: { size: 4096 } }] }]
           : []),
-        { name: `detr-decoder-self-add-pos-${layerIndex}`, kernel: k('AddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-self-q-${layerIndex}`, kernel: k('SelfQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-self-k-${layerIndex}`, kernel: k('SelfK'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-self-v-${layerIndex}`, kernel: k('SelfV'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-self-attention-softmax-${layerIndex}`, kernel: k('SelfAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-self-output-${layerIndex}`, kernel: k('SelfOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-self-residual-${layerIndex}`, kernel: k('SelfResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-self-layernorm-${layerIndex}`, kernel: k('SelfNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
-        { name: `detr-decoder-text-add-pos-${layerIndex}`, kernel: k('TextAddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-text-q-${layerIndex}`, kernel: k('TextQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-text-k-${layerIndex}`, kernel: k('TextK'), dispatch: [workgroups(promptTotal)], yieldAfter: true },
-        { name: `detr-decoder-text-v-${layerIndex}`, kernel: k('TextV'), dispatch: [workgroups(promptTotal)], yieldAfter: true },
-        { name: `detr-decoder-text-attention-softmax-${layerIndex}`, kernel: k('TextAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-text-output-${layerIndex}`, kernel: k('TextOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-text-residual-${layerIndex}`, kernel: k('TextResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-text-layernorm-${layerIndex}`, kernel: k('TextNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
-        { name: `detr-decoder-vision-add-pos-${layerIndex}`, kernel: k('VisionAddPos'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-vision-q-${layerIndex}`, kernel: k('VisionQ'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-vision-key-add-pos-${layerIndex}`, kernel: k('VisionKeyAdd'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
-        { name: `detr-decoder-vision-k-${layerIndex}`, kernel: k('VisionK'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
-        { name: `detr-decoder-vision-v-${layerIndex}`, kernel: k('VisionV'), dispatch: [workgroups(spatialTotal)], yieldAfter: true },
-        { name: `detr-decoder-vision-attention-softmax-${layerIndex}`, kernel: k('VisionAttn'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-vision-output-${layerIndex}`, kernel: k('VisionOut'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-vision-residual-${layerIndex}`, kernel: k('VisionResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-vision-layernorm-${layerIndex}`, kernel: k('VisionNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
-        { name: `detr-decoder-mlp-fc1-${layerIndex}`, kernel: k('Mlp1'), dispatch: [workgroups(mlpTotal)], yieldAfter: true },
-        { name: `detr-decoder-mlp-fc2-${layerIndex}`, kernel: k('Mlp2'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-mlp-residual-${layerIndex}`, kernel: k('MlpResidual'), dispatch: [workgroups(hiddenTotal)], yieldAfter: true },
-        { name: `detr-decoder-mlp-${layerIndex}`, kernel: k('MlpNorm'), dispatch: [workgroups(hiddenTokens)], yieldAfter: true },
-        { name: `detr-decoder-slice-query-${layerIndex}`, kernel: k('SliceQuery'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-        { name: `detr-decoder-output-layernorm-${layerIndex}`, kernel: k('OutputNorm'), dispatch: [workgroups(queryTokens)], yieldAfter: true },
-        { name: `detr-decoder-box-head-1-${layerIndex}`, kernel: k('BoxHead1'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-        { name: `detr-decoder-box-head-2-${layerIndex}`, kernel: k('BoxHead2'), dispatch: [workgroups(queryTotal)], yieldAfter: true },
-        { name: `detr-decoder-box-head-3-${layerIndex}`, kernel: k('BoxHead3'), dispatch: [workgroups(boxTotal)], yieldAfter: true },
-        { name: `detr-decoder-box-refinement-${layerIndex}`, kernel: k('BoxRefine'), dispatch: [workgroups(boxTotal)], yieldAfter: true },
+        { name: `detr-decoder-self-add-pos-${layerIndex}`, kernel: k('AddPos'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-q-${layerIndex}`, kernel: k('SelfQ'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-k-${layerIndex}`, kernel: k('SelfK'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-v-${layerIndex}`, kernel: k('SelfV'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-attention-softmax-${layerIndex}`, kernel: k('SelfAttn'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-output-${layerIndex}`, kernel: k('SelfOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-residual-${layerIndex}`, kernel: k('SelfResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-layernorm-${layerIndex}`, kernel: k('SelfNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-add-pos-${layerIndex}`, kernel: k('TextAddPos'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-q-${layerIndex}`, kernel: k('TextQ'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-k-${layerIndex}`, kernel: k('TextK'), dispatch: workgroups(promptTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-v-${layerIndex}`, kernel: k('TextV'), dispatch: workgroups(promptTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-attention-softmax-${layerIndex}`, kernel: k('TextAttn'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-output-${layerIndex}`, kernel: k('TextOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-residual-${layerIndex}`, kernel: k('TextResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-layernorm-${layerIndex}`, kernel: k('TextNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-add-pos-${layerIndex}`, kernel: k('VisionAddPos'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-q-${layerIndex}`, kernel: k('VisionQ'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-key-add-pos-${layerIndex}`, kernel: k('VisionKeyAdd'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-k-${layerIndex}`, kernel: k('VisionK'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-v-${layerIndex}`, kernel: k('VisionV'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-attention-softmax-${layerIndex}`, kernel: k('VisionAttn'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-output-${layerIndex}`, kernel: k('VisionOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-residual-${layerIndex}`, kernel: k('VisionResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-layernorm-${layerIndex}`, kernel: k('VisionNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
+        { name: `detr-decoder-mlp-fc1-${layerIndex}`, kernel: k('Mlp1'), dispatch: workgroups(mlpTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-mlp-fc2-${layerIndex}`, kernel: k('Mlp2'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-mlp-residual-${layerIndex}`, kernel: k('MlpResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-mlp-${layerIndex}`, kernel: k('MlpNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
+        { name: `detr-decoder-slice-query-${layerIndex}`, kernel: k('SliceQuery'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-output-layernorm-${layerIndex}`, kernel: k('OutputNorm'), dispatch: workgroups(queryTokens, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-head-1-${layerIndex}`, kernel: k('BoxHead1'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-head-2-${layerIndex}`, kernel: k('BoxHead2'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-head-3-${layerIndex}`, kernel: k('BoxHead3'), dispatch: workgroups(boxTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-refinement-${layerIndex}`, kernel: k('BoxRefine'), dispatch: workgroups(boxTotal, input.device), yieldAfter: true },
         ...((input.includeIntermediateReadback === true && layerIndex === 0) || input.includeAllHiddenStatesReadback === true
           ? [{
               name: `debug-detr-decoder-layer-${layerIndex}-outputs`,
@@ -1500,8 +1503,8 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
               ],
             }]
           : []),
-        { name: `detr-decoder-slice-presence-${layerIndex}`, kernel: k('SlicePresence'), dispatch: [workgroups(shape.batch * shape.channels)], yieldAfter: true },
-        { name: `detr-decoder-presence-layernorm-${layerIndex}`, kernel: k('PresenceNorm'), dispatch: [workgroups(shape.batch)], yieldAfter: true },
+        { name: `detr-decoder-slice-presence-${layerIndex}`, kernel: k('SlicePresence'), dispatch: workgroups(shape.batch * shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-presence-layernorm-${layerIndex}`, kernel: k('PresenceNorm'), dispatch: workgroups(shape.batch, input.device), yieldAfter: true },
         { name: `detr-decoder-presence-head-${layerIndex}`, kernel: k('PresenceHead'), dispatch: [shape.batch], yieldAfter: true },
       );
       const tmp = referenceInput;

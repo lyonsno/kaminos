@@ -6,7 +6,7 @@ import {
   createRouteWorkerResult,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE, createLinearDispatch } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -41,8 +41,8 @@ struct LayerNormDims {
 @group(0) @binding(4) var<uniform> dims: LayerNormDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let token = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let token = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (token >= dims.total_tokens) { return; }
   let base = token * dims.channels;
   var mean = 0.0;
@@ -74,8 +74,8 @@ struct AddDims {
 @group(0) @binding(3) var<uniform> dims: AddDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   output_values[index] = a_values[index] + b_values[index];
 }
@@ -95,8 +95,8 @@ struct LinearDims {
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -124,8 +124,8 @@ struct LinearDims {
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -157,8 +157,8 @@ struct AttentionDims {
 @group(0) @binding(4) var<uniform> dims: AttentionDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.channels;
   let query = (index / dims.channels) % dims.query_tokens;
@@ -217,8 +217,8 @@ struct AttentionDims {
 @group(0) @binding(5) var<uniform> dims: AttentionDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.channels;
   let query = (index / dims.channels) % dims.query_tokens;
@@ -546,8 +546,11 @@ export function createSam3DetrEncoderPhaseProgramRouteDefinition(input = {}) {
   });
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
+function workgroups(total, device) {
+  return createLinearDispatch(total, {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
 }
 
 async function sha256Hex(buffer) {
@@ -763,25 +766,25 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
       addLinearKernel('MlpFc2', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.mlp1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.fc2Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.fc2Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.mlp2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:fc2Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('MlpResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.mlp2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.output}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       phases.push(
-        { name: `detr-encoder-layernorm1-${layerIndex}`, kernel: `${kernelBase}LayerNorm1`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
-        { name: `detr-encoder-add-pos-${layerIndex}`, kernel: `${kernelBase}AddPos`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-self-q-${layerIndex}`, kernel: `${kernelBase}SelfQ`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-self-k-${layerIndex}`, kernel: `${kernelBase}SelfK`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-self-v-${layerIndex}`, kernel: `${kernelBase}SelfV`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-self-attention-softmax-${layerIndex}`, kernel: `${kernelBase}SelfAttention`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-self-output-linear-${layerIndex}`, kernel: `${kernelBase}SelfOutput`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-self-output-residual-${layerIndex}`, kernel: `${kernelBase}SelfResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-layernorm2-${layerIndex}`, kernel: `${kernelBase}LayerNorm2`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
-        { name: `detr-encoder-cross-q-${layerIndex}`, kernel: `${kernelBase}CrossQ`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-cross-k-${layerIndex}`, kernel: `${kernelBase}CrossK`, dispatch: [workgroups(totalPrompt)], yieldAfter: true },
-        { name: `detr-encoder-cross-v-${layerIndex}`, kernel: `${kernelBase}CrossV`, dispatch: [workgroups(totalPrompt)], yieldAfter: true },
-        { name: `detr-encoder-cross-attention-softmax-${layerIndex}`, kernel: `${kernelBase}CrossAttention`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-cross-output-linear-${layerIndex}`, kernel: `${kernelBase}CrossOutput`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-cross-output-residual-${layerIndex}`, kernel: `${kernelBase}CrossResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-layernorm3-${layerIndex}`, kernel: `${kernelBase}LayerNorm3`, dispatch: [workgroups(spatialTokenCount)], yieldAfter: true },
-        { name: `detr-encoder-mlp-fc1-relu-${layerIndex}`, kernel: `${kernelBase}MlpFc1Relu`, dispatch: [workgroups(totalMlpHidden)], yieldAfter: true },
-        { name: `detr-encoder-mlp-fc2-linear-${layerIndex}`, kernel: `${kernelBase}MlpFc2`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: `detr-encoder-mlp-fc2-residual-${layerIndex}`, kernel: `${kernelBase}MlpResidual`, dispatch: [workgroups(totalEncoder)], yieldAfter: true },
+        { name: `detr-encoder-layernorm1-${layerIndex}`, kernel: `${kernelBase}LayerNorm1`, dispatch: workgroups(spatialTokenCount, input.device), yieldAfter: true },
+        { name: `detr-encoder-add-pos-${layerIndex}`, kernel: `${kernelBase}AddPos`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-self-q-${layerIndex}`, kernel: `${kernelBase}SelfQ`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-self-k-${layerIndex}`, kernel: `${kernelBase}SelfK`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-self-v-${layerIndex}`, kernel: `${kernelBase}SelfV`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-self-attention-softmax-${layerIndex}`, kernel: `${kernelBase}SelfAttention`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-self-output-linear-${layerIndex}`, kernel: `${kernelBase}SelfOutput`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-self-output-residual-${layerIndex}`, kernel: `${kernelBase}SelfResidual`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-layernorm2-${layerIndex}`, kernel: `${kernelBase}LayerNorm2`, dispatch: workgroups(spatialTokenCount, input.device), yieldAfter: true },
+        { name: `detr-encoder-cross-q-${layerIndex}`, kernel: `${kernelBase}CrossQ`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-cross-k-${layerIndex}`, kernel: `${kernelBase}CrossK`, dispatch: workgroups(totalPrompt, input.device), yieldAfter: true },
+        { name: `detr-encoder-cross-v-${layerIndex}`, kernel: `${kernelBase}CrossV`, dispatch: workgroups(totalPrompt, input.device), yieldAfter: true },
+        { name: `detr-encoder-cross-attention-softmax-${layerIndex}`, kernel: `${kernelBase}CrossAttention`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-cross-output-linear-${layerIndex}`, kernel: `${kernelBase}CrossOutput`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-cross-output-residual-${layerIndex}`, kernel: `${kernelBase}CrossResidual`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-layernorm3-${layerIndex}`, kernel: `${kernelBase}LayerNorm3`, dispatch: workgroups(spatialTokenCount, input.device), yieldAfter: true },
+        { name: `detr-encoder-mlp-fc1-relu-${layerIndex}`, kernel: `${kernelBase}MlpFc1Relu`, dispatch: workgroups(totalMlpHidden, input.device), yieldAfter: true },
+        { name: `detr-encoder-mlp-fc2-linear-${layerIndex}`, kernel: `${kernelBase}MlpFc2`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-mlp-fc2-residual-${layerIndex}`, kernel: `${kernelBase}MlpResidual`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
       );
       currentHidden = layerKeys.output;
     }

@@ -6,7 +6,7 @@ import {
   createRouteWorkerResult,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE, createLinearDispatch } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -60,8 +60,8 @@ struct MaskTailDims {
 @group(0) @binding(4) var<uniform> dims: MaskTailDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.mask_tail_total) {
     return;
   }
@@ -98,8 +98,8 @@ struct MaskTailDims {
 @group(0) @binding(4) var<uniform> dims: MaskTailDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   let total = dims.batch * dims.channels * dims.spatial;
   if (index >= total) {
     return;
@@ -134,8 +134,8 @@ struct MaskTailDims {
 @group(0) @binding(3) var<uniform> dims: MaskTailDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.mask_total) {
     return;
   }
@@ -162,8 +162,8 @@ struct ThresholdDims {
 @group(0) @binding(2) var<uniform> dims: ThresholdDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) {
     return;
   }
@@ -370,8 +370,11 @@ export function createSam3MaskTailPhaseProgramRouteDefinition(input = {}) {
   });
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
+function workgroups(total, device) {
+  return createLinearDispatch(total, {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
 }
 
 export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
@@ -491,12 +494,12 @@ export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
         thresholdMask: { code: THRESHOLD_WGSL, bindings: [{ name: 'maskLogits', resource: 'tensor:maskLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'binaryMask', resource: 'tensor:binaryMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:thresholdDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
       },
       phases: [
-        { name: 'mask-embedder-layer-0', kernel: 'maskEmbedderLayer0', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
-        { name: 'mask-embedder-layer-1', kernel: 'maskEmbedderLayer1', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
-        { name: 'mask-embedder-layer-2', kernel: 'maskEmbedderLayer2', dispatch: [workgroups(maskTailTotal)], yieldAfter: true },
-        { name: 'instance-projection-1x1', kernel: 'instanceProjection', dispatch: [workgroups(shape.batch * shape.channels * spatial)], yieldAfter: true },
-        { name: 'decode-mask', kernel: 'decodeMask', dispatch: [workgroups(maskTotal)], yieldAfter: true },
-        { name: 'threshold-mask', kernel: 'thresholdMask', dispatch: [workgroups(maskTotal)], yieldAfter: true },
+        { name: 'mask-embedder-layer-0', kernel: 'maskEmbedderLayer0', dispatch: workgroups(maskTailTotal, input.device), yieldAfter: true },
+        { name: 'mask-embedder-layer-1', kernel: 'maskEmbedderLayer1', dispatch: workgroups(maskTailTotal, input.device), yieldAfter: true },
+        { name: 'mask-embedder-layer-2', kernel: 'maskEmbedderLayer2', dispatch: workgroups(maskTailTotal, input.device), yieldAfter: true },
+        { name: 'instance-projection-1x1', kernel: 'instanceProjection', dispatch: workgroups(shape.batch * shape.channels * spatial, input.device), yieldAfter: true },
+        { name: 'decode-mask', kernel: 'decodeMask', dispatch: workgroups(maskTotal, input.device), yieldAfter: true },
+        { name: 'threshold-mask', kernel: 'thresholdMask', dispatch: workgroups(maskTotal, input.device), yieldAfter: true },
         { name: 'readback-mask', readbacks: [{ name: 'maskLogits', tensor: 'maskLogits' }, { name: 'binaryMask', tensor: 'binaryMask' }] },
       ],
       metadata: { routeId: SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID },

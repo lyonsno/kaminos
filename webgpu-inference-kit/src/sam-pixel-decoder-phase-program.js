@@ -6,7 +6,7 @@ import {
   createRouteWorkerResult,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE, createLinearDispatch } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -47,8 +47,8 @@ struct PixelStageDims {
 @group(0) @binding(3) var<uniform> dims: PixelStageDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   let channel = index % dims.channels;
   let target_x = (index / dims.channels) % dims.target_width;
@@ -80,8 +80,8 @@ struct PixelStageDims {
 @group(0) @binding(4) var<uniform> dims: PixelStageDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   let out_channel = index % dims.channels;
   let x = (index / dims.channels) % dims.target_width;
@@ -169,8 +169,8 @@ struct PixelStageDims {
 @group(0) @binding(5) var<uniform> dims: PixelStageDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   let channel = index % dims.channels;
   let per_batch_total = dims.target_height * dims.target_width * dims.channels;
@@ -421,8 +421,11 @@ export function createSam3PixelDecoderPhaseProgramRouteDefinition(input = {}) {
   });
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
+function workgroups(total, device) {
+  return createLinearDispatch(total, {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
 }
 
 export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
@@ -531,10 +534,10 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
       kernels[`groupnormStats${index}`] = { code: GROUPNORM_STATS_WGSL, bindings: [{ name: 'input', resource: `tensor:convolved${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'stats', resource: `tensor:stats${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
       kernels[`groupnormRelu${index}`] = { code: GROUPNORM_RELU_WGSL, bindings: [{ name: 'input', resource: `tensor:convolved${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'stats', resource: `tensor:stats${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normWeight', resource: `tensor:normWeight${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normBias', resource: `tensor:normBias${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:normalized${index}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: `uniform:dims${index}`, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] };
       phases.push(
-        { name: `pixel-upsample-add-${index}`, kernel: `upsampleAdd${index}`, dispatch: [workgroups(total)], yieldAfter: true },
-        { name: `pixel-conv3x3-${index}`, kernel: `conv3x3_${index}`, dispatch: [workgroups(total)], yieldAfter: true },
+        { name: `pixel-upsample-add-${index}`, kernel: `upsampleAdd${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
+        { name: `pixel-conv3x3-${index}`, kernel: `conv3x3_${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
         { name: `pixel-groupnorm-stats-${index}`, kernel: `groupnormStats${index}`, dispatch: [shape.batch * shape.groups], yieldAfter: true },
-        { name: `pixel-groupnorm-relu-${index}`, kernel: `groupnormRelu${index}`, dispatch: [workgroups(total)], yieldAfter: true },
+        { name: `pixel-groupnorm-relu-${index}`, kernel: `groupnormRelu${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
       );
     }
     phases.push({ name: 'readback-pixel-embed', readbacks: [{ name: 'pixelEmbed', tensor: `normalized${stageCount - 1}` }] });
