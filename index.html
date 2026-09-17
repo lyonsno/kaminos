@@ -626,6 +626,28 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .finger-fluid-oracle-cockpit-readout .field-key { margin-right: 6px; }
 .finger-fluid-oracle-cockpit-readout .field-val { overflow-wrap: anywhere; }
 .finger-fluid-oracle-cockpit-warn { margin-top: 6px; color: #ffcb7c; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.authoring-controls { display: grid; gap: 8px; padding: 0 0 12px; border-bottom: 1px solid #383838; }
+.authoring-controls label { font-size: 11px; color: #aaa; }
+#composition-label { min-width: 0; width: 100%; padding: 8px; border: 1px solid #444; border-radius: 4px; background: #242424; color: #eee; font: inherit; font-size: 12px; }
+.authoring-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.authoring-actions .btn { min-height: 32px; margin: 0; }
+#composition-capture { background: #204538; border-color: #4a7867; color: #e2f8ee; }
+#composition-status { font-size: 11px; line-height: 1.4; color: #a4c4b8; overflow-wrap: anywhere; }
+#composition-status[data-failed="true"] { color: #ffa18e; }
+.saved-scene-shot { margin: 10px 0; border: 1px solid #3d3d3d; border-radius: 4px; overflow: hidden; }
+.saved-scene-picture { display: block; width: 100%; border: 0; background: #101010; cursor: pointer; }
+.saved-scene-picture img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
+.saved-scene-basin { padding: 0 8px 8px; color: #aaa; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.saved-scene-shot .gr-name { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+body.composition-authoring #volume-authored-mix-panel { display: none; }
+body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width: max-content; flex-wrap: wrap; justify-content: center; }
+@media (max-width: 760px) {
+  body.composition-authoring { flex-direction: column-reverse; }
+  body.composition-authoring #sidebar { width: 100%; height: 42%; border-right: 0; border-top: 1px solid #333; }
+  body.composition-authoring #viewport { width: 100%; min-height: 0; }
+  body.composition-authoring #transform-bar { left: 8px; transform: none; width: calc(100% - 16px); max-width: none; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
+  body.composition-authoring #transform-bar > * { flex-shrink: 0; }
+}
 </style>
 </head>
 <body>
@@ -659,6 +681,21 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="checkbox" id="append-import-toggle">
       <span>Append</span>
     </label>
+
+    <h2>Composition</h2>
+    <div class="authoring-controls">
+      <label for="composition-label">Shot label</label>
+      <input id="composition-label" type="text" value="Kiln study" autocomplete="off">
+      <div class="authoring-actions">
+        <button type="button" class="btn" id="composition-capture">Capture</button>
+        <button type="button" class="btn" id="composition-basins">Basins</button>
+        <button type="button" class="btn" id="composition-library">Library</button>
+      </div>
+      <div id="composition-status" role="status" aria-live="polite"></div>
+      <label><input id="composition-ground-visible" type="checkbox" checked> Ground</label>
+      <label for="composition-ground-height">Ground height</label>
+      <input id="composition-ground-height" type="number" step="0.05" value="-0.85" class="transform-input">
+    </div>
 
     <h2>Scene Objects</h2>
     <div class="panel">
@@ -3136,6 +3173,7 @@ import {
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
+import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
 import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
   FORGE_HOST_STATION_ATTENTION_SCHEMA,
@@ -3282,6 +3320,8 @@ let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
+let activeSceneComposition = null;
+let authoringBusy = false;
 let volumePrototype = null;
 let volumeBridge = null;
 let motionAgencyState = null;
@@ -14128,14 +14168,14 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
   }
 }
 
-async function saveVolumeSettingsPreset() {
+async function saveVolumeSettingsPreset({ preset: suppliedPreset } = {}) {
   const labelInput = document.getElementById('settings-preset-label');
   const label = String(labelInput?.value || '').trim()
     || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
   volumeSettingsPresetStatus(`saving ${label}...`);
   try {
     await volumeCockpitLayoutReady;
-    const preset = buildVolumeSettingsPreset();
+    const preset = suppliedPreset || buildVolumeSettingsPreset();
     const response = await fetch('/api/volume-settings-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -14790,9 +14830,13 @@ function openSelectedVolumeSettingsPresetInspection() {
   }
 }
 
-function navigateToSelectedVolumeSettingsPreset(openFresh = false) {
+async function navigateToSelectedVolumeSettingsPreset(openFresh = false) {
   try {
     const entry = selectedVolumeSettingsPresetEntry();
+    if (isCompositionAuthoring() && !openFresh) {
+      await changeCompositionBasin(entry);
+      return;
+    }
     const target = selectedVolumeSettingsPresetUrl();
     const destination = openFresh ? 'a fresh cockpit tab' : 'the current cockpit tab';
     volumeSettingsPresetStatus(`opening exact preset loader for ${entry.label} | ${entry.presetId} in ${destination}...`);
@@ -19663,6 +19707,7 @@ async function admitVolumeSettingsPresetRoute(params) {
   validateVolumeSettingsPresetTarget(receipt, params);
   activeVolumeSettingsPresetReceipt = receipt;
   window.__kaminosVolumeSettingsPresetReceipt = receipt;
+  document.getElementById('settings-preset-label').value = receipt.label || receipt.presetId;
   volumeSettingsPresetStatus(
     `${receipt.label || receipt.presetId} | requested ${requestedPresetId} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}`,
   );
@@ -24221,6 +24266,9 @@ async function grBrowseScenes() {
       provenance: sceneData?.provenance || null,
       modelFileName: sceneData?.model?.fileName || entry.name,
       timestamp: sceneData?.timestamp || '',
+      label: sceneData?.label || sceneData?.capture?.label || '',
+      capture: sceneData?.capture || null,
+      composition: sceneData?.composition || null,
     });
   }
 
@@ -24260,8 +24308,8 @@ async function grBrowseScenes() {
       icon.textContent = '\uD83C\uDFA8';
       const name = document.createElement('span');
       name.className = 'gr-name';
-      name.textContent = entry.name.replace('.kaminos.json', '');
-      name.title = entry.provenance?.source_url || '';
+      name.textContent = entry.label || entry.name.replace('.kaminos.json', '');
+      name.title = [entry.name, entry.composition?.flame?.label, entry.composition?.flame?.presetId].filter(Boolean).join('\n');
 
       // Show provenance badge
       if (entry.provenance?.greenroom_job_id) {
@@ -24286,7 +24334,7 @@ async function grBrowseScenes() {
         if (sceneData && !sceneData.error) {
           const blob = new Blob([JSON.stringify(sceneData)], { type: 'application/json' });
           const file = new File([blob], entry.name);
-          loadSceneFile(file);
+          loadSceneFile(file, { sceneFile: entry.name });
         }
       };
       const delBtn = document.createElement('button');
@@ -24301,7 +24349,26 @@ async function grBrowseScenes() {
       };
       div.appendChild(btn);
       div.appendChild(delBtn);
-      listEl.appendChild(div);
+      if (entry.capture?.image?.startsWith('data:image/png;base64,')) {
+        const shot = document.createElement('div');
+        shot.className = 'saved-scene-shot';
+        const thumbnail = document.createElement('img');
+        thumbnail.src = entry.capture.image;
+        thumbnail.alt = entry.capture.label || entry.label;
+        thumbnail.loading = 'lazy';
+        const pictureButton = document.createElement('button');
+        pictureButton.className = 'saved-scene-picture';
+        pictureButton.title = `Open ${entry.label || entry.name}`;
+        pictureButton.append(thumbnail);
+        pictureButton.onclick = btn.onclick;
+        const basin = document.createElement('div');
+        basin.className = 'saved-scene-basin';
+        basin.textContent = [entry.composition?.flame?.label || 'Mesh scene', entry.capture.capturedAt].filter(Boolean).join(' | ');
+        shot.append(pictureButton, div, basin);
+        listEl.append(shot);
+      } else {
+        listEl.appendChild(div);
+      }
     }
   }
 }
@@ -24512,18 +24579,20 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   }
 }
 
-function buildSceneData() {
+function buildSceneData(capture = null) {
   const objects = sceneObjects.map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
-  return buildSceneDocument({
+  const data = buildSceneDocument({
     timestamp: new Date().toISOString(),
     objects,
     groups: serializeSceneGroups(),
     activeObjectId: activeSceneObjectId,
     activeGroupId: activeSceneGroupId,
     provenance,
+    composition: activeSceneComposition,
+    capture,
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
@@ -24536,6 +24605,7 @@ function buildSceneData() {
       rotation: parseFloat(document.getElementById('env-rotation-slider').value),
       showBackground: showEnvBg,
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
+      ground: { visible: groundPlane.visible, height: groundPlane.position.y },
     },
     volumePrimitives: getVolumePrimitiveState(),
     postprocessing: {
@@ -24558,7 +24628,147 @@ function buildSceneData() {
     backdrop: !!backdropMesh,
     backdropBrightness: backdropMesh ? parseFloat(document.getElementById('backdrop-brightness').value) : undefined,
   });
+  data.label = document.getElementById('composition-label').value.trim() || 'Untitled composition';
+  return data;
 }
+
+function isCompositionAuthoring() {
+  return new URLSearchParams(location.hash.slice(1)).get('authoring') === '1' || isFireLightFieldRoute();
+}
+
+function compositionStatus(message, failed = false) {
+  const status = document.getElementById('composition-status');
+  status.textContent = message;
+  status.dataset.failed = String(failed);
+}
+
+async function collectSceneComposition() {
+  const debug = volumePrototype?.debugState?.();
+  if (!isFireLightFieldRoute() && !activeSceneComposition) return;
+  if (!debug?.active) {
+    if (activeSceneComposition || isFireLightFieldRoute()) throw new Error(debug?.error || 'Authored flame is not active');
+    activeSceneComposition = null;
+    return;
+  }
+  if (!isFireLightFieldRoute()) throw new Error('Composition saving requires the ordinary flame light-field route');
+  await volumeCockpitLayoutReady;
+  const preset = buildVolumeSettingsPreset();
+  const fingerprint = value => JSON.stringify([
+    value.domControls, value.rendererControls, value.presentationControls, value.route,
+    document.getElementById('fire-light-gain-stops').value,
+    document.getElementById('fire-light-test-scene-toggle').checked,
+  ]);
+  const savedFingerprint = fingerprint(preset);
+  const assertUnchanged = () => {
+    if (fingerprint(buildVolumeSettingsPreset()) !== savedFingerprint) {
+      throw new Error('Flame settings changed during save or capture; try again');
+    }
+  };
+  const receipt = await saveVolumeSettingsPreset({ preset });
+  assertUnchanged();
+  const route = {};
+  for (const [key, value] of fireLightFieldRouteParams()) {
+    if (key.startsWith('volume_light_field')) route[key] = value;
+  }
+  const moduleUrl = new URLSearchParams(location.hash.slice(1)).get('composition_module_url');
+  if (moduleUrl) route.composition_module_url = moduleUrl;
+  route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';
+  activeSceneComposition = {
+    schema: COMPOSITION_SCHEMA,
+    flame: { presetId: receipt.effective.presetId, label: receipt.effective.label, stationary: true },
+    route,
+    lightGainStops: Number(document.getElementById('fire-light-gain-stops').value),
+  };
+  return assertUnchanged;
+}
+
+async function withAuthoringAction(action) {
+  if (authoringBusy) return false;
+  authoringBusy = true;
+  document.getElementById('composition-capture').disabled = true;
+  try {
+    return await action();
+  } catch (error) {
+    compositionStatus(error.message || String(error), true);
+    setInfo(`Composition failed: ${error.message || error}`);
+    return false;
+  } finally {
+    authoringBusy = false;
+    document.getElementById('composition-capture').disabled = false;
+  }
+}
+
+async function changeCompositionBasin(entry) {
+  return withAuthoringAction(async () => {
+    if (sceneSaveIsBlocked()) return false;
+    await collectSceneComposition();
+    const next = buildSceneData();
+    next.composition ||= {
+      schema: COMPOSITION_SCHEMA,
+      route: { volume_light_field: '1', volume_light_field_scene_depth: '1', volume_light_field_test_scene: '0' },
+      lightGainStops: 0,
+    };
+    next.composition.flame = { presetId: entry.presetId, label: entry.label, stationary: true };
+    if (!await saveToServer(next, null)) throw new Error('Could not save the basin composition');
+    location.assign(compositionRestoreUrl(next.composition, currentSceneFile, location.origin));
+    return true;
+  });
+}
+
+window.captureComposition = () => withAuthoringAction(async () => {
+  if (sceneSaveIsBlocked() || sceneIsEmpty()) return false;
+  if (volumePrototype?.debugState?.()?.active && !isFireLightFieldRoute()) {
+    throw new Error('Capture supports the ordinary flame light-field composition, not this volume route');
+  }
+  if (sceneObjects.some(object => object.type === 'splat')) {
+    throw new Error('Splat overlay capture is not supported by this mesh/flame capture');
+  }
+  const label = document.getElementById('composition-label').value.trim();
+  if (!label) throw new Error('Give this shot a label');
+  compositionStatus('Capturing...');
+  const assertUnchanged = await collectSceneComposition();
+  const helper = transformControls?.getHelper();
+  const visible = helper?.visible;
+  let data;
+  try {
+    if (helper) helper.visible = false;
+    window._kaminosDirty?.();
+    // The second callback samples after both render loops have had a turn.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const state = volumePrototype?.debugState?.();
+    assertUnchanged?.();
+    if (activeSceneComposition && (!state?.active || state.error)) throw new Error(state?.error || 'Flame stopped before capture');
+    const capture = captureComposedCanvases({
+      host: renderer.domElement,
+      volume: activeSceneComposition ? volumePrototype.canvasElement() : null,
+      document, label,
+      simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
+    });
+    data = buildSceneData(capture);
+  } finally {
+    if (helper) helper.visible = visible;
+    window._kaminosDirty?.();
+  }
+  if (!await saveToServer(data, null)) throw new Error('Capture was not saved');
+  compositionStatus(`${label} | ${activeSceneComposition?.flame.label || 'Mesh scene'}`);
+  return true;
+});
+
+document.getElementById('composition-capture').onclick = window.captureComposition;
+document.getElementById('composition-ground-visible').onchange = event => {
+  if (groundPlane) groundPlane.visible = event.target.checked;
+  window._kaminosDirty?.();
+};
+document.getElementById('composition-ground-height').onchange = event => {
+  const height = event.target.valueAsNumber;
+  if (groundPlane && Number.isFinite(height)) groundPlane.position.y = height;
+  window._kaminosDirty?.();
+};
+document.getElementById('composition-basins').onclick = () => setActiveTab('volume');
+document.getElementById('composition-library').onclick = () => {
+  setActiveTab('greenroom');
+  grBrowseScenes().then(() => document.getElementById('scenes-list').scrollIntoView({ block: 'start' }));
+};
 
 async function saveToServer(sceneData, filename) {
   const body = { ...sceneData };
@@ -24585,7 +24795,8 @@ async function saveToServer(sceneData, filename) {
 }
 
 function sceneIsEmpty() {
-  return sceneObjects.length === 0 && volumePrimitives.length === 0;
+  const persistableFlame = isFireLightFieldRoute() && volumePrototype?.debugState?.()?.active;
+  return sceneObjects.length === 0 && volumePrimitives.length === 0 && !persistableFlame;
 }
 
 function sceneSaveIsBlocked() {
@@ -24599,26 +24810,28 @@ function sceneSaveIsBlocked() {
 }
 
 // Save: overwrite current scene file, or create new if none
-window.saveScene = async function() {
+window.saveScene = () => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked()) return false;
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
     return false;
   }
+  await collectSceneComposition();
   const data = buildSceneData();
   return saveToServer(data, currentSceneFile);
-};
+});
 
 // Save As: always create a new scene file
-window.saveSceneAs = async function() {
+window.saveSceneAs = () => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked()) return false;
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
     return false;
   }
+  await collectSceneComposition();
   const data = buildSceneData();
   return saveToServer(data, null);
-};
+});
 
 function getMaterialState() {
   return getMaterialStateForObject(currentMesh);
@@ -24652,9 +24865,14 @@ function claimLoadedSceneFile(file) {
   }
 }
 
-async function loadSceneFile(file) {
+async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
+  if (authoringBusy) {
+    setInfo('Wait for the current capture or save');
+    return;
+  }
   const previousSceneFile = currentSceneFile;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
+  sceneSaveBlockedByFailedRestore = true;
   const text = await file.text();
   let data;
   try {
@@ -24682,6 +24900,16 @@ async function loadSceneFile(file) {
     return;
   }
 
+  if ((restorePlan.composition || isCompositionAuthoring()) && !mounted) {
+    if (!sceneFile) {
+      if (!await saveToServer(data, null)) return;
+      sceneFile = currentSceneFile;
+    }
+    location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
+    return;
+  }
+  activeSceneComposition = restorePlan.composition;
+
   setInfo('Loading scene...');
 
   // Load environment first
@@ -24696,6 +24924,11 @@ async function loadSceneFile(file) {
     document.getElementById('env-intensity-slider').value = intensity;
     document.getElementById('env-intensity-val').textContent = intensity.toFixed(1);
     scene.environmentIntensity = intensity;
+
+    groundPlane.visible = env.ground?.visible ?? true;
+    groundPlane.position.y = Number.isFinite(env.ground?.height) ? env.ground.height : -0.85;
+    document.getElementById('composition-ground-visible').checked = groundPlane.visible;
+    document.getElementById('composition-ground-height').value = groundPlane.position.y;
 
     const rotation = env.rotation ?? 0;
     document.getElementById('env-rotation-slider').value = rotation;
@@ -24726,9 +24959,13 @@ async function loadSceneFile(file) {
     clearScene();
   }
 
-  setVolumePrimitivesState(restorePlan.volumePrimitives);
-  if (hasVolumePrimitiveScene) {
-    setActiveTab('volume');
+  // The pinned basin is already mounted. Reapplying identical primitives would
+  // rebuild its GPU field and invalidate textures held by the lighting pass.
+  if (!activeSceneComposition || JSON.stringify(previousVolumePrimitiveState) !== JSON.stringify(restorePlan.volumePrimitives)) {
+    setVolumePrimitivesState(restorePlan.volumePrimitives);
+  }
+  if (hasVolumePrimitiveScene || activeSceneComposition) {
+    setActiveTab(activeSceneComposition ? 'assets' : 'volume');
     await volumePrototype?.setActive?.(true);
   } else {
     await volumePrototype?.setActive?.(false);
@@ -24777,6 +25014,10 @@ async function loadSceneFile(file) {
         document.getElementById('ao-falloff').value = aoFalloff;
         document.getElementById('ao-falloff-val').textContent = aoFalloff.toFixed(2);
       }
+      for (const id of ['ao-radius', 'ao-intensity', 'ao-scale', 'ao-thickness', 'ao-falloff']) {
+        document.getElementById(id)?.dispatchEvent(new Event('input'));
+      }
+      document.getElementById('ao-toggle').dispatchEvent(new Event('change'));
     }
     const dof = data.postprocessing.dof;
     if (dof) {
@@ -24814,6 +25055,13 @@ async function loadSceneFile(file) {
   }
 
   claimLoadedSceneFile(file);
+  if (data.label) document.getElementById('composition-label').value = data.label;
+  if (activeSceneComposition) {
+    const gain = document.getElementById('fire-light-gain-stops');
+    gain.value = activeSceneComposition.lightGainStops;
+    gain.dispatchEvent(new Event('input'));
+    compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
+  }
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
@@ -24855,7 +25103,7 @@ initScene().then(() => {
   loadDemoButtons();
   restoreSettings();
   // Load HDR environment first, then auto-load deep-linked splat if present
-  loadEnvironment('studio').then(async () => {
+  const environmentLoaded = loadEnvironment('studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
     const loadSplat = params.get('load');
     if (loadSplat) {
@@ -24902,7 +25150,30 @@ initScene().then(() => {
       await loadKaminosImageAssetRoute(imageRoute);
     }
   });
-  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  const volumeLoaded = initKaminosVolumeRoute();
+  volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
+  Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
+    const hash = new URLSearchParams(location.hash.slice(1));
+    if (hash.get('authoring') !== '1') return;
+    document.body.classList.add('composition-authoring');
+    setActiveTab('assets');
+    const sceneFile = hash.get('scene');
+    if (!sceneFile) return;
+    sceneSaveBlockedByFailedRestore = true;
+    const response = await fetch(`/api/read?root=scenes&path=${encodeURIComponent(sceneFile)}`);
+    if (!response.ok) throw new Error(`Scene unavailable: ${sceneFile}`);
+    const data = await response.json();
+    const plan = planSceneRestore(data);
+    if (plan.composition) {
+      const preset = new URLSearchParams(location.search).get('settings_preset');
+      if (preset !== plan.composition.flame.presetId) throw new Error('Mounted basin does not match the saved scene');
+    }
+    await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
+  }).catch(error => {
+    sceneSaveBlockedByFailedRestore = true;
+    compositionStatus(`Restore failed: ${error.message || error}`, true);
+    setInfo(`Composition restore failed: ${error.message || error}`);
+  });
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
   initKaminosFingerFluidBenchRoute();

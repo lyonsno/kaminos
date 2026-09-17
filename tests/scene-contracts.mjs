@@ -439,12 +439,12 @@ assert.match(index, /registerSceneObject\(obj,[\s\S]*source:/, 'OBJ load registe
 assert.match(index, /function sceneIsEmpty\(\)[\s\S]*sceneObjects\.length === 0 && volumePrimitives\.length === 0/, 'shared save guard rejects truly empty scenes while allowing volume-only and group-selected object scenes');
 assert.match(index, /let sceneSaveBlockedByFailedRestore\s*=\s*false/, 'failed scene restores latch a save block instead of leaving prior scene targets writable');
 assert.match(index, /function sceneSaveIsBlocked\(\)[\s\S]*Scene save blocked until a scene loads successfully/, 'save routes report failed-restore save blocking');
-assert.match(index, /window\.saveScene\s*=\s*async function\(\) \{[\s\S]*if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save refuses to write after a failed scene restore');
-assert.match(index, /window\.saveSceneAs\s*=\s*async function\(\) \{[\s\S]*if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save As refuses to write after a failed scene restore');
+assert.match(index, /window\.saveScene\s*=[\s\S]*?if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save refuses to write after a failed scene restore');
+assert.match(index, /window\.saveSceneAs\s*=[\s\S]*?if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save As refuses to write after a failed scene restore');
 assert.match(index, /if \(sceneIsEmpty\(\)\) return;/, 'keyboard save uses the shared empty-scene guard');
 assert.match(index, /setInfo\('Volume scene loaded'\);/, 'volume-only scene loads report success after shared camera/postprocessing/backdrop restoration');
 assert.match(index, /if \(objectRecords\.length > 0\) \{[\s\S]*\} else \{\s*clearScene\(\);[\s\S]*\}/, 'volume-only scene loads clear stale object state');
-assert.match(index, /setVolumePrimitivesState\(restorePlan\.volumePrimitives\);[\s\S]*if \(hasVolumePrimitiveScene\)/, 'object-only scene loads clear stale volume primitive state');
+assert.match(index, /setVolumePrimitivesState\(restorePlan\.volumePrimitives\);[\s\S]*if \(hasVolumePrimitiveScene \|\| activeSceneComposition\)/, 'object-only scene loads clear stale volume primitive state');
 assert.match(index, /const previousSceneFile = currentSceneFile/, 'scene load preserves previous save target until restore succeeds');
 assert.match(index, /const previousVolumePrimitiveState = getVolumePrimitiveState\(\)/, 'scene load snapshots previous volume state before restore mutations');
 assert.match(index, /claimLoadedSceneFile\(file\)/, 'scene load claims current scene file only after successful restore');

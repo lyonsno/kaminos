@@ -15,6 +15,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
@@ -1095,7 +1096,7 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
         "schemaProjection": schema_projection,
         "requestedPresetRef": requested,
         "alias": alias_document.get("alias") if alias_document else None,
-        "label": alias_document.get("label") if alias_document else document.get("initialLabel"),
+        "label": alias_document.get("label") if alias_document else (document.get("initialLabel") or document.get("label")),
         "storePath": str(store),
     }
 
@@ -1263,8 +1264,8 @@ def parse_server_arguments(argv):
     return port, store, basin_session_store, cockpit_layout_store
 
 # Directories the browse API can access
-SCENES_DIR = ROOT / "scenes"
-SCENES_DIR.mkdir(exist_ok=True)
+SCENES_DIR = Path(os.environ.get("KAMINOS_SCENES_DIR", ROOT / "scenes")).expanduser().resolve()
+SCENES_DIR.mkdir(parents=True, exist_ok=True)
 KAMINOS_ASSETS_DIR = Path(os.environ.get(
     "KAMINOS_ASSETS_DIR",
     os.path.expanduser("~/.local/state/kaminos/assets"),
@@ -2739,7 +2740,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             model_name = (data.get("model") or {}).get("fileName", "scene")
             model_name = Path(model_name).stem
             timestamp = data.get("timestamp", "")[:19].replace(":", "-").replace("T", "_")
-            filename = f"{model_name}_{timestamp}.kaminos.json"
+            filename = f"{model_name}_{timestamp}_{uuid.uuid4().hex}.kaminos.json"
             filename = "".join(c for c in filename if c.isalnum() or c in "._-")
             if not filename:
                 filename = "scene.kaminos.json"
@@ -2750,7 +2751,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Path traversal"}, 403)
             return
 
-        scene_path.write_text(json.dumps(data, indent=2))
+        _atomic_write_json(scene_path, data)
         self.send_json({"saved": filename, "path": str(scene_path)})
 
     def handle_ingest_splat(self, params):
