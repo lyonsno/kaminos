@@ -3119,6 +3119,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 <script type="module">
 import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=shared-device-composition-0924';
@@ -9721,7 +9722,7 @@ async function initScene() {
   const depthTexNode = texture(depthRT.texture);
   const normalTexNode = texture(normalTexture);
   aoPass = aoCompute(depthTexNode, normalTexNode, camera);
-  aoPass.setDepthPass(depthRT, depthMaterial, scene);
+  configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, depthMaterial }, THREE.RendererUtils);
 
   const aoResolved = convertToTexture(aoPass.getTextureNode());
   const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
@@ -9731,6 +9732,7 @@ async function initScene() {
   renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
+    depthVisibility: 'source-material-side',
     hasRenderPipeline: !!renderPipeline,
     hasAoPass: !!aoPass,
     hasAoIntensity: !!aoIntensity,
