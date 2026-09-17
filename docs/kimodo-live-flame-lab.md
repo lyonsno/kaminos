@@ -48,6 +48,8 @@ node tests/kimodo-flame-evidence-contracts.mjs
 node tests/kimodo-motion-frame.mjs
 node tests/kimodo-witness-terminal.mjs
 node tests/kimodo-witness-watchdog.mjs
+node tests/kimodo-frame-admission.mjs
+node --experimental-vm-modules tests/kimodo-witness-cleanup.mjs
 node tests/kimodo-flame-witness-failures.mjs /absolute/kimodo-webgpu
 ```
 
@@ -87,3 +89,24 @@ Coexistence means both flame counters advance within each of three equal-time
 portions of inference. This is temporal coverage, not a smoothness guarantee;
 all samples and page cadence distributions are retained. Page cadence is not
 GPU execution timing. A renewable Greenroom lease covers the browser run.
+
+## Frame-admission comparison
+
+The Scheduling selector has two explicit modes, fixed for each generation:
+`telemetry-only` preserves the prior callback behavior; `frame-admission`
+waits for Kimodo's current queue prefix to finish, then observes a fresh flame
+render AND simulation counter advance before returning to inference. The
+flame keeps its separate device and loop. This is cooperative admission, not
+a shared-device interlock or a presentation guarantee. Hidden/unavailable or
+reset flame state fails; cancellation also interrupts the waiting boundary.
+
+The evidence JSON retains every admission event, producer encode/admit/readback
+timestamp, and full kit duty report, on `performance.now()` with time origin.
+CPU encoding intervals and queue-prefix completion are distinct from isolated
+GPU execution timing. Neither mode changes layers, steps, duration or weights.
+The default remains telemetry-only until a comparison earns a promotion.
+
+Append `telemetry-only` or `frame-admission` after the witness's two commit pins
+to select and verify that exact mode. The witness validates complete pass/duty
+identity and actual counter advances, in addition to the existing source and
+motion checks. The optional mode argument is required for scheduling claims.

@@ -5,8 +5,9 @@ import {execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {sha256,verifyIdentity,verifyMotion,ELFINBLUE_PRESET,PRESET_AUTHORITY} from '../lib/kimodo-witness-contracts.mjs';
 import {createWitnessWatchdog,createWitnessAbort,boundedCleanup} from '../lib/kimodo-witness-watchdog.mjs';
+import {verifyFrameAdmission} from '../lib/kimodo-frame-admission.mjs';
 
-const [kimodoRoot, output, url='http://127.0.0.1:8096/kimodo-elfinblue.html',expectedHostCommit,expectedProducerCommit] = process.argv.slice(2);
+const [kimodoRoot, output, url='http://127.0.0.1:8096/kimodo-elfinblue.html',expectedHostCommit,expectedProducerCommit,expectedScheduling] = process.argv.slice(2);
 if(!kimodoRoot||!output)throw new Error('Usage: node scripts/witness-kimodo-live-flame.mjs <kimodo-checkout> <output-directory> [url]');
 await mkdir(output,{recursive:true});
 const report={schema:'kimodo.flame-browser-witness.v1',status:'started',phase:'preflight',url,startedAt:new Date().toISOString(),errors:[],console:[],resources:[]};
@@ -18,6 +19,8 @@ const greenroom=process.env.GREENROOM_BIN;
 const leaseId=`kimodo-flame-${process.pid}`;
 try{
   if(!greenroom)throw new Error('GREENROOM_BIN must name the inspected Greenroom CLI');
+  if(expectedScheduling&&!['telemetry-only','frame-admission'].includes(expectedScheduling))throw new Error('Unknown requested scheduling mode');
+  report.requestedScheduling=expectedScheduling??null;
   if(!/^[a-f0-9]{40}$/.test(expectedHostCommit??'')||!/^[a-f0-9]{40}$/.test(expectedProducerCommit??''))throw new Error('Explicit full expected host and producer commit arguments required after URL');
   report.revisionPins={host:expectedHostCommit,producer:expectedProducerCommit,source:'caller-arguments'};
   report.hostCommit=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
@@ -54,7 +57,9 @@ try{
   page.on('response',response=>{
     const resource=new URL(response.url());
     if(resource.origin!==new URL(url).origin||resource.pathname.startsWith('/api/')||resource.pathname.endsWith('/kimodo.bin'))return;
-    const file=decodeURIComponent(resource.pathname.slice(1))||'index.html';
+    const basePath=new URL('.',url).pathname;
+    if(!resource.pathname.startsWith(basePath))return;
+    const file=decodeURIComponent(resource.pathname.slice(basePath.length))||'index.html';
     // These selector documents unload before CDP can reliably retain bodies.
     // They own no runtime claim: admit the final URL/preset and actual loaded
     // host/producer instead. Keep their request identity without a byte claim.
@@ -92,6 +97,7 @@ try{
   await wait(page.screenshot({path:path.join(output,'baseline.png')}));
   await wait(page.$eval('#kimodo-duration',el=>el.value='6'));
   await wait(page.$eval('#kimodo-steps',el=>el.value='100'));
+  if(expectedScheduling)await wait(page.select('#kimodo-scheduling',expectedScheduling));
   report.phase='generation';await persist();await wait(page.click('#kimodo-run'));
   await wait(page.waitForFunction(()=>window.__kimodoLiveFlame?.runs.length===1,{timeout:15000}));
   // Capture one in-progress frame after sampling begins; preserve terminal even if this fails.
@@ -102,6 +108,7 @@ try{
   await wait(page.waitForFunction(()=>window.__kimodoLiveFlame?.runs[0]?.status!=='running',{timeout:0}));
   await wait(page.waitForFunction(()=>document.querySelector('#kimodo-stage')?.textContent.startsWith('succeeded')||window.__kimodoLiveFlame.status!=='succeeded',{timeout:15000}));
   report.evidence=await wait(page.evaluate(()=>window.__kimodoLiveFlame));
+  if(expectedScheduling)report.scheduling=verifyFrameAdmission(report.evidence.runs[0],expectedScheduling);
   report.effectiveUrl=page.url();
   report.phase='identity';await persist();await wait(Promise.all(responses));
   if(report.resources.some(r=>r.error))throw new Error('Served-resource identity failed; see resources');

@@ -2,6 +2,7 @@ import { createKimodoProducer, KIMODO_DEFAULT_MAX_IN_FLIGHT_DUTIES } from './art
 import { initGPU } from './artifacts/kimodo-live-flame/lib/gpu.js';
 import { createFrontendTelemetry, KIMODO_ROUTE_ID } from './artifacts/kimodo-live-flame/lib/telemetry.js';
 import { summarizeFlameSpan, compositionVerdict, motionFrame } from './lib/kimodo-flame-evidence.mjs';
+import { createFrameAdmission } from './lib/kimodo-frame-admission.mjs';
 
 const $ = id => document.getElementById(`kimodo-${id}`);
 const download = (name, value) => {
@@ -29,6 +30,7 @@ export async function mountComposition({prototype, params} = {}) {
   <label>Prompt<textarea id="kimodo-prompt" rows="2">a person dances</textarea></label>
   <div class="pair"><label>Seconds<input id="kimodo-duration" type="number" min="1" max="18" value="6"></label><label>DDIM steps<input id="kimodo-steps" type="number" min="1" value="100"></label></div>
   <label>Embedding endpoint<input id="kimodo-embed" value="http://127.0.0.1:8098/embed"></label>
+  <label>Scheduling <select id="kimodo-scheduling"><option value="telemetry-only">Telemetry only (baseline)</option><option value="frame-admission">Finish pass → fresh flame frame</option></select></label>
   <div class="pair"><button id="kimodo-load">Load Kimodo</button><button id="kimodo-run" disabled>Generate motion</button><button id="kimodo-cancel" disabled>Cancel</button></div>
   <progress id="kimodo-progress" max="100" value="0"></progress>
   <dl><dt>Stage</dt><dd id="kimodo-stage">flame only · model not loaded</dd>
@@ -99,21 +101,24 @@ export async function mountComposition({prototype, params} = {}) {
     const steps=Number($('steps').value),duration=Number($('duration').value),prompt=$('prompt').value.trim();
     if(!Number.isSafeInteger(steps)||steps<1||!Number.isFinite(duration)||duration<1||duration>18||!prompt){$('error').textContent='Use a prompt, 1–18 seconds and a positive integer step count.';return;}
     $('run').disabled=true;$('cancel').disabled=false;$('error').textContent='';
-    for(const id of ['prompt','steps','duration'])$(id).disabled=true;
+    for(const id of ['prompt','steps','duration','scheduling'])$(id).disabled=true;
     const generationId=++generation, t0=performance.now();sample();
     const baselineSamples=state.samples.slice(baselineIndex),runIndex=state.samples.length;
     const record={generationId,prompt,steps,duration,startedAtMs:t0,baseline:summarizeFlameSpan(baselineSamples),baselineSampleRange:[baselineIndex,runIndex],flameStart:controls(),status:'running'};
     state.runs.push(record);state.status='running';sample();controller=new AbortController();
+    record.scheduling={mode:$('scheduling').value,topology:'same-gpu-two-devices',events:[]};
+    const admit=createFrameAdmission({mode:record.scheduling.mode,queue:device.queue,readFlame:()=>prototype.debugState(),events:record.scheduling.events});
     telemetry=createFrontendTelemetry({generationId,numSteps:steps,requestedMaxInFlightDuties:KIMODO_DEFAULT_MAX_IN_FLIGHT_DUTIES});
     try{
       const result=await producer.generate({prompt,steps,duration,generationId,signal:controller.signal,
-        onStage:(name,event)=>telemetry.stage(name,event),onProgress:p=>telemetry.progress(p),foregroundOpportunity:b=>telemetry.foreground(b)});
+        onStage:(name,event)=>telemetry.stage(name,event),onProgress:p=>telemetry.progress(p),foregroundOpportunity:async b=>{telemetry.foreground(b);await admit(b);}});
       // Preserve the generated output even if the evidence verdict is narrower.
       motion=result.motion;playbackStart=performance.now();$('motion-download').disabled=false;
       record.receipt=result.receipt;record.submission=result.submission;record.motion={numFrames:motion.numFrames,numJoints:motion.numJoints,fps:motion.fps};
+      record.diagnostics=result.diagnostics;
       telemetry.succeed(result.receipt,result.submission);
       state.status=telemetry.snapshot().status;
-    }catch(error){telemetry.fail(error);state.status=telemetry.snapshot().status;state.lastError={phase:error.phase??'generation',message:error.message};record.error=state.lastError;$('error').textContent=error.message;}
+    }catch(error){record.diagnostics=error.diagnostics??null;telemetry.fail(error);state.status=telemetry.snapshot().status;state.lastError={phase:error.phase??'generation',message:error.message};record.error=state.lastError;$('error').textContent=error.message;}
     finally{
       sample();record.endedAtMs=performance.now();record.wallMs=record.endedAtMs-t0;record.telemetry=telemetry.snapshot();state.telemetry=record.telemetry;
       record.inferenceSampleRange=[runIndex,state.samples.length];record.inference=summarizeFlameSpan(state.samples.slice(runIndex));record.flameEnd=controls();
@@ -121,7 +126,7 @@ export async function mountComposition({prototype, params} = {}) {
       $('result').textContent=`${record.status} · ${(record.wallMs/1000).toFixed(1)} s · baseline/run p95 ${ms(record.baseline.pageCadence.p95Ms)} / ${ms(record.inference.pageCadence.p95Ms)}`;
       if(record.telemetry.failure)$('error').textContent=`${record.telemetry.failure.code??record.telemetry.failure.phase}: ${record.telemetry.failure.message}`;
       baselineIndex=state.samples.length;sample();controller=null;$('cancel').disabled=true;$('run').disabled=false;
-      for(const id of ['prompt','steps','duration'])$(id).disabled=false;
+      for(const id of ['prompt','steps','duration','scheduling'])$(id).disabled=false;
     }
   };
   addEventListener('pagehide',()=>{closed=true;cancelAnimationFrame(frameId);controller?.abort();if(!controller){producer?.dispose();device?.destroy();}},{once:true});

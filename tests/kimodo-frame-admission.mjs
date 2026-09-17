@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {createFrameAdmission,verifyFrameAdmission} from '../lib/kimodo-frame-admission.mjs';
+const flush=()=>new Promise(setImmediate);
+function fixture(mode='frame-admission'){
+  let release,frame,fences=0,clock=0;
+  const controller=new AbortController(),events=[];
+  const flame={active:true,backend:'WebGPU:fixture',frameCount:10,simStepCount:20};
+  const queue={onSubmittedWorkDone(){fences++;return new Promise(r=>release=r);}};
+  const gate=createFrameAdmission({mode,queue,readFlame:()=>flame,visibility:()=>flame.visibility??'visible',
+    requestFrame:fn=>{frame=fn;return 1;},cancelFrame:()=>{frame=null;},now:()=>++clock,events});
+  let done=false;
+  const pending=gate({step:1,pass:'cond-root',signal:controller.signal}).then(()=>done=true);
+  pending.catch(()=>{});
+  return {controller,events,flame,pending,get done(){return done;},get fences(){return fences;},release:()=>release(),tick:()=>frame?.()};
+}
+const f=fixture();await flush();assert.equal(f.done,false);assert.equal(f.fences,1);
+f.flame.frameCount++;f.flame.simStepCount++;f.release();await flush();
+f.tick();await flush();assert.equal(f.done,false,'advances before the queue fence do not count');
+f.flame.frameCount++;f.tick();await flush();assert.equal(f.done,false,'render alone cannot close simulation advancement');
+f.flame.simStepCount++;f.tick();await f.pending;assert.equal(f.events[0].status,'advanced');
+for(const when of ['before-fence','after-fence']){
+  const x=fixture();await flush();if(when==='after-fence'){x.release();await flush();}
+  x.controller.abort();await assert.rejects(x.pending,{name:'AbortError'});
+  assert.equal(x.events[0].status,'failed');
+}
+for(const mutation of [s=>s.active=false,s=>s.visibility='hidden',s=>s.frameCount=0,s=>s.backend='CPU:fallback']){
+  const x=fixture();await flush();x.release();await flush();mutation(x.flame);x.tick();
+  await assert.rejects(x.pending);assert.equal(x.events[0].status,'failed');
+}
+const baseline=fixture('telemetry-only');await baseline.pending;assert.equal(baseline.fences,0);assert.equal(baseline.events[0].status,'observed-only');
+assert.throws(()=>createFrameAdmission({mode:'typo',requestFrame(){},cancelFrame(){}}),/Unknown/);
+const valid={steps:1,scheduling:{mode:'frame-admission',events:[]},diagnostics:{clock:'performance.now',passes:[],submissionReport:{duties:[]}}};
+for(const pass of ['cond-root','cond-body','uncond-root','uncond-body']){
+  valid.scheduling.events.push({...f.events[0],pass,startedAtMs:4,queueDoneAtMs:5,endedAtMs:6});
+  valid.diagnostics.passes.push({pass,dutyId:pass,encodeStartedAtMs:1,encodeEndedAtMs:2,admittedAtMs:3,boundaryEndedAtMs:7,readbackCompletedAtMs:8});
+  valid.diagnostics.submissionReport.duties.push({dutyId:pass,status:'completed'});
+}
+assert.equal(verifyFrameAdmission(valid,'frame-admission').passes,4);
+for(const mutate of [r=>r.scheduling.mode='telemetry-only',r=>r.scheduling.events.pop(),r=>r.diagnostics.passes[0].dutyId='other',r=>r.scheduling.events[0].after.simStepCount=0,r=>r.diagnostics.passes[0].encodeEndedAtMs=NaN]){
+  const r=structuredClone(valid);mutate(r);assert.throws(()=>verifyFrameAdmission(r,'frame-admission'));
+}
+console.log('Frame admission: fence + fresh dual-counter advance, abort, hidden/reset/fallback, baseline and invalid mode pass');
