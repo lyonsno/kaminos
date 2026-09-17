@@ -20,7 +20,9 @@ export function judgeSf3dSmoke(result) {
   const frames = result.foregroundFrames ?? [];
   const live = frames.filter(row => row.runId === result.runId);
   if (live.length < 2) errors.push('insufficient in-run ordinary frames');
-  if (frames.some(row => row.status !== 'completed' || !(row.successfulSubmissionCount > 0) || row.result?.renderer !== 'ordinary-volume' || row.result?.status !== 'submitted')) errors.push('failed or alternate foreground frame');
+  // Both active-run kit receipts and outside-run bridge receipts preserve the
+  // actual submission rows; successfulSubmissionCount exists only outside runs.
+  if (frames.some(row => row.status !== 'completed' || !row.submissions?.some(submission => submission.submissionStatus === 'queue-submit-returned' && submission.commandBufferCount > 0) || row.result?.renderer !== 'ordinary-volume' || row.result?.status !== 'submitted')) errors.push('failed or alternate foreground frame');
   if (live.length >= 2 && !['frameCount','simStepCount','sceneFrameCount'].every(key=>live.at(-1).result?.[key] > live[0].result?.[key])) errors.push('foreground scene/flame counters did not advance');
   return errors;
 }
