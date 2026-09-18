@@ -58,17 +58,32 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const visibility=mix(float(1),step(distance.sub(bias),shadowDistance),enabled.mul(effective));
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3();
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0};
+  let sourceRevision=0;
+  const invalidate=(reason='source-invalidated')=>{
+    sourceRevision++;effective.value=0;status.effective=false;status.reason=reason;
+    status.sourceIdentity=null;
+  };
   return {
     visibility,
-    async diagnose(anchors,cameraPosition) {
-      if(!status.effective||enabled.value===0) throw new Error('shadow-not-effective');
+    invalidate,
+    async diagnose(anchors,cameraPosition,validateSource=()=>{}) {
+      validateSource();
+      const revision=sourceRevision;
+      const check=()=>{
+        validateSource();
+        if(!status.effective||enabled.value===0||revision!==sourceRevision) throw new Error('shadow-not-effective');
+      };
+      check();
       const {diagnoseFireShadow}=await import('./fire-shadow-diagnostic.mjs');
-      return diagnoseFireShadow({renderer,scene,anchors,cameraPosition,status:{...status},nodes:{
+      check();
+      const result=await diagnoseFireShadow({renderer,scene,anchors,cameraPosition,status:{...status},nodes:{
         receiver:vec4(receiverNode,visibility),source:vec4(sourceNode,bias),
         comparison:vec4(delta,distance.sub(bias)),normal:vec4(normalNode,shadowDistance),
       }});
+      check();
+      return result;
     },
-    render() {
+    render(sourceIdentity=null) {
       if(enabled.value===0) {status.effective=false;status.reason='disabled';effective.value=0;return;}
       effective.value=0;status.effective=false;status.reason='rendering';
       try {
@@ -77,7 +92,9 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
         scene.traverseVisible(object=>{
           if(!object.isMesh||!object.castShadow) return;
           const materials=Array.isArray(object.material)?object.material:[object.material];
-          if(object.isSkinnedMesh||object.isInstancedMesh||materials.some(m=>m.transparent||m.alphaTest>0)) {
+          if(object.isSkinnedMesh||object.isInstancedMesh||materials.some(m=>
+            m.transparent||m.alphaTest>0||m.alphaTestNode!=null||m.alphaHash||
+            m.transmission>0||m.transmissionNode!=null||m.backdropNode!=null)) {
             throw new Error(`fire-shadow-unsupported-caster: ${object.name||object.uuid} requires static opaque mesh`);
           }
           if(!object.geometry.boundingBox) object.geometry.computeBoundingBox();
@@ -93,11 +110,15 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
         for(const camera of cubeCamera.children) {camera.far=far;camera.updateProjectionMatrix();}
         renderFireShadowCube({renderer,scene,cubeCamera,material,far});
         effective.value=1;status.effective=true;status.reason=null;
+        status.sourceIdentity=sourceIdentity;
         status.renderCount++;status.meshCount=meshCount;status.far=far;
       } catch(error) {status.reason=String(error.message);throw error;}
     },
-    setEnabled(value) {enabled.value=value?1:0;status.requested=!!value;return {...status};},
+    setEnabled(value) {
+      if(!value||enabled.value===0) invalidate(value?'not-rendered':'disabled');
+      enabled.value=value?1:0;status.requested=!!value;return {...status};
+    },
     debugState:()=>({...status}),
-    dispose() {target.dispose();material.dispose();},
+    dispose() {invalidate('disposed');target.dispose();material.dispose();},
   };
 }

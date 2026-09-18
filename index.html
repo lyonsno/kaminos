@@ -9541,7 +9541,11 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     return adopted;
   };
 
+  let adoptedShadowSource = null;
+  let shadowSourceGeneration = 0;
   const bindBlackAtlas = (reason) => {
+    fireShadow.invalidate(reason);
+    adoptedShadowSource = null;
     if (passState.adoptionKey !== 'black') {
       atlasTextureNode.value = atlasExternalTexture;
       passState.adoptionKey = 'black';
@@ -9554,9 +9558,13 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 
   return {
     outputNode,
-    renderShadows() { if(passState.effective) fireShadow.render(); },
+    renderShadows() { if(passState.effective) fireShadow.render(`${passState.adoptionKey}:${shadowSourceGeneration}`); },
     setShadowsEnabled(enabled) { return fireShadow.setEnabled(enabled); },
-    diagnoseShadows(anchors) { return fireShadow.diagnose(anchors,camera.position.toArray()); },
+    diagnoseShadows(anchors) {
+      return fireShadow.diagnose(anchors,camera.position.toArray(),()=>{
+        if(!this.update()) throw new Error('shadow-not-effective');
+      });
+    },
     update() {
       camera.updateMatrixWorld();
       sceneProjectionMatrixInverse.value.copy(camera.projectionMatrixInverse);
@@ -9570,6 +9578,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
         || lightField.identity !== FIRE_LIGHT_FIELD_ATLAS_IDENTITY
         || !sameDevice
         || !lightField.atlasTexture
+        || !lightField.metaTexture
       ) {
         bindBlackAtlas(
           !lightField
@@ -9581,7 +9590,13 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
         return false;
       }
       const adoptionKey = `${lightField.generation}:${lightField.atlasWidth}x${lightField.atlasHeight}`;
-      if (passState.adoptionKey !== adoptionKey) {
+      if (passState.adoptionKey !== adoptionKey
+        || adoptedShadowSource?.device !== lightField.device
+        || adoptedShadowSource?.atlasTexture !== lightField.atlasTexture
+        || adoptedShadowSource?.metaTexture !== lightField.metaTexture) {
+        fireShadow.invalidate('source-adoption-changed');
+        shadowSourceGeneration++;
+        adoptedShadowSource = {device:lightField.device,atlasTexture:lightField.atlasTexture,metaTexture:lightField.metaTexture};
         atlasTextureNode.value = makeAdoptedAtlasTexture(lightField.atlasTexture, lightField.atlasWidth, lightField.atlasHeight);
         if (lightField.metaTexture) {
           const adoptedMeta = makeAdoptedAtlasTexture(lightField.metaTexture, lightField.metaWidth, lightField.metaHeight);
