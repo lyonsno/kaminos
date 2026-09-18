@@ -12,6 +12,18 @@ const adapter = {
 const request = kit.createWebGpuDeviceRequest(adapter, { requirements: model });
 assert.ok(request.requiredFeatures.includes('shader-f16'), 'required model features must reach requestDevice');
 
+for (const name of ['minUniformBufferOffsetAlignment', 'minStorageBufferOffsetAlignment']) {
+  for (const value of [0, 192, 3, 4294967297]) {
+    const requirements = { requiredLimits: { [name]: value } };
+    assert.throws(() => kit.composeWebGpuDeviceRequirements([requirements]), /power of two/, `${name} rejects ${value}`);
+    assert.throws(() => kit.validateWebGpuDeviceRequirements(adapter, requirements), /power of two/);
+    assert.throws(() => kit.createWebGpuDeviceRequest(adapter, { requirements }), /power of two/);
+  }
+  for (const value of [1, 32, 256, 4294967296]) {
+    assert.equal(kit.composeWebGpuDeviceRequirements([{ requiredLimits: { [name]: value } }]).requiredLimits[name], value);
+  }
+}
+
 const composed = kit.composeWebGpuDeviceRequirements([model, renderer]);
 assert.deepEqual(composed.requiredFeatures, ['shader-f16']);
 assert.equal(composed.requiredLimits.maxBufferSize, 905969664);
