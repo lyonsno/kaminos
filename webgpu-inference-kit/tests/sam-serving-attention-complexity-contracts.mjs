@@ -13,6 +13,11 @@ const consumers = [
   ['DETR encoder', 'sam-detr-encoder-phase-program.js', /detr-encoder-self-attention-softmax/, /onlineAttentionDispatch\(shape\.spatialTokens, shape\.heads, shape\.batch, shape\.headDim\)/],
   ['DETR decoder', 'sam-detr-decoder-phase-program.js', /detr-decoder-vision-attention-softmax/, /onlineAttentionDispatch\(shape\.queryTokens \+ 1, shape\.heads, shape\.batch, shape\.headDim\)/],
 ];
+const productionBindings = [
+  ['ViT', 'sam-image-vit-block-stack-phase-program.js', 'SAM_VIT_ONLINE_ATTENTION_WGSL', /attention:\s*\{\s*code:\s*SAM_VIT_ONLINE_ATTENTION_WGSL/],
+  ['prompt text', 'sam-prompt-text-ingress-phase-program.js', 'SAM_CAUSAL_MASKED_ONLINE_ATTENTION_WGSL', /registerLayerKernel\(`\$\{prefix\}\.attention`,\s*SAM_CAUSAL_MASKED_ONLINE_ATTENTION_WGSL/],
+  ['prompt FPN', 'sam-prompt-fpn-phase-program.js', 'SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL', /attention:\s*\{\s*code:\s*SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL/],
+];
 
 assert.equal(existsSync(sharedUrl), true, 'serving attention must share one online-softmax WGSL family');
 const shared = existsSync(sharedUrl) ? readFileSync(sharedUrl, 'utf8') : '';
@@ -75,6 +80,23 @@ for (const [name, file, routeMarker, dispatchContract] of consumers) {
   assert.match(source, /sam-online-attention-wgsl\.js/, `${name} must consume the shared attention family`);
   assert.match(source, dispatchContract, `${name} must dispatch one workgroup per query/head/batch domain`);
   assert.doesNotMatch(source, /for \(var (key_)?token = 0u;[\s\S]{0,1400}for \(var (key_)?token = 0u;/, `${name} must not retain two-pass per-output score recomputation`);
+}
+
+function assertProductionBinding(name, source, registrationContract) {
+  assert.match(source, registrationContract, `${name} production attention must register its shared online-softmax shader`);
+}
+
+for (const [name, file, shaderSymbol, registrationContract] of productionBindings) {
+  const source = readFileSync(new URL(file, root), 'utf8');
+  assertProductionBinding(name, source, registrationContract);
+
+  const wrongRegistration = source.replace(registrationContract, match => match.replace(shaderSymbol, 'LINEAR_WGSL'));
+  assert.notEqual(wrongRegistration, source, `${name} registration-only counterexample must alter production wiring`);
+  assert.throws(
+    () => assertProductionBinding(name, wrongRegistration, registrationContract),
+    /production attention must register/,
+    `${name} contract must reject a wrong production shader while shared imports and dispatch remain intact`,
+  );
 }
 
 console.log('sam serving attention complexity contracts passed');
