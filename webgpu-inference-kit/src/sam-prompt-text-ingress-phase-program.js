@@ -24,6 +24,10 @@ import {
   SAM_CAUSAL_MASKED_ONLINE_ATTENTION_WGSL,
   onlineAttentionDispatch,
 } from './sam-online-attention-wgsl.js';
+import {
+  SAM_TILED_LINEAR_WGSL,
+  tiledLinearDispatch,
+} from './sam-tiled-linear-wgsl.js';
 
 export const SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-text-ingress.phase-program.webgpu-local.v0';
 
@@ -137,36 +141,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   for (var c = 0u; c < dims.hidden_size; c = c + 1u) {
     output_values[base + c] = (input_values[base + c] - mean) * inv_std * norm_weight[c] + norm_bias[c];
   }
-}
-`;
-
-const LINEAR_WGSL = `
-struct LinearDims {
-  rows: u32,
-  in_channels: u32,
-  out_channels: u32,
-  total_output: u32,
-};
-
-@group(0) @binding(0) var<storage, read> input_values: array<f32>;
-@group(0) @binding(1) var<storage, read> weight: array<f32>;
-@group(0) @binding(2) var<storage, read> bias: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: LinearDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
-  if (index >= dims.total_output) { return; }
-  let out_channel = index % dims.out_channels;
-  let row = index / dims.out_channels;
-  var sum = bias[out_channel];
-  let input_base = row * dims.in_channels;
-  let weight_base = out_channel * dims.in_channels;
-  for (var c = 0u; c < dims.in_channels; c = c + 1u) {
-    sum = sum + input_values[input_base + c] * weight[weight_base + c];
-  }
-  output_values[index] = sum;
 }
 `;
 
@@ -724,7 +698,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         ],
       },
       projection: {
-        code: LINEAR_WGSL,
+        code: SAM_TILED_LINEAR_WGSL,
         bindings: [
           tensorBinding('inputValues', 'tensor:hiddenB'),
           tensorBinding('weight', 'tensor:textProjectionWeight'),
@@ -753,7 +727,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         uniformBinding('dims', 'uniform:textDims'),
       ]);
       for (const projection of ['q', 'k', 'v']) {
-        registerLayerKernel(`${prefix}.${projection}`, LINEAR_WGSL, [
+        registerLayerKernel(`${prefix}.${projection}`, SAM_TILED_LINEAR_WGSL, [
           tensorBinding('inputValues', 'tensor:hiddenB'),
           tensorBinding('weight', resources[`${projection}Weight`]),
           tensorBinding('bias', resources[`${projection}Bias`]),
@@ -769,7 +743,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:attn', 'storage'),
         uniformBinding('dims', 'uniform:textDims'),
       ]);
-      registerLayerKernel(`${prefix}.out`, LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.out`, SAM_TILED_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:attn'),
         tensorBinding('weight', resources.oWeight),
         tensorBinding('bias', resources.oBias),
@@ -789,7 +763,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
         uniformBinding('dims', 'uniform:textDims'),
       ]);
-      registerLayerKernel(`${prefix}.fc1`, LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.fc1`, SAM_TILED_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:hiddenB'),
         tensorBinding('weight', resources.fc1Weight),
         tensorBinding('bias', resources.fc1Bias),
@@ -801,7 +775,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:mlpGelu', 'storage'),
         uniformBinding('dims', 'uniform:geluDims'),
       ]);
-      registerLayerKernel(`${prefix}.fc2`, LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.fc2`, SAM_TILED_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:mlpGelu'),
         tensorBinding('weight', resources.fc2Weight),
         tensorBinding('bias', resources.fc2Bias),
@@ -816,22 +790,22 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
       ]);
       phases.push(
         { name: `prompt-text-layernorm1-${layerIndex}`, kernel: `${prefix}.ln1`, dispatch: [workgroups(rows)], yieldAfter: true },
-        { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-        { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-        { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
+        { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
+        { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
         { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: onlineAttentionDispatch(shape.promptTokens, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
-        { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
         { name: `prompt-text-output-add-${layerIndex}`, kernel: `${prefix}.add1`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-layernorm2-${layerIndex}`, kernel: `${prefix}.ln2`, dispatch: [workgroups(rows)], yieldAfter: true },
-        { name: `prompt-text-mlp-fc1-${layerIndex}`, kernel: `${prefix}.fc1`, dispatch: [workgroups(totalIntermediate)], yieldAfter: true },
+        { name: `prompt-text-mlp-fc1-${layerIndex}`, kernel: `${prefix}.fc1`, dispatch: tiledLinearDispatch(rows, shape.intermediateSize), yieldAfter: true },
         { name: `prompt-text-mlp-gelu-${layerIndex}`, kernel: `${prefix}.gelu`, dispatch: [workgroups(totalIntermediate)], yieldAfter: true },
-        { name: `prompt-text-mlp-fc2-${layerIndex}`, kernel: `${prefix}.fc2`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-mlp-fc2-${layerIndex}`, kernel: `${prefix}.fc2`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
         { name: `prompt-text-mlp-residual-${layerIndex}`, kernel: `${prefix}.add2`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
       );
     }
     phases.push(
       { name: 'prompt-text-final-layernorm', kernel: 'finalLayerNorm', dispatch: [workgroups(rows)], yieldAfter: true },
-      { name: 'prompt-text-projection', kernel: 'projection', dispatch: [workgroups(totalPromptFeatures)], yieldAfter: true },
+      { name: 'prompt-text-projection', kernel: 'projection', dispatch: tiledLinearDispatch(rows, shape.channels), yieldAfter: true },
       { name: 'readback-prompt-text-ingress', readbacks: [{ name: 'promptFeatures', tensor: 'promptFeatures' }, { name: 'promptMask', tensor: 'promptMask' }] },
     );
 

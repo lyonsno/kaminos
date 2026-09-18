@@ -20,6 +20,11 @@ import {
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
+import {
+  SAM_TILED_LINEAR_GELU_WGSL,
+  SAM_TILED_LINEAR_WGSL,
+  tiledLinearDispatch,
+} from './sam-tiled-linear-wgsl.js';
 
 export const SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-vit-first-block.phase-program.webgpu-local.v0';
 
@@ -170,128 +175,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let window_token = local_y * dims.window_size + local_x;
   let window_flat = (window_index * dims.window_tokens + window_token) * dims.channels + c;
   output_values[index] = residual[index] + windows[window_flat];
-}
-`;
-
-const LINEAR_WGSL = `
-struct LinearDims {
-  input_channels: u32,
-  output_channels: u32,
-  total_output: u32,
-  _pad0: u32,
-};
-
-@group(0) @binding(0) var<storage, read> input_values: array<f32>;
-@group(0) @binding(1) var<storage, read> weight: array<f32>;
-@group(0) @binding(2) var<storage, read> bias: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: LinearDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
-  if (index >= dims.total_output) { return; }
-  let output_channel = index % dims.output_channels;
-  let token = index / dims.output_channels;
-  let input_base = token * dims.input_channels;
-  let weight_base = output_channel * dims.input_channels;
-  var sum = bias[output_channel];
-  for (var c = 0u; c < dims.input_channels; c = c + 1u) {
-    sum = sum + input_values[input_base + c] * weight[weight_base + c];
-  }
-  output_values[index] = sum;
-}
-`;
-
-const LINEAR_GELU_WGSL = `
-struct LinearDims {
-  input_channels: u32,
-  output_channels: u32,
-  total_output: u32,
-  _pad0: u32,
-};
-
-@group(0) @binding(0) var<storage, read> input_values: array<f32>;
-@group(0) @binding(1) var<storage, read> weight: array<f32>;
-@group(0) @binding(2) var<storage, read> bias: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: LinearDims;
-
-fn mlx_expm1f(x: f32) -> f32 {
-  var j = fma(1.442695, x, 12582912.0);
-  j = j - 12582912.0;
-  let exponent = i32(j);
-  let reduced = fma(j, -6.93145752e-1, x);
-  var squared = reduced * reduced;
-  if (x == 0.0) { squared = x; }
-  var polynomial = 1.97350979e-4;
-  polynomial = fma(polynomial, reduced, 1.39309070e-3);
-  polynomial = fma(polynomial, reduced, 8.33343994e-3);
-  polynomial = fma(polynomial, reduced, 4.16668020e-2);
-  polynomial = fma(polynomial, reduced, 1.66666716e-1);
-  polynomial = fma(polynomial, reduced, 4.99999970e-1);
-  let base = select(reduced, reduced + 0.5, j == 1.0);
-  let approximation = fma(polynomial, squared, base);
-  let half = 0.5;
-  let scaled = ldexp(half, exponent);
-  let high = scaled - half;
-  let low = (scaled - high) - half;
-  var result = fma(approximation, scaled, low) + high;
-  result = result + result;
-  if (j == 0.0) { result = approximation; }
-  if (j == 1.0) { result = approximation + approximation; }
-  if (abs(x - 1.0) > 88.0) {
-    let power = exp2(x);
-    result = fma(power, power, -1.0);
-  }
-  return result;
-}
-
-fn mlx_erf(x: f32) -> f32 {
-  let magnitude = abs(x);
-  let squared = x * x;
-  var result: f32;
-  if (magnitude > 0.927734375) {
-    result = fma(-1.72853470e-5, magnitude, 3.83197126e-4);
-    let companion = fma(-3.88396438e-3, magnitude, 2.42546219e-2);
-    result = fma(result, squared, companion);
-    result = fma(result, magnitude, -1.06777877e-1);
-    result = fma(result, magnitude, -6.34846687e-1);
-    result = fma(result, magnitude, -1.28717512e-1);
-    result = fma(result, magnitude, -magnitude);
-    result = -mlx_expm1f(result);
-    result = select(-abs(result), abs(result), x >= 0.0);
-  } else {
-    result = -5.96761703e-4;
-    result = fma(result, squared, 4.99119423e-3);
-    result = fma(result, squared, -2.67681349e-2);
-    result = fma(result, squared, 1.12819925e-1);
-    result = fma(result, squared, -3.76125336e-1);
-    result = fma(result, squared, 1.28379166e-1);
-    result = fma(result, x, x);
-  }
-  return result;
-}
-
-fn gelu_exact_approx(x: f32) -> f32 {
-  if (x < -10.0) { return 0.0; }
-  if (x > 10.0) { return x; }
-  return 0.5 * x * (1.0 + mlx_erf(x * 0.7071067811865476));
-}
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
-  if (index >= dims.total_output) { return; }
-  let output_channel = index % dims.output_channels;
-  let token = index / dims.output_channels;
-  let input_base = token * dims.input_channels;
-  let weight_base = output_channel * dims.input_channels;
-  var sum = bias[output_channel];
-  for (var c = 0u; c < dims.input_channels; c = c + 1u) {
-    sum = sum + input_values[input_base + c] * weight[weight_base + c];
-  }
-  output_values[index] = gelu_exact_approx(sum);
 }
 `;
 
@@ -799,6 +682,12 @@ function workgroups(total) {
   return Math.max(1, Math.ceil(total / 64));
 }
 
+function linearWorkgroups(tokens, outputChannels, device) {
+  return tiledLinearDispatch(tokens, outputChannels, {
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
+}
+
 export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || createSam3ImageVitFirstBlockPhaseProgramRouteDefinition({ kernel: input.kernel });
@@ -906,33 +795,33 @@ export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
       kernels: {
         layerNorm1: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:hiddenStates'), bindTensor('tensor:layerNorm1Weight'), bindTensor('tensor:layerNorm1Bias'), bindTensor('tensor:layerNorm1', 'storage'), bindUniform('uniform:lnDims')] },
         windowPartition: { code: WINDOW_PARTITION_WGSL, bindings: [bindTensor('tensor:layerNorm1'), bindTensor('tensor:windows', 'storage'), bindUniform('uniform:blockDims')] },
-        qProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
-        kProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:kProjWeight'), bindTensor('tensor:kProjBias'), bindTensor('tensor:k', 'storage'), bindUniform('uniform:windowLinearDims')] },
-        vProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        qProjection: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        kProjection: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:kProjWeight'), bindTensor('tensor:kProjBias'), bindTensor('tensor:k', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        vProjection: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
         qRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:q'), bindTensor('tensor:qRope', 'storage'), bindUniform('uniform:blockDims')] },
         kRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:k'), bindTensor('tensor:kRope', 'storage'), bindUniform('uniform:blockDims')] },
         attention: { code: ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
-        outputProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        outputProjection: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
         windowUnpartition: { code: WINDOW_UNPARTITION_WGSL, bindings: [bindTensor('tensor:projected'), bindTensor('tensor:hiddenStates'), bindTensor('tensor:attentionResidual', 'storage'), bindUniform('uniform:blockDims')] },
         layerNorm2: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:layerNorm2Weight'), bindTensor('tensor:layerNorm2Bias'), bindTensor('tensor:layerNorm2', 'storage'), bindUniform('uniform:lnDims')] },
-        mlpFc1: { code: LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
-        mlpFc2: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
+        mlpFc1: { code: SAM_TILED_LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
+        mlpFc2: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
         residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor('tensor:vitFirstBlockHiddenStates', 'storage'), bindUniform('uniform:blockDims')] },
       },
       phases: [
         { name: 'vit-block-layernorm1', kernel: 'layerNorm1', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true },
         { name: 'vit-block-window-partition', kernel: 'windowPartition', dispatch: [workgroups(shape.paddedTotalValues)], yieldAfter: true },
-        { name: 'vit-block-qkv-projection', kernel: 'qProjection', dispatch: [workgroups(shape.paddedTotalValues)] },
-        { name: 'vit-block-qkv-projection', kernel: 'kProjection', dispatch: [workgroups(shape.paddedTotalValues)] },
-        { name: 'vit-block-qkv-projection', kernel: 'vProjection', dispatch: [workgroups(shape.paddedTotalValues)], yieldAfter: true },
+        { name: 'vit-block-qkv-projection', kernel: 'qProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, input.device) },
+        { name: 'vit-block-qkv-projection', kernel: 'kProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, input.device) },
+        { name: 'vit-block-qkv-projection', kernel: 'vProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, input.device), yieldAfter: true },
         { name: 'vit-block-rope-attention', kernel: 'qRope', dispatch: [workgroups(shape.paddedTotalValues)] },
         { name: 'vit-block-rope-attention', kernel: 'kRope', dispatch: [workgroups(shape.paddedTotalValues)] },
         { name: 'vit-block-rope-attention', kernel: 'attention', dispatch: [workgroups(shape.paddedTotalValues)], yieldAfter: true },
-        { name: 'vit-block-output-projection', kernel: 'outputProjection', dispatch: [workgroups(shape.paddedTotalValues)], yieldAfter: true },
+        { name: 'vit-block-output-projection', kernel: 'outputProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, input.device), yieldAfter: true },
         { name: 'vit-block-window-unpartition', kernel: 'windowUnpartition', dispatch: [workgroups(shape.totalValues)], yieldAfter: true },
         { name: 'vit-block-layernorm2', kernel: 'layerNorm2', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true },
-        { name: 'vit-block-gelu-mlp', kernel: 'mlpFc1', dispatch: [workgroups(shape.tokenCount * shape.intermediateSize)] },
-        { name: 'vit-block-gelu-mlp', kernel: 'mlpFc2', dispatch: [workgroups(shape.totalValues)] },
+        { name: 'vit-block-gelu-mlp', kernel: 'mlpFc1', dispatch: linearWorkgroups(shape.tokenCount, shape.intermediateSize, input.device) },
+        { name: 'vit-block-gelu-mlp', kernel: 'mlpFc2', dispatch: linearWorkgroups(shape.tokenCount, shape.hiddenSize, input.device) },
         { name: 'vit-block-gelu-mlp', kernel: 'residualMlp', dispatch: [workgroups(shape.totalValues)], yieldAfter: true },
         { name: 'readback-vit-first-block-hidden-states', readbacks: [{ name: 'vitFirstBlockHiddenStates', tensor: 'vitFirstBlockHiddenStates' }] },
       ],

@@ -8,6 +8,11 @@ import {
   SAM_ONLINE_ATTENTION_WGSL,
   onlineAttentionDispatch,
 } from '../src/sam-online-attention-wgsl.js';
+import {
+  SAM_TILED_LINEAR_RELU_WGSL,
+  SAM_TILED_LINEAR_WGSL,
+  tiledLinearDispatch,
+} from '../src/sam-tiled-linear-wgsl.js';
 
 const kernelTokens = {
   'sam-detr-encoder': 'layernorm1:LayerNorm1 add-pos:AddPos self-q:SelfQ self-k:SelfK self-v:SelfV self-attention-softmax:SelfAttention self-output-linear:SelfOutput self-output-residual:SelfResidual layernorm2:LayerNorm2 cross-q:CrossQ cross-k:CrossK cross-v:CrossV cross-attention-softmax:CrossAttention cross-output-linear:CrossOutput cross-output-residual:CrossResidual layernorm3:LayerNorm3 mlp-fc1-relu:MlpFc1Relu mlp-fc2-linear:MlpFc2 mlp-fc2-residual:MlpResidual',
@@ -19,19 +24,19 @@ const kernelTokens = {
 const shaderClasses = {
   'sam-detr-encoder': {
     LAYERNORM: 'LayerNorm1 LayerNorm2 LayerNorm3', ADD: 'AddPos SelfResidual CrossResidual MlpResidual',
-    LINEAR: 'SelfQ SelfK SelfV SelfOutput CrossQ CrossK CrossV CrossOutput MlpFc2',
-    LINEAR_RELU: 'MlpFc1Relu', SAM_ONLINE_ATTENTION: 'SelfAttention', SAM_MASKED_ONLINE_ATTENTION: 'CrossAttention',
+    SAM_TILED_LINEAR: 'SelfQ SelfK SelfV SelfOutput CrossQ CrossK CrossV CrossOutput MlpFc2',
+    SAM_TILED_LINEAR_RELU: 'MlpFc1Relu', SAM_ONLINE_ATTENTION: 'SelfAttention', SAM_MASKED_ONLINE_ATTENTION: 'CrossAttention',
   },
   'sam-detr-decoder': {
     LAYERNORM: 'SelfNorm TextNorm VisionNorm MlpNorm OutputNorm PresenceNorm',
     ADD: 'AddPos SelfResidual TextAddPos TextResidual VisionAddPos VisionKeyAdd VisionResidual MlpResidual',
-    LINEAR: 'Ref2 SelfQ SelfK SelfV SelfOut TextQ TextK TextV TextOut VisionQ VisionK VisionV VisionOut Mlp2 BoxHead3',
-    LINEAR_RELU: 'Ref1 Mlp1 BoxHead1 BoxHead2', SAM_DECODER_MASKED_ONLINE_ATTENTION: 'SelfAttn TextAttn', SAM_BIASED_ONLINE_ATTENTION: 'VisionAttn',
+    SAM_TILED_LINEAR: 'Ref2 SelfQ SelfK SelfV SelfOut TextQ TextK TextV TextOut VisionQ VisionK VisionV VisionOut Mlp2 BoxHead3',
+    SAM_TILED_LINEAR_RELU: 'Ref1 Mlp1 BoxHead1 BoxHead2', SAM_DECODER_MASKED_ONLINE_ATTENTION: 'SelfAttn TextAttn', SAM_BIASED_ONLINE_ATTENTION: 'VisionAttn',
     SINE_BOX: 'Sine', PAD_QUERY_POS: 'PadPos', RPB_AXIS_HIDDEN: 'RpbXHidden RpbYHidden', RPB_COMBINE: 'Rpb',
     SLICE_QUERIES: 'SliceQuery', BOX_APPLY: 'BoxRefine', SLICE_PRESENCE: 'SlicePresence', PRESENCE_HEAD: 'PresenceHead',
   },
   'sam-pixel-decoder': { UPSAMPLE_ADD: 'upsampleAdd', CONV3X3: 'conv3x3_', GROUPNORM_STATS: 'groupnormStats', GROUPNORM_RELU: 'groupnormRelu' },
-  'sam-mask-tail': { LINEAR_RELU: 'maskEmbedderLayer0 maskEmbedderLayer1', LINEAR: 'maskEmbedderLayer2', INSTANCE_PROJECTION: 'instanceProjection', MASK_PROJECTION: 'decodeMask', THRESHOLD: 'thresholdMask' },
+  'sam-mask-tail': { SAM_TILED_LINEAR_RELU: 'maskEmbedderLayer0 maskEmbedderLayer1', SAM_TILED_LINEAR: 'maskEmbedderLayer2', INSTANCE_PROJECTION: 'instanceProjection', MASK_PROJECTION: 'decodeMask', THRESHOLD: 'thresholdMask' },
 };
 
 function expectedDomains(route, s, index) {
@@ -86,6 +91,8 @@ function checkProduction(route, source, shape, index = 0) {
     SAM_MASKED_ONLINE_ATTENTION_WGSL,
     SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL,
     SAM_BIASED_ONLINE_ATTENTION_WGSL,
+    SAM_TILED_LINEAR_WGSL,
+    SAM_TILED_LINEAR_RELU_WGSL,
   };
   for (const [, name, expression] of source.matchAll(/const (\w+_WGSL) = (`[^]*?`|\w+_WGSL\.replace\([^\n]+\));/g)) {
     shaders[name] = new Function(...Object.keys(shaders), `return ${expression};`)(...Object.values(shaders));
@@ -121,9 +128,19 @@ function checkProduction(route, source, shape, index = 0) {
     bindings[name] = evaluate(expressions[0].slice(`const ${name} = `.length, -1));
   }
   let logicalTotal;
+  let tiledDispatch;
   const helper = source.match(/function workgroups\([^]*?\n}/)[0];
   const workgroups = new Function('createLinearDispatch', `${helper}; return workgroups;`)(createLinearDispatch);
   bindings.workgroups = (total, device) => { logicalTotal = total; return workgroups(total, device); };
+  const linearHelper = source.match(/function linearWorkgroups\([^]*?\n}/);
+  if (linearHelper) {
+    const linearWorkgroups = new Function('tiledLinearDispatch', `${linearHelper[0]}; return linearWorkgroups;`)(tiledLinearDispatch);
+    bindings.linearWorkgroups = (tokens, outputChannels, device) => {
+      logicalTotal = tokens * outputChannels;
+      tiledDispatch = linearWorkgroups(tokens, outputChannels, device);
+      return tiledDispatch;
+    };
+  }
   bindings.onlineAttentionDispatch = onlineAttentionDispatch;
   const expected = expectedDomains(route, shape, index), observed = {};
   const tokens = Object.fromEntries(kernelTokens[route].split(' ').map(pair => pair.split(':')));
@@ -144,15 +161,21 @@ function checkProduction(route, source, shape, index = 0) {
       : route === 'sam-pixel-decoder' ? `${tokens[name]}${index}` : tokens[name];
     assert.equal(kernel, expectedKernel, `${fullName}: kernel identity`);
     assert.equal(registeredShaders[kernel]?.shaderName, expectedShaders[tokens[name]], `${kernel}: registered shader identity`);
-    const workgroup = registeredShaders[kernel]?.code.match(/@workgroup_size\((\d+)\)/);
+    const workgroup = registeredShaders[kernel]?.code.match(/@workgroup_size\((\d+)(?:,|\))/);
     assert.ok(workgroup, `${kernel}: registered workgroup size`);
-    assert.equal(Number(workgroup[1]), expected[name].size, `${kernel}: workgroup class`);
+    const tiled = expectedShaders[tokens[name]].startsWith('SAM_TILED_LINEAR');
+    assert.equal(Number(workgroup[1]), tiled ? 8 : expected[name].size, `${kernel}: workgroup class`);
     logicalTotal = undefined;
+    tiledDispatch = undefined;
     const dispatch = [].concat(evaluate(dispatchExpression));
     const { total, size, dispatch: nativeDispatch } = expected[name];
     if (nativeDispatch) {
       assert.deepEqual(dispatch, nativeDispatch, `${fullName}: native query/head/batch grid`);
       assert.equal(dispatch[0] * dispatch[1] * dispatch[2] * (shape.channels / shape.heads), total, `${fullName}: logical output domain`);
+    } else if (tiled) {
+      assert.equal(logicalTotal, total, `${fullName}: logical domain`);
+      assert.deepEqual(dispatch, tiledDispatch, `${fullName}: tiled grid`);
+      assert.ok(dispatch.reduce((a, b) => a * b, 1) * 256 >= total, `${fullName}: tiled tail coverage`);
     } else {
       assert.equal(size === 1 ? dispatch.reduce((a, b) => a * b, 1) : logicalTotal, total, `${fullName}: logical domain`);
       assert.deepEqual(dispatch, createLinearDispatch(total, { workgroupSize: size, maxWorkgroupsPerDimension: 65535 }), `${fullName}: grid`);
@@ -192,7 +215,10 @@ for (const route of ['sam-detr-encoder', 'sam-detr-decoder', 'sam-pixel-decoder'
       assert.throws(() => checkProduction(route, wrongIndex, shape), /phase identity/);
       const wrongWorkgroup = source.replace('@workgroup_size(64)', '@workgroup_size(1)');
       assert.throws(() => checkProduction(route, wrongWorkgroup, shape), /workgroup class/);
-      const bad = source.replace('workgroups(totalMlpHidden, input.device)', 'workgroups(totalEncoder, input.device)');
+      const bad = source.replace(
+        'linearWorkgroups(spatialTokenCount, shape.mlpHidden, input.device)',
+        'linearWorkgroups(spatialTokenCount, shape.channels, input.device)',
+      );
       assert.notEqual(bad, source);
       assert.throws(() => checkProduction(route, bad, shape), /mlp-fc1-relu-0: logical domain/);
     }

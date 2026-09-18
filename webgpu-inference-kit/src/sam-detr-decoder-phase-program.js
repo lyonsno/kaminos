@@ -25,6 +25,11 @@ import {
   SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL,
   onlineAttentionDispatch,
 } from './sam-online-attention-wgsl.js';
+import {
+  SAM_TILED_LINEAR_RELU_WGSL,
+  SAM_TILED_LINEAR_WGSL,
+  tiledLinearDispatch,
+} from './sam-tiled-linear-wgsl.js';
 
 export const SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-decoder.phase-program.webgpu-local.v0';
 
@@ -88,64 +93,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) 
   let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total) { return; }
   output_values[index] = a_values[index] + b_values[index];
-}
-`;
-
-const LINEAR_WGSL = `
-struct LinearDims {
-  input_channels: u32,
-  output_channels: u32,
-  total_output: u32,
-};
-
-@group(0) @binding(0) var<storage, read> input_values: array<f32>;
-@group(0) @binding(1) var<storage, read> weight: array<f32>;
-@group(0) @binding(2) var<storage, read> bias: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: LinearDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
-  if (index >= dims.total_output) { return; }
-  let output_channel = index % dims.output_channels;
-  let token = index / dims.output_channels;
-  let input_base = token * dims.input_channels;
-  var sum = bias[output_channel];
-  let weight_base = output_channel * dims.input_channels;
-  for (var c = 0u; c < dims.input_channels; c = c + 1u) {
-    sum = sum + input_values[input_base + c] * weight[weight_base + c];
-  }
-  output_values[index] = sum;
-}
-`;
-
-const LINEAR_RELU_WGSL = `
-struct LinearDims {
-  input_channels: u32,
-  output_channels: u32,
-  total_output: u32,
-};
-
-@group(0) @binding(0) var<storage, read> input_values: array<f32>;
-@group(0) @binding(1) var<storage, read> weight: array<f32>;
-@group(0) @binding(2) var<storage, read> bias: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: LinearDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
-  if (index >= dims.total_output) { return; }
-  let output_channel = index % dims.output_channels;
-  let token = index / dims.output_channels;
-  let input_base = token * dims.input_channels;
-  var sum = bias[output_channel];
-  let weight_base = output_channel * dims.input_channels;
-  for (var c = 0u; c < dims.input_channels; c = c + 1u) {
-    sum = sum + input_values[input_base + c] * weight[weight_base + c];
-  }
-  output_values[index] = max(sum, 0.0);
 }
 `;
 
@@ -996,6 +943,12 @@ function workgroups(total, device) {
   });
 }
 
+function linearWorkgroups(tokens, outputChannels, device) {
+  return tiledLinearDispatch(tokens, outputChannels, {
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
+}
+
 async function sha256Hex(buffer) {
   if (!globalThis.crypto?.subtle?.digest) throw new Error('crypto.subtle.digest is required to hash SAM DETR decoder outputs');
   const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
@@ -1281,54 +1234,54 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       }
       const k = suffix => `layer${layerIndex}${suffix}`;
       addKernel(k('Sine'), SINE_BOX_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:sine', 'storage'), bindUniform('decoderDims')]);
-      addKernel(k('Ref1'), LINEAR_RELU_WGSL, [bindTensor('tensor:sine'), bindTensor('tensor:refPointHeadLayer1Weight'), bindTensor('tensor:refPointHeadLayer1Bias'), bindTensor('tensor:refPointHidden', 'storage'), bindUniform('sineLinearDims')]);
-      addKernel(k('Ref2'), LINEAR_WGSL, [bindTensor('tensor:refPointHidden'), bindTensor('tensor:refPointHeadLayer2Weight'), bindTensor('tensor:refPointHeadLayer2Bias'), bindTensor('tensor:queryPos', 'storage'), bindUniform('queryLinearDims')]);
+      addKernel(k('Ref1'), SAM_TILED_LINEAR_RELU_WGSL, [bindTensor('tensor:sine'), bindTensor('tensor:refPointHeadLayer1Weight'), bindTensor('tensor:refPointHeadLayer1Bias'), bindTensor('tensor:refPointHidden', 'storage'), bindUniform('sineLinearDims')]);
+      addKernel(k('Ref2'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:refPointHidden'), bindTensor('tensor:refPointHeadLayer2Weight'), bindTensor('tensor:refPointHeadLayer2Bias'), bindTensor('tensor:queryPos', 'storage'), bindUniform('queryLinearDims')]);
       addKernel(k('PadPos'), PAD_QUERY_POS_WGSL, [bindTensor('tensor:queryPos'), bindTensor('tensor:queryPosPadded', 'storage'), bindUniform('decoderDims')]);
       addKernel(k('RpbXHidden'), RPB_AXIS_HIDDEN_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxRpbXLayer1Weight'), bindTensor('tensor:boxRpbXLayer1Bias'), bindTensor('tensor:rpbXHidden', 'storage'), bindUniform('rpbXDims')]);
       addKernel(k('RpbYHidden'), RPB_AXIS_HIDDEN_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxRpbYLayer1Weight'), bindTensor('tensor:boxRpbYLayer1Bias'), bindTensor('tensor:rpbYHidden', 'storage'), bindUniform('rpbYDims')]);
       addKernel(k('Rpb'), RPB_COMBINE_WGSL, [bindTensor('tensor:rpbXHidden'), bindTensor('tensor:boxRpbXLayer2Weight'), bindTensor('tensor:boxRpbXLayer2Bias'), bindTensor('tensor:rpbYHidden'), bindTensor('tensor:boxRpbYLayer2Weight'), bindTensor('tensor:boxRpbYLayer2Bias'), bindTensor('tensor:rpb', 'storage'), bindUniform('decoderDims')]);
       addKernel(k('AddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
-      addKernel(k('SelfQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfQWeight}`), bindTensor(`tensor:${layerTensorKeys.selfQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
-      addKernel(k('SelfK'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfKWeight}`), bindTensor(`tensor:${layerTensorKeys.selfKBias}`), bindTensor('tensor:kHidden', 'storage'), bindUniform('hiddenLinearDims')]);
-      addKernel(k('SelfV'), LINEAR_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.selfVWeight}`), bindTensor(`tensor:${layerTensorKeys.selfVBias}`), bindTensor('tensor:vHidden', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('SelfQ'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfQWeight}`), bindTensor(`tensor:${layerTensorKeys.selfQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('SelfK'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfKWeight}`), bindTensor(`tensor:${layerTensorKeys.selfKBias}`), bindTensor('tensor:kHidden', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('SelfV'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.selfVWeight}`), bindTensor(`tensor:${layerTensorKeys.selfVBias}`), bindTensor('tensor:vHidden', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('SelfAttn'), SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kHidden'), bindTensor('tensor:vHidden'), bindTensor('tensor:dummyMask'), bindTensor('tensor:attention', 'storage'), bindUniform('selfAttentionDims')]);
-      addKernel(k('SelfOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.selfOWeight}`), bindTensor(`tensor:${layerTensorKeys.selfOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('SelfOut'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.selfOWeight}`), bindTensor(`tensor:${layerTensorKeys.selfOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('SelfResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
       addKernel(k('SelfNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.selfLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.selfLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
       addKernel(k('TextAddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
-      addKernel(k('TextQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.textQWeight}`), bindTensor(`tensor:${layerTensorKeys.textQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
-      addKernel(k('TextK'), LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textKWeight}`), bindTensor(`tensor:${layerTensorKeys.textKBias}`), bindTensor('tensor:kPrompt', 'storage'), bindUniform('promptLinearDims')]);
-      addKernel(k('TextV'), LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textVWeight}`), bindTensor(`tensor:${layerTensorKeys.textVBias}`), bindTensor('tensor:vPrompt', 'storage'), bindUniform('promptLinearDims')]);
+      addKernel(k('TextQ'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.textQWeight}`), bindTensor(`tensor:${layerTensorKeys.textQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('TextK'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textKWeight}`), bindTensor(`tensor:${layerTensorKeys.textKBias}`), bindTensor('tensor:kPrompt', 'storage'), bindUniform('promptLinearDims')]);
+      addKernel(k('TextV'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textVWeight}`), bindTensor(`tensor:${layerTensorKeys.textVBias}`), bindTensor('tensor:vPrompt', 'storage'), bindUniform('promptLinearDims')]);
       addKernel(k('TextAttn'), SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kPrompt'), bindTensor('tensor:vPrompt'), bindTensor('tensor:promptMask'), bindTensor('tensor:attention', 'storage'), bindUniform('textAttentionDims')]);
-      addKernel(k('TextOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.textOWeight}`), bindTensor(`tensor:${layerTensorKeys.textOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('TextOut'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.textOWeight}`), bindTensor(`tensor:${layerTensorKeys.textOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('TextResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
       addKernel(k('TextNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.textLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.textLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
       addKernel(k('VisionAddPos'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryPosPadded'), bindTensor('tensor:hiddenPlusPos', 'storage'), bindUniform('hiddenAddDims')]);
-      addKernel(k('VisionQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.visionQWeight}`), bindTensor(`tensor:${layerTensorKeys.visionQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('VisionQ'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.visionQWeight}`), bindTensor(`tensor:${layerTensorKeys.visionQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('VisionKeyAdd'), ADD_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor('tensor:visionPosEncoding'), bindTensor('tensor:kVision', 'storage'), bindUniform('spatialAddDims')]);
-      addKernel(k('VisionK'), LINEAR_WGSL, [bindTensor('tensor:kVision'), bindTensor(`tensor:${layerTensorKeys.visionKWeight}`), bindTensor(`tensor:${layerTensorKeys.visionKBias}`), bindTensor('tensor:kVisionProjected', 'storage'), bindUniform('visionLinearDims')]);
-      addKernel(k('VisionV'), LINEAR_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor(`tensor:${layerTensorKeys.visionVWeight}`), bindTensor(`tensor:${layerTensorKeys.visionVBias}`), bindTensor('tensor:vVision', 'storage'), bindUniform('visionLinearDims')]);
+      addKernel(k('VisionK'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:kVision'), bindTensor(`tensor:${layerTensorKeys.visionKWeight}`), bindTensor(`tensor:${layerTensorKeys.visionKBias}`), bindTensor('tensor:kVisionProjected', 'storage'), bindUniform('visionLinearDims')]);
+      addKernel(k('VisionV'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor(`tensor:${layerTensorKeys.visionVWeight}`), bindTensor(`tensor:${layerTensorKeys.visionVBias}`), bindTensor('tensor:vVision', 'storage'), bindUniform('visionLinearDims')]);
       addKernel(k('VisionAttn'), SAM_BIASED_ONLINE_ATTENTION_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kVisionProjected'), bindTensor('tensor:vVision'), bindTensor('tensor:rpb'), bindTensor('tensor:attention', 'storage'), bindUniform('visionAttentionDims')]);
-      addKernel(k('VisionOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.visionOWeight}`), bindTensor(`tensor:${layerTensorKeys.visionOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
+      addKernel(k('VisionOut'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.visionOWeight}`), bindTensor(`tensor:${layerTensorKeys.visionOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('VisionResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
       addKernel(k('VisionNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.visionLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.visionLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
-      addKernel(k('Mlp1'), LINEAR_RELU_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.fc1Weight}`), bindTensor(`tensor:${layerTensorKeys.fc1Bias}`), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('fc1Dims')]);
-      addKernel(k('Mlp2'), LINEAR_WGSL, [bindTensor('tensor:mlpHidden'), bindTensor(`tensor:${layerTensorKeys.fc2Weight}`), bindTensor(`tensor:${layerTensorKeys.fc2Bias}`), bindTensor('tensor:projected', 'storage'), bindUniform('fc2Dims')]);
+      addKernel(k('Mlp1'), SAM_TILED_LINEAR_RELU_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.fc1Weight}`), bindTensor(`tensor:${layerTensorKeys.fc1Bias}`), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('fc1Dims')]);
+      addKernel(k('Mlp2'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:mlpHidden'), bindTensor(`tensor:${layerTensorKeys.fc2Weight}`), bindTensor(`tensor:${layerTensorKeys.fc2Bias}`), bindTensor('tensor:projected', 'storage'), bindUniform('fc2Dims')]);
       addKernel(k('MlpResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
       addKernel(k('MlpNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.mlpLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.mlpLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
       addKernel(k('SliceQuery'), SLICE_QUERIES_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:queryRaw', 'storage'), bindUniform('decoderDims')]);
       addKernel(k('OutputNorm'), LAYERNORM_WGSL, [bindTensor('tensor:queryRaw'), bindTensor('tensor:outputLayerNormWeight'), bindTensor('tensor:outputLayerNormBias'), bindTensor('tensor:lastHs', 'storage'), bindUniform('queryLayerNormDims')]);
-      addKernel(k('BoxHead1'), LINEAR_RELU_WGSL, [bindTensor('tensor:lastHs'), bindTensor('tensor:boxHeadLayer1Weight'), bindTensor('tensor:boxHeadLayer1Bias'), bindTensor('tensor:boxHidden1', 'storage'), bindUniform('queryLinearDims')]);
-      addKernel(k('BoxHead2'), LINEAR_RELU_WGSL, [bindTensor('tensor:boxHidden1'), bindTensor('tensor:boxHeadLayer2Weight'), bindTensor('tensor:boxHeadLayer2Bias'), bindTensor('tensor:boxHidden2', 'storage'), bindUniform('queryLinearDims')]);
-      addKernel(k('BoxHead3'), LINEAR_WGSL, [bindTensor('tensor:boxHidden2'), bindTensor('tensor:boxHeadLayer3Weight'), bindTensor('tensor:boxHeadLayer3Bias'), bindTensor('tensor:boxDelta', 'storage'), bindUniform('boxDeltaDims')]);
+      addKernel(k('BoxHead1'), SAM_TILED_LINEAR_RELU_WGSL, [bindTensor('tensor:lastHs'), bindTensor('tensor:boxHeadLayer1Weight'), bindTensor('tensor:boxHeadLayer1Bias'), bindTensor('tensor:boxHidden1', 'storage'), bindUniform('queryLinearDims')]);
+      addKernel(k('BoxHead2'), SAM_TILED_LINEAR_RELU_WGSL, [bindTensor('tensor:boxHidden1'), bindTensor('tensor:boxHeadLayer2Weight'), bindTensor('tensor:boxHeadLayer2Bias'), bindTensor('tensor:boxHidden2', 'storage'), bindUniform('queryLinearDims')]);
+      addKernel(k('BoxHead3'), SAM_TILED_LINEAR_WGSL, [bindTensor('tensor:boxHidden2'), bindTensor('tensor:boxHeadLayer3Weight'), bindTensor('tensor:boxHeadLayer3Bias'), bindTensor('tensor:boxDelta', 'storage'), bindUniform('boxDeltaDims')]);
       addKernel(k('BoxRefine'), BOX_APPLY_WGSL, [bindTensor(`tensor:${referenceInput}`), bindTensor('tensor:boxDelta'), bindTensor(`tensor:${referenceOutput}`, 'storage'), bindUniform('decoderDims')]);
       addKernel(k('SlicePresence'), SLICE_PRESENCE_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:presenceRaw', 'storage'), bindUniform('decoderDims')]);
       addKernel(k('PresenceNorm'), LAYERNORM_WGSL, [bindTensor('tensor:presenceRaw'), bindTensor('tensor:presenceLayerNormWeight'), bindTensor('tensor:presenceLayerNormBias'), bindTensor('tensor:presenceNormed', 'storage'), bindUniform('presenceLayerNormDims')]);
       addKernel(k('PresenceHead'), PRESENCE_HEAD_WGSL, [bindTensor('tensor:presenceNormed'), bindTensor('tensor:presenceHeadLayer1Weight'), bindTensor('tensor:presenceHeadLayer1Bias'), bindTensor('tensor:presenceHeadLayer2Weight'), bindTensor('tensor:presenceHeadLayer2Bias'), bindTensor('tensor:presenceHeadLayer3Weight'), bindTensor('tensor:presenceHeadLayer3Bias'), bindTensor(`tensor:presenceLogits${layerIndex}`, 'storage'), bindUniform('decoderDims')]);
       phases.push(
         { name: `detr-decoder-sine-box-position-${layerIndex}`, kernel: k('Sine'), dispatch: workgroups(sineTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-ref-point-head-1-${layerIndex}`, kernel: k('Ref1'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-ref-point-head-${layerIndex}`, kernel: k('Ref2'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-ref-point-head-1-${layerIndex}`, kernel: k('Ref1'), dispatch: linearWorkgroups(queryTokens, shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-ref-point-head-${layerIndex}`, kernel: k('Ref2'), dispatch: linearWorkgroups(queryTokens, shape.channels, input.device), yieldAfter: true },
         ...(input.includeIntermediateReadback === true && layerIndex === 0
           ? [{ name: 'debug-detr-decoder-layer-0-query-pos', readbacks: [{ name: 'queryPosLayer0', tensor: 'queryPos' }] }]
           : []),
@@ -1340,39 +1293,39 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
           ? [{ name: 'debug-detr-decoder-layer-0-rpb', readbacks: [{ name: 'rpbLayer0Prefix', tensor: 'rpb', options: { size: 4096 } }] }]
           : []),
         { name: `detr-decoder-self-add-pos-${layerIndex}`, kernel: k('AddPos'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-self-q-${layerIndex}`, kernel: k('SelfQ'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-self-k-${layerIndex}`, kernel: k('SelfK'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-self-v-${layerIndex}`, kernel: k('SelfV'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-q-${layerIndex}`, kernel: k('SelfQ'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-k-${layerIndex}`, kernel: k('SelfK'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-v-${layerIndex}`, kernel: k('SelfV'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
         { name: `detr-decoder-self-attention-softmax-${layerIndex}`, kernel: k('SelfAttn'), dispatch: onlineAttentionDispatch(shape.queryTokens + 1, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
-        { name: `detr-decoder-self-output-${layerIndex}`, kernel: k('SelfOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-output-${layerIndex}`, kernel: k('SelfOut'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
         { name: `detr-decoder-self-residual-${layerIndex}`, kernel: k('SelfResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-self-layernorm-${layerIndex}`, kernel: k('SelfNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
         { name: `detr-decoder-text-add-pos-${layerIndex}`, kernel: k('TextAddPos'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-text-q-${layerIndex}`, kernel: k('TextQ'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-text-k-${layerIndex}`, kernel: k('TextK'), dispatch: workgroups(promptTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-text-v-${layerIndex}`, kernel: k('TextV'), dispatch: workgroups(promptTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-q-${layerIndex}`, kernel: k('TextQ'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-k-${layerIndex}`, kernel: k('TextK'), dispatch: linearWorkgroups(promptTokens, shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-v-${layerIndex}`, kernel: k('TextV'), dispatch: linearWorkgroups(promptTokens, shape.channels, input.device), yieldAfter: true },
         { name: `detr-decoder-text-attention-softmax-${layerIndex}`, kernel: k('TextAttn'), dispatch: onlineAttentionDispatch(shape.queryTokens + 1, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
-        { name: `detr-decoder-text-output-${layerIndex}`, kernel: k('TextOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-output-${layerIndex}`, kernel: k('TextOut'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
         { name: `detr-decoder-text-residual-${layerIndex}`, kernel: k('TextResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-text-layernorm-${layerIndex}`, kernel: k('TextNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-add-pos-${layerIndex}`, kernel: k('VisionAddPos'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-vision-q-${layerIndex}`, kernel: k('VisionQ'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-q-${layerIndex}`, kernel: k('VisionQ'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-key-add-pos-${layerIndex}`, kernel: k('VisionKeyAdd'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-vision-k-${layerIndex}`, kernel: k('VisionK'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-vision-v-${layerIndex}`, kernel: k('VisionV'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-k-${layerIndex}`, kernel: k('VisionK'), dispatch: linearWorkgroups(spatialTokens, shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-v-${layerIndex}`, kernel: k('VisionV'), dispatch: linearWorkgroups(spatialTokens, shape.channels, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-attention-softmax-${layerIndex}`, kernel: k('VisionAttn'), dispatch: onlineAttentionDispatch(shape.queryTokens + 1, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
-        { name: `detr-decoder-vision-output-${layerIndex}`, kernel: k('VisionOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-output-${layerIndex}`, kernel: k('VisionOut'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-residual-${layerIndex}`, kernel: k('VisionResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-layernorm-${layerIndex}`, kernel: k('VisionNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
-        { name: `detr-decoder-mlp-fc1-${layerIndex}`, kernel: k('Mlp1'), dispatch: workgroups(mlpTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-mlp-fc2-${layerIndex}`, kernel: k('Mlp2'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-mlp-fc1-${layerIndex}`, kernel: k('Mlp1'), dispatch: linearWorkgroups(hiddenTokens, shape.mlpHidden, input.device), yieldAfter: true },
+        { name: `detr-decoder-mlp-fc2-${layerIndex}`, kernel: k('Mlp2'), dispatch: linearWorkgroups(hiddenTokens, shape.channels, input.device), yieldAfter: true },
         { name: `detr-decoder-mlp-residual-${layerIndex}`, kernel: k('MlpResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-mlp-${layerIndex}`, kernel: k('MlpNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
         { name: `detr-decoder-slice-query-${layerIndex}`, kernel: k('SliceQuery'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-output-layernorm-${layerIndex}`, kernel: k('OutputNorm'), dispatch: workgroups(queryTokens, input.device), yieldAfter: true },
-        { name: `detr-decoder-box-head-1-${layerIndex}`, kernel: k('BoxHead1'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-box-head-2-${layerIndex}`, kernel: k('BoxHead2'), dispatch: workgroups(queryTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-box-head-3-${layerIndex}`, kernel: k('BoxHead3'), dispatch: workgroups(boxTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-head-1-${layerIndex}`, kernel: k('BoxHead1'), dispatch: linearWorkgroups(queryTokens, shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-head-2-${layerIndex}`, kernel: k('BoxHead2'), dispatch: linearWorkgroups(queryTokens, shape.channels, input.device), yieldAfter: true },
+        { name: `detr-decoder-box-head-3-${layerIndex}`, kernel: k('BoxHead3'), dispatch: linearWorkgroups(queryTokens, 4, input.device), yieldAfter: true },
         { name: `detr-decoder-box-refinement-${layerIndex}`, kernel: k('BoxRefine'), dispatch: workgroups(boxTotal, input.device), yieldAfter: true },
         ...((input.includeIntermediateReadback === true && layerIndex === 0) || input.includeAllHiddenStatesReadback === true
           ? [{

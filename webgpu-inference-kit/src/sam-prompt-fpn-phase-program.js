@@ -24,6 +24,10 @@ import {
   SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL,
   onlineAttentionDispatch,
 } from './sam-online-attention-wgsl.js';
+import {
+  SAM_TILED_LINEAR_WGSL,
+  tiledLinearDispatch,
+} from './sam-tiled-linear-wgsl.js';
 
 export const SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-fpn.phase-program.webgpu-local.v0';
 
@@ -71,38 +75,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   for (var c = 0u; c < dims.channels; c = c + 1u) {
     output_values[base + c] = (input_values[base + c] - mean) * inv_std * norm_weight[c] + norm_bias[c];
   }
-}
-`;
-
-const LINEAR_WGSL = `
-struct PromptFpnDims {
-  batch: u32,
-  spatial_tokens: u32,
-  prompt_tokens: u32,
-  channels: u32,
-  heads: u32,
-  head_dim: u32,
-  total_encoder: u32,
-  total_prompt: u32,
-};
-
-@group(0) @binding(0) var<storage, read> input_values: array<f32>;
-@group(0) @binding(1) var<storage, read> weight: array<f32>;
-@group(0) @binding(2) var<storage, read> bias: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: PromptFpnDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
-  if (index >= arrayLength(&output_values)) { return; }
-  let channel = index % dims.channels;
-  let token_base = index - channel;
-  var sum = bias[channel];
-  for (var c = 0u; c < dims.channels; c = c + 1u) {
-    sum = sum + input_values[token_base + c] * weight[channel * dims.channels + c];
-  }
-  output_values[index] = sum;
 }
 `;
 
@@ -471,17 +443,17 @@ export async function runSam3PromptFpnPhaseProgramRoute(input = {}) {
       uniforms: { dims: tensors.dims },
       kernels: {
         layerNorm: { code: PROMPT_LAYER_NORM_WGSL, bindings: [{ name: 'input', resource: 'tensor:encoderHiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normWeight', resource: 'tensor:layerNormWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'normBias', resource: 'tensor:layerNormBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:normed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-        qLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:normed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:qWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:qBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:q', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-        kLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:kWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:kBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:k', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-        vLinear: { code: LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:vWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:vBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:v', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        qLinear: { code: SAM_TILED_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:normed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:qWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:qBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:q', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        kLinear: { code: SAM_TILED_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:kWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:kBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:k', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        vLinear: { code: SAM_TILED_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:vWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:vBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:v', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
         attention: { code: SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL, bindings: [{ name: 'q', resource: 'tensor:q', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: 'tensor:k', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: 'tensor:v', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'promptMask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:attention', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
         outputResidual: { code: PROMPT_OUTPUT_RESIDUAL_WGSL, bindings: [{ name: 'attention', resource: 'tensor:attention', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'residual', resource: 'tensor:encoderHiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:oWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:oBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:output', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
       },
       phases: [
         { name: 'prompt-layernorm', kernel: 'layerNorm', dispatch: [workgroups(shape.batch * shape.spatialTokens)], yieldAfter: true },
-        { name: 'prompt-qkv-q', kernel: 'qLinear', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
-        { name: 'prompt-qkv-k', kernel: 'kLinear', dispatch: [workgroups(totalPrompt)], yieldAfter: true },
-        { name: 'prompt-qkv-v', kernel: 'vLinear', dispatch: [workgroups(totalPrompt)], yieldAfter: true },
+        { name: 'prompt-qkv-q', kernel: 'qLinear', dispatch: tiledLinearDispatch(shape.batch * shape.spatialTokens, shape.channels), yieldAfter: true },
+        { name: 'prompt-qkv-k', kernel: 'kLinear', dispatch: tiledLinearDispatch(shape.batch * shape.promptTokens, shape.channels), yieldAfter: true },
+        { name: 'prompt-qkv-v', kernel: 'vLinear', dispatch: tiledLinearDispatch(shape.batch * shape.promptTokens, shape.channels), yieldAfter: true },
         { name: 'prompt-attention-softmax', kernel: 'attention', dispatch: onlineAttentionDispatch(shape.spatialTokens, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
         { name: 'prompt-output-residual', kernel: 'outputResidual', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
         { name: 'readback-prompt-fpn-feature', readbacks: [{ name: 'promptFpnFeature', tensor: 'output' }] },
