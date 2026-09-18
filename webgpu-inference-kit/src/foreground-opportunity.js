@@ -50,8 +50,12 @@ function validateBoundary(input) {
 }
 
 export function createWebGpuForegroundOpportunityInterlock(input = {}) {
+  return createInterlock(input);
+}
+
+function createInterlock(input, outsideRun = false) {
   if (!isNonEmptyString(input.routeId)) throw new Error('routeId must be a non-empty string');
-  if (!isNonEmptyString(input.runId)) throw new Error('runId must be a non-empty caller-owned identity');
+  if (!outsideRun && !isNonEmptyString(input.runId)) throw new Error('runId must be a non-empty caller-owned identity');
   if (!input.device || typeof input.device !== 'object') throw new Error('device must be an object');
   if (!input.queue || typeof input.queue !== 'object') throw new Error('queue must be an object');
   if (input.maxRequests != null || input.maxReceipts != null || input.retention != null && input.retention !== 'uncapped') {
@@ -60,7 +64,7 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
   const now = input.now || (() => globalThis.performance?.now?.() ?? Date.now());
   const state = {
     routeId: input.routeId,
-    runId: input.runId,
+    runId: outsideRun ? null : input.runId,
     sequence: 0,
     serviceSequence: 0,
     pending: [],
@@ -402,4 +406,161 @@ export function createWebGpuForegroundOpportunityInterlock(input = {}) {
     snapshot,
     finish,
   });
+}
+
+export const WEBGPU_FOREGROUND_SERVICE_SCHEMA = 'kaminos.webgpu-foreground-service.v0';
+
+/**
+ * One foreground requester across sequential model runs on a borrowed device.
+ * Await beginRun before model work, use the returned foregroundOpportunities
+ * at cooperative GPU boundaries, and wrap CPU/worker-only waits in
+ * withForeground(phase, work). That scope settles foreground callbacks before
+ * returning to the model; it does not fence GPU execution or preempt a duty.
+ * Await finish when model encoding ends, including on failure. dispose drains
+ * idle callbacks after the last run; device/resource ownership stays external.
+ */
+export function createWebGpuForegroundService(input = {}) {
+  const options = { ...input, queue: input.queue ?? input.device?.queue };
+  if (typeof options.queue?.submit !== 'function') throw new Error('queue.submit must be a function');
+  if (options.now != null && typeof options.now !== 'function') throw new Error('now must be a function');
+  createInterlock(options, true); // Validate before accepting any lifecycle state.
+  const outside = new Map();
+  let current = null;
+  let idleTail = Promise.resolve();
+  let disposal = null;
+  let sequence = 0;
+  let runCount = 0;
+  let outsideRunReceiptCount = 0;
+  let lastOutsideRunReceipt = null;
+
+  function assertOpen() {
+    if (disposal) throw new Error('foreground service is disposed');
+  }
+
+  function serviceBoundary(runId, phase) {
+    const id = `${options.routeId}:foreground-service:${++sequence}`;
+    return { invocationId: runId ?? id, boundaryId: id, dutyId: id, phase, position: 'before-encode' };
+  }
+
+  function request(requestInput) {
+    assertOpen();
+    if (current && !current.finishing) {
+      const handle = current.interlock.request(requestInput);
+      if (current.window?.accepting) current.service(current.window.phase);
+      return handle;
+    }
+    if (outside.has(requestInput?.requestId)) {
+      throw new Error(`duplicate foreground opportunity request ${requestInput.requestId}`);
+    }
+    // A one-request interlock gives idle frames the same contract without
+    // retaining an application's lifetime of frames in an internal history.
+    const interlock = createInterlock(options, true);
+    const handle = interlock.request(requestInput);
+    outside.set(handle.requestId, handle);
+    handle.completion.then(receipt => {
+      outside.delete(handle.requestId);
+      outsideRunReceiptCount += 1;
+      lastOutsideRunReceipt = receipt;
+    });
+    const finishing = current?.finishing;
+    idleTail = idleTail.then(() => finishing).then(() =>
+      interlock.serviceAtBoundary(serviceBoundary(null, 'foreground-idle')));
+    return handle;
+  }
+
+  function beginRun(runId) {
+    assertOpen();
+    if (current) throw new Error(`foreground service already has an active run (${current.runId})`);
+    const interlock = createInterlock({ ...options, runId });
+    const run = { runId, interlock, window: null, finishing: null, tail: Promise.resolve() };
+    current = run;
+    runCount += 1;
+
+    function assertRunning() {
+      if (current !== run || run.finishing) throw new Error(`foreground run ${runId} is finishing or finished`);
+      if (run.window) throw new Error('model GPU boundary is unavailable during a CPU foreground window');
+    }
+
+    function serviceAtBoundary(boundary) {
+      assertRunning();
+      run.tail = interlock.serviceAtBoundary(boundary);
+      return run.tail;
+    }
+    run.service = phase => {
+      run.tail = interlock.serviceAtBoundary(serviceBoundary(runId, phase));
+      return run.tail;
+    };
+
+    async function withForeground(phase, work) {
+      assertRunning();
+      if (!isNonEmptyString(phase)) throw new Error('foreground window phase must be a non-empty string');
+      if (typeof work !== 'function') throw new Error('foreground window work must be a function');
+      run.window = { phase, accepting: true };
+      run.service(phase);
+      try {
+        return await work();
+      } finally {
+        run.window.accepting = false;
+        try { await run.tail; } finally { run.window = null; }
+      }
+    }
+
+    function finish() {
+      if (run.finishing) return run.finishing;
+      assertRunning();
+      // Seal admission synchronously. New requests join idleTail behind this
+      // finish, while the interlock serializes the final drain after all turns.
+      let resolveFinish;
+      let rejectFinish;
+      run.finishing = new Promise((resolve, reject) => { resolveFinish = resolve; rejectFinish = reject; });
+      run.service('foreground-run-finish').then(() => {
+        const report = interlock.finish();
+        current = null;
+        resolveFinish(report);
+      }, rejectFinish);
+      return run.finishing;
+    }
+
+    const foregroundOpportunities = Object.freeze({
+      schema: WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
+      request(requestInput) {
+        if (current !== run || run.finishing) throw new Error(`foreground run ${runId} is finishing or finished`);
+        return request(requestInput);
+      },
+      serviceAtBoundary,
+      pressureSnapshot: interlock.pressureSnapshot,
+      snapshot: interlock.snapshot,
+      finish: interlock.finish,
+    });
+    // Reservation occurs before awaiting idle work: newly arriving frames join
+    // the new run instead of prolonging startup indefinitely.
+    return idleTail.then(() => Object.freeze({ runId, foregroundOpportunities, withForeground, finish }));
+  }
+
+  function snapshot() {
+    return Object.freeze({
+      schema: WEBGPU_FOREGROUND_SERVICE_SCHEMA,
+      routeId: options.routeId,
+      disposed: disposal !== null,
+      runCount,
+      activeRun: current ? Object.freeze({
+        runId: current.runId,
+        finishing: current.finishing !== null,
+        foregroundPhase: current.window?.phase ?? null,
+        pressure: current.interlock.pressureSnapshot(),
+      }) : null,
+      outsideRunInFlightCount: outside.size,
+      outsideRunReceiptCount,
+      lastOutsideRunReceipt,
+    });
+  }
+
+  function dispose() {
+    if (disposal) return disposal;
+    if (current) throw new Error('finish the active run before disposing foreground service');
+    disposal = idleTail.then(() => undefined);
+    return disposal;
+  }
+
+  return Object.freeze({ schema: WEBGPU_FOREGROUND_SERVICE_SCHEMA, routeId: options.routeId, request, beginRun, snapshot, dispose });
 }

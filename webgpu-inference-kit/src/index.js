@@ -149,7 +149,9 @@ export {
   WEBGPU_FOREGROUND_OPPORTUNITY_RECEIPT_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_SERVICE_SCHEMA,
+  WEBGPU_FOREGROUND_SERVICE_SCHEMA,
   createWebGpuForegroundOpportunityInterlock,
+  createWebGpuForegroundService,
 } from './foreground-opportunity.js';
 
 export {
