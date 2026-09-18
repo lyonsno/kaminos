@@ -61,7 +61,7 @@ assert.equal(baselineVerdict.authority,'page-clock-pass-and-duty-timing');
 const candidateVerdict=verifyFrameAdmission(valid,'frame-admission',pageTimeOrigin);
 assert.equal(candidateVerdict.foregroundQueueFence,true);
 assert.equal(candidateVerdict.authority,'page-clock-current-duty-queue-prefix-and-fresh-dual-counter');
-const chunked={steps:1,scheduling:{mode:'layer-chunk-admission',layersPerDuty:4,chunksPerPass:4,events:[]},diagnostics:{clock:'performance.now',timeOrigin:pageTimeOrigin,passes:[],submissionReport:{duties:[]}}};
+const chunked={steps:1,scheduling:{mode:'layer-chunk-admission',layersPerDuty:4,chunksPerPass:4,events:[]},diagnostics:{clock:'performance.now',timeOrigin:pageTimeOrigin,scheduling:{layersPerDuty:4,chunksPerPass:4},passes:[],submissionReport:{duties:[]}}};
 for(const pass of ['cond-root','cond-body','uncond-root','uncond-body']){
   for(let chunkIndex=1;chunkIndex<=4;chunkIndex++){
     const dutyId=`${pass}-c${chunkIndex}`,layerStart=(chunkIndex-1)*4,layerEnd=chunkIndex*4;
@@ -74,6 +74,13 @@ const chunkVerdict=verifyFrameAdmission(chunked,'layer-chunk-admission',pageTime
 assert.equal(chunkVerdict.passes,16);
 assert.equal(chunkVerdict.foregroundQueueFence,true);
 assert.equal(chunkVerdict.authority,'page-clock-current-chunk-duty-queue-prefix-and-fresh-dual-counter');
+for(const mutate of [
+  r=>delete r.diagnostics.scheduling,
+  r=>{const duplicate=r.diagnostics.passes[0].dutyId;r.scheduling.events[1].dutyId=duplicate;r.diagnostics.passes[1].dutyId=duplicate;r.diagnostics.submissionReport.duties[1].dutyId=duplicate;},
+  r=>{r.scheduling.events[0].dutyId='cond-root-wrong';r.diagnostics.passes[0].dutyId='cond-root-wrong';r.diagnostics.submissionReport.duties[0].dutyId='cond-root-wrong';},
+]){
+  const r=structuredClone(chunked);mutate(r);assert.throws(()=>verifyFrameAdmission(r,'layer-chunk-admission',pageTimeOrigin));
+}
 const injection=readFileSync(new URL('../kimodo-live-flame-inject.mjs',import.meta.url),'utf8');
 assert.match(injection,/value="layer-chunk-admission"/);
 assert.match(injection,/schedulingMode==='layer-chunk-admission'\?4:16/);
