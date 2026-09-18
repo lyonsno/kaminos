@@ -18,9 +18,11 @@ The project spans four connected capabilities:
 - **A world kiln**. Images, meshes, splats, motion, material fields, simulation
   state, and generated environments become composable world matter.
 
-[![A live browser-native orange flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](https://lyonsno.github.io/kaminos/)
+[![Golden flames illuminate the chamber of an open kiln in the Kaminos browser workbench](docs/flame-atlas/assets/kiln-authoring-hero.png)](https://lyonsno.github.io/kaminos/)
 
 ## Live Browser Combustion
+
+[![A live browser-native orange flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](https://lyonsno.github.io/kaminos/)
 
 These films were captured directly from the live browser runtime while one
 stateful WebGPU combustion material was being authored, not prerendered.
