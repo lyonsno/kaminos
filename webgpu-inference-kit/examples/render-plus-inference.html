@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebGPU Render + Inference</title>
+<style>
+  * { box-sizing: border-box; letter-spacing: 0; }
+  body { margin: 0; background: #131518; color: #f2f3f4; font: 15px system-ui, sans-serif; }
+  main { max-width: 1040px; margin: auto; padding: 28px 20px; }
+  header, .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+  h1 { font-size: 24px; margin: 0; } header { margin-bottom: 24px; }
+  canvas { display: block; width: 100%; aspect-ratio: 2.2; min-height: 220px; }
+  .controls { justify-content: flex-start; padding: 22px 0; border-bottom: 1px solid #45474d; }
+  button, input { font: inherit; border-radius: 4px; padding: 10px 14px; border: 1px solid #666970; }
+  button { background: #e5e8eb; color: #131518; cursor: pointer; } button:disabled { opacity: 0.5; cursor: default; }
+  input { width: 100px; background: #22252a; color: white; } label { display: flex; gap: 10px; align-items: center; }
+  output { color: #65dfbf; } .job { display: grid; grid-template-columns: 80px minmax(0,1fr); gap: 10px 16px; padding: 20px 0; border-bottom: 1px solid #45474d; }
+  progress { width: 100%; accent-color: #65dfbf; } pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #error { color: #ff91ab; } .muted { color: #bbc1cb; }
+</style>
+<script type="importmap">{"imports":{"@kaminos/webgpu-inference-kit":"../src/index.js"}}</script>
+<main>
+  <header><h1>Render + Inference</h1><span class="muted">Affine model / WebGPU</span></header>
+  <canvas aria-label="Animated plot of model output"></canvas>
+  <div class="controls">
+    <button id="run" disabled>Run Two Jobs</button><button id="cancel" disabled>Cancel Queued</button>
+    <label>Input wait (ms) <input id="delay" type="number" min="0" value="500" step="100"></label>
+    <output id="frames">0 frames</output>
+  </div>
+  <p id="phase">Connecting</p><div id="jobs"></div><pre id="error" role="alert"></pre>
+</main>
+<script type="module">
+import { createRenderPlusInferenceExample } from './render-plus-inference.mjs';
+const get = id => document.getElementById(id);
+let renderedJobs = '';
+try {
+  const app = await createRenderPlusInferenceExample({ canvas: document.querySelector('canvas'), onState(state) {
+    get('frames').textContent = `${state.frames} frames`;
+    get('phase').textContent = `${state.phase} / ${state.status}`;
+    get('error').textContent = state.error || '';
+    get('run').disabled = state.status === 'running'; get('cancel').disabled = state.status !== 'running';
+    const jobs = JSON.stringify(state.jobs);
+    if (jobs === renderedJobs) return;
+    renderedJobs = jobs;
+    get('jobs').replaceChildren(...state.jobs.map((row, i) => {
+      const element = document.createElement('section'); element.className = 'job';
+      const label = document.createElement('strong'); label.textContent = `Job ${i + 1}`;
+      const detail = document.createElement('div'); detail.textContent = `${row.phase} / ${row.status}`;
+      const progress = document.createElement('progress'); progress.max = 100; progress.value = row.percent;
+      const output = document.createElement('pre'); output.textContent = row.output ? JSON.stringify(row.output) : row.failure?.message || '';
+      detail.append(progress, output); element.append(label, detail); return element;
+    }));
+  } });
+  window.renderInferenceExample = app;
+  get('run').onclick = () => app.run({ inputWaitMs: Number(get('delay').value) }).catch(error => { get('error').textContent = error.message; });
+  get('cancel').onclick = () => app.cancelQueued();
+  window.addEventListener('pagehide', () => { void app.dispose(); }, { once: true });
+} catch (error) { get('error').textContent = error.message; get('phase').textContent = 'Unavailable'; }
+</script>
+</html>
