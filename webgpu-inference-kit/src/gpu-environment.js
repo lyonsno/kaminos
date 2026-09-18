@@ -53,8 +53,8 @@ export function composeWebGpuDeviceRequirements(requirements = []) {
     for (const [name, value] of Object.entries(requiredLimits)) {
       if (!name.startsWith('max') && !ALIGNMENT_LIMITS.has(name)) throw new Error(`unknown limit class: ${name}`);
       if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative safe integer`);
-      if (ALIGNMENT_LIMITS.has(name) && (value === 0 || (BigInt(value) & (BigInt(value) - 1n)) !== 0n)) {
-        throw new Error(`${name} must be a positive power of two`);
+      if (ALIGNMENT_LIMITS.has(name) && (value === 0 || value >= 2 ** 32 || (BigInt(value) & (BigInt(value) - 1n)) !== 0n)) {
+        throw new Error(`${name} must be a positive power of two below 2^32`);
       }
       const combine = ALIGNMENT_LIMITS.has(name) ? Math.min : Math.max;
       limits[name] = Object.hasOwn(limits, name) ? combine(limits[name], value) : value;
