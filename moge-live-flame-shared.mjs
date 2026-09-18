@@ -191,6 +191,8 @@ export async function runInference(inference, {
     status: frameAdmissionMode === 'none' ? 'not-requested' : 'pending',
     events: [],
     verification: null,
+    finishReport: null,
+    serviceSnapshot: null,
   };
   const capture = {
     kind: 'moge-frame-timing', runId: crypto.randomUUID(),
@@ -211,6 +213,14 @@ export async function runInference(inference, {
       hostAdmission: frameAdmissionMode === 'fresh-flame' ? 'callback' : 'none',
     },
   };
+  let admissionRuntime = null;
+  let primaryError = null;
+  const finishFrameAdmission = async () => {
+    if (!admissionRuntime || frameAdmission.finishReport) return frameAdmission.finishReport;
+    frameAdmission.finishReport = await admissionRuntime.finish();
+    frameAdmission.serviceSnapshot = admissionRuntime.serviceSnapshot?.() ?? null;
+    return frameAdmission.finishReport;
+  };
   state.lastRouteResult = null;
   markPhase('image-input');
   try {
@@ -226,7 +236,15 @@ export async function runInference(inference, {
     markPhase('inference');
     const scheduler = { ...capture.requestedScheduler };
     if (frameAdmissionMode === 'fresh-flame') {
-      scheduler.admit = createFrameAdmission(frameAdmission.events);
+      admissionRuntime = await createFrameAdmission({
+        events: frameAdmission.events,
+        runId: capture.runId,
+      });
+      if (typeof admissionRuntime?.admit !== 'function'
+        || typeof admissionRuntime?.finish !== 'function') {
+        throw new Error('Host admission factory did not return an admission runtime');
+      }
+      scheduler.admit = admissionRuntime.admit;
     }
     const result = await inference.run(imageData, {
       scheduler,
@@ -241,9 +259,11 @@ export async function runInference(inference, {
     hud('hud-frames').className = `v ${state.framesDuringInference > 30 ? 'good' : 'warn'}`;
     const sched = result.schedulerVerificationReceipt;
     if (frameAdmissionMode === 'fresh-flame') {
+      await finishFrameAdmission();
       frameAdmission.verification = verifyMogeFrameAdmission({
         events: frameAdmission.events,
         schedulerReceipt: sched,
+        finishReport: frameAdmission.finishReport,
       });
       frameAdmission.status = frameAdmission.verification.status;
     }
@@ -257,6 +277,7 @@ export async function runInference(inference, {
     capture.status = 'complete';
     markPhase('complete');
   } catch (e) {
+    primaryError = e;
     capture.status = 'failed';
     capture.failure = { phase: state.phases.at(-1)?.phase, message: String(e) };
     state.inferring = false;
@@ -264,6 +285,20 @@ export async function runInference(inference, {
     hud('hud-infer').className = 'v bad';
     throw e;
   } finally {
+    if (admissionRuntime && !frameAdmission.finishReport) {
+      try {
+        await finishFrameAdmission();
+      } catch (finishError) {
+        frameAdmission.finishFailure = {
+          name: finishError?.name || 'Error',
+          message: finishError?.message || String(finishError),
+        };
+        if (!primaryError) {
+          capture.status = 'failed';
+          capture.failure = { phase: 'foreground-run-finish', message: String(finishError) };
+        }
+      }
+    }
     collectLongTasks(state.longTaskObserver?.takeRecords() ?? []);
     capture.windowEndMs = performance.now();
     capture.visibilityAtEnd = document.visibilityState;

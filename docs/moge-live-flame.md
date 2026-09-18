@@ -40,15 +40,19 @@ candidate. It can also be preselected explicitly in the same fragment:
 #composition_module_url=./moge-live-flame-inject.mjs&moge_frame_admission=fresh-flame
 ```
 
-At each submitted MoGe chunk it finishes the current MoGe queue prefix, then
-requires both the live flame render counter and simulation-step counter to
-advance before admitting another model chunk. Hidden, inactive, fallback,
-errored, reset, or stalled flame state fails the inference instead of silently
-reverting to timer-only yielding. The raw capture retains every admission
-event and verifies parity with the scheduler's observed callback events. This
-is a same-GPU/two-device opportunity witness, not presentation or priority
-proof; it deliberately uses strict-drain pacing and is expected to cost wall
-time. Remove `moge_frame_admission` for the bounded-prefix baseline.
+At each submitted MoGe chunk, the scheduler's strict-drain mode finishes the
+current MoGe queue prefix. MoGe then services the boundary through the kit's
+persistent foreground service and requires both the live flame render counter
+and simulation-step counter to advance before admitting another model chunk.
+The service owns run lifecycle, request ordering, and immutable receipts; the
+MoGe adapter owns only boundary identity and the host flame freshness check.
+Hidden, inactive, fallback, errored, reset, or stalled flame state fails the
+inference instead of silently reverting to timer-only yielding. The raw
+capture retains every admission event, the foreground-service finish report,
+and parity with the scheduler's observed callback events. This is a
+same-GPU/two-device opportunity witness, not presentation or priority proof;
+it deliberately uses strict-drain pacing and is expected to cost wall time.
+Remove `moge_frame_admission` for the bounded-prefix baseline.
 
 ## Running a basin (example: `elfinblue-fuckeryyy`)
 

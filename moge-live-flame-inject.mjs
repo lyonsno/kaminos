@@ -13,6 +13,7 @@
  * standalone moge-live-flame.html page.
  */
 import { initGPU } from './lib/moge-inference.js';
+import { createWebGpuForegroundService } from './webgpu-inference-kit/src/index.js';
 import {
   hud, state, startFrameMonitor, loadMoge, restoreLastRunTelemetry, runInference,
 } from './moge-live-flame-shared.mjs';
@@ -87,6 +88,20 @@ export async function mountComposition({ prototype, params } = {}) {
   // MoGe owns its device (kit shared helper); the app keeps its own.
   const gpu = await initGPU();
   window.__mogeGpuDevice = gpu.device;
+  const foregroundService = createWebGpuForegroundService({
+    routeId: 'moge-live-flame.frame-admission.v0',
+    device: gpu.device,
+  });
+  window.__mogeForegroundService = foregroundService;
+  window.addEventListener('pagehide', () => {
+    try {
+      void foregroundService.dispose().catch(error => {
+        console.error('MoGe foreground service disposal failed:', error);
+      });
+    } catch (error) {
+      console.error('MoGe foreground service disposal failed:', error);
+    }
+  }, { once: true });
   const inference = await loadMoge(gpu);
   const admissionControl = hud('hud-admission');
   admissionControl.value = requestedAdmission;
@@ -108,8 +123,9 @@ export async function mountComposition({ prototype, params } = {}) {
     try {
       await runInference(inference, {
         frameAdmissionMode,
-        createFrameAdmission: events => createMogeFrameAdmission({
-          queue: gpu.device.queue,
+        createFrameAdmission: ({ events, runId }) => createMogeFrameAdmission({
+          foregroundService,
+          runId,
           readFlame: () => window.__flameVolumePrototype?.debugState?.(),
           events,
         }),
@@ -121,5 +137,5 @@ export async function mountComposition({ prototype, params } = {}) {
     }
   };
   window.__mogeLiveFlameReady = true;
-  return { inference, gpu };
+  return { inference, gpu, foregroundService };
 }

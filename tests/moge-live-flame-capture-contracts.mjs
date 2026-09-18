@@ -70,6 +70,7 @@ assert.equal(state.unsavedCaptures.length, 3);
 
 globalThis.fetch = successFetch;
 let effectiveScheduler = null;
+let finishedAdmission = false;
 const candidateInference = { async run(_imageData, options) {
   effectiveScheduler = options.scheduler;
   await options.scheduler.admit({ phase: 'backbone', chunk: 'block-0:qkv' });
@@ -87,19 +88,51 @@ const candidateInference = { async run(_imageData, options) {
 } };
 await runInference(candidateInference, {
   frameAdmissionMode: 'fresh-flame',
-  createFrameAdmission: events => async ({ phase, chunk }) => {
-    events.push({
-      phase, chunk, mode: 'fresh-flame', status: 'advanced',
-      startedAtMs: 1, queueDoneAtMs: 2, endedAtMs: 3,
-      before: { frameCount: 10, simStepCount: 20 },
-      after: { frameCount: 11, simStepCount: 21 },
-    });
-  },
+  createFrameAdmission: async ({ events, runId }) => ({
+    admit: async ({ phase, chunk }) => {
+      events.push({
+        phase, chunk, mode: 'fresh-flame', status: 'advanced',
+        requestId: `${runId}:fresh-flame:1`, startedAtMs: 1, endedAtMs: 3,
+        foregroundService: { status: 'serviced' },
+        foregroundReceipt: {
+          status: 'completed', submissionCount: 0,
+          result: {
+            before: { frameCount: 10, simStepCount: 20 },
+            after: { frameCount: 11, simStepCount: 21 },
+          },
+        },
+      });
+    },
+    finish: async () => {
+      finishedAdmission = true;
+      return { status: 'succeeded', receiptCount: 1 };
+    },
+    serviceSnapshot: () => ({ schema: 'test.foreground-service', activeRun: null }),
+  }),
 });
 assert.equal(effectiveScheduler.pacing, 'strict-drain');
 assert.equal(effectiveScheduler.hostAdmission, 'callback');
 assert.equal(typeof effectiveScheduler.admit, 'function');
 assert.equal(writes.at(-1).frameAdmission.status, 'verified');
 assert.equal(writes.at(-1).frameAdmission.verification.admissions, 1);
+assert.equal(writes.at(-1).frameAdmission.finishReport.status, 'succeeded');
+assert.equal(writes.at(-1).frameAdmission.serviceSnapshot.activeRun, null);
+assert.equal(finishedAdmission, true, 'foreground run must finish before capture publication');
 assert.equal(writes.at(-1).requestedScheduler.hostAdmission, 'callback');
+
+let failedRunFinished = false;
+await assert.rejects(runInference({ async run() { throw new Error('candidate inference failed'); } }, {
+  frameAdmissionMode: 'fresh-flame',
+  createFrameAdmission: async () => ({
+    admit: async () => {},
+    finish: async () => {
+      failedRunFinished = true;
+      return { status: 'succeeded', receiptCount: 0 };
+    },
+    serviceSnapshot: () => ({ schema: 'test.foreground-service', activeRun: null }),
+  }),
+}), /candidate inference failed/);
+assert.equal(failedRunFinished, true, 'model failure must still finish the foreground run');
+assert.equal(writes.at(-1).status, 'failed');
+assert.equal(writes.at(-1).frameAdmission.finishReport.status, 'succeeded');
 console.log('PASS: per-run raw retention, partial route, phase failures, missing fixture and failed/stale save visibility');
