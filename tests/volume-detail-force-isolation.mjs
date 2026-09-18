@@ -12,6 +12,7 @@ assert.deepEqual(detailForceContributionMask(), [1, 1, 1, 1]);
 assert.deepEqual(detailForceContributionMask({ micro: false }), [1, 0, 1, 1]);
 assert.deepEqual(detailForceContributionMask({ shred: false }), [1, 1, 0, 1]);
 assert.deepEqual(detailForceContributionMask({ fine: false }), [1, 1, 1, 0]);
+assert.deepEqual(detailForceContributionMask({ micro: false, shred: true, fine: false }), [1, 0, 1, 0]);
 assert.deepEqual(detailForceContributionMask({ micro: false, shred: false, fine: false }), [1, 0, 0, 0]);
 assert.deepEqual(detailForceContributionReceipt({ proceduralDetailForces: false }).effectiveMask, [0, 0, 0, 0]);
 assert.deepEqual(detailForceContributionReceipt({ volumeScene: 'tall_plume' }).effectiveMask, [0, 1, 1, 1]);
