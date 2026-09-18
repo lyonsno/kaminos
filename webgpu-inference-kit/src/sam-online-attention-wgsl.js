@@ -259,8 +259,9 @@ function positiveDispatchDimension(value, name) {
 }
 
 export function onlineAttentionDispatch(queryTokens, heads, batches, headDim) {
-  positiveDispatchDimension(headDim, 'headDim');
-  if (headDim > 64) throw new Error('headDim must be an integer in [1, 64]');
+  if (!Number.isInteger(headDim) || headDim <= 0 || headDim > 64) {
+    throw new Error('headDim must be an integer in [1, 64]');
+  }
   return [
     positiveDispatchDimension(queryTokens, 'queryTokens'),
     positiveDispatchDimension(heads, 'heads'),
