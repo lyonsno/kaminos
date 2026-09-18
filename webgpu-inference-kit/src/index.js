@@ -96,6 +96,8 @@ export {
 export {
   createWebGpuBackendIdentity,
   createWebGpuDeviceRequest,
+  composeWebGpuDeviceRequirements,
+  validateWebGpuDeviceRequirements,
   requestBrowserWebGpuDevice,
   validateWebGpuBackendIdentity,
 } from './gpu-environment.js';
