@@ -11,8 +11,24 @@ await fs.mkdir(output, { recursive: true });
 const report = { status: 'failed', phase: 'setup', sourceSha256: {}, checks: [], pageErrors: [], requestedRoute: process.env.RENDER_INFERENCE_URL, effectiveRoute: null };
 let browser;
 try {
-  for (const file of ['src/index.js', 'src/foreground-opportunity.js', 'src/gpu-environment.js', 'examples/minimal-model-port.mjs', 'examples/render-plus-inference.mjs', 'examples/render-plus-inference.html']) {
+  const files = ['package.json'];
+  for (const directory of ['src', 'examples']) {
+    for (const file of await fs.readdir(path.join(root, directory), { recursive: true })) {
+      if (/\.(?:m?js|html)$/.test(file)) files.push(`${directory}/${file}`);
+    }
+  }
+  for (const file of files.sort()) {
     report.sourceSha256[file] = createHash('sha256').update(await fs.readFile(path.join(root, file))).digest('hex');
+  }
+  if (process.env.RENDER_INFERENCE_INSTALLED_ROOT) {
+    const installedRoot = await fs.realpath(process.env.RENDER_INFERENCE_INSTALLED_ROOT);
+    assert.notEqual(installedRoot, await fs.realpath(root), 'installed route must not be the source checkout');
+    if (!process.env.RENDER_INFERENCE_TARBALL) throw new Error('installed replay requires its tarball');
+    report.packageIdentity = { installedRoot, tarball: process.env.RENDER_INFERENCE_TARBALL,
+      tarballSha256: createHash('sha256').update(await fs.readFile(process.env.RENDER_INFERENCE_TARBALL)).digest('hex') };
+    for (const [file, hash] of Object.entries(report.sourceSha256)) {
+      assert.equal(createHash('sha256').update(await fs.readFile(path.join(installedRoot, file))).digest('hex'), hash, `installed source differs: ${file}`);
+    }
   }
   if (!report.requestedRoute) throw new Error('RENDER_INFERENCE_URL must name the served example');
   const { default: puppeteer } = await import(process.env.PUPPETEER_MODULE || 'puppeteer-core');
@@ -80,6 +96,14 @@ try {
   const recovered = await page.evaluate(() => window.renderInferenceExample.run({ inputWaitMs: 0 }));
   assert.deepEqual(recovered.map(row => row.output), [[1,3,5,7],[9,11,13,15]]);
   report.checks.push('failed input settles and subsequent batch succeeds');
+  report.phase = 'invalid-control';
+  await page.$eval('#delay', node => { node.value = '-1'; });
+  await page.click('#run');
+  assert.match(await page.$eval('#error', node => node.textContent), /inputWaitMs must be non-negative/);
+  await page.$eval('#delay', node => { node.value = '500'; });
+  await page.click('#run');
+  await page.waitForFunction(() => window.renderInferenceExample.snapshot().status === 'succeeded');
+  report.checks.push('invalid input control reports its error and recovers');
   report.phase = 'mobile';
   await page.setViewport({ width: 390, height: 844 });
   await page.waitForFunction(() => document.querySelector('canvas').width === Math.round(document.querySelector('canvas').clientWidth * devicePixelRatio));
@@ -117,6 +141,42 @@ try {
   assert.match(cleanup.error, /injected unavailable canvas/);
   assert.equal(cleanup.destroyed, true, 'initialization failure must release its owned device');
   report.checks.push('initialization failure releases owned device');
+  report.phase = 'observer-failure';
+  const observers = await page.evaluate(async () => {
+    const { createRenderPlusInferenceExample } = await import('../examples/render-plus-inference.mjs');
+    const results = [];
+    for (const mode of ['invalid', 'initial', 'running']) {
+      let destroyed = false, requested = 0;
+      const gpu = { getPreferredCanvasFormat: () => navigator.gpu.getPreferredCanvasFormat(), async requestAdapter() {
+        requested += 1;
+        const adapter = await navigator.gpu.requestAdapter();
+        return { features: adapter.features, limits: adapter.limits, info: adapter.info, async requestDevice(descriptor) {
+          const device = await adapter.requestDevice(descriptor), destroy = device.destroy.bind(device);
+          device.destroy = () => { destroyed = true; destroy(); }; return device;
+        } };
+      } };
+      const canvas = document.createElement('canvas'); document.body.append(canvas);
+      let app, error, completions, snapshot;
+      try {
+        app = await createRenderPlusInferenceExample({ canvas, gpu, onState: mode === 'invalid' ? null : state => {
+          if (mode === 'initial' || state.status === 'running') throw new Error(`injected ${mode} observer`);
+        } });
+        completions = await app.run({ inputWaitMs: 0 }); snapshot = app.snapshot();
+      } catch (cause) { error = cause.message; }
+      finally { await app?.dispose(); canvas.remove(); }
+      results.push({ mode, destroyed, requested, error, snapshot, statuses: completions?.map(row => row.status) });
+    }
+    return results;
+  });
+  assert.equal(observers[0].requested, 0, 'invalid observer is refused before allocation');
+  assert.match(observers[0].error, /onState/);
+  assert.equal(observers[1].destroyed, true, 'initial observer exception must release device');
+  assert.match(observers[1].error, /injected initial observer/);
+  assert.deepEqual(observers[2].statuses, ['succeeded', 'succeeded']);
+  assert.equal(observers[2].snapshot.status, 'succeeded');
+  assert.match(observers[2].snapshot.observerError, /injected running observer/);
+  assert.equal(observers[2].destroyed, true);
+  report.checks.push('observer validation, initial cleanup, and runtime failure isolation');
   assert.deepEqual(report.pageErrors, []);
   report.status = 'succeeded'; report.phase = null;
 } catch (error) {
@@ -125,5 +185,5 @@ try {
 } finally {
   await fs.writeFile(path.join(output, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   await browser?.close();
-  console.log(JSON.stringify(report, null, 2));
+  console.log(JSON.stringify({ status: report.status, phase: report.phase, checks: report.checks, error: report.error, reportPath: path.join(output, 'report.json') }, null, 2));
 }

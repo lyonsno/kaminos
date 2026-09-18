@@ -32,6 +32,7 @@ struct Vertex { @builtin(position) position: vec4f, @location(0) uv: vec2f };
 // The input wait is caller-controlled: it demonstrates an asynchronous input
 // phase, not a benchmark or an artificial claim of expensive model work.
 export async function createRenderPlusInferenceExample({ canvas, onState = () => {}, gpu = globalThis.navigator?.gpu } = {}) {
+  if (typeof onState !== 'function') throw new Error('onState must be a function');
   const requirements = composeWebGpuDeviceRequirements([
     { requiredLimits: { maxStorageBuffersPerShaderStage: 2 } },
     { requiredLimits: { maxUniformBuffersPerShaderStage: 1 } },
@@ -62,7 +63,7 @@ export async function createRenderPlusInferenceExample({ canvas, onState = () =>
     surface?.unconfigure(); uniform?.destroy(); device.destroy();
     throw error;
   }
-  const state = { status: 'idle', phase: 'Idle', frames: 0, values: [0, 0, 0, 0], jobs: [], error: null, backend: context.backendIdentity };
+  const state = { status: 'idle', phase: 'Idle', frames: 0, values: [0, 0, 0, 0], jobs: [], error: null, observerError: null, backend: context.backendIdentity };
   let batch = null;
   let jobs = [];
   let runSequence = 0;
@@ -72,7 +73,13 @@ export async function createRenderPlusInferenceExample({ canvas, onState = () =>
   let disposed = false;
   let disposal = null;
   const snapshot = () => structuredClone(state);
-  const publish = () => onState(snapshot());
+  // After construction, a broken view observer is detached; inference and
+  // cleanup keep their own outcome. The caller can inspect observerError.
+  const publish = () => {
+    if (state.observerError !== null) return;
+    try { onState(snapshot()); }
+    catch (error) { state.observerError = String(error?.message ?? error); }
+  };
 
   function requestFrame(time) {
     if (disposed) return;
@@ -108,12 +115,12 @@ export async function createRenderPlusInferenceExample({ canvas, onState = () =>
     const runId = `batch:${++runSequence}`;
     state.status = 'running'; state.error = null;
     state.jobs = inputs.map((_, i) => ({ id: `${runId}:${i}`, status: 'queued', phase: 'Queued', percent: 0 }));
-    publish();
     batch = (async () => {
       const active = await foreground.beginRun(runId);
       let route;
       let model;
       try {
+        publish();
         route = await session.registerRoute({ routeId: MINIMAL_MODEL_ROUTE_ID, runtimeOptions: {
           runtimeLabel: 'render-plus-inference', kernel: { profile: 'example.affine-f32.v0' },
           foregroundOpportunities: active.foregroundOpportunities, yieldMs: 0,
@@ -165,7 +172,8 @@ export async function createRenderPlusInferenceExample({ canvas, onState = () =>
     })();
     return disposal;
   }
+  try { onState(snapshot()); }
+  catch (error) { await dispose(); throw error; }
   raf = requestAnimationFrame(requestFrame);
-  publish();
   return Object.freeze({ run, cancelQueued, snapshot, dispose });
 }

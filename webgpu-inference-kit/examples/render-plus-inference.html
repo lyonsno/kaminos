@@ -33,11 +33,12 @@
 import { createRenderPlusInferenceExample } from './render-plus-inference.mjs';
 const get = id => document.getElementById(id);
 let renderedJobs = '';
+let commandError = '';
 try {
   const app = await createRenderPlusInferenceExample({ canvas: document.querySelector('canvas'), onState(state) {
     get('frames').textContent = `${state.frames} frames`;
     get('phase').textContent = `${state.phase} / ${state.status}`;
-    get('error').textContent = state.error || '';
+    get('error').textContent = state.error || commandError;
     get('run').disabled = state.status === 'running'; get('cancel').disabled = state.status !== 'running';
     const jobs = JSON.stringify(state.jobs);
     if (jobs === renderedJobs) return;
@@ -52,7 +53,11 @@ try {
     }));
   } });
   window.renderInferenceExample = app;
-  get('run').onclick = () => app.run({ inputWaitMs: Number(get('delay').value) }).catch(error => { get('error').textContent = error.message; });
+  get('run').onclick = async () => {
+    commandError = '';
+    try { await app.run({ inputWaitMs: Number(get('delay').value) }); }
+    catch (error) { commandError = error.message; get('error').textContent = commandError; }
+  };
   get('cancel').onclick = () => app.cancelQueued();
   window.addEventListener('pagehide', () => { void app.dispose(); }, { once: true });
 } catch (error) { get('error').textContent = error.message; get('phase').textContent = 'Unavailable'; }
