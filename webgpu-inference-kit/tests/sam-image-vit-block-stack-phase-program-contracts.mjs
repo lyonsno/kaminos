@@ -40,8 +40,8 @@ assert.match(routeSource, /createLinearDispatch/, 'ViT block-stack must use the 
 assert.match(routeSource, /maxComputeWorkgroupsPerDimension/, 'ViT block-stack must route against the effective adapter workgroup-dimension limit');
 assert.match(routeSource, /gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u/, 'ViT block-stack shaders must reconstruct a linear invocation index from a two-dimensional dispatch');
 assert.ok(
-  (routeSource.match(/@builtin\(num_workgroups\) dispatch_grid: vec3<u32>/g) || []).length >= 8,
-  'every ViT linear kernel family must receive the effective two-dimensional dispatch grid',
+  (routeSource.match(/@builtin\(num_workgroups\) dispatch_grid: vec3<u32>/g) || []).length >= 7,
+  'every remaining ViT linear kernel family must receive the effective two-dimensional dispatch grid',
 );
 assert.doesNotMatch(routeSource, /dispatch:\s*\[workgroups\(/, 'ViT block-stack phases must not wrap a one-dimensional workgroup count');
 assert.match(routeSource, /dispatch:\s*dispatchPlan\.mlpFc1\.dispatch/, 'ViT block-stack phases must consume the executable named dispatch plan');
@@ -170,7 +170,7 @@ const dispatch1008Local = createSam3ImageVitBlockStackDispatchPlan({
 });
 assert.deepEqual(dispatch1008Local.windowPartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
 assert.deepEqual(dispatch1008Local.qProjection, dispatch1008Local.windowPartition);
-assert.deepEqual(dispatch1008Local.attention, dispatch1008Local.windowPartition);
+assert.deepEqual(dispatch1008Local.attention, { logicalInvocations: 82_944, dispatch: [576, 16, 9] });
 assert.deepEqual(dispatch1008Local.mlpFc1, { logicalInvocations: 24_551_424, dispatch: [620, 619] });
 assert.deepEqual(dispatch1008Local.windowUnpartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
 
@@ -181,6 +181,7 @@ const dispatch1008Global = createSam3ImageVitBlockStackDispatchPlan({
   maxWorkgroupsPerDimension: 65_535,
 });
 assert.deepEqual(dispatch1008Global.windowPartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
+assert.deepEqual(dispatch1008Global.attention, { logicalInvocations: 82_944, dispatch: [5_184, 16, 1] });
 for (const [phase, entry] of Object.entries(dispatch1008Global)) {
   assert.ok(entry.dispatch.every(dimension => dimension <= 65_535), `${phase} must respect the effective device limit`);
   assert.ok(entry.dispatch.reduce((product, dimension) => product * dimension, 1) * 64 >= entry.logicalInvocations, `${phase} must cover its logical invocation domain`);

@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createLinearDispatch } from '../src/runtime-primitives.js';
+import {
+  SAM_BIASED_ONLINE_ATTENTION_WGSL,
+  SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL,
+  SAM_MASKED_ONLINE_ATTENTION_WGSL,
+  SAM_ONLINE_ATTENTION_WGSL,
+  onlineAttentionDispatch,
+} from '../src/sam-online-attention-wgsl.js';
 
 const kernelTokens = {
   'sam-detr-encoder': 'layernorm1:LayerNorm1 add-pos:AddPos self-q:SelfQ self-k:SelfK self-v:SelfV self-attention-softmax:SelfAttention self-output-linear:SelfOutput self-output-residual:SelfResidual layernorm2:LayerNorm2 cross-q:CrossQ cross-k:CrossK cross-v:CrossV cross-attention-softmax:CrossAttention cross-output-linear:CrossOutput cross-output-residual:CrossResidual layernorm3:LayerNorm3 mlp-fc1-relu:MlpFc1Relu mlp-fc2-linear:MlpFc2 mlp-fc2-residual:MlpResidual',
@@ -13,13 +20,13 @@ const shaderClasses = {
   'sam-detr-encoder': {
     LAYERNORM: 'LayerNorm1 LayerNorm2 LayerNorm3', ADD: 'AddPos SelfResidual CrossResidual MlpResidual',
     LINEAR: 'SelfQ SelfK SelfV SelfOutput CrossQ CrossK CrossV CrossOutput MlpFc2',
-    LINEAR_RELU: 'MlpFc1Relu', ATTENTION: 'SelfAttention', MASKED_ATTENTION: 'CrossAttention',
+    LINEAR_RELU: 'MlpFc1Relu', SAM_ONLINE_ATTENTION: 'SelfAttention', SAM_MASKED_ONLINE_ATTENTION: 'CrossAttention',
   },
   'sam-detr-decoder': {
     LAYERNORM: 'SelfNorm TextNorm VisionNorm MlpNorm OutputNorm PresenceNorm',
     ADD: 'AddPos SelfResidual TextAddPos TextResidual VisionAddPos VisionKeyAdd VisionResidual MlpResidual',
     LINEAR: 'Ref2 SelfQ SelfK SelfV SelfOut TextQ TextK TextV TextOut VisionQ VisionK VisionV VisionOut Mlp2 BoxHead3',
-    LINEAR_RELU: 'Ref1 Mlp1 BoxHead1 BoxHead2', ATTENTION_MASKED: 'SelfAttn TextAttn', ATTENTION_BIAS: 'VisionAttn',
+    LINEAR_RELU: 'Ref1 Mlp1 BoxHead1 BoxHead2', SAM_DECODER_MASKED_ONLINE_ATTENTION: 'SelfAttn TextAttn', SAM_BIASED_ONLINE_ATTENTION: 'VisionAttn',
     SINE_BOX: 'Sine', PAD_QUERY_POS: 'PadPos', RPB_AXIS_HIDDEN: 'RpbXHidden RpbYHidden', RPB_COMBINE: 'Rpb',
     SLICE_QUERIES: 'SliceQuery', BOX_APPLY: 'BoxRefine', SLICE_PRESENCE: 'SlicePresence', PRESENCE_HEAD: 'PresenceHead',
   },
@@ -29,19 +36,21 @@ const shaderClasses = {
 
 function expectedDomains(route, s, index) {
   const result = {};
-  const add = (names, total, size = 64) => {
-    for (const name of names.split(' ')) result[name] = { total, size };
+  const add = (names, total, size = 64, dispatch = undefined) => {
+    for (const name of names.split(' ')) result[name] = { total, size, dispatch };
   };
   const b = s.batch, c = s.channels, q = b * s.queryTokens, h = b * (s.queryTokens + 1);
   if (route === 'sam-detr-encoder') {
     add('layernorm1 layernorm2 layernorm3', b * s.spatialTokens);
-    add('add-pos self-q self-k self-v self-attention-softmax self-output-linear self-output-residual cross-q cross-attention-softmax cross-output-linear cross-output-residual mlp-fc2-linear mlp-fc2-residual', b * s.spatialTokens * c);
+    add('add-pos self-q self-k self-v self-output-linear self-output-residual cross-q cross-output-linear cross-output-residual mlp-fc2-linear mlp-fc2-residual', b * s.spatialTokens * c);
+    add('self-attention-softmax cross-attention-softmax', b * s.spatialTokens * c, 64, [s.spatialTokens, s.heads, b]);
     add('cross-k cross-v', b * s.promptTokens * c);
     add('mlp-fc1-relu', b * s.spatialTokens * s.mlpHidden);
   } else if (route === 'sam-detr-decoder') {
     add('sine-box-position', q * c * 2);
     add('ref-point-head-1 ref-point-head slice-query box-head-1 box-head-2', q * c);
-    add('pad-query-position self-add-pos self-q self-k self-v self-attention-softmax self-output self-residual text-add-pos text-q text-attention-softmax text-output text-residual vision-add-pos vision-q vision-attention-softmax vision-output vision-residual mlp-fc2 mlp-residual', h * c);
+    add('pad-query-position self-add-pos self-q self-k self-v self-output self-residual text-add-pos text-q text-output text-residual vision-add-pos vision-q vision-output vision-residual mlp-fc2 mlp-residual', h * c);
+    add('self-attention-softmax text-attention-softmax vision-attention-softmax', h * c, 64, [s.queryTokens + 1, s.heads, b]);
     add('box-rpb-x-hidden', q * s.width * c);
     add('box-rpb-y-hidden', q * s.height * c);
     add('box-rpb', h * s.heads * s.spatialTokens);
@@ -72,7 +81,12 @@ function checkProduction(route, source, shape, index = 0) {
   const evaluate = code => new Function(...Object.keys(bindings), `return (${code});`)(...Object.values(bindings));
   if (route === 'sam-detr-encoder') bindings.kernelBase = evaluate(run.match(/const kernelBase = ([^;]+);/)[1]);
   if (route === 'sam-detr-decoder') bindings.k = evaluate(run.match(/const k = ([^;]+);/)[1]);
-  const shaders = {};
+  const shaders = {
+    SAM_ONLINE_ATTENTION_WGSL,
+    SAM_MASKED_ONLINE_ATTENTION_WGSL,
+    SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL,
+    SAM_BIASED_ONLINE_ATTENTION_WGSL,
+  };
   for (const [, name, expression] of source.matchAll(/const (\w+_WGSL) = (`[^]*?`|\w+_WGSL\.replace\([^\n]+\));/g)) {
     shaders[name] = new Function(...Object.keys(shaders), `return ${expression};`)(...Object.values(shaders));
   }
@@ -110,6 +124,7 @@ function checkProduction(route, source, shape, index = 0) {
   const helper = source.match(/function workgroups\([^]*?\n}/)[0];
   const workgroups = new Function('createLinearDispatch', `${helper}; return workgroups;`)(createLinearDispatch);
   bindings.workgroups = (total, device) => { logicalTotal = total; return workgroups(total, device); };
+  bindings.onlineAttentionDispatch = onlineAttentionDispatch;
   const expected = expectedDomains(route, shape, index), observed = {};
   const tokens = Object.fromEntries(kernelTokens[route].split(' ').map(pair => pair.split(':')));
   const expectedShaders = Object.fromEntries(Object.entries(shaderClasses[route]).flatMap(([shader, kernels]) => kernels.split(' ').map(kernel => [kernel, `${shader}_WGSL`])));
@@ -134,11 +149,16 @@ function checkProduction(route, source, shape, index = 0) {
     assert.equal(Number(workgroup[1]), expected[name].size, `${kernel}: workgroup class`);
     logicalTotal = undefined;
     const dispatch = [].concat(evaluate(dispatchExpression));
-    const { total, size } = expected[name];
-    assert.equal(size === 1 ? dispatch.reduce((a, b) => a * b, 1) : logicalTotal, total, `${fullName}: logical domain`);
-    assert.deepEqual(dispatch, createLinearDispatch(total, { workgroupSize: size, maxWorkgroupsPerDimension: 65535 }), `${fullName}: grid`);
-    const capacity = dispatch.reduce((a, b) => a * b, size);
-    assert.ok(capacity >= total && capacity - total < size * (dispatch.length > 1 ? dispatch[0] : 1), `${fullName}: tail coverage`);
+    const { total, size, dispatch: nativeDispatch } = expected[name];
+    if (nativeDispatch) {
+      assert.deepEqual(dispatch, nativeDispatch, `${fullName}: native query/head/batch grid`);
+      assert.equal(dispatch[0] * dispatch[1] * dispatch[2] * (shape.channels / shape.heads), total, `${fullName}: logical output domain`);
+    } else {
+      assert.equal(size === 1 ? dispatch.reduce((a, b) => a * b, 1) : logicalTotal, total, `${fullName}: logical domain`);
+      assert.deepEqual(dispatch, createLinearDispatch(total, { workgroupSize: size, maxWorkgroupsPerDimension: 65535 }), `${fullName}: grid`);
+      const capacity = dispatch.reduce((a, b) => a * b, size);
+      assert.ok(capacity >= total && capacity - total < size * (dispatch.length > 1 ? dispatch[0] : 1), `${fullName}: tail coverage`);
+    }
     observed[name] = true;
   }
   assert.deepEqual(Object.keys(observed).sort(), Object.keys(expected).sort(), `${route}: complete phase set`);

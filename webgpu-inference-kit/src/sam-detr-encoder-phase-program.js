@@ -20,6 +20,11 @@ import {
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
+import {
+  SAM_MASKED_ONLINE_ATTENTION_WGSL,
+  SAM_ONLINE_ATTENTION_WGSL,
+  onlineAttentionDispatch,
+} from './sam-online-attention-wgsl.js';
 
 export const SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-encoder.phase-program.webgpu-local.v0';
 
@@ -136,131 +141,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) 
     sum = sum + input_values[input_base + c] * weight[weight_base + c];
   }
   output_values[index] = max(sum, 0.0);
-}
-`;
-
-const ATTENTION_WGSL = `
-struct AttentionDims {
-  batch: u32,
-  query_tokens: u32,
-  key_tokens: u32,
-  channels: u32,
-  heads: u32,
-  head_dim: u32,
-  total_output: u32,
-};
-
-@group(0) @binding(0) var<storage, read> q_values: array<f32>;
-@group(0) @binding(1) var<storage, read> k_values: array<f32>;
-@group(0) @binding(2) var<storage, read> v_values: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: AttentionDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
-  if (index >= dims.total_output) { return; }
-  let channel = index % dims.channels;
-  let query = (index / dims.channels) % dims.query_tokens;
-  let batch = index / (dims.query_tokens * dims.channels);
-  let head = channel / dims.head_dim;
-  let head_offset = head * dims.head_dim;
-  let dim_in_head = channel - head_offset;
-  let q_base = (batch * dims.query_tokens + query) * dims.channels + head_offset;
-  let scale = inverseSqrt(f32(dims.head_dim));
-
-  var max_score = -340282346638528859811704183484516925440.0;
-  for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
-    var score = 0.0;
-    let k_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q_values[q_base + d] * k_values[k_base + d];
-    }
-    score = score * scale;
-    max_score = max(max_score, score);
-  }
-
-  var denom = 0.0;
-  var value = 0.0;
-  for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
-    var score = 0.0;
-    let k_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q_values[q_base + d] * k_values[k_base + d];
-    }
-    score = score * scale;
-    let weight = exp(score - max_score);
-    let v_index = (batch * dims.key_tokens + token) * dims.channels + head_offset + dim_in_head;
-    denom = denom + weight;
-    value = value + weight * v_values[v_index];
-  }
-  output_values[index] = value / denom;
-}
-`;
-
-const MASKED_ATTENTION_WGSL = `
-struct AttentionDims {
-  batch: u32,
-  query_tokens: u32,
-  key_tokens: u32,
-  channels: u32,
-  heads: u32,
-  head_dim: u32,
-  total_output: u32,
-};
-
-@group(0) @binding(0) var<storage, read> q_values: array<f32>;
-@group(0) @binding(1) var<storage, read> k_values: array<f32>;
-@group(0) @binding(2) var<storage, read> v_values: array<f32>;
-@group(0) @binding(3) var<storage, read> key_mask: array<f32>;
-@group(0) @binding(4) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(5) var<uniform> dims: AttentionDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
-  if (index >= dims.total_output) { return; }
-  let channel = index % dims.channels;
-  let query = (index / dims.channels) % dims.query_tokens;
-  let batch = index / (dims.query_tokens * dims.channels);
-  let head = channel / dims.head_dim;
-  let head_offset = head * dims.head_dim;
-  let dim_in_head = channel - head_offset;
-  let q_base = (batch * dims.query_tokens + query) * dims.channels + head_offset;
-  let scale = inverseSqrt(f32(dims.head_dim));
-
-  var max_score = -340282346638528859811704183484516925440.0;
-  for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
-    var score = 0.0;
-    let k_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q_values[q_base + d] * k_values[k_base + d];
-    }
-    score = score * scale;
-    if (key_mask[batch * dims.key_tokens + token] <= 0.0) {
-      score = score - 1000000000.0;
-    }
-    max_score = max(max_score, score);
-  }
-
-  var denom = 0.0;
-  var value = 0.0;
-  for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
-    var score = 0.0;
-    let k_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q_values[q_base + d] * k_values[k_base + d];
-    }
-    score = score * scale;
-    if (key_mask[batch * dims.key_tokens + token] <= 0.0) {
-      score = score - 1000000000.0;
-    }
-    let weight = exp(score - max_score);
-    let v_index = (batch * dims.key_tokens + token) * dims.channels + head_offset + dim_in_head;
-    denom = denom + weight;
-    value = value + weight * v_values[v_index];
-  }
-  output_values[index] = value / denom;
 }
 `;
 
@@ -751,14 +631,14 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
       addLinearKernel('SelfQ', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfInput}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfQWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfQBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('SelfK', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfInput}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfKWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfKBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('SelfV', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.norm1}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfVWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfVBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-      addLinearKernel('SelfAttention', ATTENTION_WGSL, [{ name: 'q', resource: `tensor:${layerKeys.selfQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: `tensor:${layerKeys.selfK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: `tensor:${layerKeys.selfV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:selfAttentionDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('SelfAttention', SAM_ONLINE_ATTENTION_WGSL, [{ name: 'q', resource: `tensor:${layerKeys.selfQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: `tensor:${layerKeys.selfK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: `tensor:${layerKeys.selfV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:selfAttentionDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('SelfOutput', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.selfOWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.selfOBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('SelfResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${currentHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.selfProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('LayerNorm2', LAYERNORM_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.layerNorm2Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.layerNorm2Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.norm2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:layerNormDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('CrossQ', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.norm2}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossQWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossQBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('CrossK', LINEAR_WGSL, [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossKWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossKBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:promptLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('CrossV', LINEAR_WGSL, [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossVWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossVBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:promptLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
-      addLinearKernel('CrossAttention', MASKED_ATTENTION_WGSL, [{ name: 'q', resource: `tensor:${layerKeys.crossQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: `tensor:${layerKeys.crossK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: `tensor:${layerKeys.crossV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'mask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:crossAttentionDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
+      addLinearKernel('CrossAttention', SAM_MASKED_ONLINE_ATTENTION_WGSL, [{ name: 'q', resource: `tensor:${layerKeys.crossQ}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'k', resource: `tensor:${layerKeys.crossK}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'v', resource: `tensor:${layerKeys.crossV}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'mask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:crossAttentionDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('CrossOutput', LINEAR_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.crossAttention}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.crossOWeight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.crossOBias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:spatialLinearDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('CrossResidual', ADD_WGSL, [{ name: 'a', resource: `tensor:${layerKeys.selfHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'b', resource: `tensor:${layerKeys.crossProjected}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:addDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
       addLinearKernel('LayerNorm3', LAYERNORM_WGSL, [{ name: 'input', resource: `tensor:${layerKeys.crossHidden}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: `tensor:${layerKeys.layerNorm3Weight}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: `tensor:${layerKeys.layerNorm3Bias}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: `tensor:${layerKeys.norm3}`, visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:layerNormDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }]);
@@ -771,14 +651,14 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
         { name: `detr-encoder-self-q-${layerIndex}`, kernel: `${kernelBase}SelfQ`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
         { name: `detr-encoder-self-k-${layerIndex}`, kernel: `${kernelBase}SelfK`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
         { name: `detr-encoder-self-v-${layerIndex}`, kernel: `${kernelBase}SelfV`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
-        { name: `detr-encoder-self-attention-softmax-${layerIndex}`, kernel: `${kernelBase}SelfAttention`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-self-attention-softmax-${layerIndex}`, kernel: `${kernelBase}SelfAttention`, dispatch: onlineAttentionDispatch(shape.spatialTokens, shape.heads, shape.batch), yieldAfter: true },
         { name: `detr-encoder-self-output-linear-${layerIndex}`, kernel: `${kernelBase}SelfOutput`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
         { name: `detr-encoder-self-output-residual-${layerIndex}`, kernel: `${kernelBase}SelfResidual`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
         { name: `detr-encoder-layernorm2-${layerIndex}`, kernel: `${kernelBase}LayerNorm2`, dispatch: workgroups(spatialTokenCount, input.device), yieldAfter: true },
         { name: `detr-encoder-cross-q-${layerIndex}`, kernel: `${kernelBase}CrossQ`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
         { name: `detr-encoder-cross-k-${layerIndex}`, kernel: `${kernelBase}CrossK`, dispatch: workgroups(totalPrompt, input.device), yieldAfter: true },
         { name: `detr-encoder-cross-v-${layerIndex}`, kernel: `${kernelBase}CrossV`, dispatch: workgroups(totalPrompt, input.device), yieldAfter: true },
-        { name: `detr-encoder-cross-attention-softmax-${layerIndex}`, kernel: `${kernelBase}CrossAttention`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
+        { name: `detr-encoder-cross-attention-softmax-${layerIndex}`, kernel: `${kernelBase}CrossAttention`, dispatch: onlineAttentionDispatch(shape.spatialTokens, shape.heads, shape.batch), yieldAfter: true },
         { name: `detr-encoder-cross-output-linear-${layerIndex}`, kernel: `${kernelBase}CrossOutput`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
         { name: `detr-encoder-cross-output-residual-${layerIndex}`, kernel: `${kernelBase}CrossResidual`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
         { name: `detr-encoder-layernorm3-${layerIndex}`, kernel: `${kernelBase}LayerNorm3`, dispatch: workgroups(spatialTokenCount, input.device), yieldAfter: true },

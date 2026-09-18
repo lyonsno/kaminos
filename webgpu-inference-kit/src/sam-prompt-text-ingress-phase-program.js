@@ -20,6 +20,10 @@ import {
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
+import {
+  SAM_CAUSAL_MASKED_ONLINE_ATTENTION_WGSL,
+  onlineAttentionDispatch,
+} from './sam-online-attention-wgsl.js';
 
 export const SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-text-ingress.phase-program.webgpu-local.v0';
 
@@ -163,72 +167,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     sum = sum + input_values[input_base + c] * weight[weight_base + c];
   }
   output_values[index] = sum;
-}
-`;
-
-const ATTENTION_WGSL = `
-struct TextDims {
-  batch: u32,
-  prompt_tokens: u32,
-  hidden_size: u32,
-  channels: u32,
-  intermediate_size: u32,
-  heads: u32,
-  head_dim: u32,
-  total_hidden: u32,
-};
-
-@group(0) @binding(0) var<storage, read> q_values: array<f32>;
-@group(0) @binding(1) var<storage, read> k_values: array<f32>;
-@group(0) @binding(2) var<storage, read> v_values: array<f32>;
-@group(0) @binding(3) var<storage, read> prompt_mask: array<f32>;
-@group(0) @binding(4) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(5) var<uniform> dims: TextDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
-  if (index >= dims.total_hidden) { return; }
-  let channel = index % dims.hidden_size;
-  let token = (index / dims.hidden_size) % dims.prompt_tokens;
-  let batch = index / (dims.prompt_tokens * dims.hidden_size);
-  let head = channel / dims.head_dim;
-  let dim_in_head = channel - head * dims.head_dim;
-  let q_base = (batch * dims.prompt_tokens + token) * dims.hidden_size + head * dims.head_dim;
-  let scale = inverseSqrt(f32(dims.head_dim));
-
-  var max_score = -340282346638528859811704183484516925440.0;
-  for (var key_token = 0u; key_token < dims.prompt_tokens; key_token = key_token + 1u) {
-    var score = -1000000000.0;
-    if (key_token <= token && prompt_mask[batch * dims.prompt_tokens + key_token] > 0.0) {
-      score = 0.0;
-      let k_base = (batch * dims.prompt_tokens + key_token) * dims.hidden_size + head * dims.head_dim;
-      for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-        score = score + q_values[q_base + d] * k_values[k_base + d];
-      }
-      score = score * scale;
-    }
-    max_score = max(max_score, score);
-  }
-
-  var denom = 0.0;
-  var value = 0.0;
-  for (var key_token = 0u; key_token < dims.prompt_tokens; key_token = key_token + 1u) {
-    var score = -1000000000.0;
-    if (key_token <= token && prompt_mask[batch * dims.prompt_tokens + key_token] > 0.0) {
-      score = 0.0;
-      let k_base = (batch * dims.prompt_tokens + key_token) * dims.hidden_size + head * dims.head_dim;
-      for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-        score = score + q_values[q_base + d] * k_values[k_base + d];
-      }
-      score = score * scale;
-    }
-    let attention = exp(score - max_score);
-    let v_index = (batch * dims.prompt_tokens + key_token) * dims.hidden_size + head * dims.head_dim + dim_in_head;
-    denom = denom + attention;
-    value = value + attention * v_values[v_index];
-  }
-  output_values[index] = value / denom;
 }
 `;
 
@@ -823,7 +761,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
           uniformBinding('dims', 'uniform:hiddenHiddenDims'),
         ]);
       }
-      registerLayerKernel(`${prefix}.attention`, ATTENTION_WGSL, [
+      registerLayerKernel(`${prefix}.attention`, SAM_CAUSAL_MASKED_ONLINE_ATTENTION_WGSL, [
         tensorBinding('qValues', 'tensor:q'),
         tensorBinding('kValues', 'tensor:k'),
         tensorBinding('vValues', 'tensor:v'),
@@ -881,7 +819,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-        { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
+        { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: onlineAttentionDispatch(shape.promptTokens, shape.heads, shape.batch), yieldAfter: true },
         { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-output-add-${layerIndex}`, kernel: `${prefix}.add1`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-layernorm2-${layerIndex}`, kernel: `${prefix}.ln2`, dispatch: [workgroups(rows)], yieldAfter: true },

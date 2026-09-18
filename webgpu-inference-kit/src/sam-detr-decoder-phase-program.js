@@ -20,6 +20,11 @@ import {
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
+import {
+  SAM_BIASED_ONLINE_ATTENTION_WGSL,
+  SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL,
+  onlineAttentionDispatch,
+} from './sam-online-attention-wgsl.js';
 
 export const SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-decoder.phase-program.webgpu-local.v0';
 
@@ -141,131 +146,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) 
     sum = sum + input_values[input_base + c] * weight[weight_base + c];
   }
   output_values[index] = max(sum, 0.0);
-}
-`;
-
-const ATTENTION_MASKED_WGSL = `
-struct AttentionDims {
-  batch: u32,
-  query_tokens: u32,
-  key_tokens: u32,
-  channels: u32,
-  heads: u32,
-  head_dim: u32,
-  total_output: u32,
-  mask_mode: u32,
-};
-
-@group(0) @binding(0) var<storage, read> q_values: array<f32>;
-@group(0) @binding(1) var<storage, read> k_values: array<f32>;
-@group(0) @binding(2) var<storage, read> v_values: array<f32>;
-@group(0) @binding(3) var<storage, read> key_mask: array<f32>;
-@group(0) @binding(4) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(5) var<uniform> dims: AttentionDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
-  if (index >= dims.total_output) { return; }
-  let channel = index % dims.channels;
-  let query = (index / dims.channels) % dims.query_tokens;
-  let batch = index / (dims.query_tokens * dims.channels);
-  let head = channel / dims.head_dim;
-  let head_offset = head * dims.head_dim;
-  let dim_in_head = channel - head_offset;
-  let q_base = (batch * dims.query_tokens + query) * dims.channels + head_offset;
-  let scale = inverseSqrt(f32(dims.head_dim));
-  var max_score = -340282346638528859811704183484516925440.0;
-  for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
-    var score = 0.0;
-    let k_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q_values[q_base + d] * k_values[k_base + d];
-    }
-    score = score * scale;
-    if (dims.mask_mode == 1u && key_mask[batch * dims.key_tokens + token] <= 0.0) {
-      score = score - 1000000000.0;
-    }
-    max_score = max(max_score, score);
-  }
-  var denom = 0.0;
-  var value = 0.0;
-  for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
-    var score = 0.0;
-    let k_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q_values[q_base + d] * k_values[k_base + d];
-    }
-    score = score * scale;
-    if (dims.mask_mode == 1u && key_mask[batch * dims.key_tokens + token] <= 0.0) {
-      score = score - 1000000000.0;
-    }
-    let weight = exp(score - max_score);
-    let v_index = (batch * dims.key_tokens + token) * dims.channels + head_offset + dim_in_head;
-    denom = denom + weight;
-    value = value + weight * v_values[v_index];
-  }
-  output_values[index] = value / denom;
-}
-`;
-
-const ATTENTION_BIAS_WGSL = `
-struct AttentionDims {
-  batch: u32,
-  query_tokens: u32,
-  key_tokens: u32,
-  channels: u32,
-  heads: u32,
-  head_dim: u32,
-  total_output: u32,
-  mask_mode: u32,
-};
-
-@group(0) @binding(0) var<storage, read> q_values: array<f32>;
-@group(0) @binding(1) var<storage, read> k_values: array<f32>;
-@group(0) @binding(2) var<storage, read> v_values: array<f32>;
-@group(0) @binding(3) var<storage, read> bias_values: array<f32>;
-@group(0) @binding(4) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(5) var<uniform> dims: AttentionDims;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
-  if (index >= dims.total_output) { return; }
-  let channel = index % dims.channels;
-  let query = (index / dims.channels) % dims.query_tokens;
-  let batch = index / (dims.query_tokens * dims.channels);
-  let head = channel / dims.head_dim;
-  let head_offset = head * dims.head_dim;
-  let dim_in_head = channel - head_offset;
-  let q_base = (batch * dims.query_tokens + query) * dims.channels + head_offset;
-  let bias_base = ((batch * dims.heads + head) * dims.query_tokens + query) * dims.key_tokens;
-  let scale = inverseSqrt(f32(dims.head_dim));
-  var max_score = -340282346638528859811704183484516925440.0;
-  for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
-    var score = 0.0;
-    let k_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q_values[q_base + d] * k_values[k_base + d];
-    }
-    score = score * scale + bias_values[bias_base + token];
-    max_score = max(max_score, score);
-  }
-  var denom = 0.0;
-  var value = 0.0;
-  for (var token = 0u; token < dims.key_tokens; token = token + 1u) {
-    var score = 0.0;
-    let k_base = (batch * dims.key_tokens + token) * dims.channels + head_offset;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q_values[q_base + d] * k_values[k_base + d];
-    }
-    score = score * scale + bias_values[bias_base + token];
-    let weight = exp(score - max_score);
-    let v_index = (batch * dims.key_tokens + token) * dims.channels + head_offset + dim_in_head;
-    denom = denom + weight;
-    value = value + weight * v_values[v_index];
-  }
-  output_values[index] = value / denom;
 }
 `;
 
@@ -1411,7 +1291,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       addKernel(k('SelfQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfQWeight}`), bindTensor(`tensor:${layerTensorKeys.selfQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('SelfK'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.selfKWeight}`), bindTensor(`tensor:${layerTensorKeys.selfKBias}`), bindTensor('tensor:kHidden', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('SelfV'), LINEAR_WGSL, [bindTensor('tensor:hidden'), bindTensor(`tensor:${layerTensorKeys.selfVWeight}`), bindTensor(`tensor:${layerTensorKeys.selfVBias}`), bindTensor('tensor:vHidden', 'storage'), bindUniform('hiddenLinearDims')]);
-      addKernel(k('SelfAttn'), ATTENTION_MASKED_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kHidden'), bindTensor('tensor:vHidden'), bindTensor('tensor:dummyMask'), bindTensor('tensor:attention', 'storage'), bindUniform('selfAttentionDims')]);
+      addKernel(k('SelfAttn'), SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kHidden'), bindTensor('tensor:vHidden'), bindTensor('tensor:dummyMask'), bindTensor('tensor:attention', 'storage'), bindUniform('selfAttentionDims')]);
       addKernel(k('SelfOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.selfOWeight}`), bindTensor(`tensor:${layerTensorKeys.selfOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('SelfResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
       addKernel(k('SelfNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.selfLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.selfLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
@@ -1419,7 +1299,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       addKernel(k('TextQ'), LINEAR_WGSL, [bindTensor('tensor:hiddenPlusPos'), bindTensor(`tensor:${layerTensorKeys.textQWeight}`), bindTensor(`tensor:${layerTensorKeys.textQBias}`), bindTensor('tensor:q', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('TextK'), LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textKWeight}`), bindTensor(`tensor:${layerTensorKeys.textKBias}`), bindTensor('tensor:kPrompt', 'storage'), bindUniform('promptLinearDims')]);
       addKernel(k('TextV'), LINEAR_WGSL, [bindTensor('tensor:promptFeatures'), bindTensor(`tensor:${layerTensorKeys.textVWeight}`), bindTensor(`tensor:${layerTensorKeys.textVBias}`), bindTensor('tensor:vPrompt', 'storage'), bindUniform('promptLinearDims')]);
-      addKernel(k('TextAttn'), ATTENTION_MASKED_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kPrompt'), bindTensor('tensor:vPrompt'), bindTensor('tensor:promptMask'), bindTensor('tensor:attention', 'storage'), bindUniform('textAttentionDims')]);
+      addKernel(k('TextAttn'), SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kPrompt'), bindTensor('tensor:vPrompt'), bindTensor('tensor:promptMask'), bindTensor('tensor:attention', 'storage'), bindUniform('textAttentionDims')]);
       addKernel(k('TextOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.textOWeight}`), bindTensor(`tensor:${layerTensorKeys.textOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('TextResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
       addKernel(k('TextNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.textLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.textLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
@@ -1428,7 +1308,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       addKernel(k('VisionKeyAdd'), ADD_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor('tensor:visionPosEncoding'), bindTensor('tensor:kVision', 'storage'), bindUniform('spatialAddDims')]);
       addKernel(k('VisionK'), LINEAR_WGSL, [bindTensor('tensor:kVision'), bindTensor(`tensor:${layerTensorKeys.visionKWeight}`), bindTensor(`tensor:${layerTensorKeys.visionKBias}`), bindTensor('tensor:kVisionProjected', 'storage'), bindUniform('visionLinearDims')]);
       addKernel(k('VisionV'), LINEAR_WGSL, [bindTensor('tensor:visionFeatures'), bindTensor(`tensor:${layerTensorKeys.visionVWeight}`), bindTensor(`tensor:${layerTensorKeys.visionVBias}`), bindTensor('tensor:vVision', 'storage'), bindUniform('visionLinearDims')]);
-      addKernel(k('VisionAttn'), ATTENTION_BIAS_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kVisionProjected'), bindTensor('tensor:vVision'), bindTensor('tensor:rpb'), bindTensor('tensor:attention', 'storage'), bindUniform('visionAttentionDims')]);
+      addKernel(k('VisionAttn'), SAM_BIASED_ONLINE_ATTENTION_WGSL, [bindTensor('tensor:q'), bindTensor('tensor:kVisionProjected'), bindTensor('tensor:vVision'), bindTensor('tensor:rpb'), bindTensor('tensor:attention', 'storage'), bindUniform('visionAttentionDims')]);
       addKernel(k('VisionOut'), LINEAR_WGSL, [bindTensor('tensor:attention'), bindTensor(`tensor:${layerTensorKeys.visionOWeight}`), bindTensor(`tensor:${layerTensorKeys.visionOBias}`), bindTensor('tensor:projected', 'storage'), bindUniform('hiddenLinearDims')]);
       addKernel(k('VisionResidual'), ADD_WGSL, [bindTensor('tensor:hidden'), bindTensor('tensor:projected'), bindTensor('tensor:residual', 'storage'), bindUniform('hiddenAddDims')]);
       addKernel(k('VisionNorm'), LAYERNORM_WGSL, [bindTensor('tensor:residual'), bindTensor(`tensor:${layerTensorKeys.visionLayerNormWeight}`), bindTensor(`tensor:${layerTensorKeys.visionLayerNormBias}`), bindTensor('tensor:hidden', 'storage'), bindUniform('hiddenLayerNormDims')]);
@@ -1463,7 +1343,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
         { name: `detr-decoder-self-q-${layerIndex}`, kernel: k('SelfQ'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-self-k-${layerIndex}`, kernel: k('SelfK'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-self-v-${layerIndex}`, kernel: k('SelfV'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-self-attention-softmax-${layerIndex}`, kernel: k('SelfAttn'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-self-attention-softmax-${layerIndex}`, kernel: k('SelfAttn'), dispatch: onlineAttentionDispatch(shape.queryTokens + 1, shape.heads, shape.batch), yieldAfter: true },
         { name: `detr-decoder-self-output-${layerIndex}`, kernel: k('SelfOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-self-residual-${layerIndex}`, kernel: k('SelfResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-self-layernorm-${layerIndex}`, kernel: k('SelfNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
@@ -1471,7 +1351,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
         { name: `detr-decoder-text-q-${layerIndex}`, kernel: k('TextQ'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-text-k-${layerIndex}`, kernel: k('TextK'), dispatch: workgroups(promptTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-text-v-${layerIndex}`, kernel: k('TextV'), dispatch: workgroups(promptTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-text-attention-softmax-${layerIndex}`, kernel: k('TextAttn'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-text-attention-softmax-${layerIndex}`, kernel: k('TextAttn'), dispatch: onlineAttentionDispatch(shape.queryTokens + 1, shape.heads, shape.batch), yieldAfter: true },
         { name: `detr-decoder-text-output-${layerIndex}`, kernel: k('TextOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-text-residual-${layerIndex}`, kernel: k('TextResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-text-layernorm-${layerIndex}`, kernel: k('TextNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },
@@ -1480,7 +1360,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
         { name: `detr-decoder-vision-key-add-pos-${layerIndex}`, kernel: k('VisionKeyAdd'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-k-${layerIndex}`, kernel: k('VisionK'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-v-${layerIndex}`, kernel: k('VisionV'), dispatch: workgroups(spatialTotal, input.device), yieldAfter: true },
-        { name: `detr-decoder-vision-attention-softmax-${layerIndex}`, kernel: k('VisionAttn'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
+        { name: `detr-decoder-vision-attention-softmax-${layerIndex}`, kernel: k('VisionAttn'), dispatch: onlineAttentionDispatch(shape.queryTokens + 1, shape.heads, shape.batch), yieldAfter: true },
         { name: `detr-decoder-vision-output-${layerIndex}`, kernel: k('VisionOut'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-residual-${layerIndex}`, kernel: k('VisionResidual'), dispatch: workgroups(hiddenTotal, input.device), yieldAfter: true },
         { name: `detr-decoder-vision-layernorm-${layerIndex}`, kernel: k('VisionNorm'), dispatch: workgroups(hiddenTokens, input.device), yieldAfter: true },

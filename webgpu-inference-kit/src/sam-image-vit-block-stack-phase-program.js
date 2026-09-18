@@ -20,6 +20,10 @@ import {
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
+import {
+  SAM_VIT_ONLINE_ATTENTION_WGSL,
+  onlineAttentionDispatch,
+} from './sam-online-attention-wgsl.js';
 
 export const SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-vit-block-stack.phase-program.webgpu-local.v0';
 
@@ -399,73 +403,6 @@ fn main(
 }
 `;
 
-const ATTENTION_WGSL = `
-struct BlockDims {
-  batch: u32,
-  height: u32,
-  width: u32,
-  channels: u32,
-  heads: u32,
-  head_dim: u32,
-  window_size: u32,
-  intermediate_size: u32,
-  padded_height: u32,
-  padded_width: u32,
-  windows_per_row: u32,
-  window_count: u32,
-  window_tokens: u32,
-  total_values: u32,
-  padded_total_values: u32,
-  _pad0: u32,
-};
-
-@group(0) @binding(0) var<storage, read> q: array<f32>;
-@group(0) @binding(1) var<storage, read> k: array<f32>;
-@group(0) @binding(2) var<storage, read> v: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: BlockDims;
-
-fn qkv_index(window_index: u32, token: u32, head: u32, dim: u32) -> u32 {
-  return (window_index * dims.window_tokens + token) * dims.channels + head * dims.head_dim + dim;
-}
-
-@compute @workgroup_size(64)
-fn main(
-  @builtin(global_invocation_id) gid: vec3<u32>,
-  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
-) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u;
-  if (index >= dims.padded_total_values) { return; }
-  let c = index % dims.channels;
-  let dim = c % dims.head_dim;
-  let head = c / dims.head_dim;
-  let token = (index / dims.channels) % dims.window_tokens;
-  let window_index = index / (dims.window_tokens * dims.channels);
-  let scale = inverseSqrt(f32(dims.head_dim));
-  var max_score = -3.402823e38;
-  for (var key_token = 0u; key_token < dims.window_tokens; key_token = key_token + 1u) {
-    var score = 0.0;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q[qkv_index(window_index, token, head, d)] * k[qkv_index(window_index, key_token, head, d)];
-    }
-    score = score * scale;
-    max_score = max(max_score, score);
-  }
-  var denom = 0.0;
-  var numerator = 0.0;
-  for (var key_token = 0u; key_token < dims.window_tokens; key_token = key_token + 1u) {
-    var score = 0.0;
-    for (var d = 0u; d < dims.head_dim; d = d + 1u) {
-      score = score + q[qkv_index(window_index, token, head, d)] * k[qkv_index(window_index, key_token, head, d)];
-    }
-    let weight = exp(score * scale - max_score);
-    denom = denom + weight;
-    numerator = numerator + weight * v[qkv_index(window_index, key_token, head, dim)];
-  }
-  output_values[index] = numerator / denom;
-}
-`;
-
 function createDefaultScheduler() {
   return createWebGpuRouteSchedulerProfile({
     requestedScheduler: { mode: 'cooperative', yieldMs: 0, waitForSubmittedWorkDone: true, phaseChunkSize: Object.fromEntries(REQUIRED_STAGES.map(stage => [stage, 1])) },
@@ -609,7 +546,10 @@ export function createSam3ImageVitBlockStackDispatchPlan(input = {}) {
     vProjection: padded(),
     qRope: padded(),
     kRope: padded(),
-    attention: padded(),
+    attention: {
+      logicalInvocations: shape.batch * layerShape.windowCount * layerShape.windowTokens * shape.numHeads,
+      dispatch: onlineAttentionDispatch(layerShape.windowTokens, shape.numHeads, shape.batch * layerShape.windowCount),
+    },
     outputProjection: padded(),
     windowUnpartition: total(),
     layerNorm2: entry(shape.tokenCount),
@@ -1311,7 +1251,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
         vProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
         qRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:q'), bindTensor('tensor:qRope', 'storage'), bindUniform('uniform:blockDims')] },
         kRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:k'), bindTensor('tensor:kRope', 'storage'), bindUniform('uniform:blockDims')] },
-        attention: { code: ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
+        attention: { code: SAM_VIT_ONLINE_ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
         outputProjection: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
         windowUnpartition: { code: WINDOW_UNPARTITION_WGSL, bindings: [bindTensor('tensor:projected'), bindTensor(`tensor:${inputTensorName}`), bindTensor('tensor:attentionResidual', 'storage'), bindUniform('uniform:blockDims')] },
         layerNorm2: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:layerNorm2Weight'), bindTensor('tensor:layerNorm2Bias'), bindTensor('tensor:layerNorm2', 'storage'), bindUniform('uniform:lnDims')] },
