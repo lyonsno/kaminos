@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createFrameAdmission,verifyFrameAdmission} from '../lib/kimodo-frame-admission.mjs';
 const flush=()=>new Promise(setImmediate);
 function fixture(mode='frame-admission'){
@@ -60,4 +61,22 @@ assert.equal(baselineVerdict.authority,'page-clock-pass-and-duty-timing');
 const candidateVerdict=verifyFrameAdmission(valid,'frame-admission',pageTimeOrigin);
 assert.equal(candidateVerdict.foregroundQueueFence,true);
 assert.equal(candidateVerdict.authority,'page-clock-current-duty-queue-prefix-and-fresh-dual-counter');
+const chunked={steps:1,scheduling:{mode:'layer-chunk-admission',layersPerDuty:4,chunksPerPass:4,events:[]},diagnostics:{clock:'performance.now',timeOrigin:pageTimeOrigin,passes:[],submissionReport:{duties:[]}}};
+for(const pass of ['cond-root','cond-body','uncond-root','uncond-body']){
+  for(let chunkIndex=1;chunkIndex<=4;chunkIndex++){
+    const dutyId=`${pass}-c${chunkIndex}`,layerStart=(chunkIndex-1)*4,layerEnd=chunkIndex*4;
+    chunked.scheduling.events.push({mode:'layer-chunk-admission',status:'advanced',step:1,pass,dutyId,chunkIndex,chunkCount:4,layerStart,layerEnd,startedAtMs:4,queueDoneAtMs:5,before:{frameCount:10,simStepCount:20},after:{frameCount:11,simStepCount:21},endedAtMs:6});
+    chunked.diagnostics.passes.push({pass,dutyId,chunkIndex,chunkCount:4,layerStart,layerEnd,encodeStartedAtMs:1,encodeEndedAtMs:2,admittedAtMs:3,boundaryEndedAtMs:7,readbackCompletedAtMs:8});
+    chunked.diagnostics.submissionReport.duties.push({dutyId,status:'completed',submitStartedAtMs:2,submitReturnedAtMs:2.5,submittedAtMs:2.5,completedAtMs:4.5,timingAuthority:'queue-work-done'});
+  }
+}
+const chunkVerdict=verifyFrameAdmission(chunked,'layer-chunk-admission',pageTimeOrigin);
+assert.equal(chunkVerdict.passes,16);
+assert.equal(chunkVerdict.foregroundQueueFence,true);
+assert.equal(chunkVerdict.authority,'page-clock-current-chunk-duty-queue-prefix-and-fresh-dual-counter');
+const injection=readFileSync(new URL('../kimodo-live-flame-inject.mjs',import.meta.url),'utf8');
+assert.match(injection,/value="layer-chunk-admission"/);
+assert.match(injection,/schedulingMode==='layer-chunk-admission'\?4:16/);
+assert.match(injection,/boundariesPerStep:4\*chunksPerPass/);
+assert.match(injection,/producer\.generate\(\{prompt,steps,duration,generationId,layersPerDuty/);
 console.log('Frame admission: fence + fresh dual-counter advance, abort, hidden/reset/fallback, baseline and invalid mode pass');

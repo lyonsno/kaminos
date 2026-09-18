@@ -30,7 +30,7 @@ export async function mountComposition({prototype, params} = {}) {
   <label>Prompt<textarea id="kimodo-prompt" rows="2">a person dances</textarea></label>
   <div class="pair"><label>Seconds<input id="kimodo-duration" type="number" min="1" max="18" value="6"></label><label>DDIM steps<input id="kimodo-steps" type="number" min="1" value="100"></label></div>
   <label>Embedding endpoint<input id="kimodo-embed" value="http://127.0.0.1:8098/embed"></label>
-  <label>Scheduling <select id="kimodo-scheduling"><option value="telemetry-only">Telemetry only (baseline)</option><option value="frame-admission">Finish pass → fresh flame frame</option></select></label>
+  <label>Scheduling <select id="kimodo-scheduling"><option value="telemetry-only">Telemetry only (baseline)</option><option value="frame-admission">Finish pass → fresh flame frame</option><option value="layer-chunk-admission">4-layer chunk → fresh flame frame</option></select></label>
   <div class="pair"><button id="kimodo-load">Load Kimodo</button><button id="kimodo-run" disabled>Generate motion</button><button id="kimodo-cancel" disabled>Cancel</button></div>
   <progress id="kimodo-progress" max="100" value="0"></progress>
   <dl><dt>Stage</dt><dd id="kimodo-stage">flame only · model not loaded</dd>
@@ -106,11 +106,14 @@ export async function mountComposition({prototype, params} = {}) {
     const baselineSamples=state.samples.slice(baselineIndex),runIndex=state.samples.length;
     const record={generationId,prompt,steps,duration,startedAtMs:t0,baseline:summarizeFlameSpan(baselineSamples),baselineSampleRange:[baselineIndex,runIndex],flameStart:controls(),status:'running'};
     state.runs.push(record);state.status='running';sample();controller=new AbortController();
-    record.scheduling={mode:$('scheduling').value,topology:'same-gpu-two-devices',events:[]};
+    const schedulingMode=$('scheduling').value;
+    const layersPerDuty=schedulingMode==='layer-chunk-admission'?4:16;
+    const chunksPerPass=16/layersPerDuty;
+    record.scheduling={mode:schedulingMode,layersPerDuty,chunksPerPass,topology:'same-gpu-two-devices',events:[]};
     const admit=createFrameAdmission({mode:record.scheduling.mode,queue:device.queue,readFlame:()=>prototype.debugState(),events:record.scheduling.events});
-    telemetry=createFrontendTelemetry({generationId,numSteps:steps,requestedMaxInFlightDuties:KIMODO_DEFAULT_MAX_IN_FLIGHT_DUTIES});
+    telemetry=createFrontendTelemetry({generationId,numSteps:steps,boundariesPerStep:4*chunksPerPass,requestedMaxInFlightDuties:KIMODO_DEFAULT_MAX_IN_FLIGHT_DUTIES});
     try{
-      const result=await producer.generate({prompt,steps,duration,generationId,signal:controller.signal,
+      const result=await producer.generate({prompt,steps,duration,generationId,layersPerDuty,signal:controller.signal,
         onStage:(name,event)=>telemetry.stage(name,event),onProgress:p=>telemetry.progress(p),foregroundOpportunity:async b=>{telemetry.foreground(b);await admit(b);}});
       // Preserve the generated output even if the evidence verdict is narrower.
       motion=result.motion;playbackStart=performance.now();$('motion-download').disabled=false;

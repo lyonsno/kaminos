@@ -92,7 +92,7 @@ GPU execution timing. A renewable Greenroom lease covers the browser run.
 
 ## Frame-admission comparison
 
-The Scheduling selector has two explicit modes, fixed for each generation:
+The Scheduling selector has three explicit modes, fixed for each generation:
 `telemetry-only` preserves the prior callback behavior; `frame-admission`
 waits for Kimodo's current queue prefix to finish, then observes a fresh flame
 render AND simulation counter advance before returning to inference. The
@@ -100,13 +100,20 @@ flame keeps its separate device and loop. This is cooperative admission, not
 a shared-device interlock or a presentation guarantee. Hidden/unavailable or
 reset flame state fails; cancellation also interrupts the waiting boundary.
 
+`layer-chunk-admission` is the bounded follow-on experiment. It encodes the
+same 16 transformer layers in the same order but submits four consecutive
+4-layer duties per pass, waiting for a fresh flame render and simulation
+advance after each. It does not alter weights, DDIM steps, duration, buffer
+dependencies, or model math. The default producer schedule remains one
+16-layer duty per pass.
+
 The evidence JSON retains every admission event, producer encode/admit/readback
 timestamp, and full kit duty report, on `performance.now()` with time origin.
 CPU encoding intervals and queue-prefix completion are distinct from isolated
-GPU execution timing. Neither mode changes layers, steps, duration or weights.
+GPU execution timing. None of the modes changes layers, steps, duration or weights.
 The default remains telemetry-only until a comparison earns a promotion.
 
-Append `telemetry-only` or `frame-admission` after the witness's two commit pins
-to select and verify that exact mode. The witness validates complete pass/duty
+Append `telemetry-only`, `frame-admission`, or `layer-chunk-admission` after the
+witness's two commit pins to select and verify that exact mode. The witness validates complete pass/duty
 identity and actual counter advances, in addition to the existing source and
 motion checks. The optional mode argument is required for scheduling claims.

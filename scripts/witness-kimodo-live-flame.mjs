@@ -19,7 +19,7 @@ const greenroom=process.env.GREENROOM_BIN;
 const leaseId=`kimodo-flame-${process.pid}`;
 try{
   if(!greenroom)throw new Error('GREENROOM_BIN must name the inspected Greenroom CLI');
-  if(expectedScheduling&&!['telemetry-only','frame-admission'].includes(expectedScheduling))throw new Error('Unknown requested scheduling mode');
+  if(expectedScheduling&&!['telemetry-only','frame-admission','layer-chunk-admission'].includes(expectedScheduling))throw new Error('Unknown requested scheduling mode');
   report.requestedScheduling=expectedScheduling??null;
   if(!/^[a-f0-9]{40}$/.test(expectedHostCommit??'')||!/^[a-f0-9]{40}$/.test(expectedProducerCommit??''))throw new Error('Explicit full expected host and producer commit arguments required after URL');
   report.revisionPins={host:expectedHostCommit,producer:expectedProducerCommit,source:'caller-arguments'};
