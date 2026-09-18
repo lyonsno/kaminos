@@ -28,12 +28,13 @@ const float = v => new Scalar(v);
 const mix = (a, b, t) => float(a).mul(float(1).sub(t)).add(float(b).mul(t));
 
 test('AO intensity stays monotone and nonnegative without clipping intermediate visibility', () => {
-  const expression = between(source.includes('  const aoVisibility =') ? '  const aoVisibility =' : '  const aoOutput =', '  const baseSceneOutput');
+  const expression = between(source.includes('  const aoVisibility =') ? '  const aoVisibility =' : '  const aoOutput =', source.includes('  scenePass.contextNode =') ? '  scenePass.contextNode =' : '  const baseSceneOutput');
   for (const visibility of [0, 0.01, 0.2, 0.5, 0.8, 1]) {
     let previous = 1;
     for (const strength of [0, 0.25, 0.7, 1, 1.5, 2, 3]) {
       const result = Number(vm.runInNewContext(`${expression}\nNumber(aoOutput)`, {
         float, mix, denoisePass: { r: float(visibility) }, aoIntensity: float(strength),
+        texture: () => ({ r: float(visibility) }), denoiseResolved: { value: {} }, screenUV: {},
       }));
       assert.ok(result >= 0 && result <= previous + 1e-12, `${visibility} at ${strength}: ${result}`);
       if (visibility > 0) assert.ok(result > 0, 'nonzero visibility must not be crushed to zero');

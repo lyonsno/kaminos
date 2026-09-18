@@ -209,6 +209,9 @@ canvas { display: block; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
 .slider-row input[type="range"] { min-height: 24px; cursor: grab; touch-action: pan-y; }
 .slider-row input[type="range"]:active { cursor: grabbing; }
+.rim-number { width: 66px; min-width: 66px; padding: 4px; color: #ddd; background: #202020; border: 1px solid #444; border-radius: 3px; }
+#rim-controls .slider-label { min-width: 70px; }
+#rim-controls input[type="range"] { min-width: 0; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #1976d2; border-radius: 50%; cursor: pointer; }
 input[type="color"].volume-color-swatch { flex: 1; min-width: 0; height: 24px; padding: 0; border: 1px solid #333; border-radius: 5px; background: #151515; cursor: pointer; }
 input[type="color"].volume-color-swatch::-webkit-color-swatch-wrapper { padding: 2px; }
@@ -899,6 +902,24 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <input type="range" id="env-bg-contrast" min="0" max="3" step="0.05" value="1">
         <span class="slider-val" id="env-bg-contrast-val">1.00</span>
       </div>
+    </div>
+
+    <button class="btn" id="env-reset" title="Reset this environment's lighting recipe">Reset Map</button>
+
+    <h2>Rim Light</h2>
+    <label><input type="checkbox" id="rim-enabled"> Enabled</label>
+    <div id="rim-controls" hidden>
+      <div class="field"><label for="rim-color">Color</label><input type="color" id="rim-color" value="#d6e5ff"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-intensity">Intensity</label><input type="range" id="rim-intensity" min="0" max="500" step="1" value="120"><input class="rim-number" id="rim-intensity-number" aria-label="Rim intensity" type="number" min="0" step="1" value="120"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-azimuth">Azimuth</label><input type="range" id="rim-azimuth" min="-180" max="180" step="1" value="135"><input class="rim-number" id="rim-azimuth-number" aria-label="Rim azimuth" type="number" step="1" value="135"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-elevation">Elevation</label><input type="range" id="rim-elevation" min="-89" max="89" step="1" value="30"><input class="rim-number" id="rim-elevation-number" aria-label="Rim elevation" type="number" min="-89" max="89" step="1" value="30"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-distance">Distance</label><input type="range" id="rim-distance" min="0.1" max="15" step="0.1" value="6"><input class="rim-number" id="rim-distance-number" aria-label="Rim distance" type="number" min="0.1" step="0.1" value="6"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-angle">Cone Angle</label><input type="range" id="rim-angle" min="1" max="89" step="1" value="35"><input class="rim-number" id="rim-angle-number" aria-label="Rim cone half-angle" type="number" min="1" max="89" step="1" value="35"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-penumbra">Soft Edge</label><input type="range" id="rim-penumbra" min="0" max="1" step="0.01" value="0.65"><input class="rim-number" id="rim-penumbra-number" aria-label="Rim soft edge" type="number" min="0" max="1" step="0.01" value="0.65"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-x">Target X</label><input type="range" id="rim-target-x" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-x-number" aria-label="Rim target X" type="number" step="0.05" value="0"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-y">Target Y</label><input type="range" id="rim-target-y" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-y-number" aria-label="Rim target Y" type="number" step="0.05" value="0"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-z">Target Z</label><input type="range" id="rim-target-z" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-z-number" aria-label="Rim target Z" type="number" step="0.05" value="0"></div>
+      <button class="btn" id="rim-aim" title="Aim at the orbit camera's current target">Aim at View Target</button>
     </div>
 
     <h2>Post Processing</h2>
@@ -3102,7 +3123,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <script type="module">
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
-import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
+import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
@@ -3345,7 +3366,10 @@ let groundPlane = null;
 let lermsPreviewActorsGroup = null;
 let loadedFiles = {};
 let receipt = null;
-let currentEnvName = 'studio';
+let currentEnvName = null;
+let environmentRecipes = {};
+let environmentLoadToken = 0;
+let rimLight = null;
 let showEnvBg = false;
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
@@ -9232,6 +9256,7 @@ window.addEventListener('keydown', e => {
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
+let restoringSettings = false;
 const PERSISTED_SLIDERS = [
   'exposure-slider', 'env-intensity-slider', 'env-rotation-slider', 'env-blur-slider',
   'ao-radius', 'ao-intensity', 'ao-scale', 'ao-thickness', 'ao-falloff',
@@ -9240,6 +9265,7 @@ const PERSISTED_SLIDERS = [
 const PERSISTED_CHECKBOXES = ['ao-toggle', 'show-env-bg', 'backdrop-toggle', 'dof-toggle'];
 
 function saveSettings() {
+  if (restoringSettings) return;
   const settings = {};
   for (const id of PERSISTED_SLIDERS) {
     const el = document.getElementById(id);
@@ -9249,6 +9275,10 @@ function saveSettings() {
     const el = document.getElementById(id);
     if (el) settings[id] = el.checked;
   }
+  rememberEnvironmentRecipe();
+  settings.environmentRecipes = environmentRecipes;
+  settings.environmentName = currentEnvName;
+  settings.rimLight = readRimLightSettings();
   try { localStorage.setItem(KAMINOS_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
 }
 
@@ -9256,19 +9286,27 @@ function restoreSettings() {
   let settings;
   try { settings = JSON.parse(localStorage.getItem(KAMINOS_SETTINGS_KEY)); } catch {}
   if (!settings) return;
-  for (const id of PERSISTED_SLIDERS) {
-    const el = document.getElementById(id);
-    if (el && settings[id] !== undefined) {
-      el.value = settings[id];
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+  restoringSettings = true;
+  try {
+    for (const id of PERSISTED_SLIDERS) {
+      const el = document.getElementById(id);
+      if (el && settings[id] !== undefined) {
+        el.value = settings[id];
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     }
-  }
-  for (const id of PERSISTED_CHECKBOXES) {
-    const el = document.getElementById(id);
-    if (el && settings[id] !== undefined) {
-      el.checked = settings[id];
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+    for (const id of PERSISTED_CHECKBOXES) {
+      const el = document.getElementById(id);
+      if (el && settings[id] !== undefined) {
+        el.checked = settings[id];
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }
+    environmentRecipes = normalizeEnvironmentRecipes(settings.environmentRecipes);
+    setRimLight(settings.rimLight);
+    return Object.hasOwn(HDR_ENVS, settings.environmentName) ? settings.environmentName : 'studio';
+  } finally {
+    restoringSettings = false;
   }
 }
 
@@ -9804,6 +9842,14 @@ async function initScene() {
   keyLight.shadow.camera.bottom = -3;
   keyLight.shadow.bias = -0.001;
   scene.add(keyLight);
+  rimLight = new THREE.SpotLight(0xd6e5ff, 120);
+  rimLight.name = 'Authored rim light';
+  rimLight.castShadow = true;
+  rimLight.shadow.mapSize.set(1024, 1024);
+  rimLight.shadow.bias = -0.0001;
+  rimLight.shadow.normalBias = 0.02;
+  scene.add(rimLight, rimLight.target);
+  setRimLight();
 
   // Transform gizmo
   transformControls = new TransformControls(camera, renderer.domElement);
@@ -9852,13 +9898,21 @@ async function initScene() {
 
   const aoResolved = convertToTexture(aoPass.getTextureNode());
   const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
+  const denoiseResolved = convertToTexture(denoisePass);
+  // Resolve screen-space visibility before the lit pass, not once per material.
+  const setupScenePass = scenePass.setup;
+  scenePass.setup = function(builder) {
+    denoiseResolved.build(builder);
+    return setupScenePass.call(this, builder);
+  };
 
   aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
   // Preserve the existing 0..1 look; stronger AO darkens smoothly without negative light.
-  const aoVisibility = denoisePass.r.clamp(0, 1);
+  const aoVisibility = texture(denoiseResolved.value, screenUV).r.clamp(0, 1);
   const aoOutput = mix(float(1.0), aoVisibility, aoIntensity.min(1)).div(
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
-  const baseSceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
+  scenePass.contextNode = builtinAOContext(aoOutput);
+  const baseSceneOutput = scenePass;
   fireLightFieldPass?.dispose?.();
   fireLightFieldPass = null;
   if (isFireLightFieldRoute() && sharedGpu?.device) {
@@ -10048,6 +10102,62 @@ async function initScene() {
 }
 
 // --- Environment Loading ---
+const environmentRecipeFields = {
+  exposure: 'exposure-slider', intensity: 'env-intensity-slider', rotation: 'env-rotation-slider',
+  backgroundBrightness: 'env-bg-brightness', backgroundContrast: 'env-bg-contrast', backgroundBlur: 'env-blur-slider',
+};
+
+function environmentDefaults(name) {
+  return { exposure: HDR_ENVS[name].exposure, intensity: HDR_ENVS[name].intensity,
+    rotation: 0, backgroundBrightness: 0.6, backgroundContrast: 1, backgroundBlur: 0.4 };
+}
+
+function normalizeEnvironmentRecipe(name, recipe = {}) {
+  const defaults = environmentDefaults(name);
+  return Object.fromEntries(Object.keys(environmentRecipeFields).map(key => {
+    const value = recipe[key];
+    if (value === undefined) return [key, defaults[key]];
+    if (typeof value !== 'number' || !Number.isFinite(value) || (key !== 'rotation' && value < 0)) {
+      throw new Error(`Invalid environment ${name} ${key}`);
+    }
+    if (key === 'backgroundBlur' && value > 1) throw new Error('Background blur must be between 0 and 1');
+    return [key, value];
+  }));
+}
+
+function normalizeEnvironmentRecipes(recipes = {}) {
+  const result = {};
+  for (const [name, recipe] of Object.entries(recipes)) {
+    if (Object.hasOwn(HDR_ENVS, name)) result[name] = normalizeEnvironmentRecipe(name, recipe);
+  }
+  return result;
+}
+
+function readEnvironmentRecipe() {
+  return Object.fromEntries(Object.entries(environmentRecipeFields).map(([key,id]) => [key, Number(document.getElementById(id).value)]));
+}
+
+function rememberEnvironmentRecipe() {
+  if (currentEnvName) environmentRecipes[currentEnvName] = readEnvironmentRecipe();
+}
+
+function applyEnvironmentRecipe(recipe) {
+  for (const [key,id] of Object.entries(environmentRecipeFields)) {
+    const input = document.getElementById(id);
+    // Range bounds are editing affordances, not limits on a valid saved recipe.
+    input.min = Math.min(Number(input.min), recipe[key]);
+    input.max = Math.max(Number(input.max), recipe[key]);
+    input.step = 'any';
+    input.value = recipe[key];
+    const label = document.getElementById(id.endsWith('-slider') ? id.replace('-slider','-val') : `${id}-val`);
+    label.textContent = recipe[key].toFixed(2);
+  }
+  renderer.toneMappingExposure = recipe.exposure;
+  scene.environmentIntensity = recipe.intensity;
+  scene.environmentRotation = new THREE.Euler(0, recipe.rotation, 0);
+  updateBackground();
+}
+
 function createProceduralEnv() {
   // Create a simple gradient environment for fallback
   const envScene = new THREE.Scene();
@@ -10070,10 +10180,11 @@ function createProceduralEnv() {
   return pmremGenerator.fromScene(envScene, 0.04).texture;
 }
 
-async function loadEnvironment(name) {
+async function loadEnvironment(name, { remember = true } = {}) {
   const env = HDR_ENVS[name];
   if (!env) return;
-
+  if (remember) rememberEnvironmentRecipe();
+  const token = ++environmentLoadToken;
   currentEnvName = name;
 
   // Update button states
@@ -10081,15 +10192,14 @@ async function loadEnvironment(name) {
     b.classList.toggle('active', b.dataset.env === name);
   });
 
-  // Update sliders
-  document.getElementById('exposure-slider').value = env.exposure;
-  document.getElementById('exposure-val').textContent = env.exposure.toFixed(1);
-  document.getElementById('env-intensity-slider').value = env.intensity;
-  document.getElementById('env-intensity-val').textContent = env.intensity.toFixed(1);
-  renderer.toneMappingExposure = env.exposure;
+  const recipe = normalizeEnvironmentRecipe(name, environmentRecipes[name]);
+  environmentRecipes[name] = recipe;
+  applyEnvironmentRecipe(recipe);
+  const loadingEl = document.getElementById('env-loading');
+  loadingEl.style.display = 'none';
 
   if (envCache[name]) {
-    applyEnvMap(envCache[name], env.intensity);
+    applyEnvMap(envCache[name], recipe.intensity);
     return;
   }
 
@@ -10097,11 +10207,10 @@ async function loadEnvironment(name) {
     // Procedural environment
     const tex = createProceduralEnv();
     envCache[name] = tex;
-    applyEnvMap(tex, env.intensity);
+    applyEnvMap(tex, recipe.intensity);
     return;
   }
 
-  const loadingEl = document.getElementById('env-loading');
   loadingEl.style.display = 'block';
   loadingEl.textContent = `Loading ${env.label} HDR...`;
 
@@ -10112,14 +10221,14 @@ async function loadEnvironment(name) {
     const envMap = pmremGenerator.fromEquirectangular(tex).texture;
     tex.dispose();
     envCache[name] = envMap;
-    applyEnvMap(envMap, env.intensity);
+    if (token === environmentLoadToken) applyEnvMap(envMap, readEnvironmentRecipe().intensity);
   } catch (e) {
     console.warn(`Failed to load HDR ${name}, using procedural fallback:`, e);
     const tex = createProceduralEnv();
     envCache[name] = tex;
-    applyEnvMap(tex, env.intensity);
+    if (token === environmentLoadToken) applyEnvMap(tex, readEnvironmentRecipe().intensity);
   }
-  loadingEl.style.display = 'none';
+  if (token === environmentLoadToken) loadingEl.style.display = 'none';
 }
 
 function applyEnvMap(envMap, intensity) {
@@ -10131,9 +10240,9 @@ function applyEnvMap(envMap, intensity) {
   // Update all materials in scene to use envMap
   sceneObjects.forEach(({ object }) => {
     object.traverse(child => {
-      if (child.material) {
-        child.material.envMapIntensity = intensity;
-        child.material.needsUpdate = true;
+      for (const material of [].concat(child.material || [])) {
+        material.envMapIntensity = intensity;
+        material.needsUpdate = true;
       }
     });
   });
@@ -21880,10 +21989,88 @@ function initEnvButtons() {
     btn.className = 'env-btn' + (key === 'studio' ? ' active' : '');
     btn.textContent = env.label;
     btn.dataset.env = key;
-    btn.onclick = () => loadEnvironment(key);
+    btn.onclick = () => loadEnvironment(key).then(saveSettings).catch(error => setInfo(error.message));
     container.appendChild(btn);
   }
 }
+
+document.getElementById('env-reset').onclick = () => {
+  if (!currentEnvName) return;
+  environmentRecipes[currentEnvName] = environmentDefaults(currentEnvName);
+  loadEnvironment(currentEnvName, { remember: false }).then(saveSettings).catch(error => setInfo(error.message));
+};
+
+// --- Authored Rim Light ---
+const RIM_DEFAULTS = { enabled: false, color: '#d6e5ff', intensity: 120, azimuth: 135, elevation: 30,
+  distance: 6, angle: 35, penumbra: 0.65, target: [0, 0, 0] };
+const rimFields = ['intensity', 'azimuth', 'elevation', 'distance', 'angle', 'penumbra', 'target-x', 'target-y', 'target-z'];
+
+function readRimLightSettings() {
+  const settings = { enabled: document.getElementById('rim-enabled').checked, color: document.getElementById('rim-color').value };
+  for (const key of rimFields.slice(0, 6)) settings[key] = Number(document.getElementById(`rim-${key}`).value);
+  settings.target = ['x','y','z'].map(axis => Number(document.getElementById(`rim-target-${axis}`).value));
+  return settings;
+}
+
+function updateRimLight() {
+  const settings = readRimLightSettings();
+  document.getElementById('rim-controls').hidden = !settings.enabled;
+  if (!rimLight) return;
+  rimLight.visible = settings.enabled;
+  rimLight.color.set(settings.color);
+  rimLight.intensity = settings.intensity;
+  rimLight.angle = THREE.MathUtils.degToRad(settings.angle);
+  rimLight.penumbra = settings.penumbra;
+  const azimuth = THREE.MathUtils.degToRad(settings.azimuth), elevation = THREE.MathUtils.degToRad(settings.elevation);
+  rimLight.target.position.fromArray(settings.target);
+  rimLight.position.set(
+    settings.target[0] + settings.distance * Math.cos(elevation) * Math.sin(azimuth),
+    settings.target[1] + settings.distance * Math.sin(elevation),
+    settings.target[2] + settings.distance * Math.cos(elevation) * Math.cos(azimuth));
+  rimLight.shadow.camera.near = Math.min(0.1, settings.distance * 0.05);
+  rimLight.shadow.camera.far = Math.max(20, settings.distance * 3);
+  rimLight.shadow.camera.updateProjectionMatrix();
+  window._kaminosDirty?.();
+}
+
+function setRimLight(recipe = null) {
+  const settings = { ...RIM_DEFAULTS, ...recipe };
+  if (typeof settings.enabled !== 'boolean' || !/^#[\da-f]{6}$/i.test(settings.color)
+    || !Array.isArray(settings.target) || settings.target.length !== 3 || !settings.target.every(Number.isFinite)) throw new Error('Invalid rim light');
+  for (const key of rimFields.slice(0, 6)) if (!Number.isFinite(settings[key])) throw new Error(`Invalid rim ${key}`);
+  if (settings.intensity < 0 || settings.distance < 0.1 || Math.abs(settings.elevation) > 89
+    || settings.angle < 1 || settings.angle > 89 || settings.penumbra < 0 || settings.penumbra > 1) throw new Error('Invalid rim light range');
+  document.getElementById('rim-enabled').checked = settings.enabled;
+  document.getElementById('rim-color').value = settings.color;
+  for (const key of rimFields) {
+    const value = key.startsWith('target-') ? settings.target['xyz'.indexOf(key.at(-1))] : settings[key];
+    const range = document.getElementById(`rim-${key}`), number = document.getElementById(`rim-${key}-number`);
+    range.min = Math.min(Number(range.min), value);
+    range.max = Math.max(Number(range.max), value);
+    range.step = 'any';
+    range.value = number.value = value;
+  }
+  updateRimLight();
+}
+
+for (const key of rimFields) {
+  const range = document.getElementById(`rim-${key}`), number = document.getElementById(`rim-${key}-number`);
+  number.step = 'any';
+  range.addEventListener('input', () => { number.value = range.value; updateRimLight(); });
+  number.addEventListener('change', () => {
+    if (number.value === '' || !number.validity.valid || !Number.isFinite(number.valueAsNumber)) { number.value = range.value; return; }
+    range.min = Math.min(Number(range.min), number.valueAsNumber);
+    range.max = Math.max(Number(range.max), number.valueAsNumber);
+    range.value = number.value;
+    updateRimLight();
+  });
+}
+document.getElementById('rim-enabled').addEventListener('change', updateRimLight);
+document.getElementById('rim-color').addEventListener('input', updateRimLight);
+document.getElementById('rim-aim').onclick = () => {
+  setRimLight({ ...readRimLightSettings(), target: controls.target.toArray() });
+  saveSettings();
+};
 
 // --- Exposure / Intensity Controls ---
 document.getElementById('exposure-slider').addEventListener('input', e => {
@@ -21897,14 +22084,9 @@ document.getElementById('env-intensity-slider').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   scene.environmentIntensity = v;
   document.getElementById('env-intensity-val').textContent = v.toFixed(1);
-  if (currentMesh) {
-    currentMesh.traverse(child => {
-      if (child.material) {
-        child.material.envMapIntensity = v;
-        child.material.needsUpdate = true;
-      }
-    });
-  }
+  for (const { object } of sceneObjects) object.traverse(child => {
+    for (const material of [].concat(child.material || [])) material.envMapIntensity = v;
+  });
   window._kaminosDirty?.();
 });
 
@@ -24658,6 +24840,7 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
 }
 
 function buildSceneData(capture = null) {
+  rememberEnvironmentRecipe();
   const objects = sceneObjects.map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
@@ -24685,6 +24868,8 @@ function buildSceneData(capture = null) {
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
       backgroundBrightness: Number(document.getElementById('env-bg-brightness').value),
       backgroundContrast: Number(document.getElementById('env-bg-contrast').value),
+      recipes: environmentRecipes,
+      rimLight: readRimLightSettings(),
       ground: { visible: groundPlane.visible, height: groundPlane.position.y },
     },
     volumePrimitives: getVolumePrimitiveState(),
@@ -25139,7 +25324,10 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   // Load environment first
   if (data.environment) {
     const env = data.environment;
-    await loadEnvironment(env.name || 'studio');
+    const name = env.name || 'studio';
+    environmentRecipes = normalizeEnvironmentRecipes(env.recipes);
+    environmentRecipes[name] = normalizeEnvironmentRecipe(name, env);
+    await loadEnvironment(name, { remember: false });
     renderer.toneMappingExposure = env.exposure ?? 1.5;
     document.getElementById('exposure-slider').value = renderer.toneMappingExposure;
     document.getElementById('exposure-val').textContent = renderer.toneMappingExposure.toFixed(1);
@@ -25173,6 +25361,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     }
     updateBackground();
   }
+  setRimLight(data.environment?.rimLight);
 
   if (objectRecords.length > 0) {
     try {
@@ -25330,9 +25519,9 @@ initKaminosFingerJuiceHostRoute();
 initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
-  restoreSettings();
+  const initialEnvironment = restoreSettings();
   // Load HDR environment first, then auto-load deep-linked splat if present
-  const environmentLoaded = loadEnvironment('studio').then(async () => {
+  const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
     const loadSplat = params.get('load');
     if (loadSplat) {
