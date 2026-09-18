@@ -11,6 +11,7 @@ export function normalizeBurner(value) {
   if (value == null) return null;
   if (typeof value !== 'object' || Array.isArray(value) || value.schema !== BURNER_SCHEMA) throw new Error('Unsupported burner recipe');
   const recipe = { ...BURNER_DEFAULTS, ...value };
+  if (recipe.enabled !== undefined && typeof recipe.enabled !== 'boolean') throw new Error('Burner enabled must be a boolean');
   for (const key of ['innerRadius', 'outerRadius', 'grooveFraction', 'grooveDepth', 'thickness', 'rimHeight', 'glow', 'coolingSeconds']) {
     if (typeof recipe[key] !== 'number' || !Number.isFinite(recipe[key]) || recipe[key] < 0) throw new Error(`Burner ${key} must be a finite non-negative number`);
   }
