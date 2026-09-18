@@ -16,6 +16,7 @@ import { initGPU } from './lib/moge-inference.js';
 import {
   hud, state, startFrameMonitor, loadMoge, restoreLastRunTelemetry, runInference,
 } from './moge-live-flame-shared.mjs';
+import { createMogeFrameAdmission, resolveMogeFrameAdmissionMode } from './lib/moge-frame-admission.mjs';
 
 function injectHud() {
   const style = document.createElement('style');
@@ -30,6 +31,7 @@ function injectHud() {
     #ignite { margin-top: 10px; width: 100%; padding: 9px 0; font-size: 0.85rem; font-weight: 600;
       background: #b3502a; color: #fff; border: none; border-radius: 7px; cursor: pointer; }
     #ignite:disabled { background: #3a3a42; color: #777; cursor: default; }
+    #hud select { background:#17171d; color:#e8e4da; border:1px solid #3a3a42; border-radius:4px; }
     #depth-panel { position: fixed; right: 12px; bottom: 12px; z-index: 10000; display: none;
       background: rgba(10,10,14,0.88); border: 1px solid #2a2a33; border-radius: 10px; padding: 8px; }
     #depth-panel h3 { font-size: 0.68rem; color: #9a958a; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 6px; }
@@ -48,6 +50,7 @@ function injectHud() {
     <div class="row"><span class="k">weights</span><span class="v" id="hud-weights">not loaded</span></div>
     <div class="row"><span class="k">inference</span><span class="v" id="hud-infer">idle</span></div>
     <div class="row"><span class="k">scheduler receipt</span><span class="v" id="hud-sched">—</span></div>
+    <div class="row"><label class="k" for="hud-admission">frame admission</label><select class="v" id="hud-admission"><option value="none">none · bounded-prefix baseline</option><option value="fresh-flame">finish chunk → fresh flame</option></select></div>
     <button id="ignite" disabled>Loading weights…</button>`;
   document.body.appendChild(hudEl);
   const depth = document.createElement('div');
@@ -73,25 +76,48 @@ export async function mountComposition({ prototype, params } = {}) {
   startFrameMonitor();
   mirrorFireStatus();
   window.__flameVolumePrototype = prototype || window.__kaminosVolumePrototype || null;
+  const requestedAdmission = resolveMogeFrameAdmissionMode(window.location.hash);
   window.__compositionRoute = {
     settingsPreset: params?.get('settings_preset') || null,
     settingsPresetAuthority: params?.get('settings_preset_authority') || null,
     deviceTopology: 'same-gpu-two-devices',
+    frameAdmission: requestedAdmission,
   };
 
   // MoGe owns its device (kit shared helper); the app keeps its own.
   const gpu = await initGPU();
   window.__mogeGpuDevice = gpu.device;
   const inference = await loadMoge(gpu);
+  const admissionControl = hud('hud-admission');
+  admissionControl.value = requestedAdmission;
 
   const button = document.getElementById('ignite');
   button.disabled = false;
-  button.textContent = 'Run MoGe inference (cooperative)';
+  const labelButton = () => {
+    button.textContent = admissionControl.value === 'fresh-flame'
+      ? 'Run MoGe inference (fresh-flame admission)'
+      : 'Run MoGe inference (cooperative)';
+  };
+  admissionControl.onchange = labelButton;
+  labelButton();
   button.onclick = async () => {
     button.disabled = true;
-    try { await runInference(inference); } finally {
+    admissionControl.disabled = true;
+    const frameAdmissionMode = admissionControl.value;
+    window.__compositionRoute.frameAdmission = frameAdmissionMode;
+    try {
+      await runInference(inference, {
+        frameAdmissionMode,
+        createFrameAdmission: events => createMogeFrameAdmission({
+          queue: gpu.device.queue,
+          readFlame: () => window.__flameVolumePrototype?.debugState?.(),
+          events,
+        }),
+      });
+    } finally {
       button.disabled = false;
-      button.textContent = 'Run again';
+      admissionControl.disabled = false;
+      labelButton();
     }
   };
   window.__mogeLiveFlameReady = true;

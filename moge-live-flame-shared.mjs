@@ -5,6 +5,7 @@
  * painting, and on-device chunk telemetry with persistence.
  */
 import { MoGeInference } from './lib/moge-inference.js';
+import { verifyMogeFrameAdmission } from './lib/moge-frame-admission.mjs';
 
 export const hud = id => document.getElementById(id);
 export const state = {
@@ -175,7 +176,22 @@ export async function paintDepth(result) {
 }
 
 
-export async function runInference(inference) {
+export async function runInference(inference, {
+  frameAdmissionMode = 'none',
+  createFrameAdmission = null,
+} = {}) {
+  if (!['none', 'fresh-flame'].includes(frameAdmissionMode)) {
+    throw new Error(`Unknown MoGe frame admission mode: ${frameAdmissionMode}`);
+  }
+  if (frameAdmissionMode === 'fresh-flame' && typeof createFrameAdmission !== 'function') {
+    throw new Error('Fresh-flame admission requested without a host admission factory');
+  }
+  const frameAdmission = {
+    mode: frameAdmissionMode,
+    status: frameAdmissionMode === 'none' ? 'not-requested' : 'pending',
+    events: [],
+    verification: null,
+  };
   const capture = {
     kind: 'moge-frame-timing', runId: crypto.randomUUID(),
     at: new Date().toISOString(), timeOrigin: performance.timeOrigin,
@@ -186,10 +202,13 @@ export async function runInference(inference) {
     input: { source: 'fixtures/moge-live-flame-source.png', status: 'unavailable' },
     longTaskSupport: !!state.longTaskObserver,
     routeResult: null, status: 'running',
+    frameAdmission,
     requestedScheduler: {
       mode: 'cooperative', yieldMs: 0, vitBlockChunkSize: 1,
       splitVitBlocks: true, splitDecoderResBlocks: true,
-      pacing: 'bounded-prefix', maxInFlightChunks: 1,
+      pacing: frameAdmissionMode === 'fresh-flame' ? 'strict-drain' : 'bounded-prefix',
+      maxInFlightChunks: 1,
+      hostAdmission: frameAdmissionMode === 'fresh-flame' ? 'callback' : 'none',
     },
   };
   state.lastRouteResult = null;
@@ -205,8 +224,12 @@ export async function runInference(inference) {
     state.inferring = true;
     const t0 = performance.now();
     markPhase('inference');
+    const scheduler = { ...capture.requestedScheduler };
+    if (frameAdmissionMode === 'fresh-flame') {
+      scheduler.admit = createFrameAdmission(frameAdmission.events);
+    }
     const result = await inference.run(imageData, {
-      scheduler: capture.requestedScheduler,
+      scheduler,
     });
     const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
     state.inferring = false;
@@ -217,6 +240,13 @@ export async function runInference(inference) {
     hud('hud-frames').textContent = String(state.framesDuringInference);
     hud('hud-frames').className = `v ${state.framesDuringInference > 30 ? 'good' : 'warn'}`;
     const sched = result.schedulerVerificationReceipt;
+    if (frameAdmissionMode === 'fresh-flame') {
+      frameAdmission.verification = verifyMogeFrameAdmission({
+        events: frameAdmission.events,
+        schedulerReceipt: sched,
+      });
+      frameAdmission.status = frameAdmission.verification.status;
+    }
     hud('hud-sched').textContent = sched ? `${sched.status} / ${sched.classification}` : 'missing';
     hud('hud-sched').className = `v ${sched?.status === 'verified' ? 'good' : 'warn'}`;
     renderChunkTelemetry(sched, state.worstGapDuringInference, state.inferenceGaps);

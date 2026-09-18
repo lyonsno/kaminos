@@ -14,8 +14,11 @@ works. Both use the vendored library build `lib/moge-inference.js`
 
 Shared code (`moge-live-flame-shared.mjs`): frame monitor, MoGe load + warm-up,
 cooperative run, depth paint (row-banded), and on-device chunk telemetry.
-The vendored bundle is built from moge-webgpu `e9fc64b` (SHA256
-`f76f6c47f447661f83227929ba23de21d07aeafa00a7b607302bebda9c55e019`).
+The vendored candidate bundle is built from moge-webgpu
+`a1a50576655e7caa52652120983d56f39b0bae1b` (SHA256
+`d7484a7ffa430ea352db5b426405e0a7869a9e69ce3507145069b1eebeda93df`).
+This pin belongs to the feature-branch experiment; it does not claim that
+producer revision is on main.
 
 ## Composition-module seam (index.html)
 
@@ -28,6 +31,24 @@ routes are contract-validated and reject unexpected query parameters.
 `moge-live-flame-inject.mjs` is the first composition module: it acquires its
 own device through the kit shared helper, loads MoGe, warms up, injects the HUD,
 and mirrors the app's `#volume-backend` status.
+
+The HUD's **frame admission** selector defaults to `none · bounded-prefix
+baseline`. Choose `finish chunk → fresh flame` before running to exercise the
+candidate. It can also be preselected explicitly in the same fragment:
+
+```text
+#composition_module_url=./moge-live-flame-inject.mjs&moge_frame_admission=fresh-flame
+```
+
+At each submitted MoGe chunk it finishes the current MoGe queue prefix, then
+requires both the live flame render counter and simulation-step counter to
+advance before admitting another model chunk. Hidden, inactive, fallback,
+errored, reset, or stalled flame state fails the inference instead of silently
+reverting to timer-only yielding. The raw capture retains every admission
+event and verifies parity with the scheduler's observed callback events. This
+is a same-GPU/two-device opportunity witness, not presentation or priority
+proof; it deliberately uses strict-drain pacing and is expected to cost wall
+time. Remove `moge_frame_admission` for the bounded-prefix baseline.
 
 ## Running a basin (example: `elfinblue-fuckeryyy`)
 

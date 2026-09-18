@@ -18,12 +18,13 @@ globalThis.Image = class { width = 1; height = 1; async decode() {} };
 globalThis.localStorage = { setItem() {} };
 globalThis.requestAnimationFrame = callback => setImmediate(() => callback(performance.now()));
 const writes = [];
-globalThis.fetch = async (url, options) => {
+const successFetch = async (url, options) => {
   assert.equal(url, '/api/volume-capture');
   const capture = JSON.parse(options.body);
   writes.push(capture);
   return { ok: true, json: async () => ({ ok: true, relativePath: `artifacts/volume-captures/${capture.runId}.json`, document: { capture } }) };
 };
+globalThis.fetch = successFetch;
 const scheduler = { status: 'unverified', classification: 'synthetic-test-only', eventTrace: { events: [{ kind: 'test-event', atMs: 12 }] } };
 const inference = { async run() {
   state.frameTimes?.push(11, 22, 55);
@@ -66,4 +67,39 @@ for (const response of [
   assert.ok(state.unsavedCaptures.length, 'failed writes must retain raw data in memory');
 }
 assert.equal(state.unsavedCaptures.length, 3);
+
+globalThis.fetch = successFetch;
+let effectiveScheduler = null;
+const candidateInference = { async run(_imageData, options) {
+  effectiveScheduler = options.scheduler;
+  await options.scheduler.admit({ phase: 'backbone', chunk: 'block-0:qkv' });
+  const admissionTrace = [
+    { kind: 'host-admission-start' },
+    { kind: 'host-admission-end', status: 'advanced' },
+  ];
+  const receipt = {
+    status: 'verified', classification: 'observed-boundary',
+    scheduler: { effectiveScheduler: { hostAdmission: 'callback' } },
+    eventTrace: { events: admissionTrace },
+  };
+  return { width: 1, height: 1, depth: [1], schedulerVerificationReceipt: receipt,
+    routeResult: { status: 'partial', runtime: { schedulerVerification: receipt } } };
+} };
+await runInference(candidateInference, {
+  frameAdmissionMode: 'fresh-flame',
+  createFrameAdmission: events => async ({ phase, chunk }) => {
+    events.push({
+      phase, chunk, mode: 'fresh-flame', status: 'advanced',
+      startedAtMs: 1, queueDoneAtMs: 2, endedAtMs: 3,
+      before: { frameCount: 10, simStepCount: 20 },
+      after: { frameCount: 11, simStepCount: 21 },
+    });
+  },
+});
+assert.equal(effectiveScheduler.pacing, 'strict-drain');
+assert.equal(effectiveScheduler.hostAdmission, 'callback');
+assert.equal(typeof effectiveScheduler.admit, 'function');
+assert.equal(writes.at(-1).frameAdmission.status, 'verified');
+assert.equal(writes.at(-1).frameAdmission.verification.admissions, 1);
+assert.equal(writes.at(-1).requestedScheduler.hostAdmission, 'callback');
 console.log('PASS: per-run raw retention, partial route, phase failures, missing fixture and failed/stale save visibility');
