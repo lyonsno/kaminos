@@ -75,12 +75,15 @@ const candidateInference = { async run(_imageData, options) {
   effectiveScheduler = options.scheduler;
   await options.scheduler.admit({ phase: 'backbone', chunk: 'block-0:qkv' });
   const admissionTrace = [
-    { kind: 'host-admission-start' },
-    { kind: 'host-admission-end', status: 'advanced' },
+    { kind: 'queue-work-done-end', phase: 'backbone', chunk: 'block-0:qkv', provenance: 'observed' },
+    { kind: 'host-admission-start', phase: 'backbone', chunk: 'block-0:qkv', provenance: 'observed' },
+    { kind: 'host-admission-end', phase: 'backbone', chunk: 'block-0:qkv', status: 'advanced', provenance: 'observed' },
   ];
   const receipt = {
     status: 'verified', classification: 'observed-boundary',
-    scheduler: { effectiveScheduler: { hostAdmission: 'callback' } },
+    scheduler: { effectiveScheduler: {
+      hostAdmission: 'callback', pacing: 'strict-drain', waitForSubmittedWorkDone: true,
+    } },
     eventTrace: { events: admissionTrace },
   };
   return { width: 1, height: 1, depth: [1], schedulerVerificationReceipt: receipt,
@@ -90,12 +93,14 @@ await runInference(candidateInference, {
   frameAdmissionMode: 'fresh-flame',
   createFrameAdmission: async ({ events, runId }) => ({
     admit: async ({ phase, chunk }) => {
+      const requestId = `${runId}:fresh-flame:1`;
+      const boundary = { phase, dutyId: chunk };
       events.push({
         phase, chunk, mode: 'fresh-flame', status: 'advanced',
-        requestId: `${runId}:fresh-flame:1`, startedAtMs: 1, endedAtMs: 3,
-        foregroundService: { status: 'serviced' },
+        requestId, startedAtMs: 1, endedAtMs: 3,
+        foregroundService: { status: 'serviced', receiptIds: [requestId] },
         foregroundReceipt: {
-          status: 'completed', submissionCount: 0,
+          requestId, status: 'completed', submissionCount: 0, boundary,
           result: {
             before: { frameCount: 10, simStepCount: 20 },
             after: { frameCount: 11, simStepCount: 21 },
@@ -105,7 +110,10 @@ await runInference(candidateInference, {
     },
     finish: async () => {
       finishedAdmission = true;
-      return { status: 'succeeded', receiptCount: 1 };
+      return {
+        status: 'succeeded', receiptCount: events.length,
+        receipts: events.map(event => structuredClone(event.foregroundReceipt)),
+      };
     },
     serviceSnapshot: () => ({ schema: 'test.foreground-service', activeRun: null }),
   }),

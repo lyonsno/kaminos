@@ -15,8 +15,8 @@ works. Both use the vendored library build `lib/moge-inference.js`
 Shared code (`moge-live-flame-shared.mjs`): frame monitor, MoGe load + warm-up,
 cooperative run, depth paint (row-banded), and on-device chunk telemetry.
 The vendored candidate bundle is built from moge-webgpu
-`a1a50576655e7caa52652120983d56f39b0bae1b` (SHA256
-`d7484a7ffa430ea352db5b426405e0a7869a9e69ce3507145069b1eebeda93df`).
+`daba63a` (SHA256
+`97bf9089e86200874a02d0e10ba0dd2e2ec9375348c09a0eee15f99ebaec638d`).
 This pin belongs to the feature-branch experiment; it does not claim that
 producer revision is on main.
 
@@ -49,7 +49,9 @@ MoGe adapter owns only boundary identity and the host flame freshness check.
 Hidden, inactive, fallback, errored, reset, or stalled flame state fails the
 inference instead of silently reverting to timer-only yielding. The raw
 capture retains every admission event, the foreground-service finish report,
-and parity with the scheduler's observed callback events. This is a
+and ordered identity parity across effective strict-drain configuration,
+observed queue retirement, scheduler callbacks, service receipts, and the
+finish report. This is a
 same-GPU/two-device opportunity witness, not presentation or priority proof;
 it deliberately uses strict-drain pacing and is expected to cost wall time.
 Remove `moge_frame_admission` for the bounded-prefix baseline.

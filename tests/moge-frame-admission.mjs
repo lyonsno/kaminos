@@ -85,10 +85,13 @@ for (const mutation of [
 
 const admitted = candidate.events[0];
 const schedulerReceipt = {
-  scheduler: { effectiveScheduler: { hostAdmission: 'callback' } },
+  scheduler: { effectiveScheduler: {
+    hostAdmission: 'callback', pacing: 'strict-drain', waitForSubmittedWorkDone: true,
+  } },
   eventTrace: { events: [
-    { kind: 'host-admission-start' },
-    { kind: 'host-admission-end', status: 'advanced' },
+    { kind: 'queue-work-done-end', phase: admitted.phase, chunk: admitted.chunk, provenance: 'observed' },
+    { kind: 'host-admission-start', phase: admitted.phase, chunk: admitted.chunk, provenance: 'observed' },
+    { kind: 'host-admission-end', phase: admitted.phase, chunk: admitted.chunk, status: 'advanced', provenance: 'observed' },
   ] },
 };
 assert.equal(verifyMogeFrameAdmission({
@@ -97,7 +100,14 @@ assert.equal(verifyMogeFrameAdmission({
 for (const mutate of [
   value => { value.events[0].foregroundReceipt.result.after.simStepCount = value.events[0].foregroundReceipt.result.before.simStepCount; },
   value => { value.schedulerReceipt.scheduler.effectiveScheduler.hostAdmission = 'none'; },
-  value => { value.schedulerReceipt.eventTrace.events.pop(); },
+  value => { value.schedulerReceipt.scheduler.effectiveScheduler.pacing = 'bounded-prefix'; },
+  value => { value.schedulerReceipt.scheduler.effectiveScheduler.waitForSubmittedWorkDone = false; },
+  value => { delete value.schedulerReceipt.scheduler.effectiveScheduler.pacing; },
+  value => { value.schedulerReceipt.eventTrace.events.shift(); },
+  value => { value.schedulerReceipt.eventTrace.events[1].chunk = 'wrong-chunk'; },
+  value => { value.schedulerReceipt.eventTrace.events.splice(1, 0, structuredClone(value.schedulerReceipt.eventTrace.events[1])); },
+  value => { value.events[0].foregroundReceipt.requestId = 'wrong-request'; },
+  value => { value.finishReport.receipts[0].requestId = 'wrong-retained-request'; },
   value => { value.finishReport.status = 'incomplete'; },
 ]) {
   const value = structuredClone({ events: [admitted], schedulerReceipt, finishReport: candidateFinish });
