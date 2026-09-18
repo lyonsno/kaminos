@@ -7,11 +7,11 @@ const root = new URL('../src/', import.meta.url);
 const sharedUrl = new URL('sam-online-attention-wgsl.js', root);
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const consumers = [
-  ['ViT', 'sam-image-vit-block-stack-phase-program.js', /dispatchPlan\.attention\.dispatch/, /onlineAttentionDispatch\(layerShape\.windowTokens, shape\.numHeads, shape\.batch \* layerShape\.windowCount\)/],
-  ['prompt text', 'sam-prompt-text-ingress-phase-program.js', /prompt-text-causal-attention/, /onlineAttentionDispatch\(shape\.promptTokens, shape\.heads, shape\.batch\)/],
-  ['prompt FPN', 'sam-prompt-fpn-phase-program.js', /prompt-attention-softmax/, /onlineAttentionDispatch\(shape\.spatialTokens, shape\.heads, shape\.batch\)/],
-  ['DETR encoder', 'sam-detr-encoder-phase-program.js', /detr-encoder-self-attention-softmax/, /onlineAttentionDispatch\(shape\.spatialTokens, shape\.heads, shape\.batch\)/],
-  ['DETR decoder', 'sam-detr-decoder-phase-program.js', /detr-decoder-vision-attention-softmax/, /onlineAttentionDispatch\(shape\.queryTokens \+ 1, shape\.heads, shape\.batch\)/],
+  ['ViT', 'sam-image-vit-block-stack-phase-program.js', /dispatchPlan\.attention\.dispatch/, /onlineAttentionDispatch\(layerShape\.windowTokens, shape\.numHeads, shape\.batch \* layerShape\.windowCount, shape\.headDim\)/],
+  ['prompt text', 'sam-prompt-text-ingress-phase-program.js', /prompt-text-causal-attention/, /onlineAttentionDispatch\(shape\.promptTokens, shape\.heads, shape\.batch, shape\.headDim\)/],
+  ['prompt FPN', 'sam-prompt-fpn-phase-program.js', /prompt-attention-softmax/, /onlineAttentionDispatch\(shape\.spatialTokens, shape\.heads, shape\.batch, shape\.headDim\)/],
+  ['DETR encoder', 'sam-detr-encoder-phase-program.js', /detr-encoder-self-attention-softmax/, /onlineAttentionDispatch\(shape\.spatialTokens, shape\.heads, shape\.batch, shape\.headDim\)/],
+  ['DETR decoder', 'sam-detr-decoder-phase-program.js', /detr-decoder-vision-attention-softmax/, /onlineAttentionDispatch\(shape\.queryTokens \+ 1, shape\.heads, shape\.batch, shape\.headDim\)/],
 ];
 
 assert.equal(existsSync(sharedUrl), true, 'serving attention must share one online-softmax WGSL family');
@@ -21,8 +21,9 @@ assert.match(shared, /accumulator = accumulator \* state\[2\] \+ state\[3\] \* v
 assert.equal((shared.match(/for \(var token = 0u;/g) || []).length, 1, 'the score/value pass must traverse keys once, not once per output channel and softmax pass');
 assert.match(shared, /head_dim > 64u/, 'the shared kernel must fail closed when a head exceeds its workgroup width');
 assert.match(packageJson.scripts.test, /sam-serving-attention-complexity-contracts\.mjs/, 'the default suite must retain the serving attention regression contract');
-assert.deepEqual(onlineAttentionDispatch(576, 16, 9), [576, 16, 9]);
-assert.throws(() => onlineAttentionDispatch(65_536, 16, 1), /queryTokens.*\[1, 65535\]/);
+assert.deepEqual(onlineAttentionDispatch(576, 16, 9, 64), [576, 16, 9]);
+assert.throws(() => onlineAttentionDispatch(65_536, 16, 1, 64), /queryTokens.*\[1, 65535\]/);
+assert.throws(() => onlineAttentionDispatch(576, 16, 9, 65), /headDim.*\[1, 64\]/);
 
 function directSoftmax(scores, values) {
   const maxScore = Math.max(...scores);

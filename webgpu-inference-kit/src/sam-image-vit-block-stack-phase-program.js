@@ -548,7 +548,7 @@ export function createSam3ImageVitBlockStackDispatchPlan(input = {}) {
     kRope: padded(),
     attention: {
       logicalInvocations: shape.batch * layerShape.windowCount * layerShape.windowTokens * shape.numHeads,
-      dispatch: onlineAttentionDispatch(layerShape.windowTokens, shape.numHeads, shape.batch * layerShape.windowCount),
+      dispatch: onlineAttentionDispatch(layerShape.windowTokens, shape.numHeads, shape.batch * layerShape.windowCount, shape.headDim),
     },
     outputProjection: padded(),
     windowUnpartition: total(),

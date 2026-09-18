@@ -169,6 +169,7 @@ for (const route of ['sam-detr-encoder', 'sam-detr-decoder', 'sam-pixel-decoder'
   for (const [height, width, batch] of [[16, 16, 1], [72, 72, 1], [9, 13, 2]]) {
     const shape = { batch, height, width, channels: 256, spatialTokens: height * width, queryTokens: 200, maskTokens: 200, promptTokens: 32, mlpHidden: 2048, heads: 8, groups: 32,
       levels: [4, 2, 1].map(scale => ({ height: height * scale, width: width * scale })) };
+    shape.headDim = shape.channels / shape.heads;
     if (route === 'sam-mask-tail') { shape.height *= 4; shape.width *= 4; }
     for (const index of route === 'sam-pixel-decoder' ? [0, 1] : [0, 5]) checkProduction(route, source, shape, index);
     if (route === 'sam-mask-tail') {

@@ -819,7 +819,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
-        { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: onlineAttentionDispatch(shape.promptTokens, shape.heads, shape.batch), yieldAfter: true },
+        { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: onlineAttentionDispatch(shape.promptTokens, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
         { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-output-add-${layerIndex}`, kernel: `${prefix}.add1`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-layernorm2-${layerIndex}`, kernel: `${prefix}.ln2`, dispatch: [workgroups(rows)], yieldAfter: true },

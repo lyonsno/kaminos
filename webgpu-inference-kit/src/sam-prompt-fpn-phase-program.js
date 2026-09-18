@@ -482,7 +482,7 @@ export async function runSam3PromptFpnPhaseProgramRoute(input = {}) {
         { name: 'prompt-qkv-q', kernel: 'qLinear', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
         { name: 'prompt-qkv-k', kernel: 'kLinear', dispatch: [workgroups(totalPrompt)], yieldAfter: true },
         { name: 'prompt-qkv-v', kernel: 'vLinear', dispatch: [workgroups(totalPrompt)], yieldAfter: true },
-        { name: 'prompt-attention-softmax', kernel: 'attention', dispatch: onlineAttentionDispatch(shape.spatialTokens, shape.heads, shape.batch), yieldAfter: true },
+        { name: 'prompt-attention-softmax', kernel: 'attention', dispatch: onlineAttentionDispatch(shape.spatialTokens, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
         { name: 'prompt-output-residual', kernel: 'outputResidual', dispatch: [workgroups(totalEncoder)], yieldAfter: true },
         { name: 'readback-prompt-fpn-feature', readbacks: [{ name: 'promptFpnFeature', tensor: 'output' }] },
       ],
