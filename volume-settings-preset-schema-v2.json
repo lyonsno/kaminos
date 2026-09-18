@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 206,
+  "controlCount": 209,
   "controls": [
     { "key": "volume-physical-material-law", "param": "volume_physical_material_law", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
     { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
@@ -147,6 +147,27 @@
     {
       "key": "volume-procedural-detail-forces",
       "param": "volume_procedural_detail_forces",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-force-micro-carrier",
+      "param": "volume_force_micro_carrier",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-force-interface-shred",
+      "param": "volume_force_interface_shred",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-force-fine-breakup",
+      "param": "volume_force_fine_breakup",
       "tagName": "INPUT",
       "type": "checkbox",
       "additiveDefault": true

@@ -1,15 +1,22 @@
-// Session diagnostic only. Ordering matches Uniforms.detail_force_isolation.
+// Ordering matches Uniforms.detail_force_isolation. Transported detail remains
+// enabled internally for compatibility, but is retired from the live cockpit.
 const TERMS = ['detail', 'micro', 'shred', 'fine'];
-export function detailForceIsolationMask(mode = 'all') {
-  if (mode === 'all') return [1, 1, 1, 1];
-  const match = /^(without|only)-(detail|micro|shred|fine)$/.exec(mode);
-  if (!match) throw new Error(`Unknown detail force isolation: ${mode}`);
-  return TERMS.map(term => +(match[1] === 'only' ? term === match[2] : term !== match[2]));
+export function detailForceContributionMask(contributions = {}) {
+  return [
+    1,
+    contributions.micro === false ? 0 : 1,
+    contributions.shred === false ? 0 : 1,
+    contributions.fine === false ? 0 : 1,
+  ];
 }
 
-export function detailForceIsolationReceipt(controls = {}) {
-  const requested = controls.detailForceIsolation ?? 'all';
-  const requestedMask = detailForceIsolationMask(requested);
+export function detailForceContributionReceipt(controls = {}) {
+  const requested = {
+    micro: controls.detailForceContributions?.micro !== false,
+    shred: controls.detailForceContributions?.shred !== false,
+    fine: controls.detailForceContributions?.fine !== false,
+  };
+  const requestedMask = detailForceContributionMask(requested);
   const masterEnabled = controls.proceduralDetailForces !== false;
   const detailSuppressedByScene = controls.volumeScene === 'tall_plume';
   const sceneGain = controls.volumeScene === 'bonfire_plume'

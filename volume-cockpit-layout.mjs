@@ -22,6 +22,12 @@ const LAYOUT_API = '/api/volume-cockpit-layouts';
 const LAYOUT_ACTIVATION_API = '/api/volume-cockpit-layout-activation';
 const LAYOUT_SURFACES = new Set(['primary', 'authored-mix']);
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._-]{0,95})$/;
+const FORCE_CONTRIBUTION_CONTROL_IDS = Object.freeze([
+  'volume-procedural-detail-forces',
+  'volume-force-micro-carrier',
+  'volume-force-interface-shred',
+  'volume-force-fine-breakup',
+]);
 
 class VolumeCockpitLayoutAvailabilityError extends Error {
   constructor(message, options = {}) {
@@ -155,7 +161,33 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
   const retirementMigration = migrateRetiredVolumeCockpitLayoutDocument(documentValue, retiredControls);
   const receipt = validateVolumeCockpitLayoutDocument({ document: retirementMigration.document, authorableControlIds });
   const reconciled = cloneDocument(retirementMigration.document);
-  if (receipt.missingControlIds.length) {
+  const authorableSet = new Set(authorableControlIds);
+  const forceContributionIds = FORCE_CONTRIBUTION_CONTROL_IDS.filter(controlId => authorableSet.has(controlId));
+  if (forceContributionIds.length) {
+    for (const group of reconciled.groups) {
+      group.controlIds = group.controlIds.filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId));
+    }
+    let forceGroup = reconciled.groups.find(group => group.id === 'organized-force');
+    if (!forceGroup) {
+      forceGroup = {
+        id: 'organized-force',
+        label: 'Force contributions',
+        surface: 'primary',
+        collapsed: false,
+        controlIds: [],
+      };
+      const simulationIndex = reconciled.groups.findIndex(group => group.id === 'organized-simulation'
+        || group.label === 'Simulation dynamics');
+      reconciled.groups.splice(simulationIndex < 0 ? reconciled.groups.length : simulationIndex, 0, forceGroup);
+    }
+    forceGroup.label = 'Force contributions';
+    forceGroup.surface = 'primary';
+    forceGroup.collapsed = false;
+    forceGroup.controlIds = forceContributionIds;
+  }
+  const ordinaryMissingControlIds = receipt.missingControlIds
+    .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId));
+  if (ordinaryMissingControlIds.length) {
     let newControls = reconciled.groups.find(group => group.id === 'new-controls');
     if (!newControls) {
       newControls = {
@@ -170,7 +202,7 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
     newControls.label = 'New controls';
     newControls.surface = 'primary';
     newControls.collapsed = false;
-    newControls.controlIds.push(...receipt.missingControlIds);
+    newControls.controlIds.push(...ordinaryMissingControlIds);
   }
   const effectiveReceipt = validateVolumeCockpitLayoutDocument({
     document: reconciled,
@@ -350,7 +382,8 @@ const ORGANIZED_GROUPS = [
   ['detail', 'Flame detail', /^volume-(fire|fire-scale|detail-scale|microdetail|interface-shred|fire-licks)$/],
   ['budget', 'Raymarch budget', /^volume-(steps|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
-  ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|procedural-detail-forces|pyro-detail)$/],
+  ['force', 'Force contributions', /^volume-(procedural-detail-forces|force-(micro-carrier|interface-shred|fine-breakup))$/],
+  ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail)$/],
   ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|boundary-splat-.+|flow-kernel-.+|residual-.+|grid-overlay|flow-debug|oracle-.+|pyro-compare|look-freeze)$/],
   ['shell', 'Shell renderer', /^volume-shell-.+/],
   ['capture', 'Capture extractor', /^volume-reaction-.+/],

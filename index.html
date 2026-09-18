@@ -169,6 +169,10 @@ canvas { display: block; }
 
 /* Exposure slider */
 .slider-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; user-select: none; -webkit-user-select: none; }
+.force-contribution-row { align-items: flex-start; }
+.force-contribution-row .slider-label { min-width: 88px; }
+.force-contribution-row input[type="checkbox"] { flex: 0 0 auto; margin-top: 2px; }
+.force-contribution-gloss { flex: 1 1 auto; color: #5f747b; font-size: 9px; line-height: 1.25; }
 .volume-control-section { margin: 10px 0 12px; padding: 8px 0; border-top: 1px solid #252525; border-bottom: 1px solid #202020; }
 .volume-control-section-title { font-size: 10px; color: #777; font-weight: 600; margin: 0 0 6px; }
 .volume-collapsible-group { margin: 8px 0; padding: 0 8px 7px; border: 1px solid #292929; border-radius: 6px; background: rgba(255,255,255,0.012); }
@@ -1111,24 +1115,6 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-cockpit-layout-toolbar-row">
         <span id="volume-cockpit-layout-status" role="status" aria-live="polite">connecting…</span>
       </div>
-    <div class="volume-cockpit-layout-toolbar" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Detail force comparison" style="margin-top:10px">
-      <label for="detail-force-isolation">Detail force comparison · session only</label>
-      <div class="volume-cockpit-layout-toolbar-row">
-        <select id="detail-force-isolation" aria-describedby="detail-force-isolation-note">
-          <option value="all">All forces — original behavior</option>
-          <option value="without-micro">Without micro-carrier push</option>
-          <option value="without-shred">Without interface shredding</option>
-          <option value="without-fine">Without fine-scale breakup</option>
-          <option value="only-micro">Only micro-carrier push</option>
-          <option value="only-shred">Only interface shredding</option>
-          <option value="only-fine">Only fine-scale breakup</option>
-          <option value="without-detail">Without transported detail push</option>
-          <option value="only-detail">Only transported detail push</option>
-        </select>
-      </div>
-      <div id="detail-force-isolation-note" role="status" style="font-size:11px;line-height:1.4;color:#a7b4b8;margin-top:6px"></div>
-      <div style="font-size:11px;line-height:1.4;color:#a7b4b8;margin-top:6px">Changes new force injection, not existing velocity or material detail. Let old motion pass through before comparing. “Only” isolates terms inside Procedural detail forces; buoyancy and the rest of the solve remain. Reload restores All; this selection is not saved in the basin.</div>
-    </div>
     </div>
     <h2>Volume Renderer</h2>
     <div class="panel">
@@ -1715,10 +1701,29 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="checkbox" id="volume-phased-sway" checked>
       <span class="slider-val" id="volume-phased-sway-val">on</span>
     </div>
-    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
-      <span class="slider-label">Procedural detail forces</span>
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+      <span class="slider-label">Master</span>
       <input type="checkbox" id="volume-procedural-detail-forces" checked>
+      <span class="force-contribution-gloss">Gates all active force contributions; transported material fields and prior velocity remain.</span>
       <span class="slider-val" id="volume-procedural-detail-forces-val">on</span>
+    </div>
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+      <span class="slider-label">Micro-carrier</span>
+      <input type="checkbox" id="volume-force-micro-carrier" data-volume-settings-param="volume_force_micro_carrier" checked>
+      <span class="force-contribution-gloss">Returns transported microstructure to velocity; feeds articulated lateral motion.</span>
+      <span class="slider-val" id="volume-force-micro-carrier-val">on</span>
+    </div>
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+      <span class="slider-label">Interface shred</span>
+      <input type="checkbox" id="volume-force-interface-shred" data-volume-settings-param="volume_force_interface_shred" checked>
+      <span class="force-contribution-gloss">Returns material boundaries and local curl to velocity; feeds interface opening and roughness.</span>
+      <span class="slider-val" id="volume-force-interface-shred-val">on</span>
+    </div>
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+      <span class="slider-label">Fine breakup</span>
+      <input type="checkbox" id="volume-force-fine-breakup" data-volume-settings-param="volume_force_fine_breakup" checked>
+      <span class="force-contribution-gloss">Returns heat, smoke, source and curl to velocity; can disturb coupled reaction regimes.</span>
+      <span class="slider-val" id="volume-force-fine-breakup-val">on</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="presentation-exposure">
       <span class="slider-label">Exposure</span>
@@ -3044,7 +3049,6 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=fire-actor-parity-0722';
-import { detailForceIsolationReceipt } from './volume-detail-force-isolation.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -18397,7 +18401,11 @@ function readVolumeControls() {
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked,
-    detailForceIsolation: document.getElementById('detail-force-isolation').value,
+    detailForceContributions: {
+      micro: document.getElementById('volume-force-micro-carrier').checked,
+      shred: document.getElementById('volume-force-interface-shred').checked,
+      fine: document.getElementById('volume-force-fine-breakup').checked,
+    },
     volumeExposure: parseFloat(document.getElementById('volume-exposure').value),
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
@@ -18674,14 +18682,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
   document.getElementById('volume-procedural-detail-forces-val').textContent = c.proceduralDetailForces ? 'on' : 'off';
-  const forceComparison = detailForceIsolationReceipt(c);
-  document.getElementById('detail-force-isolation-note').textContent = !forceComparison.masterEnabled
-    ? 'Master switch is OFF: all four detail forces are disabled.'
-    : forceComparison.sceneGain === 0
-      ? 'Bonfire detail-force gain is ZERO: all four detail forces are disabled regardless of this selector.'
-    : forceComparison.detailSuppressedByScene
-      ? 'Tall plume already suppresses transported detail push. Compare micro-carrier, shredding and fine breakup; Only transported detail therefore disables all four.'
-      : 'Master switch is ON. Comparison affects only the named force contributions.';
+  document.getElementById('volume-force-micro-carrier-val').textContent = c.detailForceContributions.micro ? 'on' : 'off';
+  document.getElementById('volume-force-interface-shred-val').textContent = c.detailForceContributions.shred ? 'on' : 'off';
+  document.getElementById('volume-force-fine-breakup-val').textContent = c.detailForceContributions.fine ? 'on' : 'off';
   document.getElementById('volume-exposure-val').textContent = c.volumeExposure.toFixed(2);
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
@@ -20063,11 +20066,10 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
-  for (const id of ['volume-scene', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }
-  document.getElementById('detail-force-isolation').addEventListener('change', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('input', syncControls);
   document.getElementById('volume-reaction-live-view')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-sidecar-source')?.addEventListener('input', syncControls);
