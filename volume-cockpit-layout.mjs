@@ -163,7 +163,9 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
   const reconciled = cloneDocument(retirementMigration.document);
   const authorableSet = new Set(authorableControlIds);
   const forceContributionIds = FORCE_CONTRIBUTION_CONTROL_IDS.filter(controlId => authorableSet.has(controlId));
-  if (forceContributionIds.length) {
+  const missingForceContributionIds = receipt.missingControlIds
+    .filter(controlId => FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId));
+  if (forceContributionIds.length && missingForceContributionIds.length) {
     for (const group of reconciled.groups) {
       group.controlIds = group.controlIds.filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId));
     }

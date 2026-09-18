@@ -19804,6 +19804,13 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_procedural_detail_forces')) {
     setVolumeControlValue('volume-procedural-detail-forces', params.get('volume_procedural_detail_forces'));
   }
+  for (const [id, param] of [
+    ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
+    ['volume-force-interface-shred', 'volume_force_interface_shred'],
+    ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
+  ]) {
+    if (params.has(param)) setVolumeControlValue(id, params.get(param));
+  }
   updateVolumeControlLabels();
   volumePrototype = createKaminosVolumePrototype({
     THREE,

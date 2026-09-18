@@ -33,6 +33,18 @@ for (const [id, label, gloss] of [
   assert.match(index, new RegExp(`<span class="slider-label">${label}<\\/span>[\\s\\S]*?<input type="checkbox" id="${id}"[^>]+checked>[\\s\\S]*?${gloss}`),
     `${label} exposes a default-on checkbox and a behavioral gloss`);
 }
+for (const [id, param] of [
+  ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
+  ['volume-force-interface-shred', 'volume_force_interface_shred'],
+  ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
+]) {
+  assert.ok(index.includes(`['${id}', '${param}']`), `${id} maps to its exact persisted basin-route key`);
+}
+assert.match(
+  index,
+  /for \(const \[id, param\] of \[[\s\S]*?if \(params\.has\(param\)\) setVolumeControlValue\(id, params\.get\(param\)\)/,
+  'force contribution route mappings restore their persisted off/on state before the renderer reads the cockpit',
+);
 assert.match(index, /detailForceContributions:\s*\{[\s\S]*?micro: document\.getElementById\('volume-force-micro-carrier'\)\.checked[\s\S]*?shred: document\.getElementById\('volume-force-interface-shred'\)\.checked[\s\S]*?fine: document\.getElementById\('volume-force-fine-breakup'\)\.checked/);
 assert.match(layout, /\['force', 'Force contributions',[\s\S]*?\['simulation', 'Simulation dynamics'/,
   'force contribution controls sit immediately above simulation dynamics in the source layout');
@@ -63,4 +75,39 @@ assert.deepEqual(reconciled.document.groups.map(group => group.id), ['organized-
 assert.deepEqual(reconciled.document.groups[0].controlIds, forceControlIds.slice(0, 4));
 assert.deepEqual(reconciled.document.groups[1].controlIds, ['volume-speed']);
 assert.deepEqual(reconciled.newControlIds, forceControlIds.slice(1, 4));
+const authoredLayout = {
+  identity: 'kaminos.volume.cockpit-layout.v1',
+  layoutId: 'operator-authored-force-layout',
+  label: 'Operator-authored force layout',
+  groups: [
+    {
+      id: 'operator-primary',
+      label: 'My immediate controls',
+      surface: 'primary',
+      collapsed: true,
+      controlIds: ['volume-force-fine-breakup', 'volume-speed'],
+    },
+    {
+      id: 'operator-secondary',
+      label: 'My occasional controls',
+      surface: 'authored-mix',
+      collapsed: false,
+      controlIds: [
+        'volume-procedural-detail-forces',
+        'volume-force-interface-shred',
+        'volume-force-micro-carrier',
+      ],
+    },
+  ],
+};
+const preserved = reconcileVolumeCockpitLayoutDocument({
+  document: authoredLayout,
+  authorableControlIds: forceControlIds,
+});
+assert.deepEqual(
+  preserved.document,
+  authoredLayout,
+  'once every force control is known, reconciliation must preserve the operator-authored grouping, order and collapse state',
+);
+assert.deepEqual(preserved.newControlIds, []);
 console.log('detail force contributions: independent controls, bypass routing and cockpit placement pass');
