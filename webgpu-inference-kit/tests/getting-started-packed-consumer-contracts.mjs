@@ -31,6 +31,7 @@ try {
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port-runner.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/render-plus-inference.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/render-plus-inference.html'));
+  assert.ok(packOutput[0].files.some(row => row.path === 'examples/assets/brightness-still-life.jpg'));
 
   const tarball = join(temporaryRoot, packOutput[0].filename);
   await writeFile(join(temporaryRoot, 'package.json'), '{"type":"module","private":true}\n');

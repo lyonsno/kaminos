@@ -2,64 +2,174 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WebGPU Render + Inference</title>
+<title>Brighten a Photo With WebGPU</title>
 <style>
+  :root { color-scheme: light; --ink: #17201e; --muted: #5e6b67; --line: #cbd3d0; --paper: #f7f9f8; --panel: #ffffff; --accent: #087b62; --accent-dark: #075c4b; --warm: #f0bd3d; --danger: #a92c4a; }
   * { box-sizing: border-box; letter-spacing: 0; }
-  body { margin: 0; background: #131518; color: #f2f3f4; font: 15px system-ui, sans-serif; }
-  main { max-width: 1040px; margin: auto; padding: 28px 20px; }
-  header, .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
-  h1 { font-size: 24px; margin: 0; } header { margin-bottom: 24px; }
-  canvas { display: block; width: 100%; aspect-ratio: 2.2; min-height: 220px; }
-  .controls { justify-content: flex-start; padding: 22px 0; border-bottom: 1px solid #45474d; }
-  button, input { font: inherit; border-radius: 4px; padding: 10px 14px; border: 1px solid #666970; }
-  button { background: #e5e8eb; color: #131518; cursor: pointer; } button:disabled { opacity: 0.5; cursor: default; }
-  input { width: 100px; background: #22252a; color: white; } label { display: flex; gap: 10px; align-items: center; }
-  output { color: #65dfbf; } .job { display: grid; grid-template-columns: 80px minmax(0,1fr); gap: 10px 16px; padding: 20px 0; border-bottom: 1px solid #45474d; }
-  progress { width: 100%; accent-color: #65dfbf; } pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-  #error { color: #ff91ab; } .muted { color: #bbc1cb; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.55 system-ui, sans-serif; }
+  main { width: min(1120px, 100%); margin: auto; padding: 40px 24px 72px; }
+  header { max-width: 760px; margin-bottom: 32px; }
+  h1 { margin: 0 0 10px; font-size: clamp(32px, 5vw, 52px); line-height: 1.05; font-weight: 720; }
+  h2 { margin: 0 0 12px; font-size: 24px; line-height: 1.2; }
+  p { margin: 0 0 16px; }
+  .lede { color: var(--muted); font-size: 19px; }
+  .comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
+  .image-wrap { position: relative; aspect-ratio: 3 / 2; background: #dfe5e2; }
+  .image-wrap img, .image-wrap canvas { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .empty-result { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; background: #e7ecea; color: var(--muted); text-align: center; }
+  .empty-result[hidden] { display: none; }
+  figcaption { min-height: 72px; padding: 14px 16px; border-top: 1px solid var(--line); }
+  figcaption strong, figcaption span { display: block; }
+  figcaption span { color: var(--muted); font-size: 14px; }
+  .workspace { padding: 28px 0 8px; }
+  .controls { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 20px; align-items: end; }
+  .control-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-weight: 650; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .range-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
+  button { min-height: 44px; padding: 10px 20px; border: 0; border-radius: 5px; background: var(--accent); color: white; font: inherit; font-weight: 700; cursor: pointer; }
+  button:hover { background: var(--accent-dark); }
+  button:disabled { opacity: .55; cursor: default; }
+  .runtime { display: flex; align-items: center; gap: 12px; margin-top: 22px; min-height: 72px; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  #activity { flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; }
+  .runtime strong, .runtime span { display: block; }
+  .runtime span { color: var(--muted); font-size: 14px; }
+  #error { min-height: 24px; margin-top: 10px; color: var(--danger); }
+  .explanation { margin-top: 48px; padding-top: 36px; border-top: 2px solid var(--ink); }
+  .explanation > p { max-width: 780px; color: var(--muted); }
+  ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 18px; margin: 28px 0 0; padding: 0; list-style: none; counter-reset: steps; }
+  li { counter-increment: steps; padding-top: 14px; border-top: 4px solid var(--warm); }
+  li::before { content: counter(steps); display: block; margin-bottom: 12px; color: var(--accent-dark); font-weight: 800; }
+  li strong { display: block; margin-bottom: 5px; }
+  li span { color: var(--muted); font-size: 14px; }
+  .why { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 42px; padding-top: 36px; border-top: 1px solid var(--line); }
+  code { padding: 2px 5px; border-radius: 3px; background: #e5ebe8; font-size: .9em; }
+  a { color: var(--accent-dark); }
+  @media (max-width: 760px) {
+    main { padding: 28px 16px 56px; }
+    .comparison, .why { grid-template-columns: 1fr; }
+    .controls { grid-template-columns: 1fr; }
+    ol { grid-template-columns: 1fr; gap: 10px; }
+    li { display: grid; grid-template-columns: 28px 1fr; column-gap: 10px; }
+    li::before { grid-row: 1 / 3; }
+  }
 </style>
 <script type="importmap">{"imports":{"@kaminos/webgpu-inference-kit":"../src/index.js"}}</script>
 <main>
-  <header><h1>Render + Inference</h1><span class="muted">Affine model / WebGPU</span></header>
-  <canvas aria-label="Animated plot of model output"></canvas>
-  <div class="controls">
-    <button id="run" disabled>Run Two Jobs</button><button id="cancel" disabled>Cancel Queued</button>
-    <label>Input wait (ms) <input id="delay" type="number" min="0" value="500" step="100"></label>
-    <output id="frames">0 frames</output>
-  </div>
-  <p id="phase">Connecting</p><div id="jobs"></div><pre id="error" role="alert"></pre>
+  <header>
+    <h1>Brighten a photo with WebGPU</h1>
+    <p class="lede">This small worked example shows the whole connection: a familiar input, one understandable GPU operation, and a visible result inside an application that is already rendering.</p>
+  </header>
+
+  <section class="comparison" aria-label="Original and processed photograph">
+    <figure>
+      <div class="image-wrap"><img id="source-image" src="./assets/brightness-still-life.jpg" alt="A yellow mug, red apple, and teal cloth on a dark table"></div>
+      <figcaption><strong>Original</strong><span>The unchanged source photograph</span></figcaption>
+    </figure>
+    <figure>
+      <div class="image-wrap">
+        <canvas id="processed" width="768" height="512" aria-label="Photograph processed by the WebGPU brightness operation"></canvas>
+        <div class="empty-result" id="empty-result">Your processed image will appear here.</div>
+      </div>
+      <figcaption><strong id="result-title">Processed</strong><span id="result-caption">No result yet</span></figcaption>
+    </figure>
+  </section>
+
+  <section class="workspace" aria-labelledby="adjustment-heading">
+    <h2 id="adjustment-heading">Choose one obvious adjustment</h2>
+    <p>We multiply every pixel's red, green, and blue values by the number below. Transparency stays unchanged.</p>
+    <div class="controls">
+      <div>
+        <div class="control-label"><label for="brightness">Brightness</label><output id="brightness-value" for="brightness">1.50×</output></div>
+        <input id="brightness" type="range" min="0.25" max="2" value="1.5" step="0.05">
+        <div class="range-labels"><span>Darker · 0.25×</span><span>Unchanged · 1×</span><span>Brighter · 2×</span></div>
+      </div>
+      <button id="apply" disabled>Apply with WebGPU</button>
+    </div>
+    <div class="runtime">
+      <canvas id="activity" width="104" height="104" aria-label="Continuously rendered activity indicator"></canvas>
+      <div><strong id="phase" aria-live="polite">Connecting to WebGPU</strong><span id="runtime-detail">The moving dot is drawn by the application's renderer.</span></div>
+    </div>
+    <p id="error" role="alert"></p>
+  </section>
+
+  <section class="explanation" aria-labelledby="mechanism-heading">
+    <h2 id="mechanism-heading">What happens when you press Apply?</h2>
+    <p>There is no hidden model and no visual trick. The example uses a hand-written operation so every part of the integration is easy to inspect.</p>
+    <ol>
+      <li><strong>Share one device</strong><span>The renderer and the brightness operation declare what they need. The application creates one GPU device that satisfies both.</span></li>
+      <li><strong>Read the pixels</strong><span>The photograph becomes a list of red, green, blue, and transparency values.</span></li>
+      <li><strong>Queue one job</strong><span>The application asks the kit to run the brightness adapter with your selected multiplier.</span></li>
+      <li><strong>Run on the GPU</strong><span>A small compute kernel multiplies the color channels and clamps them to the image's valid range.</span></li>
+      <li><strong>Display the result</strong><span>The processed pixels return to the application and appear beside the original. Apply again to reuse the same device and rendering service.</span></li>
+    </ol>
+  </section>
+
+  <section class="why">
+    <div>
+      <h2>Why use such a simple operation?</h2>
+      <p>Because this page teaches the connection, not image editing. You can predict the result, see whether it is correct, and then inspect how an ordinary application gives work to the kit.</p>
+      <p>The operation runs at its natural speed. We do not slow it down to manufacture a performance demonstration.</p>
+    </div>
+    <div>
+      <h2>Where should I look in the code?</h2>
+      <p><a href="./render-plus-inference.mjs">Open the worked example module</a>. Start with <code>createRenderPlusInferenceExample()</code>, then follow <code>createBrightnessModelAdapter()</code> to the three-step upload, compute, and readback path.</p>
+      <p>The same kit interfaces can host larger model ports. This example deliberately keeps the operation small enough to understand in one sitting.</p>
+    </div>
+  </section>
 </main>
 <script type="module">
 import { createRenderPlusInferenceExample } from './render-plus-inference.mjs';
+
 const get = id => document.getElementById(id);
-let renderedJobs = '';
+const sourceImage = get('source-image');
+const resultCanvas = get('processed');
+const resultContext = resultCanvas.getContext('2d');
 let commandError = '';
+
+get('brightness').addEventListener('input', event => {
+  get('brightness-value').textContent = `${Number(event.target.value).toFixed(2)}×`;
+});
+
 try {
-  const app = await createRenderPlusInferenceExample({ canvas: document.querySelector('canvas'), onState(state) {
-    get('frames').textContent = `${state.frames} frames`;
-    get('phase').textContent = `${state.phase} / ${state.status}`;
-    get('error').textContent = state.error || commandError;
-    get('run').disabled = state.status === 'running'; get('cancel').disabled = state.status !== 'running';
-    const jobs = JSON.stringify(state.jobs);
-    if (jobs === renderedJobs) return;
-    renderedJobs = jobs;
-    get('jobs').replaceChildren(...state.jobs.map((row, i) => {
-      const element = document.createElement('section'); element.className = 'job';
-      const label = document.createElement('strong'); label.textContent = `Job ${i + 1}`;
-      const detail = document.createElement('div'); detail.textContent = `${row.phase} / ${row.status}`;
-      const progress = document.createElement('progress'); progress.max = 100; progress.value = row.percent;
-      const output = document.createElement('pre'); output.textContent = row.output ? JSON.stringify(row.output) : row.failure?.message || '';
-      detail.append(progress, output); element.append(label, detail); return element;
-    }));
-  } });
+  await sourceImage.decode();
+  const app = await createRenderPlusInferenceExample({
+    canvas: get('activity'),
+    sourceImage,
+    onState(state) {
+      get('phase').textContent = state.phase;
+      get('runtime-detail').textContent = state.status === 'running'
+        ? 'The job is using the shared GPU device.'
+        : `Renderer active · ${state.frames.toLocaleString()} frames drawn`;
+      get('error').textContent = state.error || commandError;
+      get('apply').disabled = state.status === 'running';
+    },
+  });
   window.renderInferenceExample = app;
-  get('run').onclick = async () => {
+  get('apply').onclick = async () => {
     commandError = '';
-    try { await app.run({ inputWaitMs: Number(get('delay').value) }); }
-    catch (error) { commandError = error.message; get('error').textContent = commandError; }
+    get('error').textContent = '';
+    const multiplier = Number(get('brightness').value);
+    try {
+      const completion = await app.run({ multiplier });
+      const result = completion.output;
+      resultCanvas.width = result.width;
+      resultCanvas.height = result.height;
+      resultContext.putImageData(new ImageData(result.pixels, result.width, result.height), 0, 0);
+      get('empty-result').hidden = true;
+      get('result-title').textContent = `Processed · ${result.multiplier.toFixed(2)}×`;
+      get('result-caption').textContent = `Each color channel was multiplied by ${result.multiplier.toFixed(2)} on the GPU.`;
+      window.lastBrightnessCompletion = completion;
+    } catch (error) {
+      commandError = error.message;
+      get('error').textContent = commandError;
+    }
   };
-  get('cancel').onclick = () => app.cancelQueued();
   window.addEventListener('pagehide', () => { void app.dispose(); }, { once: true });
-} catch (error) { get('error').textContent = error.message; get('phase').textContent = 'Unavailable'; }
+} catch (error) {
+  get('error').textContent = error.message;
+  get('phase').textContent = 'WebGPU unavailable';
+  get('runtime-detail').textContent = 'This example needs a browser with WebGPU enabled.';
+}
 </script>
 </html>
