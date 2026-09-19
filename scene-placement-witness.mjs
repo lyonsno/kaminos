@@ -77,8 +77,10 @@ try {
  r.phase='capture';await page.locator('#composition-label').fill('Modal placement study');assert.equal(await page.evaluate(()=>window.captureComposition()),true);await shot('final');
  r.phase='busy-admission';let releasePreset,sawPreset;const held=new Promise(resolve=>releasePreset=resolve),requested=new Promise(resolve=>sawPreset=resolve);
  await page.route('**/api/volume-settings-presets',async route=>{if(route.request().method()==='POST'){sawPreset();await held;}await route.continue();});
- const capture=page.evaluate(()=>window.captureComposition());await requested;
- r.busyRejection=await page.evaluate(()=>{try{window.kaminosSetSceneObjectTransform('kiln',{position:[9,9,9]});return null;}catch(error){return error.message;}});assert.match(r.busyRejection,/authoring/);assert.deepEqual(await current(),r.savedPose);releasePreset();assert.equal(await capture,true);await page.unroute('**/api/volume-settings-presets');
+ const capture=page.evaluate(()=>window.captureComposition()).then(value=>({value}),error=>({error}));await requested;
+ try {
+  r.busyRejection=await page.evaluate(()=>{try{window.kaminosSetSceneObjectTransform('kiln',{position:[9,9,9]});return null;}catch(error){return error.message;}});assert.match(r.busyRejection,/authoring/);savedPoseEqual(await current(),r.savedPose);
+ } finally {releasePreset();const captured=await capture;await page.unroute('**/api/volume-settings-presets');if(captured.error)throw captured.error;assert.equal(captured.value,true);}
  r.phase='correction-admission';const ply='ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\nend_header\n0 0 0\n1 0 0\n0 1 1\n';await fs.writeFile(path.join(v.out,'correction-fixture.ply'),ply);
  await page.route('**/placement-correction-fixture.ply',route=>route.fulfill({contentType:'application/octet-stream',body:ply}));
  await page.evaluate(async()=>{await window.greenroomImportSplat('/placement-correction-fixture.ply','placement-correction-fixture.ply',{}, {clear:false,metadata:{id:'correction-fixture',splat:{correction:{centroidOffset:[.1,0,0]}}}});await window.enterSplatCorrectionMode('correction-fixture');});
