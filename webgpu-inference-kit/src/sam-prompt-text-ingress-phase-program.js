@@ -25,9 +25,9 @@ import {
   onlineAttentionDispatch,
 } from './sam-online-attention-wgsl.js';
 import {
-  SAM_BLOCKED_LINEAR_WGSL,
-  blockedLinearDispatchForDevice,
-} from './sam-blocked-linear-wgsl.js';
+  SAM_VECTOR_LINEAR_WGSL,
+  vectorLinearDispatchForDevice,
+} from './sam-vector-linear-wgsl.js';
 
 export const SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-text-ingress.phase-program.webgpu-local.v0';
 
@@ -529,8 +529,8 @@ function workgroups(total) {
   return Math.max(1, Math.ceil(total / 64));
 }
 
-function linearWorkgroups(tokens, outputChannels, device) {
-  return blockedLinearDispatchForDevice(tokens, outputChannels, device);
+function linearWorkgroups(tokens, inputChannels, outputChannels, device) {
+  return vectorLinearDispatchForDevice(tokens, inputChannels, outputChannels, device);
 }
 
 function linearDims(stage, label, rows, inChannels, outChannels) {
@@ -702,7 +702,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         ],
       },
       projection: {
-        code: SAM_BLOCKED_LINEAR_WGSL,
+        code: SAM_VECTOR_LINEAR_WGSL,
         bindings: [
           tensorBinding('inputValues', 'tensor:hiddenB'),
           tensorBinding('weight', 'tensor:textProjectionWeight'),
@@ -731,7 +731,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         uniformBinding('dims', 'uniform:textDims'),
       ]);
       for (const projection of ['q', 'k', 'v']) {
-        registerLayerKernel(`${prefix}.${projection}`, SAM_BLOCKED_LINEAR_WGSL, [
+        registerLayerKernel(`${prefix}.${projection}`, SAM_VECTOR_LINEAR_WGSL, [
           tensorBinding('inputValues', 'tensor:hiddenB'),
           tensorBinding('weight', resources[`${projection}Weight`]),
           tensorBinding('bias', resources[`${projection}Bias`]),
@@ -747,7 +747,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:attn', 'storage'),
         uniformBinding('dims', 'uniform:textDims'),
       ]);
-      registerLayerKernel(`${prefix}.out`, SAM_BLOCKED_LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.out`, SAM_VECTOR_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:attn'),
         tensorBinding('weight', resources.oWeight),
         tensorBinding('bias', resources.oBias),
@@ -767,7 +767,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
         uniformBinding('dims', 'uniform:textDims'),
       ]);
-      registerLayerKernel(`${prefix}.fc1`, SAM_BLOCKED_LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.fc1`, SAM_VECTOR_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:hiddenB'),
         tensorBinding('weight', resources.fc1Weight),
         tensorBinding('bias', resources.fc1Bias),
@@ -779,7 +779,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:mlpGelu', 'storage'),
         uniformBinding('dims', 'uniform:geluDims'),
       ]);
-      registerLayerKernel(`${prefix}.fc2`, SAM_BLOCKED_LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.fc2`, SAM_VECTOR_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:mlpGelu'),
         tensorBinding('weight', resources.fc2Weight),
         tensorBinding('bias', resources.fc2Bias),
@@ -794,22 +794,22 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
       ]);
       phases.push(
         { name: `prompt-text-layernorm1-${layerIndex}`, kernel: `${prefix}.ln1`, dispatch: [workgroups(rows)], yieldAfter: true },
-        { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
-        { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
-        { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: linearWorkgroups(rows, shape.hiddenSize, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: linearWorkgroups(rows, shape.hiddenSize, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: linearWorkgroups(rows, shape.hiddenSize, shape.hiddenSize, input.device), yieldAfter: true },
         { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: onlineAttentionDispatch(shape.promptTokens, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
-        { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: linearWorkgroups(rows, shape.hiddenSize, shape.hiddenSize, input.device), yieldAfter: true },
         { name: `prompt-text-output-add-${layerIndex}`, kernel: `${prefix}.add1`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-layernorm2-${layerIndex}`, kernel: `${prefix}.ln2`, dispatch: [workgroups(rows)], yieldAfter: true },
-        { name: `prompt-text-mlp-fc1-${layerIndex}`, kernel: `${prefix}.fc1`, dispatch: linearWorkgroups(rows, shape.intermediateSize, input.device), yieldAfter: true },
+        { name: `prompt-text-mlp-fc1-${layerIndex}`, kernel: `${prefix}.fc1`, dispatch: linearWorkgroups(rows, shape.hiddenSize, shape.intermediateSize, input.device), yieldAfter: true },
         { name: `prompt-text-mlp-gelu-${layerIndex}`, kernel: `${prefix}.gelu`, dispatch: [workgroups(totalIntermediate)], yieldAfter: true },
-        { name: `prompt-text-mlp-fc2-${layerIndex}`, kernel: `${prefix}.fc2`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: `prompt-text-mlp-fc2-${layerIndex}`, kernel: `${prefix}.fc2`, dispatch: linearWorkgroups(rows, shape.intermediateSize, shape.hiddenSize, input.device), yieldAfter: true },
         { name: `prompt-text-mlp-residual-${layerIndex}`, kernel: `${prefix}.add2`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
       );
     }
     phases.push(
       { name: 'prompt-text-final-layernorm', kernel: 'finalLayerNorm', dispatch: [workgroups(rows)], yieldAfter: true },
-      { name: 'prompt-text-projection', kernel: 'projection', dispatch: linearWorkgroups(rows, shape.channels, input.device), yieldAfter: true },
+      { name: 'prompt-text-projection', kernel: 'projection', dispatch: linearWorkgroups(rows, shape.hiddenSize, shape.channels, input.device), yieldAfter: true },
       { name: 'readback-prompt-text-ingress', readbacks: [{ name: 'promptFeatures', tensor: 'promptFeatures' }, { name: 'promptMask', tensor: 'promptMask' }] },
     );
 

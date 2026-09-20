@@ -21,10 +21,10 @@ import {
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
 import {
-  SAM_BLOCKED_LINEAR_RELU_WGSL,
-  SAM_BLOCKED_LINEAR_WGSL,
-  blockedLinearDispatchForDevice,
-} from './sam-blocked-linear-wgsl.js';
+  SAM_VECTOR_LINEAR_RELU_WGSL,
+  SAM_VECTOR_LINEAR_WGSL,
+  vectorLinearDispatchForDevice,
+} from './sam-vector-linear-wgsl.js';
 
 export const SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID = 'sam3.scoring.phase-program.webgpu-local.v0';
 
@@ -378,8 +378,8 @@ function workgroups(total) {
   return Math.max(1, Math.ceil(total / 64));
 }
 
-function linearWorkgroups(tokens, outputChannels, device) {
-  return blockedLinearDispatchForDevice(tokens, outputChannels, device);
+function linearWorkgroups(tokens, inputChannels, outputChannels, device) {
+  return vectorLinearDispatchForDevice(tokens, inputChannels, outputChannels, device);
 }
 
 export async function runSam3ScoringPhaseProgramRoute(input = {}) {
@@ -477,21 +477,21 @@ export async function runSam3ScoringPhaseProgramRoute(input = {}) {
       },
       uniforms: { textMlp1Dims: tensors.textMlp1Dims, textMlp2Dims: tensors.textMlp2Dims, textDims: tensors.textDims, textProjDims: tensors.textProjDims, queryProjDims: tensors.queryProjDims, scoreDims: tensors.scoreDims },
       kernels: {
-        textMlpFc1Relu: { code: SAM_BLOCKED_LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpLayer1Weight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpLayer1Bias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textMlp1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textMlp1Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-        textMlpFc2: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:textMlp1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpLayer2Weight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpLayer2Bias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textMlp2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textMlp2Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        textMlpFc1Relu: { code: SAM_VECTOR_LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpLayer1Weight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpLayer1Bias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textMlp1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textMlp1Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        textMlpFc2: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:textMlp1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpLayer2Weight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpLayer2Bias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textMlp2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textMlp2Dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
         residualLayernorm: { code: RESIDUAL_LAYERNORM_WGSL, bindings: [{ name: 'mlp', resource: 'tensor:textMlp2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'residual', resource: 'tensor:promptFeatures', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textMlpOutNormWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textMlpOutNormBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:textProcessed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
         maskedPool: { code: MASKED_POOL_WGSL, bindings: [{ name: 'text', resource: 'tensor:textProcessed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'mask', resource: 'tensor:promptMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'pooled', resource: 'tensor:pooledText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-        textProj: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:pooledText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textProjWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textProjBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:projectedText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textProjDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-        queryProj: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:hiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:queryProjWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:queryProjBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:projectedQueries', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:queryProjDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        textProj: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:pooledText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:textProjWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:textProjBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:projectedText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:textProjDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        queryProj: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:hiddenStates', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:queryProjWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:queryProjBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:projectedQueries', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:queryProjDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
         dotProduct: { code: DOT_PRODUCT_WGSL, bindings: [{ name: 'queries', resource: 'tensor:projectedQueries', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'text', resource: 'tensor:projectedText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'predLogits', resource: 'tensor:predLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:scoreDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
       },
       phases: [
-        { name: 'scoring-text-mlp-fc1-relu', kernel: 'textMlpFc1Relu', dispatch: linearWorkgroups(promptTotal, shape.mlpHidden, input.device), yieldAfter: true },
-        { name: 'scoring-text-mlp-fc2', kernel: 'textMlpFc2', dispatch: linearWorkgroups(promptTotal, shape.channels, input.device), yieldAfter: true },
+        { name: 'scoring-text-mlp-fc1-relu', kernel: 'textMlpFc1Relu', dispatch: linearWorkgroups(promptTotal, shape.channels, shape.mlpHidden, input.device), yieldAfter: true },
+        { name: 'scoring-text-mlp-fc2', kernel: 'textMlpFc2', dispatch: linearWorkgroups(promptTotal, shape.mlpHidden, shape.channels, input.device), yieldAfter: true },
         { name: 'scoring-text-mlp-residual-layernorm', kernel: 'residualLayernorm', dispatch: [workgroups(promptTotal)], yieldAfter: true },
         { name: 'scoring-mask-pool-text', kernel: 'maskedPool', dispatch: [workgroups(pooledTotal)], yieldAfter: true },
-        { name: 'scoring-text-proj', kernel: 'textProj', dispatch: linearWorkgroups(shape.batch, shape.channels, input.device), yieldAfter: true },
-        { name: 'scoring-query-proj', kernel: 'queryProj', dispatch: linearWorkgroups(shape.layerCount * shape.batch * shape.queryTokens, shape.channels, input.device), yieldAfter: true },
+        { name: 'scoring-text-proj', kernel: 'textProj', dispatch: linearWorkgroups(shape.batch, shape.channels, shape.channels, input.device), yieldAfter: true },
+        { name: 'scoring-query-proj', kernel: 'queryProj', dispatch: linearWorkgroups(shape.layerCount * shape.batch * shape.queryTokens, shape.channels, shape.channels, input.device), yieldAfter: true },
         { name: 'scoring-dot-product', kernel: 'dotProduct', dispatch: [workgroups(scoreTotal)], yieldAfter: true },
         { name: 'readback-scoring', readbacks: [{ name: 'predLogits', tensor: 'predLogits' }] },
       ],

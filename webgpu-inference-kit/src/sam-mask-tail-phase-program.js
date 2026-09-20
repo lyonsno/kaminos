@@ -21,10 +21,10 @@ import {
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
 import {
-  SAM_BLOCKED_LINEAR_RELU_WGSL,
-  SAM_BLOCKED_LINEAR_WGSL,
-  blockedLinearDispatchForDevice,
-} from './sam-blocked-linear-wgsl.js';
+  SAM_VECTOR_LINEAR_RELU_WGSL,
+  SAM_VECTOR_LINEAR_WGSL,
+  vectorLinearDispatchForDevice,
+} from './sam-vector-linear-wgsl.js';
 
 export const SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID = 'sam3.mask-tail.phase-program.webgpu-local.v0';
 
@@ -344,8 +344,8 @@ function workgroups(total, device) {
   });
 }
 
-function linearWorkgroups(tokens, outputChannels, device) {
-  return blockedLinearDispatchForDevice(tokens, outputChannels, device);
+function linearWorkgroups(tokens, inputChannels, outputChannels, device) {
+  return vectorLinearDispatchForDevice(tokens, inputChannels, outputChannels, device);
 }
 
 export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
@@ -457,17 +457,17 @@ export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
       },
       uniforms: { dims: tensors.dims, thresholdDims: tensors.thresholdDims },
       kernels: {
-        maskEmbedderLayer0: { code: SAM_BLOCKED_LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:lastHs', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:layer0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-        maskEmbedderLayer1: { code: SAM_BLOCKED_LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:layer0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:layer1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
-        maskEmbedderLayer2: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:layer1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:maskEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        maskEmbedderLayer0: { code: SAM_VECTOR_LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:lastHs', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:layer0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        maskEmbedderLayer1: { code: SAM_VECTOR_LINEAR_RELU_WGSL, bindings: [{ name: 'input', resource: 'tensor:layer0', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:layer1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
+        maskEmbedderLayer2: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [{ name: 'input', resource: 'tensor:layer1', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:w2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:b2', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'output', resource: 'tensor:maskEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
         instanceProjection: { code: INSTANCE_PROJECTION_WGSL, bindings: [{ name: 'pixelEmbed', resource: 'tensor:pixelEmbed', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'weight', resource: 'tensor:instanceWeight', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'bias', resource: 'tensor:instanceBias', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'upscaledEmbedding', resource: 'tensor:upscaledEmbedding', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
         decodeMask: { code: MASK_PROJECTION_WGSL, bindings: [{ name: 'maskEmbeddings', resource: 'tensor:maskEmbeddings', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'upscaledEmbedding', resource: 'tensor:upscaledEmbedding', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'maskLogits', resource: 'tensor:maskLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:dims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
         thresholdMask: { code: THRESHOLD_WGSL, bindings: [{ name: 'maskLogits', resource: 'tensor:maskLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'binaryMask', resource: 'tensor:binaryMask', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:thresholdDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
       },
       phases: [
-        { name: 'mask-embedder-layer-0', kernel: 'maskEmbedderLayer0', dispatch: linearWorkgroups(shape.batch * shape.maskTokens, shape.channels, input.device), yieldAfter: true },
-        { name: 'mask-embedder-layer-1', kernel: 'maskEmbedderLayer1', dispatch: linearWorkgroups(shape.batch * shape.maskTokens, shape.channels, input.device), yieldAfter: true },
-        { name: 'mask-embedder-layer-2', kernel: 'maskEmbedderLayer2', dispatch: linearWorkgroups(shape.batch * shape.maskTokens, shape.channels, input.device), yieldAfter: true },
+        { name: 'mask-embedder-layer-0', kernel: 'maskEmbedderLayer0', dispatch: linearWorkgroups(shape.batch * shape.maskTokens, shape.channels, shape.channels, input.device), yieldAfter: true },
+        { name: 'mask-embedder-layer-1', kernel: 'maskEmbedderLayer1', dispatch: linearWorkgroups(shape.batch * shape.maskTokens, shape.channels, shape.channels, input.device), yieldAfter: true },
+        { name: 'mask-embedder-layer-2', kernel: 'maskEmbedderLayer2', dispatch: linearWorkgroups(shape.batch * shape.maskTokens, shape.channels, shape.channels, input.device), yieldAfter: true },
         { name: 'instance-projection-1x1', kernel: 'instanceProjection', dispatch: workgroups(shape.batch * shape.channels * spatial, input.device), yieldAfter: true },
         { name: 'decode-mask', kernel: 'decodeMask', dispatch: workgroups(maskTotal, input.device), yieldAfter: true },
         { name: 'threshold-mask', kernel: 'thresholdMask', dispatch: workgroups(maskTotal, input.device), yieldAfter: true },

@@ -21,10 +21,10 @@ import {
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
 import {
-  SAM_BLOCKED_LINEAR_GELU_WGSL,
-  SAM_BLOCKED_LINEAR_WGSL,
-  blockedLinearDispatchForDevice,
-} from './sam-blocked-linear-wgsl.js';
+  SAM_VECTOR_LINEAR_GELU_WGSL,
+  SAM_VECTOR_LINEAR_WGSL,
+  vectorLinearDispatchForDevice,
+} from './sam-vector-linear-wgsl.js';
 
 export const SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-vit-first-block.phase-program.webgpu-local.v0';
 
@@ -682,8 +682,8 @@ function workgroups(total) {
   return Math.max(1, Math.ceil(total / 64));
 }
 
-function linearWorkgroups(tokens, outputChannels, device) {
-  return blockedLinearDispatchForDevice(tokens, outputChannels, device);
+function linearWorkgroups(tokens, inputChannels, outputChannels, device) {
+  return vectorLinearDispatchForDevice(tokens, inputChannels, outputChannels, device);
 }
 
 export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
@@ -793,33 +793,33 @@ export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
       kernels: {
         layerNorm1: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:hiddenStates'), bindTensor('tensor:layerNorm1Weight'), bindTensor('tensor:layerNorm1Bias'), bindTensor('tensor:layerNorm1', 'storage'), bindUniform('uniform:lnDims')] },
         windowPartition: { code: WINDOW_PARTITION_WGSL, bindings: [bindTensor('tensor:layerNorm1'), bindTensor('tensor:windows', 'storage'), bindUniform('uniform:blockDims')] },
-        qProjection: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
-        kProjection: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:kProjWeight'), bindTensor('tensor:kProjBias'), bindTensor('tensor:k', 'storage'), bindUniform('uniform:windowLinearDims')] },
-        vProjection: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        qProjection: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        kProjection: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:kProjWeight'), bindTensor('tensor:kProjBias'), bindTensor('tensor:k', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        vProjection: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
         qRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:q'), bindTensor('tensor:qRope', 'storage'), bindUniform('uniform:blockDims')] },
         kRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:k'), bindTensor('tensor:kRope', 'storage'), bindUniform('uniform:blockDims')] },
         attention: { code: ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
-        outputProjection: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        outputProjection: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
         windowUnpartition: { code: WINDOW_UNPARTITION_WGSL, bindings: [bindTensor('tensor:projected'), bindTensor('tensor:hiddenStates'), bindTensor('tensor:attentionResidual', 'storage'), bindUniform('uniform:blockDims')] },
         layerNorm2: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:layerNorm2Weight'), bindTensor('tensor:layerNorm2Bias'), bindTensor('tensor:layerNorm2', 'storage'), bindUniform('uniform:lnDims')] },
-        mlpFc1: { code: SAM_BLOCKED_LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
-        mlpFc2: { code: SAM_BLOCKED_LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
+        mlpFc1: { code: SAM_VECTOR_LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
+        mlpFc2: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
         residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor('tensor:vitFirstBlockHiddenStates', 'storage'), bindUniform('uniform:blockDims')] },
       },
       phases: [
         { name: 'vit-block-layernorm1', kernel: 'layerNorm1', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true },
         { name: 'vit-block-window-partition', kernel: 'windowPartition', dispatch: [workgroups(shape.paddedTotalValues)], yieldAfter: true },
-        { name: 'vit-block-qkv-projection', kernel: 'qProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, input.device) },
-        { name: 'vit-block-qkv-projection', kernel: 'kProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, input.device) },
-        { name: 'vit-block-qkv-projection', kernel: 'vProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: 'vit-block-qkv-projection', kernel: 'qProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, shape.hiddenSize, input.device) },
+        { name: 'vit-block-qkv-projection', kernel: 'kProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, shape.hiddenSize, input.device) },
+        { name: 'vit-block-qkv-projection', kernel: 'vProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, shape.hiddenSize, input.device), yieldAfter: true },
         { name: 'vit-block-rope-attention', kernel: 'qRope', dispatch: [workgroups(shape.paddedTotalValues)] },
         { name: 'vit-block-rope-attention', kernel: 'kRope', dispatch: [workgroups(shape.paddedTotalValues)] },
         { name: 'vit-block-rope-attention', kernel: 'attention', dispatch: [workgroups(shape.paddedTotalValues)], yieldAfter: true },
-        { name: 'vit-block-output-projection', kernel: 'outputProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: 'vit-block-output-projection', kernel: 'outputProjection', dispatch: linearWorkgroups(windowTokenCount, shape.hiddenSize, shape.hiddenSize, input.device), yieldAfter: true },
         { name: 'vit-block-window-unpartition', kernel: 'windowUnpartition', dispatch: [workgroups(shape.totalValues)], yieldAfter: true },
         { name: 'vit-block-layernorm2', kernel: 'layerNorm2', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true },
-        { name: 'vit-block-gelu-mlp', kernel: 'mlpFc1', dispatch: linearWorkgroups(shape.tokenCount, shape.intermediateSize, input.device) },
-        { name: 'vit-block-gelu-mlp', kernel: 'mlpFc2', dispatch: linearWorkgroups(shape.tokenCount, shape.hiddenSize, input.device) },
+        { name: 'vit-block-gelu-mlp', kernel: 'mlpFc1', dispatch: linearWorkgroups(shape.tokenCount, shape.hiddenSize, shape.intermediateSize, input.device) },
+        { name: 'vit-block-gelu-mlp', kernel: 'mlpFc2', dispatch: linearWorkgroups(shape.tokenCount, shape.intermediateSize, shape.hiddenSize, input.device) },
         { name: 'vit-block-gelu-mlp', kernel: 'residualMlp', dispatch: [workgroups(shape.totalValues)], yieldAfter: true },
         { name: 'readback-vit-first-block-hidden-states', readbacks: [{ name: 'vitFirstBlockHiddenStates', tensor: 'vitFirstBlockHiddenStates' }] },
       ],

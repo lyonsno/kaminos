@@ -185,6 +185,6 @@ for (const [name, expected] of Object.entries(reference.expected)) {
   assert.ok(maxError < 0.00001, `${name}: MLX CPU reference error ${maxError}`);
 }
 assert.match(routeSource, /let coord = f32\(axis_index\) \/ f32\(dims.axis_tokens\)/, 'GPU BoxRPB uses cell corners');
-assert.match(routeSource, /addKernel\(k\('Ref2'\), SAM_BLOCKED_LINEAR_WGSL/, 'reference-point output projection preserves negative coordinates without applying ReLU');
+assert.match(routeSource, /addKernel\(k\('Ref2'\), SAM_VECTOR_LINEAR_WGSL/, 'reference-point output projection preserves negative coordinates without applying ReLU');
 
 console.log('sam DETR decoder phase-program contracts passed');
