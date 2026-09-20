@@ -48,7 +48,7 @@ export function installParameterTools({edits, descriptors, report = () => {}}) {
         if(!e.ctrlKey&&!e.metaKey&&!e.altKey && (e.key.length===1 || ['Backspace','Delete','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(e.key)))begin(binding);
       },true);
       input.addEventListener('beforeinput',()=>begin(binding),true);
-      input.addEventListener('input',e=>{if(!e.isTrusted)return;e.stopImmediatePropagation();if(input.value.trim())preview(binding,input.valueAsNumber);},true);
+      input.addEventListener('input',e=>{if(!e.isTrusted){binding.adopt?.();return;}e.stopImmediatePropagation();if(input.value.trim())preview(binding,input.valueAsNumber);},true);
       input.addEventListener('change',e=>{if(!e.isTrusted)return;e.stopImmediatePropagation();finish(true);},true);
       input.addEventListener('blur',()=>{if(active?.binding===binding&&!active.capture)finish(true);});
       input.addEventListener('pointercancel',()=>finish(false));
@@ -77,7 +77,7 @@ export function installParameterTools({edits, descriptors, report = () => {}}) {
   });
   document.addEventListener('keydown',e=>{if(active?.capture && ['Escape','Enter'].includes(e.key)){steal(e);finish(e.key==='Enter');}},true);
   window.addEventListener('blur',()=>finish(false));
-  return {finish,sync:()=>{for(const binding of bindings.values())sync(binding);},
+  return {finish,sync:()=>{for(const binding of bindings.values()){binding.adopt?.();sync(binding);}},
     set(id,value){const binding=bindings.get('@'+id);if(!binding)throw Error(`Unknown authored parameter: ${id}`);edits.apply(binding.id,{value},binding.label);},
     state:()=>Object.fromEntries([...bindings.values()].map(b=>[b.id.slice(1),b.read()]))};
 }

@@ -10233,6 +10233,7 @@ async function loadEnvironment(name, { remember = true } = {}) {
   const recipe = normalizeEnvironmentRecipe(name, environmentRecipes[name]);
   environmentRecipes[name] = recipe;
   applyEnvironmentRecipe(recipe);
+  sceneParameterTools?.sync();
   const loadingEl = document.getElementById('env-loading');
   loadingEl.style.display = 'none';
 
@@ -22090,6 +22091,7 @@ function setRimLight(recipe = null) {
     range.value = number.value = value;
   }
   updateRimLight();
+  sceneParameterTools?.sync();
 }
 
 for (const key of rimFields) {
@@ -25234,22 +25236,24 @@ function installAuthoredParameterControls() {
   for(const [id,label,step,min,max] of lighting) {
     const range=document.getElementById(id),number=numberFor(range);
     const row=range.closest('.slider-row') || range.parentElement;
+    let accepted=Number(range.value);
     descriptors.push({id,label,inputs:[range,number],grip:row.querySelector('label'),step,
-      read:()=>id==='exposure-slider'?renderer.toneMappingExposure:Number(range.value),
+      read:()=>accepted,adopt:()=>{accepted=Number(range.value);},
       validate:value=>{if((min!==null&&value<min)||(max!==undefined&&value>max))throw Error('Value outside '+label+' range');},
       write:value=>{
         range.min=Math.min(Number(range.min),value);range.max=Math.max(Number(range.max),value);range.step='any';range.value=value;
-        range.dispatchEvent(new Event('input',{bubbles:true}));
+        accepted=value;range.dispatchEvent(new Event('input',{bubbles:true}));
         if(id==='fire-light-gain-stops'&&activeSceneComposition)activeSceneComposition.lightGainStops=value;
       }});
   }
   // Existing rim numeric UI stays here until the separately requested placeable-light slice.
   for(const key of rimFields) {
     const range=document.getElementById('rim-'+key),number=document.getElementById('rim-'+key+'-number');
-    const current=()=>key.startsWith('target-')?readRimLightSettings().target['xyz'.indexOf(key.at(-1))]:readRimLightSettings()[key];
+    const actual=()=>key.startsWith('target-')?readRimLightSettings().target['xyz'.indexOf(key.at(-1))]:readRimLightSettings()[key];
+    let accepted=actual();
     descriptors.push({id:'rim.'+key,label:'Rim '+key,inputs:[range,number],grip:range.parentElement.querySelector('label'),step: ['intensity','azimuth','elevation','angle'].includes(key)?.2:.01,
-      read:current,validate:value=>{if((number.min!==''&&value<Number(number.min))||(number.max!==''&&value>Number(number.max)))throw Error('Invalid rim '+key);},
-      write:value=>{const recipe=readRimLightSettings();if(key.startsWith('target-'))recipe.target['xyz'.indexOf(key.at(-1))]=value;else recipe[key]=value;setRimLight(recipe);}});
+      read:()=>accepted,adopt:()=>{accepted=actual();},validate:value=>{if((number.min!==''&&value<Number(number.min))||(number.max!==''&&value>Number(number.max)))throw Error('Invalid rim '+key);},
+      write:value=>{const recipe=readRimLightSettings();if(key.startsWith('target-'))recipe.target['xyz'.indexOf(key.at(-1))]=value;else recipe[key]=value;setRimLight(recipe);accepted=value;}});
   }
   return installParameterTools({edits:scenePlacementTools.edits,descriptors,report:message=>{document.getElementById('scene-edit-hud').textContent=message;}});
 }
@@ -25565,6 +25569,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     gain.dispatchEvent(new Event('input'));
     compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
   }
+  sceneParameterTools?.sync();
+  scenePlacementTools?.edits.clear();
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
