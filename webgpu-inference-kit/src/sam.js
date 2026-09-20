@@ -1,0 +1,323 @@
+export {
+  SAM31_RESIDENT_MODEL_RESOURCES_SCHEMA,
+  createSam31ResidentModelResources,
+} from './sam31-resident-model-resources.js';
+
+export {
+  SAM3_BROWSER_MODEL_PACKAGE_RUNTIME_SCHEMA,
+  createSam3BrowserModelPackageRuntime,
+} from './sam3-browser-model-package-runtime.js';
+
+export {
+  SAM3_BROWSER_RESIDENT_MODEL_OWNER_ROUTE_ID,
+  SAM3_BROWSER_RESIDENT_MODEL_SESSION_EVIDENCE_SCHEMA,
+  createSam3BrowserResidentModelSession,
+  createSam3BrowserResidentModelSessionForTest,
+} from './sam3-browser-resident-model-session.js';
+
+export {
+  SAM3_MASK_DECODER_ISLAND_ROUTE_ID,
+  createSam3MaskDecoderIslandRouteDefinition,
+  createSam3MaskDecoderIslandRouteReceipt,
+  createSam3MaskProjectionCpuOracle,
+  runSam3MaskDecoderIslandRoute,
+} from './sam-mask-decoder-island.js';
+
+export {
+  SAM3_MASK_TAIL_PHASE_PROGRAM_ROUTE_ID,
+  createSam3MaskTailPhaseProgramCpuOracle,
+  createSam3MaskTailPhaseProgramRouteDefinition,
+  createSam3MaskTailPhaseProgramRouteReceipt,
+  runSam3MaskTailPhaseProgramRoute,
+} from './sam-mask-tail-phase-program.js';
+
+export {
+  SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImagePreprocessPhaseProgramCpuOracle,
+  createSam3ImagePreprocessPhaseProgramRouteDefinition,
+  createSam3ImagePreprocessPhaseProgramRouteReceipt,
+  runSam3ImagePreprocessPhaseProgramRoute,
+} from './sam-image-preprocess-phase-program.js';
+
+export {
+  SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImagePatchEmbedDispatchPlan,
+  createSam3ImagePatchEmbedPhaseProgramCpuOracle,
+  createSam3ImagePatchEmbedPhaseProgramRouteDefinition,
+  createSam3ImagePatchEmbedPhaseProgramRouteReceipt,
+  runSam3ImagePatchEmbedPhaseProgramRoute,
+} from './sam-image-patch-embed-phase-program.js';
+
+export {
+  SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitPrefixDispatchPlan,
+  createSam3ImageVitPrefixPhaseProgramCpuOracle,
+  createSam3ImageVitPrefixPhaseProgramRouteDefinition,
+  createSam3ImageVitPrefixPhaseProgramRouteReceipt,
+  runSam3ImageVitPrefixPhaseProgramRoute,
+} from './sam-image-vit-prefix-phase-program.js';
+
+export {
+  SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitFirstBlockPhaseProgramCpuOracle,
+  createSam3ImageVitFirstBlockPhaseProgramRouteDefinition,
+  createSam3ImageVitFirstBlockPhaseProgramRouteReceipt,
+  runSam3ImageVitFirstBlockPhaseProgramRoute,
+} from './sam-image-vit-first-block-phase-program.js';
+
+export {
+  SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitBlockStackDispatchPlan,
+  createSam3ImageVitBlockStackWorkspacePlan,
+  createSam3ImageVitBlockStackPhaseProgramCpuOracle,
+  createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
+  createSam3ImageVitBlockStackPhaseProgramRouteReceipt,
+  runSam3ImageVitBlockStackPhaseProgramRoute,
+  normalizeSam3ExpectedLayerCheckpoints,
+  passesSam3LayerParityCheckpoint,
+  summarizeSam3FinitePhaseOutputs,
+  summarizeSam3FiniteValues,
+  summarizeSam3LayerParityCheckpoint,
+  summarizeSam3PhaseParityCheckpoints,
+  summarizeSam3TensorParityCheckpoint,
+  stableSam3Gelu,
+} from './sam-image-vit-block-stack-phase-program.js';
+
+export {
+  createSam31NumericalVerificationEvidence,
+  evaluateSam31ImageBackboneParity,
+  evaluateSam31TrackerDownstreamParity,
+} from './sam31-tracker-parity.js';
+
+export {
+  SAM31_IMAGE_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
+  SAM31_INTERACTIVE_NECK_PHASE_PROGRAM_ROUTE_ID,
+  SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
+  SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
+  createSam31ImagePropagationNeckPhaseProgramRouteDefinition,
+  createSam31InteractiveNeckPhaseProgramRouteDefinition,
+  createSam31PropagationNeckPhaseProgramCpuOracle,
+  createSam31PropagationNeckPhaseProgramRouteDefinition,
+  createSam31PropagationNeckPhaseProgramRouteReceipt,
+  createSam31TrackingNeckPhaseProgramCpuOracle,
+  createSam3FpnNeckDispatchPlan,
+  createSam3ImageFpnNeckPhaseProgramCpuOracle,
+  createSam3ImageFpnNeckPhaseProgramRouteDefinition,
+  createSam3ImageFpnNeckPhaseProgramRouteReceipt,
+  runSam31ImagePropagationNeckPhaseProgramRoute,
+  runSam31InteractiveNeckPhaseProgramRoute,
+  runSam31PropagationNeckPhaseProgramRoute,
+  runSam3ImageFpnNeckPhaseProgramRoute,
+} from './sam-image-fpn-neck-phase-program.js';
+
+export {
+  SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID,
+  SAM31_MEMORY_ENCODER_WEBGPU_CONTRACT,
+  createSam31MemoryEncoderLinearDispatch,
+  createSam31MemoryEncoderPhaseProgramCpuOracle,
+  createSam31MemoryEncoderPhaseProgramRouteDefinition,
+  createSam31MemoryEncoderPhaseProgramRouteReceipt,
+  runSam31MemoryEncoderPhaseProgramRoute,
+} from './sam31-memory-encoder-phase-program.js';
+
+export {
+  classifySam31PropagationMemoryAdapter,
+  evaluateSam31PropagationMemoryEvidence,
+} from './sam31-propagation-memory-evidence.js';
+
+export {
+  SAM31_DECODER_HIGH_RESOLUTION_PROJECTION_PHASE_PROGRAM_ROUTE_ID,
+  createSam31DecoderHighResolutionProjectionPhaseProgramCpuOracle,
+  createSam31DecoderHighResolutionProjectionPhaseProgramRouteDefinition,
+  createSam31DecoderHighResolutionProjectionPhaseProgramRouteReceipt,
+  runSam31DecoderHighResolutionProjectionPhaseProgramRoute,
+} from './sam31-decoder-high-resolution-projection-phase-program.js';
+
+export {
+  MEMORY_ATTENTION_ONLINE_SOFTMAX_WGSL,
+  SAM31_MEMORY_ATTENTION_PHASE_PROGRAM_ROUTE_ID,
+  applySam31AxialRope,
+  createSam31MemoryAttentionDispatchPlan,
+  createSam31MemoryAttentionPhaseProgramCpuOracle,
+  createSam31MemoryAttentionPhaseProgramRouteDefinition,
+  createSam31MemoryAttentionPhaseProgramRouteReceipt,
+  runSam31MemoryAttentionPhaseProgramRoute,
+} from './sam31-memory-attention-phase-program.js';
+
+export {
+  classifySam31MemoryAttentionAdapter,
+  evaluateSam31MemoryAttentionEvidence,
+} from './sam31-memory-attention-evidence.js';
+
+export {
+  SAM3_PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID,
+  createSam3PixelDecoderPhaseProgramCpuOracle,
+  createSam3PixelDecoderPhaseProgramRouteDefinition,
+  createSam3PixelDecoderPhaseProgramRouteReceipt,
+  runSam3PixelDecoderPhaseProgramRoute,
+} from './sam-pixel-decoder-phase-program.js';
+
+export {
+  SAM3_PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID,
+  createSam3PromptFpnPhaseProgramCpuOracle,
+  createSam3PromptFpnPhaseProgramRouteDefinition,
+  createSam3PromptFpnPhaseProgramRouteReceipt,
+  runSam3PromptFpnPhaseProgramRoute,
+} from './sam-prompt-fpn-phase-program.js';
+
+export {
+  SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID,
+  createSam3PromptTextIngressPhaseProgramCpuOracle,
+  createSam3PromptTextIngressPhaseProgramRouteDefinition,
+  createSam3PromptTextIngressPhaseProgramRouteReceipt,
+  runSam3PromptTextIngressPhaseProgramRoute,
+} from './sam-prompt-text-ingress-phase-program.js';
+
+export {
+  createSam3ClipTokenizer,
+  normalizeSam3ClipPrompt,
+  parseSam3ClipMerges,
+} from './sam-prompt-tokenizer.js';
+
+export {
+  SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID,
+  createSam3DetrEncoderPhaseProgramCpuOracle,
+  createSam3DetrEncoderPhaseProgramRouteDefinition,
+  createSam3DetrEncoderPhaseProgramRouteReceipt,
+  runSam3DetrEncoderPhaseProgramRoute,
+} from './sam-detr-encoder-phase-program.js';
+
+export {
+  createSam3DetrImageIngressFromFpnFeatures,
+  createSam3PositionEmbeddingSine,
+} from './sam-detr-image-ingress.js';
+
+export {
+  SAM3_DETR_DECODER_PHASE_PROGRAM_ROUTE_ID,
+  createSam3DetrDecoderPhaseProgramCpuOracle,
+  createSam3DetrDecoderPhaseProgramRouteDefinition,
+  createSam3DetrDecoderPhaseProgramRouteReceipt,
+  runSam3DetrDecoderPhaseProgramRoute,
+} from './sam-detr-decoder-phase-program.js';
+
+export {
+  SAM3_SCORING_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ScoringPhaseProgramCpuOracle,
+  createSam3ScoringPhaseProgramRouteDefinition,
+  createSam3ScoringPhaseProgramRouteReceipt,
+  runSam3ScoringPhaseProgramRoute,
+} from './sam-scoring-phase-program.js';
+
+export {
+  SAM3_SELECTION_POSTPROCESS_PHASE_PROGRAM_ROUTE_ID,
+  createSam3SelectionPostprocessPhaseProgramCpuOracle,
+  createSam3SelectionPostprocessPhaseProgramRouteDefinition,
+  createSam3SelectionPostprocessPhaseProgramRouteReceipt,
+  runSam3SelectionPostprocessPhaseProgramRoute,
+} from './sam-selection-postprocess-phase-program.js';
+
+export {
+  SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY,
+  SAM31_TEMPORAL_PACKET_AUTHORITY,
+  SAM31_TWO_FRAME_PACKET_AUTHORITIES,
+  verifySam31PacketFloat32Bytes,
+  verifySam31TemporalPacketAuthority,
+  verifySam31TwoImageIngressPacketAuthority,
+  verifySam31TwoFramePacketAuthority,
+} from './sam31-packet-artifact.js';
+
+export {
+  SAM31_BROWSER_TRACKER_INVOCATION_SCHEMA,
+  SAM31_BROWSER_TRACKER_MODEL_PACKAGE_SCHEMA,
+  SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
+  SAM31_BROWSER_TRACKER_ROOT_SCHEMA,
+  SAM31_BROWSER_TRACKER_VERIFICATION_SCHEMA,
+  createSam31BrowserTrackerPackageProjection,
+} from './sam31-browser-tracker-package.js';
+
+export {
+  createSam31BrowserTrackerDualInvocationEvidence,
+  createSam31BrowserTrackerPackageCache,
+  loadSam31BrowserTrackerPackageRuntime,
+} from './sam31-browser-tracker-package-runtime.js';
+
+export {
+  createSam31BrowserTrackerCallerDualInvocationEvidence,
+  createSam31BrowserTrackerCallerInvocationRuntime,
+  createSam31BrowserTrackerResidentCallerDualInvocationEvidence,
+  decodeSam31BrowserTrackerSourceImage,
+} from './sam31-browser-tracker-caller-invocation.js';
+
+export {
+  SAM31_BROWSER_TRACKER_SESSION_SCHEMA,
+  SAM31_BROWSER_TRACKER_RESIDENT_SESSION_SCHEMA,
+  createSam31BrowserTrackerSession,
+  createSam31BrowserTrackerResidentSession,
+} from './sam31-browser-tracker-session.js';
+
+export {
+  runSam31BrowserTrackerPackageInvocation,
+} from './sam31-browser-tracker-session-driver.js';
+
+export {
+  runSam31TwoImageBackbone,
+} from './sam31-two-image-backbone.js';
+
+export {
+  SAM31_TEMPORAL_MEMORY_BANK_PHASE_PROGRAM_ROUTE_ID,
+  createSam31TemporalMemoryBankCpuOracle,
+  createSam31TemporalMemoryBankPhaseProgramRouteDefinition,
+  createSam31TemporalMemoryBankPlan,
+  getSam31TemporalPointerPositionEncoding,
+  runSam31TemporalMemoryBankPhaseProgramRoute,
+} from './sam31-temporal-memory-bank-phase-program.js';
+
+export {
+  createSam31TrackerState,
+  getSam31TrackerStateSnapshot,
+  insertSam31TrackerFrame,
+  prepareSam31TrackerTemporalInputs,
+} from './sam31-tracker-state.js';
+
+export {
+  SAM31_MASK_CONDITIONING_PHASE_PROGRAM_ROUTE_ID,
+  createSam31MaskConditioningPhaseProgramCpuOracle,
+  createSam31MaskConditioningPhaseProgramRouteDefinition,
+  createSam31MaskConditioningPhaseProgramRouteReceipt,
+  runSam31MaskConditioningPhaseProgramRoute,
+} from './sam31-mask-conditioning-phase-program.js';
+
+export {
+  SAM31_INTERACTIVE_POINTER_PHASE_PROGRAM_ROUTE_ID,
+  createSam31InteractivePointerLinearDispatch,
+  deriveSam31InteractivePointerGeometry,
+  createSam31InteractivePointerPhaseProgramCpuOracle,
+  createSam31InteractivePointerPhaseProgramRouteDefinition,
+  createSam31InteractivePointerPhaseProgramRouteReceipt,
+  runSam31InteractivePointerPhaseProgramRoute,
+} from './sam31-interactive-pointer-phase-program.js';
+
+export {
+  SAM31_MULTIPLEX_MASK_DECODER_PHASE_PROGRAM_ROUTE_ID,
+  createSam31MultiplexMaskDecoderPhaseProgramCpuOracle,
+  createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition,
+  runSam31MultiplexMaskDecoderPhaseProgramRoute,
+} from './sam31-multiplex-mask-decoder-phase-program.js';
+
+export {
+  SAM3_BROWSER_INVOCATION_SCHEMA,
+  SAM3_BROWSER_MODEL_PACKAGE_SCHEMA,
+  SAM3_BROWSER_PACKAGE_CONTRACT,
+  SAM3_BROWSER_VERIFICATION_SCHEMA,
+  createSam3BrowserStaticArtifactCache,
+  createSam3DualInvocationEvidence,
+  resolveSam3BrowserArtifactUrl,
+  resolveSam3BrowserPackageManifest,
+  resolveSam3BrowserPackageManifestSync,
+} from './sam-browser-package-manifest.js';
+
+export {
+  SAM3_BROWSER_SERVING_RESOURCES_EVIDENCE_SCHEMA,
+  createSam3BrowserImageCacheKey,
+  createSam3BrowserServingResources,
+} from './sam3-browser-serving-resources.js';
