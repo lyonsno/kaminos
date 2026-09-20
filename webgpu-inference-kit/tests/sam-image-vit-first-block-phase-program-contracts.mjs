@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSourceUrl = new URL('../src/sam-image-vit-first-block-phase-program.js', import.meta.url);
-const packedLinearSourceUrl = new URL('../src/sam-packed-linear-wgsl.js', import.meta.url);
+const packedLinearSourceUrl = new URL('../src/sam-blocked-linear-wgsl.js', import.meta.url);
 const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const stackExporter = readFileSync(new URL('../tools/sam-detr-stack-mlx-packet.py', import.meta.url), 'utf8');
@@ -31,7 +31,7 @@ assert.match(packedLinearSource, /fn mlx_erf\(x: f32\)/, 'first-block GELU shade
 assert.match(packedLinearSource, /fn mlx_expm1f\(x: f32\)/, 'first-block GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
 assert.match(packedLinearSource, /0\.927734375/, 'first-block GELU shader must preserve the MLX Metal erf branch boundary');
 assert.doesNotMatch(packedLinearSource, /0\.044715/, 'first-block GPU and CPU GELU paths must not retain the tanh approximation');
-assert.match(routeSource, /packedLinearDispatch/, 'first-block dense projections must use the shared packed-linear dispatch contract');
+assert.match(routeSource, /blockedLinearDispatch/, 'first-block dense projections must use the shared blocked-linear dispatch contract');
 assert.match(routeSource, /kernel: 'qProjection', dispatch: linearWorkgroups\(windowTokenCount, shape\.hiddenSize, input\.device\)/, 'first-block Q projection must dispatch one packed grid over window tokens and hidden channels');
 assert.match(routeSource, /kernel: 'mlpFc1', dispatch: linearWorkgroups\(shape\.tokenCount, shape\.intermediateSize, input\.device\)/, 'first-block MLP expansion must dispatch one packed grid over image tokens and intermediate channels');
 assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*if \(gid\.x >= dims\.total_values\) \{ return; \}/, 'first-block residual add must guard rounded-up dispatch tail writes');
