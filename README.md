@@ -27,6 +27,7 @@ The repository spans four connected capabilities:
 | Surface | What it demonstrates | Entry point |
 | --- | --- | --- |
 | Live combustion | A stateful browser-native fire material being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Open the live screening room](https://lyonsno.github.io/kaminos/) |
+| Generated beings | Deliberate morphology surviving generative transformation, reconstructed casts returning to mechanical control, and a separate creature consuming terrain-relative motion | [Inspect the generated-being chain](docs/generated-beings/README.md) |
 | WebGPU inference kit | Shared-device lifecycle, persistent model routes, queues, cooperative scheduling, resource residency, progress, and runtime telemetry | [Read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
 | Spatial model ports | MoGe depth and normals, SHARP Gaussian reconstruction, SF3D textured meshes, Kimodo motion diffusion, and an in-tree SAM segmentation route | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
 | Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
@@ -108,10 +109,12 @@ The fire began as an answer to the question that produced the inference kit:
 what should a local AI application do while expensive inference occupies the
 machine? It should stay alive.
 
-## Controllable Generated Worlds
+## Generated Beings
 
 Generated creatures can preserve deliberate morphology through generative
 transformation and return to mechanical control.
+
+[![Two matched analytical creature carriers above two generated descendants, showing a deliberate change in posterior mass survive generation](docs/generated-beings/assets/morphology-intervention-seed80303.png)](docs/generated-beings/README.md)
 
 Deliberate edits to a parameterized creature template have produced
 corresponding changes after image generation and image-to-3D reconstruction.
@@ -123,6 +126,11 @@ That work joins analytical authorship, generative elaboration, reconstructed
 geometry, rigging, articulation, and motion in one loop. The continuing
 frontier is stronger editable control: returning distinctions authored before
 generation as durable controls that can survive later rounds of transformation.
+
+[Inspect the generated-being chain](docs/generated-beings/README.md), including
+the held morphology intervention, round-trip registration measurements,
+articulated returned cast, terrain-motion sequence, and the exact boundary of
+each result.
 
 ## Spatial Asset Kiln
 

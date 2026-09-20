@@ -17,10 +17,17 @@ function sha256(relativePath) {
 }
 
 test("generated-worlds README and flame screening room public claims agree", () => {
+  const generatedBeingsPath = "docs/generated-beings/README.md";
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, generatedBeingsPath)),
+    `${generatedBeingsPath} must give the generated-world claim a direct evidence route`,
+  );
+
   const manifest = JSON.parse(read("docs/flame-atlas/capture-manifest.json"));
   const html = read("docs/flame-atlas/index.html");
   const rootReadme = read("README.md");
   const atlasReadme = read("docs/flame-atlas/README.md");
+  const generatedBeingsReadme = read(generatedBeingsPath);
 
   assert.equal(manifest.schema, "kaminos.live-combustion-screening-room.v2");
   assert.equal(manifest.route.simulation_grid, 96);
@@ -63,12 +70,27 @@ test("generated-worlds README and flame screening room public claims agree", () 
   assert.match(rootReadme, /@kaminos\/webgpu-inference-kit/);
   assert.match(rootReadme, /1,179,648 Gaussian splats/);
   assert.match(rootReadme, /21,818 foreground\s+frame intervals/);
+  assert.match(rootReadme, /docs\/generated-beings\/README\.md/);
+  assert.match(
+    rootReadme,
+    /docs\/generated-beings\/assets\/morphology-intervention-seed80303\.png/,
+  );
   assert.match(rootReadme, /\*\*Generated beings\*\*/);
   assert.match(rootReadme, /\*\*Live materials\*\*/);
   assert.match(rootReadme, /\*\*Browser-native intelligence\*\*/);
   assert.match(rootReadme, /\*\*A world kiln\*\*/);
   assert.match(rootReadme, /Generated creatures can preserve deliberate morphology\s+through generative transformation and return to mechanical control\./);
   assert.doesNotMatch(rootReadme, /Generated beings retain identity, structure, and handles after inference/i);
+  assert.match(
+    generatedBeingsReadme,
+    /assets\/morphology-intervention-seed80303\.png/,
+  );
+  assert.match(generatedBeingsReadme, /assets\/registered-cast-articulation\.png/);
+  assert.match(generatedBeingsReadme, /assets\/terrain-following-motion\.png/);
+  assert.match(generatedBeingsReadme, /These are separate assays/i);
+  assert.match(generatedBeingsReadme, /Skinning weights were\s+painted\s+manually/i);
+  assert.match(generatedBeingsReadme, /does not establish automatic skinning/i);
+  assert.doesNotMatch(generatedBeingsReadme, /(?:demonstrates|provides|includes) automatic skinning/i);
   assert.match(
     html,
     /<a href=["']https:\/\/github\.com\/lyonsno\/kaminos["']>Kaminos<\/a>/,
