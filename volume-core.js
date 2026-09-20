@@ -1,6 +1,7 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
 import { detailForceContributionMask, detailForceContributionReceipt } from './volume-detail-force-isolation.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, EMISSIVE_LIGHT_DIRECTION_COUNT, EMISSIVE_LIGHT_TRANSPORT_MODEL, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
+import { incidentLightBatchTimestampWrites } from './volume-gpu-profile.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
@@ -15420,9 +15421,7 @@ export function createKaminosVolumePrototype({
       const encoder = device.createCommandEncoder({ label: 'same-state emissive lighting cost' });
       emissiveLightField.encode(encoder,currentFluid);
       for (let repeat = 0; repeat < repeats; repeat++) {
-        let timestampWrites;
-        if (repeat === 0) timestampWrites = { querySet: query, beginningOfPassWriteIndex: 0 };
-        else if (repeat === repeats - 1) timestampWrites = { querySet: query, endOfPassWriteIndex: 1 };
+        const timestampWrites = incidentLightBatchTimestampWrites(query, repeat, repeats);
         emissiveLightField.encode(encoder,currentFluid,timestampWrites);
       }
       encoder.resolveQuerySet(query,0,2,resolved,0);
