@@ -1,14 +1,25 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 
 const sharedUrl = new URL('../src/sam-vector-linear-wgsl.js', import.meta.url);
 assert.equal(existsSync(sharedUrl), true, 'serving linears must expose one shared four-wide reduction family');
-const source = existsSync(sharedUrl) ? readFileSync(sharedUrl, 'utf8') : '';
-
-const template = source.match(/const VECTOR_LINEAR_WGSL = `([\s\S]*?)`;/)?.[1] ?? '';
-const wgsl = template
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/\/\/[^\n]*/g, '');
+const {
+  SAM_VECTOR_LINEAR_GELU_WGSL,
+  SAM_VECTOR_LINEAR_RELU_WGSL,
+  SAM_VECTOR_LINEAR_WGSL,
+  vectorLinearDispatch,
+  vectorLinearDispatchForDevice,
+} = await import('../src/sam-vector-linear-wgsl.js');
+const emittedShaders = [
+  SAM_VECTOR_LINEAR_WGSL,
+  SAM_VECTOR_LINEAR_RELU_WGSL,
+  SAM_VECTOR_LINEAR_GELU_WGSL,
+];
+for (const emitted of emittedShaders) {
+  assert.equal(typeof emitted, 'string', 'every production variant must export emitted WGSL text');
+  assert.doesNotMatch(emitted, /\/\*|\/\//, 'emitted linear WGSL must remain comment-free so semantic assertions need no comment parser');
+}
+const wgsl = SAM_VECTOR_LINEAR_WGSL;
 
 assert.match(wgsl, /var<storage, read> input_values: array<f32>;/, 'resident input ranges must retain their scalar storage interpretation');
 assert.match(wgsl, /var<storage, read> weight: array<f32>;/, 'resident weight ranges must retain their scalar storage interpretation');
@@ -25,14 +36,10 @@ assert.doesNotMatch(wgsl, /\bdot\s*\(/, 'dot reduction must not change the accep
 assert.doesNotMatch(wgsl, /workgroupBarrier|var<workgroup>|sum0[01]|sum1[01]/, 'the vector family must not reintroduce synchronization or multiple-output register pressure');
 assert.match(wgsl, /output_values\[index\] = activate\(sum\);/, 'one invocation must still produce exactly one activated output');
 
-for (const symbol of ['SAM_VECTOR_LINEAR_WGSL', 'SAM_VECTOR_LINEAR_RELU_WGSL', 'SAM_VECTOR_LINEAR_GELU_WGSL']) {
-  assert.match(source, new RegExp(`export const ${symbol} =`), `${symbol} must remain a shared production variant`);
+for (const emitted of emittedShaders) {
+  assert.match(emitted, orderedLanes, 'every emitted activation variant must preserve ordered four-wide accumulation');
 }
 
-const {
-  vectorLinearDispatch,
-  vectorLinearDispatchForDevice,
-} = await import('../src/sam-vector-linear-wgsl.js');
 assert.deepEqual(vectorLinearDispatch(33, 256, 65), [34]);
 assert.deepEqual(vectorLinearDispatch(1_048_576, 256, 16), [512, 512]);
 assert.deepEqual(
