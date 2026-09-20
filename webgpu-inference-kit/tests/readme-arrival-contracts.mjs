@@ -42,11 +42,11 @@ const assertSurfaceSemantics = (name, copy, patterns) => {
 };
 
 const assertNoSamOverclaim = (name, copy) => {
-  const affirmativeUnits = copy
-    .split(/(?<=[.!?])\s+|\n+/)
-    .map(unit => unit.trim())
+  const affirmativeClauses = copy
+    .split(/(?<=[.!?])\s+|\n+|;\s*|,\s+(?=(?:and|but|yet)\b)/i)
+    .map(clause => clause.trim())
     .filter(Boolean)
-    .filter(unit => !/\b(?:not|no|never|cannot|can't|does not|do not|is not|isn't|without|requires?|unproved|unclaimed)\b/i.test(unit));
+    .filter(clause => !/\b(?:not|no|never|cannot|can't|does not|do not|is not|isn't|without|requires?|unproved|unclaimed)\b/i.test(clause));
   const overclaims = [
     ['presentation/frame/latency guarantee', /\b(?:guarantees?|maintains?|sustains?|delivers?)\b.{0,100}\b(?:\d+\s*fps|frames? per second|frame[- ]?(?:pacing|latency|budget)|presentation cadence|responsive presentation)\b/i],
     ['adaptive or preemptive scheduling', /\b(?:adaptively budgets?|adaptive frame[- ]?budget(?:ing)?|preempts?)\b/i],
@@ -55,7 +55,7 @@ const assertNoSamOverclaim = (name, copy) => {
     ['general throughput guarantee', /\b(?:guarantees?|delivers?|provides?)\b.{0,100}\b(?:streaming\s+)?throughput\b/i],
   ];
   for (const [label, pattern] of overclaims) {
-    assert.doesNotMatch(affirmativeUnits.join('\n'), pattern, `${name} must not claim ${label}`);
+    assert.doesNotMatch(affirmativeClauses.join('\n'), pattern, `${name} must not claim ${label}`);
   }
 };
 
@@ -122,6 +122,24 @@ for (const repo of ['moge-webgpu', 'sf3d-webgpu', 'sharp-webgpu', 'kimodo-webgpu
 assert.match(modelRows.find(line => line.includes('/kimodo-webgpu)')), /text embeddings.*external server/i);
 assertSamPublicClaims({ rootReadme, packageReadme: readme, samDemoGuide });
 const contradictoryClaims = [
+  {
+    name: 'same-sentence disclaimer and frame guarantee',
+    field: 'rootReadme',
+    value: rootReadme.replace(
+      'composition result, not a frame-pacing claim.',
+      'composition result, not a frame-pacing claim, and SAM guarantees 60 FPS during inference.',
+    ),
+    expected: /presentation|frame|latency/i,
+  },
+  {
+    name: 'same-sentence disclaimer and video-tracking claim',
+    field: 'samDemoGuide',
+    value: samDemoGuide.replace(
+      'or a throughput guarantee.',
+      'or a throughput guarantee, but SAM supports video tracking across arbitrary clips.',
+    ),
+    expected: /video|tracking/i,
+  },
   {
     name: 'root-README frame guarantee',
     field: 'rootReadme',
