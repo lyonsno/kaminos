@@ -78,6 +78,7 @@ export function installParameterTools({edits, descriptors, report = () => {}}) {
   document.addEventListener('keydown',e=>{if(active?.capture && ['Escape','Enter'].includes(e.key)){steal(e);finish(e.key==='Enter');}},true);
   window.addEventListener('blur',()=>finish(false));
   return {finish,sync:()=>{for(const binding of bindings.values()){binding.adopt?.();sync(binding);}},
+    discard(ids){const targets=new Set([...ids].map(id=>'@'+id));return edits.discard(entry=>targets.has(entry.id));},
     set(id,value){const binding=bindings.get('@'+id);if(!binding)throw Error(`Unknown authored parameter: ${id}`);edits.apply(binding.id,{value},binding.label);},
     state:()=>Object.fromEntries([...bindings.values()].map(b=>[b.id.slice(1),b.read()]))};
 }

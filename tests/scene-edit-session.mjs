@@ -48,3 +48,14 @@ test('registered parameters and poses share chronological history and rollback',
  e.undo();assert.deepEqual(f.pose,start);e.redo();e.redo();assert.equal(value,3);
  e.begin('@exposure');assert.throws(()=>e.preview({value:-2}),/invalid/);e.preview({value:4});e.cancel();assert.equal(value,3);
 });
+test('dropping environment entries preserves object and burner undo history',()=>{
+ const f=fixture(),e=f.edits;let burner=1,exposure=1;
+ e.register('@burner.outerRadius',{read:()=>({value:burner}),write:s=>{burner=s.value;},check:s=>s});
+ e.register('@exposure-slider',{read:()=>({value:exposure}),write:s=>{exposure=s.value;},check:s=>s});
+ e.apply('kiln',{position:[1,2,3]});e.apply('@burner.outerRadius',{value:1.2},'Burner outer radius');e.apply('@exposure-slider',{value:2},'Exposure');
+ assert.equal(e.state().undoCount,3);
+ e.discard(entry=>entry.id==='@exposure-slider');
+ assert.equal(e.state().undoCount,2,'changing an environment may discard its stale field history only');
+ e.undo();assert.equal(burner,1);e.undo();assert.deepEqual(f.pose,start);
+ e.redo();e.redo();assert.equal(burner,1.2);assert.deepEqual(f.pose.position,[1,2,3]);
+});

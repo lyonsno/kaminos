@@ -48,10 +48,17 @@ export function createSceneEdits({read, write, changed = () => {}, admit = () =>
     const entry=from.at(-1);if(!entry)return false;
     get(entry.id);put(entry.id,clone(entry[key]));from.pop();to.push(entry);notify();return true;
   }
+  function discard(predicate) {
+    if(typeof predicate!=='function')throw new Error('History discard requires an entry predicate');
+    if(active)cancel();
+    past=past.filter(entry=>!predicate(clone(entry)));
+    future=future.filter(entry=>!predicate(clone(entry)));
+    notify();return state();
+  }
   return {begin,preview,commit,cancel,apply,state,
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
     register(id,target){if(!id.startsWith("@") || targets.has(id))throw Error("Duplicate or invalid edit target");targets.set(id,target);},undo:()=>replay(past,future,'before'),redo:()=>replay(future,past,'after'),
-    clear(){if(active)cancel();past=[];future=[];notify();}};
+    discard,clear(){if(active)cancel();past=[];future=[];notify();}};
 }
 export function axisVector(axis, frame='world', frameRotation=[0,0,0]) {
   const vector=new Vector3(...({x:[1,0,0],y:[0,1,0],z:[0,0,1]}[axis] || [0,0,1]));

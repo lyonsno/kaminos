@@ -742,7 +742,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <span>Test geometry</span>
       </label>
       <div class="slider-row">
-        <span class="slider-label">Light gain (stops)</span>
+        <label class="slider-label" for="fire-light-gain-stops">Light gain (stops)</label>
         <input type="range" id="fire-light-gain-stops" min="-4" max="4" step="0.25" value="0">
         <span class="slider-val" id="fire-light-gain-stops-val">+0.0</span>
       </div>
@@ -872,17 +872,17 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="env-grid" id="env-buttons"></div>
 
     <div class="slider-row" style="margin-top: 10px;">
-      <span class="slider-label">Exposure</span>
+      <label class="slider-label" for="exposure-slider">Exposure</label>
       <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.5">
       <span class="slider-val" id="exposure-val">1.5</span>
     </div>
     <div class="slider-row">
-      <span class="slider-label">Env Intensity</span>
+      <label class="slider-label" for="env-intensity-slider">Env Intensity</label>
       <input type="range" id="env-intensity-slider" min="0.1" max="5" step="0.1" value="1.0">
       <span class="slider-val" id="env-intensity-val">1.0</span>
     </div>
     <div class="slider-row">
-      <span class="slider-label">Rotation</span>
+      <label class="slider-label" for="env-rotation-slider">Rotation</label>
       <input type="range" id="env-rotation-slider" min="0" max="6.28" step="0.1" value="0">
       <span class="slider-val" id="env-rotation-val">0.0</span>
     </div>
@@ -892,7 +892,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </label>
     </div>
     <div class="slider-row" id="blur-row" style="display: none;">
-      <span class="slider-label">Blur</span>
+      <label class="slider-label" for="env-blur-slider">Blur</label>
       <input type="range" id="env-blur-slider" min="0" max="1" step="0.01" value="0.4">
       <span class="slider-val" id="env-blur-val">0.4</span>
     </div>
@@ -10220,7 +10220,10 @@ function createProceduralEnv() {
 async function loadEnvironment(name, { remember = true } = {}) {
   const env = HDR_ENVS[name];
   if (!env) return;
-  if (currentEnvName !== name) { sceneParameterTools?.finish(false); scenePlacementTools?.clear(); }
+  if (currentEnvName !== name) {
+    sceneParameterTools?.finish(false);
+    sceneParameterTools?.discard(Object.values(environmentRecipeFields));
+  }
   if (remember) rememberEnvironmentRecipe();
   const token = ++environmentLoadToken;
   currentEnvName = name;

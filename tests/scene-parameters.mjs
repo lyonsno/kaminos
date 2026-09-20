@@ -13,7 +13,7 @@ function fixture(){
  globalThis.document=new Element();globalThis.window=new Element();
  const range=new Element('range'),number=new Element('number'),grip=new Element();let value=1,blocked=false;
  const edits=createSceneEdits({read:()=>null,write(){},admit(){if(blocked)throw Error('busy');}});
- const ui=installParameterTools({edits,descriptors:[{id:'light',label:'Light',inputs:[range,number],grip,step:.01,read:()=>value,validate:v=>{if(v<0)throw Error('negative');},write:v=>{value=v;}}]});
+ const ui=installParameterTools({edits,descriptors:[{id:'light',label:'Light',inputs:[range,number],grip,step:.01,read:()=>value,adopt:()=>{value=range.valueAsNumber;},validate:v=>{if(v<0)throw Error('negative');},write:v=>{value=v;}}]});
  return {range,number,grip,edits,ui,get value(){return value;},set blocked(v){blocked=v;}};
 }
 test('one slider gesture is one edit, escape rolls back and invalid/busy input cannot mutate state',()=>{
@@ -28,4 +28,8 @@ test('relative grip begins at its value, cancels on blur and releases capture on
  f.edits.cancel();assert.equal(f.value,1);assert.equal(f.grip.captured,false);f.grip.emit('pointermove',{clientX:200});assert.equal(f.value,1);
  f.grip.emit('pointerdown',{clientX:100});f.grip.emit('pointermove',{clientX:130});window.emit('blur');assert.equal(f.value,1);
  f.ui.set('light',2);assert.equal(f.edits.state().undoCount,1);f.edits.undo();assert.equal(f.value,1);
+});
+test('external restoration adopts its effective range value and synchronizes the paired number without history',()=>{
+ const f=fixture();f.range.value='2.25';f.range.emit('input',{isTrusted:false});f.ui.sync();
+ assert.equal(f.ui.state().light,2.25);assert.equal(f.range.value,'2.25');assert.equal(f.number.value,'2.25');assert.equal(f.edits.state().undoCount,0);
 });
