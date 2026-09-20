@@ -17,39 +17,48 @@ const consumers = [
 assert.equal(existsSync(sharedUrl), true, 'serving linears must expose one shared blocked WGSL family');
 const shared = existsSync(sharedUrl) ? readFileSync(sharedUrl, 'utf8') : '';
 
+function executableBlockedKernelWgsl(source) {
+  const match = source.match(/const BLOCKED_LINEAR_WGSL = `([\s\S]*?)`;/);
+  assert.ok(match, 'the blocked kernel must retain one inspectable WGSL template');
+  return match[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+}
+
 function validateBlockedKernelSource(source) {
   assert.match(source, /const OUTPUT_TILE = 16;/, 'the blocked kernel must produce a 16 by 16 output tile');
   assert.match(source, /const REDUCTION_TILE = 128;/, 'the reduction tile must amortize synchronization across 128 channels');
-  assert.match(source, /var<workgroup> input_tile: array<f32, 2048>;/, 'the input tile must retain sixteen 128-wide rows');
-  assert.match(source, /var<workgroup> weight_tile: array<f32, 2048>;/, 'the weight tile must retain sixteen 128-wide rows');
-  assert.equal((source.match(/workgroupBarrier\(\);/g) || []).length, 2, 'each reduction block must use exactly one load and one reuse barrier');
-  assert.match(source, /@compute @workgroup_size\(8, 8, 1\)/, 'the blocked kernel must retain 64 cooperative invocations');
-  assert.match(source, /for \(var k_base = 0u; k_base < input_channels; k_base = k_base \+ 128u\)/, 'the outer reduction must advance by one complete block');
-  assert.match(source, /for \(var tile_index = lane; tile_index < 2048u; tile_index = tile_index \+ 64u\)/, 'all 64 invocations must cooperatively load both complete tiles');
-  assert.match(source, /let tile_row = tile_index \/ 128u;/, 'cooperative loads must preserve tile rows');
-  assert.match(source, /let tile_column = tile_index % 128u;/, 'cooperative loads must preserve contiguous reduction columns');
-  assert.match(source, /input_tile\[tile_index\] = 0\.0;\s*if \(token < token_count && input_channel < input_channels\)/, 'input tile rows must be zeroed before guarded partial-tile loads');
-  assert.match(source, /weight_tile\[tile_index\] = 0\.0;\s*if \(output_channel < output_channels && input_channel < input_channels\)/, 'weight tile rows must be zeroed before guarded partial-tile loads');
-  assert.match(source, /for \(var k_local = 0u; k_local < 128u; k_local = k_local \+ 1u\)/, 'each loaded reduction block must be consumed completely in order');
-  assert.match(source, /let input0 = input_tile\[local_id\.y \* 128u \+ k_local\];/, 'input0 must read the first token row');
-  assert.match(source, /let input1 = input_tile\[\(local_id\.y \+ 8u\) \* 128u \+ k_local\];/, 'input1 must read the second token row');
-  assert.match(source, /let weight0 = weight_tile\[local_id\.x \* 128u \+ k_local\];/, 'weight0 must read the first output row');
-  assert.match(source, /let weight1 = weight_tile\[\(local_id\.x \+ 8u\) \* 128u \+ k_local\];/, 'weight1 must read the second output row');
-  assert.match(source, /sum00 = sum00 \+ input0 \* weight0;/, 'sum00 must pair the first token and first output rows');
-  assert.match(source, /sum01 = sum01 \+ input0 \* weight1;/, 'sum01 must pair the first token and second output rows');
-  assert.match(source, /sum10 = sum10 \+ input1 \* weight0;/, 'sum10 must pair the second token and first output rows');
-  assert.match(source, /sum11 = sum11 \+ input1 \* weight1;/, 'sum11 must pair the second token and second output rows');
+  const wgsl = executableBlockedKernelWgsl(source);
+  assert.match(wgsl, /var<workgroup> input_tile: array<f32, 2048>;/, 'the input tile must retain sixteen 128-wide rows');
+  assert.match(wgsl, /var<workgroup> weight_tile: array<f32, 2048>;/, 'the weight tile must retain sixteen 128-wide rows');
+  assert.equal((wgsl.match(/workgroupBarrier\(\);/g) || []).length, 2, 'each reduction block must use exactly one load and one reuse barrier');
+  assert.match(wgsl, /@compute @workgroup_size\(8, 8, 1\)/, 'the blocked kernel must retain 64 cooperative invocations');
+  assert.match(wgsl, /for \(var k_base = 0u; k_base < input_channels; k_base = k_base \+ 128u\)/, 'the outer reduction must advance by one complete block');
+  assert.match(wgsl, /for \(var tile_index = lane; tile_index < 2048u; tile_index = tile_index \+ 64u\)/, 'all 64 invocations must cooperatively load both complete tiles');
+  assert.match(wgsl, /let tile_row = tile_index \/ 128u;/, 'cooperative loads must preserve tile rows');
+  assert.match(wgsl, /let tile_column = tile_index % 128u;/, 'cooperative loads must preserve contiguous reduction columns');
+  assert.match(wgsl, /input_tile\[tile_index\] = 0\.0;\s*if \(token < token_count && input_channel < input_channels\)/, 'input tile rows must be zeroed before guarded partial-tile loads');
+  assert.match(wgsl, /weight_tile\[tile_index\] = 0\.0;\s*if \(output_channel < output_channels && input_channel < input_channels\)/, 'weight tile rows must be zeroed before guarded partial-tile loads');
+  assert.match(wgsl, /for \(var k_local = 0u; k_local < 128u; k_local = k_local \+ 1u\)/, 'each loaded reduction block must be consumed completely in order');
+  assert.match(wgsl, /let input0 = input_tile\[local_id\.y \* 128u \+ k_local\];/, 'input0 must read the first token row');
+  assert.match(wgsl, /let input1 = input_tile\[\(local_id\.y \+ 8u\) \* 128u \+ k_local\];/, 'input1 must read the second token row');
+  assert.match(wgsl, /let weight0 = weight_tile\[local_id\.x \* 128u \+ k_local\];/, 'weight0 must read the first output row');
+  assert.match(wgsl, /let weight1 = weight_tile\[\(local_id\.x \+ 8u\) \* 128u \+ k_local\];/, 'weight1 must read the second output row');
+  assert.match(wgsl, /sum00 = sum00 \+ input0 \* weight0;/, 'sum00 must pair the first token and first output rows');
+  assert.match(wgsl, /sum01 = sum01 \+ input0 \* weight1;/, 'sum01 must pair the first token and second output rows');
+  assert.match(wgsl, /sum10 = sum10 \+ input1 \* weight0;/, 'sum10 must pair the second token and first output rows');
+  assert.match(wgsl, /sum11 = sum11 \+ input1 \* weight1;/, 'sum11 must pair the second token and second output rows');
   for (const accumulator of ['sum00', 'sum01', 'sum10', 'sum11']) {
-    assert.match(source, new RegExp(`var ${accumulator} =`), `${accumulator} must be an explicit scalar accumulator`);
-    assert.match(source, new RegExp(`${accumulator} = ${accumulator}\\s*\\+`), `${accumulator} must preserve scalar accumulation order`);
-    assert.match(source, new RegExp(`activate\\(${accumulator}\\)`), `${accumulator} must feed one final activated store`);
+    assert.match(wgsl, new RegExp(`var ${accumulator} =`), `${accumulator} must be an explicit scalar accumulator`);
+    assert.match(wgsl, new RegExp(`${accumulator} = ${accumulator}\\s*\\+`), `${accumulator} must preserve scalar accumulation order`);
+    assert.match(wgsl, new RegExp(`activate\\(${accumulator}\\)`), `${accumulator} must feed one final activated store`);
   }
-  assert.doesNotMatch(source, /array<f32, 4>|output_lane|token_half|output_half/, 'the blocked kernel must not dynamically index its four output accumulators');
-  assert.equal((source.match(/if \(token\d < token_count && output\d < output_channels\)/g) || []).length, 4, 'all four stores must independently guard token and output tails');
-  assert.match(source, /output_values\[token0 \* output_channels \+ output0\] = activate\(sum00\);/, 'the first output must remain token-major');
-  assert.match(source, /output_values\[token0 \* output_channels \+ output1\] = activate\(sum01\);/, 'the second output must remain token-major');
-  assert.match(source, /output_values\[token1 \* output_channels \+ output0\] = activate\(sum10\);/, 'the third output must remain token-major');
-  assert.match(source, /output_values\[token1 \* output_channels \+ output1\] = activate\(sum11\);/, 'the fourth output must remain token-major');
+  assert.doesNotMatch(wgsl, /array<f32, 4>|output_lane|token_half|output_half/, 'the blocked kernel must not dynamically index its four output accumulators');
+  assert.equal((wgsl.match(/if \(token\d < token_count && output\d < output_channels\)/g) || []).length, 4, 'all four stores must independently guard token and output tails');
+  assert.match(wgsl, /output_values\[token0 \* output_channels \+ output0\] = activate\(sum00\);/, 'the first output must remain token-major');
+  assert.match(wgsl, /output_values\[token0 \* output_channels \+ output1\] = activate\(sum01\);/, 'the second output must remain token-major');
+  assert.match(wgsl, /output_values\[token1 \* output_channels \+ output0\] = activate\(sum10\);/, 'the third output must remain token-major');
+  assert.match(wgsl, /output_values\[token1 \* output_channels \+ output1\] = activate\(sum11\);/, 'the fourth output must remain token-major');
 }
 
 validateBlockedKernelSource(shared);
@@ -67,6 +76,46 @@ const semanticCounterexamples = [
   ['transposed first output store', shared.replace('output_values[token0 * output_channels + output0]', 'output_values[output0 * token_count + token0]')],
   ['omitted fourth accumulator update', shared.replace('sum11 = sum11', 'sum11_omitted = sum11')],
   ['dynamic accumulator regression', shared.replace('var sum00 =', 'var sums: array<f32, 4>;\n  var sum00 =')],
+  [
+    'comment-hidden input tail zero',
+    shared.replace(
+      'input_tile[tile_index] = 0.0;',
+      'input_tile[tile_index] = 1.0;\n      // input_tile[tile_index] = 0.0;',
+    ),
+  ],
+  [
+    'comment-hidden weight tail zero',
+    shared.replace(
+      'weight_tile[tile_index] = 0.0;',
+      'weight_tile[tile_index] = 1.0;\n      // weight_tile[tile_index] = 0.0;',
+    ),
+  ],
+  [
+    'comment-hidden input1 row alias',
+    shared.replace(
+      'let input1 = input_tile[(local_id.y + 8u) * 128u + k_local];',
+      'let input1 = input_tile[local_id.y * 128u + k_local];\n      // let input1 = input_tile[(local_id.y + 8u) * 128u + k_local];',
+    ),
+  ],
+  [
+    'comment-hidden weight1 row alias',
+    shared.replace(
+      'let weight1 = weight_tile[(local_id.x + 8u) * 128u + k_local];',
+      'let weight1 = weight_tile[local_id.x * 128u + k_local];\n      // let weight1 = weight_tile[(local_id.x + 8u) * 128u + k_local];',
+    ),
+  ],
+  ...[
+    ['sum00', 'input0 * weight0', 'input1 * weight0'],
+    ['sum01', 'input0 * weight1', 'input0 * weight0'],
+    ['sum10', 'input1 * weight0', 'input0 * weight0'],
+    ['sum11', 'input1 * weight1', 'input0 * weight0'],
+  ].map(([accumulator, expectedPair, wrongPair]) => [
+    `comment-hidden ${accumulator} operand pair`,
+    shared.replace(
+      `${accumulator} = ${accumulator} + ${expectedPair};`,
+      `${accumulator} = ${accumulator} + ${wrongPair};\n      // ${accumulator} = ${accumulator} + ${expectedPair};`,
+    ),
+  ]),
 ];
 for (const [name, counterexample] of semanticCounterexamples) {
   assert.notEqual(counterexample, shared, `${name} counterexample must alter the shared kernel`);
