@@ -23,5 +23,12 @@ assert.deepEqual([...packed], [
 ]);
 assert.deepEqual([...unpackRgbaPixels(packed)], [...source]);
 assert.throws(() => packRgbaPixels(new Uint8Array([1, 2, 3])), /groups of four/);
+for (const invalid of [new Uint16Array(4), new Float32Array(4), new DataView(new ArrayBuffer(4))]) {
+  assert.throws(() => packRgbaPixels(invalid), /Uint8Array or Uint8ClampedArray/);
+}
+for (const ArrayType of [Uint8Array, Uint8ClampedArray]) {
+  const buffer = new ArrayType([99, 99, 40, 80, 120, 255, 99]);
+  assert.deepEqual([...packRgbaPixels(buffer.subarray(2, 6))], [0xff785028]);
+}
 
 console.log('brightness example contracts passed');

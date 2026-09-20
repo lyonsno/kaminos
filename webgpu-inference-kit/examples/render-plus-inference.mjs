@@ -58,7 +58,9 @@ export function normalizeBrightnessMultiplier(value) {
 }
 
 export function packRgbaPixels(bytes) {
-  if (!ArrayBuffer.isView(bytes)) throw new Error('RGBA pixels must be a typed array');
+  if (!(bytes instanceof Uint8Array) && !(bytes instanceof Uint8ClampedArray)) {
+    throw new Error('RGBA pixels must be a Uint8Array or Uint8ClampedArray');
+  }
   if (bytes.byteLength === 0 || bytes.byteLength % 4 !== 0) {
     throw new Error('RGBA pixels must contain non-empty groups of four channels');
   }
@@ -280,9 +282,7 @@ export async function createRenderPlusInferenceExample({
     state.status = 'running';
     state.phase = 'Starting GPU work';
     state.error = null;
-    publish();
-
-    activeBatch = (async () => {
+    activeBatch = Promise.resolve().then(async () => {
       const active = await foreground.beginRun(runId);
       let route;
       let model;
@@ -332,7 +332,7 @@ export async function createRenderPlusInferenceExample({
         if (route) session.unregisterRoute(route.routeId);
         await active.finish();
       }
-    })().catch(error => {
+    }).catch(error => {
       state.status = 'failed';
       state.phase = 'Adjustment failed';
       state.error = error.message;
@@ -341,6 +341,7 @@ export async function createRenderPlusInferenceExample({
       activeBatch = null;
       publish();
     });
+    publish();
     return activeBatch;
   }
 

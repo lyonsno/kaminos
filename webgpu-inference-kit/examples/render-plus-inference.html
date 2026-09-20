@@ -42,7 +42,8 @@
   li::before { content: counter(steps); display: block; margin-bottom: 12px; color: var(--accent-dark); font-weight: 800; }
   li strong { display: block; margin-bottom: 5px; }
   li span { color: var(--muted); font-size: 14px; }
-  .why { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 42px; padding-top: 36px; border-top: 1px solid var(--line); }
+  .why { margin-top: 42px; padding-top: 36px; border-top: 1px solid var(--line); }
+  .why > div { max-width: 780px; }
   code { padding: 2px 5px; border-radius: 3px; background: #e5ebe8; font-size: .9em; }
   a { color: var(--accent-dark); }
   @media (max-width: 760px) {
@@ -58,7 +59,7 @@
 <main>
   <header>
     <h1>Brighten a photo with WebGPU</h1>
-    <p class="lede">This small worked example shows the whole connection: a familiar input, one understandable GPU operation, and a visible result inside an application that is already rendering.</p>
+    <p class="lede">This example shows how an application uses the kit to run a GPU operation alongside rendering, using a brightness adjustment whose result you can see immediately.</p>
   </header>
 
   <section class="comparison" aria-label="Original and processed photograph">
@@ -106,11 +107,6 @@
   </section>
 
   <section class="why">
-    <div>
-      <h2>Why use such a simple operation?</h2>
-      <p>Because this page teaches the connection, not image editing. You can predict the result, see whether it is correct, and then inspect how an ordinary application gives work to the kit.</p>
-      <p>The operation runs at its natural speed. We do not slow it down to manufacture a performance demonstration.</p>
-    </div>
     <div>
       <h2>Where should I look in the code?</h2>
       <p><a href="./render-plus-inference.mjs">Open the worked example module</a>. Start with <code>createRenderPlusInferenceExample()</code>, then follow <code>createBrightnessModelAdapter()</code> to the three-step upload, compute, and readback path.</p>

@@ -140,10 +140,20 @@ try {
   assert.equal(await page.$eval('#result-title', node => node.textContent), 'Processed · 1.50×');
   assert.match(await page.$eval('#result-caption', node => node.textContent), /multiplied by 1.50 on the GPU/);
   assert.equal(await page.$eval('#empty-result', node => getComputedStyle(node).display), 'none');
+  if (process.env.RENDER_INFERENCE_PERTURB_CANVAS === '1') {
+    report.injectedFault = 'displayed-canvas-pixel';
+    await page.evaluate(() => {
+      const context = document.querySelector('#processed').getContext('2d');
+      const pixel = context.getImageData(0, 0, 1, 1);
+      pixel.data[0] ^= 255;
+      context.putImageData(pixel, 0, 0);
+    });
+  }
   const bright = await browserPixelProof(page, 1.5);
   report.brightResult = bright;
   assert.equal(bright.mismatches, 0);
   assert.equal(bright.alphaMismatches, 0);
+  assert.equal(bright.canvasMismatches, 0, 'displayed bright image must match GPU output');
   assert.ok(bright.changedChannels > bright.width * bright.height, 'brightness operation must visibly change the photograph');
   report.checks.push('full photograph matches the exact 1.50x RGB transform');
 
@@ -156,10 +166,11 @@ try {
   await page.waitForFunction(() => window.renderInferenceExample.snapshot().runs === 2);
   assert.equal(await page.$eval('#result-title', node => node.textContent), 'Processed · 0.50×');
   const dark = await browserPixelProof(page, 0.5);
+  report.darkResult = dark;
   assert.equal(dark.mismatches, 0);
   assert.equal(dark.alphaMismatches, 0);
+  assert.equal(dark.canvasMismatches, 0, 'displayed dark image must match GPU output');
   assert.notEqual(dark.sha256, bright.sha256);
-  report.darkResult = dark;
   report.checks.push('repeat run reuses the application and produces exact 0.50x pixels');
 
   report.phase = 'failure-recovery';
@@ -235,7 +246,7 @@ try {
   const observers = await page.evaluate(async () => {
     const { createRenderPlusInferenceExample } = await import('../examples/render-plus-inference.mjs');
     const results = [];
-    for (const mode of ['invalid', 'initial', 'running']) {
+    for (const mode of ['invalid', 'initial', 'running', 'reentrant']) {
       let destroyed = false;
       let requested = 0;
       const gpu = {
@@ -256,21 +267,31 @@ try {
       };
       const canvas = document.createElement('canvas');
       document.body.append(canvas);
-      let app, error, completion, snapshot;
+      let app, error, completion, snapshot, nestedError;
+      let attempted = false;
+      let nestedRun;
       try {
         app = await createRenderPlusInferenceExample({
           canvas,
           gpu,
           sourceImage: document.querySelector('#source-image'),
           onState: mode === 'invalid' ? null : state => {
+            if (mode === 'reentrant') {
+              if (state.status === 'running' && !attempted) {
+                attempted = true;
+                try { nestedRun = app.run().catch(cause => { nestedError = cause.message; }); }
+                catch (cause) { nestedError = cause.message; }
+              }
+              return;
+            }
             if (mode === 'initial' || state.status === 'running') throw new Error(`injected ${mode} observer`);
           },
         });
         completion = await app.run({ multiplier: 1.1 });
         snapshot = app.snapshot();
       } catch (cause) { error = cause.message; }
-      finally { await app?.dispose(); canvas.remove(); }
-      results.push({ mode, destroyed, requested, error, snapshot, status: completion?.status });
+      finally { await nestedRun; await app?.dispose(); canvas.remove(); }
+      results.push({ mode, destroyed, requested, error, snapshot, nestedError, attempted, status: completion?.status });
     }
     return results;
   });
@@ -282,6 +303,12 @@ try {
   assert.equal(observers[2].snapshot.status, 'succeeded');
   assert.match(observers[2].snapshot.observerError, /injected running observer/);
   assert.equal(observers[2].destroyed, true);
+  report.observers = observers;
+  assert.equal(observers[3].attempted, true);
+  assert.match(observers[3].nestedError, /already running/);
+  assert.equal(observers[3].status, 'succeeded');
+  assert.equal(observers[3].snapshot.runs, 1);
+  assert.equal(observers[3].destroyed, true);
   report.checks.push('observer validation, initial cleanup, and runtime failure isolation');
 
   assert.deepEqual(report.pageErrors, []);
