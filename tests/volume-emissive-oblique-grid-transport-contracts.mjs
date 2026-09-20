@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  EMISSIVE_LIGHT_GRID,
   EMISSIVE_LIGHT_DIRECTIONS,
   EMISSIVE_TRANSPORT_WGSL,
 } from '../volume-emissive-transport.mjs';
@@ -11,7 +12,7 @@ for (const direction of EMISSIVE_LIGHT_DIRECTIONS) {
   );
 }
 
-const grid = 9;
+const grid = EMISSIVE_LIGHT_GRID;
 const cells = grid ** 3;
 const index = ([x, y, z]) => x + grid * (y + grid * z);
 const majorAxis = direction => {

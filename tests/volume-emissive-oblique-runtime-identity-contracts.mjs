@@ -11,7 +11,7 @@ assert.match(core, /slabs:\s*EMISSIVE_LIGHT_GRID/);
 assert.doesNotMatch(core, /model:\s*'six-direction-single-scattering-v1'/);
 assert.match(
   witness,
-  /result\.state\.physicalColor\.incidentLight\?\.model,\s*'twelve-direction-oblique-short-characteristics-v1'/,
+  /result\.state\.physicalColor\.incidentLight\?\.model,\s*'twenty-four-direction-cubic-short-characteristics-v1'/,
   'native evidence must reject a stale or fallback transport identity',
 );
 

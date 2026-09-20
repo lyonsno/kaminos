@@ -45,34 +45,26 @@ for (const [nm, x, y, z] of CIE_1931_2DEG) {
 const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => sum + v*reactionXYZ[i], 0)));
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
 export const EMISSIVE_LIGHT_GRID = 32;
-const goldenRatio = (1 + Math.sqrt(5)) / 2;
-const icosahedronScale = 1 / Math.sqrt(1 + goldenRatio ** 2);
-const signedBit = (variant, bit) => variant & bit ? 1 : -1;
-const canonicalIcosahedronDirections = [
-  ...Array.from({ length: 4 }, (_, variant) => Object.freeze([0, signedBit(variant, 1) * icosahedronScale, signedBit(variant, 2) * goldenRatio * icosahedronScale])),
-  ...Array.from({ length: 4 }, (_, variant) => Object.freeze([signedBit(variant, 1) * icosahedronScale, signedBit(variant, 2) * goldenRatio * icosahedronScale, 0])),
-  ...Array.from({ length: 4 }, (_, variant) => Object.freeze([signedBit(variant, 1) * goldenRatio * icosahedronScale, 0, signedBit(variant, 2) * icosahedronScale])),
-];
-// A rigid generic rotation preserves the icosahedron's quadrature while keeping
-// every characteristic out of the Cartesian coordinate planes.
-const icosahedronRotation = [
-  [0.213601909605, 0.768755366976, -0.602817891207],
-  [0.706440722858, 0.304661421834, 0.638844991477],
-  [0.674770871705, -0.562313616937, -0.478003835660],
-];
-export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze(canonicalIcosahedronDirections.map(direction => {
-  const rotated = icosahedronRotation.map(row => row.reduce((sum, value, axis) => sum + value * direction[axis], 0));
-  const length = Math.hypot(...rotated);
-  return Object.freeze(rotated.map(value => value / length));
+const cubicDirectionMinor = 1 / Math.sqrt(8);
+const cubicDirectionMajor = Math.sqrt(3) / 2;
+// Every signed permutation of normalized (1,1,sqrt(6)) is fully oblique, antipodal,
+// and closed under the Cartesian grid's proper cube rotations.
+export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze(Array.from({ length: 3 * 8 }, (_, variant) => {
+  const majorAxis = Math.floor(variant / 8);
+  const signs = variant % 8;
+  const direction = [cubicDirectionMinor, cubicDirectionMinor, cubicDirectionMinor];
+  direction[majorAxis] = cubicDirectionMajor;
+  for (let axis = 0; axis < 3; axis++) if (signs & (1 << axis)) direction[axis] *= -1;
+  return Object.freeze(direction);
 }));
 export const EMISSIVE_LIGHT_DIRECTION_COUNT = EMISSIVE_LIGHT_DIRECTIONS.length;
-export const EMISSIVE_LIGHT_TRANSPORT_MODEL = 'twelve-direction-oblique-short-characteristics-v1';
+export const EMISSIVE_LIGHT_TRANSPORT_MODEL = 'twenty-four-direction-cubic-short-characteristics-v1';
 
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = allocate('emissive material coefficients', cells);
-  const directions = allocate('twelve-direction incident radiance at cell centers', cells*EMISSIVE_LIGHT_DIRECTION_COUNT);
+  const directions = allocate('twenty-four-direction incident radiance at cell centers', cells*EMISSIVE_LIGHT_DIRECTION_COUNT);
   const incident = allocate('single-scattering mean incident radiance', cells);
   const stepStride = 256;
   const stepBuffer = device.createBuffer({
@@ -272,7 +264,7 @@ fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
   emissiveCoefficientsDst[lightIndex(c)] = coefficients;
 }
 // Ordered short characteristics. Each dispatch advances one slab for all
-// twelve directions; the preceding slab is complete before it is sampled.
+// all directions; the preceding slab is complete before it is sampled.
 @compute @workgroup_size(64)
 fn sweepEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
   let plane = LIGHT_GRID*LIGHT_GRID;

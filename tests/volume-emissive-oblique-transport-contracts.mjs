@@ -3,7 +3,7 @@ import * as transport from '../volume-emissive-transport.mjs';
 
 const directions = transport.EMISSIVE_LIGHT_DIRECTIONS;
 assert.ok(Array.isArray(directions), 'production exports the oblique transport direction basis');
-assert.equal(directions.length, 12, 'incident transport uses the twelve icosahedral vertices');
+assert.equal(directions.length, 24, 'incident transport uses the cubic orbit of normalized (1,1,sqrt(6))');
 
 const dot = (a, b) => a.reduce((sum, value, i) => sum + value * b[i], 0);
 const magnitude = vector => Math.sqrt(dot(vector, vector));
@@ -39,7 +39,7 @@ const deviation = Math.sqrt(responses.reduce((sum, value) => sum + (value - mean
 assert.ok(deviation / mean < 0.015, 'equal-weight slab response has low orientation bias at unit optical depth');
 
 const shader = transport.EMISSIVE_TRANSPORT_WGSL;
-assert.match(shader, /const LIGHT_DIRECTIONS: u32 = 12u;/);
+assert.match(shader, /const LIGHT_DIRECTIONS: u32 = 24u;/);
 assert.match(shader, /fn lightDirection\(direction: u32\) -> vec3<f32>/);
 assert.match(shader, /fn samplePreviousOutgoing\(/);
 assert.match(shader, /@group\(3\) @binding\(4\) var<uniform> emissiveSweepStep:/);
