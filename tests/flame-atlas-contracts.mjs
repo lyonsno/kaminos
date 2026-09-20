@@ -69,7 +69,16 @@ test("repository README and flame screening room public claims agree", () => {
   assert.match(rootReadme, /\*\*Live materials\*\*/);
   assert.match(rootReadme, /\*\*Browser-native intelligence\*\*/);
   assert.match(rootReadme, /\*\*A world kiln\*\*/);
-  assert.match(rootReadme, /Generated creatures can preserve deliberate morphology\s+through generative transformation and return to mechanical control\./);
+  assert.match(
+    rootReadme,
+    /one matched-image assay showed an authored low-frequency morphology edit\s+influencing generated mass, stance, and support organization/i,
+  );
+  assert.match(rootReadme, /Separately, one\s+reconstructed cast was registered to a control armature/i);
+  assert.match(rootReadme, /A different textured reconstruction\s+consumed terrain-relative motion/i);
+  assert.doesNotMatch(
+    rootReadme,
+    /Deliberate edits[\s\S]{0,240}after image generation and image-to-3D reconstruction/i,
+  );
   assert.doesNotMatch(rootReadme, /Generated beings retain identity, structure, and handles after inference/i);
   assert.match(
     html,

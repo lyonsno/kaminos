@@ -14,8 +14,9 @@ The repository spans four connected capabilities:
   interactive browser application.
 - **Live materials**. Stateful fire, smoke, fluids, particles, and rendering
   processes remain visible and authorable while compute continues.
-- **Generated beings**. Generated creatures can preserve deliberate morphology
-  through generative transformation and return to mechanical control.
+- **Generated beings**. Separate experiments connect authored morphology to
+  generated form, reconstructed casts to mechanical control, and generated
+  creatures to terrain-relative motion.
 - **A world kiln**. Images, meshes, splats, motion, material fields, simulation
   state, and generated environments can be inspected, corrected, staged, and
   composed in one WebGPU workbench.
@@ -110,19 +111,16 @@ machine? It should stay alive.
 
 ## Generated Beings
 
-Generated creatures can preserve deliberate morphology through generative
-transformation and return to mechanical control.
+One matched-image assay showed an authored low-frequency morphology edit
+influencing generated mass, stance, and support organization. Separately, one
+reconstructed cast was registered to a control armature and posed through
+ordinary controls after manual skinning. A different textured reconstruction
+consumed terrain-relative motion in a browser world.
 
-Deliberate edits to a parameterized creature template have produced
-corresponding changes after image generation and image-to-3D reconstruction.
-Using recovered correspondence, one reconstruction was registered to a control
-rig and manually skinned for large articulated deformations; another was driven
-by synthesized terrain-following motion.
-
-These are adjacent research lines, not one creature moving through a completed
-end-to-end pipeline. The continuing frontier is stronger editable control:
-returning distinctions authored before generation as durable controls that can
-survive later rounds of transformation.
+These are three adjacent research lines, not one creature moving through a
+completed end-to-end pipeline. The continuing frontier is stronger editable
+control: returning distinctions authored before generation as durable controls
+that can survive later rounds of transformation.
 
 ## Spatial Asset Kiln
 
