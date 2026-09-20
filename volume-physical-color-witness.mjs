@@ -140,9 +140,9 @@ try {
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, arm.temperature);
     if (arm.mode === 2) {
-      assert.equal(result.state.physicalColor.incidentLight?.model, 'twenty-four-direction-cubic-short-characteristics-v1');
-      assert.equal(result.state.physicalColor.incidentLight?.directions, 24);
-      assert.equal(result.state.physicalColor.incidentLight?.slabs, 32);
+      assert.equal(result.state.physicalColor.incidentLight?.model, 'fourteen-direction-cubic-lattice-ordinates-v1');
+      assert.equal(result.state.physicalColor.incidentLight?.directions, 14);
+      assert.equal(result.state.physicalColor.incidentLight?.traversal, 'direct-lattice-rays');
     }
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
     writeFileSync(join(out, `${arm.id}.png`), Buffer.from(result.png, 'base64'));

@@ -15390,7 +15390,7 @@ export function createKaminosVolumePrototype({
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     if (uniforms[368] > 1.5) {
       emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
-      state.physicalColor.incidentLight = { model: EMISSIVE_LIGHT_TRANSPORT_MODEL, directions: EMISSIVE_LIGHT_DIRECTION_COUNT, slabs: EMISSIVE_LIGHT_GRID, grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
+      state.physicalColor.incidentLight = { model: EMISSIVE_LIGHT_TRANSPORT_MODEL, directions: EMISSIVE_LIGHT_DIRECTION_COUNT, traversal: 'direct-lattice-rays', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
     }
     const pass = encoder.beginRenderPass({
       label,

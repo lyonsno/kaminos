@@ -2,99 +2,84 @@ import assert from 'node:assert/strict';
 import {
   EMISSIVE_LIGHT_GRID,
   EMISSIVE_LIGHT_DIRECTIONS,
+  EMISSIVE_LIGHT_WEIGHTS,
+  EMISSIVE_LIGHT_RAY_COUNT,
   EMISSIVE_TRANSPORT_WGSL,
 } from '../volume-emissive-transport.mjs';
-
-for (const direction of EMISSIVE_LIGHT_DIRECTIONS) {
-  assert.ok(
-    Math.min(...direction.map(Math.abs)) > 0.08,
-    'every characteristic must couple both transverse coordinates instead of remaining in a Cartesian plane',
-  );
-}
 
 const grid = EMISSIVE_LIGHT_GRID;
 const cells = grid ** 3;
 const index = ([x, y, z]) => x + grid * (y + grid * z);
-const majorAxis = direction => {
-  const magnitude = direction.map(Math.abs);
-  return magnitude.indexOf(Math.max(...magnitude));
-};
-const cellFor = (direction, column, step) => {
-  const axis = majorAxis(direction);
-  const along = direction[axis] < 0 ? grid - 1 - step : step;
-  const a = column % grid;
-  const b = Math.floor(column / grid);
-  return axis === 0 ? [along, a, b] : axis === 1 ? [a, along, b] : [a, b, along];
-};
-const integrate = (source, extinction, distance) => {
-  if (extinction * distance < 0.001) {
-    const tau = extinction * distance;
-    return source * distance * (1 - tau * 0.5 + tau * tau / 6);
+const inBounds = cell => cell.every(value => value >= 0 && value < grid);
+const stepFor = direction => direction.map(value => Math.sign(value));
+const boundary = step => step > 0 ? 0 : grid - 1;
+const excludingBoundary = (offset, edge) => offset + (edge === 0 ? 1 : 0);
+const cardinalRays = 6 * grid ** 2;
+const diagonalRays = 3 * grid ** 2 - 3 * grid + 1;
+assert.equal(EMISSIVE_LIGHT_RAY_COUNT, cardinalRays + 8 * diagonalRays);
+const packedRayStart = (directionIndex, ray) => {
+  const step = stepFor(EMISSIVE_LIGHT_DIRECTIONS[directionIndex]);
+  if (directionIndex < 6) {
+    const axis = Math.floor(directionIndex / 2);
+    const a = ray % grid;
+    const b = Math.floor(ray / grid);
+    return axis === 0 ? [boundary(step[0]), a, b]
+      : axis === 1 ? [a, boundary(step[1]), b]
+        : [a, b, boundary(step[2])];
   }
-  return source * (1 - Math.exp(-extinction * distance)) / extinction;
+  const edges = step.map(boundary);
+  if (ray < grid ** 2) return [edges[0], ray % grid, Math.floor(ray / grid)];
+  let local = ray - grid ** 2;
+  if (local < (grid - 1) * grid) return [
+    excludingBoundary(local % (grid - 1), edges[0]),
+    edges[1],
+    Math.floor(local / (grid - 1)),
+  ];
+  local -= (grid - 1) * grid;
+  return [
+    excludingBoundary(local % (grid - 1), edges[0]),
+    excludingBoundary(Math.floor(local / (grid - 1)), edges[1]),
+    edges[2],
+  ];
 };
-
-const samplePrevious = (field, emission, extinction, point, halfDistance, mode = 'per-neighbor') => {
-  const base = point.map(Math.floor);
-  const fraction = point.map((value, axis) => value - base[axis]);
-  let outgoing = 0;
-  let averagedCenter = 0;
-  let averagedEmission = 0;
-  let averagedExtinction = 0;
-  for (let z = 0; z < 2; z++) for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) {
-    const weight = (x ? fraction[0] : 1 - fraction[0])
-      * (y ? fraction[1] : 1 - fraction[1])
-      * (z ? fraction[2] : 1 - fraction[2]);
-    if (weight === 0) continue;
-    const cell = [base[0] + x, base[1] + y, base[2] + z];
-    if (cell.some(value => value < 0 || value >= grid)) continue;
-    const i = index(cell);
-    if (mode === 'per-neighbor') {
-      outgoing += weight * (
-        field[i] * Math.exp(-extinction[i] * halfDistance)
-        + integrate(emission[i], extinction[i], halfDistance)
-      );
-    } else {
-      averagedCenter += weight * field[i];
-      averagedEmission += weight * emission[i];
-      averagedExtinction += weight * extinction[i];
+for (let directionIndex = 0; directionIndex < EMISSIVE_LIGHT_DIRECTIONS.length; directionIndex++) {
+  const visits = new Uint8Array(cells);
+  const rayCount = directionIndex < 6 ? grid ** 2 : diagonalRays;
+  const step = stepFor(EMISSIVE_LIGHT_DIRECTIONS[directionIndex]);
+  for (let ray = 0; ray < rayCount; ray++) {
+    for (let cell = packedRayStart(directionIndex, ray); inBounds(cell); cell = cell.map((value, axis) => value + step[axis])) {
+      visits[index(cell)]++;
     }
   }
-  if (mode === 'per-neighbor') return outgoing;
-  return averagedCenter * Math.exp(-averagedExtinction * halfDistance)
-    + integrate(averagedEmission, averagedExtinction, halfDistance);
+  assert.ok(visits.every(count => count === 1), `packed GPU ray indexing covers every cell exactly once for direction ${directionIndex}`);
+}
+const integrate = (source, extinction, distance) => {
+  const tau = extinction * distance;
+  if (tau < 0.001) return source * distance * (1 - tau * 0.5 + tau * tau / 6);
+  return source * (1 - Math.exp(-tau)) / extinction;
 };
 
-const solveIncident = (emission, extinction, mode = 'per-neighbor') => {
-  const directional = EMISSIVE_LIGHT_DIRECTIONS.map(() => new Float64Array(cells));
-  for (let step = 0; step < grid; step++) {
-    for (let directionIndex = 0; directionIndex < EMISSIVE_LIGHT_DIRECTIONS.length; directionIndex++) {
-      const direction = EMISSIVE_LIGHT_DIRECTIONS[directionIndex];
-      const axis = majorAxis(direction);
-      const dominant = Math.abs(direction[axis]);
-      const halfDistance = 1 / grid / dominant;
-      for (let column = 0; column < grid * grid; column++) {
-        const cell = cellFor(direction, column, step);
+const solveIncident = (emission, extinction) => {
+  const incident = new Float64Array(cells);
+  for (let directionIndex = 0; directionIndex < EMISSIVE_LIGHT_DIRECTIONS.length; directionIndex++) {
+    const step = stepFor(EMISSIVE_LIGHT_DIRECTIONS[directionIndex]);
+    const distance = 2 / grid * Math.hypot(...step);
+    const halfDistance = distance * 0.5;
+    const field = new Float64Array(cells);
+    for (let z = 0; z < grid; z++) for (let y = 0; y < grid; y++) for (let x = 0; x < grid; x++) {
+      const start = [x, y, z];
+      if (inBounds(start.map((value, axis) => value - step[axis]))) continue;
+      let incoming = 0;
+      for (let cell = start; inBounds(cell); cell = cell.map((value, axis) => value + step[axis])) {
         const i = index(cell);
-        let incoming = 0;
-        if (step > 0) {
-          incoming = samplePrevious(
-            directional[directionIndex],
-            emission,
-            extinction,
-            cell.map((value, component) => value - direction[component] / dominant),
-            halfDistance,
-            mode,
-          );
-        }
-        directional[directionIndex][i] = incoming * Math.exp(-extinction[i] * halfDistance)
-          + integrate(emission[i], extinction[i], halfDistance);
+        const attenuation = Math.exp(-extinction[i] * halfDistance);
+        const halfEmission = integrate(emission[i], extinction[i], halfDistance);
+        const center = incoming * attenuation + halfEmission;
+        field[i] = center;
+        incoming = center * attenuation + halfEmission;
       }
     }
-  }
-  const incident = new Float64Array(cells);
-  for (let i = 0; i < cells; i++) {
-    for (const field of directional) incident[i] += field[i] / directional.length;
+    for (let i = 0; i < cells; i++) incident[i] += field[i] * EMISSIVE_LIGHT_WEIGHTS[directionIndex];
   }
   return incident;
 };
@@ -106,36 +91,9 @@ pointEmission[index(origin)] = 1;
 const pointIncident = solveIncident(pointEmission, vacuum);
 let fullyObliqueLitCells = 0;
 for (let z = 0; z < grid; z++) for (let y = 0; y < grid; y++) for (let x = 0; x < grid; x++) {
-  if (x !== origin[0] && y !== origin[1] && z !== origin[2] && pointIncident[index([x, y, z])] > 1e-12) {
-    fullyObliqueLitCells++;
-  }
+  if (x !== origin[0] && y !== origin[1] && z !== origin[2] && pointIncident[index([x, y, z])] > 1e-12) fullyObliqueLitCells++;
 }
-assert.ok(fullyObliqueLitCells > 0, 'a point emitter must transport radiance outside all three origin coordinate planes');
-
-const heterogeneousField = new Float64Array(cells);
-const heterogeneousEmission = new Float64Array(cells);
-const heterogeneousExtinction = new Float64Array(cells);
-heterogeneousField[index([4, 4, 4])] = 1;
-heterogeneousField[index([5, 4, 4])] = 1;
-heterogeneousExtinction[index([5, 4, 4])] = 10;
-const perNeighbor = samplePrevious(
-  heterogeneousField,
-  heterogeneousEmission,
-  heterogeneousExtinction,
-  [4.5, 4, 4],
-  0.25,
-);
-const averagedBeforeTransfer = samplePrevious(
-  heterogeneousField,
-  heterogeneousEmission,
-  heterogeneousExtinction,
-  [4.5, 4, 4],
-  0.25,
-  'average-before-transfer',
-);
-const expectedPerNeighbor = 0.5 + 0.5 * Math.exp(-2.5);
-assert.ok(Math.abs(perNeighbor - expectedPerNeighbor) < 1e-12, 'each upstream neighbor must undergo its own optical transfer');
-assert.ok(perNeighbor > averagedBeforeTransfer * 1.8, 'the oracle must reject averaging heterogeneous extinction before exponentiation');
+assert.ok(fullyObliqueLitCells > 0, 'a point emitter transports radiance outside all three origin coordinate planes');
 
 const emission = new Float64Array(cells);
 const extinction = new Float64Array(cells);
@@ -176,28 +134,16 @@ const relativeRotatedError = (reference, rotated, rotation) => {
 };
 
 const heterogeneousIncident = solveIncident(emission, extinction);
-const rotationErrors = rotations.map(rotation => {
-  const rotatedIncident = solveIncident(
-    rotateField(emission, rotation),
-    rotateField(extinction, rotation),
-  );
-  return relativeRotatedError(heterogeneousIncident, rotatedIncident, rotation);
-});
-assert.ok(
-  rotationErrors.every(error => error < 0.20),
-  `rotated heterogeneous coefficient scenes must agree within the declared 20% relative-L2 bound: ${rotationErrors}`,
-);
+const rotationErrors = rotations.map(rotation => relativeRotatedError(
+  heterogeneousIncident,
+  solveIncident(rotateField(emission, rotation), rotateField(extinction, rotation)),
+  rotation,
+));
+assert.ok(rotationErrors.every(error => error < 1e-12), `cube rotations must be exact: ${rotationErrors}`);
 
-assert.match(EMISSIVE_TRANSPORT_WGSL, /fn samplePreviousOutgoing\(/);
-const outgoingBody = EMISSIVE_TRANSPORT_WGSL.split('fn samplePreviousOutgoing(')[1]?.split('\n}')[0] ?? '';
-assert.match(outgoingBody, /emissiveDirectionsDst/);
-assert.match(outgoingBody, /emissiveCoefficients/);
-assert.match(outgoingBody, /emissionIntegral\(material\.w,halfDs\)/);
-assert.doesNotMatch(EMISSIVE_TRANSPORT_WGSL, /fn samplePreviousCoefficient\(/);
-assert.match(EMISSIVE_TRANSPORT_WGSL, /incoming=samplePreviousOutgoing\(direction,previousPosition,halfDs\)/);
+assert.match(EMISSIVE_TRANSPORT_WGSL, /let center = incoming\*attenuation\+halfEmission;/);
+assert.match(EMISSIVE_TRANSPORT_WGSL, /incoming = center\*attenuation\+halfEmission;/);
+assert.match(EMISSIVE_TRANSPORT_WGSL, /let ds = \(2\.0\/f32\(LIGHT_GRID\)\)\*length\(vec3<f32>\(rayStep\)\);/);
+assert.doesNotMatch(EMISSIVE_TRANSPORT_WGSL, /samplePreviousOutgoing/);
 
-console.log(
-  `emissive oblique grid transport: ${fullyObliqueLitCells} fully-oblique cells; `
-  + `heterogeneous interpolation ratio ${(perNeighbor / averagedBeforeTransfer).toFixed(3)}; `
-  + `rotation errors ${rotationErrors.map(error => error.toFixed(3)).join(', ')}`,
-);
+console.log(`emissive lattice grid transport: ${fullyObliqueLitCells} off-plane cells; rotation errors ${rotationErrors.map(error => error.toExponential(2)).join(', ')}`);
