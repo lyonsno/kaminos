@@ -56,7 +56,13 @@ test("generated-worlds README and flame screening room public claims agree", () 
 
   assert.match(rootReadme, /docs\/flame-atlas\/assets\/conventional-fire-hero\.png/);
   assert.match(rootReadme, /\[Live Combustion\]\(https:\/\/lyonsno\.github\.io\/kaminos\/\)/);
-  assert.match(rootReadme, /^> A browser-native workbench for making generated worlds live\.$/m);
+  assert.match(
+    rootReadme,
+    /^> Browser-native WebGPU inference, realtime simulation, and generated spatial systems in one inspectable workbench\.$/m,
+  );
+  assert.match(rootReadme, /@kaminos\/webgpu-inference-kit/);
+  assert.match(rootReadme, /1,179,648 Gaussian splats/);
+  assert.match(rootReadme, /21,818 foreground\s+frame intervals/);
   assert.match(rootReadme, /\*\*Generated beings\*\*/);
   assert.match(rootReadme, /\*\*Live materials\*\*/);
   assert.match(rootReadme, /\*\*Browser-native intelligence\*\*/);
