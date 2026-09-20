@@ -15438,7 +15438,7 @@ export function createKaminosVolumePrototype({
     const readback = device.createBuffer({ size: 32, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     try {
       const encoder = device.createCommandEncoder({ label: 'same-state emissive frame cost' });
-      encodeDraw(encoder, frameTexture.createView(), 'same-state emissive frame profile', pipeline, {
+      encodeDraw(encoder, frameTexture.createView(), 'same-state emissive frame profile', readbackPipeline, {
         emissiveTimestampWrites: { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
         timestampWrites: { querySet: query, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
       });

@@ -7,6 +7,7 @@ const witness = readFileSync(new URL('../volume-physical-color-witness.mjs', imp
 assert.match(core, /async function sampleEmissiveFrameProfile\(\)/);
 const profile = core.split('async function sampleEmissiveFrameProfile()')[1]?.split('\n  function ')[0] ?? '';
 assert.match(profile, /createQuerySet\(\{ type: 'timestamp', count: 4 \}\)/);
+assert.match(profile, /encodeDraw\(encoder, frameTexture\.createView\(\), 'same-state emissive frame profile', readbackPipeline,/);
 assert.match(profile, /emissiveTimestampWrites:\s*\{ querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 \}/);
 assert.match(profile, /timestampWrites:\s*\{ querySet: query, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 \}/);
 assert.match(profile, /incidentLightMs:\s*Number\(times\[1\]-times\[0\]\)\/1e6/);
