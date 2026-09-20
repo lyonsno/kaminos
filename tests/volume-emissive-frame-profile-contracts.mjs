@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { incidentLightBatchTimestampWrites } from '../volume-gpu-profile.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../volume-physical-color-witness.mjs', import.meta.url), 'utf8');
@@ -10,8 +11,7 @@ const profile = core.split('async function sampleEmissiveFrameProfile()')[1]?.sp
 assert.match(lightProfile, /const repeats = 8;/);
 assert.match(lightProfile, /emissiveLightField\.encode\(encoder,currentFluid\);\s*for/, 'warmup must execute before the measured batch');
 assert.match(lightProfile, /for \(let repeat = 0; repeat < repeats; repeat\+\+\)/);
-assert.match(lightProfile, /let timestampWrites;/);
-assert.doesNotMatch(lightProfile, /const timestampWrites = \{ querySet: query \}/, 'a timestamp descriptor without either write index invalidates the command buffer');
+assert.match(lightProfile, /incidentLightBatchTimestampWrites\(query, repeat, repeats\)/);
 assert.match(lightProfile, /const totalMs=Number\(times\[1\]-times\[0\]\)\/1e6/);
 assert.match(lightProfile, /ms:totalMs\/repeats/);
 assert.match(profile, /createQuerySet\(\{ type: 'timestamp', count: 4 \}\)/);
@@ -27,5 +27,12 @@ assert.match(core, /sampleEmissiveFrameProfile,/);
 assert.match(witness, /core\.sampleEmissiveFrameProfile\(\)/);
 assert.match(witness, /native frame timing failed:\s*'\s*\+\s*JSON\.stringify\(frameProfile\)/);
 assert.match(witness, /frameProfile:result\.frameProfile/);
+
+const querySet = { id: 'query-set' };
+assert.deepEqual(incidentLightBatchTimestampWrites(querySet, 0, 8), { querySet, beginningOfPassWriteIndex: 0 });
+for (let repeat = 1; repeat < 7; repeat++) assert.equal(incidentLightBatchTimestampWrites(querySet, repeat, 8), undefined);
+assert.deepEqual(incidentLightBatchTimestampWrites(querySet, 7, 8), { querySet, endOfPassWriteIndex: 1 });
+assert.deepEqual(incidentLightBatchTimestampWrites(querySet, 0, 1), { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 });
+assert.throws(() => incidentLightBatchTimestampWrites(querySet, 8, 8), /invalid incident-light batch repetition/);
 
 console.log('emissive frame profile: incident solve, raymarch, combined span, and witness custody contracts pass');
