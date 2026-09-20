@@ -15420,9 +15420,9 @@ export function createKaminosVolumePrototype({
       const encoder = device.createCommandEncoder({ label: 'same-state emissive lighting cost' });
       emissiveLightField.encode(encoder,currentFluid);
       for (let repeat = 0; repeat < repeats; repeat++) {
-        const timestampWrites = { querySet: query };
-        if (repeat === 0) timestampWrites.beginningOfPassWriteIndex = 0;
-        if (repeat === repeats - 1) timestampWrites.endOfPassWriteIndex = 1;
+        let timestampWrites;
+        if (repeat === 0) timestampWrites = { querySet: query, beginningOfPassWriteIndex: 0 };
+        else if (repeat === repeats - 1) timestampWrites = { querySet: query, endOfPassWriteIndex: 1 };
         emissiveLightField.encode(encoder,currentFluid,timestampWrites);
       }
       encoder.resolveQuerySet(query,0,2,resolved,0);

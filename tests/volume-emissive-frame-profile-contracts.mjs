@@ -10,6 +10,8 @@ const profile = core.split('async function sampleEmissiveFrameProfile()')[1]?.sp
 assert.match(lightProfile, /const repeats = 8;/);
 assert.match(lightProfile, /emissiveLightField\.encode\(encoder,currentFluid\);\s*for/, 'warmup must execute before the measured batch');
 assert.match(lightProfile, /for \(let repeat = 0; repeat < repeats; repeat\+\+\)/);
+assert.match(lightProfile, /let timestampWrites;/);
+assert.doesNotMatch(lightProfile, /const timestampWrites = \{ querySet: query \}/, 'a timestamp descriptor without either write index invalidates the command buffer');
 assert.match(lightProfile, /const totalMs=Number\(times\[1\]-times\[0\]\)\/1e6/);
 assert.match(lightProfile, /ms:totalMs\/repeats/);
 assert.match(profile, /createQuerySet\(\{ type: 'timestamp', count: 4 \}\)/);
