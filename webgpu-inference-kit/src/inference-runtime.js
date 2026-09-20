@@ -203,8 +203,14 @@ function normalizeBackendIdentity(input, context) {
     adapterName,
     browser: input.browser || globalThis.navigator?.userAgent || null,
     requestedFeatures: input.requestedFeatures || context?.deviceRequest?.requiredFeatures || [],
-    effectiveFeatures: input.effectiveFeatures || input.device?.features || context?.device?.features || input.adapter?.features || [],
-    limits: input.limits || input.device?.limits || context?.device?.limits || input.adapter?.limits || {},
+    // Nullish selection across LEGITIMATE effective sources only: adapter
+    // support lists describe what the adapter offers, not what this device
+    // enabled, and a manufactured [] would masquerade as an observed
+    // zero-feature device. Absent capture stays absent (and invalid).
+    effectiveFeatures: input.effectiveFeatures ?? input.device?.features ?? context?.device?.features ?? undefined,
+    // Nullish across observed sources only; adapter support and a
+    // manufactured {} are not effective-limit observations.
+    limits: input.limits ?? input.device?.limits ?? context?.device?.limits ?? undefined,
     timestampQuery: input.timestampQuery || context?.deviceRequest?.timestampQuery || 'unavailable',
   }));
 }

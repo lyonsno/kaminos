@@ -11,6 +11,13 @@ export {
 } from './tensor-manifest.js';
 
 export {
+  WEBGPU_PARITY_CAPTURE_SCHEMA,
+  WEBGPU_PARITY_COMPARISON_SCHEMA,
+  compareWebGpuParityArrays,
+  createWebGpuParityCaptureRegistry,
+} from './parity-primitives.js';
+
+export {
   WEBGPU_BUFFER_USAGE,
   WEBGPU_COMPUTE_KERNEL_SCHEMA,
   WEBGPU_SHADER_STAGE,
@@ -106,6 +113,8 @@ export {
 export {
   createWebGpuBackendIdentity,
   createWebGpuDeviceRequest,
+  composeWebGpuDeviceRequirements,
+  validateWebGpuDeviceRequirements,
   requestBrowserWebGpuDevice,
   validateWebGpuBackendIdentity,
 } from './gpu-environment.js';
@@ -159,7 +168,9 @@ export {
   WEBGPU_FOREGROUND_OPPORTUNITY_RECEIPT_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
   WEBGPU_FOREGROUND_OPPORTUNITY_SERVICE_SCHEMA,
+  WEBGPU_FOREGROUND_SERVICE_SCHEMA,
   createWebGpuForegroundOpportunityInterlock,
+  createWebGpuForegroundService,
 } from './foreground-opportunity.js';
 
 export {
@@ -319,7 +330,9 @@ export {
   KIMODO_TEXT_TO_MOTION_ROUTE_ID,
   createKimodoTextToMotionRouteDefinition,
   createKimodoTextToMotionRouteReceipt,
+  validateKimodoOutputArtifacts,
 } from './kimodo-route.js';
+
 
 export {
   SF3D_IMAGE_TO_MESH_ROUTE_ID,

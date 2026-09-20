@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebGPU Inference Kit parity capture smoke</title>
+<script type="module">
+  const requestedModuleUrl = new URL('../src/index.js', import.meta.url).href;
+  try {
+    const { createWebGpuParityCaptureRegistry } = await import(requestedModuleUrl);
+    const runId = 'kaminos-parity-browser-smoke';
+    const stageId = 'decoder.fusion';
+    const registry = createWebGpuParityCaptureRegistry({ runId });
+    registry.capture(stageId, new Float32Array([1, 2, 3, 5]), { shape: [1, 4], layout: 'NC' });
+    const comparison = registry.compare(stageId, new Float32Array([1, 2.5, 3, 4]));
+    const bytes = registry.readBytes(stageId, { byteOffset: 0, byteLength: 16 });
+    const values = Array.from(new Float32Array(bytes.buffer));
+    registry.clear();
+    document.documentElement.dataset.paritySmoke = btoa(JSON.stringify({
+      status: 'succeeded', requestedModuleUrl, effectiveModuleUrl: requestedModuleUrl,
+      runId, stageId, values, comparison, remainingStages: registry.stageIds(),
+      userAgent: navigator.userAgent,
+    }));
+  } catch (error) {
+    document.documentElement.dataset.paritySmoke = btoa(JSON.stringify({
+      status: 'failed', requestedModuleUrl,
+      error: { name: error.name, message: error.message },
+    }));
+  }
+</script>

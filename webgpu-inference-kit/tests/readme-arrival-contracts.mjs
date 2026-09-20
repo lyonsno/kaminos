@@ -18,19 +18,24 @@ assert.match(readme, /registerRoute/);
 assert.match(readme, /route\.enqueue/);
 assert.match(readme, /job\.completion/);
 assert.match(readme, /completion\.status === ['"]succeeded['"]/);
-assert.match(readme, /Current kit adoption/);
 assert.match(readme, /Ports can adopt a common application-facing shape/);
-assert.match(readme, /tensor, kernel, runtime, and route primitives/i);
-assert.match(readme, /runtime and route primitives around browser diffusion, with external text embedding/i);
-assert.match(readme, /cooperative orchestration and model-owned bounded work/i);
-assert.match(readme, /cooperative orchestration, scheduling, shared-device foreground opportunities, and route composition/i);
+const modelRows = readme.split('\n').filter(line => line.startsWith('| ['));
+for (const repo of ['moge-webgpu', 'sf3d-webgpu', 'sharp-webgpu', 'kimodo-webgpu']) {
+  const rows = modelRows.filter(line => line.includes(`https://github.com/lyonsno/${repo})`));
+  assert.equal(rows.length, 1, `${repo} must have one model-family row`);
+  const columns = rows[0].split('|').slice(1, -1).map(value => value.trim());
+  assert.equal(columns.length, 3, `${repo} must name the port, output, and integration`);
+  assert.ok(columns.every(Boolean), `${repo} must populate every column`);
+}
+assert.match(modelRows.find(line => line.includes('/kimodo-webgpu)')), /text embeddings.*external server/i);
+assert.match(readme, /\*\*In development: SAM\b/);
 assert.doesNotMatch(readme, /These ports share a common application-facing shape/);
 assert.doesNotMatch(readme, /That firing exercises the architecture.*persistent model resources/);
 
 assert.doesNotMatch(readme, /\b(?:loadModelPort|LoadedModel|ModelRun)\b/);
 assert.doesNotMatch(readme, /^## Receipt And Evidence Layer$/m);
 
-assert.equal(packageJson.version, '0.1.46');
+assert.equal(packageJson.version, '0.1.52');
 assert.ok(packageJson.files.includes('docs'), 'published package must include linked documentation');
 assert.ok(packageJson.files.includes('examples'), 'published package must include the runnable example');
 

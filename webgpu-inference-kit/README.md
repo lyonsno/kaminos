@@ -8,6 +8,8 @@ Kaminos WebGPU Inference Kit gives model ports a shared session and device lifec
 npm install @kaminos/webgpu-inference-kit
 ```
 
+For a visual first run, [brighten a photo while a renderer stays active](./docs/getting-started.md#try-the-photo-walkthrough). The worked example walks through sharing a GPU device, queuing an operation, and displaying its result.
+
 ## Quick Look
 
 A Kaminos application creates a session, registers a model route, and queues model-owned work through that route:
@@ -86,14 +88,18 @@ Kaminos separates common runtime machinery from model implementation and product
 
 ## One Runtime, Different Models
 
-Kaminos is already used across substantially different browser-native inference workloads:
+The kit connects a growing family of browser model ports: recover a scene's geometry, generate a textured object, turn an image into Gaussian splats, or animate a character from a text prompt. Each port brings its own model implementation and adopts shared runtime facilities where they serve its workload.
 
-| Port | Execution shape | Reusable route state | Useful work boundaries | Output | Current kit adoption |
-| --- | --- | --- | --- | --- | --- |
-| [MoGe](https://github.com/lyonsno/moge-webgpu) | Feed-forward image inference | Weights, pipelines, reusable tensors | Encoder, decoder, output phases | Depth, normals, and point map | Tensor, kernel, runtime, and route primitives |
-| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Iterative motion generation | Model weights and diffusion resources | Diffusion steps and major phases | Skeletal motion | Runtime and route primitives around browser diffusion, with external text embedding |
-| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Multi-stage image-to-geometry inference | Vision, reconstruction, decoding, and baking resources | Backbone, postprocessor, decoder, texture baking | Textured GLB mesh | Cooperative orchestration and model-owned bounded work |
-| [SHARP](https://github.com/lyonsno/sharp-webgpu) | Long image-to-splat inference | Image encoder, depth, Gaussian decoder, and output resources | Encoder blocks, depth phases, decoder ranges, output batches | Gaussian splat scene | Cooperative orchestration, scheduling, shared-device foreground opportunities, and route composition |
+| Model Port | What You Can Build | Integration |
+| --- | --- | --- |
+| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth maps, surface normals, and interactive point clouds from a single image | Shared device helpers, cooperative encoder and decoder work, bounded in-flight submissions, reusable GPU buffers, and a library build for embedding in a host application. |
+| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Textured, UV-unwrapped GLB meshes from a single image | Cooperative reconstruction and baking, bounded in-flight submissions, reusable scratch memory, worker offload, and a callable producer that can use the application's GPU device. |
+| [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground rendering, staged output construction, and shared tensor-comparison helpers for port development. |
+| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding, bounded GPU submissions, reusable model resources, and a host-callable producer with rendering opportunities between transformer passes. Text embeddings come from an external server. |
+
+These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
+
+**In development: SAM image-and-prompt segmentation.** The in-tree port combines shared model-package loading, persistent model resources, cached image features, and queued semantic requests. Its browser serving path produces masks and reuses image features across prompts; concurrent foreground rendering is the next integration target.
 
 Ports can adopt a common application-facing shape:
 
@@ -118,11 +124,15 @@ The runtime schedules those model duties so the browser can regain useful foregr
 
 Ports can begin with direct execution and introduce cooperative boundaries where measurement shows that a phase is hostile to foreground responsiveness. The [advanced integration reference](./docs/integration-reference.md) covers scheduling policy, adaptive duty sizing, completion behavior, foreground opportunity donation, resources, multi-route admission, and runtime telemetry.
 
-## Proven On A Long-Running Product Route
+## Inference Alongside Rendering
 
-In one measured product firing on an M4 Max in Chrome, SHARP generated `1,179,648` Gaussian splats over `185.3s` while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across `21,818` foreground frame intervals, p95 and p99 were `9.3ms` and `10.0ms`; `40` intervals exceeded `33.3ms`.
+In one measured run on an M4 Max in Chrome, **SHARP generated 1,179,648 Gaussian splats in 185.3 seconds** while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across 21,818 foreground frame intervals, p95 and p99 were 9.3ms and 10.0ms; 40 intervals exceeded 33.3ms.
 
-That firing demonstrates the runtime's central product target directly: long local inference sharing one browser and GPU with a continuously rendering application, while producing the complete model output and preserving measured foreground cadence.
+**Stable Fast 3D generated a complete textured GLB in 41.9 seconds** while servicing 3,644 test host frames through the kit's shared-device foreground interlock. Page frame intervals had a p99 of 9.7ms and a maximum of 92.4ms. The GLB was byte-identical to the monolithic route's output.
+
+SF3D also runs alongside Kaminos' live flame in an experimental host integration. That integration currently uses separate devices on the same GPU; coordinated shared-device rendering is the next step toward recovering throughput under the full rendering workload.
+
+Together, these examples show how model ports can expose useful scheduling boundaries, preserve their outputs, and make room for the application around them.
 
 ## Continue Porting
 

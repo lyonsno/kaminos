@@ -41,7 +41,7 @@ shared WebGPU device -> depth / splat / mesh / motion outputs
 | Port | Browser-native route | Kit adoption |
 | --- | --- | --- |
 | [SHARP WebGPU](https://github.com/lyonsno/sharp-webgpu) | image to 1.18M Gaussian splats | cooperative orchestration, scheduling, shared-device foreground opportunities, route composition |
-| [SF3D WebGPU](https://github.com/lyonsno/sf3d-webgpu) | image to textured GLB mesh | cooperative orchestration and model-owned bounded work |
+| [SF3D WebGPU](https://github.com/lyonsno/sf3d-webgpu) | image to textured GLB mesh | cooperative orchestration on every long boundary, bounded-prefix completion, scratch arena, resource caches, parity primitives, worker-offloaded CPU phases, shared-device foreground cadence |
 | [MoGe WebGPU](https://github.com/lyonsno/moge-webgpu) | image to depth, normals, and point map | tensor, kernel, runtime, and route primitives |
 | [Kimodo WebGPU](https://github.com/lyonsno/kimodo-webgpu) | prompt to skeletal motion | runtime and route primitives around browser diffusion, with text embedding declared as an external backend |
 
@@ -331,6 +331,64 @@ This catches orchestration defects before browser smoke. It does not compile
 WGSL, execute model kernels, observe physical buffer destruction, prove
 numerical parity by itself, or claim foreground cadence. Those remain real
 adapter and product-route obligations.
+
+## Localize Numerical Drift
+
+Keep captured tensors next to the model and compare them against a reference
+in the same JavaScript environment:
+
+```js
+import { createWebGpuParityCaptureRegistry } from "@kaminos/webgpu-inference-kit";
+
+const captures = createWebGpuParityCaptureRegistry({ runId: invocationId });
+captures.capture("decoder.fusion", await readDecoderFusion(), {
+  shape: [1, 256, 96, 96],
+  layout: "NCHW",
+});
+const comparison = captures.compare("decoder.fusion", referenceValues, {
+  sampling: { mode: "stride", stride: 4, offset: 0 },
+});
+
+// Optional raw export: ask for one range at a time.
+const description = captures.describe("decoder.fusion");
+const bytes = captures.readBytes("decoder.fusion", {
+  byteOffset: 0,
+  byteLength: description.byteLength,
+});
+captures.release("decoder.fusion");
+captures.clear();
+```
+
+Capture copies values once into private storage and returns frozen metadata.
+Type and byte counts are derived from those values. Descriptions contain no
+tensor reference; byte-range reads return independent copies. Comparisons run
+against the retained tensor and include the run and stage identities. Create
+one registry per invocation and clear it when its diagnostic work is complete.
+
+For arrays already available together, call
+`compareWebGpuParityArrays(actual, reference, options)` directly. Comparisons
+are exhaustive unless the caller explicitly selects a stride. Results retain
+the full source count, compared count, sample plan, effective type, summaries,
+exact mismatch count, maximum and RMS error, relative L2 error, and cosine
+similarity. Floating tensors use `Float32Array`; decode FP16 storage into
+float32 first. Integers use exact mismatch accounting, and both inputs must
+have matching constructors. Non-finite selected values, unequal lengths,
+empty selections, and unsupported Float64 inputs reject. Signed zeros compare
+equal. A nonzero error against an all-zero reference has an explicit infinite
+relative-error status.
+
+The model adapter owns GPU readback timing, stage shapes and conventions,
+reference loading, browser transfer, and tolerances. Keep normal comparisons
+in the page and return their small results. Export raw byte ranges when needed;
+the adapter verifies the requested run, stage, offsets, lengths, and transfer
+completion. Preserve original source cardinality when sampling: a comparison
+of pre-sampled arrays describes those arrays, not an exhaustive comparison of
+the original tensors.
+
+SHARP's adapter demonstrates reference injection and optional raw export through
+Chrome's debugging connection. Model-specific transforms, such as image
+normalization, interior-only comparisons, PLY field conversion, and equivalent
+quaternion signs, stay beside SHARP.
 
 ## Build Runtime Primitives
 
@@ -1016,7 +1074,7 @@ The runtime helpers are the lowest useful layer. Route helpers sit above them so
 - `defineWebGpuRoute(input)`, `createWebGpuRouteRegistry(routes)`, `createRouteInvocationRequest(route, input)`, `createRouteWorkerResult(route, input)`, and validators define worker-executable browser-local inference routes.
 - `createMogeDepthNormalRouteDefinition(input)` and `createMogeDepthNormalRouteReceipt(input)` define the MoGE source-image to depth/normal/pointmap route.
 - `createSharpImageToSplatRouteDefinition(input)` and `createSharpImageToSplatRouteReceipt(input)` define the SHARP source-image to splat candidate/depth/metadata route.
-- `createKimodoTextToMotionRouteDefinition(input)` and `createKimodoTextToMotionRouteReceipt(input)` define the Kimodo text-prompt to SOMA77 joints/motion-clip route.
+- `createKimodoTextToMotionRouteDefinition(input)` and `createKimodoTextToMotionRouteReceipt(input)` define the Kimodo text-prompt to motion route as shipped by the browser port: `soma-joints` output `[frames, 30, 3]` (30-joint SOMA skeleton, duration-dependent frame count at 30 fps) and a `motion-clip` output of `[frames, 369]` motion-feature rows, with an optional filmstrip. The shape law is enforced where receipts are MINTED: the factory throws on the old fictional shapes, mismatched frame counts, and malformed ranks. Consumers who receive Kimodo receipts from outside the factory and want independent verification call the exported `validateKimodoOutputArtifacts(receipt.outputs)` directly. `assertAuthoritativeRouteReceipt(receipt)` and the evidence classifier assert generic envelope authority; route-specific semantic laws are deliberately not woven into the generic authority machinery — the kit's consumers are cooperative in-process code, and JavaScript offers no in-process security boundary that such machinery could actually enforce.
 - `createSf3dImageToMeshRouteDefinition(input)` and `createSf3dImageToMeshRouteReceipt(input)` define the Stable Fast 3D source-image to mesh/albedo/normal route.
 
 These route definitions are not meant to trap future ports into MoGE/SHARP/Kimodo/SF3D. They are examples of the current shared grammar: route id, input roles, output roles, backend kind, model identity, kernel/stage identity, scheduler posture, and output artifacts.
