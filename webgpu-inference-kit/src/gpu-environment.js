@@ -28,18 +28,76 @@ function copyLimits(limits = {}) {
   return out;
 }
 
+// WebGPU limit classes: maximum limits improve upward; alignment limits improve
+// downward. https://gpuweb.github.io/gpuweb/#limits
+const ALIGNMENT_LIMITS = new Set(['minUniformBufferOffsetAlignment', 'minStorageBufferOffsetAlignment']);
+
+export function composeWebGpuDeviceRequirements(requirements = []) {
+  if (!Array.isArray(requirements)) throw new Error('device requirements must be an array of descriptors');
+  const features = new Set();
+  const limits = {};
+  for (const requirement of requirements) {
+    if (!requirement || typeof requirement !== 'object' || Array.isArray(requirement)) {
+      throw new Error('each device requirement must be a descriptor');
+    }
+    const requiredFeatures = requirement.requiredFeatures ?? [];
+    if (typeof requiredFeatures === 'string' || typeof requiredFeatures[Symbol.iterator] !== 'function') {
+      throw new Error('requiredFeatures must be an iterable of feature names');
+    }
+    for (const feature of requiredFeatures) {
+      if (!isNonEmptyString(feature)) throw new Error('requiredFeatures must contain non-empty feature names');
+      features.add(feature);
+    }
+    const requiredLimits = requirement.requiredLimits ?? {};
+    if (typeof requiredLimits !== 'object' || Array.isArray(requiredLimits)) throw new Error('requiredLimits must be an object');
+    for (const [name, value] of Object.entries(requiredLimits)) {
+      if (!name.startsWith('max') && !ALIGNMENT_LIMITS.has(name)) throw new Error(`unknown limit class: ${name}`);
+      if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative safe integer`);
+      if (ALIGNMENT_LIMITS.has(name) && (value === 0 || value >= 2 ** 32 || (BigInt(value) & (BigInt(value) - 1n)) !== 0n)) {
+        throw new Error(`${name} must be a positive power of two below 2^32`);
+      }
+      const combine = ALIGNMENT_LIMITS.has(name) ? Math.min : Math.max;
+      limits[name] = Object.hasOwn(limits, name) ? combine(limits[name], value) : value;
+    }
+  }
+  return Object.freeze({ requiredFeatures: Object.freeze([...features].sort()), requiredLimits: Object.freeze(limits) });
+}
+
+export function validateWebGpuDeviceRequirements(device, requirements = {}) {
+  const composed = composeWebGpuDeviceRequirements([requirements]);
+  const enabled = featureList(device?.features);
+  const errors = [];
+  for (const feature of composed.requiredFeatures) {
+    if (!enabled.includes(feature)) errors.push(`required feature ${feature} is unavailable`);
+  }
+  for (const [name, required] of Object.entries(composed.requiredLimits)) {
+    const effective = device?.limits?.[name];
+    if (!Number.isFinite(effective)) errors.push(`required limit ${name} is unavailable`);
+    else if (ALIGNMENT_LIMITS.has(name) ? effective > required : effective < required) {
+      errors.push(`${name}: required ${required}, effective ${effective}`);
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 export function createWebGpuDeviceRequest(adapter, options = {}) {
   if (!adapter || typeof adapter !== 'object') {
     throw new Error('adapter must be an object');
   }
 
   const timestampPreference = options.timestampQuery || 'prefer';
-  const requiredFeatures = [];
+  const requirements = composeWebGpuDeviceRequirements([options.requirements ?? {}]);
+  const validation = validateWebGpuDeviceRequirements(adapter, requirements);
+  if (!validation.ok) throw new Error(`adapter does not meet device requirements: ${validation.errors.join('; ')}`);
+  const requiredFeatures = [...requirements.requiredFeatures];
+  if (timestampPreference === 'disable' && requiredFeatures.includes('timestamp-query')) {
+    throw new Error('timestamp-query is required but timestampQuery is disable');
+  }
   let timestampQuery = 'disabled';
 
   if (timestampPreference !== 'disable') {
     if (hasFeature(adapter.features, 'timestamp-query')) {
-      requiredFeatures.push('timestamp-query');
+      if (!requiredFeatures.includes('timestamp-query')) requiredFeatures.push('timestamp-query');
       timestampQuery = 'requested';
     } else if (timestampPreference === 'require') {
       throw new Error('timestamp-query required but not supported by adapter');
@@ -49,8 +107,8 @@ export function createWebGpuDeviceRequest(adapter, options = {}) {
   }
 
   return {
-    requiredFeatures,
-    requiredLimits: copyLimits(adapter.limits),
+    requiredFeatures: requiredFeatures.sort(),
+    requiredLimits: { ...copyLimits(adapter.limits), ...requirements.requiredLimits },
     timestampQuery,
   };
 }
@@ -60,11 +118,12 @@ export function requestBrowserWebGpuDevice(gpu, options = {}) {
     throw new Error('gpu.requestAdapter must be available');
   }
 
+  const requirements = options.requirements == null ? null : composeWebGpuDeviceRequirements([options.requirements]);
   return (async () => {
     const adapter = await gpu.requestAdapter(options.adapterOptions || {});
     if (!adapter) throw new Error('WebGPU adapter unavailable');
 
-    const deviceRequest = createWebGpuDeviceRequest(adapter, options);
+    const deviceRequest = createWebGpuDeviceRequest(adapter, { ...options, requirements });
     const descriptor = {
       requiredFeatures: deviceRequest.requiredFeatures,
       requiredLimits: deviceRequest.requiredLimits,
@@ -72,6 +131,13 @@ export function requestBrowserWebGpuDevice(gpu, options = {}) {
     if (isNonEmptyString(options.label)) descriptor.label = options.label;
 
     const device = await adapter.requestDevice(descriptor);
+    if (requirements) {
+      const validation = validateWebGpuDeviceRequirements(device, requirements);
+      if (!validation.ok) {
+        device?.destroy?.();
+        throw new Error(`effective device does not meet requirements: ${validation.errors.join('; ')}`);
+      }
+    }
     const backendIdentity = createWebGpuBackendIdentity({
       adapterName: options.adapterName || adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter',
       browser: options.browser || globalThis.navigator?.userAgent || null,

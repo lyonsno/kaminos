@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WebGPU Device Requirements Contract</title>
+<script type="module">
+import { composeWebGpuDeviceRequirements, createWebGpuDeviceRequest, validateWebGpuDeviceRequirements } from '../src/index.js';
+
+window.deviceRequirementsResult = (async () => {
+  let device;
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) throw new Error('WebGPU adapter unavailable');
+    const requirements = composeWebGpuDeviceRequirements([
+      { requiredFeatures: ['shader-f16'], requiredLimits: { maxBufferSize: 905969664, maxStorageBufferBindingSize: 905969664 } },
+      { requiredLimits: { maxStorageBuffersPerShaderStage: 9, minUniformBufferOffsetAlignment: adapter.limits.minUniformBufferOffsetAlignment } },
+    ]);
+    const requested = createWebGpuDeviceRequest(adapter, { requirements });
+    device = await adapter.requestDevice(requested);
+    const validation = validateWebGpuDeviceRequirements(device, requirements);
+    if (!validation.ok) throw new Error(validation.errors.join('; '));
+    const impossible = { requiredLimits: { maxBufferSize: adapter.limits.maxBufferSize * 2 } };
+    if (validateWebGpuDeviceRequirements(device, impossible).ok) throw new Error('impossible requirement accepted');
+    // A consumed adapter rejects even a valid descriptor. That rejection is a
+    // control, not evidence of above-limit validation.
+    let consumedValidRejected = false;
+    try { const unexpected = await adapter.requestDevice({}); unexpected.destroy(); } catch { consumedValidRejected = true; }
+    if (!consumedValidRejected) throw new Error('consumed adapter unexpectedly accepted a second device');
+    const negativeAdapter = await navigator.gpu.requestAdapter();
+    if (!negativeAdapter || negativeAdapter === adapter) throw new Error('negative probe requires a fresh adapter');
+    const negativeDescriptor = { requiredLimits: { maxBufferSize: negativeAdapter.limits.maxBufferSize * 2 } };
+    let nativeRejection = null;
+    try { const unexpected = await negativeAdapter.requestDevice(negativeDescriptor); unexpected.destroy(); }
+    catch (error) { nativeRejection = { name: error.name, message: error.message }; }
+    if (!nativeRejection) throw new Error('native requestDevice accepted above-adapter limit');
+    // A failed requirements request must not consume the adapter. Successful
+    // acquisition here rules out an already-consumed or unusable adapter.
+    const negativeControl = await negativeAdapter.requestDevice({});
+    negativeControl.destroy();
+    return {
+      status: 'succeeded', route: location.href, moduleUrl: new URL('../src/index.js', location.href).href,
+      browser: navigator.userAgent, adapter: { vendor: adapter.info.vendor, architecture: adapter.info.architecture, device: adapter.info.device, description: adapter.info.description },
+      requested, effective: { features: [...device.features], limits: Object.fromEntries(Object.keys(requirements.requiredLimits).map(key => [key, device.limits[key]])) },
+      validation, nativeRejection, consumedValidRejected,
+      negativeProbe: { requested: negativeDescriptor, adapterMaxBufferSize: negativeAdapter.limits.maxBufferSize, freshAdapter: true, subsequentValidRequestSucceeded: true },
+    };
+  } finally { device?.destroy(); }
+})();
+</script>

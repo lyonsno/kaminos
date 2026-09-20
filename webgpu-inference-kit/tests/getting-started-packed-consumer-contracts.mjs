@@ -25,10 +25,13 @@ try {
     ['pack', packageRoot, '--pack-destination', temporaryRoot, '--json'],
     temporaryRoot,
   ));
-  assert.equal(packOutput[0].version, '0.1.50');
+  assert.equal(packOutput[0].version, '0.1.51');
   assert.ok(packOutput[0].files.some(row => row.path === 'docs/getting-started.md'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port-runner.mjs'));
+  assert.ok(packOutput[0].files.some(row => row.path === 'examples/render-plus-inference.mjs'));
+  assert.ok(packOutput[0].files.some(row => row.path === 'examples/render-plus-inference.html'));
+  assert.ok(packOutput[0].files.some(row => row.path === 'examples/assets/brightness-still-life.jpg'));
 
   const tarball = join(temporaryRoot, packOutput[0].filename);
   await writeFile(join(temporaryRoot, 'package.json'), '{"type":"module","private":true}\n');
@@ -36,7 +39,10 @@ try {
   await copyFile(fixturePath, join(temporaryRoot, 'fake-device.mjs'));
   await writeFile(join(temporaryRoot, 'consumer.mjs'), `
 import { runMinimalModelPort } from '@kaminos/webgpu-inference-kit/examples/minimal-model-port';
+import { createRenderPlusInferenceExample } from '@kaminos/webgpu-inference-kit/examples/render-plus-inference';
 import { createMinimalWebGpuTestSurface } from './fake-device.mjs';
+
+if (typeof createRenderPlusInferenceExample !== 'function') throw new Error('render-plus-inference export unavailable');
 
 const surface = createMinimalWebGpuTestSurface();
 const report = await runMinimalModelPort({
