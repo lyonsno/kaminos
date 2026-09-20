@@ -5,6 +5,15 @@ import { test } from 'node:test';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const between = (a, b) => source.slice(source.indexOf(a), source.indexOf(b, source.indexOf(a)));
+const environmentFieldIds = ['exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast','env-blur-slider'];
+function recordingParameterTools() {
+  const calls=[];
+  return { calls,
+    finish: commit => calls.push(['finish',commit]),
+    discard: ids => calls.push(['discard',[...ids]]),
+    sync: () => calls.push(['sync']),
+  };
+}
 function environmentContext({ storage = new Map(), startup = false } = {}) {
   const elements = new Map(), listeners = {};
   const document = { querySelectorAll: () => [], getElementById(id) {
@@ -15,13 +24,14 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
     return elements.get(id);
   } };
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
+  const sceneParameterTools=recordingParameterTools();
   const context = vm.createContext({ document, scene, sceneObjects: [], currentEnvName: null,
     envCache: { studio: { name: 'studio' }, warehouse: { name: 'warehouse' } },
     HDR_ENVS: { studio: { exposure: 1.5, intensity: 1 }, warehouse: { exposure: 0.7, intensity: 0.5 } },
     environmentRecipes: {}, environmentLoadToken: 0, currentEnvMap: null, showEnvBg: false,
     renderer: { toneMappingExposure: 1 }, THREE: { Euler: class { constructor(x,y,z) { Object.assign(this,{x,y,z}); } } },
     updateBackground() {}, window: {}, console,
-    Event: class { constructor(type) { this.type = type; } }, rimLight: null, controls: {},
+    Event: class { constructor(type) { this.type = type; } }, rimLight: null, controls: {}, sceneParameterTools,
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key,value) => storage.set(key,value) },
   });
   vm.runInContext(between('// --- Environment Loading ---', '// --- File Loading ---'), context);
@@ -43,8 +53,10 @@ test('environment A/B/A recalls each lighting recipe, including exposure', async
   const c = environmentContext();
   const a = { exposure: 2.3, intensity: 1.7, rotation: 2.1, backgroundBrightness: 0.85, backgroundContrast: 1.6 };
   const b = { exposure: 0.8, intensity: 0.4, rotation: 4.1, backgroundBrightness: 0.3, backgroundContrast: 0.7 };
-  await c.loadEnvironment('studio'); tune(c,a);
-  await c.loadEnvironment('warehouse'); tune(c,b);
+  await c.loadEnvironment('studio'); tune(c,a);c.sceneParameterTools.calls.length=0;
+  await c.loadEnvironment('warehouse');
+  assert.deepEqual(c.sceneParameterTools.calls,[['finish',false],['discard',environmentFieldIds],['sync']], 'an environment switch cancels the transient edit, discards only replaced fields, then synchronizes visible values');
+  tune(c,b);
   await c.loadEnvironment('studio'); assert.deepEqual(snapshot(c), a);
   assert.equal(c.renderer.toneMappingExposure,a.exposure);
   await c.loadEnvironment('warehouse'); assert.deepEqual(snapshot(c),b);
@@ -64,6 +76,7 @@ test('two startups without edits retain stored map recipes, selection, and rim s
     assert.deepEqual(JSON.parse(JSON.stringify(c.environmentRecipes)),saved.environmentRecipes);
     assert.deepEqual(JSON.parse(JSON.stringify(c.readRimLightSettings())),saved.rimLight);
     assert.deepEqual(JSON.parse(storage.get('kaminos-settings')),saved,'restoring controls must not overwrite storage with partial startup state');
+    assert.ok(c.sceneParameterTools.calls.some(([kind])=>kind==='sync'),'restoration reaches the authored adapter synchronization path');
   }
 });
 
@@ -94,7 +107,8 @@ test('recipe validation preserves fine values and rejects invalid authored light
 test('rim off/on preserves its aim and fine-valued recipe', () => {
   const elements = new Map();
   const document = { getElementById(id) { if (!elements.has(id)) elements.set(id,{ value:'',min:'0',max:'1',checked:false,addEventListener(){} }); return elements.get(id); } };
-  const c=vm.createContext({document,rimLight:null,window:{},controls:{},saveSettings(){}});
+  const sceneParameterTools=recordingParameterTools();
+  const c=vm.createContext({document,rimLight:null,window:{},controls:{},saveSettings(){},sceneParameterTools});
   vm.runInContext(between('// --- Authored Rim Light ---','// --- Exposure / Intensity Controls ---'),c);
   const recipe={enabled:true,color:'#d6e5ff',intensity:123.45,azimuth:-237.89,elevation:34.56,distance:5.4321,angle:45.67,penumbra:0.1234,target:[1.234,2.345,-3.456]};
   c.setRimLight(recipe);document.getElementById('rim-enabled').checked=false;c.updateRimLight();
@@ -102,6 +116,7 @@ test('rim off/on preserves its aim and fine-valued recipe', () => {
   document.getElementById('rim-enabled').checked=true;c.updateRimLight();
   assert.deepEqual(JSON.parse(JSON.stringify(c.readRimLightSettings())),recipe);
   c.setRimLight();assert.equal(c.readRimLightSettings().enabled,false);
+  assert.ok(sceneParameterTools.calls.some(([kind])=>kind==='sync'),'rim restoration synchronizes the authored adapter');
   assert.throws(()=>c.setRimLight({...recipe,distance:0}),/range/);
 });
 
