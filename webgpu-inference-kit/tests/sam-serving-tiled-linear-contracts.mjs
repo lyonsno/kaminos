@@ -50,6 +50,9 @@ assert.match(packageJson.scripts.test, /sam-serving-tiled-linear-contracts\.mjs/
 function validateSharedKernelSource(source) {
   assert.equal((source.match(/let output_channel = output_base \+ local_id\.x \+ output_half \* 8u;/g) || []).length, 2, 'both initialization and store must use the lane x-coordinate for output channels');
   assert.equal((source.match(/let token_local = local_id\.y \+ token_half \* 8u;/g) || []).length, 1, 'the reduction must use the lane y-coordinate for token rows');
+  assert.equal((source.match(/let accumulator_index = token_half \* 2u \+ output_half;/g) || []).length, 3, 'initialization, reduction, and store must share the token-major accumulator mapping');
+  assert.match(source, /let token = token_base \+ local_id\.y \+ token_half \* 8u;/, 'the final store must use the lane y-coordinate for token rows');
+  assert.match(source, /output_values\[token \* output_channels \+ output_channel\] = activate\(sums\[accumulator_index\]\);/, 'the final store must write token-major output coordinates from the matching accumulator');
   assert.match(source, /sums\[accumulator_index\] = bias\[output_channel\];/, 'bias must use the owned output channel');
   assert.match(source, /input_tile\[token_local \* 16u \+ k_local\]/, 'input tiles must index token rows');
   assert.match(source, /weight_tile\[output_local \* 16u \+ k_local\]/, 'weight tiles must index output-channel rows');
@@ -67,10 +70,19 @@ function validateSharedKernelSource(source) {
   assert.equal(source.indexOf('activate(sums['), activation, 'activation must not move into the reduction loop');
 }
 
+function replaceLast(source, search, replacement) {
+  const index = source.lastIndexOf(search);
+  assert.notEqual(index, -1, `counterexample source must contain ${search}`);
+  return source.slice(0, index) + replacement + source.slice(index + search.length);
+}
+
 validateSharedKernelSource(shared);
 const semanticCounterexamples = [
   ['output axis', shared.replace('output_base + local_id.x + output_half * 8u', 'output_base + local_id.y + output_half * 8u')],
   ['token axis', shared.replace('local_id.y + token_half * 8u', 'local_id.x + token_half * 8u')],
+  ['transposed output store', shared.replace('output_values[token * output_channels + output_channel]', 'output_values[output_channel * token_count + token]')],
+  ['final token axis', shared.replace('let token = token_base + local_id.y + token_half * 8u;', 'let token = token_base + local_id.x + token_half * 8u;')],
+  ['store accumulator', replaceLast(shared, 'let accumulator_index = token_half * 2u + output_half;', 'let accumulator_index = output_half * 2u + token_half;')],
   ['input tail guard', shared.replace('if (token < token_count && input_channel < input_channels)', 'if (input_channel < input_channels)')],
   ['load barrier', shared.replace('workgroupBarrier();', '// missing load barrier')],
   ['activation timing', shared.replace('= activate(sums[accumulator_index]);', '= sums[accumulator_index];')],
@@ -80,11 +92,29 @@ for (const [name, counterexample] of semanticCounterexamples) {
   assert.throws(() => validateSharedKernelSource(counterexample), `shared-kernel semantic contract must reject ${name} drift`);
 }
 
+const deviceAwareHelperConsumers = [
+  'sam-image-vit-first-block-phase-program.js',
+  'sam-prompt-text-ingress-phase-program.js',
+  'sam-prompt-fpn-phase-program.js',
+  'sam-detr-encoder-phase-program.js',
+  'sam-detr-decoder-phase-program.js',
+  'sam-scoring-phase-program.js',
+  'sam-mask-tail-phase-program.js',
+];
+for (const file of deviceAwareHelperConsumers) {
+  const source = readFileSync(new URL(file, root), 'utf8');
+  assert.match(
+    source,
+    /function linearWorkgroups\(tokens, outputChannels, device\) \{\s*return tiledLinearDispatchForDevice\(tokens, outputChannels, device\);\s*\}/,
+    `${file} must delegate effective-device dispatch to the exercised shared helper`,
+  );
+}
+
 for (const [name, file, shaderSymbols] of consumers) {
   const source = readFileSync(new URL(file, root), 'utf8');
   assert.match(source, /sam-tiled-linear-wgsl\.js/, `${name} must consume the shared tiled-linear family`);
-  assert.match(source, /tiledLinearDispatch\(/, `${name} must dispatch output tiles rather than scalar outputs`);
-  assert.match(source, /maxComputeWorkgroupsPerDimension/, `${name} must bind tiled dispatch to the effective device limit`);
+  assert.match(source, /tiledLinearDispatch(?:ForDevice)?\(/, `${name} must dispatch output tiles rather than scalar outputs`);
+  assert.match(source, /maxComputeWorkgroupsPerDimension|tiledLinearDispatchForDevice\(tokens, outputChannels, device\)/, `${name} must bind tiled dispatch to the effective device limit`);
   assert.doesNotMatch(source, /\{ name:[^\n]+dispatch:\s*tiledLinearDispatch\(/, `${name} production phases must not bypass the device-aware tiled dispatch helper`);
   assert.doesNotMatch(source, /const LINEAR(?:_RELU|_GELU)?_WGSL = `/, `${name} must not retain a private scalar linear shader`);
   for (const shaderSymbol of shaderSymbols) assert.match(source, new RegExp(shaderSymbol), `${name} must register ${shaderSymbol}`);
@@ -144,9 +174,14 @@ for (const [surface, file, dispatches] of productionDispatches) {
   }
 }
 
-const { tiledLinearDispatch } = await import('../src/sam-tiled-linear-wgsl.js');
+const { tiledLinearDispatch, tiledLinearDispatchForDevice } = await import('../src/sam-tiled-linear-wgsl.js');
 assert.deepEqual(tiledLinearDispatch(33, 65), [5, 3, 1]);
 assert.deepEqual(tiledLinearDispatch(1_048_576, 16), [1, 65_535, 2]);
+assert.deepEqual(
+  tiledLinearDispatchForDevice(400, 16, { limits: { maxComputeWorkgroupsPerDimension: 7 } }),
+  [1, 7, 4],
+  'device-aware dispatch must honor the effective non-default workgroup limit',
+);
 assert.throws(() => tiledLinearDispatch(0, 16), /tokenCount.*positive integer/);
 assert.throws(() => tiledLinearDispatch(1, 1_048_561), /output tile count/);
 

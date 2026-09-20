@@ -28,7 +28,7 @@ import {
 import {
   SAM_TILED_LINEAR_RELU_WGSL,
   SAM_TILED_LINEAR_WGSL,
-  tiledLinearDispatch,
+  tiledLinearDispatchForDevice,
 } from './sam-tiled-linear-wgsl.js';
 
 export const SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID = 'sam3.detr-encoder.phase-program.webgpu-local.v0';
@@ -381,9 +381,7 @@ function workgroups(total, device) {
 }
 
 function linearWorkgroups(tokens, outputChannels, device) {
-  return tiledLinearDispatch(tokens, outputChannels, {
-    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
-  });
+  return tiledLinearDispatchForDevice(tokens, outputChannels, device);
 }
 
 async function sha256Hex(buffer) {

@@ -12,6 +12,7 @@ import {
   SAM_TILED_LINEAR_RELU_WGSL,
   SAM_TILED_LINEAR_WGSL,
   tiledLinearDispatch,
+  tiledLinearDispatchForDevice,
 } from '../src/sam-tiled-linear-wgsl.js';
 
 const kernelTokens = {
@@ -134,7 +135,11 @@ function checkProduction(route, source, shape, index = 0) {
   bindings.workgroups = (total, device) => { logicalTotal = total; return workgroups(total, device); };
   const linearHelper = source.match(/function linearWorkgroups\([^]*?\n}/);
   if (linearHelper) {
-    const linearWorkgroups = new Function('tiledLinearDispatch', `${linearHelper[0]}; return linearWorkgroups;`)(tiledLinearDispatch);
+    const linearWorkgroups = new Function(
+      'tiledLinearDispatch',
+      'tiledLinearDispatchForDevice',
+      `${linearHelper[0]}; return linearWorkgroups;`,
+    )(tiledLinearDispatch, tiledLinearDispatchForDevice);
     bindings.linearWorkgroups = (tokens, outputChannels, device) => {
       logicalTotal = tokens * outputChannels;
       tiledDispatch = linearWorkgroups(tokens, outputChannels, device);

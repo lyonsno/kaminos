@@ -195,6 +195,12 @@ export function tiledLinearDispatch(tokenCount, outputChannels, options = {}) {
   return [outputTiles, dispatchY, dispatchZ];
 }
 
+export function tiledLinearDispatchForDevice(tokenCount, outputChannels, device) {
+  return tiledLinearDispatch(tokenCount, outputChannels, {
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
+}
+
 export const SAM_TILED_LINEAR_TILE = Object.freeze({
   outputRows: OUTPUT_TILE,
   outputColumns: OUTPUT_TILE,

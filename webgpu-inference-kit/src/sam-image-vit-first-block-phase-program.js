@@ -23,7 +23,7 @@ import {
 import {
   SAM_TILED_LINEAR_GELU_WGSL,
   SAM_TILED_LINEAR_WGSL,
-  tiledLinearDispatch,
+  tiledLinearDispatchForDevice,
 } from './sam-tiled-linear-wgsl.js';
 
 export const SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-vit-first-block.phase-program.webgpu-local.v0';
@@ -683,9 +683,7 @@ function workgroups(total) {
 }
 
 function linearWorkgroups(tokens, outputChannels, device) {
-  return tiledLinearDispatch(tokens, outputChannels, {
-    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
-  });
+  return tiledLinearDispatchForDevice(tokens, outputChannels, device);
 }
 
 export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {

@@ -26,7 +26,7 @@ import {
 } from './sam-online-attention-wgsl.js';
 import {
   SAM_TILED_LINEAR_WGSL,
-  tiledLinearDispatch,
+  tiledLinearDispatchForDevice,
 } from './sam-tiled-linear-wgsl.js';
 
 export const SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-text-ingress.phase-program.webgpu-local.v0';
@@ -530,9 +530,7 @@ function workgroups(total) {
 }
 
 function linearWorkgroups(tokens, outputChannels, device) {
-  return tiledLinearDispatch(tokens, outputChannels, {
-    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
-  });
+  return tiledLinearDispatchForDevice(tokens, outputChannels, device);
 }
 
 function linearDims(stage, label, rows, inChannels, outChannels) {
