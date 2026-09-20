@@ -5,7 +5,7 @@ const index=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const bounce=readFileSync(new URL('../fire-light-field-bounce.mjs',import.meta.url),'utf8');
 const volumeCore=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 assert.match(index,/volume_light_field_bounce/,'static bounce is an explicit route choice');
-assert.match(index,/bouncePatchCount = Math\.min\([\s\S]*maxSamplersPerShaderStage[\s\S]*bounceReservedSamplerCount/,'the live route derives its sparse patch basis from the effective adapter sampler capacity');
+assert.match(index,/bounceSampledResourceCapacity = Math\.min\([\s\S]*maxSamplersPerShaderStage[\s\S]*maxSampledTexturesPerShaderStage[\s\S]*bouncePatchCount = Math\.min\([\s\S]*bounceSampledResourceCapacity - bounceReservedSamplerCount/,'the live route derives its sparse patch basis from both effective adapter sampler and sampled-texture capacity');
 assert.match(index,/requested:bounceRequested,patchCount:bouncePatchCount,resolution:64/,'the live route cannot overcompile its measured sampler capacity');
 assert.match(index,/bounceRequested\s*\?\s*createStaticDiffuseBounce[\s\S]*:\s*createDisabledStaticDiffuseBounce/,'the ordinary non-bounce route does not compile or sample the bounce machinery');
 assert.match(volumeCore,/requiredLimits\.maxSampledTexturesPerShaderStage = adapter\.limits\.maxSampledTexturesPerShaderStage/,'the shared device does not silently cap sampled textures below the adapter capacity');
@@ -18,7 +18,7 @@ assert.match(index,/maxSampledTexturesPerShaderStage: sharedGpu\?\.device\?\.lim
 assert.match(index,/maxSamplersPerShaderStage: sharedGpu\?\.device\?\.limits\?\.maxSamplersPerShaderStage/,'the receiver receipts its effective sampler capacity');
 assert.match(index,/bouncePatchCapacity:[\s\S]*reservedSamplerCount: bounceReservedSamplerCount/,'the receiver receipts why its sparse basis has the effective patch count');
 assert.match(bounce,/setEnabled\(value\)/,'the bounce machine exposes a non-destructive runtime enable control');
-assert.match(bounce,/geometryRevision[\s\S]*cachedGeometryRevision/,'surface visibility cache is keyed to scene geometry revision');
+assert.match(bounce,/staticBounceGeometryRevision[\s\S]*cachedGeometryRevision/,'surface visibility cache fingerprints the authored geometry and material state it actually consumes');
 assert.match(bounce,/createFireLightFieldShadow[\s\S]*requested,resolution/,'each surface patch uses cached geometry visibility rather than unoccluded fill');
 assert.match(bounce,/patchRadiance[\s\S]*receiverCosine[\s\S]*patchCosine[\s\S]*distanceSq/,'bounce transfer includes both cosine terms and distance falloff');
 assert.match(bounce,/fireIrradianceAtNode\(position\)\.max\(vec3\(0\)\)/,'surface patches inherit nonnegative live spatial near-plus-far incident irradiance instead of a second point-source collapse');

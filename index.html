@@ -9485,9 +9485,13 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   // uses eight samplers, so derive the sparse basis from the effective device
   // limit instead of compiling a basis the adapter cannot bind.
   const bounceReservedSamplerCount = 8;
+  const bounceSampledResourceCapacity = Math.min(
+    sharedGpu?.device?.limits?.maxSamplersPerShaderStage ?? 16,
+    sharedGpu?.device?.limits?.maxSampledTexturesPerShaderStage ?? 16
+  );
   const bouncePatchCount = Math.min(
     32,
-    Math.max(1, (sharedGpu?.device?.limits?.maxSamplersPerShaderStage ?? 16) - bounceReservedSamplerCount)
+    Math.max(1, bounceSampledResourceCapacity - bounceReservedSamplerCount)
   );
   const fireBounce = bounceRequested ? createStaticDiffuseBounce({
     renderer,scene,fireShadow,

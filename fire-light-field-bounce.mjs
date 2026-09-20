@@ -11,7 +11,7 @@ function materialForTriangle(mesh,triangleOffset) {
 }
 
 function eligibleMaterial(material) {
-  return !!material&&!material.transparent&&!(material.opacity<1)&&!(material.alphaTest>0)
+  return !!material&&material.visible!==false&&!material.transparent&&!(material.opacity<1)&&!(material.alphaTest>0)
     &&!(material.transmission>0)&&material.transmissionNode==null&&material.backdropNode==null;
 }
 
@@ -25,6 +25,61 @@ function belongsToAuthoredSceneObject(object) {
     if(current.userData?.kaminosSceneObject) return true;
   }
   return false;
+}
+
+function nodeIdentity(node) {
+  return node?.uuid??node?.id??(node==null?null:'present');
+}
+
+function materialRevisionState(material) {
+  if(!material) return null;
+  return {
+    uuid:material.uuid,version:material.version,visible:material.visible!==false,side:material.side,
+    transparent:!!material.transparent,opacity:material.opacity,alphaTest:material.alphaTest,
+    transmission:material.transmission??0,color:material.color?.isColor?material.color.toArray():null,
+    alphaTestNode:nodeIdentity(material.alphaTestNode),transmissionNode:nodeIdentity(material.transmissionNode),
+    backdropNode:nodeIdentity(material.backdropNode),
+  };
+}
+
+function compactRevision(signature) {
+  let first=0x811c9dc5,second=0x9e3779b9;
+  for(let i=0;i<signature.length;i++) {
+    const code=signature.charCodeAt(i);
+    first=Math.imul(first^code,0x01000193);
+    second=Math.imul(second^code,0x85ebca6b);
+  }
+  return `authored-static-v1:${(first>>>0).toString(16).padStart(8,'0')}${(second>>>0).toString(16).padStart(8,'0')}`;
+}
+
+// Fingerprint the complete authored state that controls patch membership,
+// placement, albedo, and visibility. This deliberately does not rely on the
+// authoring shell's coarse mutation token: direct transforms and material or
+// geometry edits must invalidate the cache too.
+export function staticBounceGeometryRevision(scene,{origin=new THREE.Vector3()}={}) {
+  const meshes=[];
+  scene.updateMatrixWorld(true);
+  scene.traverseVisible(object=>{
+    if(!object.isMesh||!belongsToAuthoredSceneObject(object)) return;
+    const geometry=object.geometry;
+    const position=geometry?.attributes?.position;
+    const index=geometry?.index;
+    const materials=Array.isArray(object.material)?object.material:[object.material];
+    meshes.push({
+      uuid:object.uuid,castShadow:!!object.castShadow,
+      skinned:!!object.isSkinnedMesh,instanced:!!object.isInstancedMesh,
+      matrixWorld:object.matrixWorld.elements,
+      geometry:geometry?{
+        uuid:geometry.uuid,version:geometry.version??0,
+        position:position?{count:position.count,itemSize:position.itemSize,normalized:!!position.normalized,version:position.version}:null,
+        index:index?{count:index.count,itemSize:index.itemSize,normalized:!!index.normalized,version:index.version}:null,
+        groups:geometry.groups.map(group=>[group.start,group.count,group.materialIndex]),
+      }:null,
+      materials:materials.map(materialRevisionState),
+    });
+  });
+  meshes.sort((left,right)=>left.uuid.localeCompare(right.uuid));
+  return JSON.stringify({origin:origin.toArray(),meshes});
 }
 
 export function collectStaticBounceTriangles(scene,{origin=new THREE.Vector3()}={}) {
@@ -160,9 +215,12 @@ export function createStaticDiffuseBounce({
     directBoundary:'accepted-direct-preserved',renderCount:0,
   };
   let cachedGeometryRevision=null;
-  const render=geometryRevision=>{
+  const render=externalGeometryRevision=>{
     if(!requested) return false;
-    if(status.effective&&geometryRevision===cachedGeometryRevision) return true;
+    const authoredGeometryRevision=staticBounceGeometryRevision(scene,{origin});
+    const geometryRevision=JSON.stringify([externalGeometryRevision??null,authoredGeometryRevision]);
+    if(geometryRevision===cachedGeometryRevision) return status.effective;
+    const revisionIdentity=compactRevision(geometryRevision);
     const patches=selectStaticBouncePatches(scene,{count:patchCount,origin});
     for(let i=0;i<slots.length;i++) {
       const slot=slots[i],patch=patches[i];
@@ -175,10 +233,10 @@ export function createStaticDiffuseBounce({
       slot.area.value=patch.area;
       slot.active.value=1;
       slot.identity=patch.identity;
-      slot.visibility.render(`bounce:${geometryRevision}:${patch.identity}`);
+      slot.visibility.render(`bounce:${revisionIdentity}:${patch.identity}`);
     }
     cachedGeometryRevision=geometryRevision;
-    status.cachedGeometryRevision=geometryRevision;
+    status.cachedGeometryRevision=revisionIdentity;
     status.patchCount=patches.length;
     status.effective=patches.length>0;
     status.reason=status.effective?null:'no-static-opaque-patches';
