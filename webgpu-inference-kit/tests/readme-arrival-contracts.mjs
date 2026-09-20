@@ -6,11 +6,103 @@ import * as kit from '../src/index.js';
 
 const packageRoot = new URL('../', import.meta.url);
 const readPackageFile = relativePath => readFile(new URL(relativePath, packageRoot), 'utf8');
+const readRepoFile = relativePath => readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');
 
-const [readme, packageJson] = await Promise.all([
+const [readme, packageJson, rootReadme, samDemoGuide] = await Promise.all([
   readPackageFile('README.md'),
   readPackageFile('package.json').then(JSON.parse),
+  readRepoFile('README.md'),
+  readPackageFile('docs/sam-semantic-demo.md'),
 ]);
+
+const section = (copy, heading) => {
+  const start = copy.indexOf(`${heading}\n`);
+  assert.notEqual(start, -1, `${heading} section must exist`);
+  const end = copy.indexOf('\n## ', start + heading.length);
+  return copy.slice(start, end === -1 ? copy.length : end);
+};
+
+const passage = (copy, startNeedle, endNeedle) => {
+  const start = copy.indexOf(startNeedle);
+  assert.notEqual(start, -1, `SAM passage must contain ${startNeedle}`);
+  const end = endNeedle === null ? copy.length : copy.indexOf(endNeedle, start);
+  assert.notEqual(end, -1, `SAM passage must end at ${endNeedle}`);
+  return copy.slice(start, end);
+};
+
+const withClaim = (copy, anchor, claim) => {
+  assert.ok(copy.includes(anchor), `fixture anchor must exist: ${anchor}`);
+  return copy.replace(anchor, `${anchor} ${claim}`);
+};
+
+const assertSurfaceSemantics = (name, copy, patterns) => {
+  for (const [label, pattern] of patterns) {
+    assert.match(copy, pattern, `${name} must preserve ${label}`);
+  }
+};
+
+const assertNoSamOverclaim = (name, copy) => {
+  const affirmativeUnits = copy
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(unit => unit.trim())
+    .filter(Boolean)
+    .filter(unit => !/\b(?:not|no|never|cannot|can't|does not|do not|is not|isn't|without|requires?|unproved|unclaimed)\b/i.test(unit));
+  const overclaims = [
+    ['presentation/frame/latency guarantee', /\b(?:guarantees?|maintains?|sustains?|delivers?)\b.{0,100}\b(?:\d+\s*fps|frames? per second|frame[- ]?(?:pacing|latency|budget)|presentation cadence|responsive presentation)\b/i],
+    ['adaptive or preemptive scheduling', /\b(?:adaptively budgets?|adaptive frame[- ]?budget(?:ing)?|preempts?)\b/i],
+    ['video or tracking support', /\b(?:supports?|provides?)\b.{0,60}\b(?:video tracking|tracking across)\b/i],
+    ['broad semantic or native-resolution quality', /\b(?:semantically accurate|broad semantic accuracy|native-resolution (?:quality|universality)|native resolution)\b/i],
+    ['general throughput guarantee', /\b(?:guarantees?|delivers?|provides?)\b.{0,100}\b(?:streaming\s+)?throughput\b/i],
+  ];
+  for (const [label, pattern] of overclaims) {
+    assert.doesNotMatch(affirmativeUnits.join('\n'), pattern, `${name} must not claim ${label}`);
+  }
+};
+
+const assertSamPublicClaims = ({ rootReadme: root, packageReadme, samDemoGuide: guide }) => {
+  const rootSection = section(root, '## WebGPU Inference Kit');
+  const packageSection = section(packageReadme, '## One Runtime, Different Models');
+  const surfaces = {
+    'root README': passage(rootSection, '| [SAM 3.1]', '\n\nThe package includes'),
+    'package README': passage(packageSection, '| [SAM 3.1]', '\n\n```text'),
+    'SAM demo guide': guide,
+  };
+
+  assertSurfaceSemantics('root README', surfaces['root README'], [
+    ['an image-plus-text mask result', /masks from an image and text prompt/i],
+    ['a complete browser WebGPU route', /complete browser WebGPU route/i],
+    ['persistent model resources', /persistent model package/i],
+    ['cached image features', /cached image features/i],
+    ['queued prompts', /queued prompts/i],
+    ['same-device foreground submissions at existing boundaries', /same-device foreground submissions[\s\S]*existing phase boundaries/i],
+    ['exact cold/warm witness equality', /cold and warm mask outputs were bit-exact/i],
+    ['an exactly empty negative control', /nonsense-prompt control returned exactly\s+empty/i],
+  ]);
+  assertSurfaceSemantics('package README', surfaces['package README'], [
+    ['an image-plus-text mask result', /masks from an image and text prompt/i],
+    ['a complete browser WebGPU route', /complete browser WebGPU route/i],
+    ['persistent authenticated model resources', /authenticated persistent model resources/i],
+    ['cached image features', /cached image features/i],
+    ['queued requests', /queued semantic requests/i],
+    ['same-device foreground submissions at existing boundaries', /same-device foreground submissions[\s\S]*existing phase boundaries/i],
+    ['exact cold/warm witness equality', /bit-exact cold and warm mask outputs/i],
+    ['an exactly empty negative control', /exactly\s+empty nonsense-prompt control/i],
+  ]);
+  assertSurfaceSemantics('SAM demo guide', surfaces['SAM demo guide'], [
+    ['an image-plus-text browser WebGPU route', /image and text prompt[\s\S]*in browser WebGPU/i],
+    ['persistent authenticated model resources', /authenticated host views[\s\S]*persistent GPU weights/i],
+    ['cached image features', /reuses its image features/i],
+    ['queued requests', /registered session route's queue/i],
+    ['same-device foreground submissions at existing boundaries', /exact device and queue[\s\S]*existing model boundaries/i],
+    ['exact cold/warm four-instance witness equality', /cold and warm retained the same four instances and were bit-exact/i],
+    ['an exactly empty negative control', /negative control retained no candidate and produced exact-zero mask and logit output/i],
+  ]);
+
+  for (const [name, copy] of Object.entries(surfaces)) assertNoSamOverclaim(name, copy);
+  const combined = Object.values(surfaces).join('\n');
+  assert.doesNotMatch(combined, /In development: SAM/i);
+  assert.doesNotMatch(combined, /foreground rendering is the next integration target/i);
+};
 
 assert.equal(typeof kit.createWebGpuInferenceSession, 'function');
 assert.match(readme, /createWebGpuInferenceSession/);
@@ -28,15 +120,48 @@ for (const repo of ['moge-webgpu', 'sf3d-webgpu', 'sharp-webgpu', 'kimodo-webgpu
   assert.ok(columns.every(Boolean), `${repo} must populate every column`);
 }
 assert.match(modelRows.find(line => line.includes('/kimodo-webgpu)')), /text embeddings.*external server/i);
-const samRows = modelRows.filter(line => line.includes('[SAM 3.1]'));
-assert.equal(samRows.length, 1, 'SAM 3.1 must have one model-family row');
-assert.match(samRows[0], /image and text prompt/i);
-assert.match(samRows[0], /cached image features/i);
-assert.match(readme, /complete browser WebGPU route/i);
-assert.match(readme, /same-device foreground submissions/i);
-assert.match(readme, /not a frame-pacing claim/i);
-assert.doesNotMatch(readme, /In development: SAM/i);
-assert.doesNotMatch(readme, /foreground rendering is the next integration target/i);
+assertSamPublicClaims({ rootReadme, packageReadme: readme, samDemoGuide });
+const contradictoryClaims = [
+  {
+    name: 'root-README frame guarantee',
+    field: 'rootReadme',
+    value: withClaim(rootReadme, 'composition result, not a frame-pacing claim.', 'SAM guarantees 60 FPS during inference.'),
+    expected: /presentation|frame|latency/i,
+  },
+  {
+    name: 'package adaptive/preemptive scheduling claim',
+    field: 'packageReadme',
+    value: withClaim(readme, "model's existing phase boundaries.", 'SAM adaptively budgets every frame and preempts submitted GPU dispatches.'),
+    expected: /adaptive|preemptive/i,
+  },
+  {
+    name: 'demo video-tracking claim',
+    field: 'samDemoGuide',
+    value: withClaim(samDemoGuide, '## Evidence Boundary', 'SAM supports video tracking across arbitrary clips.'),
+    expected: /video|tracking/i,
+  },
+  {
+    name: 'root broad semantic/native-resolution claim',
+    field: 'rootReadme',
+    value: withClaim(rootReadme, 'composition result, not a frame-pacing claim.', 'SAM is semantically accurate across arbitrary images and prompts at native resolution.'),
+    expected: /semantic|native-resolution/i,
+  },
+  {
+    name: 'package general-throughput claim',
+    field: 'packageReadme',
+    value: withClaim(readme, "model's existing phase boundaries.", 'SAM guarantees streaming throughput for every supported model package.'),
+    expected: /throughput/i,
+  },
+];
+for (const fixture of contradictoryClaims) {
+  const surfaces = { rootReadme, packageReadme: readme, samDemoGuide };
+  surfaces[fixture.field] = fixture.value;
+  assert.throws(
+    () => assertSamPublicClaims(surfaces),
+    fixture.expected,
+    `${fixture.name} must fail even when approved phrases remain`,
+  );
+}
 assert.doesNotMatch(readme, /These ports share a common application-facing shape/);
 assert.doesNotMatch(readme, /That firing exercises the architecture.*persistent model resources/);
 
