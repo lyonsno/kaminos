@@ -4,7 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 const packageSource = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
 const routeSource = readFileSync(new URL('../src/sam31-interactive-pointer-phase-program.js', import.meta.url), 'utf8');
 const memoryAttentionSource = readFileSync(new URL('../src/sam31-memory-attention-phase-program.js', import.meta.url), 'utf8');
-const indexSource = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
+const kit = await import('@kaminos/webgpu-inference-kit');
+const pointer = await import('../src/sam31-interactive-pointer-phase-program.js');
 const smokeSource = readFileSync(new URL('../smokes/sam31-interactive-pointer-parity.js', import.meta.url), 'utf8');
 const runnerUrl = new URL('../tools/sam31-interactive-pointer-browser-parity-smoke.mjs', import.meta.url);
 
@@ -16,7 +17,10 @@ for (const token of [
   'createSam31InteractivePointerPhaseProgramRouteDefinition',
   'createSam31InteractivePointerPhaseProgramRouteReceipt',
   'runSam31InteractivePointerPhaseProgramRoute',
-]) assert.match(indexSource, new RegExp(token), `package surface must export ${token}`);
+]) {
+  assert.notEqual(pointer[token], undefined, `pointer must implement ${token}`);
+  assert.equal(kit[token], pointer[token], `package surface must export ${token}`);
+}
 
 assert.match(packageSource, /sam31-interactive-pointer-phase-program-contracts\.mjs/, 'aggregate tests must cover the interactive pointer route');
 assert.equal(existsSync(runnerUrl), true, 'interactive pointer browser evidence runner must exist');

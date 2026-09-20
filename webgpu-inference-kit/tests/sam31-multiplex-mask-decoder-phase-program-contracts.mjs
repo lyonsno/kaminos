@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as kit from '@kaminos/webgpu-inference-kit';
+import * as decoder from '../src/sam31-multiplex-mask-decoder-phase-program.js';
 
-const indexSource = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
 const packageSource = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
 const decoderSource = readFileSync(new URL('../src/sam31-multiplex-mask-decoder-phase-program.js', import.meta.url), 'utf8');
 const browserSource = readFileSync(new URL('../smokes/sam31-multiplex-mask-decoder-parity.js', import.meta.url), 'utf8');
@@ -12,7 +13,10 @@ for (const token of [
   'createSam31MultiplexMaskDecoderPhaseProgramCpuOracle',
   'createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition',
   'runSam31MultiplexMaskDecoderPhaseProgramRoute',
-]) assert.match(indexSource, new RegExp(token), `public package surface must expose ${token}`);
+]) {
+  assert.notEqual(decoder[token], undefined, `decoder must implement ${token}`);
+  assert.equal(kit[token], decoder[token], `public package surface must expose ${token}`);
+}
 
 assert.match(packageSource, /sam31-multiplex-mask-decoder-phase-program-contracts\.mjs/, 'the full suite must execute multiplex decoder contracts');
 assert.match(packageSource, /test:live:sam31-multiplex-decoder-webgpu/, 'the package must expose the live multiplex decoder witness');
