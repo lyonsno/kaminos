@@ -28,7 +28,17 @@ function validateBlockedKernelSource(source) {
   assert.match(source, /for \(var tile_index = lane; tile_index < 2048u; tile_index = tile_index \+ 64u\)/, 'all 64 invocations must cooperatively load both complete tiles');
   assert.match(source, /let tile_row = tile_index \/ 128u;/, 'cooperative loads must preserve tile rows');
   assert.match(source, /let tile_column = tile_index % 128u;/, 'cooperative loads must preserve contiguous reduction columns');
+  assert.match(source, /input_tile\[tile_index\] = 0\.0;\s*if \(token < token_count && input_channel < input_channels\)/, 'input tile rows must be zeroed before guarded partial-tile loads');
+  assert.match(source, /weight_tile\[tile_index\] = 0\.0;\s*if \(output_channel < output_channels && input_channel < input_channels\)/, 'weight tile rows must be zeroed before guarded partial-tile loads');
   assert.match(source, /for \(var k_local = 0u; k_local < 128u; k_local = k_local \+ 1u\)/, 'each loaded reduction block must be consumed completely in order');
+  assert.match(source, /let input0 = input_tile\[local_id\.y \* 128u \+ k_local\];/, 'input0 must read the first token row');
+  assert.match(source, /let input1 = input_tile\[\(local_id\.y \+ 8u\) \* 128u \+ k_local\];/, 'input1 must read the second token row');
+  assert.match(source, /let weight0 = weight_tile\[local_id\.x \* 128u \+ k_local\];/, 'weight0 must read the first output row');
+  assert.match(source, /let weight1 = weight_tile\[\(local_id\.x \+ 8u\) \* 128u \+ k_local\];/, 'weight1 must read the second output row');
+  assert.match(source, /sum00 = sum00 \+ input0 \* weight0;/, 'sum00 must pair the first token and first output rows');
+  assert.match(source, /sum01 = sum01 \+ input0 \* weight1;/, 'sum01 must pair the first token and second output rows');
+  assert.match(source, /sum10 = sum10 \+ input1 \* weight0;/, 'sum10 must pair the second token and first output rows');
+  assert.match(source, /sum11 = sum11 \+ input1 \* weight1;/, 'sum11 must pair the second token and second output rows');
   for (const accumulator of ['sum00', 'sum01', 'sum10', 'sum11']) {
     assert.match(source, new RegExp(`var ${accumulator} =`), `${accumulator} must be an explicit scalar accumulator`);
     assert.match(source, new RegExp(`${accumulator} = ${accumulator}\\s*\\+`), `${accumulator} must preserve scalar accumulation order`);
@@ -46,6 +56,14 @@ validateBlockedKernelSource(shared);
 const semanticCounterexamples = [
   ['narrow reduction tile', shared.replaceAll('128u', '16u')],
   ['missing reuse barrier', shared.replace('workgroupBarrier();', '// missing load barrier')],
+  ['missing input tail zero', shared.replace('input_tile[tile_index] = 0.0;', '// missing input tail zero')],
+  ['missing weight tail zero', shared.replace('weight_tile[tile_index] = 0.0;', '// missing weight tail zero')],
+  ['token1 aliases token0 row', shared.replace('(local_id.y + 8u) * 128u + k_local', 'local_id.y * 128u + k_local')],
+  ['output1 aliases output0 row', shared.replace('(local_id.x + 8u) * 128u + k_local', 'local_id.x * 128u + k_local')],
+  ['sum00 crosses operands', shared.replace('sum00 = sum00 + input0 * weight0;', 'sum00 = sum00 + input1 * weight0;')],
+  ['sum01 crosses operands', shared.replace('sum01 = sum01 + input0 * weight1;', 'sum01 = sum01 + input0 * weight0;')],
+  ['sum10 crosses operands', shared.replace('sum10 = sum10 + input1 * weight0;', 'sum10 = sum10 + input0 * weight0;')],
+  ['sum11 crosses operands', shared.replace('sum11 = sum11 + input1 * weight1;', 'sum11 = sum11 + input0 * weight0;')],
   ['transposed first output store', shared.replace('output_values[token0 * output_channels + output0]', 'output_values[output0 * token_count + token0]')],
   ['omitted fourth accumulator update', shared.replace('sum11 = sum11', 'sum11_omitted = sum11')],
   ['dynamic accumulator regression', shared.replace('var sum00 =', 'var sums: array<f32, 4>;\n  var sum00 =')],
