@@ -5,7 +5,13 @@ const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8')
 const witness = readFileSync(new URL('../volume-physical-color-witness.mjs', import.meta.url), 'utf8');
 
 assert.match(core, /async function sampleEmissiveFrameProfile\(\)/);
+const lightProfile = core.split('async function sampleEmissiveLightProfile()')[1]?.split('\n  async function ')[0] ?? '';
 const profile = core.split('async function sampleEmissiveFrameProfile()')[1]?.split('\n  function ')[0] ?? '';
+assert.match(lightProfile, /const repeats = 8;/);
+assert.match(lightProfile, /emissiveLightField\.encode\(encoder,currentFluid\);\s*for/, 'warmup must execute before the measured batch');
+assert.match(lightProfile, /for \(let repeat = 0; repeat < repeats; repeat\+\+\)/);
+assert.match(lightProfile, /const totalMs=Number\(times\[1\]-times\[0\]\)\/1e6/);
+assert.match(lightProfile, /ms:totalMs\/repeats/);
 assert.match(profile, /createQuerySet\(\{ type: 'timestamp', count: 4 \}\)/);
 assert.match(profile, /encodeDraw\(encoder, frameTexture\.createView\(\), 'same-state emissive frame profile', readbackPipeline,/);
 assert.match(profile, /emissiveTimestampWrites:\s*\{ querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 \}/);
