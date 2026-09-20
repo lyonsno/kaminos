@@ -7,14 +7,13 @@ const witness = readFileSync(new URL('../volume-physical-color-witness.mjs', imp
 assert.match(core, /EMISSIVE_LIGHT_TRANSPORT_MODEL/);
 assert.match(core, /model:\s*EMISSIVE_LIGHT_TRANSPORT_MODEL/);
 assert.match(core, /directions:\s*EMISSIVE_LIGHT_DIRECTION_COUNT/);
-assert.match(core, /traversal:\s*'direct-lattice-rays'/);
+assert.match(core, /slabs:\s*EMISSIVE_LIGHT_GRID/);
 assert.doesNotMatch(core, /model:\s*'six-direction-single-scattering-v1'/);
 assert.match(
   witness,
-  /result\.state\.physicalColor\.incidentLight\?\.model,\s*'fourteen-direction-cubic-lattice-ordinates-v1'/,
+  /result\.state\.physicalColor\.incidentLight\?\.model,\s*'twenty-four-direction-cubic-short-characteristics-v1'/,
   'native evidence must reject a stale or fallback transport identity',
 );
-assert.match(witness, /result\.state\.physicalColor\.incidentLight\?\.directions,\s*14/);
-assert.match(witness, /result\.state\.physicalColor\.incidentLight\?\.traversal,\s*'direct-lattice-rays'/);
+assert.match(witness, /result\.state\.physicalColor\.incidentLight\?\.slabs,\s*20/);
 
 console.log('emissive oblique runtime identity: cockpit and native witness require the effective transport route');

@@ -44,33 +44,38 @@ for (const [nm, x, y, z] of CIE_1931_2DEG) {
 }
 const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => sum + v*reactionXYZ[i], 0)));
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
-export const EMISSIVE_LIGHT_GRID = 32;
-const inverseSqrtThree = 1 / Math.sqrt(3);
-// This 14-point degree-five cube-symmetric rule combines the six axes with all
-// eight body diagonals. Every ordinate follows exact cell-center lattice lines.
-export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze([
-  Object.freeze([1, 0, 0]), Object.freeze([-1, 0, 0]),
-  Object.freeze([0, 1, 0]), Object.freeze([0, -1, 0]),
-  Object.freeze([0, 0, 1]), Object.freeze([0, 0, -1]),
-  ...Array.from({ length: 8 }, (_, signs) => Object.freeze([0, 1, 2].map(
-    axis => (signs & (1 << axis) ? -1 : 1) * inverseSqrtThree,
-  ))),
-]);
-export const EMISSIVE_LIGHT_WEIGHTS = Object.freeze([
-  ...Array(6).fill(1 / 15),
-  ...Array(8).fill(3 / 40),
-]);
+export const EMISSIVE_LIGHT_GRID = 20;
+const cubicDirectionMinor = 1 / Math.sqrt(8);
+const cubicDirectionMajor = Math.sqrt(3) / 2;
+// Every signed permutation of normalized (1,1,sqrt(6)) is fully oblique, antipodal,
+// and closed under the Cartesian grid's proper cube rotations.
+export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze(Array.from({ length: 3 * 8 }, (_, variant) => {
+  const majorAxis = Math.floor(variant / 8);
+  const signs = variant % 8;
+  const direction = [cubicDirectionMinor, cubicDirectionMinor, cubicDirectionMinor];
+  direction[majorAxis] = cubicDirectionMajor;
+  for (let axis = 0; axis < 3; axis++) if (signs & (1 << axis)) direction[axis] *= -1;
+  return Object.freeze(direction);
+}));
 export const EMISSIVE_LIGHT_DIRECTION_COUNT = EMISSIVE_LIGHT_DIRECTIONS.length;
-export const EMISSIVE_LIGHT_RAY_COUNT = 6 * EMISSIVE_LIGHT_GRID ** 2
-  + 8 * (3 * EMISSIVE_LIGHT_GRID ** 2 - 3 * EMISSIVE_LIGHT_GRID + 1);
-export const EMISSIVE_LIGHT_TRANSPORT_MODEL = 'fourteen-direction-cubic-lattice-ordinates-v1';
+export const EMISSIVE_LIGHT_TRANSPORT_MODEL = 'twenty-four-direction-cubic-short-characteristics-v1';
 
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = allocate('emissive material coefficients', cells);
-  const directions = allocate('fourteen-direction incident radiance at cell centers', cells*EMISSIVE_LIGHT_DIRECTION_COUNT);
+  const directions = allocate('twenty-four-direction incident radiance at cell centers', cells*EMISSIVE_LIGHT_DIRECTION_COUNT);
   const incident = allocate('single-scattering mean incident radiance', cells);
+  const stepStride = 256;
+  const stepBuffer = device.createBuffer({
+    label: 'emissive short-characteristics slab steps',
+    size: EMISSIVE_LIGHT_GRID * stepStride,
+    usage: GPUBufferUsage.UNIFORM,
+    mappedAtCreation: true,
+  });
+  const stepWords = new Uint32Array(stepBuffer.getMappedRange());
+  for (let step = 0; step < EMISSIVE_LIGHT_GRID; step++) stepWords[step * stepStride / 4] = step;
+  stepBuffer.unmap();
   const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
   const seed = pipeline('seedEmissiveLight'), sweep = pipeline('sweepEmissiveLight'), resolve = pipeline('resolveEmissiveLight');
   const group = (pipe, index, buffers) => device.createBindGroup({
@@ -83,7 +88,9 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   const seedInputs = fluidBuffers.map((buffer, i) => group(seed,0,[[0,uniformBuffer],[1,buffer],[7,frontBuffers[i]]]));
   const seedOutput = group(seed,3,[[1,coefficients]]);
   const sweepInput = group(sweep,0,[[0,uniformBuffer],[13,coefficients]]);
-  const sweepOutput = group(sweep,3,[[2,directions]]);
+  const sweepOutputs = Array.from({ length: EMISSIVE_LIGHT_GRID }, (_, step) => (
+    group(sweep,3,[[2,directions],[4,stepBuffer,step*stepStride,16]])
+  ));
   const resolveInput = group(resolve,0,[[14,directions]]);
   const resolveOutput = group(resolve,3,[[3,incident]]);
   return {
@@ -92,13 +99,16 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
       const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });
       pass.setPipeline(seed); pass.setBindGroup(0,seedInputs[sourceIndex]); pass.setBindGroup(3,seedOutput);
       pass.dispatchWorkgroups(EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4);
-      pass.setPipeline(sweep); pass.setBindGroup(0,sweepInput); pass.setBindGroup(3,sweepOutput);
-      pass.dispatchWorkgroups(Math.ceil(EMISSIVE_LIGHT_RAY_COUNT/64));
+      pass.setPipeline(sweep); pass.setBindGroup(0,sweepInput);
+      for (let step = 0; step < EMISSIVE_LIGHT_GRID; step++) {
+        pass.setBindGroup(3,sweepOutputs[step]);
+        pass.dispatchWorkgroups(Math.ceil(EMISSIVE_LIGHT_DIRECTION_COUNT*EMISSIVE_LIGHT_GRID**2/64));
+      }
       pass.setPipeline(resolve); pass.setBindGroup(0,resolveInput); pass.setBindGroup(3,resolveOutput);
       pass.dispatchWorkgroups(Math.ceil(cells/64));
       pass.end();
     },
-    destroy() { coefficients.destroy(); directions.destroy(); incident.destroy(); },
+    destroy() { coefficients.destroy(); directions.destroy(); incident.destroy(); stepBuffer.destroy(); },
   };
 }
 
@@ -175,51 +185,56 @@ const LIGHT_DIRECTIONS: u32 = ${EMISSIVE_LIGHT_DIRECTION_COUNT}u;
 const LIGHT_DIRECTION_BASIS = array<vec3<f32>,${EMISSIVE_LIGHT_DIRECTION_COUNT}>(
 ${EMISSIVE_LIGHT_DIRECTIONS.map(direction => `  vec3<f32>(${direction.map(value => value.toFixed(12)).join(',')})`).join(',\n')}
 );
-const LIGHT_DIRECTION_WEIGHTS = array<f32,${EMISSIVE_LIGHT_DIRECTION_COUNT}>(
-${EMISSIVE_LIGHT_WEIGHTS.map(weight => `  ${weight.toFixed(12)}`).join(',\n')}
-);
-const LIGHT_CARDINAL_DIRECTIONS: u32 = 6u;
-const LIGHT_CARDINAL_RAYS: u32 = LIGHT_CARDINAL_DIRECTIONS*LIGHT_GRID*LIGHT_GRID;
-const LIGHT_DIAGONAL_RAYS_PER_DIRECTION: u32 = 3u*LIGHT_GRID*LIGHT_GRID-3u*LIGHT_GRID+1u;
-const LIGHT_RAYS: u32 = LIGHT_CARDINAL_RAYS+(LIGHT_DIRECTIONS-LIGHT_CARDINAL_DIRECTIONS)*LIGHT_DIAGONAL_RAYS_PER_DIRECTION;
 @group(0) @binding(13) var<storage,read> emissiveCoefficients: array<vec4<f32>>;
 @group(0) @binding(14) var<storage,read> emissiveDirections: array<vec4<f32>>;
 @group(0) @binding(15) var<storage,read> emissiveIncident: array<vec4<f32>>;
 @group(3) @binding(1) var<storage,read_write> emissiveCoefficientsDst: array<vec4<f32>>;
 @group(3) @binding(2) var<storage,read_write> emissiveDirectionsDst: array<vec4<f32>>;
 @group(3) @binding(3) var<storage,read_write> emissiveIncidentDst: array<vec4<f32>>;
+@group(3) @binding(4) var<uniform> emissiveSweepStep: vec4<u32>;
 fn lightIndex(c: vec3<u32>) -> u32 { return c.x+LIGHT_GRID*(c.y+LIGHT_GRID*c.z); }
 fn lightDirection(direction: u32) -> vec3<f32> { return LIGHT_DIRECTION_BASIS[direction]; }
-fn lightRayStep(direction: u32) -> vec3<i32> {
-  return vec3<i32>(sign(lightDirection(direction)));
+fn lightMajorAxis(direction: u32) -> u32 {
+  let magnitude = abs(lightDirection(direction));
+  if(magnitude.x>=magnitude.y && magnitude.x>=magnitude.z) { return 0u; }
+  if(magnitude.y>=magnitude.z) { return 1u; }
+  return 2u;
 }
-fn upstreamBoundary(step: i32) -> i32 {
-  return select(i32(LIGHT_GRID)-1,0,step>0);
+fn lightMajorComponent(direction: u32) -> f32 {
+  let d = lightDirection(direction); let axis = lightMajorAxis(direction);
+  if(axis==0u) { return d.x; }
+  if(axis==1u) { return d.y; }
+  return d.z;
 }
-fn coordinateExcludingBoundary(offset: u32, boundary: i32) -> i32 {
-  return i32(offset)+select(0,1,boundary==0);
+fn lightCell(direction: u32, column: u32, step: u32) -> vec3<u32> {
+  let major = lightMajorComponent(direction);
+  let along = select(step,LIGHT_GRID-1u-step,major<0.0);
+  let a = column%LIGHT_GRID; let b = column/LIGHT_GRID;
+  let axis = lightMajorAxis(direction);
+  if(axis==0u) { return vec3<u32>(along,a,b); }
+  if(axis==1u) { return vec3<u32>(a,along,b); }
+  return vec3<u32>(a,b,along);
 }
-fn lightRayStart(direction: u32, ray: u32) -> vec3<i32> {
-  let rayStep = lightRayStep(direction);
-  if(direction<LIGHT_CARDINAL_DIRECTIONS) {
-    let axis = direction/2u; let a = i32(ray%LIGHT_GRID); let b = i32(ray/LIGHT_GRID);
-    if(axis==0u) { return vec3<i32>(upstreamBoundary(rayStep.x),a,b); }
-    if(axis==1u) { return vec3<i32>(a,upstreamBoundary(rayStep.y),b); }
-    return vec3<i32>(a,b,upstreamBoundary(rayStep.z));
-  }
-  let bx=upstreamBoundary(rayStep.x); let by=upstreamBoundary(rayStep.y); let bz=upstreamBoundary(rayStep.z);
-  let face=LIGHT_GRID*LIGHT_GRID;
-  if(ray<face) { return vec3<i32>(bx,i32(ray%LIGHT_GRID),i32(ray/LIGHT_GRID)); }
-  var local=ray-face; let side=(LIGHT_GRID-1u)*LIGHT_GRID;
-  if(local<side) {
-    return vec3<i32>(coordinateExcludingBoundary(local%(LIGHT_GRID-1u),bx),by,i32(local/(LIGHT_GRID-1u)));
-  }
-  local-=side;
-  return vec3<i32>(
-    coordinateExcludingBoundary(local%(LIGHT_GRID-1u),bx),
-    coordinateExcludingBoundary(local/(LIGHT_GRID-1u),by),
-    bz,
-  );
+fn samplePreviousOutgoing(direction: u32, p: vec3<f32>, halfDs: f32) -> vec3<f32> {
+  let base = vec3<i32>(floor(p)); let w = fract(p);
+  let ambient = vec3<f32>(u.emissive_material.z);
+  var sum = vec3<f32>(0.0);
+  for(var z=0u;z<2u;z++) { for(var y=0u;y<2u;y++) { for(var x=0u;x<2u;x++) {
+    let weight = select(1.0-w.x,w.x,x==1u)*select(1.0-w.y,w.y,y==1u)*select(1.0-w.z,w.z,z==1u);
+    if(weight>0.0) {
+      let sampleCell = base+vec3<i32>(i32(x),i32(y),i32(z));
+      if(any(sampleCell<vec3<i32>(0)) || any(sampleCell>=vec3<i32>(i32(LIGHT_GRID)))) {
+        sum += ambient*weight;
+      } else {
+        let sampleIndex = lightIndex(vec3<u32>(sampleCell));
+        let center = emissiveDirectionsDst[direction*LIGHT_CELLS+sampleIndex].rgb;
+        let material = emissiveCoefficients[sampleIndex];
+        let outgoing = center*exp(-material.w*halfDs)+material.rgb*emissionIntegral(material.w,halfDs);
+        sum += outgoing*weight;
+      }
+    }
+  } } }
+  return sum;
 }
 fn incidentAt(p: vec3<f32>) -> vec3<f32> {
   let q = clamp((p*0.5+vec3<f32>(0.5))*f32(LIGHT_GRID)-vec3<f32>(0.5),vec3<f32>(0.0),vec3<f32>(f32(LIGHT_GRID)-1.001));
@@ -248,41 +263,34 @@ fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
   }
   emissiveCoefficientsDst[lightIndex(c)] = coefficients;
 }
-// One invocation owns one complete lattice ray, so its optical recurrence is
-// ordered without cross-workgroup barriers or interpolation of unlike media.
+// Ordered short characteristics. Each dispatch advances one slab for all
+// all directions; the preceding slab is complete before it is sampled.
 @compute @workgroup_size(64)
 fn sweepEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
-  if(id.x>=LIGHT_RAYS) { return; }
-  var direction: u32; var ray: u32;
-  if(id.x<LIGHT_CARDINAL_RAYS) {
-    direction=id.x/(LIGHT_GRID*LIGHT_GRID); ray=id.x%(LIGHT_GRID*LIGHT_GRID);
-  } else {
-    let diagonal=id.x-LIGHT_CARDINAL_RAYS;
-    direction=LIGHT_CARDINAL_DIRECTIONS+diagonal/LIGHT_DIAGONAL_RAYS_PER_DIRECTION;
-    ray=diagonal%LIGHT_DIAGONAL_RAYS_PER_DIRECTION;
-  }
-  let rayStep=lightRayStep(direction);
-  var cell=lightRayStart(direction,ray);
-  let ds = (2.0/f32(LIGHT_GRID))*length(vec3<f32>(rayStep));
+  let plane = LIGHT_GRID*LIGHT_GRID;
+  if(id.x>=LIGHT_DIRECTIONS*plane) { return; }
+  let direction = id.x/plane; let column = id.x%plane;
+  let step = emissiveSweepStep.x;
+  if(step>=LIGHT_GRID) { return; }
+  let d = lightDirection(direction); let dominant = abs(lightMajorComponent(direction));
+  let c = lightCell(direction,column,step); let index = lightIndex(c);
+  let ds = (2.0/f32(LIGHT_GRID))/dominant;
+  let material = emissiveCoefficients[index];
   let halfDs = ds*0.5;
   var incoming = vec3<f32>(u.emissive_material.z);
-  for(var step=0u;step<LIGHT_GRID;step++) {
-    if(any(cell<vec3<i32>(0)) || any(cell>=vec3<i32>(i32(LIGHT_GRID)))) { break; }
-    let index=lightIndex(vec3<u32>(cell)); let material=emissiveCoefficients[index];
-    let attenuation=exp(-material.w*halfDs);
-    let halfEmission=material.rgb*emissionIntegral(material.w,halfDs);
-    let center = incoming*attenuation+halfEmission;
-    emissiveDirectionsDst[direction*LIGHT_CELLS+index]=vec4<f32>(center,0.0);
-    incoming = center*attenuation+halfEmission;
-    cell+=rayStep;
+  if(step>0u) {
+    let previousPosition=vec3<f32>(c)-d/dominant;
+    incoming=samplePreviousOutgoing(direction,previousPosition,halfDs);
   }
+  let center = incoming*exp(-material.w*halfDs)+material.rgb*emissionIntegral(material.w,halfDs);
+  emissiveDirectionsDst[direction*LIGHT_CELLS+index] = vec4<f32>(center,0.0);
 }
 @compute @workgroup_size(64)
 fn resolveEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
   if(id.x>=LIGHT_CELLS) { return; }
   var light = vec3<f32>(0.0);
   for(var direction=0u;direction<LIGHT_DIRECTIONS;direction++) {
-    light += emissiveDirections[direction*LIGHT_CELLS+id.x].rgb*LIGHT_DIRECTION_WEIGHTS[direction];
+    light += emissiveDirections[direction*LIGHT_CELLS+id.x].rgb/f32(LIGHT_DIRECTIONS);
   }
   emissiveIncidentDst[id.x] = vec4<f32>(light,1.0);
 }
