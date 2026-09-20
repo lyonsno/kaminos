@@ -378,6 +378,12 @@ function workgroups(total) {
   return Math.max(1, Math.ceil(total / 64));
 }
 
+function linearWorkgroups(tokens, outputChannels, device) {
+  return tiledLinearDispatch(tokens, outputChannels, {
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
+}
+
 export async function runSam3ScoringPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || createSam3ScoringPhaseProgramRouteDefinition({ kernel: input.kernel });
@@ -482,12 +488,12 @@ export async function runSam3ScoringPhaseProgramRoute(input = {}) {
         dotProduct: { code: DOT_PRODUCT_WGSL, bindings: [{ name: 'queries', resource: 'tensor:projectedQueries', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'text', resource: 'tensor:projectedText', visibility: WEBGPU_SHADER_STAGE.compute, access: 'read-only-storage' }, { name: 'predLogits', resource: 'tensor:predLogits', visibility: WEBGPU_SHADER_STAGE.compute, access: 'storage' }, { name: 'dims', resource: 'uniform:scoreDims', visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }] },
       },
       phases: [
-        { name: 'scoring-text-mlp-fc1-relu', kernel: 'textMlpFc1Relu', dispatch: tiledLinearDispatch(promptTotal, shape.mlpHidden), yieldAfter: true },
-        { name: 'scoring-text-mlp-fc2', kernel: 'textMlpFc2', dispatch: tiledLinearDispatch(promptTotal, shape.channels), yieldAfter: true },
+        { name: 'scoring-text-mlp-fc1-relu', kernel: 'textMlpFc1Relu', dispatch: linearWorkgroups(promptTotal, shape.mlpHidden, input.device), yieldAfter: true },
+        { name: 'scoring-text-mlp-fc2', kernel: 'textMlpFc2', dispatch: linearWorkgroups(promptTotal, shape.channels, input.device), yieldAfter: true },
         { name: 'scoring-text-mlp-residual-layernorm', kernel: 'residualLayernorm', dispatch: [workgroups(promptTotal)], yieldAfter: true },
         { name: 'scoring-mask-pool-text', kernel: 'maskedPool', dispatch: [workgroups(pooledTotal)], yieldAfter: true },
-        { name: 'scoring-text-proj', kernel: 'textProj', dispatch: tiledLinearDispatch(shape.batch, shape.channels), yieldAfter: true },
-        { name: 'scoring-query-proj', kernel: 'queryProj', dispatch: tiledLinearDispatch(shape.layerCount * shape.batch * shape.queryTokens, shape.channels), yieldAfter: true },
+        { name: 'scoring-text-proj', kernel: 'textProj', dispatch: linearWorkgroups(shape.batch, shape.channels, input.device), yieldAfter: true },
+        { name: 'scoring-query-proj', kernel: 'queryProj', dispatch: linearWorkgroups(shape.layerCount * shape.batch * shape.queryTokens, shape.channels, input.device), yieldAfter: true },
         { name: 'scoring-dot-product', kernel: 'dotProduct', dispatch: [workgroups(scoreTotal)], yieldAfter: true },
         { name: 'readback-scoring', readbacks: [{ name: 'predLogits', tensor: 'predLogits' }] },
       ],

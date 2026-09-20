@@ -529,6 +529,12 @@ function workgroups(total) {
   return Math.max(1, Math.ceil(total / 64));
 }
 
+function linearWorkgroups(tokens, outputChannels, device) {
+  return tiledLinearDispatch(tokens, outputChannels, {
+    maxWorkgroupsPerDimension: device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  });
+}
+
 function linearDims(stage, label, rows, inChannels, outChannels) {
   return stage.createUniformBuffer({
     label,
@@ -790,22 +796,22 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
       ]);
       phases.push(
         { name: `prompt-text-layernorm1-${layerIndex}`, kernel: `${prefix}.ln1`, dispatch: [workgroups(rows)], yieldAfter: true },
-        { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
-        { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
-        { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
+        { name: `prompt-text-qkv-q-${layerIndex}`, kernel: `${prefix}.q`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: `prompt-text-qkv-k-${layerIndex}`, kernel: `${prefix}.k`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
+        { name: `prompt-text-qkv-v-${layerIndex}`, kernel: `${prefix}.v`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
         { name: `prompt-text-causal-attention-${layerIndex}`, kernel: `${prefix}.attention`, dispatch: onlineAttentionDispatch(shape.promptTokens, shape.heads, shape.batch, shape.headDim), yieldAfter: true },
-        { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
+        { name: `prompt-text-output-residual-${layerIndex}`, kernel: `${prefix}.out`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
         { name: `prompt-text-output-add-${layerIndex}`, kernel: `${prefix}.add1`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
         { name: `prompt-text-layernorm2-${layerIndex}`, kernel: `${prefix}.ln2`, dispatch: [workgroups(rows)], yieldAfter: true },
-        { name: `prompt-text-mlp-fc1-${layerIndex}`, kernel: `${prefix}.fc1`, dispatch: tiledLinearDispatch(rows, shape.intermediateSize), yieldAfter: true },
+        { name: `prompt-text-mlp-fc1-${layerIndex}`, kernel: `${prefix}.fc1`, dispatch: linearWorkgroups(rows, shape.intermediateSize, input.device), yieldAfter: true },
         { name: `prompt-text-mlp-gelu-${layerIndex}`, kernel: `${prefix}.gelu`, dispatch: [workgroups(totalIntermediate)], yieldAfter: true },
-        { name: `prompt-text-mlp-fc2-${layerIndex}`, kernel: `${prefix}.fc2`, dispatch: tiledLinearDispatch(rows, shape.hiddenSize), yieldAfter: true },
+        { name: `prompt-text-mlp-fc2-${layerIndex}`, kernel: `${prefix}.fc2`, dispatch: linearWorkgroups(rows, shape.hiddenSize, input.device), yieldAfter: true },
         { name: `prompt-text-mlp-residual-${layerIndex}`, kernel: `${prefix}.add2`, dispatch: [workgroups(totalHidden)], yieldAfter: true },
       );
     }
     phases.push(
       { name: 'prompt-text-final-layernorm', kernel: 'finalLayerNorm', dispatch: [workgroups(rows)], yieldAfter: true },
-      { name: 'prompt-text-projection', kernel: 'projection', dispatch: tiledLinearDispatch(rows, shape.channels), yieldAfter: true },
+      { name: 'prompt-text-projection', kernel: 'projection', dispatch: linearWorkgroups(rows, shape.channels, input.device), yieldAfter: true },
       { name: 'readback-prompt-text-ingress', readbacks: [{ name: 'promptFeatures', tensor: 'promptFeatures' }, { name: 'promptMask', tensor: 'promptMask' }] },
     );
 
