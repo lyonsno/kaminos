@@ -9,3 +9,9 @@ export function incidentLightBatchTimestampWrites(querySet, repeat, repeats) {
     ...(repeat === repeats - 1 ? { endOfPassWriteIndex: 1 } : {}),
   };
 }
+
+export function encodeIncidentLightBatch(lightField, encoder, fluidIndex, querySet, repeats) {
+  for (let repeat = 0; repeat < repeats; repeat++) {
+    lightField.encode(encoder, fluidIndex, incidentLightBatchTimestampWrites(querySet, repeat, repeats));
+  }
+}
