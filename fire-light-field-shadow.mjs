@@ -1,6 +1,69 @@
 import * as THREE from './lib/three.webgpu.js';
 const {cameraProjectionMatrix,cameraViewMatrix,positionWorld,cubeTexture,float,vec3,vec4,uniform,step,mix}=THREE.TSL;
 
+function nodeIdentity(node) {
+  return node?.uuid??node?.id??(node==null?null:'present');
+}
+
+export function fireShadowMaterialRevisionState(material) {
+  if(!material) return null;
+  return {
+    uuid:material.uuid,version:material.version,visible:material.visible!==false,side:material.side,
+    transparent:!!material.transparent,opacity:material.opacity,alphaTest:material.alphaTest,
+    alphaHash:!!material.alphaHash,transmission:material.transmission??0,
+    alphaTestNode:nodeIdentity(material.alphaTestNode),transmissionNode:nodeIdentity(material.transmissionNode),
+    backdropNode:nodeIdentity(material.backdropNode),
+  };
+}
+
+export function isFireShadowOpaqueMaterial(material) {
+  return !!material&&material.visible!==false&&!material.transparent&&!(material.opacity<1)
+    &&!(material.alphaTest>0)&&material.alphaTestNode==null&&!material.alphaHash
+    &&!(material.transmission>0)&&material.transmissionNode==null&&material.backdropNode==null;
+}
+
+function assertFireShadowCaster(object) {
+  const materials=Array.isArray(object.material)?object.material:[object.material];
+  if(object.isSkinnedMesh||object.isInstancedMesh||!object.geometry?.attributes?.position
+    ||materials.some(material=>!isFireShadowOpaqueMaterial(material))) {
+    throw new Error(`fire-shadow-unsupported-caster: ${object.name||object.uuid} requires static opaque mesh`);
+  }
+  return materials;
+}
+
+function casterGeometryState(geometry) {
+  const position=geometry.attributes.position,index=geometry.index;
+  return {
+    uuid:geometry.uuid,version:geometry.version??0,
+    position:{count:position.count,itemSize:position.itemSize,normalized:!!position.normalized,version:position.version},
+    index:index?{count:index.count,itemSize:index.itemSize,normalized:!!index.normalized,version:index.version}:null,
+    groups:geometry.groups.map(group=>[group.start,group.count,group.materialIndex]),
+    drawRange:[geometry.drawRange.start,geometry.drawRange.count],
+  };
+}
+
+function collectFireShadowCasterState(scene,{recomputeBounds=false}={}) {
+  const casters=[];
+  scene.updateMatrixWorld(true);
+  scene.traverseVisible(object=>{
+    if(!object.isMesh||!object.castShadow) return;
+    const materials=assertFireShadowCaster(object);
+    if(recomputeBounds) object.geometry.computeBoundingBox();
+    casters.push({object,revision:{
+        uuid:object.uuid,matrixWorld:object.matrixWorld.elements,
+        geometry:casterGeometryState(object.geometry),
+        materials:materials.map(fireShadowMaterialRevisionState),
+      }});
+  });
+  return casters;
+}
+
+export function fireShadowCasterRevision(scene) {
+  const revisions=collectFireShadowCasterState(scene).map(entry=>entry.revision);
+  revisions.sort((left,right)=>left.uuid.localeCompare(right.uuid));
+  return JSON.stringify(revisions);
+}
+
 // CPU frustum tests cannot see the GPU source used by vertexNode. Restore all
 // temporary state even when a face fails, and keep actual material sidedness.
 export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,RendererUtils=THREE.RendererUtils}) {
@@ -95,20 +158,14 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
       if(enabled.value===0) {status.effective=false;status.reason='disabled';effective.value=0;return;}
       effective.value=0;status.effective=false;status.reason='rendering';
       try {
-        bounds.makeEmpty();let meshCount=0;
-        scene.updateMatrixWorld(true);
-        scene.traverseVisible(object=>{
-          if(!object.isMesh||!object.castShadow) return;
-          const materials=Array.isArray(object.material)?object.material:[object.material];
-          if(object.isSkinnedMesh||object.isInstancedMesh||materials.some(m=>
-            m.transparent||m.alphaTest>0||m.alphaTestNode!=null||m.alphaHash||
-            m.transmission>0||m.transmissionNode!=null||m.backdropNode!=null)) {
-            throw new Error(`fire-shadow-unsupported-caster: ${object.name||object.uuid} requires static opaque mesh`);
-          }
-          if(!object.geometry.boundingBox) object.geometry.computeBoundingBox();
+        bounds.makeEmpty();
+        // Bounds are derived state. Rebuild them whenever the visibility cache
+        // is rebuilt so a versioned in-place position edit cannot retain stale far.
+        const casters=collectFireShadowCasterState(scene,{recomputeBounds:true});
+        for(const {object} of casters) {
           objectBounds.copy(object.geometry.boundingBox).applyMatrix4(object.matrixWorld);
-          bounds.union(objectBounds);meshCount++;
-        });
+          bounds.union(objectBounds);
+        }
         // Bound scene plus source domain [-1,1]^3; no arbitrary distance cap.
         const extent=bounds.isEmpty()?new THREE.Vector3(1,1,1):new THREE.Vector3(
           Math.max(Math.abs(bounds.min.x),Math.abs(bounds.max.x)),
@@ -119,7 +176,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
         renderFireShadowCube({renderer,scene,cubeCamera,material,far});
         effective.value=1;status.effective=true;status.reason=null;
         status.sourceIdentity=sourceIdentity;
-        status.renderCount++;status.meshCount=meshCount;status.far=far;
+        status.renderCount++;status.meshCount=casters.length;status.far=far;
       } catch(error) {status.reason=String(error.message);throw error;}
     },
     setEnabled(value) {

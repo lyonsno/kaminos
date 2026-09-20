@@ -77,6 +77,34 @@ assert.equal(afterTransform.renderCount,beforeTransform.renderCount+1,'an author
 assert.notDeepEqual(afterTransform.patches.map(p=>p.position),beforeTransform.patches.map(p=>p.position),'rebuilt patch positions follow the authored transform');
 assert.equal(afterTransform.patches[0].visibility.renderCount,beforeTransform.patches[0].visibility.renderCount+1,'the transformed patch visibility cube is rerendered');
 
+const runtimeCaster=new THREE.Mesh(new THREE.BoxGeometry(.25,.25,.25),new THREE.MeshStandardMaterial({color:0x303030}));
+runtimeCaster.name='unregistered-runtime-caster';runtimeCaster.castShadow=true;runtimeCaster.position.set(0,0,-.5);
+cacheScene.add(runtimeCaster);
+bounce.render('unchanged-external-revision');
+const afterRuntimeAdd=bounce.debugState();
+assert.equal(afterRuntimeAdd.renderCount,afterTransform.renderCount+1,'adding an unregistered runtime caster invalidates the visibility cache');
+assert.equal(afterRuntimeAdd.patches[0].visibility.meshCount,2,'patch visibility includes the same runtime caster that invalidated its cache');
+runtimeCaster.position.x=8;
+runtimeCaster.updateMatrixWorld(true);
+bounce.render('unchanged-external-revision');
+const afterRuntimeMove=bounce.debugState();
+assert.equal(afterRuntimeMove.renderCount,afterRuntimeAdd.renderCount+1,'moving an unregistered runtime caster invalidates the visibility cache');
+assert.ok(afterRuntimeMove.patches[0].visibility.far>afterRuntimeAdd.patches[0].visibility.far,'moving a runtime caster outside the prior bounds expands the visibility far plane');
+runtimeCaster.visible=false;
+bounce.render('unchanged-external-revision');
+const afterRuntimeHide=bounce.debugState();
+assert.equal(afterRuntimeHide.renderCount,afterRuntimeMove.renderCount+1,'hiding an unregistered runtime caster invalidates the visibility cache');
+assert.equal(afterRuntimeHide.patches[0].visibility.meshCount,1,'hidden runtime casters leave the effective visibility set');
+runtimeCaster.visible=true;
+bounce.render('unchanged-external-revision');
+const afterRuntimeShow=bounce.debugState();
+assert.equal(afterRuntimeShow.renderCount,afterRuntimeHide.renderCount+1,'showing an unregistered runtime caster invalidates the visibility cache');
+cacheScene.remove(runtimeCaster);
+bounce.render('unchanged-external-revision');
+const afterRuntimeRemove=bounce.debugState();
+assert.equal(afterRuntimeRemove.renderCount,afterRuntimeShow.renderCount+1,'removing a visible runtime caster invalidates the visibility cache');
+assert.equal(afterRuntimeRemove.patches[0].visibility.meshCount,1,'removed runtime casters leave the effective visibility set');
+
 const secondCacheMesh=triangleMesh('second-cache-surface',.5,0x204080);
 cacheRoot.add(secondCacheMesh);
 bounce.render('unchanged-external-revision');
@@ -91,10 +119,15 @@ const recoloredPatch=afterAlbedo.patches.find(p=>p.identity.startsWith(secondCac
 assert.deepEqual(recoloredPatch.albedo,secondCacheMesh.material.color.toArray(),'material albedo changes refresh the cached patch payload');
 
 firstCacheMesh.material.opacity=.5;
-bounce.render('unchanged-external-revision');
-const afterEligibility=bounce.debugState();
-assert.equal(afterEligibility.patchCount,1,'changing material opacity refreshes patch eligibility');
-assert.ok(afterEligibility.patches.every(p=>!p.identity.startsWith(firstCacheMesh.uuid)),'the newly ineligible surface is removed from the active cache');
+assert.throws(()=>bounce.render('unchanged-external-revision'),/fire-shadow-unsupported-caster: first-cache-surface/,'sub-opaque material state fails immediately under the shared caster contract');
+firstCacheMesh.material.opacity=1;
+firstCacheMesh.material.alphaHash=true;
+assert.throws(()=>bounce.render('unchanged-external-revision'),/fire-shadow-unsupported-caster: first-cache-surface/,'alpha-hash cutouts fail immediately under the shared caster contract');
+firstCacheMesh.material.alphaHash=false;
+firstCacheMesh.material.alphaTestNode=THREE.TSL.float(.5);
+assert.throws(()=>bounce.render('unchanged-external-revision'),/fire-shadow-unsupported-caster: first-cache-surface/,'node alpha tests fail immediately under the shared caster contract');
+firstCacheMesh.material.alphaTestNode=null;
+assert.deepEqual(bounce.debugState(),afterAlbedo,'failed unsupported states do not replace the last valid effective cache');
 
 const replacement=new THREE.BufferGeometry();
 replacement.setAttribute('position',new THREE.Float32BufferAttribute([
@@ -103,8 +136,8 @@ replacement.setAttribute('position',new THREE.Float32BufferAttribute([
 secondCacheMesh.geometry=replacement;
 bounce.render('unchanged-external-revision');
 const afterGeometryReplacement=bounce.debugState();
-assert.equal(afterGeometryReplacement.renderCount,afterEligibility.renderCount+1,'geometry replacement invalidates the effective bounce cache');
-assert.notDeepEqual(afterGeometryReplacement.patches.map(p=>p.position),afterEligibility.patches.map(p=>p.position),'rebuilt patch positions follow replacement geometry');
+assert.equal(afterGeometryReplacement.renderCount,afterAlbedo.renderCount+1,'geometry replacement invalidates the effective bounce cache');
+assert.notDeepEqual(afterGeometryReplacement.patches.map(p=>p.position),afterAlbedo.patches.map(p=>p.position),'rebuilt patch positions follow replacement geometry');
 
 replacement.attributes.position.setX(0,2.5);
 replacement.attributes.position.needsUpdate=true;
@@ -112,11 +145,17 @@ bounce.render('unchanged-external-revision');
 const afterGeometryMutation=bounce.debugState();
 assert.equal(afterGeometryMutation.renderCount,afterGeometryReplacement.renderCount+1,'versioned in-place position changes invalidate the effective bounce cache');
 assert.notDeepEqual(afterGeometryMutation.patches.map(p=>p.position),afterGeometryReplacement.patches.map(p=>p.position),'rebuilt patch positions follow versioned in-place geometry changes');
+assert.ok(afterGeometryMutation.patches[0].visibility.far>afterGeometryReplacement.patches[0].visibility.far,'versioned in-place geometry changes recompute bounds and expand visibility far');
 
 cacheRoot.remove(secondCacheMesh);
 bounce.render('unchanged-external-revision');
 const afterRemove=bounce.debugState();
-assert.equal(afterRemove.patchCount,0,'removing the final eligible authored surface clears the active patch cache');
-assert.equal(afterRemove.renderCount,afterGeometryMutation.renderCount+1,'removal is a cache rebuild even when no eligible patches remain');
+assert.equal(afterRemove.patchCount,1,'removing an authored surface refreshes the active patch count');
+assert.equal(afterRemove.renderCount,afterGeometryMutation.renderCount+1,'authored removal rebuilds the cache');
+cacheRoot.remove(firstCacheMesh);
+bounce.render('unchanged-external-revision');
+const afterFinalRemove=bounce.debugState();
+assert.equal(afterFinalRemove.patchCount,0,'removing the final eligible authored surface clears the active patch cache');
+assert.equal(afterFinalRemove.renderCount,afterRemove.renderCount+1,'the final removal is a cache rebuild even when no eligible patches remain');
 bounce.dispose();
 console.log('static bounce patches are deterministic, material-bearing, and opaque-only');

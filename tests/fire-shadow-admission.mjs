@@ -23,6 +23,8 @@ try {
       Object.assign(new THREE.MeshBasicNodeMaterial(),{backdropNode:THREE.TSL.vec3(1)}),
       new THREE.MeshBasicMaterial({alphaHash:true}),
       Object.assign(new THREE.MeshBasicNodeMaterial(),{alphaTestNode:THREE.TSL.float(.5)}),
+      new THREE.MeshBasicMaterial({opacity:.5}),
+      Object.assign(new THREE.MeshBasicMaterial(),{visible:false}),
     ];
     for(const material of unsupported) {
       caster.material=material;

@@ -1,5 +1,7 @@
 import * as THREE from './lib/three.webgpu.js';
-import {createFireLightFieldShadow} from './fire-light-field-shadow.mjs';
+import {
+  createFireLightFieldShadow,fireShadowCasterRevision,fireShadowMaterialRevisionState,isFireShadowOpaqueMaterial,
+} from './fire-light-field-shadow.mjs';
 
 const {float,uniform,vec3}=THREE.TSL;
 
@@ -11,8 +13,7 @@ function materialForTriangle(mesh,triangleOffset) {
 }
 
 function eligibleMaterial(material) {
-  return !!material&&material.visible!==false&&!material.transparent&&!(material.opacity<1)&&!(material.alphaTest>0)
-    &&!(material.transmission>0)&&material.transmissionNode==null&&material.backdropNode==null;
+  return isFireShadowOpaqueMaterial(material);
 }
 
 function materialAlbedo(material) {
@@ -27,18 +28,11 @@ function belongsToAuthoredSceneObject(object) {
   return false;
 }
 
-function nodeIdentity(node) {
-  return node?.uuid??node?.id??(node==null?null:'present');
-}
-
 function materialRevisionState(material) {
   if(!material) return null;
   return {
-    uuid:material.uuid,version:material.version,visible:material.visible!==false,side:material.side,
-    transparent:!!material.transparent,opacity:material.opacity,alphaTest:material.alphaTest,
-    transmission:material.transmission??0,color:material.color?.isColor?material.color.toArray():null,
-    alphaTestNode:nodeIdentity(material.alphaTestNode),transmissionNode:nodeIdentity(material.transmissionNode),
-    backdropNode:nodeIdentity(material.backdropNode),
+    ...fireShadowMaterialRevisionState(material),
+    color:material.color?.isColor?material.color.toArray():null,
   };
 }
 
@@ -79,7 +73,7 @@ export function staticBounceGeometryRevision(scene,{origin=new THREE.Vector3()}=
     });
   });
   meshes.sort((left,right)=>left.uuid.localeCompare(right.uuid));
-  return JSON.stringify({origin:origin.toArray(),meshes});
+  return JSON.stringify({origin:origin.toArray(),meshes,visibilityCasters:fireShadowCasterRevision(scene)});
 }
 
 export function collectStaticBounceTriangles(scene,{origin=new THREE.Vector3()}={}) {
