@@ -49,10 +49,12 @@ try {
     const shadow=makeShadow();
     const uniforms=()=>({value:{copy(){},set(){}}});
     const bindings={THREE,FIRE_LIGHT_FIELD_PASS_IDENTITY:'pass',FIRE_LIGHT_FIELD_MASK_AUTHORITY:'depth',FIRE_LIGHT_FIELD_ATLAS_IDENTITY:'atlas',
-      isFireLightFieldIsolateRoute:()=>false,routeParams:{},baseStrength:1,outputNode:{},fireShadow:shadow,
+      isFireLightFieldIsolateRoute:()=>false,routeParams:{},baseStrength:1,baseBounceStrength:1,outputNode:{},fireShadow:shadow,
+      fireBounce:{render(){},setEnabled(){},debugState:()=>({}),dispose(){}},sceneMutationToken:1,
+      bouncePatchCount:8,bounceReservedSamplerCount:8,
       camera:{updateMatrixWorld(){},position:new THREE.Vector3(),projectionMatrixInverse:{},matrixWorld:{}},
       sceneProjectionMatrixInverse:uniforms(),sceneCameraWorldMatrix:uniforms(),atlasTextureNode:uniforms(),metaTextureNode:uniforms(),
-      atlasExternalTexture:{},fireLightFieldStrength:uniforms(),atlasGrid:uniforms(),atlasTilesX:uniforms(),atlasTexelSize:uniforms(),isolateMix:uniforms(),
+      atlasExternalTexture:{},fireLightFieldStrength:uniforms(),bounceStrength:{value:1},atlasGrid:uniforms(),atlasTilesX:uniforms(),atlasTexelSize:uniforms(),isolateMix:uniforms(),
       sharedGpu:{device},volumePrototype:{fireIrradianceLightField:()=>field},blackAtlasTexture:{}};
     const pass=new Function(...Object.keys(bindings),body.slice(0,body.lastIndexOf('}')))(...Object.values(bindings));
     const render=()=>{pass.update();pass.renderShadows();assert.equal(pass.debugState().shadow.effective,true);};

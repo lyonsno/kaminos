@@ -44,18 +44,25 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   // identical to the receiver's live far-field source. No CPU centroid lag.
   material.vertexNode=cameraProjectionMatrix.mul(cameraViewMatrix).mul(vec4(positionWorld.sub(sourceNode),1));
   material.fragmentNode=vec4(vec3(positionWorld.sub(sourceNode).length()),1);
-  const sourceDistance=receiverNode.sub(sourceNode).length();
-  const towardsSource=sourceNode.sub(receiverNode);
-  const faceSign=mix(float(-1),float(1),step(float(0),normalNode.dot(towardsSource)));
-  // Offset along the receiver plane's light-facing normal by one cube texel.
-  // Radial-only bias fails on a floor viewed by the light at grazing angles.
-  const receiverOffset=normalNode.mul(faceSign).mul(sourceDistance.mul(2/resolution).max(.001));
-  const delta=receiverNode.add(receiverOffset).sub(sourceNode),distance=delta.length();
-  const direction=delta.div(distance.max(.00001));
-  // Bias follows the radial texel footprint, not viewer depth or light gain.
-  const bias=distance.mul(2/resolution).max(.001);
-  const shadowDistance=cubeTexture(target.texture,direction).r;
-  const visibility=mix(float(1),step(distance.sub(bias),shadowDistance),enabled.mul(effective));
+  const visibilityAt=(receiver,normal)=>{
+    const sourceDistance=receiver.sub(sourceNode).length();
+    const towardsSource=sourceNode.sub(receiver);
+    const faceSign=mix(float(-1),float(1),step(float(0),normal.dot(towardsSource)));
+    // Offset along the receiver plane's light-facing normal by one cube texel.
+    // Radial-only bias fails on a floor viewed by the light at grazing angles.
+    const receiverOffset=normal.mul(faceSign).mul(sourceDistance.mul(2/resolution).max(.001));
+    const delta=receiver.add(receiverOffset).sub(sourceNode),distance=delta.length();
+    const direction=delta.div(distance.max(.00001));
+    // Bias follows the radial texel footprint, not viewer depth or light gain.
+    const bias=distance.mul(2/resolution).max(.001);
+    const shadowDistance=cubeTexture(target.texture,direction).r;
+    return {
+      visibility:mix(float(1),step(distance.sub(bias),shadowDistance),enabled.mul(effective)),
+      delta,distance,bias,shadowDistance,
+    };
+  };
+  const receiverVisibility=visibilityAt(receiverNode,normalNode);
+  const visibility=receiverVisibility.visibility;
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3();
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0};
   let sourceRevision=0;
@@ -65,6 +72,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   };
   return {
     visibility,
+    visibilityAt(receiver,normal) { return visibilityAt(receiver,normal).visibility; },
     invalidate,
     async diagnose(anchors,cameraPosition,validateSource=()=>{}) {
       validateSource();
@@ -77,8 +85,8 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
       const {diagnoseFireShadow}=await import('./fire-shadow-diagnostic.mjs');
       check();
       const result=await diagnoseFireShadow({renderer,scene,anchors,cameraPosition,status:{...status},nodes:{
-        receiver:vec4(receiverNode,visibility),source:vec4(sourceNode,bias),
-        comparison:vec4(delta,distance.sub(bias)),normal:vec4(normalNode,shadowDistance),
+        receiver:vec4(receiverNode,visibility),source:vec4(sourceNode,receiverVisibility.bias),
+        comparison:vec4(receiverVisibility.delta,receiverVisibility.distance.sub(receiverVisibility.bias)),normal:vec4(normalNode,receiverVisibility.shadowDistance),
       }});
       check();
       return result;

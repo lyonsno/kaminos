@@ -1367,6 +1367,16 @@ export async function requestKaminosSharedWebGpuDevice() {
   if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
     requiredLimits.maxStorageBuffersPerShaderStage = adapter.limits.maxStorageBuffersPerShaderStage;
   }
+  // Do not inherit WebGPU's conservative default when the adapter advertises
+  // a larger sampled-texture budget. Static bounce uses the measured capacity
+  // for its cached visibility basis; adapters that expose only the default
+  // retain that default naturally.
+  if ((adapter.limits?.maxSampledTexturesPerShaderStage ?? 0) > 0) {
+    requiredLimits.maxSampledTexturesPerShaderStage = adapter.limits.maxSampledTexturesPerShaderStage;
+  }
+  if ((adapter.limits?.maxSamplersPerShaderStage ?? 0) > 0) {
+    requiredLimits.maxSamplersPerShaderStage = adapter.limits.maxSamplersPerShaderStage;
+  }
   const storageStageRequirements = {
     maxStorageBuffersInFragmentStage: 5,
     maxStorageBuffersInVertexStage: 4,

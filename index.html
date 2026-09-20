@@ -3086,6 +3086,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <script type="module">
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
+import { createDisabledStaticDiffuseBounce, createStaticDiffuseBounce } from './fire-light-field-bounce.mjs';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
@@ -9332,8 +9333,13 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const baseStrength = Number.isFinite(routeStrength) ? Math.max(0, routeStrength) : 1.0;
   const routeFarStrength = parseFloat(routeParams.get('volume_light_field_far') ?? '');
   const baseFarStrength = Number.isFinite(routeFarStrength) ? Math.max(0, routeFarStrength) : 1.0;
+  const routeBounceStrength = parseFloat(routeParams.get('volume_light_field_bounce_strength') ?? '');
+  const baseBounceStrength = Number.isFinite(routeBounceStrength) ? Math.max(0, routeBounceStrength) : 1.0;
+  const bounceRequested = routeParams.get('volume_light_field_bounce') === '1'
+    && routeParams.get('volume_light_field_shadows') === '1';
   const debugView = routeParams.get('volume_light_field_debug') || '';
   const fireLightFieldStrength = uniform(0.0);
+  const bounceStrength = uniform(baseBounceStrength);
   const farFieldStrength = uniform(baseFarStrength);
   const blackMetaTexture = sharedGpu.device.createTexture({
     label: 'kaminos fire light field black meta placeholder',
@@ -9458,14 +9464,48 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const farRadial = farRadialRaw.div(farRadialRaw.mul(1.5).add(1.0));
   const farSignal = metaColor.rgb.mul(farRadial).mul(farNdotL).mul(farFieldStrength);
 
+  const fireIrradianceAt = positionNode => {
+    const patchExterior=positionNode.abs().sub(vec3(1.0)).max(vec3(0.0));
+    const patchExteriorDistance=patchExterior.length();
+    const patchNearFalloff=float(1.0).div(
+      patchExteriorDistance.mul(patchExteriorDistance).mul(3.0).add(patchExteriorDistance.mul(1.5)).add(1.0)
+    );
+    const patchFireVector=fireCenterWorld.sub(positionNode);
+    const patchFireDistanceSq=patchFireVector.dot(patchFireVector);
+    const patchFarRaw=firePower.mul(0.006).div(patchFireDistanceSq.mul(2.5).add(0.25));
+    const patchFar=patchFarRaw.div(patchFarRaw.mul(1.5).add(1.0));
+    return sampleLatticeAt(positionNode).rgb.mul(patchNearFalloff)
+      .add(metaColor.rgb.mul(patchFar).mul(farFieldStrength));
+  };
+
   const nearSignal = latticeSample.rgb
     .mul(exteriorFalloff)
     .mul(directionalResponse);
-  const receiverSignal = nearSignal.add(farSignal)
+  // Each patch owns one cube visibility sampler. The receiver pass already
+  // uses eight samplers, so derive the sparse basis from the effective device
+  // limit instead of compiling a basis the adapter cannot bind.
+  const bounceReservedSamplerCount = 8;
+  const bouncePatchCount = Math.min(
+    32,
+    Math.max(1, (sharedGpu?.device?.limits?.maxSamplersPerShaderStage ?? 16) - bounceReservedSamplerCount)
+  );
+  const fireBounce = bounceRequested ? createStaticDiffuseBounce({
+    renderer,scene,fireShadow,
+    fireCenterNode:fireCenterWorld,fireIrradianceAtNode:fireIrradianceAt,
+    receiverNode:worldPositionNode,receiverNormalNode:worldNormalNode,
+    requested:bounceRequested,patchCount:bouncePatchCount,resolution:64,
+  }) : createDisabledStaticDiffuseBounce();
+  const directReceiverSignal = nearSignal.add(farSignal)
     .mul(fireShadowVisibility)
     .mul(backgroundMask)
     .mul(materialResponse)
     .mul(fireLightFieldStrength);
+  const bounceSignal = fireBounce.signal
+    .mul(backgroundMask)
+    .mul(materialResponse)
+    .mul(fireLightFieldStrength)
+    .mul(bounceStrength);
+  const receiverSignal = directReceiverSignal.add(bounceSignal);
   const compositeOutput = baseOutputNode.add(vec4(receiverSignal, 0.0));
   const isolateOutput = vec4(
     baseOutputNode.rgb.mul(0.08).mul(backgroundMask).add(receiverSignal),
@@ -9487,6 +9527,8 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     outputNode = vec4(vec3(wrappedNdotL.mul(backgroundMask)), 1.0);
   } else if (debugView === 'far') {
     outputNode = vec4(farSignal.mul(4.0).mul(backgroundMask), 1.0);
+  } else if (debugView === 'bounce') {
+    outputNode = vec4(bounceSignal.mul(8.0), 1.0);
   } else if (debugView === 'atlas') {
     outputNode = vec4(atlasTextureNode.sample(viewportUV).rgb.mul(4.0), 1.0);
   } else if (debugView === 'groundtest') {
@@ -9558,8 +9600,17 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 
   return {
     outputNode,
-    renderShadows() { if(passState.effective) fireShadow.render(`${passState.adoptionKey}:${shadowSourceGeneration}`); },
+    renderShadows() {
+      if(!passState.effective) return;
+      fireShadow.render(`${passState.adoptionKey}:${shadowSourceGeneration}`);
+      fireBounce.render(sceneMutationToken);
+    },
     setShadowsEnabled(enabled) { return fireShadow.setEnabled(enabled); },
+    setBounceEnabled(enabled) { return fireBounce.setEnabled(enabled); },
+    setBounceStrength(strength) {
+      bounceStrength.value=Number.isFinite(Number(strength))?Math.max(0,Number(strength)):baseBounceStrength;
+      return {identity:'static-diffuse-bounce-strength-v0',strength:bounceStrength.value};
+    },
     diagnoseShadows(anchors) {
       return fireShadow.diagnose(anchors,camera.position.toArray(),()=>{
         if(!this.update()) throw new Error('shadow-not-effective');
@@ -9647,12 +9698,23 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
         ...passState,
         strength: fireLightFieldStrength.value,
         isolateMix: isolateMix.value,
+        bounceStrength: bounceStrength.value,
+        bouncePatchCapacity: {
+          effective: bouncePatchCount,
+          reservedSamplerCount: bounceReservedSamplerCount,
+        },
         atlasGrid: atlasGrid.value,
         shadow: fireShadow.debugState(),
+        bounce: fireBounce.debugState(),
         sharedDeviceIdentity: sharedGpu?.identity ?? null,
+        sharedDeviceLimits: {
+          maxSampledTexturesPerShaderStage: sharedGpu?.device?.limits?.maxSampledTexturesPerShaderStage ?? null,
+          maxSamplersPerShaderStage: sharedGpu?.device?.limits?.maxSamplersPerShaderStage ?? null,
+        },
       };
     },
     dispose() {
+      fireBounce.dispose();
       fireShadow.dispose();
       blackAtlasTexture.destroy?.();
     },
@@ -9875,6 +9937,8 @@ async function initScene() {
     ? fireLightFieldPass.setWitnessMute(muted)
     : { error: 'fire-light-field-pass-not-constructed' });
   window.kaminosFireLightFieldSetShadowsEnabled = enabled => fireLightFieldPass?.setShadowsEnabled(enabled);
+  window.kaminosFireLightFieldSetBounceEnabled = enabled => fireLightFieldPass?.setBounceEnabled(enabled);
+  window.kaminosFireLightFieldSetBounceStrength = strength => fireLightFieldPass?.setBounceStrength(strength);
   window.kaminosFireShadowDiagnose = anchors => fireLightFieldPass.diagnoseShadows(anchors);
   window.kaminosFireLightFieldSetWitnessIsolate = isolate => (fireLightFieldPass
     ? fireLightFieldPass.setWitnessIsolate(isolate)
