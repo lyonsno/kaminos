@@ -1,31 +1,101 @@
 # Kaminos
 
-> A browser-native workbench for making generated worlds live.
+> Browser-native WebGPU inference, realtime simulation, and generated spatial systems in one inspectable workbench.
 
-Kaminos brings generated beings, live materials, local inference, motion, and
-spatial assets into one inspectable WebGPU workbench. It is where difficult
-technical systems become visible enough to steer, compose, and decide around
-while they are still alive.
+Kaminos is the browser-based authoring workbench where several independently
+useful systems meet. It keeps a spatial scene alive while local models run,
+receives their outputs as editable world matter, and turns runtime machinery
+that survives the workbench into reusable packages and focused model ports.
 
-The project spans four connected capabilities:
+The repository spans four connected capabilities:
 
-- **Generated beings**. Generated creatures can preserve deliberate morphology
-  through generative transformation and return to mechanical control.
-- **Live materials**. Simulated structure, appearance, and motion remain
-  authorable while state advances.
-- **Browser-native intelligence**. Spatial models execute inside the same local
-  environment that inspects and consumes their outputs.
+- **Browser-native intelligence**. A published WebGPU inference runtime and a
+  growing family of spatial and generative model ports run as components of an
+  interactive browser application.
+- **Live materials**. Stateful fire, smoke, fluids, particles, and rendering
+  processes remain visible and authorable while compute continues.
+- **Generated beings**. Separate experiments connect authored morphology to
+  generated form, reconstructed casts to mechanical control, and generated
+  creatures to terrain-relative motion.
 - **A world kiln**. Images, meshes, splats, motion, material fields, simulation
-  state, and generated environments become composable world matter.
+  state, and generated environments can be inspected, corrected, staged, and
+  composed in one WebGPU workbench.
 
 [![Golden flames illuminate the chamber of an open kiln in the Kaminos browser workbench](docs/flame-atlas/assets/kiln-authoring-hero.png)](https://lyonsno.github.io/kaminos/)
 
-## Live Browser Combustion
+## Start Here
 
-[![A live browser-native orange flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](https://lyonsno.github.io/kaminos/)
+| Surface | What it demonstrates | Entry point |
+| --- | --- | --- |
+| Browser combustion films | A stateful WebGPU fire material captured while being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Watch the captured studies](https://lyonsno.github.io/kaminos/) |
+| WebGPU inference kit | Shared-device lifecycle, persistent model routes, queues, cooperative scheduling, resource residency, progress, and runtime telemetry | [Read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
+| Spatial model ports | MoGe depth and normals, SHARP Gaussian reconstruction, SF3D textured meshes, Kimodo motion diffusion, and an in-tree SAM segmentation route | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
+| Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
 
-These films were captured directly from the live browser runtime while one
-stateful WebGPU combustion material was being authored, not prerendered.
+## One Browser, One GPU
+
+The architectural center of Kaminos is a simple product requirement: local AI
+should behave like part of an application, not replace the application with a
+modal wait.
+
+In one measured M4 Max Chrome run, **SHARP generated 1,179,648 Gaussian splats
+in 185.3 seconds while the full Kaminos fire volume continued to simulate on
+every frame in the same browser and on the same GPU**. Across 21,818 foreground
+frame intervals, p95 and p99 were 9.3ms and 10.0ms; 40 intervals exceeded
+33.3ms.
+
+In a separate shared-device run, **Stable Fast 3D produced a complete textured
+GLB in 41.9 seconds while servicing 3,644 host frames**. Page frame intervals
+had a p99 of 9.7ms and a maximum of 92.4ms, and the output was byte-identical to
+the monolithic route's output.
+
+Kaminos is the authoring surface. The
+[`@kaminos/webgpu-inference-kit`](webgpu-inference-kit/README.md) is the reusable
+runtime extracted from the work required to keep that surface responsive while
+substantial models execute.
+
+## WebGPU Inference Kit
+
+The inference kit gives browser model ports a shared session and device
+lifecycle, persistent routes, queued invocations, cooperative scheduling,
+foreground opportunities, resource residency, and terminal state. Model ports
+retain ownership of their weights, kernels, tensor semantics, execution order,
+and outputs.
+
+```sh
+npm install @kaminos/webgpu-inference-kit
+```
+
+The same runtime grammar now composes model implementations with very different
+shapes:
+
+| Port | Browser-native result | Runtime integration |
+| --- | --- | --- |
+| [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth, normals, and point maps from one image | Embeddable feed-forward pipeline with reusable buffers and bounded submissions |
+| [SHARP](https://github.com/lyonsno/sharp-webgpu) | A Gaussian-splat scene from one image | Adaptive cooperative scheduling and shared-device foreground rendering |
+| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | A textured, UV-unwrapped GLB from one image | Cooperative GPU work, reusable scratch memory, and worker offload |
+| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |
+| [SAM 3.1](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
+
+SAM is the largest complete in-tree consumer of the shared runtime. Its browser
+route executes the image backbone, prompt encoder, DETR encoder and decoder,
+scoring, selection, and mask decoder without an MLX process. On the exact
+merged native-1008 route, cold and warm mask outputs were bit-exact against the
+accepted source-equivalent baseline, a nonsense-prompt control returned exactly
+empty, and input-driven source-viewport work continued through the same WebGPU
+device at the model's existing phase boundaries. This is a direct shared-runtime
+composition result, not a frame-pacing claim.
+
+The package includes a complete minimal port, an executable render-plus-inference
+walkthrough, focused integration documentation, and runtime contracts for
+admission, scheduling, lifecycle, resources, and receipts.
+
+## Browser-Computed Combustion
+
+[![An orange WebGPU flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](https://lyonsno.github.io/kaminos/)
+
+These films were captured directly from the browser while one stateful WebGPU
+combustion material was being computed and authored, not prerendered.
 
 The material carries its history through control changes. Existing momentum
 continues through contraction, acceleration, chromatic transition, changing
@@ -33,124 +103,79 @@ source geometry, and renewed expansion. A broad burner can gather into a jet,
 retain the structure already in flight, and rebuild into another morphology
 without resetting the simulation.
 
-[Live Combustion](https://lyonsno.github.io/kaminos/) presents one complete composition, four
-authored transitions, and seven compact studies of color, structure, width, and
-state history.
+[Browser Combustion Films](https://lyonsno.github.io/kaminos/) presents one complete
+composition, four authored transitions, and seven compact studies of color,
+structure, width, and state history.
 
-Kaminos currently carries a multi-field volumetric fire and smoke simulation
-that runs directly in the browser through WebGPU. Its current boundary-fire
-renderer derives compact structural fields around the combustion front, then
-uses those fields to guide where the volumetric renderer spends work.
+The current multi-field simulation runs directly in the browser through
+WebGPU. Its boundary-fire renderer derives compact structural fields around the
+combustion front, then uses those fields to guide where the volumetric renderer
+spends work. The same material can run in the isolated screening room, inhabit
+arbitrary scene geometry, or remain active as the foreground workload around
+browser inference.
 
-The result is a live material process with:
-
-- dynamic fire and smoke at interactive cadence;
-- live simulation routes developed and profiled on Apple Silicon;
-- combustion-front topology and baked boundary-sidecar fields;
-- support, coverage, ridge, proximity, and footprint guidance;
-- adaptive raymarch and explicit quality controls;
-- route, backend, effective-control, and performance receipts;
-- durable state capture and replay for visual investigation.
-
-The fire began as an answer to a product question: how can a local AI
-experience remain alive while expensive inference occupies the machine? It is
-now becoming a material and rendering research program of its own.
+The fire began as an answer to the question that produced the inference kit:
+what should a local AI application do while expensive inference occupies the
+machine? It should stay alive.
 
 ## Generated Beings
 
-Generated creatures can preserve deliberate morphology through generative
-transformation and return to mechanical control.
+One matched-image assay showed an authored low-frequency morphology edit
+influencing generated mass, stance, and support organization. Separately, one
+reconstructed cast was registered to a control armature and posed through
+ordinary controls after manual skinning. A different textured reconstruction
+consumed terrain-relative motion in a browser world.
 
-Deliberate edits to a parameterized creature template have produced
-corresponding changes after image generation and image-to-3D reconstruction.
-Using recovered correspondence, one reconstruction was registered to a control
-rig and manually skinned for large articulated deformations; another was driven
-by synthesized terrain-following motion.
+These are three adjacent research lines, not one creature moving through a
+completed end-to-end pipeline. The continuing frontier is stronger editable
+control: returning distinctions authored before generation as durable controls
+that can survive later rounds of transformation.
 
-That result reaches recovered structure and downstream mechanical consumption.
-The continuing research frontier is editable authority: returning distinctions
-authored by the generator as durable, named controls that can survive another
-generation and accumulate into later rounds of authorship.
+## Spatial Asset Kiln
 
-## Browser-Native Intelligence
+The workbench receives images, meshes, splats, motion, material fields,
+simulation state, and generated environments as things that can be handled,
+not merely viewed. Current substrate includes:
 
-The reusable runtime is [Kaminos WebGPU Inference Kit](webgpu-inference-kit/README.md), published as `@kaminos/webgpu-inference-kit`. It gives model ports shared device and session ownership, persistent weights, queued invocations, cooperative execution boundaries, and runtime telemetry. Model implementations retain their kernels and tensor semantics; applications retain their interaction and rendering loop.
-
-```sh
-npm install @kaminos/webgpu-inference-kit
-```
-
-The [integration guide](webgpu-inference-kit/docs/getting-started.md) starts with a working model adapter. The complete in-tree [SAM 3.1 image/prompt/mask demo](webgpu-inference-kit/docs/sam-semantic-demo.md) carries an image and text prompt through the browser backbone, prompt encoder, DETR stack, scoring, selection, and mask decoder to visible instance masks. Its 3.32 GB model package remains resident, image features are cached across prompts, and prompt requests use the shared registered queue; parity verification is a separate mode, not work repeated for each prompt.
-
-On the exact merged native-1008 route, cold and warm mask outputs were bit-exact against the accepted source-equivalent baseline, a nonsense-prompt control returned exactly empty, and input-driven source-viewport work continued through the same WebGPU device at the model's existing phase boundaries. This is a complete browser inference consumer and direct shared-runtime composition result, not a frame-pacing claim.
-
-Spatial models execute inside the same browser environment that consumes their
-outputs. Local WebGPU inference, geometry, motion, and simulation can therefore
-remain part of one operating world rather than terminating at a model response
-or crossing into a disconnected application.
-
-The workbench preserves requested and effective route identity, model and
-backend lifecycle, generated assets, live state, and the inspection surfaces
-needed to decide what should happen next.
-
-## The World Kiln
-
-Kaminos treats generated outputs as world matter with lineage and behavior.
-Images, meshes, splats, motion, material fields, simulation state, and route
-outputs enter a shared browser workbench where they can be inspected,
-conditioned, transformed, staged, and handed onward.
-
-Current substrate includes:
-
-- Three.js/WebGPU scene editing and persistence;
-- source-aware splat import, correction, crop, orientation, and sidecars;
+- Three.js/WebGPU scene editing, cameras, lighting, and persistence;
+- splat import, correction, crop, orientation, and sidecars;
 - mesh/splat hybrid rendering and scene-context integration;
-- motion-generation and motion-transposition experiments;
-- browser-native fluid, particle, and material processes;
-- world/chamber contracts for generated environments and inhabitants;
-- route receipts that distinguish requested and effective execution;
-- smoke and witness harnesses for visual and technical evidence.
+- motion generation, transposition, preview, and export experiments;
+- browser-native fluid, particle, and volumetric material processes;
+- World Chambers and Preview Benches for coherent generated environments;
+- Smoke Offers and browser witnesses for handing live visual work between
+  producers and the operator.
 
 The architecture is documented in [Spatial Asset Kiln](docs/spatial-asset-kiln.md).
-Splat lineage and correction contracts are documented in
+Splat correction and renderer-consumption contracts are documented in
 [Splat Assets](docs/splat-assets.md).
 
-## From Source To Cast
-
-The product direction is a complete visible loop:
+The longer product loop is already visible in the repository:
 
 ```text
-source -> route -> live work -> generated matter -> inspectable cast
+source -> model route -> live workbench -> generated matter -> authored world
 ```
 
-A team should be able to choose a source, fire a real local route, remain
-inside a living workroom while compute runs, and inspect the resulting object
-without crossing into a disconnected tool or dead waiting screen.
+## Repository Atlas
 
-This loop is being assembled from the same browser-native systems already used
-for volumetric fire, splats, generated assets, motion, route scheduling, and
-scene inspection.
+| Path | Role |
+| --- | --- |
+| [`index.html`](index.html) | Main Three.js/WebGPU workbench, scene editor, rendering routes, and authoring controls |
+| [`serve.py`](serve.py) | Local server and asset-browse API for Kaminos and sibling model outputs |
+| [`webgpu-inference-kit/`](webgpu-inference-kit/) | Published runtime package, examples, integration guides, and contract tests |
+| [`docs/flame-atlas/`](docs/flame-atlas/) | Public browser-combustion film collection and capture manifest |
+| [`models/`](models/) and [`pipelines/`](pipelines/) | In-tree experimental models and generated-asset pipelines |
+| [`docs/`](docs/) | Kiln, splat, structural-control, and route architecture |
+| [`tests/`](tests/) | Browser, runtime, scene, simulation, pipeline, and public-surface contracts |
+| [`artifacts/`](artifacts/) | Retained visual investigations and renderer studies |
 
-## Decision Artifacts
-
-Kaminos projects are organized around one expensive uncertainty. The goal is a
-live artifact that makes the next product decision obvious enough to fund,
-staff, transfer, continue, or kill.
-
-The recurring engineering move is to find the missing representation that
-makes the system tractable. In the current fire route, combustion-front and
-boundary fields turn an expensive volumetric search into guided rendering. In
-generated-world routes, the corresponding representation may be a depth or
-normal field, splat, mesh, semantic substrate, motion packet, route receipt, or
-world-state contract.
-
-The visible experience carries the idea. The accompanying implementation,
-tests, route identity, performance evidence, and handoff notes make it usable
-after the demonstration ends.
+Focused model ports live in their own repositories once their boundaries are
+strong enough to stand alone. Kaminos remains the place where those ports meet
+rendering, simulation, generated assets, and actual product behavior.
 
 ## Run Locally
 
-Kaminos is developed as a local browser application. Serve the checkout:
+Serve the checkout:
 
 ```sh
 python3 serve.py 8095
@@ -162,15 +187,15 @@ Open the current volume route in a WebGPU-capable Chromium browser:
 http://127.0.0.1:8095/?kaminos_volume_smoke=1&volume_scene=tall_plume
 ```
 
-The strongest current route is developed and witnessed on Apple Silicon. Other
-WebGPU devices may expose different performance and feature boundaries.
+The strongest current routes are developed and measured on Apple Silicon.
+Other WebGPU devices may expose different performance and feature boundaries.
 
 ## Status
 
-Kaminos is an active research and product prototype. Internal contracts,
-control surfaces, and route integrations are evolving quickly. Publicly useful
-subsystems are being separated into focused packages and upstream contributions
-as their interfaces settle.
+Kaminos is an active research workbench. The inference runtime is published as
+a reusable npm package; the combustion material, generated-world controls, and
+spatial authoring surfaces continue to evolve in the workbench; focused model
+ports graduate into their own repositories.
 
 For technical or collaboration inquiries, contact
 [Noah Lyons](https://github.com/lyonsno).

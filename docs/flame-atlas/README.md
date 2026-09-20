@@ -1,11 +1,11 @@
-# Live Combustion
+# Browser Combustion Films
 
-These compositions and studies were captured directly from the live browser
-runtime while one stateful WebGPU combustion material was being authored. The
+These compositions and studies were captured directly from the browser while
+one stateful WebGPU combustion material was being computed and authored. The
 material keeps its momentum and history as source geometry, energy, structure,
 and color change.
 
-![A live orange flame with a luminous crown and rooted filament structure](assets/conventional-fire-hero.png)
+![An orange WebGPU flame with a luminous crown and rooted filament structure](assets/conventional-fire-hero.png)
 
 The conventional-fire still establishes the material at a glance. The films
 below show the harder part: its structure and momentum remain alive while the

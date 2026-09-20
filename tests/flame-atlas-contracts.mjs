@@ -16,7 +16,31 @@ function sha256(relativePath) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-test("generated-worlds README and flame screening room public claims agree", () => {
+function assertGeneratedBeingClaims(copy) {
+  const section = copy.match(/^## Generated Beings\s*$([\s\S]*?)(?=^##\s|\Z)/m)?.[1] ?? "";
+
+  assert.match(
+    section,
+    /one matched-image assay showed an authored low-frequency morphology edit\s+influencing generated mass, stance, and support organization/i,
+  );
+  assert.match(section, /Separately, one\s+reconstructed cast was registered to a control armature/i);
+  assert.match(section, /A different textured reconstruction\s+consumed terrain-relative motion/i);
+  assert.match(section, /three adjacent research lines, not one creature moving through a\s+completed end-to-end pipeline/i);
+
+  const sentences = section.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/);
+  for (const sentence of sentences) {
+    const namesAuthoredMorphology = /\b(?:authored\s+(?:low-frequency\s+)?morphology\s+edit|deliberate\s+edits?|morphological\s+edit)\b/i.test(sentence);
+    const namesReconstruction = /\b(?:image-to-3D\s+reconstruction|3D\s+reconstruction|reconstruction)\b/i.test(sentence);
+    const assertsContinuity = /\b(?:persist(?:ed|s)?|surviv(?:ed|es)?|preserv(?:ed|es)?|carried|corresponding|resulting|through|after|before)\b/i.test(sentence);
+
+    assert.ok(
+      !(namesAuthoredMorphology && namesReconstruction && assertsContinuity),
+      `morphology-to-reconstruction bridge is not an admitted public claim: ${sentence}`,
+    );
+  }
+}
+
+test("repository README and flame screening room public claims agree", () => {
   const manifest = JSON.parse(read("docs/flame-atlas/capture-manifest.json"));
   const html = read("docs/flame-atlas/index.html");
   const rootReadme = read("README.md");
@@ -55,13 +79,21 @@ test("generated-worlds README and flame screening room public claims agree", () 
   }
 
   assert.match(rootReadme, /docs\/flame-atlas\/assets\/conventional-fire-hero\.png/);
-  assert.match(rootReadme, /\[Live Combustion\]\(https:\/\/lyonsno\.github\.io\/kaminos\/\)/);
-  assert.match(rootReadme, /^> A browser-native workbench for making generated worlds live\.$/m);
+  assert.match(rootReadme, /\[Browser Combustion Films\]\(https:\/\/lyonsno\.github\.io\/kaminos\/\)/);
+  assert.doesNotMatch(rootReadme, /Live Browser Combustion|Open the live screening room/);
+  assert.match(
+    rootReadme,
+    /^> Browser-native WebGPU inference, realtime simulation, and generated spatial systems in one inspectable workbench\.$/m,
+  );
+  assert.match(rootReadme, /@kaminos\/webgpu-inference-kit/);
+  assert.match(rootReadme, /1,179,648 Gaussian splats/);
+  assert.match(rootReadme, /21,818 foreground\s+frame intervals/);
+  assert.doesNotMatch(rootReadme, /docs\/generated-beings\//);
   assert.match(rootReadme, /\*\*Generated beings\*\*/);
   assert.match(rootReadme, /\*\*Live materials\*\*/);
   assert.match(rootReadme, /\*\*Browser-native intelligence\*\*/);
   assert.match(rootReadme, /\*\*A world kiln\*\*/);
-  assert.match(rootReadme, /Generated creatures can preserve deliberate morphology\s+through generative transformation and return to mechanical control\./);
+  assertGeneratedBeingClaims(rootReadme);
   assert.doesNotMatch(rootReadme, /Generated beings retain identity, structure, and handles after inference/i);
   assert.match(
     html,
@@ -76,8 +108,26 @@ test("generated-worlds README and flame screening room public claims agree", () 
   assert.doesNotMatch(publicCopy, /\b\d+(?:[-–]\d+)?\s*fps\b/i);
   assert.doesNotMatch(publicCopy, /\b(?:60|30|24|12)\s*\/\s*1\b/);
   assert.doesNotMatch(publicCopy, /\b(?:96|128|160)\s*(?:\^?3|³)\b/i);
-  assert.match(publicCopy, /captured directly from the live browser runtime/i);
+  assert.match(publicCopy, /captured directly from the browser/i);
+  assert.match(html, /<h1>Browser <span>Combustion<\/span><\/h1>/);
   assert.doesNotMatch(html, /<video\b[^>]*\sautoplay(?:\s|>)/i);
+});
+
+test("generated-being claims reject morphology-to-reconstruction bridges", () => {
+  const rootReadme = read("README.md");
+  assert.doesNotThrow(() => assertGeneratedBeingClaims(rootReadme));
+
+  const paraphrasedBridge = rootReadme.replace(
+    "These are three adjacent research lines",
+    "The authored morphology edit persisted through image generation and 3D reconstruction before the resulting body returned to mechanical control.\n\nThese are three adjacent research lines",
+  );
+  assert.throws(() => assertGeneratedBeingClaims(paraphrasedBridge), /morphology-to-reconstruction bridge/i);
+
+  const historicalBridge = rootReadme.replace(
+    "These are three adjacent research lines",
+    "Deliberate edits produced corresponding changes after image generation and image-to-3D reconstruction.\n\nThese are three adjacent research lines",
+  );
+  assert.throws(() => assertGeneratedBeingClaims(historicalBridge), /morphology-to-reconstruction bridge/i);
 });
 
 test("flame boutique deploys as the narrow Kaminos Pages artifact", () => {
