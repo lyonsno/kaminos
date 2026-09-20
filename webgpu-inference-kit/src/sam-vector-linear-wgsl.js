@@ -8,8 +8,8 @@ struct LinearDims {
   _pad0: u32,
 };
 
-@group(0) @binding(0) var<storage, read> input_values: array<vec4<f32>>;
-@group(0) @binding(1) var<storage, read> weight: array<vec4<f32>>;
+@group(0) @binding(0) var<storage, read> input_values: array<f32>;
+@group(0) @binding(1) var<storage, read> weight: array<f32>;
 @group(0) @binding(2) var<storage, read> bias: array<f32>;
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: LinearDims;
@@ -29,17 +29,14 @@ fn main(
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
-  let packed_input_channels = dims.input_channels / 4u;
-  let input_base = token * packed_input_channels;
-  let weight_base = output_channel * packed_input_channels;
+  let input_base = token * dims.input_channels;
+  let weight_base = output_channel * dims.input_channels;
   var sum = bias[output_channel];
-  for (var packed_channel = 0u; packed_channel < packed_input_channels; packed_channel = packed_channel + 1u) {
-    let input_vector = input_values[input_base + packed_channel];
-    let weight_vector = weight[weight_base + packed_channel];
-    sum = sum + input_vector.x * weight_vector.x;
-    sum = sum + input_vector.y * weight_vector.y;
-    sum = sum + input_vector.z * weight_vector.z;
-    sum = sum + input_vector.w * weight_vector.w;
+  for (var channel = 0u; channel < dims.input_channels; channel = channel + 4u) {
+    sum = sum + input_values[input_base + channel] * weight[weight_base + channel];
+    sum = sum + input_values[input_base + channel + 1u] * weight[weight_base + channel + 1u];
+    sum = sum + input_values[input_base + channel + 2u] * weight[weight_base + channel + 2u];
+    sum = sum + input_values[input_base + channel + 3u] * weight[weight_base + channel + 3u];
   }
   output_values[index] = activate(sum);
 }
