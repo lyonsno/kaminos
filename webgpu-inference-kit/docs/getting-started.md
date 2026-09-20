@@ -16,6 +16,22 @@ npm install @kaminos/webgpu-inference-kit
 npm install --save-dev vite
 ```
 
+## Try The Photo Walkthrough
+
+The package includes a [photo-brightness walkthrough](../examples/render-plus-inference.html): an original photograph, a brightness control, a processed result, and a moving activity indicator. It shows how an application shares one GPU device between rendering and a queued operation.
+
+From the project directory you just created, run:
+
+```sh
+npx vite node_modules/@kaminos/webgpu-inference-kit --open /examples/render-plus-inference.html
+```
+
+The browser opens the worked example. Move the brightness slider and press **Apply with WebGPU** to see the processed image beside the original. The page explains the steps and links to the implementation. If your browser does not open automatically, append `/examples/render-plus-inference.html` to the local URL printed by Vite.
+
+Stop the server with Ctrl+C when you finish. Continue below to build the minimal model app in your own files.
+
+## Build The Minimal Model App
+
 Create `index.html`:
 
 ```html
