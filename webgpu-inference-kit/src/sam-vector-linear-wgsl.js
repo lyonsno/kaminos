@@ -32,8 +32,11 @@ fn main(
   let input_base = token * dims.input_channels;
   let weight_base = output_channel * dims.input_channels;
   var sum = bias[output_channel];
-  for (var channel = 0u; channel < dims.input_channels; channel = channel + 1u) {
+  for (var channel = 0u; channel < dims.input_channels; channel = channel + 4u) {
     sum = sum + input_values[input_base + channel] * weight[weight_base + channel];
+    sum = sum + input_values[input_base + channel + 1u] * weight[weight_base + channel + 1u];
+    sum = sum + input_values[input_base + channel + 2u] * weight[weight_base + channel + 2u];
+    sum = sum + input_values[input_base + channel + 3u] * weight[weight_base + channel + 3u];
   }
   output_values[index] = activate(sum);
 }
@@ -120,7 +123,8 @@ function positiveInteger(value, name) {
 
 export function vectorLinearDispatch(tokenCount, inputChannels, outputChannels, options = {}) {
   const tokens = positiveInteger(tokenCount, 'tokenCount');
-  positiveInteger(inputChannels, 'inputChannels');
+  const inputs = positiveInteger(inputChannels, 'inputChannels');
+  if (inputs % 4 !== 0) throw new Error('inputChannels must be divisible by 4');
   const outputs = positiveInteger(outputChannels, 'outputChannels');
   const maxWorkgroupsPerDimension = positiveInteger(
     options.maxWorkgroupsPerDimension ?? 65_535,
@@ -138,4 +142,4 @@ export function vectorLinearDispatchForDevice(tokenCount, inputChannels, outputC
   });
 }
 
-export const SAM_VECTOR_LINEAR_WIDTH = 1;
+export const SAM_VECTOR_LINEAR_WIDTH = 4;
