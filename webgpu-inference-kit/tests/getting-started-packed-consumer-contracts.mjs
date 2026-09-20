@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,13 @@ try {
   const tarball = join(temporaryRoot, packOutput[0].filename);
   await writeFile(join(temporaryRoot, 'package.json'), '{"type":"module","private":true}\n');
   run('npm', ['install', '--ignore-scripts', '--no-package-lock', tarball], temporaryRoot);
+  const installedRoot = join(temporaryRoot, 'node_modules/@kaminos/webgpu-inference-kit');
+  await mkdir(join(installedRoot, 'tests'));
+  await copyFile(
+    join(packageRoot, 'tests/package-entrypoints-contracts.mjs'),
+    join(installedRoot, 'tests/package-entrypoints-contracts.mjs'),
+  );
+  run('node', ['--experimental-vm-modules', 'tests/package-entrypoints-contracts.mjs'], installedRoot);
   await copyFile(fixturePath, join(temporaryRoot, 'fake-device.mjs'));
   await writeFile(join(temporaryRoot, 'consumer.mjs'), `
 import { runMinimalModelPort } from '@kaminos/webgpu-inference-kit/examples/minimal-model-port';
@@ -67,6 +74,14 @@ console.log(JSON.stringify({ report, calls: surface.calls }));
     'utf8',
   );
   assert.match(installedGuide, /exact-source: examples\/minimal-model-port-runner\.mjs/);
+
+  // A root-barrel shortcut must fail even when it exposes all required core names.
+  await writeFile(join(installedRoot, 'src/core.js'), "export * from './index.js';\n");
+  const contaminated = spawnSync('node', [
+    '--experimental-vm-modules', 'tests/package-entrypoints-contracts.mjs',
+  ], { cwd: installedRoot, encoding: 'utf8' });
+  assert.notEqual(contaminated.status, 0);
+  assert.match(contaminated.stderr, /core loads model implementation:/);
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
 }
