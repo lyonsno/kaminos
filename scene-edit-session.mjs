@@ -10,9 +10,12 @@ export function checkedPose(pose) {
 }
 export function createSceneEdits({read, write, changed = () => {}, admit = () => {}}) {
   let active = null, past = [], future = [];
+  const targets=new Map(),listeners=new Set();
+  const check=(id,value)=>(targets.get(id)?.check || checkedPose)(value);
+  const put=(id,value)=>targets.has(id)?targets.get(id).write(clone(value)):write(id,value);
   const state = () => ({active:active ? clone(active) : null,undoCount:past.length,redoCount:future.length});
-  const get = id => {const pose=read(id);if(!pose)throw new Error(`Scene object "${id}" was not found`);return checkedPose(pose);};
-  const notify = () => changed(state());
+  const get = id => {const pose=targets.has(id)?targets.get(id).read():read(id);if(!pose)throw new Error(`Scene object "${id}" was not found`);return check(id,pose);};
+  const notify = () => {changed(state());for(const listener of listeners)listener(state());};
   function begin(id,label='Transform') {
     admit();
     if(active)throw new Error('A scene edit is already active');
@@ -21,7 +24,7 @@ export function createSceneEdits({read, write, changed = () => {}, admit = () =>
   function preview(patch) {
     admit();
     if(!active)throw new Error('No scene edit is active');
-    const pose=checkedPose({...get(active.id),...patch});write(active.id,pose);notify();return clone(pose);
+    const pose=check(active.id,{...get(active.id),...patch});put(active.id,pose);notify();return clone(pose);
   }
   function commit() {
     if(!active)return false;
@@ -32,20 +35,22 @@ export function createSceneEdits({read, write, changed = () => {}, admit = () =>
   }
   function cancel() {
     if(!active)return false;
-    get(active.id);write(active.id,clone(active.before));active=null;notify();return true;
+    get(active.id);put(active.id,clone(active.before));active=null;notify();return true;
   }
   function apply(id,patch,label='Transform') {
     admit();
     if(active)throw new Error('Finish the active scene edit first');
-    const pose=checkedPose({...get(id),...patch});begin(id,label);preview(pose);commit();return clone(pose);
+    const pose=check(id,{...get(id),...patch});begin(id,label);preview(pose);commit();return clone(pose);
   }
   function replay(from,to,key) {
     admit();
     if(active)throw new Error('Finish the active scene edit first');
     const entry=from.at(-1);if(!entry)return false;
-    get(entry.id);write(entry.id,clone(entry[key]));from.pop();to.push(entry);notify();return true;
+    get(entry.id);put(entry.id,clone(entry[key]));from.pop();to.push(entry);notify();return true;
   }
-  return {begin,preview,commit,cancel,apply,state,undo:()=>replay(past,future,'before'),redo:()=>replay(future,past,'after'),
+  return {begin,preview,commit,cancel,apply,state,
+    subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
+    register(id,target){if(!id.startsWith("@") || targets.has(id))throw Error("Duplicate or invalid edit target");targets.set(id,target);},undo:()=>replay(past,future,'before'),redo:()=>replay(future,past,'after'),
     clear(){if(active)cancel();past=[];future=[];notify();}};
 }
 export function axisVector(axis, frame='world', frameRotation=[0,0,0]) {

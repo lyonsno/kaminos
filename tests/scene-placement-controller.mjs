@@ -46,3 +46,14 @@ test('a correction gizmo remains owned by its correction controller',()=>{
  const f=fixture();f.allowed=false;f.gizmo.dragging=true;f.gizmo.dispatchEvent({type:'mouseDown'});
  assert.equal(f.gizmo.dragging,true);assert.equal(f.tools.state().gizmoEditing,false);assert.equal(f.tools.state().active,null);
 });
+test('switching operation restores gesture-start pose while keeping frame and one undo entry',()=>{
+ const f=fixture();f.tools.start('translate');
+ f.tools.edits.preview({position:[3,0,0]});
+ emit(f.document,'keydown',{key:'x',shiftKey:false});
+ f.tools.edits.preview({position:[3,0,0]});
+ f.tools.start('rotate');assert.deepEqual(f.pose.position,[0,0,0]);
+ assert.equal(f.tools.state().modal.axis,'x');
+ emit(f.document,'keydown',{key:'3'});emit(f.document,'keydown',{key:'0'});
+ f.tools.finish(true);assert.deepEqual(f.pose.position,[0,0,0]);assert.equal(f.tools.state().undoCount,1);
+ f.tools.edits.undo();assert.deepEqual(f.pose.rotation,[0,0,0]);
+});

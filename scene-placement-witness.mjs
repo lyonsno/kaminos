@@ -16,7 +16,7 @@ let browser,page,lease;
 try {
  for(const key of ['origin','scene','playwright','greenroom','owner'])assert.ok(v[key],`--${key} required`);
  r.phase='source';r.source=await verifyAuthoringServer({origin:v.origin,repoRoot:process.cwd()});
- for(const name of ['scene-edit-session.mjs','scene-placement-tools.mjs']) {
+ for(const name of ['scene-edit-session.mjs','scene-placement-tools.mjs','scene-parameter-tools.mjs','scene-selection-tools.mjs']) {
   const raw=await(await fetch(new URL(name,v.origin))).text(),local=await fs.readFile(name,'utf8');assert.equal(raw,local,`wrong served source ${name}`);
   r.source.hashes[name]=createHash('sha256').update(raw).digest('hex');
  }
@@ -46,7 +46,7 @@ try {
  await press('x');await page.keyboard.type('0.25');await shot('move');r.moved=await current();
  assert.equal(await page.evaluate(()=>window.kaminosPlacementDebugState().gizmoVisible),false,'modal axis owns feedback without an overlaid gizmo');
  assert.ok(Math.abs(r.moved.position[0]-r.before.position[0]-.25)<1e-10);
- r.phase='operation-switch';await press('r');await page.keyboard.type('15');r.rotated=await current();assert.deepEqual(r.rotated.position,r.moved.position);
+ r.phase='operation-switch';await press('r');await page.keyboard.type('15');r.rotated=await current();assert.deepEqual(r.rotated.position,r.before.position);
  assert.ok(Math.abs(r.rotated.rotation[0]-Math.PI/12)<1e-10);await shot('rotate');
  await press('Escape');assert.deepEqual(await current(),r.before);assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),0);
  r.phase='commit-undo-redo';await press('g');await press('x');await page.keyboard.type('0.25');await press('r');await page.keyboard.type('15');await press('Enter');r.accepted=await current();
@@ -70,10 +70,27 @@ try {
  await input.fill('1.23456789');await press('Enter');assert.equal((await current()).position[0],1.23456789);
  // Native cursor movement stays in the text field and cannot start rotation/scale.
  await input.focus();await press('Meta+ArrowLeft');assert.equal(await page.evaluate(()=>window.kaminosPlacementDebugState().modal),null);await input.blur();
+ r.phase='parameter-history';
+ const params=()=>page.evaluate(()=>window.kaminosAuthoredParameterState());
+ r.parametersBefore=await params();
+ const burner=page.locator('#burner-outerRadius'),exposure=page.locator('#exposure-slider-number');
+ await burner.fill('1.1');await press('Enter');assert.equal((await params())['burner.outerRadius'],1.1);
+ await exposure.fill('1.8');await press('Enter');assert.equal((await params())['exposure-slider'],1.8);
+ await inside();await press('Meta+z');assert.equal((await params())['exposure-slider'],r.parametersBefore['exposure-slider']);assert.equal((await params())['burner.outerRadius'],1.1);
+ await press('Meta+z');assert.equal((await params())['burner.outerRadius'],r.parametersBefore['burner.outerRadius']);
+ await press('Meta+Shift+z');await press('Meta+Shift+z');
+ await exposure.fill('2.3');await press('Escape');assert.equal((await params())['exposure-slider'],1.8);
+ const eg=page.locator('label[for="exposure-slider"]');await eg.scrollIntoViewIfNeeded();const eb=await eg.boundingBox();
+ await page.mouse.move(eb.x+eb.width/2,eb.y+eb.height/2);await page.mouse.down();await page.mouse.move(eb.x+eb.width/2+30,eb.y+eb.height/2,{steps:4});await page.mouse.up();
+ assert.ok(Math.abs((await params())['exposure-slider']-2.1)<1e-9);await shot('lighting-relative');
+ // Headless parameter edits enter the same chronological undo path.
+ await page.evaluate(()=>window.kaminosSetAuthoredParameter('burner.outerRadius',1.2));await inside();await press('Meta+z');assert.equal((await params())['burner.outerRadius'],1.1);
+ r.parametersSaved=await params();
+ r.phase='frame-selected';await inside();await press('f');assert.ok((await page.evaluate(()=>window.kaminosSelectionDebugState())).meshes>0);await shot('frame-selected');
  r.phase='save-guard';await inside();await press('g');await press('x');await page.keyboard.type('9');assert.equal(await page.evaluate(()=>window.saveScene()),false);await press('Escape');
  r.phase='save-reopen';r.savedPose=await current();assert.equal(await page.evaluate(()=>window.saveScene()),true);
  const saved=await(await fetch(`${v.origin}/api/read?root=scenes&path=${encodeURIComponent(v.scene)}`)).json();await fs.writeFile(path.join(v.out,'saved-scene.json'),JSON.stringify(saved,null,2));savedPoseEqual(saved.objects[0].transform,r.savedPose);assert.equal(saved.objects[0].source,scene.objects[0].source);
- r.reopenUrl=compositionRestoreUrl(saved.composition,v.scene,v.origin);await page.goto(r.reopenUrl);await page.waitForFunction(()=>window.kaminosSceneObjectDebugState?.().length===1 && window.__kaminosVolumePrototype?.debugState().frameCount>25,null,{timeout:120000});savedPoseEqual(await current(),r.savedPose);await shot('reopened');
+ r.reopenUrl=compositionRestoreUrl(saved.composition,v.scene,v.origin);await page.goto(r.reopenUrl);await page.waitForFunction(()=>window.kaminosSceneObjectDebugState?.().length===1 && window.__kaminosVolumePrototype?.debugState().frameCount>25,null,{timeout:120000});savedPoseEqual(await current(),r.savedPose);assert.equal((await params())['exposure-slider'],r.parametersSaved['exposure-slider']);assert.equal((await params())['burner.outerRadius'],r.parametersSaved['burner.outerRadius']);await shot('reopened');
  r.phase='capture';await page.locator('#composition-label').fill('Modal placement study');assert.equal(await page.evaluate(()=>window.captureComposition()),true);await shot('final');
  r.phase='busy-admission';let releasePreset,sawPreset;const held=new Promise(resolve=>releasePreset=resolve),requested=new Promise(resolve=>sawPreset=resolve);
  await page.route('**/api/volume-settings-presets',async route=>{if(route.request().method()==='POST'){sawPreset();await held;}await route.continue();});

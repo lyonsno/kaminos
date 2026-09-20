@@ -1,7 +1,7 @@
 import { Vector3, Vector2, Raycaster, Plane } from './lib/three.core.js';
 import { createSceneEdits, transformPose, axisVector } from './scene-edit-session.mjs';
 
-export function installScenePlacementTools({viewport, camera, controls, gizmo, selected, read, write, object, refresh, allowed, busy}) {
+export function installScenePlacementTools({viewport, camera, controls, gizmo, selected, read, write, object, refresh, allowed, busy, frameSelected = () => {}, selectionFeedback = () => {}}) {
   const hud=document.createElement('div');hud.id='scene-edit-hud';hud.setAttribute('role','status');
   const overlay=document.createElementNS('http://www.w3.org/2000/svg','svg');overlay.id='scene-edit-overlay';
   overlay.setAttribute('aria-hidden','true');viewport.append(overlay,hud);
@@ -39,7 +39,9 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
       modal={axis:null,plane:false,frame:'world',frameRotation:[...pose().rotation],numeric:'',snap:false,precise:false,
         prior:priorControls()};
     }
-    modal.operation=operation;modal.base=structuredClone(pose());modal.anchor={...lastPointer};modal.numeric='';modal.amount=operation==='scale'?1:0;
+    modal.base=structuredClone(edits.state().active.before);
+    edits.preview(modal.base);
+    modal.operation=operation;modal.anchor={...lastPointer};modal.numeric='';modal.amount=operation==='scale'?1:0;
     // Axis scale is explicitly local: root TRS has no shear channel.
     if(operation==='scale' && modal.axis)modal.frame='local';
     controls.enabled=false;gizmo.enabled=false;gizmo.getHelper().visible=false;draw();return true;
@@ -82,12 +84,13 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
   function draw() {
     camera.updateMatrixWorld(true);
     const id=selected(),target=id?object(id):null,m=modal;
+    selectionFeedback(target);
     hud.dataset.active=String(!!edits.state().active);
     if(m) {
       const value=m.numeric || (m.operation==='rotate'?((m.amount||0)*180/Math.PI).toFixed(1)+'°':(m.amount??(m.operation==='scale'?1:0)).toFixed(3));
       hud.textContent=`${{translate:'Move',rotate:'Rotate',scale:'Scale'}[m.operation]} ${m.axis?(m.plane?'plane ⟂ ':'')+m.axis.toUpperCase():''} · ${m.axis?m.frame:'view'} · ${value} · ${m.snap?'Snap '+(m.operation==='rotate'?'5°':'0.1')+' · ':''}Enter / LMB confirm · Esc / RMB cancel`;
     } else if(field)hud.textContent='Edit value · drag axis label to adjust · Enter confirm · Esc cancel';
-    else hud.textContent=id?`${id} · G Move · R Rotate · S Scale · X/Y/Z constrain · Ctrl snap · Shift precision · ⌘/Ctrl Z undo`:'Select an object to place it';
+    else hud.textContent=id?`${id} · G Move · R Rotate · S Scale · X/Y/Z constrain · Ctrl snap · Shift precision · F frame selected · ⌘/Ctrl Z undo`:'Select an object to place it';
     overlay.setAttribute('viewBox',`0 0 ${viewport.clientWidth} ${viewport.clientHeight}`);
     let lines='';
     const line=(a,b,color,opacity=1,dash='')=>{if([a.x,a.y,b.x,b.y].every(Number.isFinite))lines+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${color}" opacity="${opacity}" stroke-width="1.3" ${dash?`stroke-dasharray="${dash}"`:''}/>`;};
@@ -148,6 +151,7 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
     if(!(hover || viewport.contains(document.activeElement)) || !allowed() || busy())return;
     if((e.ctrlKey || e.metaKey) && key==='z') {steal(e);try{e.shiftKey?edits.redo():edits.undo();}catch(error){hud.textContent=error.message;}return;}
     if(e.ctrlKey||e.metaKey||e.altKey)return;
+    if(key==='f' || e.code==='NumpadDecimal'){steal(e);frameSelected();return;}
     if(['g','r','s'].includes(key)){steal(e);start({g:'translate',r:'rotate',s:'scale'}[key]);}
   },true);
   document.addEventListener('keyup',e=>{if(modal && ['Control','Shift'].includes(e.key)){modal.snap=e.ctrlKey;modal.precise=e.shiftKey;preview();}},true);
@@ -189,5 +193,5 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
   draw();
   return {edits,state,start,finish,selectionChanged:changeSelection,draw,
     clear(){finish(false);edits.clear();draw();},
-    suspendVisuals(value){overlay.style.visibility=value?'hidden':'';hud.style.visibility=value?'hidden':'';}};
+    suspendVisuals(value){selectionFeedback(value?null:object(selected()));overlay.style.visibility=value?'hidden':'';hud.style.visibility=value?'hidden':'';}};
 }

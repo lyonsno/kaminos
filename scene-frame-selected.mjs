@@ -1,0 +1,15 @@
+import * as THREE from './lib/three.core.js';
+export function frameObject(object,camera,controls) {
+  if(!object)return false;
+  const box=new THREE.Box3().setFromObject(object);
+  if(box.isEmpty())return false;
+  const center=box.getCenter(new THREE.Vector3()),radius=box.getSize(new THREE.Vector3()).length()/2;
+  if(!Number.isFinite(radius)||radius<=0)return false;
+  const vertical=camera.fov*Math.PI/360,horizontal=Math.atan(Math.tan(vertical)*camera.aspect);
+  const distance=radius/Math.sin(Math.min(vertical,horizontal))*1.12;
+  const direction=camera.position.clone().sub(controls.target).normalize();
+  if(direction.lengthSq()===0)direction.set(0,0,1);
+  camera.position.copy(center).addScaledVector(direction,distance);controls.target.copy(center);
+  camera.near=Math.min(camera.near,Math.max(.001,distance-radius)/10);camera.far=Math.max(camera.far,distance+radius*3);
+  camera.updateProjectionMatrix();controls.update();return true;
+}

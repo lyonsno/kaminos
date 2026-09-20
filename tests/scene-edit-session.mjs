@@ -39,3 +39,12 @@ test('shared admission rejects every authored mutation while allowing rollback',
  assert.throws(()=>e.preview({position:[7,8,9]}),/busy or correction/);e.cancel();assert.deepEqual(pose,accepted);
  blocked=false;e.undo();blocked=true;assert.throws(()=>e.redo(),/busy or correction/);assert.deepEqual(pose,start);
 });
+test('registered parameters and poses share chronological history and rollback',()=>{
+ const f=fixture(),e=f.edits;let value=1;
+ assert.equal(typeof e.register,'function','history must accept an authored parameter target');
+ e.register('@exposure',{read:()=>({value}),write:s=>{value=s.value;},check:s=>{if(!Number.isFinite(s.value)||s.value<0)throw Error('invalid exposure');return {value:s.value};}});
+ e.apply('kiln',{position:[1,2,3]});e.begin('@exposure');e.preview({value:2});e.preview({value:3});e.commit();
+ assert.equal(e.state().undoCount,2);e.undo();assert.equal(value,1);assert.deepEqual(f.pose.position,[1,2,3]);
+ e.undo();assert.deepEqual(f.pose,start);e.redo();e.redo();assert.equal(value,3);
+ e.begin('@exposure');assert.throws(()=>e.preview({value:-2}),/invalid/);e.preview({value:4});e.cancel();assert.equal(value,3);
+});

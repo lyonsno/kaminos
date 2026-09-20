@@ -660,6 +660,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   body.composition-authoring #transform-bar { left: 8px; transform: none; width: calc(100% - 16px); max-width: none; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
   body.composition-authoring #transform-bar > * { flex-shrink: 0; }
 }
+.authored-number { width: 68px; min-width: 0; background: #181818; color: #ccc; border: 1px solid #333; border-radius: 3px; padding: 3px; font: 11px monospace; }
+[data-authored-parameter]:focus { outline: 1px solid #b98540; }
 </style>
 </head>
 <body>
@@ -3315,7 +3317,10 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
-let scenePlacementTools = null;
+import { installParameterTools } from './scene-parameter-tools.mjs';
+import { createSelectionFeedback } from './scene-selection-tools.mjs';
+import { frameObject } from './scene-frame-selected.mjs';
+let scenePlacementTools = null, sceneParameterTools = null, selectionFeedback = null;
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
@@ -9931,6 +9936,9 @@ async function initScene() {
   } else {
     renderPipeline.outputNode = baseSceneOutput;
   }
+  selectionFeedback = createSelectionFeedback(camera, renderPipeline.outputNode);
+  renderPipeline.outputNode = selectionFeedback.output;
+  window.kaminosSelectionDebugState = selectionFeedback.state;
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
     ? fireLightFieldPass.debugState()
     : {
@@ -10050,7 +10058,13 @@ async function initScene() {
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
     busy: () => authoringBusy,
+    frameSelected: () => { frameObject(currentMesh, camera, controls); markDirty(); },
+    selectionFeedback: target => selectionFeedback?.update(target),
   });
+  sceneParameterTools = installAuthoredParameterControls();
+  window.kaminosSetAuthoredParameter = sceneParameterTools.set;
+  window.kaminosAuthoredParameterState = sceneParameterTools.state;
+  window.kaminosFrameSelected = () => frameObject(currentMesh, camera, controls);
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
 
@@ -10082,6 +10096,7 @@ async function initScene() {
     const t0 = performance.now();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
+    selectionFeedback?.update(currentMesh);
     renderPipeline.render();
     const frameMs = performance.now() - t0;
     fpsFrames++;
@@ -10205,6 +10220,7 @@ function createProceduralEnv() {
 async function loadEnvironment(name, { remember = true } = {}) {
   const env = HDR_ENVS[name];
   if (!env) return;
+  if (currentEnvName !== name) { sceneParameterTools?.finish(false); scenePlacementTools?.clear(); }
   if (remember) rememberEnvironmentRecipe();
   const token = ++environmentLoadToken;
   currentEnvName = name;
@@ -25018,6 +25034,7 @@ window.captureComposition = () => withAuthoringAction(async () => {
   try {
     if (helper) helper.visible = false;
     scenePlacementTools?.suspendVisuals(true);
+    selectionFeedback?.suspend(true);
     window._kaminosDirty?.();
     // The second callback samples after both render loops have had a turn.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -25034,6 +25051,7 @@ window.captureComposition = () => withAuthoringAction(async () => {
   } finally {
     if (helper) helper.visible = visible;
     scenePlacementTools?.suspendVisuals(false);
+    selectionFeedback?.suspend(false);
     window._kaminosDirty?.();
   }
   if (!await saveToServer(data, null)) throw new Error('Capture was not saved');
@@ -25192,6 +25210,49 @@ window.kaminosSetBurner = value => {
   if (value && (!isFireLightFieldRoute() || !burnerSource(window.__kaminosVolumeEmitterReceipt))) throw new Error('Annular bed requires an ordinary ring-flame composition');
   return setAnnularBurner(value);
 };
+
+function installAuthoredParameterControls() {
+  const descriptors=[];
+  const numberFor=(range,existing=null)=>{
+    if(existing)return existing;
+    const input=document.createElement('input');input.type='number';input.className='authored-number';input.id=range.id+'-number';
+    input.setAttribute('aria-label',range.closest('.slider-row')?.querySelector('label')?.textContent || range.id);
+    range.insertAdjacentElement('afterend',input);return input;
+  };
+  for(const [key,label,type,step] of burnerFields) {
+    if(type!=='number')continue;
+    const range=document.getElementById(`burner-${key}-slider`),number=document.getElementById(`burner-${key}`);
+    descriptors.push({id:'burner.'+key,label,inputs:[range,number],grip:number.parentElement.querySelector('label'),step,integer:step===1,
+      read:()=> (burnerRecipe || BURNER_DEFAULTS)[key],
+      validate:value=>normalizeBurner({...burnerRecipe,[key]:value}),
+      write:value=>setAnnularBurner({...burnerRecipe,[key]:value})});
+  }
+  const lighting=[['exposure-slider','Exposure',.01,0],['env-intensity-slider','Environment intensity',.01,0],
+    ['env-rotation-slider','Environment rotation',.01,null],['env-blur-slider','Background blur',.005,0,1],
+    ['env-bg-brightness','Background brightness',.01,0],['env-bg-contrast','Background contrast',.01,0],
+    ['fire-light-gain-stops','Flame light gain',.025,null]];
+  for(const [id,label,step,min,max] of lighting) {
+    const range=document.getElementById(id),number=numberFor(range);
+    const row=range.closest('.slider-row') || range.parentElement;
+    descriptors.push({id,label,inputs:[range,number],grip:row.querySelector('label'),step,
+      read:()=>id==='exposure-slider'?renderer.toneMappingExposure:Number(range.value),
+      validate:value=>{if((min!==null&&value<min)||(max!==undefined&&value>max))throw Error('Value outside '+label+' range');},
+      write:value=>{
+        range.min=Math.min(Number(range.min),value);range.max=Math.max(Number(range.max),value);range.step='any';range.value=value;
+        range.dispatchEvent(new Event('input',{bubbles:true}));
+        if(id==='fire-light-gain-stops'&&activeSceneComposition)activeSceneComposition.lightGainStops=value;
+      }});
+  }
+  // Existing rim numeric UI stays here until the separately requested placeable-light slice.
+  for(const key of rimFields) {
+    const range=document.getElementById('rim-'+key),number=document.getElementById('rim-'+key+'-number');
+    const current=()=>key.startsWith('target-')?readRimLightSettings().target['xyz'.indexOf(key.at(-1))]:readRimLightSettings()[key];
+    descriptors.push({id:'rim.'+key,label:'Rim '+key,inputs:[range,number],grip:range.parentElement.querySelector('label'),step: ['intensity','azimuth','elevation','angle'].includes(key)?.2:.01,
+      read:current,validate:value=>{if((number.min!==''&&value<Number(number.min))||(number.max!==''&&value>Number(number.max)))throw Error('Invalid rim '+key);},
+      write:value=>{const recipe=readRimLightSettings();if(key.startsWith('target-'))recipe.target['xyz'.indexOf(key.at(-1))]=value;else recipe[key]=value;setRimLight(recipe);}});
+  }
+  return installParameterTools({edits:scenePlacementTools.edits,descriptors,report:message=>{document.getElementById('scene-edit-hud').textContent=message;}});
+}
 
 document.getElementById('composition-library').onclick = () => {
   setActiveTab('greenroom');
