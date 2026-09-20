@@ -49,7 +49,22 @@ assert.match(firstBlock, /kernel: 'mlpFc1', dispatch: linearWorkgroups\(shape\.t
 assert.match(firstBlock, /kernel: 'mlpFc2', dispatch: linearWorkgroups\(shape\.tokenCount, shape\.intermediateSize, shape\.hiddenSize, input\.device\)/);
 
 const promptText = readFileSync(new URL('sam-prompt-text-ingress-phase-program.js', root), 'utf8');
+assert.match(
+  promptText,
+  /schema: \[\s*\{ name: 'input_channels', type: 'u32' \},\s*\{ name: 'output_channels', type: 'u32' \},\s*\{ name: 'total_output', type: 'u32' \},\s*\{ name: '_pad0', type: 'u32' \},?\s*\]/,
+  'prompt text linear uniforms must match the shared WGSL field order exactly',
+);
 assert.match(promptText, /kernel: 'projection', dispatch: linearWorkgroups\(rows, shape\.hiddenSize, shape\.channels, input\.device\)/);
+
+const promptFpn = readFileSync(new URL('sam-prompt-fpn-phase-program.js', root), 'utf8');
+assert.match(promptFpn, /spatialLinearDims: stage\.createUniformBuffer\(/, 'prompt FPN must not bind its attention dims as shared-linear dims');
+assert.match(promptFpn, /promptLinearDims: stage\.createUniformBuffer\(/, 'prompt FPN prompt projections need their own shared-linear dims');
+assert.match(promptFpn, /resource: 'uniform:spatialLinearDims'/, 'prompt FPN spatial projections must bind compatible linear dims');
+assert.match(promptFpn, /resource: 'uniform:promptLinearDims'/, 'prompt FPN prompt projections must bind compatible linear dims');
+
+const maskTail = readFileSync(new URL('sam-mask-tail-phase-program.js', root), 'utf8');
+assert.match(maskTail, /maskEmbedderLinearDims: stage\.createUniformBuffer\(/, 'mask embedder must not bind the mask-tail descriptor as shared-linear dims');
+assert.match(maskTail, /resource: 'uniform:maskEmbedderLinearDims'/, 'all mask-embedder linears must bind compatible linear dims');
 
 const encoder = readFileSync(new URL('sam-detr-encoder-phase-program.js', root), 'utf8');
 assert.match(encoder, /MlpFc1Relu`, dispatch: linearWorkgroups\(spatialTokenCount, shape\.channels, shape\.mlpHidden, input\.device\)/);

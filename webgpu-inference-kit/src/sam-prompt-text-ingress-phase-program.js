@@ -537,12 +537,12 @@ function linearDims(stage, label, rows, inChannels, outChannels) {
   return stage.createUniformBuffer({
     label,
     schema: [
-      { name: 'rows', type: 'u32' },
-      { name: 'in_channels', type: 'u32' },
-      { name: 'out_channels', type: 'u32' },
+      { name: 'input_channels', type: 'u32' },
+      { name: 'output_channels', type: 'u32' },
       { name: 'total_output', type: 'u32' },
+      { name: '_pad0', type: 'u32' },
     ],
-    values: { rows, in_channels: inChannels, out_channels: outChannels, total_output: rows * outChannels },
+    values: { input_channels: inChannels, output_channels: outChannels, total_output: rows * outChannels, _pad0: 0 },
   });
 }
 
