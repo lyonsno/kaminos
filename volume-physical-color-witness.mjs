@@ -132,7 +132,7 @@ try {
       const profile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveLightProfile() : null;
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
       const frameProfile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveFrameProfile() : null;
-      if (frameProfile && !frameProfile.ok) throw new Error('native frame timing failed: '+frameProfile.reason);
+      if (frameProfile && !frameProfile.ok) throw new Error('native frame timing failed: '+JSON.stringify(frameProfile));
       return {sample, profile, frameProfile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
