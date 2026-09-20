@@ -42,20 +42,15 @@ const assertSurfaceSemantics = (name, copy, patterns) => {
 };
 
 const assertNoSamOverclaim = (name, copy) => {
-  const affirmativeClauses = copy
-    .split(/(?<=[.!?])\s+|\n+|;\s*|,\s+(?=(?:and|but|yet)\b)/i)
-    .map(clause => clause.trim())
-    .filter(Boolean)
-    .filter(clause => !/\b(?:not|no|never|cannot|can't|does not|do not|is not|isn't|without|requires?|unproved|unclaimed)\b/i.test(clause));
   const overclaims = [
     ['presentation/frame/latency guarantee', /\b(?:guarantees?|maintains?|sustains?|delivers?)\b.{0,100}\b(?:\d+\s*fps|frames? per second|frame[- ]?(?:pacing|latency|budget)|presentation cadence|responsive presentation)\b/i],
-    ['adaptive or preemptive scheduling', /\b(?:adaptively budgets?|adaptive frame[- ]?budget(?:ing)?|preempts?)\b/i],
+    ['adaptive or preemptive scheduling', /\b(?:adaptively budgets?|preempts|(?:provides?|delivers?|supports?|uses?)\b.{0,80}\badaptive frame[- ]?budget(?:ing)?)\b/i],
     ['video or tracking support', /\b(?:supports?|provides?)\b.{0,60}\b(?:video tracking|tracking across)\b/i],
-    ['broad semantic or native-resolution quality', /\b(?:semantically accurate|broad semantic accuracy|native-resolution (?:quality|universality)|native resolution)\b/i],
+    ['broad semantic or native-resolution quality', /\b(?:guarantees?|delivers?|provides?|supports?|achieves?|is)\b.{0,100}\b(?:semantically accurate|broad semantic accuracy|native-resolution (?:quality|universality)|native resolution)\b/i],
     ['general throughput guarantee', /\b(?:guarantees?|delivers?|provides?)\b.{0,100}\b(?:streaming\s+)?throughput\b/i],
   ];
   for (const [label, pattern] of overclaims) {
-    assert.doesNotMatch(affirmativeClauses.join('\n'), pattern, `${name} must not claim ${label}`);
+    assert.doesNotMatch(copy, pattern, `${name} must not claim ${label}`);
   }
 };
 
@@ -122,6 +117,24 @@ for (const repo of ['moge-webgpu', 'sf3d-webgpu', 'sharp-webgpu', 'kimodo-webgpu
 assert.match(modelRows.find(line => line.includes('/kimodo-webgpu)')), /text embeddings.*external server/i);
 assertSamPublicClaims({ rootReadme, packageReadme: readme, samDemoGuide });
 const contradictoryClaims = [
+  {
+    name: 'same-sentence while disclaimer and frame guarantee',
+    field: 'rootReadme',
+    value: rootReadme.replace(
+      'composition result, not a frame-pacing claim.',
+      'composition result, not a frame-pacing claim, while SAM guarantees 60 FPS during inference.',
+    ),
+    expected: /presentation|frame|latency/i,
+  },
+  {
+    name: 'same-sentence comma-less disclaimer and frame guarantee',
+    field: 'rootReadme',
+    value: rootReadme.replace(
+      'composition result, not a frame-pacing claim.',
+      'composition result, not a frame-pacing claim but SAM guarantees 60 FPS during inference.',
+    ),
+    expected: /presentation|frame|latency/i,
+  },
   {
     name: 'same-sentence disclaimer and frame guarantee',
     field: 'rootReadme',
