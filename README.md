@@ -80,7 +80,9 @@ The reusable runtime is [Kaminos WebGPU Inference Kit](webgpu-inference-kit/READ
 npm install @kaminos/webgpu-inference-kit
 ```
 
-The [integration guide](webgpu-inference-kit/docs/getting-started.md) starts with a working model adapter. The [SAM image/prompt/mask demo](webgpu-inference-kit/docs/sam-semantic-demo.md) exercises the resident package and invocation path; parity verification is a separate mode, not work repeated for each prompt.
+The [integration guide](webgpu-inference-kit/docs/getting-started.md) starts with a working model adapter. The complete in-tree [SAM 3.1 image/prompt/mask demo](webgpu-inference-kit/docs/sam-semantic-demo.md) carries an image and text prompt through the browser backbone, prompt encoder, DETR stack, scoring, selection, and mask decoder to visible instance masks. Its 3.32 GB model package remains resident, image features are cached across prompts, and prompt requests use the shared registered queue; parity verification is a separate mode, not work repeated for each prompt.
+
+On the exact merged native-1008 route, cold and warm mask outputs were bit-exact against the accepted source-equivalent baseline, a nonsense-prompt control returned exactly empty, and input-driven source-viewport work continued through the same WebGPU device at the model's existing phase boundaries. This is a complete browser inference consumer and direct shared-runtime composition result, not a frame-pacing claim.
 
 Spatial models execute inside the same browser environment that consumes their
 outputs. Local WebGPU inference, geometry, motion, and simulation can therefore

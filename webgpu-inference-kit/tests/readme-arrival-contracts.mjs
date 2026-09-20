@@ -28,7 +28,15 @@ for (const repo of ['moge-webgpu', 'sf3d-webgpu', 'sharp-webgpu', 'kimodo-webgpu
   assert.ok(columns.every(Boolean), `${repo} must populate every column`);
 }
 assert.match(modelRows.find(line => line.includes('/kimodo-webgpu)')), /text embeddings.*external server/i);
-assert.match(readme, /\*\*In development: SAM\b/);
+const samRows = modelRows.filter(line => line.includes('[SAM 3.1]'));
+assert.equal(samRows.length, 1, 'SAM 3.1 must have one model-family row');
+assert.match(samRows[0], /image and text prompt/i);
+assert.match(samRows[0], /cached image features/i);
+assert.match(readme, /complete browser WebGPU route/i);
+assert.match(readme, /same-device foreground submissions/i);
+assert.match(readme, /not a frame-pacing claim/i);
+assert.doesNotMatch(readme, /In development: SAM/i);
+assert.doesNotMatch(readme, /foreground rendering is the next integration target/i);
 assert.doesNotMatch(readme, /These ports share a common application-facing shape/);
 assert.doesNotMatch(readme, /That firing exercises the architecture.*persistent model resources/);
 

@@ -42,7 +42,9 @@ The workbench installs that callback for an input-driven source viewport on SAM'
 
 ## Evidence Boundary
 
-The previously inspected workbench package uses 224-pixel model input, not native-resolution quality. Higher-resolution export and the new foreground path require their own live witnesses. Historical positive and negative prompt controls establish useful prior evidence, not numerical or latency certification of each new checkout. No throughput or streaming-speed guarantee is made here.
+The current merged native-1008 workbench route has been exercised cold, warm, and with an expected-empty negative control. Cold and warm retained the same four instances and were bit-exact against the accepted source-equivalent baseline across scores, boxes, foreground counts, every retained mask, the selected mask, and selected logits. The negative control retained no candidate and produced exact-zero mask and logit output. The inspected screenshots showed both requested wheels on the positive route and no stale overlay on the negative route.
+
+The same witness exercised input-driven source-viewport submissions through SAM's exact device and queue while inference advanced. It establishes same-device cooperative submission at the existing model boundaries, not presentation cadence, frame-budget quality, broad semantic accuracy, video tracking, or a throughput guarantee. Those claims require their own live measurements and representative inputs.
 
 The optional witness exercises the real UI and preserves route identity, output identity, screenshots, timing, and a terminal failure report:
 

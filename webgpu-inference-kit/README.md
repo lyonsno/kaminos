@@ -96,14 +96,15 @@ The kit connects a growing family of browser model ports: recover a scene's geom
 | [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Textured, UV-unwrapped GLB meshes from a single image | Cooperative reconstruction and baking, bounded in-flight submissions, reusable scratch memory, worker offload, and a callable producer that can use the application's GPU device. |
 | [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground rendering, staged output construction, and shared tensor-comparison helpers for port development. |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding, bounded GPU submissions, reusable model resources, and a host-callable producer with rendering opportunities between transformer passes. Text embeddings come from an external server. |
+| [SAM 3.1](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
 
 These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
 
-**In development: SAM image-and-prompt segmentation.** The in-tree port combines shared model-package loading, persistent model resources, cached image features, and queued semantic requests. Its browser serving path produces masks and reuses image features across prompts; concurrent foreground rendering is the next integration target.
-
 Ports can adopt a common application-facing shape:
 
-The in-tree [SAM semantic-mask demo](./docs/sam-semantic-demo.md) adds image-and-prompt segmentation with persistent, authenticated weights and cached image features. It uses the shared sequential model-package loader and registered invocation queue. Its serving path is separate from reference verification; current semantic/performance evidence and the remaining shared-rendering measurement gate are described in the demo guide.
+The in-tree [SAM 3.1 semantic-mask demo](./docs/sam-semantic-demo.md) is a complete image-plus-text consumer of that shape. Its browser serving path executes the image backbone, prompt encoder, DETR encoder and decoder, scoring, selection, and mask tail without an MLX process. One authenticated model package stays resident, image features are cached across prompts, and every retained instance mask is available to the application.
+
+The exact merged native-1008 witness produced bit-exact cold and warm mask outputs against its accepted baseline, returned an exactly empty nonsense-prompt control, and reused cached image features for a 5.0-second warm prompt. Input-driven source-viewport work continued through the same device and queue at the model's existing phase boundaries. That is direct shared-device composition evidence, not a frame-pacing claim; the [demo guide](./docs/sam-semantic-demo.md) preserves the boundary and the runnable route.
 
 ```text
 shared session
