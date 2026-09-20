@@ -10,7 +10,7 @@ const magnitude = vector => Math.sqrt(dot(vector, vector));
 for (const direction of directions) {
   assert.equal(direction.length, 3);
   assert.ok(Math.abs(magnitude(direction) - 1) < 1e-12, 'transport directions are unit length');
-  assert.ok(Math.max(...direction.map(Math.abs)) < 0.9, 'no transport direction is a cardinal axis');
+  assert.ok(Math.max(...direction.map(Math.abs)) < 0.95, 'no transport direction is a cardinal axis');
   assert.ok(directions.some(candidate => candidate.every((value, i) => Math.abs(value + direction[i]) < 1e-12)), 'every direction has an antipode');
 }
 
@@ -41,9 +41,9 @@ assert.ok(deviation / mean < 0.015, 'equal-weight slab response has low orientat
 const shader = transport.EMISSIVE_TRANSPORT_WGSL;
 assert.match(shader, /const LIGHT_DIRECTIONS: u32 = 12u;/);
 assert.match(shader, /fn lightDirection\(direction: u32\) -> vec3<f32>/);
-assert.match(shader, /fn samplePreviousDirectional\(/);
+assert.match(shader, /fn samplePreviousOutgoing\(/);
 assert.match(shader, /@group\(3\) @binding\(4\) var<uniform> emissiveSweepStep:/);
-assert.match(shader, /samplePreviousDirectional\(direction/);
+assert.match(shader, /samplePreviousOutgoing\(direction/);
 assert.match(shader, /let ds = \(2\.0\/f32\(LIGHT_GRID\)\)\/dominant;/);
 assert.doesNotMatch(shader, /let direction = id\.x\/plane; let column = id\.x%plane;[\s\S]*for\(var step=0u;step<LIGHT_GRID;step\+\+\)/);
 

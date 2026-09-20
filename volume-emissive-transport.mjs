@@ -48,12 +48,25 @@ export const EMISSIVE_LIGHT_GRID = 32;
 const goldenRatio = (1 + Math.sqrt(5)) / 2;
 const icosahedronScale = 1 / Math.sqrt(1 + goldenRatio ** 2);
 const signedBit = (variant, bit) => variant & bit ? 1 : -1;
-export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze([
+const canonicalIcosahedronDirections = [
   ...Array.from({ length: 4 }, (_, variant) => Object.freeze([0, signedBit(variant, 1) * icosahedronScale, signedBit(variant, 2) * goldenRatio * icosahedronScale])),
   ...Array.from({ length: 4 }, (_, variant) => Object.freeze([signedBit(variant, 1) * icosahedronScale, signedBit(variant, 2) * goldenRatio * icosahedronScale, 0])),
   ...Array.from({ length: 4 }, (_, variant) => Object.freeze([signedBit(variant, 1) * goldenRatio * icosahedronScale, 0, signedBit(variant, 2) * icosahedronScale])),
-]);
+];
+// A rigid generic rotation preserves the icosahedron's quadrature while keeping
+// every characteristic out of the Cartesian coordinate planes.
+const icosahedronRotation = [
+  [0.213601909605, 0.768755366976, -0.602817891207],
+  [0.706440722858, 0.304661421834, 0.638844991477],
+  [0.674770871705, -0.562313616937, -0.478003835660],
+];
+export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze(canonicalIcosahedronDirections.map(direction => {
+  const rotated = icosahedronRotation.map(row => row.reduce((sum, value, axis) => sum + value * direction[axis], 0));
+  const length = Math.hypot(...rotated);
+  return Object.freeze(rotated.map(value => value / length));
+}));
 export const EMISSIVE_LIGHT_DIRECTION_COUNT = EMISSIVE_LIGHT_DIRECTIONS.length;
+export const EMISSIVE_LIGHT_TRANSPORT_MODEL = 'twelve-direction-oblique-short-characteristics-v1';
 
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
@@ -176,7 +189,10 @@ fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
 }
 const LIGHT_GRID: u32 = ${EMISSIVE_LIGHT_GRID}u;
 const LIGHT_CELLS: u32 = LIGHT_GRID*LIGHT_GRID*LIGHT_GRID;
-const LIGHT_DIRECTIONS: u32 = 12u;
+const LIGHT_DIRECTIONS: u32 = ${EMISSIVE_LIGHT_DIRECTION_COUNT}u;
+const LIGHT_DIRECTION_BASIS = array<vec3<f32>,${EMISSIVE_LIGHT_DIRECTION_COUNT}>(
+${EMISSIVE_LIGHT_DIRECTIONS.map(direction => `  vec3<f32>(${direction.map(value => value.toFixed(12)).join(',')})`).join(',\n')}
+);
 @group(0) @binding(13) var<storage,read> emissiveCoefficients: array<vec4<f32>>;
 @group(0) @binding(14) var<storage,read> emissiveDirections: array<vec4<f32>>;
 @group(0) @binding(15) var<storage,read> emissiveIncident: array<vec4<f32>>;
@@ -185,33 +201,29 @@ const LIGHT_DIRECTIONS: u32 = 12u;
 @group(3) @binding(3) var<storage,read_write> emissiveIncidentDst: array<vec4<f32>>;
 @group(3) @binding(4) var<uniform> emissiveSweepStep: vec4<u32>;
 fn lightIndex(c: vec3<u32>) -> u32 { return c.x+LIGHT_GRID*(c.y+LIGHT_GRID*c.z); }
-fn lightDirection(direction: u32) -> vec3<f32> {
-  let minor = 0.5257311121191336;
-  let major = 0.8506508083520400;
-  let variant = direction%4u;
-  let a = select(-1.0,1.0,(variant&1u)==1u);
-  let b = select(-1.0,1.0,(variant&2u)==2u);
-  let group = direction/4u;
-  if(group==0u) { return vec3<f32>(0.0,a*minor,b*major); }
-  if(group==1u) { return vec3<f32>(a*minor,b*major,0.0); }
-  return vec3<f32>(a*major,0.0,b*minor);
+fn lightDirection(direction: u32) -> vec3<f32> { return LIGHT_DIRECTION_BASIS[direction]; }
+fn lightMajorAxis(direction: u32) -> u32 {
+  let magnitude = abs(lightDirection(direction));
+  if(magnitude.x>=magnitude.y && magnitude.x>=magnitude.z) { return 0u; }
+  if(magnitude.y>=magnitude.z) { return 1u; }
+  return 2u;
 }
 fn lightMajorComponent(direction: u32) -> f32 {
-  let d = lightDirection(direction); let group = direction/4u;
-  if(group==0u) { return d.z; }
-  if(group==1u) { return d.y; }
-  return d.x;
+  let d = lightDirection(direction); let axis = lightMajorAxis(direction);
+  if(axis==0u) { return d.x; }
+  if(axis==1u) { return d.y; }
+  return d.z;
 }
 fn lightCell(direction: u32, column: u32, step: u32) -> vec3<u32> {
   let major = lightMajorComponent(direction);
   let along = select(step,LIGHT_GRID-1u-step,major<0.0);
   let a = column%LIGHT_GRID; let b = column/LIGHT_GRID;
-  let group = direction/4u;
-  if(group==0u) { return vec3<u32>(a,b,along); }
-  if(group==1u) { return vec3<u32>(a,along,b); }
-  return vec3<u32>(along,a,b);
+  let axis = lightMajorAxis(direction);
+  if(axis==0u) { return vec3<u32>(along,a,b); }
+  if(axis==1u) { return vec3<u32>(a,along,b); }
+  return vec3<u32>(a,b,along);
 }
-fn samplePreviousDirectional(direction: u32, p: vec3<f32>) -> vec3<f32> {
+fn samplePreviousOutgoing(direction: u32, p: vec3<f32>, halfDs: f32) -> vec3<f32> {
   let base = vec3<i32>(floor(p)); let w = fract(p);
   let ambient = vec3<f32>(u.emissive_material.z);
   var sum = vec3<f32>(0.0);
@@ -222,20 +234,12 @@ fn samplePreviousDirectional(direction: u32, p: vec3<f32>) -> vec3<f32> {
       if(any(sampleCell<vec3<i32>(0)) || any(sampleCell>=vec3<i32>(i32(LIGHT_GRID)))) {
         sum += ambient*weight;
       } else {
-        sum += emissiveDirectionsDst[direction*LIGHT_CELLS+lightIndex(vec3<u32>(sampleCell))].rgb*weight;
+        let sampleIndex = lightIndex(vec3<u32>(sampleCell));
+        let center = emissiveDirectionsDst[direction*LIGHT_CELLS+sampleIndex].rgb;
+        let material = emissiveCoefficients[sampleIndex];
+        let outgoing = center*exp(-material.w*halfDs)+material.rgb*emissionIntegral(material.w,halfDs);
+        sum += outgoing*weight;
       }
-    }
-  } } }
-  return sum;
-}
-fn samplePreviousCoefficient(p: vec3<f32>) -> vec4<f32> {
-  let base = vec3<i32>(floor(p)); let w = fract(p);
-  var sum = vec4<f32>(0.0);
-  for(var z=0u;z<2u;z++) { for(var y=0u;y<2u;y++) { for(var x=0u;x<2u;x++) {
-    let weight = select(1.0-w.x,w.x,x==1u)*select(1.0-w.y,w.y,y==1u)*select(1.0-w.z,w.z,z==1u);
-    let sampleCell = base+vec3<i32>(i32(x),i32(y),i32(z));
-    if(weight>0.0 && all(sampleCell>=vec3<i32>(0)) && all(sampleCell<vec3<i32>(i32(LIGHT_GRID)))) {
-      sum += emissiveCoefficients[lightIndex(vec3<u32>(sampleCell))]*weight;
     }
   } } }
   return sum;
@@ -284,9 +288,7 @@ fn sweepEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
   var incoming = vec3<f32>(u.emissive_material.z);
   if(step>0u) {
     let previousPosition=vec3<f32>(c)-d/dominant;
-    let previousLight=samplePreviousDirectional(direction,previousPosition);
-    let previousMaterial=samplePreviousCoefficient(previousPosition);
-    incoming=previousLight*exp(-previousMaterial.w*halfDs)+previousMaterial.rgb*emissionIntegral(previousMaterial.w,halfDs);
+    incoming=samplePreviousOutgoing(direction,previousPosition,halfDs);
   }
   let center = incoming*exp(-material.w*halfDs)+material.rgb*emissionIntegral(material.w,halfDs);
   emissiveDirectionsDst[direction*LIGHT_CELLS+index] = vec4<f32>(center,0.0);
