@@ -15448,7 +15448,7 @@ export function createKaminosVolumePrototype({
       await readback.mapAsync(GPUMapMode.READ);
       const times = new BigUint64Array(readback.getMappedRange().slice(0));
       readback.unmap();
-      if (times.some(value => value === 0n) || times[1] <= times[0] || times[3] <= times[2] || times[2] < times[1]) {
+      if (times.some(value => value === 0n) || times[1] <= times[0] || times[3] <= times[2] || times[3] <= times[0]) {
         return { ok:false, reason:'missing-or-invalid-frame-timestamps', timestamps:Array.from(times,String) };
       }
       return {
