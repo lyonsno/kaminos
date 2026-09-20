@@ -25,9 +25,9 @@ import {
   onlineAttentionDispatch,
 } from './sam-online-attention-wgsl.js';
 import {
-  SAM_TILED_LINEAR_WGSL,
-  tiledLinearDispatchForDevice,
-} from './sam-tiled-linear-wgsl.js';
+  SAM_PACKED_LINEAR_WGSL,
+  packedLinearDispatchForDevice,
+} from './sam-packed-linear-wgsl.js';
 
 export const SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID = 'sam3.prompt-text-ingress.phase-program.webgpu-local.v0';
 
@@ -530,7 +530,7 @@ function workgroups(total) {
 }
 
 function linearWorkgroups(tokens, outputChannels, device) {
-  return tiledLinearDispatchForDevice(tokens, outputChannels, device);
+  return packedLinearDispatchForDevice(tokens, outputChannels, device);
 }
 
 function linearDims(stage, label, rows, inChannels, outChannels) {
@@ -702,7 +702,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         ],
       },
       projection: {
-        code: SAM_TILED_LINEAR_WGSL,
+        code: SAM_PACKED_LINEAR_WGSL,
         bindings: [
           tensorBinding('inputValues', 'tensor:hiddenB'),
           tensorBinding('weight', 'tensor:textProjectionWeight'),
@@ -731,7 +731,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         uniformBinding('dims', 'uniform:textDims'),
       ]);
       for (const projection of ['q', 'k', 'v']) {
-        registerLayerKernel(`${prefix}.${projection}`, SAM_TILED_LINEAR_WGSL, [
+        registerLayerKernel(`${prefix}.${projection}`, SAM_PACKED_LINEAR_WGSL, [
           tensorBinding('inputValues', 'tensor:hiddenB'),
           tensorBinding('weight', resources[`${projection}Weight`]),
           tensorBinding('bias', resources[`${projection}Bias`]),
@@ -747,7 +747,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:attn', 'storage'),
         uniformBinding('dims', 'uniform:textDims'),
       ]);
-      registerLayerKernel(`${prefix}.out`, SAM_TILED_LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.out`, SAM_PACKED_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:attn'),
         tensorBinding('weight', resources.oWeight),
         tensorBinding('bias', resources.oBias),
@@ -767,7 +767,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:hiddenB', 'storage'),
         uniformBinding('dims', 'uniform:textDims'),
       ]);
-      registerLayerKernel(`${prefix}.fc1`, SAM_TILED_LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.fc1`, SAM_PACKED_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:hiddenB'),
         tensorBinding('weight', resources.fc1Weight),
         tensorBinding('bias', resources.fc1Bias),
@@ -779,7 +779,7 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
         tensorBinding('outputValues', 'tensor:mlpGelu', 'storage'),
         uniformBinding('dims', 'uniform:geluDims'),
       ]);
-      registerLayerKernel(`${prefix}.fc2`, SAM_TILED_LINEAR_WGSL, [
+      registerLayerKernel(`${prefix}.fc2`, SAM_PACKED_LINEAR_WGSL, [
         tensorBinding('inputValues', 'tensor:mlpGelu'),
         tensorBinding('weight', resources.fc2Weight),
         tensorBinding('bias', resources.fc2Bias),

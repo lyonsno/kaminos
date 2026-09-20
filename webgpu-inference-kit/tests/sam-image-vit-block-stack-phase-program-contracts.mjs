@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSourceUrl = new URL('../src/sam-image-vit-block-stack-phase-program.js', import.meta.url);
-const tiledLinearSourceUrl = new URL('../src/sam-tiled-linear-wgsl.js', import.meta.url);
+const packedLinearSourceUrl = new URL('../src/sam-packed-linear-wgsl.js', import.meta.url);
 const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const stackExporter = readFileSync(new URL('../tools/sam-detr-stack-mlx-packet.py', import.meta.url), 'utf8');
@@ -19,7 +19,7 @@ assert.match(packageJson.scripts.test, /sam-image-vit-block-stack-phase-program-
 assert.equal(existsSync(routeSourceUrl), true, 'SAM3 image ViT block-stack route source must exist');
 
 const routeSource = existsSync(routeSourceUrl) ? readFileSync(routeSourceUrl, 'utf8') : '';
-const tiledLinearSource = existsSync(tiledLinearSourceUrl) ? readFileSync(tiledLinearSourceUrl, 'utf8') : '';
+const packedLinearSource = existsSync(packedLinearSourceUrl) ? readFileSync(packedLinearSourceUrl, 'utf8') : '';
 assert.match(routeSource, /SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID/, 'image ViT block-stack route must export stable route identity');
 assert.match(routeSource, /sam3\.image-vit-block-stack\.phase-program\.webgpu-local\.v0/, 'image ViT block-stack route must name the WebGPU-local route id');
 assert.match(routeSource, /defineProgram/, 'image ViT block-stack route must use the phase-program runtime');
@@ -31,15 +31,15 @@ assert.match(routeSource, /vit-block-stack-rope-attention/, 'image ViT block-sta
 assert.match(routeSource, /vit-block-stack-layer-range/, 'image ViT block-stack route must preserve layer range identity');
 assert.match(routeSource, /firstGlobalLayerIndex/, 'image ViT block-stack route must record first global layer identity');
 assert.match(routeSource, /global_attn_indexes/, 'image ViT block-stack route must name the reference global-attention boundary');
-assert.match(tiledLinearSource, /if \(x < -10\.0\) \{ return 0\.0; \}/, 'ViT MLP GELU shader must saturate its negative tail before cubic overflow can produce NaN');
-assert.match(tiledLinearSource, /if \(x > 10\.0\) \{ return x; \}/, 'ViT MLP GELU shader must saturate its positive tail before cubic overflow');
-assert.match(tiledLinearSource, /fn mlx_erf\(x: f32\)/, 'ViT MLP GELU shader must port the MLX Metal erf implementation used by the reference backend');
-assert.match(tiledLinearSource, /fn mlx_expm1f\(x: f32\)/, 'ViT MLP GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
-assert.match(tiledLinearSource, /0\.927734375/, 'ViT MLP GELU shader must preserve the MLX Metal erf branch boundary');
-assert.doesNotMatch(tiledLinearSource, /0\.044715/, 'ViT block-stack GPU and CPU GELU paths must not retain the tanh approximation');
-assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*let index = gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u;[\s\S]*if \(index >= dims\.total_values\) \{ return; \}/, 'block-stack residual add must linearize tiled dispatch and guard rounded-up tail writes');
+assert.match(packedLinearSource, /if \(x < -10\.0\) \{ return 0\.0; \}/, 'ViT MLP GELU shader must saturate its negative tail before cubic overflow can produce NaN');
+assert.match(packedLinearSource, /if \(x > 10\.0\) \{ return x; \}/, 'ViT MLP GELU shader must saturate its positive tail before cubic overflow');
+assert.match(packedLinearSource, /fn mlx_erf\(x: f32\)/, 'ViT MLP GELU shader must port the MLX Metal erf implementation used by the reference backend');
+assert.match(packedLinearSource, /fn mlx_expm1f\(x: f32\)/, 'ViT MLP GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
+assert.match(packedLinearSource, /0\.927734375/, 'ViT MLP GELU shader must preserve the MLX Metal erf branch boundary');
+assert.doesNotMatch(packedLinearSource, /0\.044715/, 'ViT block-stack GPU and CPU GELU paths must not retain the tanh approximation');
+assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*let index = gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u;[\s\S]*if \(index >= dims\.total_values\) \{ return; \}/, 'block-stack residual add must linearize packed dispatch and guard rounded-up tail writes');
 assert.match(routeSource, /createLinearDispatch/, 'ViT block-stack must use the shared device-limit-aware linear dispatch contract');
-assert.match(routeSource, /tiledLinearDispatch/, 'ViT dense projections must use the shared tiled-linear dispatch contract');
+assert.match(routeSource, /packedLinearDispatch/, 'ViT dense projections must use the shared packed-linear dispatch contract');
 assert.match(routeSource, /maxComputeWorkgroupsPerDimension/, 'ViT block-stack must route against the effective adapter workgroup-dimension limit');
 assert.match(routeSource, /gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u/, 'ViT block-stack shaders must reconstruct a linear invocation index from a two-dimensional dispatch');
 assert.ok(
@@ -162,8 +162,8 @@ const dispatch448 = createSam3ImageVitBlockStackDispatchPlan({
 });
 assert.deepEqual(dispatch448.layerNorm1, { logicalInvocations: 1_024, dispatch: [16] });
 assert.deepEqual(dispatch448.windowPartition, { logicalInvocations: 2_359_296, dispatch: [36_864] });
-assert.deepEqual(dispatch448.mlpFc1, { logicalInvocations: 4_849_664, dispatch: [296, 64, 1] });
-assert.deepEqual(dispatch448.mlpFc2, { logicalInvocations: 1_048_576, dispatch: [64, 64, 1] });
+assert.deepEqual(dispatch448.mlpFc1, { logicalInvocations: 4_849_664, dispatch: [18_944] });
+assert.deepEqual(dispatch448.mlpFc2, { logicalInvocations: 1_048_576, dispatch: [4_096] });
 assert.deepEqual(dispatch448.residualMlp, { logicalInvocations: 1_048_576, dispatch: [16_384] });
 
 const dispatch1008Local = createSam3ImageVitBlockStackDispatchPlan({
@@ -172,9 +172,9 @@ const dispatch1008Local = createSam3ImageVitBlockStackDispatchPlan({
   maxWorkgroupsPerDimension: 65_535,
 });
 assert.deepEqual(dispatch1008Local.windowPartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
-assert.deepEqual(dispatch1008Local.qProjection, { logicalInvocations: 5_308_416, dispatch: [64, 324, 1] });
+assert.deepEqual(dispatch1008Local.qProjection, { logicalInvocations: 5_308_416, dispatch: [20_736] });
 assert.deepEqual(dispatch1008Local.attention, { logicalInvocations: 82_944, dispatch: [576, 16, 9] });
-assert.deepEqual(dispatch1008Local.mlpFc1, { logicalInvocations: 24_551_424, dispatch: [296, 324, 1] });
+assert.deepEqual(dispatch1008Local.mlpFc1, { logicalInvocations: 24_551_424, dispatch: [310, 310] });
 assert.deepEqual(dispatch1008Local.windowUnpartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
 
 const dispatch1008Global = createSam3ImageVitBlockStackDispatchPlan({
@@ -185,10 +185,10 @@ const dispatch1008Global = createSam3ImageVitBlockStackDispatchPlan({
 });
 assert.deepEqual(dispatch1008Global.windowPartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
 assert.deepEqual(dispatch1008Global.attention, { logicalInvocations: 82_944, dispatch: [5_184, 16, 1] });
-const tiledPhases = new Set(['qProjection', 'kProjection', 'vProjection', 'outputProjection', 'mlpFc1', 'mlpFc2']);
+const packedPhases = new Set(['qProjection', 'kProjection', 'vProjection', 'outputProjection', 'mlpFc1', 'mlpFc2']);
 for (const [phase, entry] of Object.entries(dispatch1008Global)) {
   assert.ok(entry.dispatch.every(dimension => dimension <= 65_535), `${phase} must respect the effective device limit`);
-  const outputsPerWorkgroup = tiledPhases.has(phase) ? 256 : 64;
+  const outputsPerWorkgroup = packedPhases.has(phase) ? 256 : 64;
   assert.ok(entry.dispatch.reduce((product, dimension) => product * dimension, 1) * outputsPerWorkgroup >= entry.logicalInvocations, `${phase} must cover its logical invocation domain`);
 }
 

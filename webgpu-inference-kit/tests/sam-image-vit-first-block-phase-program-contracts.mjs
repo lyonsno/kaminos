@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSourceUrl = new URL('../src/sam-image-vit-first-block-phase-program.js', import.meta.url);
-const tiledLinearSourceUrl = new URL('../src/sam-tiled-linear-wgsl.js', import.meta.url);
+const packedLinearSourceUrl = new URL('../src/sam-packed-linear-wgsl.js', import.meta.url);
 const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const stackExporter = readFileSync(new URL('../tools/sam-detr-stack-mlx-packet.py', import.meta.url), 'utf8');
@@ -12,7 +12,7 @@ assert.match(packageJson.scripts.test, /sam-image-vit-first-block-phase-program-
 assert.equal(existsSync(routeSourceUrl), true, 'SAM3 image ViT first-block route source must exist');
 
 const routeSource = existsSync(routeSourceUrl) ? readFileSync(routeSourceUrl, 'utf8') : '';
-const tiledLinearSource = existsSync(tiledLinearSourceUrl) ? readFileSync(tiledLinearSourceUrl, 'utf8') : '';
+const packedLinearSource = existsSync(packedLinearSourceUrl) ? readFileSync(packedLinearSourceUrl, 'utf8') : '';
 assert.match(routeSource, /SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID/, 'image ViT first-block route must export stable route identity');
 assert.match(routeSource, /sam3\.image-vit-first-block\.phase-program\.webgpu-local\.v0/, 'image ViT first-block route must name the WebGPU-local route id');
 assert.match(routeSource, /defineProgram/, 'image ViT first-block route must use the phase-program runtime');
@@ -25,15 +25,15 @@ assert.match(routeSource, /vit-block-output-projection/, 'image ViT first-block 
 assert.match(routeSource, /vit-block-window-unpartition/, 'image ViT first-block route must expose crop\/unpartition metadata');
 assert.match(routeSource, /vit-block-layernorm2/, 'image ViT first-block route must expose layer_norm2 stage metadata');
 assert.match(routeSource, /vit-block-gelu-mlp/, 'image ViT first-block route must expose GELU MLP metadata');
-assert.match(tiledLinearSource, /if \(x < -10\.0\) \{ return 0\.0; \}/, 'first-block GELU shader must saturate its negative tail before cubic overflow can produce NaN');
-assert.match(tiledLinearSource, /if \(x > 10\.0\) \{ return x; \}/, 'first-block GELU shader must saturate its positive tail before cubic overflow');
-assert.match(tiledLinearSource, /fn mlx_erf\(x: f32\)/, 'first-block GELU shader must port the MLX Metal erf implementation used by the reference backend');
-assert.match(tiledLinearSource, /fn mlx_expm1f\(x: f32\)/, 'first-block GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
-assert.match(tiledLinearSource, /0\.927734375/, 'first-block GELU shader must preserve the MLX Metal erf branch boundary');
-assert.doesNotMatch(tiledLinearSource, /0\.044715/, 'first-block GPU and CPU GELU paths must not retain the tanh approximation');
-assert.match(routeSource, /tiledLinearDispatch/, 'first-block dense projections must use the shared tiled-linear dispatch contract');
-assert.match(routeSource, /kernel: 'qProjection', dispatch: linearWorkgroups\(windowTokenCount, shape\.hiddenSize, input\.device\)/, 'first-block Q projection must dispatch one tiled grid over window tokens and hidden channels');
-assert.match(routeSource, /kernel: 'mlpFc1', dispatch: linearWorkgroups\(shape\.tokenCount, shape\.intermediateSize, input\.device\)/, 'first-block MLP expansion must dispatch one tiled grid over image tokens and intermediate channels');
+assert.match(packedLinearSource, /if \(x < -10\.0\) \{ return 0\.0; \}/, 'first-block GELU shader must saturate its negative tail before cubic overflow can produce NaN');
+assert.match(packedLinearSource, /if \(x > 10\.0\) \{ return x; \}/, 'first-block GELU shader must saturate its positive tail before cubic overflow');
+assert.match(packedLinearSource, /fn mlx_erf\(x: f32\)/, 'first-block GELU shader must port the MLX Metal erf implementation used by the reference backend');
+assert.match(packedLinearSource, /fn mlx_expm1f\(x: f32\)/, 'first-block GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
+assert.match(packedLinearSource, /0\.927734375/, 'first-block GELU shader must preserve the MLX Metal erf branch boundary');
+assert.doesNotMatch(packedLinearSource, /0\.044715/, 'first-block GPU and CPU GELU paths must not retain the tanh approximation');
+assert.match(routeSource, /packedLinearDispatch/, 'first-block dense projections must use the shared packed-linear dispatch contract');
+assert.match(routeSource, /kernel: 'qProjection', dispatch: linearWorkgroups\(windowTokenCount, shape\.hiddenSize, input\.device\)/, 'first-block Q projection must dispatch one packed grid over window tokens and hidden channels');
+assert.match(routeSource, /kernel: 'mlpFc1', dispatch: linearWorkgroups\(shape\.tokenCount, shape\.intermediateSize, input\.device\)/, 'first-block MLP expansion must dispatch one packed grid over image tokens and intermediate channels');
 assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*if \(gid\.x >= dims\.total_values\) \{ return; \}/, 'first-block residual add must guard rounded-up dispatch tail writes');
 assert.match(routeSource, /readback-vit-first-block-hidden-states/, 'image ViT first-block route must expose readback identity');
 assert.match(routeSource, /window partition\/pad\/crop/, 'image ViT first-block route must document the MLX window partition boundary');

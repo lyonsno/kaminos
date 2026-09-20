@@ -21,10 +21,10 @@ import {
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
 import {
-  SAM_TILED_LINEAR_GELU_WGSL,
-  SAM_TILED_LINEAR_WGSL,
-  tiledLinearDispatchForDevice,
-} from './sam-tiled-linear-wgsl.js';
+  SAM_PACKED_LINEAR_GELU_WGSL,
+  SAM_PACKED_LINEAR_WGSL,
+  packedLinearDispatchForDevice,
+} from './sam-packed-linear-wgsl.js';
 
 export const SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-vit-first-block.phase-program.webgpu-local.v0';
 
@@ -683,7 +683,7 @@ function workgroups(total) {
 }
 
 function linearWorkgroups(tokens, outputChannels, device) {
-  return tiledLinearDispatchForDevice(tokens, outputChannels, device);
+  return packedLinearDispatchForDevice(tokens, outputChannels, device);
 }
 
 export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
@@ -793,17 +793,17 @@ export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
       kernels: {
         layerNorm1: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:hiddenStates'), bindTensor('tensor:layerNorm1Weight'), bindTensor('tensor:layerNorm1Bias'), bindTensor('tensor:layerNorm1', 'storage'), bindUniform('uniform:lnDims')] },
         windowPartition: { code: WINDOW_PARTITION_WGSL, bindings: [bindTensor('tensor:layerNorm1'), bindTensor('tensor:windows', 'storage'), bindUniform('uniform:blockDims')] },
-        qProjection: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
-        kProjection: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:kProjWeight'), bindTensor('tensor:kProjBias'), bindTensor('tensor:k', 'storage'), bindUniform('uniform:windowLinearDims')] },
-        vProjection: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        qProjection: { code: SAM_PACKED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        kProjection: { code: SAM_PACKED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:kProjWeight'), bindTensor('tensor:kProjBias'), bindTensor('tensor:k', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        vProjection: { code: SAM_PACKED_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
         qRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:q'), bindTensor('tensor:qRope', 'storage'), bindUniform('uniform:blockDims')] },
         kRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:k'), bindTensor('tensor:kRope', 'storage'), bindUniform('uniform:blockDims')] },
         attention: { code: ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
-        outputProjection: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
+        outputProjection: { code: SAM_PACKED_LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
         windowUnpartition: { code: WINDOW_UNPARTITION_WGSL, bindings: [bindTensor('tensor:projected'), bindTensor('tensor:hiddenStates'), bindTensor('tensor:attentionResidual', 'storage'), bindUniform('uniform:blockDims')] },
         layerNorm2: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:layerNorm2Weight'), bindTensor('tensor:layerNorm2Bias'), bindTensor('tensor:layerNorm2', 'storage'), bindUniform('uniform:lnDims')] },
-        mlpFc1: { code: SAM_TILED_LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
-        mlpFc2: { code: SAM_TILED_LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
+        mlpFc1: { code: SAM_PACKED_LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
+        mlpFc2: { code: SAM_PACKED_LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
         residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor('tensor:vitFirstBlockHiddenStates', 'storage'), bindUniform('uniform:blockDims')] },
       },
       phases: [
