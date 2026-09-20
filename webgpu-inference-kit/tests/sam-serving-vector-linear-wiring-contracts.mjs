@@ -14,6 +14,18 @@ const consumers = [
   ['mask tail', 'sam-mask-tail-phase-program.js', ['SAM_VECTOR_LINEAR_WGSL', 'SAM_VECTOR_LINEAR_RELU_WGSL']],
 ];
 
+function assertObjectKernelUniform(source, kernel, uniform, label = kernel) {
+  const registration = source.match(new RegExp(
+    `${kernel}: \\{ code: SAM_VECTOR_LINEAR(?:_RELU|_GELU)?_WGSL, bindings: \\[([^\\n]+)\\] \\}`,
+  ));
+  assert.ok(registration, `${label} must remain a shared-linear object-kernel registration`);
+  assert.match(
+    registration[1],
+    new RegExp(`resource: '${uniform.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}'`),
+    `${label} must bind ${uniform}`,
+  );
+}
+
 assert.match(packageJson.scripts.test, /sam-serving-vector-linear-contracts\.mjs/, 'default tests must exercise the vector kernel contract');
 assert.match(packageJson.scripts.test, /sam-serving-vector-linear-wiring-contracts\.mjs/, 'default tests must exercise vector production wiring');
 assert.doesNotMatch(packageJson.scripts.test, /sam-serving-blocked-linear/, 'rejected blocked kernels must not remain in the default suite');
@@ -59,12 +71,36 @@ assert.match(promptText, /kernel: 'projection', dispatch: linearWorkgroups\(rows
 const promptFpn = readFileSync(new URL('sam-prompt-fpn-phase-program.js', root), 'utf8');
 assert.match(promptFpn, /spatialLinearDims: stage\.createUniformBuffer\(/, 'prompt FPN must not bind its attention dims as shared-linear dims');
 assert.match(promptFpn, /promptLinearDims: stage\.createUniformBuffer\(/, 'prompt FPN prompt projections need their own shared-linear dims');
-assert.match(promptFpn, /resource: 'uniform:spatialLinearDims'/, 'prompt FPN spatial projections must bind compatible linear dims');
-assert.match(promptFpn, /resource: 'uniform:promptLinearDims'/, 'prompt FPN prompt projections must bind compatible linear dims');
+for (const [kernel, uniform] of [
+  ['qLinear', 'uniform:spatialLinearDims'],
+  ['kLinear', 'uniform:promptLinearDims'],
+  ['vLinear', 'uniform:promptLinearDims'],
+  ['outputLinear', 'uniform:spatialLinearDims'],
+]) assertObjectKernelUniform(promptFpn, kernel, uniform, `prompt FPN ${kernel}`);
+const wrongPromptFpnQUniform = promptFpn.replace(
+  /(qLinear: \{ code: SAM_VECTOR_LINEAR_WGSL[^\n]*resource: ')uniform:spatialLinearDims/,
+  '$1uniform:dims',
+);
+assert.throws(
+  () => assertObjectKernelUniform(wrongPromptFpnQUniform, 'qLinear', 'uniform:spatialLinearDims', 'prompt FPN qLinear mutation'),
+  /prompt FPN qLinear mutation must bind uniform:spatialLinearDims/,
+  'a single prompt FPN registration rebound to the broad descriptor must fail',
+);
 
 const maskTail = readFileSync(new URL('sam-mask-tail-phase-program.js', root), 'utf8');
 assert.match(maskTail, /maskEmbedderLinearDims: stage\.createUniformBuffer\(/, 'mask embedder must not bind the mask-tail descriptor as shared-linear dims');
-assert.match(maskTail, /resource: 'uniform:maskEmbedderLinearDims'/, 'all mask-embedder linears must bind compatible linear dims');
+for (const kernel of ['maskEmbedderLayer0', 'maskEmbedderLayer1', 'maskEmbedderLayer2']) {
+  assertObjectKernelUniform(maskTail, kernel, 'uniform:maskEmbedderLinearDims', `mask tail ${kernel}`);
+}
+const wrongMaskTailLayer0Uniform = maskTail.replace(
+  /(maskEmbedderLayer0: \{ code: SAM_VECTOR_LINEAR_RELU_WGSL[^\n]*resource: ')uniform:maskEmbedderLinearDims/,
+  '$1uniform:dims',
+);
+assert.throws(
+  () => assertObjectKernelUniform(wrongMaskTailLayer0Uniform, 'maskEmbedderLayer0', 'uniform:maskEmbedderLinearDims', 'mask tail layer 0 mutation'),
+  /mask tail layer 0 mutation must bind uniform:maskEmbedderLinearDims/,
+  'a single mask-tail registration rebound to the broad descriptor must fail',
+);
 
 const encoder = readFileSync(new URL('sam-detr-encoder-phase-program.js', root), 'utf8');
 assert.match(encoder, /MlpFc1Relu`, dispatch: linearWorkgroups\(spatialTokenCount, shape\.channels, shape\.mlpHidden, input\.device\)/);
