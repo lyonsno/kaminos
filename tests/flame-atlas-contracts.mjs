@@ -16,18 +16,11 @@ function sha256(relativePath) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-test("generated-worlds README and flame screening room public claims agree", () => {
-  const generatedBeingsPath = "docs/generated-beings/README.md";
-  assert.ok(
-    fs.existsSync(path.join(repoRoot, generatedBeingsPath)),
-    `${generatedBeingsPath} must give the generated-world claim a direct evidence route`,
-  );
-
+test("repository README and flame screening room public claims agree", () => {
   const manifest = JSON.parse(read("docs/flame-atlas/capture-manifest.json"));
   const html = read("docs/flame-atlas/index.html");
   const rootReadme = read("README.md");
   const atlasReadme = read("docs/flame-atlas/README.md");
-  const generatedBeingsReadme = read(generatedBeingsPath);
 
   assert.equal(manifest.schema, "kaminos.live-combustion-screening-room.v2");
   assert.equal(manifest.route.simulation_grid, 96);
@@ -62,7 +55,8 @@ test("generated-worlds README and flame screening room public claims agree", () 
   }
 
   assert.match(rootReadme, /docs\/flame-atlas\/assets\/conventional-fire-hero\.png/);
-  assert.match(rootReadme, /\[Live Combustion\]\(https:\/\/lyonsno\.github\.io\/kaminos\/\)/);
+  assert.match(rootReadme, /\[Browser Combustion Films\]\(https:\/\/lyonsno\.github\.io\/kaminos\/\)/);
+  assert.doesNotMatch(rootReadme, /Live Browser Combustion|Open the live screening room/);
   assert.match(
     rootReadme,
     /^> Browser-native WebGPU inference, realtime simulation, and generated spatial systems in one inspectable workbench\.$/m,
@@ -70,27 +64,13 @@ test("generated-worlds README and flame screening room public claims agree", () 
   assert.match(rootReadme, /@kaminos\/webgpu-inference-kit/);
   assert.match(rootReadme, /1,179,648 Gaussian splats/);
   assert.match(rootReadme, /21,818 foreground\s+frame intervals/);
-  assert.match(rootReadme, /docs\/generated-beings\/README\.md/);
-  assert.match(
-    rootReadme,
-    /docs\/generated-beings\/assets\/morphology-intervention-seed80303\.png/,
-  );
+  assert.doesNotMatch(rootReadme, /docs\/generated-beings\//);
   assert.match(rootReadme, /\*\*Generated beings\*\*/);
   assert.match(rootReadme, /\*\*Live materials\*\*/);
   assert.match(rootReadme, /\*\*Browser-native intelligence\*\*/);
   assert.match(rootReadme, /\*\*A world kiln\*\*/);
   assert.match(rootReadme, /Generated creatures can preserve deliberate morphology\s+through generative transformation and return to mechanical control\./);
   assert.doesNotMatch(rootReadme, /Generated beings retain identity, structure, and handles after inference/i);
-  assert.match(
-    generatedBeingsReadme,
-    /assets\/morphology-intervention-seed80303\.png/,
-  );
-  assert.match(generatedBeingsReadme, /assets\/registered-cast-articulation\.png/);
-  assert.match(generatedBeingsReadme, /assets\/terrain-following-motion\.png/);
-  assert.match(generatedBeingsReadme, /These are separate assays/i);
-  assert.match(generatedBeingsReadme, /Skinning weights were\s+painted\s+manually/i);
-  assert.match(generatedBeingsReadme, /does not establish automatic skinning/i);
-  assert.doesNotMatch(generatedBeingsReadme, /(?:demonstrates|provides|includes) automatic skinning/i);
   assert.match(
     html,
     /<a href=["']https:\/\/github\.com\/lyonsno\/kaminos["']>Kaminos<\/a>/,
@@ -104,7 +84,8 @@ test("generated-worlds README and flame screening room public claims agree", () 
   assert.doesNotMatch(publicCopy, /\b\d+(?:[-–]\d+)?\s*fps\b/i);
   assert.doesNotMatch(publicCopy, /\b(?:60|30|24|12)\s*\/\s*1\b/);
   assert.doesNotMatch(publicCopy, /\b(?:96|128|160)\s*(?:\^?3|³)\b/i);
-  assert.match(publicCopy, /captured directly from the live browser runtime/i);
+  assert.match(publicCopy, /captured directly from the browser/i);
+  assert.match(html, /<h1>Browser <span>Combustion<\/span><\/h1>/);
   assert.doesNotMatch(html, /<video\b[^>]*\sautoplay(?:\s|>)/i);
 });
 

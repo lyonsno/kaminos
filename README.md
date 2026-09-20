@@ -26,8 +26,7 @@ The repository spans four connected capabilities:
 
 | Surface | What it demonstrates | Entry point |
 | --- | --- | --- |
-| Live combustion | A stateful browser-native fire material being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Open the live screening room](https://lyonsno.github.io/kaminos/) |
-| Generated beings | Deliberate morphology surviving generative transformation, reconstructed casts returning to mechanical control, and a separate creature consuming terrain-relative motion | [Inspect the generated-being chain](docs/generated-beings/README.md) |
+| Browser combustion films | A stateful WebGPU fire material captured while being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Watch the captured studies](https://lyonsno.github.io/kaminos/) |
 | WebGPU inference kit | Shared-device lifecycle, persistent model routes, queues, cooperative scheduling, resource residency, progress, and runtime telemetry | [Read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
 | Spatial model ports | MoGe depth and normals, SHARP Gaussian reconstruction, SF3D textured meshes, Kimodo motion diffusion, and an in-tree SAM segmentation route | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
 | Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
@@ -81,12 +80,12 @@ The package includes a complete minimal port, an executable render-plus-inferenc
 walkthrough, focused integration documentation, and runtime contracts for
 admission, scheduling, lifecycle, resources, and receipts.
 
-## Live Browser Combustion
+## Browser-Computed Combustion
 
-[![A live browser-native orange flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](https://lyonsno.github.io/kaminos/)
+[![An orange WebGPU flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](https://lyonsno.github.io/kaminos/)
 
-These films were captured directly from the live browser runtime while one
-stateful WebGPU combustion material was being authored, not prerendered.
+These films were captured directly from the browser while one stateful WebGPU
+combustion material was being computed and authored, not prerendered.
 
 The material carries its history through control changes. Existing momentum
 continues through contraction, acceleration, chromatic transition, changing
@@ -94,7 +93,7 @@ source geometry, and renewed expansion. A broad burner can gather into a jet,
 retain the structure already in flight, and rebuild into another morphology
 without resetting the simulation.
 
-[Live Combustion](https://lyonsno.github.io/kaminos/) presents one complete
+[Browser Combustion Films](https://lyonsno.github.io/kaminos/) presents one complete
 composition, four authored transitions, and seven compact studies of color,
 structure, width, and state history.
 
@@ -114,23 +113,16 @@ machine? It should stay alive.
 Generated creatures can preserve deliberate morphology through generative
 transformation and return to mechanical control.
 
-[![Two matched analytical creature carriers above two generated descendants, showing a deliberate change in posterior mass survive generation](docs/generated-beings/assets/morphology-intervention-seed80303.png)](docs/generated-beings/README.md)
-
 Deliberate edits to a parameterized creature template have produced
 corresponding changes after image generation and image-to-3D reconstruction.
 Using recovered correspondence, one reconstruction was registered to a control
 rig and manually skinned for large articulated deformations; another was driven
 by synthesized terrain-following motion.
 
-That work joins analytical authorship, generative elaboration, reconstructed
-geometry, rigging, articulation, and motion in one loop. The continuing
-frontier is stronger editable control: returning distinctions authored before
-generation as durable controls that can survive later rounds of transformation.
-
-[Inspect the generated-being chain](docs/generated-beings/README.md), including
-the held morphology intervention, round-trip registration measurements,
-articulated returned cast, terrain-motion sequence, and the exact boundary of
-each result.
+These are adjacent research lines, not one creature moving through a completed
+end-to-end pipeline. The continuing frontier is stronger editable control:
+returning distinctions authored before generation as durable controls that can
+survive later rounds of transformation.
 
 ## Spatial Asset Kiln
 
@@ -164,7 +156,7 @@ source -> model route -> live workbench -> generated matter -> authored world
 | [`index.html`](index.html) | Main Three.js/WebGPU workbench, scene editor, rendering routes, and authoring controls |
 | [`serve.py`](serve.py) | Local server and asset-browse API for Kaminos and sibling model outputs |
 | [`webgpu-inference-kit/`](webgpu-inference-kit/) | Published runtime package, examples, integration guides, and contract tests |
-| [`docs/flame-atlas/`](docs/flame-atlas/) | Public live-combustion screening room and capture manifest |
+| [`docs/flame-atlas/`](docs/flame-atlas/) | Public browser-combustion film collection and capture manifest |
 | [`models/`](models/) and [`pipelines/`](pipelines/) | In-tree experimental models and generated-asset pipelines |
 | [`docs/`](docs/) | Kiln, splat, structural-control, and route architecture |
 | [`tests/`](tests/) | Browser, runtime, scene, simulation, pipeline, and public-surface contracts |
