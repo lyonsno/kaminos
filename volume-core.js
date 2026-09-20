@@ -15429,6 +15429,44 @@ export function createKaminosVolumePrototype({
     } finally { query.destroy(); resolved.destroy(); readback.destroy(); }
   }
 
+  async function sampleEmissiveFrameProfile() {
+    if (uniforms[368] !== 2 || !timestampQueriesAvailable()) return { ok: false, reason: 'emissive-mode-or-gpu-timestamps-unavailable' };
+    ensureFrameTexture();
+    updateUniforms(performance.now());
+    const query = device.createQuerySet({ type: 'timestamp', count: 4 });
+    const resolved = device.createBuffer({ size: 32, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    const readback = device.createBuffer({ size: 32, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'same-state emissive frame cost' });
+      encodeDraw(encoder, frameTexture.createView(), 'same-state emissive frame profile', pipeline, {
+        emissiveTimestampWrites: { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+        timestampWrites: { querySet: query, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+      });
+      encoder.resolveQuerySet(query,0,4,resolved,0);
+      encoder.copyBufferToBuffer(resolved,0,readback,0,32);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const times = new BigUint64Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      if (times.some(value => value === 0n) || times[1] <= times[0] || times[3] <= times[2] || times[2] < times[1]) {
+        return { ok:false, reason:'missing-or-invalid-frame-timestamps', timestamps:Array.from(times,String) };
+      }
+      return {
+        ok:true,
+        scope:'frozen-incident-light-plus-camera-raymarch-gpu-span-not-simulation',
+        incidentLightMs:Number(times[1]-times[0])/1e6,
+        raymarchMs:Number(times[3]-times[2])/1e6,
+        combinedGpuSpanMs:Number(times[3]-times[0])/1e6,
+        timestamps:Array.from(times,String),
+        grid:EMISSIVE_LIGHT_GRID,
+        simStepCount:state.simStepCount,
+        effectiveRoute:state.effectiveRoute,
+        physicalColor:state.physicalColor,
+        backend:state.backend,
+      };
+    } finally { query.destroy(); resolved.destroy(); readback.destroy(); }
+  }
+
   function encodeProductSmokeRaymarch(encoder, colorView, sceneDepthView, bindGroup) {
     if (!productRaymarchPipeline || !productRaymarchDepthBindGroupLayout) {
       throw new Error('product-smoke-raymarch-pipeline-unavailable');
@@ -22274,6 +22312,7 @@ export function createKaminosVolumePrototype({
     controlledStepSequence,
     captureSelectiveHeadLiveFrame,
     sampleEmissiveLightProfile,
+    sampleEmissiveFrameProfile,
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,

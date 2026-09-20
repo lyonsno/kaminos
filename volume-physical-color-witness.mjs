@@ -131,7 +131,9 @@ try {
       image.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(rgba),width,height),0,0);
       const profile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveLightProfile() : null;
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
-      return {sample, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      const frameProfile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveFrameProfile() : null;
+      if (frameProfile && !frameProfile.ok) throw new Error('native frame timing failed: '+frameProfile.reason);
+      return {sample, profile, frameProfile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
@@ -144,7 +146,7 @@ try {
     assertArmEquivalent(arm,rgba,earlierRgba);
     earlierRgba.set(arm.id,rgba);
     const {image, ...sample} = result.sample;
-    report.captures.push({arm, sample, profile:result.profile, state:result.state, image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
+    report.captures.push({arm, sample, profile:result.profile, frameProfile:result.frameProfile, state:result.state, image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
   }
   const screenshot = await call('Page.captureScreenshot', {format:'png'});
   writeFileSync(join(out, 'cockpit.png'), Buffer.from(screenshot.data, 'base64'));
