@@ -1,46 +1,5 @@
+import { createWebGpuLinearShader } from './linear-kernel.js';
 import { createLinearDispatch } from './runtime-primitives.js';
-
-const VECTOR_LINEAR_WGSL = `
-struct LinearDims {
-  input_channels: u32,
-  output_channels: u32,
-  total_output: u32,
-  _pad0: u32,
-};
-
-@group(0) @binding(0) var<storage, read> input_values: array<f32>;
-@group(0) @binding(1) var<storage, read> weight: array<f32>;
-@group(0) @binding(2) var<storage, read> bias: array<f32>;
-@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: LinearDims;
-
-__ACTIVATION_HELPERS__
-
-fn activate(value: f32) -> f32 {
-  return __ACTIVATION__;
-}
-
-@compute @workgroup_size(64)
-fn main(
-  @builtin(global_invocation_id) gid: vec3<u32>,
-  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
-) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u;
-  if (index >= dims.total_output) { return; }
-  let output_channel = index % dims.output_channels;
-  let token = index / dims.output_channels;
-  let input_base = token * dims.input_channels;
-  let weight_base = output_channel * dims.input_channels;
-  var sum = bias[output_channel];
-  for (var channel = 0u; channel < dims.input_channels; channel = channel + 4u) {
-    sum = sum + input_values[input_base + channel] * weight[weight_base + channel];
-    sum = sum + input_values[input_base + channel + 1u] * weight[weight_base + channel + 1u];
-    sum = sum + input_values[input_base + channel + 2u] * weight[weight_base + channel + 2u];
-    sum = sum + input_values[input_base + channel + 3u] * weight[weight_base + channel + 3u];
-  }
-  output_values[index] = activate(sum);
-}
-`;
 
 const GELU_HELPERS = `
 fn mlx_expm1f(x: f32) -> f32 {
@@ -107,9 +66,9 @@ fn gelu_exact_approx(x: f32) -> f32 {
 `;
 
 function shader({ activation, helpers = '' }) {
-  return VECTOR_LINEAR_WGSL
-    .replace('__ACTIVATION_HELPERS__', helpers)
-    .replace('__ACTIVATION__', activation);
+  return createWebGpuLinearShader({
+    variant: 'sequential4', activationExpression: activation, activationHelpers: helpers,
+  });
 }
 
 export const SAM_VECTOR_LINEAR_WGSL = shader({ activation: 'value' });

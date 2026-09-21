@@ -1,3 +1,5 @@
+export { createWebGpuLinearShader } from './linear-kernel.js';
+
 export {
   assertAuthoritativeRouteReceipt,
   createWebGpuLocalRouteReceipt,
