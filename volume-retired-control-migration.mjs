@@ -70,12 +70,21 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   const migrated = clone(documentValue);
   const preset = migrated?.preset;
   if (!preset || typeof preset !== 'object') {
-    return { document: migrated, removedControlIds: [], removedRouteParams: [], applied: false };
+    return {
+      document: migrated,
+      removedControlIds: [],
+      removedRouteParams: [],
+      addedControlIds: [],
+      addedRouteParams: [],
+      applied: false,
+    };
   }
   validateSourceCounts(documentValue, documentValue.preset);
   const route = new URL(preset.route || '/', 'http://kaminos.invalid/');
   const removedControlIds = [];
   const removedRouteParams = [];
+  const addedControlIds = [];
+  const addedRouteParams = [];
   const changedAxes = new Set();
   for (const retired of retiredControls) {
     const axis = preset[retired.axis];
@@ -102,12 +111,46 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   if (changedAxes.has('domControls') && migrated.controlCount !== undefined) {
     migrated.controlCount = preset.controlCount;
   }
+  for (const control of schema.controls || []) {
+    const introducedAt = Number(control.additiveSinceControlCount);
+    if (!Number.isSafeInteger(introducedAt)) continue;
+    if (!Object.hasOwn(control, 'additiveDefault')) {
+      throw new Error(`additive control is missing its default: ${control.key}`);
+    }
+    const activeCount = Object.keys(preset.domControls || {}).length;
+    if (activeCount >= introducedAt) continue;
+    if (activeCount !== introducedAt - 1) {
+      throw new Error(`settings preset cannot bridge additive control history at ${control.key}`);
+    }
+    if (Object.hasOwn(preset.domControls, control.key)) {
+      throw new Error(`settings preset carries additive control before its declared schema count: ${control.key}`);
+    }
+    if (route.searchParams.has(control.param)) {
+      throw new Error(`settings preset routes additive control without its descriptor: ${control.param}`);
+    }
+    preset.domControls[control.key] = {
+      id: control.key,
+      param: control.param,
+      tagName: control.tagName,
+      type: control.type,
+      value: control.additiveDefault,
+    };
+    route.searchParams.set(control.param, String(control.additiveDefault));
+    addedControlIds.push(control.key);
+    addedRouteParams.push(control.param);
+  }
+  if (addedControlIds.length) {
+    preset.controlCount = Object.keys(preset.domControls).length;
+    if (migrated.controlCount !== undefined) migrated.controlCount = preset.controlCount;
+  }
   preset.route = route.href;
   return {
     document: migrated,
     removedControlIds,
     removedRouteParams,
-    applied: removedControlIds.length > 0,
+    addedControlIds,
+    addedRouteParams,
+    applied: removedControlIds.length > 0 || addedControlIds.length > 0,
   };
 }
 

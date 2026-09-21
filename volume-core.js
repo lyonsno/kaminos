@@ -1,5 +1,10 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
-import { detailForceContributionMask, detailForceContributionReceipt } from './volume-detail-force-isolation.mjs';
+import {
+  detailForceContributionMask,
+  detailForceContributionReceipt,
+  fineBreakupSupportReceipt,
+  normalizeFineBreakupLocalization,
+} from './volume-detail-force-isolation.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
@@ -3044,12 +3049,28 @@ fn interfaceShreddingForce(c: vec3<i32>, amount: f32, heat: f32, smoke: f32, fla
   return direction / max(length(direction), 0.0001) * interfaceActive * amount * 0.036;
 }
 
-fn fieldDerivedFineScaleBreakup(c: vec3<i32>, curl: f32, heat: f32, smoke: f32, source: f32) -> vec3<f32> {
+fn fieldDerivedFineScaleBreakup(c: vec3<i32>, curl: f32, heat: f32, smoke: f32, source: f32, fineBreakupLocalization: f32) -> vec3<f32> {
   let localCurl = curlAtCell(c);
   let curlEnergy = length(localCurl);
   let scalarAxis = vec3<f32>(heat - smoke * 0.48, source - heat * 0.34, smoke - source * 0.28);
   let direction = cross(localCurl, scalarAxis) + localCurl * 0.28 + scalarAxis * curlEnergy * 0.12;
-  let activeFlow = source * 1.55 + heat * 0.52 + smoke * 0.18 + smoothstep(0.006, 0.095, curlEnergy) * 0.32;
+  let legacyActiveFlow = source * 1.55 + heat * 0.52 + smoke * 0.18 + smoothstep(0.006, 0.095, curlEnergy) * 0.32;
+  if (fineBreakupLocalization <= 0.0) {
+    return direction / max(length(direction), 0.0001) * legacyActiveFlow * (0.006 + curl * 0.010);
+  }
+  let interfaceEnergy = length(materialInterfaceGradient(c));
+  let frontGradientEnergy = length(bonfireReferenceFrontGradient(c));
+  let frontTopology = readFrontField(c);
+  let interfaceSupport = smoothstep(0.018, 0.23, interfaceEnergy);
+  let reactionFrontSupport = smoothstep(0.010, 0.16, frontGradientEnergy + frontTopology * 0.36);
+  let curlShearSupport = smoothstep(0.006, 0.095, curlEnergy)
+    * smoothstep(0.010, 0.18, interfaceEnergy + frontGradientEnergy * 0.72);
+  let localizedSupport = clamp(
+    interfaceSupport * 0.52 + reactionFrontSupport * 0.44 + curlShearSupport * 0.48,
+    0.0,
+    1.0
+  );
+  let activeFlow = legacyActiveFlow * mix(1.0, localizedSupport, fineBreakupLocalization);
   return direction / max(length(direction), 0.0001) * activeFlow * (0.006 + curl * 0.010);
 }
 
@@ -4220,7 +4241,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation;
     }
     if (u.detail_force_isolation.w > 0.5) {
-      let rawFineBreakup = fieldDerivedFineScaleBreakup(cellI, curl, heat, smoke, source);
+      let rawFineBreakup = fieldDerivedFineScaleBreakup(
+        cellI,
+        curl,
+        heat,
+        smoke,
+        source,
+        clamp(u.reserved_source_extension_2.x, 0.0, 1.0)
+      );
       let fineBreakupLateral = vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping;
       fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
     }
@@ -12251,6 +12279,7 @@ export function createKaminosVolumePrototype({
     uniforms.fill(0, 344, 364);
     uniforms[344] = controlsSnapshot.fixedSourceDephase === false ? 0 : 1;
     uniforms.set(detailForceContributionMask(controlsSnapshot.detailForceContributions), 348);
+    uniforms[352] = normalizeFineBreakupLocalization(controlsSnapshot.fineBreakupLocalization);
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,
@@ -12374,6 +12403,7 @@ export function createKaminosVolumePrototype({
     state.phasedSway = uniforms[365] >= 0.5;
     state.proceduralDetailForces = uniforms[366] >= 0.5;
     state.detailForceIsolation = detailForceContributionReceipt({ ...controlsSnapshot, volumeScene: state.volumeScene });
+    state.fineBreakupSupport = fineBreakupSupportReceipt(controlsSnapshot);
     state.proceduralTransportSlip = false;
     state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
     state.fixedSourceDephase = uniforms[344] >= 0.5;
@@ -21741,6 +21771,7 @@ export function createKaminosVolumePrototype({
       state.phasedSway = controlsSnapshot.phasedSway !== false;
       state.proceduralDetailForces = controlsSnapshot.proceduralDetailForces !== false;
       state.detailForceIsolation = detailForceContributionReceipt({ ...controlsSnapshot, volumeScene: state.volumeScene });
+      state.fineBreakupSupport = fineBreakupSupportReceipt(controlsSnapshot);
       state.proceduralTransportSlip = false;
       state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
       state.fixedSourceDephase = controlsSnapshot.fixedSourceDephase !== false;

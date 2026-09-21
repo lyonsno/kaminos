@@ -328,6 +328,8 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
       applied: retirementMigration.applied,
       removedControlIds: Object.freeze([...retirementMigration.removedControlIds]),
       removedRouteParams: Object.freeze([...retirementMigration.removedRouteParams]),
+      addedControlIds: Object.freeze([...retirementMigration.addedControlIds]),
+      addedRouteParams: Object.freeze([...retirementMigration.addedRouteParams]),
     }),
   });
 }

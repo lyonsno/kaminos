@@ -88,6 +88,27 @@ function currentPresetArtifact() {
   return current;
 }
 
+const additiveFineBreakupLocalization = schema.controls.find(control => control.key === 'volume-fine-breakup-localization');
+assert.equal(additiveFineBreakupLocalization?.additiveSinceControlCount, schema.controlCount,
+  'the Fine Breakup localization control declares the exact schema count at which it became additive');
+const legacyFineBreakupArtifact = currentPresetArtifact();
+delete legacyFineBreakupArtifact.preset.domControls[additiveFineBreakupLocalization.key];
+const legacyFineBreakupRoute = new URL(legacyFineBreakupArtifact.preset.route);
+legacyFineBreakupRoute.searchParams.delete(additiveFineBreakupLocalization.param);
+legacyFineBreakupArtifact.preset.route = legacyFineBreakupRoute.href;
+legacyFineBreakupArtifact.controlCount -= 1;
+legacyFineBreakupArtifact.preset.controlCount -= 1;
+const legacyFineBreakupReceipt = validateVolumeSettingsPresetDocument(
+  legacyFineBreakupArtifact,
+  legacyFineBreakupArtifact.presetId,
+  schema,
+);
+assert.deepEqual(legacyFineBreakupReceipt.retirementMigration?.addedControlIds, [additiveFineBreakupLocalization.key]);
+assert.equal(legacyFineBreakupReceipt.preset.domControls[additiveFineBreakupLocalization.key].value, 0);
+assert.equal(legacyFineBreakupReceipt.presetRoute.searchParams.get(additiveFineBreakupLocalization.param), '0');
+assert.equal(legacyFineBreakupReceipt.preset.controlCount, schema.controlCount,
+  'a valid immediately-pre-addition basin migrates only the declared default control before exact current-schema validation');
+
 const malformedDomCount = currentPresetArtifact();
 malformedDomCount.controlCount = 999;
 malformedDomCount.preset.controlCount = 999;

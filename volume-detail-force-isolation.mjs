@@ -1,6 +1,25 @@
 // Ordering matches Uniforms.detail_force_isolation. Transported detail remains
 // enabled internally for compatibility, but is retired from the live cockpit.
 const TERMS = ['detail', 'micro', 'shred', 'fine'];
+
+export function normalizeFineBreakupLocalization(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(1, numeric));
+}
+
+export function fineBreakupSupportReceipt(controls = {}) {
+  const effectiveLocalization = normalizeFineBreakupLocalization(controls.fineBreakupLocalization);
+  return {
+    identity: 'fine-breakup-localized-support-v0',
+    requestedLocalization: controls.fineBreakupLocalization === undefined ? 0 : controls.fineBreakupLocalization,
+    effectiveLocalization,
+    mode: effectiveLocalization === 0 ? 'legacy-broad' : 'reaction-front-interface-shear',
+    legacyPathPreserved: effectiveLocalization === 0,
+    localizedEvidence: ['reaction-front', 'material-interface', 'curl-shear'],
+  };
+}
+
 export function detailForceContributionMask(contributions = {}) {
   return [
     1,
