@@ -4,12 +4,14 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { validateLinearKernelCase } from './linear-kernel-witness-checks.mjs';
+import { execFileSync } from 'node:child_process';
+import { validateLinearKernelCase, validateLinearKernelInventory, validateLinearKernelSource } from './linear-kernel-witness-checks.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = process.env.LINEAR_KERNEL_REPORT;
 if (!output) throw new Error('LINEAR_KERNEL_REPORT must name the caller-owned report');
 const report = { status: 'failed', phase: 'setup', sourceSha256: {}, cases: [],
+  expectedCommit: process.env.LINEAR_KERNEL_EXPECTED_COMMIT,
   requestedBackend: 'native-webgpu', expectedVendor: process.env.LINEAR_EXPECTED_VENDOR || 'apple' };
 let browser, server;
 const persist = async () => {
@@ -18,9 +20,18 @@ const persist = async () => {
 };
 try {
   await persist();
+  report.phase = 'source-identity';
+  const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+  report.commit = git(['rev-parse', 'HEAD']);
+  report.dirty = git(['status', '--porcelain']);
+  validateLinearKernelSource(report);
   const { default: puppeteer } = await import(process.env.PUPPETEER_MODULE || 'puppeteer-core');
-  for (const file of ['src/linear-kernel.js', 'src/core.js', 'tests/linear-kernel-browser-cases.mjs', 'tests/fixtures/linear-source-baselines.json']) {
+  const prefix = git(['rev-parse', '--show-prefix']);
+  for (const file of ['src/linear-kernel.js', 'src/core.js', 'tests/linear-kernel-browser-cases.mjs',
+    'tests/fixtures/linear-source-baselines.json', 'tests/linear-kernel-browser-smoke.mjs', 'tests/linear-kernel-witness-checks.mjs']) {
     report.sourceSha256[file] = createHash('sha256').update(await fs.readFile(path.join(root, file))).digest('hex');
+    const admitted = execFileSync('git', ['show', `${report.expectedCommit}:${prefix}${file}`], { cwd: root });
+    assert.equal(report.sourceSha256[file], createHash('sha256').update(admitted).digest('hex'), `source differs from admitted commit: ${file}`);
   }
   server = http.createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
@@ -62,14 +73,7 @@ try {
   }, report.sourceSha256);
   report.backend = result.backend;
   assert.equal(result.backend.vendor.toLowerCase(), report.expectedVendor.toLowerCase());
-  assert.equal(report.cases.length, 10, 'all declared variant/layout/shape cases must return');
-  const expectedCases = ['sequential4/0/8', 'sequential4/0/1024'];
-  for (const variant of ['split4', 'split4-range']) {
-    for (const transposed of [0, 1]) {
-      for (const channels of [7, 8]) expectedCases.push(`${variant}/${transposed}/${channels}`);
-    }
-  }
-  assert.deepEqual(report.cases.map(row => `${row.variant}/${row.transposed}/${row.channels}`).sort(), expectedCases.sort());
+  validateLinearKernelInventory(report.cases);
   report.phase = 'comparison';
   for (const row of report.cases) validateLinearKernelCase(row);
   report.status = 'succeeded';
