@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+const { disposeKimodoCompositionResources } = await import('../kimodo-shared-device-inject.mjs');
+
 const source = readFileSync(new URL('../kimodo-shared-device-inject.mjs', import.meta.url), 'utf8');
 
 assert.match(source, /export\s*\{\s*sharedGpuDeviceRequirements\s*\}/, 'composition exports declarative requirements before mount');
@@ -23,5 +25,31 @@ assert.match(source, /record\.pageP99Ms\s*=\s*percentile\(record\.frameIntervals
 assert.match(source, /record\.pageMaxMs\s*=\s*record\.frameIntervals\.length\s*\?\s*Math\.max\(\.\.\.record\.frameIntervals\)\s*:\s*null/, 'each run records the worst observed frame interval without inventing an empty-run value');
 assert.doesNotMatch(source, /frameIntervals\.length\s*>|samples\.length\s*>|\.splice\(|\.shift\(\)/, 'diagnostic history remains uncapped so a long run cannot erase its own contention evidence');
 assert.doesNotMatch(source, /layerChunk|chunkSize|four-layer/i, 'the shared-device assay preserves the full-pass Kimodo comparison class');
+
+let unsafeProducerDisposals = 0;
+await assert.rejects(
+  () => disposeKimodoCompositionResources({
+    foreground: {
+      async dispose() { throw new Error('kit-run-still-active'); },
+      snapshot() { return { disposed: false, activeRun: 'run-1', foregroundService: { disposed: false, activeRun: { runId: 'run-1' } } }; },
+    },
+    producer: { dispose() { unsafeProducerDisposals += 1; } },
+  }),
+  /kit-run-still-active/,
+);
+assert.equal(unsafeProducerDisposals, 0, 'producer weights remain resident when foreground/service quiescence was not established');
+
+let quiescentProducerDisposals = 0;
+await assert.rejects(
+  () => disposeKimodoCompositionResources({
+    foreground: {
+      async dispose() { throw new Error('preserved-render-failure'); },
+      snapshot() { return { disposed: true, activeRun: null, foregroundService: { disposed: true, activeRun: null } }; },
+    },
+    producer: { dispose() { quiescentProducerDisposals += 1; } },
+  }),
+  /preserved-render-failure/,
+);
+assert.equal(quiescentProducerDisposals, 1, 'a preserved renderer failure does not prevent release after foreground quiescence is proven');
 
 console.log('Kimodo shared-device page contracts passed');

@@ -9649,12 +9649,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
-  async function pauseForegroundFrames() {
+  function stopForegroundFrameAdmission() {
     foregroundStopping = true;
     cancelAnimationFrame(raf);
     raf = 0;
+  }
+
+  async function awaitForegroundFrames() {
     const pending = foregroundPendingSettled;
     if (pending) await pending;
+  }
+
+  async function pauseForegroundFrames() {
+    stopForegroundFrameAdmission();
+    await awaitForegroundFrames();
     emitStatus({ phase: 'foreground-frames-paused' });
   }
 
@@ -13787,6 +13795,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
     },
     setForegroundOpportunityRequester,
+    stopForegroundFrameAdmission,
+    awaitForegroundFrames,
     pauseForegroundFrames,
     stopForegroundFrames,
     foregroundGpuContext() {

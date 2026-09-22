@@ -285,4 +285,76 @@ assert.deepEqual(
   'failed teardown drains and relinquishes scene ownership before returning its failure',
 );
 
+let windowDrainRequester = null;
+let releaseWindowWork;
+const windowDrainWork = new Promise(resolve => { releaseWindowWork = resolve; });
+const windowDrainForeground = connectKimodoSharedDeviceForeground({
+  prototype: {
+    foregroundGpuContext: () => ({ device, queue: device.queue, active: true, renderer: 'ordinary-volume', productFrameOwner: 'prototype' }),
+    setForegroundOpportunityRequester(next) { windowDrainRequester = next; },
+    stopForegroundFrameAdmission() {},
+    async awaitForegroundFrames() {},
+    async stopForegroundFrames() {},
+  },
+  host: { device, setForegroundServiceActive() {}, runForegroundFrame(runFrame) { return runFrame(); } },
+  sharedGpu,
+});
+windowDrainForeground.attachProducer(producer);
+const windowDrainRun = await windowDrainForeground.beginRun('window-drain-run');
+const activeWindow = windowDrainRun.withForeground('text-embedding', () => windowDrainWork);
+await Promise.resolve();
+await assert.rejects(
+  () => windowDrainRun.finish(),
+  /CPU foreground window/,
+  'finish before CPU window settlement reports the pre-finish condition',
+);
+assert.equal(
+  windowDrainForeground.snapshot().activeRun,
+  'window-drain-run',
+  'a pre-finish rejection retains host custody of the kit run for a lawful retry',
+);
+releaseWindowWork('embedded');
+await activeWindow;
+await windowDrainForeground.dispose();
+assert.equal(windowDrainRequester, null, 'retrying finish during disposal drains and detaches the settled CPU-window run');
+
+let pendingDrainRequester = null;
+let pendingFrameCompletion = Promise.resolve();
+const pendingDrainEvents = [];
+const pendingDrainPrototype = {
+  foregroundGpuContext: () => ({ device, queue: device.queue, active: true, renderer: 'ordinary-volume', productFrameOwner: 'prototype' }),
+  setForegroundOpportunityRequester(next) { pendingDrainRequester = next; },
+  stopForegroundFrameAdmission() { pendingDrainEvents.push('stop-admission'); },
+  async awaitForegroundFrames() { pendingDrainEvents.push('await-pending'); await pendingFrameCompletion; },
+  async stopForegroundFrames() { pendingDrainEvents.push('stop'); },
+};
+const pendingDrainForeground = connectKimodoSharedDeviceForeground({
+  prototype: pendingDrainPrototype,
+  host: { device, setForegroundServiceActive() {}, runForegroundFrame(runFrame) { return runFrame(); } },
+  sharedGpu,
+});
+pendingDrainForeground.attachProducer(producer);
+const pendingDrainRun = await pendingDrainForeground.beginRun('pending-frame-drain-run');
+const pendingFrame = pendingDrainRequester({
+  requestId: 'pending-frame-at-dispose',
+  run(service) {
+    service.submit([{}]);
+    return { status: 'submitted' };
+  },
+});
+pendingFrameCompletion = pendingFrame.completion;
+const pendingDispose = pendingDrainForeground.dispose();
+const pendingOutcome = await Promise.race([
+  pendingDispose.then(() => 'disposed'),
+  new Promise(resolve => setTimeout(() => resolve('pending'), 100)),
+]);
+if (pendingOutcome === 'pending') await pendingDrainRun.finish();
+await pendingDispose;
+assert.equal(pendingOutcome, 'disposed', 'disposal services an active-run pending frame instead of waiting on it before finish');
+assert.deepEqual(
+  pendingDrainEvents.slice(0, 3),
+  ['stop-admission', 'await-pending', 'stop'],
+  'teardown stops admission, finishes the run, then awaits the pending frame before final stop',
+);
+
 console.log('Kimodo shared-device foreground host contracts passed');

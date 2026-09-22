@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  boundedCleanup,
   progressFailure,
   validateMountedComposition,
   validateSuccessfulRun,
@@ -36,11 +37,13 @@ const successfulRun = {
   status: 'succeeded',
   foregroundReceipts: [{ status: 'completed' }],
   runs: [{
-    foregroundReceipts: [{ status: 'completed', submissionCount: 1, result: { status: 'submitted' } }],
+    runId: 'run-current',
+    foregroundReceipts: [{ runId: 'run-current', status: 'completed', submissionCount: 1, result: { status: 'submitted' } }],
     foregroundRunReport: {
+      runId: 'run-current',
       status: 'succeeded',
-      receipts: [{ status: 'completed' }],
-      services: [{ status: 'serviced', failures: [] }],
+      receipts: [{ runId: 'run-current', status: 'completed', submissionCount: 1, result: { status: 'submitted' } }],
+      services: [{ runId: 'run-current', status: 'serviced', failures: [] }],
     },
     flameBefore: { frameCount: 10, simStepCount: 20 },
     flameAfter: { frameCount: 12, simStepCount: 22 },
@@ -54,8 +57,42 @@ assert.throws(
   'historical page receipts cannot substitute for current-run evidence',
 );
 assert.throws(
-  () => validateSuccessfulRun({ ...successfulRun, runs: [{ ...successfulRun.runs[0], foregroundReceipts: [{ status: 'failed-before-submission' }] }] }),
+  () => validateSuccessfulRun({ ...successfulRun, runs: [{ ...successfulRun.runs[0], foregroundReceipts: [{ runId: 'run-current', status: 'failed-before-submission' }] }] }),
   /failed, canceled, or submission-free/,
+);
+assert.throws(
+  () => validateSuccessfulRun({
+    ...successfulRun,
+    runs: [{
+      ...successfulRun.runs[0],
+      foregroundReceipts: [{ runId: null, status: 'completed', submissionCount: 1, result: { status: 'submitted' } }],
+      foregroundRunReport: { ...successfulRun.runs[0].foregroundRunReport, receipts: [] },
+    }],
+  }),
+  /exact current run/,
+  'a successful outside-run receipt cannot substitute for current-run evidence',
+);
+assert.throws(
+  () => validateSuccessfulRun({
+    ...successfulRun,
+    runs: [{ ...successfulRun.runs[0], foregroundRunReport: { ...successfulRun.runs[0].foregroundRunReport, runId: 'run-prior' } }],
+  }),
+  /run report identity/,
+  'a prior or later run report cannot close the current run',
+);
+assert.throws(
+  () => validateSuccessfulRun({
+    ...successfulRun,
+    runs: [{
+      ...successfulRun.runs[0],
+      foregroundReceipts: [
+        ...successfulRun.runs[0].foregroundReceipts,
+        { runId: null, status: 'completed', submissionCount: 1, result: { status: 'submitted' } },
+      ],
+    }],
+  }),
+  /exact current run/,
+  'mixed current-run and outside-run receipt slices are rejected rather than partially trusted',
 );
 assert.throws(
   () => validateSuccessfulRun({ ...successfulRun, runs: [{ ...successfulRun.runs[0], flameAfter: { frameCount: 10, simStepCount: 20 } }] }),
@@ -64,5 +101,11 @@ assert.throws(
 assert.equal(progressFailure({ now: 10, deadline: 20, lastProgressAt: 9, noProgressTimeoutMs: 5, label: 'x', totalTimeoutMs: 20 }), null);
 assert.equal(progressFailure({ now: 15, deadline: 20, lastProgressAt: 9, noProgressTimeoutMs: 5, label: 'x', totalTimeoutMs: 20 }).code, 'WEDGED');
 assert.equal(progressFailure({ now: 20, deadline: 20, lastProgressAt: 19, noProgressTimeoutMs: 5, label: 'x', totalTimeoutMs: 20 }).code, 'TIMEOUT');
+const cleanupTimeout = await boundedCleanup(new Promise(() => {}), {
+  label: 'page teardown',
+  timeoutMs: 5,
+});
+assert.equal(cleanupTimeout.status, 'timed-out');
+assert.match(cleanupTimeout.error, /page teardown/);
 
 console.log('Kimodo shared-device smoke adjudication contracts passed');

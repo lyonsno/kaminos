@@ -226,7 +226,7 @@ export function connectKimodoSharedDeviceForeground({
       async finish() {
         if (run.finishPromise) return run.finishPromise;
         if (activeRun !== run) throw new Error(`Kimodo foreground run ${runId} is not active`);
-        run.finishPromise = (async () => {
+        const attempt = (async () => {
           try {
             const report = await kitRun.finish();
             validateForegroundRunReport(report);
@@ -234,12 +234,24 @@ export function connectKimodoSharedDeviceForeground({
             assertHealthy('finish');
             return report;
           } catch (error) {
+            const kitActiveRun = service.snapshot().activeRun;
+            if (kitActiveRun?.runId === runId && kitActiveRun.finishing === false) {
+              throw error;
+            }
             throw rememberFailure(error);
-          } finally {
-            if (activeRun === run) activeRun = null;
           }
         })();
-        return run.finishPromise;
+        run.finishPromise = attempt;
+        try {
+          return await attempt;
+        } finally {
+          const kitActiveRun = service.snapshot().activeRun;
+          if (!kitActiveRun || kitActiveRun.runId !== runId) {
+            if (activeRun === run) activeRun = null;
+          } else if (kitActiveRun.finishing === false) {
+            run.finishPromise = null;
+          }
+        }
       },
     };
     activeRun = run;
@@ -252,6 +264,7 @@ export function connectKimodoSharedDeviceForeground({
       deviceReceipt,
       producerAttached: Boolean(attachedProducer),
       activeRun: activeRun?.runId ?? null,
+      disposed,
       foregroundService: service.snapshot(),
     });
   }
@@ -262,12 +275,25 @@ export function connectKimodoSharedDeviceForeground({
       let failure = null;
       const preserveFailure = error => { failure ||= error; };
       try {
-        await prototype.pauseForegroundFrames?.();
+        if (typeof prototype.stopForegroundFrameAdmission === 'function') {
+          prototype.stopForegroundFrameAdmission();
+        } else if (!activeRun) {
+          await prototype.pauseForegroundFrames?.();
+        }
       } catch (error) {
         preserveFailure(error);
       }
       try {
         if (activeRun) await activeRun.finish();
+      } catch (error) {
+        preserveFailure(error);
+      }
+      try {
+        if (typeof prototype.awaitForegroundFrames === 'function') {
+          await prototype.awaitForegroundFrames();
+        } else if (activeRun === null) {
+          await prototype.pauseForegroundFrames?.();
+        }
       } catch (error) {
         preserveFailure(error);
       }

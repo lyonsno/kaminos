@@ -17,13 +17,27 @@ export function validateSuccessfulRun(terminal) {
   if (terminal?.status !== 'succeeded') throw new Error(terminal?.lastError?.message || `Generation ended as ${terminal?.status || 'missing'}`);
   const run = terminal.runs?.at(-1);
   if (!run?.foregroundRunReport) throw new Error('Generation succeeded without a persistent foreground run report');
+  if (!run.runId || run.foregroundRunReport.runId !== run.runId) {
+    throw new Error('Generation succeeded with a mismatched foreground run report identity');
+  }
   if (!run.foregroundReceipts?.length) throw new Error('Generation succeeded without current-run foreground frame receipts');
+  if (run.foregroundReceipts.some(receipt => receipt.runId !== run.runId)) {
+    throw new Error('Generation receipt evidence is not bound to the exact current run');
+  }
   if (run.foregroundReceipts.some(receipt => receipt.status !== 'completed' || receipt.submissionCount < 1 || receipt.result?.status !== 'submitted')) {
     throw new Error('Generation succeeded with a failed, canceled, or submission-free current-run foreground receipt');
   }
+  if (!run.foregroundRunReport.receipts?.length) {
+    throw new Error('Generation run report contains no exact current-run foreground receipts');
+  }
   if (run.foregroundRunReport.status !== 'succeeded'
-    || run.foregroundRunReport.receipts?.some(receipt => receipt.status !== 'completed')
-    || run.foregroundRunReport.services?.some(service => !['serviced', 'no-demand'].includes(service.status) || service.failures?.length)) {
+    || run.foregroundRunReport.receipts.some(receipt => receipt.runId !== run.runId
+      || receipt.status !== 'completed'
+      || receipt.submissionCount < 1
+      || receipt.result?.status !== 'submitted')
+    || run.foregroundRunReport.services?.some(service => service.runId !== run.runId
+      || !['serviced', 'no-demand'].includes(service.status)
+      || service.failures?.length)) {
     throw new Error('Generation succeeded with an unhealthy foreground service report');
   }
   if (!(run.flameAfter?.frameCount > run.flameBefore?.frameCount)
@@ -50,4 +64,24 @@ export function progressFailure({ now, deadline, lastProgressAt, noProgressTimeo
     return error;
   }
   return null;
+}
+
+export async function boundedCleanup(promise, { label, timeoutMs }) {
+  let timeoutId = null;
+  try {
+    return await Promise.race([
+      Promise.resolve(promise).then(
+        value => ({ status: 'succeeded', value }),
+        error => ({ status: 'failed', error: error?.message || String(error) }),
+      ),
+      new Promise(resolve => {
+        timeoutId = setTimeout(() => resolve({
+          status: 'timed-out',
+          error: `${label} did not settle within ${timeoutMs}ms`,
+        }), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId != null) clearTimeout(timeoutId);
+  }
 }

@@ -3,6 +3,10 @@ import { execFileSync } from 'node:child_process';
 import { lstat, mkdir, readFile, readdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  KIT_REGISTRY_IDENTITY,
+  collectIdentityMap,
+} from '../kimodo-shared-device-source-admission.mjs';
 
 const host = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checkout = process.argv[2];
@@ -24,8 +28,19 @@ if (sourcePackage.devDependencies?.['@kaminos/webgpu-inference-kit'] !== '^0.1.5
 }
 const kimodoKitPackage = JSON.parse(await readFile(path.join(root, 'node_modules/@kaminos/webgpu-inference-kit/package.json'), 'utf8'));
 const hostKitPackage = JSON.parse(await readFile(path.join(host, 'node_modules/@kaminos/webgpu-inference-kit/package.json'), 'utf8'));
-if (kimodoKitPackage.version !== '0.1.52' || hostKitPackage.version !== '0.1.52') {
+const kimodoLock = JSON.parse(await readFile(path.join(root, 'package-lock.json'), 'utf8'));
+const hostLock = JSON.parse(await readFile(path.join(host, 'package-lock.json'), 'utf8'));
+const kimodoKitLock = kimodoLock.packages?.['node_modules/@kaminos/webgpu-inference-kit'];
+const hostKitLock = hostLock.packages?.['node_modules/@kaminos/webgpu-inference-kit'];
+if (kimodoKitPackage.version !== KIT_REGISTRY_IDENTITY.version || hostKitPackage.version !== KIT_REGISTRY_IDENTITY.version) {
   throw new Error(`shared-device build requires exact installed kit 0.1.52 (kimodo=${kimodoKitPackage.version}, host=${hostKitPackage.version})`);
+}
+for (const [owner, identity] of [['kimodo', kimodoKitLock], ['host', hostKitLock]]) {
+  for (const field of ['version', 'resolved', 'integrity']) {
+    if (identity?.[field] !== KIT_REGISTRY_IDENTITY[field]) {
+      throw new Error(`${owner} lockfile does not bind the reviewed public inference-kit tarball (${field})`);
+    }
+  }
 }
 const { build } = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')));
 await mkdir(out, { recursive: true });
@@ -84,6 +99,10 @@ for (const name of [
   const bytes = await readFile(path.join(host, name));
   servedFiles[name] = { bytes: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') };
 }
+const runtimeKit = {
+  ...KIT_REGISTRY_IDENTITY,
+  files: collectIdentityMap(path.join(host, 'node_modules/@kaminos/webgpu-inference-kit/src')),
+};
 const manifest = {
   status: 'built',
   topology: 'one-host-owned-gpu-device-exact-queue',
@@ -93,6 +112,7 @@ const manifest = {
   hostCommit: hostGit('rev-parse', 'HEAD'),
   kitVersion: '0.1.52',
   installedKitVersions: { kimodo: kimodoKitPackage.version, host: hostKitPackage.version },
+  runtimeKit,
   servedFiles,
   assets,
   bundles,

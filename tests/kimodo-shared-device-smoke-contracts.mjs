@@ -19,6 +19,14 @@ assert.match(source, /no-progress-timeout-ms/, 'the witness distinguishes a no-p
 assert.match(source, /lastRun\.foregroundReceipts/, 'the witness adjudicates receipts from the current run rather than page-global history');
 assert.match(source, /validateSuccessfulRun/, 'the witness delegates same-run receipt and flame-progress adjudication to the executable contract');
 assert.match(source, /__kaminosCompositionSetup[\s\S]*mounted/, 'the witness rejects a partial HUD/device receipt when composition mount failed');
+assert.match(
+  source,
+  /report\.classification[\s\S]*writeReport\(['"]failed['"]\)[\s\S]*report\.teardown\s*=/,
+  'terminal failure is durably published before best-effort page teardown can hang',
+);
+assert.match(source, /verifyIdentityMap[\s\S]*sourceManifest\.bundles/, 'smoke rehashes admitted producer and telemetry bundles');
+assert.match(source, /verifyIdentityMap[\s\S]*sourceManifest\.assets/, 'smoke rehashes admitted model and metadata assets');
+assert.match(source, /verifyRuntimeKitSource/, 'smoke verifies the effective inference-kit implementation closure, not only its version string');
 assert.doesNotMatch(source, /slice\(-|splice\(|\.shift\(\)/, 'the witness does not erase earlier contention evidence');
 
 console.log('Kimodo shared-device smoke contracts passed');

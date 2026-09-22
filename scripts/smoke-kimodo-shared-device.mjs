@@ -7,10 +7,15 @@ import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import {
+  boundedCleanup,
   progressFailure,
   validateMountedComposition,
   validateSuccessfulRun,
 } from '../kimodo-shared-device-smoke-adjudication.mjs';
+import {
+  verifyIdentityMap,
+  verifyRuntimeKitSource,
+} from '../kimodo-shared-device-source-admission.mjs';
 
 const { values } = parseArgs({
   options: {
@@ -101,9 +106,9 @@ if (!kimodoCheckout) {
 const requireFromKimodo = createRequire(join(resolve(kimodoCheckout), 'package.json'));
 const puppeteer = requireFromKimodo('puppeteer-core');
 const hostRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const sha256File = path => createHash('sha256').update(readFileSync(path)).digest('hex');
 const git = (root, ...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
 let embeddingFixture = null;
+report.failurePhase = 'source-preflight';
 try {
   const sourceManifest = JSON.parse(readFileSync(join(hostRoot, 'artifacts/kimodo-shared-device/manifest.json')));
   const effectiveHostCommit = git(hostRoot, 'rev-parse', 'HEAD');
@@ -116,18 +121,34 @@ try {
   if (sourceManifest.kitVersion !== '0.1.52' || sourceManifest.installedKitVersions?.host !== '0.1.52' || sourceManifest.installedKitVersions?.kimodo !== '0.1.52') {
     throw new Error('derived source manifest does not bind exact installed inference kit 0.1.52');
   }
-  for (const [name, identity] of Object.entries(sourceManifest.servedFiles || {})) {
-    if (sha256File(join(hostRoot, name)) !== identity.sha256) throw new Error(`served source hash mismatch: ${name}`);
-  }
+  const servedFiles = verifyIdentityMap({ root: hostRoot, identities: sourceManifest.servedFiles, label: 'served source' });
+  const bundles = verifyIdentityMap({
+    root: join(hostRoot, 'artifacts/kimodo-shared-device/lib'),
+    identities: sourceManifest.bundles,
+    label: 'bundle',
+  });
+  const assets = verifyIdentityMap({
+    root: join(hostRoot, 'artifacts/kimodo-shared-device/assets'),
+    identities: sourceManifest.assets,
+    label: 'asset',
+  });
+  const runtimeKit = verifyRuntimeKitSource({
+    packageRoot: join(hostRoot, 'node_modules/@kaminos/webgpu-inference-kit'),
+    runtimeKit: sourceManifest.runtimeKit,
+  });
   report.effective = {
     sourcePreflight: {
       hostCommit: effectiveHostCommit,
       kimodoCommit: effectiveKimodoCommit,
       kitVersion: sourceManifest.kitVersion,
-      servedFiles: sourceManifest.servedFiles,
+      servedFiles,
+      bundles,
+      assets,
+      runtimeKit,
     },
   };
   if (values['embedding-fixture']) {
+    report.failurePhase = 'embedding-fixture';
     const fixturePath = resolve(values['embedding-fixture']);
     const fixtureBytes = readFileSync(fixturePath);
     const fixture = JSON.parse(fixtureBytes);
@@ -142,9 +163,9 @@ try {
     report.requested.embeddingAuthority = 'live-external-endpoint';
     report.requested.embeddingFixtureSha256 = null;
   }
+  report.failurePhase = null;
   writeReport('starting');
 } catch (error) {
-  report.failurePhase = 'embedding-fixture';
   report.error = { name: error?.name || 'Error', message: error?.message || String(error) };
   report.finishedAt = new Date().toISOString();
   writeReport('failed');
@@ -152,6 +173,7 @@ try {
 }
 let browser = null;
 let page = null;
+let lastTrustworthyComposition = null;
 const delay = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
 
 async function snapshotPageState() {
@@ -176,7 +198,17 @@ async function waitForProgress(label, predicate) {
   let lastMarker = null;
   let lastProgressAt = Date.now();
   while (true) {
-    const snapshot = await snapshotComposition();
+    const snapshotResult = await boundedCleanup(snapshotComposition(), {
+      label: `${label} page-state read`,
+      timeoutMs: Math.max(1, Math.min(noProgressTimeoutMs, totalDeadlineMs - Date.now())),
+    });
+    if (snapshotResult.status !== 'succeeded') {
+      const error = new Error(snapshotResult.error);
+      error.code = Date.now() >= totalDeadlineMs ? 'TIMEOUT' : 'WEDGED';
+      throw error;
+    }
+    const snapshot = snapshotResult.value;
+    lastTrustworthyComposition = snapshot;
     if (snapshot?.setup?.status === 'failed') throw new Error(`composition mount failed: ${snapshot.setup.error || 'unknown error'}`);
     if (predicate(snapshot)) return snapshot;
     const marker = JSON.stringify([
@@ -204,7 +236,11 @@ async function waitForProgress(label, predicate) {
 
 async function captureScreenshot(name) {
   const path = join(outputDir, `${name}.png`);
-  await page.screenshot({ path, type: 'png' });
+  const capture = await boundedCleanup(page.screenshot({ path, type: 'png' }), {
+    label: `screenshot ${name}`,
+    timeoutMs: Math.max(1, Math.min(noProgressTimeoutMs, totalDeadlineMs - Date.now())),
+  });
+  if (capture.status !== 'succeeded') throw new Error(capture.error);
   const bytes = statSync(path).size;
   if (bytes < 1024) throw new Error(`Screenshot ${name} is implausibly small (${bytes} bytes)`);
   report.screenshots.push({ name, path, bytes });
@@ -317,25 +353,50 @@ try {
     await captureScreenshot('03-generated');
   }
 
-  report.teardown = await page.evaluate(() => window.__kimodoSharedDeviceTeardown('smoke-finalize'));
+  const successfulTeardown = await boundedCleanup(
+    page.evaluate(() => window.__kimodoSharedDeviceTeardown('smoke-finalize')),
+    { label: 'successful page teardown', timeoutMs: 30000 },
+  );
+  report.teardown = successfulTeardown;
+  if (successfulTeardown.status !== 'succeeded') throw new Error(successfulTeardown.error);
   report.failurePhase = null;
-  report.pageState = await snapshotPageState();
+  const finalSnapshot = await boundedCleanup(snapshotPageState(), {
+    label: 'final page-state read',
+    timeoutMs: 30000,
+  });
+  if (finalSnapshot.status !== 'succeeded') throw new Error(finalSnapshot.error);
+  report.pageState = finalSnapshot.value;
   report.finishedAt = new Date().toISOString();
   writeReport('succeeded');
 } catch (error) {
-  report.pageState = await snapshotPageState().catch(() => null);
+  report.pageState = lastTrustworthyComposition?.state ?? null;
   report.error = { name: error?.name || 'Error', code: error?.code || null, message: error?.message || String(error), stack: error?.stack || null };
   report.classification = error?.code === 'WEDGED' ? 'wedged-no-progress' : (error?.code === 'TIMEOUT' ? 'bounded-timeout' : 'failed');
-  report.teardown = page
-    ? await page.evaluate(() => window.__kimodoSharedDeviceTeardown?.('smoke-failure'))
-      .catch(teardownError => ({ status: 'failed', error: teardownError?.message || String(teardownError) }))
-    : null;
   report.finishedAt = new Date().toISOString();
+  writeReport('failed');
+  report.teardown = page
+    ? await boundedCleanup(
+      page.evaluate(() => window.__kimodoSharedDeviceTeardown?.('smoke-failure')),
+      { label: 'failure page teardown', timeoutMs: 30000 },
+    )
+    : null;
   writeReport('failed');
   process.exitCode = 1;
 } finally {
-  await browser?.close().catch(error => {
-    report.console.push({ at: new Date().toISOString(), type: 'browser-close-error', text: error.message });
-  });
+  if (browser) {
+    const browserClose = await boundedCleanup(browser.close(), { label: 'browser close', timeoutMs: 30000 });
+    report.browserClose = browserClose;
+    if (browserClose.status !== 'succeeded') {
+      browser.process()?.kill('SIGKILL');
+      report.console.push({ at: new Date().toISOString(), type: 'browser-close-error', text: browserClose.error });
+      if (report.status === 'succeeded') {
+        report.failurePhase = 'browser-close';
+        report.error = { name: 'Error', code: 'CLEANUP_TIMEOUT', message: browserClose.error, stack: null };
+        report.finishedAt = new Date().toISOString();
+        report.status = 'failed';
+        process.exitCode = 1;
+      }
+    }
+  }
   writeReport(report.status);
 }

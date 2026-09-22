@@ -18,6 +18,38 @@ const percentile = (values, q) => {
 };
 const formatMs = value => Number.isFinite(value) ? `${value.toFixed(1)} ms` : 'unmeasured';
 
+export async function disposeKimodoCompositionResources({ foreground, producer } = {}) {
+  let teardownError = null;
+  try {
+    await foreground?.dispose();
+  } catch (error) {
+    teardownError = error;
+  }
+  let foregroundState = null;
+  try {
+    foregroundState = foreground?.snapshot?.() ?? null;
+  } catch (error) {
+    teardownError ||= error;
+  }
+  const quiescent = !foreground || (
+    foregroundState?.disposed === true
+    && foregroundState.activeRun == null
+    && foregroundState.foregroundService?.disposed === true
+    && foregroundState.foregroundService?.activeRun == null
+  );
+  if (quiescent) {
+    try {
+      producer?.dispose();
+    } catch (error) {
+      teardownError ||= error;
+    }
+  } else {
+    teardownError ||= new Error('foreground service did not reach quiescence; producer resources remain resident');
+  }
+  if (teardownError) throw teardownError;
+  return Object.freeze({ status: 'disposed', foregroundQuiescent: true, producerDisposed: Boolean(producer) });
+}
+
 function injectHud() {
   const root = document.createElement('aside');
   root.id = 'kimodo-shared-device-hud';
@@ -336,7 +368,9 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       record.frameIntervalsOver100Ms = record.frameIntervals.filter(value => value > 100).length;
       record.samples = state.samples.slice(record.sampleStart);
       record.telemetry = telemetry.snapshot();
-      record.foregroundReceipts = state.foregroundReceipts.slice(record.foregroundReceiptStart);
+      record.foregroundReceipts = state.foregroundReceipts
+        .slice(record.foregroundReceiptStart)
+        .filter(receipt => receipt.runId === record.runId);
       record.flameAfter = prototype.debugState();
       record.foregroundSnapshot = foreground.snapshot();
       $('result').textContent = `${record.status} · ${(record.wallMs / 1000).toFixed(1)} s · ${record.foregroundReceipts.length} ordinary frames`;
@@ -364,18 +398,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       cancelAnimationFrame(raf);
       await loadLifecycle?.catch(() => undefined);
       await generationLifecycle?.catch(() => undefined);
-      let teardownError = null;
-      try {
-        await foreground?.dispose();
-      } catch (error) {
-        teardownError = error;
-      }
-      try {
-        producer?.dispose();
-      } catch (error) {
-        teardownError ||= error;
-      }
-      if (teardownError) throw teardownError;
+      await disposeKimodoCompositionResources({ foreground, producer });
       state.teardown = { ...state.teardown, status: 'succeeded', endedAtMs: performance.now() };
       heartbeat('teardown-succeeded');
       return state.teardown;
