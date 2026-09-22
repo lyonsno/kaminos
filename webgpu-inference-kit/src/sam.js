@@ -321,3 +321,5 @@ export {
   createSam3BrowserImageCacheKey,
   createSam3BrowserServingResources,
 } from './sam3-browser-serving-resources.js';
+export { createSam3BrowserImageRuntime } from './sam3-browser-image-runtime.js';
+export { createSam3SourceMask, resizeSam3MaskLogits } from './sam3-source-mask.js';

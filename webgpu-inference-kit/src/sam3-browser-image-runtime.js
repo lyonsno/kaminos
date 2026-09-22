@@ -17,11 +17,9 @@ import {
   createSam3BrowserImageCacheKey,
   createSam3BrowserModelPackageRuntime,
   createSam3BrowserServingResources,
-  requestBrowserWebGpuDevice,
   createSam3BrowserStaticArtifactCache,
   resolveSam3BrowserArtifactUrl,
   resolveSam3BrowserPackageManifest,
-  createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
   createSam3ImagePreprocessPhaseProgramCpuOracle,
@@ -68,7 +66,8 @@ import {
   runSam3ImageVitFirstBlockPhaseProgramRoute as runSam3ImageVitFirstBlockPhaseProgramRouteRaw,
   runSam3ImageVitBlockStackPhaseProgramRoute as runSam3ImageVitBlockStackPhaseProgramRouteRaw,
   runSam3ImageFpnNeckPhaseProgramRoute as runSam3ImageFpnNeckPhaseProgramRouteRaw,
-} from './index.js';
+} from './sam.js';
+import { requestBrowserWebGpuDevice, createRouteInvocationRequest } from './core.js';
 import { sam3Readback, sam3TypedView } from './sam-readback.js';
 
 // The model and invocation state belong to the caller, not a diagnostic page.

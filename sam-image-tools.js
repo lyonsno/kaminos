@@ -1,5 +1,4 @@
-import { createSam3BrowserImageRuntime } from './webgpu-inference-kit/src/sam3-browser-image-runtime.js';
-import { createSam3SourceMask } from './webgpu-inference-kit/src/sam3-source-mask.js';
+import { createSam3BrowserImageRuntime, createSam3SourceMask } from './webgpu-inference-kit/src/sam.js';
 import { createSamWorkbenchForeground } from './webgpu-inference-kit/smokes/sam-workbench-foreground.js';
 
 const COLORS = [[50, 203, 222], [233, 184, 78], [208, 115, 185], [129, 217, 137]];
@@ -77,6 +76,7 @@ export function createSamImageTools({ inferenceSession, config, onAsset, onScene
     el('name').textContent = 'Loading image';
     el('result').textContent = '';
     el('empty').hidden = false;
+    canvas.hidden = true;
     controls(); status('Loading image');
     try {
       const entry = input instanceof Blob
@@ -103,6 +103,7 @@ export function createSamImageTools({ inferenceSession, config, onAsset, onScene
         });
       } else foreground.setImage(image);
       el('empty').hidden = true;
+      canvas.hidden = false;
       el('name').textContent = entry.name || 'Image';
       el('dimensions').textContent = `${canvas.width} x ${canvas.height}`;
       status(config?.mounted ? 'Image loaded' : 'SAM model not mounted');

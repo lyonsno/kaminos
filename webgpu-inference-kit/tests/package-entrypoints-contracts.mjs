@@ -39,6 +39,9 @@ for (const name of ['createWebGpuInferenceSession', 'createWebGpuForegroundServi
 }
 assert.equal(typeof sam.createSam3BrowserServingResources, 'function');
 assert.equal(typeof sam.createSam31BrowserTrackerSession, 'function');
+assert.equal(typeof sam.createSam3BrowserImageRuntime, 'function');
+assert.equal(typeof sam.createSam3SourceMask, 'function');
+assert.equal(typeof sam.resizeSam3MaskLogits, 'function');
 for (const name of ['createSharpImageToSplatRouteDefinition', 'createSf3dImageToMeshRouteDefinition',
   'createMogeDepthNormalRouteDefinition', 'createKimodoTextToMotionRouteDefinition']) {
   assert.equal(typeof root[name], 'function', `legacy model adapter: ${name}`);

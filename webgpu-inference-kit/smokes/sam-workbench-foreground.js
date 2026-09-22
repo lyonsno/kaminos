@@ -1,4 +1,4 @@
-import { createCooperativeYield } from '../src/index.js';
+import { createCooperativeYield } from '../src/core.js';
 
 // The source viewport and inference share one device and queue. Input creates
 // demand; idle phase boundaries retain the kit's ordinary event-loop yield.

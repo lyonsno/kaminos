@@ -8901,8 +8901,7 @@ async function initScene() {
     if (response.ok) samHostConfig = (await response.json()).sam3 || null;
   } catch (error) { console.warn('SAM runtime configuration unavailable', error); }
   if (samHostConfig?.mounted) {
-    const { createWebGpuDeviceRequest } = await import('./webgpu-inference-kit/src/gpu-environment.js');
-    const { createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/inference-session.js');
+    const { createWebGpuDeviceRequest, createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/core.js');
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('SAM host WebGPU adapter unavailable');
     const request = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
