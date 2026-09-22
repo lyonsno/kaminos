@@ -69,6 +69,8 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 
 /* Viewport */
 #viewport { flex: 1; min-width: 0; position: relative; overflow: hidden; isolation: isolate; background: #111; }
+.navigation-input { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: #888; font-size: 11px; }
+.navigation-input select { flex: 1; background: #191919; color: #bbb; border: 1px solid #333; border-radius: 4px; padding: 4px 6px; font: inherit; }
 canvas { display: block; }
 #volume-stage-b-producer-media { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; background: #000; }
 #volume-stage-b-producer-media[hidden] { display: none; }
@@ -669,6 +671,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <div id="sidebar">
   <h1>Kaminos</h1>
   <div class="subtitle">spatial asset kiln</div>
+  <label class="navigation-input" for="navigation-input-mode">Navigation
+    <select id="navigation-input-mode" title="Trackpad: two-finger orbit, Shift pan, Cmd/Ctrl zoom. Mouse: middle/right drag orbit, wheel zoom.">
+      <option value="trackpad">Trackpad</option>
+      <option value="mouse">Mouse</option>
+    </select>
+  </label>
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
@@ -10051,6 +10059,16 @@ async function initScene() {
   renderer.domElement.addEventListener('wheel', markDirty);
   window._kaminosDirty = markDirty;
   let navigation = null;
+  const navigationInput = document.getElementById('navigation-input-mode');
+  let savedNavigationInput;
+  try { savedNavigationInput = localStorage.getItem('kaminos.navigationInput'); } catch {}
+  navigationInput.value = ['trackpad', 'mouse'].includes(savedNavigationInput) ? savedNavigationInput
+    : /Mac/i.test(navigator.userAgentData?.platform || navigator.platform) ? 'trackpad' : 'mouse';
+  navigationInput.addEventListener('change', () => {
+    try { localStorage.setItem('kaminos.navigationInput', navigationInput.value); } catch {}
+    scenePlacementTools.navigationStatus('');
+    navigationInput.blur();
+  });
   scenePlacementTools = installScenePlacementTools({
     viewport: viewportEl, camera, controls, gizmo: transformControls,
     selected: () => activeSceneObjectId,
@@ -10062,6 +10080,9 @@ async function initScene() {
     busy: () => authoringBusy,
     frameSelected: () => { frameObject(currentMesh, camera, controls); markDirty(); },
     navigationBusy: () => !!navigation?.state().gesture,
+    navigationHint: () => navigationInput.value === 'trackpad'
+      ? 'Two-finger drag orbit · Shift pan · Cmd/Ctrl zoom'
+      : 'MMB/RMB drag orbit · Shift pan · Cmd/Ctrl zoom · Wheel zoom',
     selectionFeedback: target => selectionFeedback?.update(target),
   });
   sceneParameterTools = installAuthoredParameterControls();
@@ -10073,6 +10094,7 @@ async function initScene() {
     roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object), groundPlane, annularBurner?.group, fireLightWitnessGroup],
     frameAll: () => frameObjects(sceneObjects.map(entry => entry.object), camera, controls),
     blocked: () => !!scenePlacementTools.state().active || transformControls.dragging || authoringBusy,
+    inputMode: () => navigationInput.value,
     status: text => scenePlacementTools.navigationStatus(text),
   });
   window.kaminosNavigationState = navigation.state;

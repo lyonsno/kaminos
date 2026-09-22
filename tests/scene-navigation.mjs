@@ -70,11 +70,11 @@ class Element extends EventTarget {
  setPointerCapture(id){this.captures.add(id);}hasPointerCapture(id){return this.captures.has(id);}releasePointerCapture(id){this.captures.delete(id);}
 }
 function emit(node,type,props={}){const e=new Event(type,{cancelable:true});Object.assign(e,props);node.dispatchEvent(e);return e;}
-function fixture(){
+function fixture(options={}){
  const c=cameraAt(),canvas=new Element(),doc=new Element(),win=new Element();
  const controls=new THREE.EventDispatcher();controls.enabled=true;controls.target=new THREE.Vector3();controls.update=()=>{c.lookAt(controls.target);c.updateMatrixWorld(true);};
  let blocked=false,frames=0;
- const nav=installSceneNavigation({camera:c,canvas,viewport:canvas,document:doc,window:win,controls,roots:()=>[],blocked:()=>blocked,frameAll:()=>frames++});
+ const nav=installSceneNavigation({camera:c,canvas,viewport:canvas,document:doc,window:win,controls,roots:()=>[],blocked:()=>blocked,frameAll:()=>frames++,...options});
  emit(canvas,'pointerenter');
  return {c,canvas,doc,win,controls,nav,get frames(){return frames;},set blocked(v){blocked=v;}};
 }
@@ -101,6 +101,50 @@ test('keyboard and wheel respect focus, modal ownership and controls suspension'
   const before=f.nav.state();f.doc.activeElement=gate==='text'?{closest:()=>true}:null;f.blocked=gate==='blocked';f.controls.enabled=gate!=='disabled';
   emit(f.doc,'keydown',{key:'3',code:'Numpad3'});assert.deepEqual(f.nav.state().position,before.position);
   if(gate!=='text'){emit(f.canvas,'wheel',{deltaY:120,deltaMode:0,clientX:400,clientY:300});assert.deepEqual(f.nav.state().position,before.position);}
+ }
+});
+
+// Pixel-mode integer deltas and modifiers observed in Noah's Chrome153 trace,
+// September22, input-observation-final.json at652360.4/6760258.4/6762424.3ms.
+// Raw trace remains in the owning navigation report's evidence directory.
+const trackpadPackets=[
+ {deltaX:-49,deltaY:53,deltaMode:0},
+ {deltaX:0,deltaY:-1,deltaMode:0,shiftKey:true},
+ {deltaX:0,deltaY:-1,deltaMode:0,metaKey:true},
+];
+test('click-free trackpad orbit retains the inspected point and distance, including horizontal motion',()=>{
+ for(const packet of [trackpadPackets[0],{deltaX:-49,deltaY:0,deltaMode:0}]){
+  const f=fixture({inputMode:()=> 'trackpad'}),pivot=new THREE.Vector3(1,.5,0);
+  const screen=pivot.clone().project(f.c),q=f.c.quaternion.clone(),radius=f.c.position.distanceTo(pivot);
+  const e=emit(f.canvas,'wheel',{...packet,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
+  assert.ok(f.c.quaternion.angleTo(q)>.01,'plain glide must orbit, including horizontal-only glide');
+  near(pivot.clone().project(f.c),screen,'the inspected point must stay under the pointer');
+  assert.ok(Math.abs(f.c.position.distanceTo(pivot)-radius)<1e-8,'orbit must not become wheel zoom');
+  assert.equal(e.defaultPrevented,true);assert.equal(f.nav.state().gesture,null);assert.equal(f.canvas.captures.size,0);
+ }
+});
+test('Shift glide pans with content motion, while Cmd/Ctrl glide zooms along the view axis',()=>{
+ const f=fixture({inputMode:()=> 'trackpad'}),q=f.c.quaternion.clone(),point=new THREE.Vector3();
+ emit(f.canvas,'wheel',{...trackpadPackets[1],clientX:400,clientY:300});
+ assert.ok(f.c.quaternion.angleTo(q)<1e-8);near(f.c.position.clone().sub(f.controls.target),new THREE.Vector3(0,0,10));
+ assert.ok(Math.abs(point.project(f.c).y+2/600)<1e-8,'negative scroll moves scene down, like natural scrolling');
+ for(const modifiers of [{metaKey:true},{metaKey:false,ctrlKey:true}]){
+  const f=fixture({inputMode:()=> 'trackpad'});
+  emit(f.canvas,'wheel',{...trackpadPackets[2],...modifiers,clientX:450,clientY:280});
+  near(f.controls.target,new THREE.Vector3());assert.equal(f.c.position.x,0);assert.equal(f.c.position.y,0);assert.ok(f.c.position.z<10);
+ }
+});
+test('input preference switches immediately; mouse wheel zoom and modal ownership remain intact',()=>{
+ let inputMode='trackpad';const f=fixture({inputMode:()=>inputMode});
+ assert.equal(f.nav.state().inputMode,'trackpad');inputMode='mouse';
+ emit(f.canvas,'wheel',{deltaX:0,deltaY:120,deltaMode:0,clientX:400,clientY:300});
+ assert.equal(f.nav.state().inputMode,'mouse');assert.ok(f.c.position.z>10);assert.equal(f.c.position.x,0);
+ for(const gate of ['blocked','disabled','pointer-gesture']){
+  const f=fixture({inputMode:()=> 'trackpad'});f.blocked=gate==='blocked';f.controls.enabled=gate!=='disabled';
+  if(gate==='pointer-gesture')emit(f.canvas,'pointerdown',{button:2,pointerId:1,clientX:400,clientY:300});
+  const before=f.nav.state();
+  for(const packet of trackpadPackets)emit(f.canvas,'wheel',{...packet,clientX:400,clientY:300});
+  assert.deepEqual(f.nav.state(),before,'another gesture keeps camera ownership');
  }
 });
 

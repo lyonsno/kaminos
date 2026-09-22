@@ -89,7 +89,7 @@ const modeFor = e => e.shiftKey ? 'pan' : e.ctrlKey || e.metaKey ? 'dolly' : 'or
 const take = e => { e.preventDefault(); e.stopImmediatePropagation(); };
 
 export function installSceneNavigation({canvas, viewport, camera, controls, roots, frameAll, gizmo = null,
-  blocked = () => false, status = () => {}, document = globalThis.document, window = globalThis.window}) {
+  inputMode = () => 'mouse', blocked = () => false, status = () => {}, document = globalThis.document, window = globalThis.window}) {
   let gesture = null, hover = false, lastDepth = null;
   const listen = (node, type, fn, options) => {
     node.addEventListener(type, fn, options);
@@ -161,10 +161,17 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
   listen(canvas, 'wheel', e => {
     take(e);
     if (gesture || !permitted()) return;
-    // Wheel is a discrete depth-aware zoom. The offset never moves toward the cursor.
-    sample(e);
-    const pixels = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1);
-    zoomCamera(camera, controls.target, Math.exp(pixels * .0015));
+    // Browsers deliver a trackpad glide as wheel input, not a middle-button drag.
+    // Units and integer/fractional deltas cannot reliably identify the device.
+    const mode = inputMode() === 'trackpad' ? modeFor(e) : 'dolly';
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1;
+    const dx = (e.deltaX || 0) * unit, dy = e.deltaY * unit;
+    const pivot = sample(e);
+    // Scroll deltas describe content displacement opposite to pointer motion.
+    // Each packet completes immediately; no click, capture or idle timer needed.
+    if (mode === 'orbit') orbitCamera(camera, controls.target, pivot, dx * .005, dy * .005);
+    else if (mode === 'pan') panCamera(camera, controls.target, -dx, -dy, canvas.clientHeight);
+    else zoomCamera(camera, controls.target, Math.exp(dy * .0015));
     changed();
   }, {capture:true, passive:false});
   listen(document, 'keydown', e => {
@@ -194,7 +201,7 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     if (action) {take(e); action(); changed();}
   }, true);
   return {
-    state: () => ({gesture:gesture?.mode || null, depth:lastDepth, position:camera.position.toArray(), target:controls.target.toArray(), up:camera.up.toArray(), near:camera.near, far:camera.far, fov:camera.fov, projection:'perspective', autoDepth:true, zoomToMouse:false}),
+    state: () => ({gesture:gesture?.mode || null, inputMode:inputMode(), depth:lastDepth, position:camera.position.toArray(), target:controls.target.toArray(), up:camera.up.toArray(), near:camera.near, far:camera.far, fov:camera.fov, projection:'perspective', autoDepth:true, zoomToMouse:false}),
     cancel: () => finish(true),
     dispose: () => {finish(true); for (const dispose of disposers) dispose();},
   };

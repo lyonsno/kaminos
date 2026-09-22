@@ -1,7 +1,7 @@
 import { Vector3, Vector2, Raycaster, Plane } from './lib/three.core.js';
 import { createSceneEdits, transformPose, axisVector } from './scene-edit-session.mjs';
 
-export function installScenePlacementTools({viewport, camera, controls, gizmo, selected, read, write, object, refresh, allowed, busy, frameSelected = () => {}, navigationBusy = () => false, selectionFeedback = () => {}}) {
+export function installScenePlacementTools({viewport, camera, controls, gizmo, selected, read, write, object, refresh, allowed, busy, frameSelected = () => {}, navigationBusy = () => false, navigationHint = () => 'MMB/RMB drag orbit · Shift pan · Cmd/Ctrl zoom · Wheel zoom', selectionFeedback = () => {}}) {
   const hud=document.createElement('div');hud.id='scene-edit-hud';hud.setAttribute('role','status');
   const overlay=document.createElementNS('http://www.w3.org/2000/svg','svg');overlay.id='scene-edit-overlay';
   overlay.setAttribute('aria-hidden','true');viewport.append(overlay,hud);
@@ -93,7 +93,7 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
     } else if(field)hud.textContent='Edit value · drag axis label to adjust · Enter confirm · Esc cancel';
     else if(navigationText)hud.textContent=navigationText;
     else hud.textContent=id?`${id} · G Move · R Rotate · S Scale · X/Y/Z constrain · Ctrl snap · Shift precision · F frame selected · ⌘/Ctrl Z undo`:'Select an object to place it';
-    if(!m && !field && !navigationText)hud.textContent+=' · Right drag orbit · Shift right drag pan · Cmd/Ctrl right drag zoom · Wheel zoom · Numpad views · Home frame all';
+    if(!m && !field && !navigationText)hud.textContent+=` · ${navigationHint()} · Numpad views · Home frame all`;
     overlay.setAttribute('viewBox',`0 0 ${viewport.clientWidth} ${viewport.clientHeight}`);
     let lines='';
     const line=(a,b,color,opacity=1,dash='')=>{if([a.x,a.y,b.x,b.y].every(Number.isFinite))lines+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${color}" opacity="${opacity}" stroke-width="1.3" ${dash?`stroke-dasharray="${dash}"`:''}/>`;};
