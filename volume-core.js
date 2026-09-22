@@ -28,6 +28,10 @@ import {
   SELECTIVE_HEAD_LIVE_ROUTE,
   createSelectiveHeadLiveRuntime,
 } from './selective-head-live-runtime.mjs';
+import {
+  composeWebGpuDeviceRequirements,
+  requestBrowserWebGpuDevice,
+} from '@kaminos/webgpu-inference-kit';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -562,6 +566,47 @@ function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize) {
 
 function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+}
+
+export const KAMINOS_VOLUME_GPU_DEVICE_REQUIREMENTS = Object.freeze({
+  requiredFeatures: Object.freeze([]),
+  requiredLimits: Object.freeze({
+    maxStorageBufferBindingSize: fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES)),
+    maxStorageBuffersPerShaderStage: 10,
+    maxStorageBuffersInFragmentStage: 5,
+    maxStorageBuffersInVertexStage: 4,
+  }),
+});
+
+// Acquire the one device consumed by the host scene, native flame, and an
+// optional inference composition. The kit owns requirement composition and
+// effective identity; callers receive the exact queue object from that device.
+export async function requestKaminosSharedWebGpuDevice({ requirements = {} } = {}) {
+  if (!globalThis.navigator?.gpu) throw new Error('WebGPU unavailable');
+  const composedRequirements = composeWebGpuDeviceRequirements([
+    KAMINOS_VOLUME_GPU_DEVICE_REQUIREMENTS,
+    requirements,
+  ]);
+  const acquired = await requestBrowserWebGpuDevice(globalThis.navigator.gpu, {
+    adapterOptions: { powerPreference: 'high-performance', featureLevel: 'core' },
+    timestampQuery: 'prefer',
+    label: 'kaminos-shared-host-device',
+    requirements: composedRequirements,
+  });
+  if (!acquired.device || typeof acquired.device.queue?.submit !== 'function') {
+    acquired.device?.destroy?.();
+    throw new Error('Kaminos shared GPU acquisition returned an invalid device queue');
+  }
+  return Object.freeze({
+    identity: 'kaminos-shared-webgpu-device.v1',
+    authority: 'one-kit-acquired-device-three-volume-inference-v0',
+    adapter: acquired.adapter,
+    device: acquired.device,
+    queue: acquired.device.queue,
+    deviceRequest: acquired.deviceRequest,
+    backendIdentity: acquired.backendIdentity,
+    requirements: composedRequirements,
+  });
 }
 
 function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
@@ -9540,13 +9585,76 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalHistoryFrames += 1;
   }
 
+  let foregroundRequester = null;
+  let foregroundPending = null;
+  let foregroundSequence = 0;
+
+  function setForegroundOpportunityRequester(requester) {
+    if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
+    if (foregroundPending) throw new Error('foreground frame is still pending');
+    if (requester && (boundarySplatRequested() || browserResidualCanApply())) {
+      throw new Error('ordinary foreground service requires the ordinary raymarch route');
+    }
+    foregroundRequester = requester;
+    state.ordinaryForeground = {
+      mode: requester ? 'producer-foreground-opportunities' : 'private-animation-loop',
+      completedFrames: 0,
+      lastReceipt: null,
+    };
+  }
+
   function render(now) {
+    if (!foregroundRequester) return renderOrdinaryFrame(now);
+    raf = 0;
+    if (!state.active || selectiveHeadLiveCapturePaused || foregroundPending) return;
+    const requestId = `ordinary-flame-frame-${++foregroundSequence}`;
+    const requester = foregroundRequester;
+    foregroundPending = { requestId };
+    Promise.resolve().then(() => {
+      const handle = requester({
+        requestId,
+        metadata: {
+          renderer: 'ordinary-volume',
+          frameCountBefore: state.frameCount,
+          simStepCountBefore: state.simStepCount,
+        },
+        run(service) {
+          if (!state.active || requester !== foregroundRequester) throw new Error('ordinary foreground frame no longer active');
+          if (service.device !== device || service.queue !== device.queue || typeof service.submit !== 'function') {
+            throw new Error('ordinary foreground device/queue mismatch');
+          }
+          if (service.signal?.aborted) throw new Error('ordinary foreground frame aborted');
+          if (boundarySplatRequested() || browserResidualCanApply()) throw new Error('ordinary foreground route changed');
+          return renderOrdinaryFrame(performance.now(), service);
+        },
+      });
+      if (!handle?.completion) throw new Error('foreground requester did not return a completion handle');
+      foregroundPending = handle;
+      return handle.completion;
+    }).then(receipt => {
+      if (receipt?.status !== 'completed' || receipt.result?.status !== 'submitted') {
+        throw new Error(`ordinary foreground frame failed: ${receipt?.status || 'missing receipt'}`);
+      }
+      state.ordinaryForeground.completedFrames += 1;
+      state.ordinaryForeground.lastReceipt = receipt;
+    }).catch(error => {
+      state.active = false;
+      state.error = error?.message || String(error);
+      canvas.classList.remove('active');
+      emitStatus({ phase: 'foreground-frame-error', error: state.error });
+    }).finally(() => {
+      foregroundPending = null;
+      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+    });
+  }
+
+  function renderOrdinaryFrame(now, foregroundService = null) {
     if (!state.active) return;
     if (selectiveHeadLiveCapturePaused) {
       raf = 0;
       return;
     }
-    raf = requestAnimationFrame(render);
+    raf = 0;
     try {
       const cpuStart = performance.now();
       controls?.update?.();
@@ -9646,19 +9754,38 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       encodeHistoryCopy(encoder, currentTexture);
       encodeBoundarySplatTelemetry(encoder);
-      device.queue.submit([encoder.finish()]);
+      if (foregroundService) {
+        foregroundService.submit([encoder.finish()], {
+          metadata: { renderer: 'ordinary-volume', simStepCount: state.simStepCount },
+        });
+      } else {
+        device.queue.submit([encoder.finish()]);
+      }
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       commitPreviousViewProjection();
       state.frameCount += 1;
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
       recordVolumeFrameTiming(now, performance.now() - cpuStart);
       if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
+      return {
+        status: 'submitted',
+        renderer: 'ordinary-volume',
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        atMs: now,
+        authority: 'queue-submit-returned-not-gpu-completion-or-presentation',
+      };
     } catch (err) {
       state.active = false;
       state.error = err?.message || String(err);
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
       emitStatus({ phase: 'render-error', error: state.error });
+      if (foregroundService) throw err;
+    } finally {
+      if (!foregroundService && !selectiveHeadLiveCapturePaused && state.active) {
+        raf = requestAnimationFrame(render);
+      }
     }
   }
 
@@ -13640,6 +13767,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         cancelAnimationFrame(raf);
         emitStatus({ phase: 'inactive' });
       }
+    },
+    setForegroundOpportunityRequester,
+    foregroundGpuContext() {
+      return {
+        device,
+        queue: device?.queue,
+        active: state.active,
+        renderer: boundarySplatRequested() || browserResidualCanApply() ? 'alternate-volume' : 'ordinary-volume',
+        productFrameOwner: 'prototype',
+      };
     },
     debugState() {
       return {

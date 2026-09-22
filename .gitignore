@@ -5,3 +5,4 @@ scratch/*
 scenes/*
 !scenes/.gitkeep
 artifacts/volume-captures/
+artifacts/kimodo-shared-device/

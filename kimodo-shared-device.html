@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Kimodo × live flame — shared device</title>
+<body style="background:#08080a;color:#e8e4da;font:16px system-ui;padding:2rem">
+<p>Opening Kimodo and the live flame on one host-owned GPUDevice…</p>
+<script type="module">
+const route = new URL('./index.html', location.href);
+route.searchParams.set('kaminos_volume_smoke', '1');
+route.searchParams.set('volume_scene', 'tall_plume');
+route.searchParams.set('volume_resolution', '160');
+route.searchParams.set('volume_steps', '160');
+route.searchParams.set('volume_render_scale', '0.254');
+route.searchParams.set('volume_density', '3.15');
+route.searchParams.set('volume_speed', '0.45');
+route.searchParams.set('volume_input_radius', '0.44');
+route.searchParams.set('volume_flow_rate', '0.75');
+route.hash = new URLSearchParams({ composition_module_url: './kimodo-shared-device-inject.mjs' }).toString();
+location.replace(route);
+</script>

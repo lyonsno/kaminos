@@ -2684,6 +2684,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     "three": "./lib/three.webgpu.js",
     "three/webgpu": "./lib/three.webgpu.js",
     "three/tsl": "./lib/three.tsl.js",
+    "@kaminos/webgpu-inference-kit": "./node_modules/@kaminos/webgpu-inference-kit/src/index.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
   }
 }
@@ -2694,7 +2695,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=kimodo-shared-device-0922';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -2847,6 +2848,9 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let sharedGpu = null;
+let compositionModule = null;
+let compositionHost = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -8814,7 +8818,36 @@ async function initScene() {
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGPURenderer({ antialias: true });
+  // Composition modules declare their device requirements at module scope so
+  // the host can acquire one adequate device before constructing either GPU
+  // consumer. A requested composition never falls back to independent queues.
+  const compositionModuleUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('composition_module_url');
+  window.__kaminosCompositionSetup = {
+    moduleUrl: compositionModuleUrl,
+    status: compositionModuleUrl ? 'pending' : 'absent',
+    phase: compositionModuleUrl ? 'module-load' : 'none',
+  };
+  if (compositionModuleUrl) {
+    const resolvedCompositionUrl = new URL(compositionModuleUrl, window.location.href);
+    if (resolvedCompositionUrl.origin !== window.location.origin) {
+      throw new Error('composition_module_url must resolve on the Kaminos origin');
+    }
+    compositionModule = await import(resolvedCompositionUrl.href);
+    if (typeof compositionModule.mountComposition !== 'function') {
+      throw new Error('composition module did not export mountComposition');
+    }
+    if (!compositionModule.sharedGpuDeviceRequirements) {
+      throw new Error('composition module did not export sharedGpuDeviceRequirements');
+    }
+    window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
+    sharedGpu = await requestKaminosSharedWebGpuDevice({
+      requirements: compositionModule.sharedGpuDeviceRequirements,
+    });
+  }
+
+  renderer = sharedGpu?.device
+    ? new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device })
+    : new THREE.WebGPURenderer({ antialias: true });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -8825,6 +8858,9 @@ async function initScene() {
   vp.appendChild(renderer.domElement);
 
   await renderer.init();
+  if (sharedGpu?.device && renderer.backend?.device !== sharedGpu.device) {
+    throw new Error('Three renderer did not retain the required Kaminos shared GPUDevice');
+  }
   console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
 
   controls = new OrbitControls(camera, renderer.domElement);
@@ -8985,10 +9021,35 @@ async function initScene() {
   renderer.domElement.addEventListener('wheel', markDirty);
   window._kaminosDirty = markDirty;
 
+  let foregroundServiceActive = false;
+  let insideForegroundFrame = false;
+  let sceneFrameCount = 0;
+
   // FPS counter
   const fpsEl = document.getElementById('fps-counter');
   let fpsFrames = 0;
   let fpsLast = performance.now();
+
+  function renderSceneFrame() {
+    const t0 = performance.now();
+    renderPipeline.render();
+    sceneFrameCount += 1;
+    const frameMs = performance.now() - t0;
+    fpsFrames++;
+    const elapsed = performance.now() - fpsLast;
+    if (elapsed >= 500) {
+      const fps = (fpsFrames / elapsed * 1000).toFixed(0);
+      fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
+      fpsFrames = 0;
+      fpsLast = performance.now();
+    }
+    return {
+      renderer: 'ordinary-three-scene',
+      status: 'submitted',
+      sceneFrameCount,
+      authority: 'three-render-returned-no-presentation-claim',
+    };
+  }
 
   function animate() {
     requestAnimationFrame(animate);
@@ -9006,25 +9067,44 @@ async function initScene() {
     const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
-      const t0 = performance.now();
-
-      renderPipeline.render();
-
-      const frameMs = performance.now() - t0;
-      fpsFrames++;
-      const elapsed = performance.now() - fpsLast;
-      if (elapsed >= 500) {
-        const fps = (fpsFrames / elapsed * 1000).toFixed(0);
-        fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
-        fpsFrames = 0;
-        fpsLast = performance.now();
-      }
-
+    if (!foregroundServiceActive && mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
+      renderSceneFrame();
       if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }
+  compositionHost = Object.freeze({
+    device: sharedGpu?.device ?? null,
+    setForegroundServiceActive(active) {
+      if (active && !sharedGpu?.device) throw new Error('foreground service requires the host shared GPUDevice');
+      foregroundServiceActive = Boolean(active);
+    },
+    runForegroundFrame(run) {
+      if (!foregroundServiceActive || insideForegroundFrame || typeof run !== 'function') {
+        throw new Error('invalid foreground scene frame state');
+      }
+      insideForegroundFrame = true;
+      try {
+        const volume = run();
+        const scene = renderSceneFrame();
+        return {
+          ...volume,
+          sceneFrameCount: scene.sceneFrameCount,
+          sceneAuthority: scene.authority,
+        };
+      } finally {
+        insideForegroundFrame = false;
+      }
+    },
+    snapshot() {
+      return Object.freeze({
+        foregroundServiceActive,
+        insideForegroundFrame,
+        sceneFrameCount,
+        deviceTopology: sharedGpu?.device ? 'same-device' : 'independent-device',
+      });
+    },
+  });
   animate();
 }
 
@@ -18726,9 +18806,28 @@ async function initKaminosVolumeRoute() {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
+    sharedGpuContext: sharedGpu,
     transparentCanvas: fingerFluidPyroCompositionRequested(),
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  if (compositionModule) {
+    window.__kaminosCompositionSetup.phase = 'mount';
+    try {
+      await compositionModule.mountComposition({
+        prototype: volumePrototype,
+        params: new URLSearchParams(window.location.search),
+        sharedGpu,
+        host: compositionHost,
+      });
+      window.__kaminosCompositionSetup.status = 'mounted';
+    } catch (error) {
+      Object.assign(window.__kaminosCompositionSetup, {
+        status: 'failed',
+        error: String(error?.message || error),
+      });
+      throw error;
+    }
+  }
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;
