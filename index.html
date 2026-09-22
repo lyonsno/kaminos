@@ -2814,6 +2814,7 @@ import {
   measureFingerFluidLiveInletReleasePlan,
   planFingerFluidLiveInletEconomics,
   createWebGPUFingerFluidSolver,
+  resolveFingerFluidEnergyDiagnosticsMode,
   resolveFingerFluidColorMode,
   resolveFingerFluidTruthScene,
   resolveFingerFluidRendererMode,
@@ -3081,6 +3082,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     ?? waterfallOracleConfig?.defaultParticleCount
     ?? KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT);
   const requestedPressureIterations = Number(params.get('finger_fluid_density_iterations') ?? oracleCockpitRequested?.pressureIterations ?? 3);
+  const requestedEnergyDiagnosticsMode = params.get('finger_fluid_energy_diagnostics') ?? 'every_step';
   const requestedWitnessTargetStepValue = params.get('finger_fluid_witness_target_step');
   const requestedWitnessTargetStep = requestedWitnessTargetStepValue === null
     ? null
@@ -3169,6 +3171,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
     requestedPressureIterations,
     effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
+    requestedEnergyDiagnosticsMode,
+    effectiveEnergyDiagnosticsMode: resolveFingerFluidEnergyDiagnosticsMode(requestedEnergyDiagnosticsMode),
     requestedWitnessTargetStep,
     effectiveWitnessTargetStep: requestedWitnessTargetStep,
     requestedWitnessStartStep,
@@ -11209,6 +11213,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     supportFrictionContract: gpuState.supportFrictionContract,
     supportFriction: gpuState.supportFriction,
     energyLedgerContract: gpuState.energyLedgerContract,
+    energyDiagnostics: gpuState.energyDiagnostics,
     energyLedger: gpuState.energyLedger,
     vorticityConfinementContract: gpuState.vorticityConfinementContract,
     freeSurfaceContract: gpuState.freeSurfaceContract,
@@ -11354,6 +11359,7 @@ async function startFingerFluidBench() {
       canvas,
       particleCount: fingerFluidBenchConfig.effectiveParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
+      energyDiagnosticsMode: fingerFluidBenchConfig.effectiveEnergyDiagnosticsMode,
       substeps: 1,
       truthScene: fingerFluidBenchConfig.effectiveTruthScene,
       colorMode: fingerFluidBenchConfig.effectiveColorMode,

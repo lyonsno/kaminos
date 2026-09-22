@@ -5,6 +5,12 @@ export const KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT = 'wgsl-analytic-bo
 export const KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_CONTRACT = 'wgsl-analytic-contact-partial-slip-v0';
 export const KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION = 1.6;
 export const KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT = 'wgsl-per-pass-kinetic-energy-ledger-v0';
+export function resolveFingerFluidEnergyDiagnosticsMode(mode = 'every_step') {
+  if (mode !== 'every_step' && mode !== 'disabled') {
+    throw new RangeError(`Unsupported Finger Fluid energy diagnostics mode: ${String(mode)}`);
+  }
+  return mode;
+}
 export const KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT = 'wgsl-neighbor-vorticity-confinement-v0';
 export const KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT = 'wgsl-neighbor-free-surface-cohesion-v0';
 export const KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT = 'wgsl-support-aware-persistent-rest-state-v0';
@@ -12830,6 +12836,7 @@ export async function createWebGPUFingerFluidSolver({
   webgpuDevice = null,
   particleCount = DEFAULT_PARTICLE_COUNT,
   densityIterations = 3,
+  energyDiagnosticsMode = 'every_step',
   substeps = 1,
   truthScene = 'multi_regime_playground',
   colorMode = 'phase',
@@ -12858,6 +12865,8 @@ export async function createWebGPUFingerFluidSolver({
   movingHillSupportContactProviderFactory = null,
   composedRevision = null,
 } = {}) {
+  const effectiveEnergyDiagnosticsMode = resolveFingerFluidEnergyDiagnosticsMode(energyDiagnosticsMode);
+  const energyDiagnosticsEnabled = effectiveEnergyDiagnosticsMode === 'every_step';
   const safePresentationMode = resolveFingerFluidPresentationMode(presentationMode);
   const safeHostFrameComposition = Boolean(hostFrameComposition);
   const safeHostFramePipelineIdentity = (
@@ -13727,6 +13736,7 @@ export async function createWebGPUFingerFluidSolver({
   let liveInletReleaseEpochFrame = initialLiveInletPublicationState.releaseEpochFrame;
   let linkedCellGridBuildCount = 0;
   let densityIterationCount = 0;
+  let energyDiagnosticsPassCount = 0;
   let vorticityPassCount = 0;
   let postProjectionGridRefreshCount = 0;
   let freeSurfaceClassificationPassCount = 0;
@@ -14264,10 +14274,12 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function dispatchEnergy(pass, pipeline) {
+    if (!energyDiagnosticsEnabled) return;
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, energyDiagnosticsBindGroup);
     pass.dispatchWorkgroups(Math.ceil(safeParticleCount / WORKGROUP_SIZE));
     pass.setBindGroup(0, computeBindGroup);
+    energyDiagnosticsPassCount += 1;
   }
 
   function step(dt = 1 / 60) {
@@ -14870,7 +14882,8 @@ export async function createWebGPUFingerFluidSolver({
     diagnosticsPending = true;
     diagnosticsRequestCount += 1;
     const diagnosticsStartedAtMs = performance.now();
-    const readbackBuffers = [diagnosticsBuffer, energyDiagnosticsReadbackBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer, liquidFireContactHeaderReadbackBuffer];
+    const captureEnergyDiagnostics = energyDiagnosticsEnabled && energyDiagnosticsPassCount > 0;
+    const readbackBuffers = [diagnosticsBuffer, ...(captureEnergyDiagnostics ? [energyDiagnosticsReadbackBuffer] : []), interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer, liquidFireContactHeaderReadbackBuffer];
     try {
       const diagnosticsStepCount = stepCount;
       const diagnosticsCapturedAtMs = performance.now();
@@ -14881,7 +14894,9 @@ export async function createWebGPUFingerFluidSolver({
       const diagnosticsLiveInletPublications = [...liveInletPublicationHistory];
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-diagnostics-copy' });
       encoder.copyBufferToBuffer(particleBuffer, 0, diagnosticsBuffer, 0, particleData.byteLength);
-      encoder.copyBufferToBuffer(energyDiagnosticsBuffer, 0, energyDiagnosticsReadbackBuffer, 0, safeParticleCount * ENERGY_RECORD_BYTES);
+      if (captureEnergyDiagnostics) {
+        encoder.copyBufferToBuffer(energyDiagnosticsBuffer, 0, energyDiagnosticsReadbackBuffer, 0, safeParticleCount * ENERGY_RECORD_BYTES);
+      }
       encoder.copyBufferToBuffer(
         interfaceCountersBuffer,
         0,
@@ -14905,7 +14920,9 @@ export async function createWebGPUFingerFluidSolver({
         );
       }
       const values = new Float32Array(diagnosticsBuffer.getMappedRange());
-      const energyValues = new Float32Array(energyDiagnosticsReadbackBuffer.getMappedRange());
+      const energyValues = captureEnergyDiagnostics
+        ? new Float32Array(energyDiagnosticsReadbackBuffer.getMappedRange())
+        : null;
       const interfaceCounters = new Uint32Array(interfaceCountersReadbackBuffer.getMappedRange());
       const interfaceValues = new Float32Array(interfaceRecordsReadbackBuffer.getMappedRange());
       const restStateValues = new Float32Array(restStateReadbackBuffer.getMappedRange());
@@ -15155,7 +15172,9 @@ export async function createWebGPUFingerFluidSolver({
         kernelRadius: safeKernelRadius,
         sourceRecirculationCount: interfaceCounters[2],
       });
-      const energyLedger = summarizeFingerFluidEnergyLedger(energyValues, safeParticleCount, diagnosticsStepCount);
+      const energyLedger = captureEnergyDiagnostics
+        ? summarizeFingerFluidEnergyLedger(energyValues, safeParticleCount, diagnosticsStepCount)
+        : null;
       const waterfallContinuityDiagnostics = safeTruthScene === 'laminar_inlets'
         ? measureFingerFluidWaterfallContinuity(values, restStateValues, safeParticleCount)
         : null;
@@ -15451,6 +15470,13 @@ export async function createWebGPUFingerFluidSolver({
       boundaryPressureContract: KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
       supportFrictionContract: KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_CONTRACT,
       energyLedgerContract: KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT,
+      energyDiagnostics: {
+        requestedMode: energyDiagnosticsMode,
+        effectiveMode: effectiveEnergyDiagnosticsMode,
+        passCount: energyDiagnosticsPassCount,
+        measuredStep: energyDiagnosticsPassCount > 0 ? stepCount : null,
+        readbackStep: diagnostics?.energyLedger?.stepCount ?? null,
+      },
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       waterfallContinuityContract: KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT,
