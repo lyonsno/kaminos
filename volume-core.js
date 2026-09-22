@@ -2922,7 +2922,14 @@ fn vorticityConfinement(c: vec3<i32>, amount: f32) -> vec3<f32> {
   let magX = curlMagnitudeAtCell(c + vec3<i32>(1, 0, 0)) - curlMagnitudeAtCell(c + vec3<i32>(-1, 0, 0));
   let magY = curlMagnitudeAtCell(c + vec3<i32>(0, 1, 0)) - curlMagnitudeAtCell(c + vec3<i32>(0, -1, 0));
   let magZ = curlMagnitudeAtCell(c + vec3<i32>(0, 0, 1)) - curlMagnitudeAtCell(c + vec3<i32>(0, 0, -1));
-  let normal = normalize(vec3<f32>(magX, magY, magZ) + vec3<f32>(0.0001));
+  let gradient = vec3<f32>(magX, magY, magZ);
+  let magnitude = length(gradient);
+  // A flat magnitude field has no confinement direction. Keep every nonzero
+  // gradient's unit direction without adding a fixed axis or an amplitude mask.
+  if (magnitude == 0.0) {
+    return vec3<f32>(0.0);
+  }
+  let normal = gradient / magnitude;
   return cross(normal, curlAtCell(c)) * amount;
 }
 
