@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import {
+  progressFailure,
+  validateMountedComposition,
+  validateSuccessfulRun,
+} from '../kimodo-shared-device-smoke-adjudication.mjs';
 
 const { values } = parseArgs({
   options: {
@@ -13,6 +20,8 @@ const { values } = parseArgs({
     prompt: { type: 'string', default: 'a person dances' },
     duration: { type: 'string', default: '6' },
     steps: { type: 'string', default: '100' },
+    'total-timeout-ms': { type: 'string', default: '600000' },
+    'no-progress-timeout-ms': { type: 'string', default: '120000' },
     'embedding-fixture': { type: 'string' },
     browser: { type: 'string', default: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
   },
@@ -25,8 +34,17 @@ if (!values.url || !values['output-dir']) {
 if (!['load', 'generate'].includes(values.mode)) throw new Error(`Unsupported smoke mode: ${values.mode}`);
 const steps = Number(values.steps);
 const duration = Number(values.duration);
+const totalTimeoutMs = Number(values['total-timeout-ms']);
+const noProgressTimeoutMs = Number(values['no-progress-timeout-ms']);
 if (!Number.isSafeInteger(steps) || steps < 1) throw new Error('--steps must be a positive integer');
 if (!Number.isFinite(duration) || duration < 1 || duration > 18) throw new Error('--duration must be between 1 and 18 seconds');
+if (!Number.isFinite(totalTimeoutMs) || totalTimeoutMs < 300000 || totalTimeoutMs > 600000) {
+  throw new Error('--total-timeout-ms must preserve the operator-approved 5–10 minute witness window');
+}
+if (!Number.isFinite(noProgressTimeoutMs) || noProgressTimeoutMs < 1000 || noProgressTimeoutMs > 120000) {
+  throw new Error('--no-progress-timeout-ms must be between 1 second and 120 seconds');
+}
+const totalDeadlineMs = Date.now() + totalTimeoutMs;
 
 const outputDir = resolve(values['output-dir']);
 mkdirSync(outputDir, { recursive: true });
@@ -44,6 +62,8 @@ const report = {
     prompt: values.prompt,
     duration,
     steps,
+    totalTimeoutMs,
+    noProgressTimeoutMs,
     browser: values.browser,
     embeddingFixture: values['embedding-fixture'] ?? null,
     route: 'Chrome Metal / one host-owned GPUDevice / exact shared queue',
@@ -80,8 +100,33 @@ if (!kimodoCheckout) {
 
 const requireFromKimodo = createRequire(join(resolve(kimodoCheckout), 'package.json'));
 const puppeteer = requireFromKimodo('puppeteer-core');
+const hostRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const sha256File = path => createHash('sha256').update(readFileSync(path)).digest('hex');
+const git = (root, ...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
 let embeddingFixture = null;
 try {
+  const sourceManifest = JSON.parse(readFileSync(join(hostRoot, 'artifacts/kimodo-shared-device/manifest.json')));
+  const effectiveHostCommit = git(hostRoot, 'rev-parse', 'HEAD');
+  const effectiveKimodoCommit = git(resolve(kimodoCheckout), 'rev-parse', 'HEAD');
+  if (git(hostRoot, 'status', '--porcelain', '--untracked-files=no')) throw new Error('Kaminos tracked source is dirty');
+  if (git(resolve(kimodoCheckout), 'status', '--porcelain', '--untracked-files=no')) throw new Error('Kimodo tracked source is dirty');
+  if (sourceManifest.hostCommit !== effectiveHostCommit || sourceManifest.sourceCommit !== effectiveKimodoCommit) {
+    throw new Error('derived source manifest does not match the effective clean host/provider commits');
+  }
+  if (sourceManifest.kitVersion !== '0.1.52' || sourceManifest.installedKitVersions?.host !== '0.1.52' || sourceManifest.installedKitVersions?.kimodo !== '0.1.52') {
+    throw new Error('derived source manifest does not bind exact installed inference kit 0.1.52');
+  }
+  for (const [name, identity] of Object.entries(sourceManifest.servedFiles || {})) {
+    if (sha256File(join(hostRoot, name)) !== identity.sha256) throw new Error(`served source hash mismatch: ${name}`);
+  }
+  report.effective = {
+    sourcePreflight: {
+      hostCommit: effectiveHostCommit,
+      kimodoCommit: effectiveKimodoCommit,
+      kitVersion: sourceManifest.kitVersion,
+      servedFiles: sourceManifest.servedFiles,
+    },
+  };
   if (values['embedding-fixture']) {
     const fixturePath = resolve(values['embedding-fixture']);
     const fixtureBytes = readFileSync(fixturePath);
@@ -107,6 +152,7 @@ try {
 }
 let browser = null;
 let page = null;
+const delay = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
 
 async function snapshotPageState() {
   if (!page || page.isClosed()) return null;
@@ -115,6 +161,45 @@ async function snapshotPageState() {
     if (!state) return null;
     return JSON.parse(JSON.stringify(state));
   });
+}
+
+async function snapshotComposition() {
+  if (!page || page.isClosed()) return null;
+  return page.evaluate(() => ({
+    setup: window.__kaminosCompositionSetup ? JSON.parse(JSON.stringify(window.__kaminosCompositionSetup)) : null,
+    state: window.__kimodoSharedDevice ? JSON.parse(JSON.stringify(window.__kimodoSharedDevice)) : null,
+    volume: window.__kaminosVolumePrototype?.debugState ? JSON.parse(JSON.stringify(window.__kaminosVolumePrototype.debugState())) : null,
+  }));
+}
+
+async function waitForProgress(label, predicate) {
+  let lastMarker = null;
+  let lastProgressAt = Date.now();
+  while (true) {
+    const snapshot = await snapshotComposition();
+    if (snapshot?.setup?.status === 'failed') throw new Error(`composition mount failed: ${snapshot.setup.error || 'unknown error'}`);
+    if (predicate(snapshot)) return snapshot;
+    const marker = JSON.stringify([
+      snapshot?.setup?.status,
+      snapshot?.setup?.phase,
+      snapshot?.state?.progressSequence,
+      snapshot?.state?.status,
+    ]);
+    if (marker !== lastMarker) {
+      lastMarker = marker;
+      lastProgressAt = Date.now();
+    }
+    const failure = progressFailure({
+      now: Date.now(),
+      deadline: totalDeadlineMs,
+      lastProgressAt,
+      noProgressTimeoutMs,
+      label,
+      totalTimeoutMs,
+    });
+    if (failure) throw failure;
+    await delay(250);
+  }
 }
 
 async function captureScreenshot(name) {
@@ -140,7 +225,7 @@ try {
     defaultViewport: { width: 1600, height: 1000, deviceScaleFactor: 1 },
   });
   page = await browser.newPage();
-  page.setDefaultTimeout(0);
+  page.setDefaultTimeout(Math.min(noProgressTimeoutMs, Math.max(1000, totalDeadlineMs - Date.now())));
   if (embeddingFixture) {
     const fixtureUrl = 'http://127.0.0.1:65534/embed';
     await page.setRequestInterception(true);
@@ -164,7 +249,7 @@ try {
         body: JSON.stringify({ embedding: embeddingFixture.embedding, dim: 4096, authority: report.requested.embeddingAuthority }),
       });
     });
-    report.effective = { embeddingEndpoint: fixtureUrl };
+    report.effective = { ...(report.effective ?? {}), embeddingEndpoint: fixtureUrl };
   }
   page.on('console', message => {
     report.console.push({ at: new Date().toISOString(), type: message.type(), text: message.text() });
@@ -182,10 +267,8 @@ try {
 
   report.failurePhase = 'page-load';
   await page.goto(values.url, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.__kimodoSharedDevice?.deviceReceipt, { timeout: 0 });
-  const initial = await snapshotPageState();
-  if (initial.deviceTopology !== 'same-device') throw new Error(`Unexpected device topology: ${initial.deviceTopology}`);
-  if (initial.queueTopology !== 'exact-device-queue') throw new Error(`Unexpected queue topology: ${initial.queueTopology}`);
+  const mounted = await waitForProgress('composition mount', snapshot => snapshot?.setup?.status === 'mounted');
+  const initial = validateMountedComposition(mounted);
   report.effective.finalUrl = page.url();
   report.effective.deviceReceipt = initial.deviceReceipt;
   report.effective.deviceTopology = initial.deviceTopology;
@@ -200,8 +283,8 @@ try {
 
   report.failurePhase = 'model-load';
   await page.click('#kimodo-shared-load');
-  await page.waitForFunction(() => ['loaded', 'failed'].includes(window.__kimodoSharedDevice?.status), { timeout: 0 });
-  const loaded = await snapshotPageState();
+  const loadedSnapshot = await waitForProgress('model load', snapshot => ['loaded', 'failed'].includes(snapshot?.state?.status));
+  const loaded = loadedSnapshot.state;
   if (loaded.status !== 'loaded') throw new Error(loaded.lastError?.message || `Kimodo load ended as ${loaded.status}`);
   const source = loaded.source;
   if (!source || source.status !== 'built') throw new Error('Kimodo source manifest is absent, partial, or not built');
@@ -218,12 +301,9 @@ try {
       document.querySelector('#kimodo-shared-steps').value = String(steps);
     }, { prompt: values.prompt, duration, steps });
     await page.click('#kimodo-shared-run');
-    await page.waitForFunction(() => ['succeeded', 'failed', 'canceled'].includes(window.__kimodoSharedDevice?.status), { timeout: 0 });
-    const terminal = await snapshotPageState();
-    if (terminal.status !== 'succeeded') throw new Error(terminal.lastError?.message || `Generation ended as ${terminal.status}`);
-    const lastRun = terminal.runs.at(-1);
-    if (!lastRun?.foregroundRunReport) throw new Error('Generation succeeded without a persistent foreground run report');
-    if (!terminal.foregroundReceipts?.length) throw new Error('Generation succeeded without any actual foreground frame receipts');
+    const terminalSnapshot = await waitForProgress('generation', snapshot => ['succeeded', 'failed', 'canceled'].includes(snapshot?.state?.status));
+    const terminal = terminalSnapshot.state;
+    const lastRun = validateSuccessfulRun(terminal);
     phase('generation-succeeded', {
       runId: lastRun.runId,
       wallMs: lastRun.wallMs,
@@ -232,18 +312,24 @@ try {
       pageMaxMs: lastRun.pageMaxMs,
       frameCount: lastRun.flameAfter?.frameCount,
       simStepCount: lastRun.flameAfter?.simStepCount,
-      foregroundReceipts: terminal.foregroundReceipts.length,
+      foregroundReceipts: lastRun.foregroundReceipts.length,
     });
     await captureScreenshot('03-generated');
   }
 
+  report.teardown = await page.evaluate(() => window.__kimodoSharedDeviceTeardown('smoke-finalize'));
   report.failurePhase = null;
   report.pageState = await snapshotPageState();
   report.finishedAt = new Date().toISOString();
   writeReport('succeeded');
 } catch (error) {
   report.pageState = await snapshotPageState().catch(() => null);
-  report.error = { name: error?.name || 'Error', message: error?.message || String(error), stack: error?.stack || null };
+  report.error = { name: error?.name || 'Error', code: error?.code || null, message: error?.message || String(error), stack: error?.stack || null };
+  report.classification = error?.code === 'WEDGED' ? 'wedged-no-progress' : (error?.code === 'TIMEOUT' ? 'bounded-timeout' : 'failed');
+  report.teardown = page
+    ? await page.evaluate(() => window.__kimodoSharedDeviceTeardown?.('smoke-failure'))
+      .catch(teardownError => ({ status: 'failed', error: teardownError?.message || String(teardownError) }))
+    : null;
   report.finishedAt = new Date().toISOString();
   writeReport('failed');
   process.exitCode = 1;

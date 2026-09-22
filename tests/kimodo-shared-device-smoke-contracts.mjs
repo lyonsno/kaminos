@@ -5,8 +5,7 @@ const source = readFileSync(new URL('../scripts/smoke-kimodo-shared-device.mjs',
 
 assert.match(source, /writeReport\(['"]starting['"]\)/, 'the witness writes a durable receipt before browser launch');
 assert.match(source, /finally\s*\{[\s\S]*writeReport/, 'the witness publishes its terminal state even when launch, load, or generation fails');
-assert.match(source, /deviceTopology\s*!==\s*['"]same-device['"]/, 'the witness rejects a topology claim weaker than one shared GPUDevice');
-assert.match(source, /queueTopology\s*!==\s*['"]exact-device-queue['"]/, 'the witness rejects separate or merely compatible queues');
+assert.match(source, /validateMountedComposition/, 'the witness delegates mount and exact-topology adjudication to the executable contract');
 assert.match(source, /source\.status\s*!==\s*['"]built['"]/, 'the witness rejects a missing or partial derived source manifest');
 assert.match(source, /frameCount[\s\S]*simStepCount/, 'the witness records live flame progress rather than page nonblankness alone');
 assert.match(source, /wallMs:\s*lastRun\.wallMs/, 'the witness reports the run duration field actually retained by the page');
@@ -15,6 +14,11 @@ assert.match(source, /foregroundReceipts/, 'the witness retains the foreground s
 assert.match(source, /embeddingAuthority/, 'the witness distinguishes a live encoder from a replayed embedding fixture');
 assert.match(source, /embeddingFixtureSha256/, 'a replayed embedding is tied to exact fixture bytes');
 assert.match(source, /screenshot/, 'the witness captures a human-inspectable rendered frame');
+assert.match(source, /total-timeout-ms/, 'the witness has a bounded total product-run deadline');
+assert.match(source, /no-progress-timeout-ms/, 'the witness distinguishes a no-progress wedge from merely slow generation');
+assert.match(source, /lastRun\.foregroundReceipts/, 'the witness adjudicates receipts from the current run rather than page-global history');
+assert.match(source, /validateSuccessfulRun/, 'the witness delegates same-run receipt and flame-progress adjudication to the executable contract');
+assert.match(source, /__kaminosCompositionSetup[\s\S]*mounted/, 'the witness rejects a partial HUD/device receipt when composition mount failed');
 assert.doesNotMatch(source, /slice\(-|splice\(|\.shift\(\)/, 'the witness does not erase earlier contention evidence');
 
 console.log('Kimodo shared-device smoke contracts passed');

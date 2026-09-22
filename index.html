@@ -2696,6 +2696,7 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=kimodo-shared-device-0922';
+import { mountKaminosSharedDeviceComposition } from './kimodo-shared-device-route.mjs?v=kimodo-shared-device-0922';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -18810,10 +18811,21 @@ async function initKaminosVolumeRoute() {
     transparentCanvas: fingerFluidPyroCompositionRequested(),
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  volumeBridge?.dispose?.();
+  volumeBridge = createVolumeMainRendererBridge();
+  window.__kaminosVolumeBridge = volumeBridge;
+  window.__kaminosVolumeMainRendererBridge = volumeBridge;
+  volumePrototype.setVolumePrimitives(volumePrimitives);
+  if (params.has('volume_primitive_fixture')) {
+    seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
+  }
+
+  volumePrototype.setControls(readVolumeControls());
   if (compositionModule) {
-    window.__kaminosCompositionSetup.phase = 'mount';
+    window.__kaminosCompositionSetup.phase = 'activate-and-mount';
     try {
-      await compositionModule.mountComposition({
+      window.__kaminosCompositionSetup.receipt = await mountKaminosSharedDeviceComposition({
+        compositionModule,
         prototype: volumePrototype,
         params: new URLSearchParams(window.location.search),
         sharedGpu,
@@ -18828,16 +18840,6 @@ async function initKaminosVolumeRoute() {
       throw error;
     }
   }
-  volumeBridge?.dispose?.();
-  volumeBridge = createVolumeMainRendererBridge();
-  window.__kaminosVolumeBridge = volumeBridge;
-  window.__kaminosVolumeMainRendererBridge = volumeBridge;
-  volumePrototype.setVolumePrimitives(volumePrimitives);
-  if (params.has('volume_primitive_fixture')) {
-    seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
-  }
-
-  volumePrototype.setControls(readVolumeControls());
   void activateFingerFluidPyroComposition().catch(error => {
     fingerFluidPyroCompositionState = {
       ...fingerFluidPyroCompositionState,

@@ -61,6 +61,7 @@ let hostFrameCount = 0;
 const prototype = {
   foregroundGpuContext: () => ({ device, queue: device.queue, active: true, renderer: 'ordinary-volume', productFrameOwner: 'prototype' }),
   setForegroundOpportunityRequester(next) { requester = next; },
+  async stopForegroundFrames() {},
 };
 const host = {
   device,
@@ -120,5 +121,168 @@ assert.throws(
   'a producer-owned or foreign device cannot impersonate same-device composition',
 );
 await foreignProducerForeground.dispose();
+
+let failingRequester = null;
+const failingPrototype = {
+  foregroundGpuContext: () => ({ device, queue: device.queue, active: true, renderer: 'ordinary-volume', productFrameOwner: 'prototype' }),
+  setForegroundOpportunityRequester(next) { failingRequester = next; },
+  async stopForegroundFrames() {},
+};
+const failingHost = {
+  device,
+  setForegroundServiceActive() {},
+  runForegroundFrame() { throw new Error('three-render-failed'); },
+};
+const failingForeground = connectKimodoSharedDeviceForeground({ prototype: failingPrototype, host: failingHost, sharedGpu });
+failingForeground.attachProducer(producer);
+const failingRun = await failingForeground.beginRun('failing-run');
+const failedFrame = failingRequester({
+  requestId: 'ordinary-failure',
+  run(service) {
+    service.submit([{}]);
+    return { status: 'submitted' };
+  },
+});
+await assert.rejects(
+  () => failingRun.foregroundOpportunity({ phase: 'transformer-pass', step: 0, numSteps: 1, pass: 'conditioned' }),
+  /foreground.*failed/i,
+  'a failed foreground callback rejects the model boundary instead of becoming success-shaped receipt data',
+);
+assert.match((await failedFrame.completion).status, /^failed-/);
+await assert.rejects(
+  () => failingRun.foregroundOpportunity({ phase: 'transformer-pass', step: 0, numSteps: 1, pass: 'unconditioned' }),
+  /foreground.*failed/i,
+  'the first foreground failure seals later model boundary admission',
+);
+await assert.rejects(() => failingRun.finish(), /foreground.*failed/i, 'quiescent finish cannot erase a failed receipt');
+await failingForeground.dispose();
+
+let windowRequester = null;
+const windowPrototype = {
+  foregroundGpuContext: () => ({ device, queue: device.queue, active: true, renderer: 'ordinary-volume', productFrameOwner: 'prototype' }),
+  setForegroundOpportunityRequester(next) { windowRequester = next; },
+  async stopForegroundFrames() {},
+};
+const windowForeground = connectKimodoSharedDeviceForeground({
+  prototype: windowPrototype,
+  host: { device, setForegroundServiceActive() {}, runForegroundFrame() { throw new Error('cpu-window-frame-failed'); } },
+  sharedGpu,
+});
+windowForeground.attachProducer(producer);
+const windowRun = await windowForeground.beginRun('window-failure-run');
+await assert.rejects(
+  () => windowRun.withForeground('text-embedding', async () => {
+    windowRequester({ requestId: 'window-failure', run: () => ({ status: 'submitted' }) });
+    await Promise.resolve();
+    return 'embedding-ok';
+  }),
+  /foreground.*failed/i,
+  'CPU-only foreground windows reject when an admitted renderer callback fails',
+);
+await assert.rejects(() => windowRun.finish(), /foreground.*failed/i);
+await windowForeground.dispose();
+
+let cancellationRequester = null;
+let enteredCallback;
+let releaseCallback;
+const callbackEntered = new Promise(resolve => { enteredCallback = resolve; });
+const callbackRelease = new Promise(resolve => { releaseCallback = resolve; });
+const cancellationPrototype = {
+  foregroundGpuContext: () => ({ device, queue: device.queue, active: true, renderer: 'ordinary-volume', productFrameOwner: 'prototype' }),
+  setForegroundOpportunityRequester(next) { cancellationRequester = next; },
+  async stopForegroundFrames() {},
+};
+const cancellationForeground = connectKimodoSharedDeviceForeground({
+  prototype: cancellationPrototype,
+  host: { device, setForegroundServiceActive() {}, async runForegroundFrame(run) { return run(); } },
+  sharedGpu,
+});
+cancellationForeground.attachProducer(producer);
+const cancellationRun = await cancellationForeground.beginRun('cancellation-run');
+const cancelHandle = cancellationRequester({
+  requestId: 'cancel-during-service',
+  async run(service) {
+    enteredCallback();
+    await callbackRelease;
+    if (!service.signal.aborted) service.submit([{}]);
+    return { status: 'submitted' };
+  },
+});
+const cancellationBoundary = cancellationRun.foregroundOpportunity({ phase: 'transformer-pass', step: 0, numSteps: 1, pass: 'conditioned' });
+await callbackEntered;
+cancelHandle.cancel('test-cancel');
+releaseCallback();
+await assert.rejects(() => cancellationBoundary, /foreground.*failed/i, 'cancellation during service rejects the model boundary');
+assert.equal((await cancelHandle.completion).status, 'canceled-during-service');
+await assert.rejects(() => cancellationRun.finish(), /foreground.*failed/i);
+await cancellationForeground.dispose();
+
+const teardownEvents = [];
+let teardownRequester = null;
+const teardownPrototype = {
+  foregroundGpuContext: () => ({ device, queue: device.queue, active: true, renderer: 'ordinary-volume', productFrameOwner: 'prototype' }),
+  setForegroundOpportunityRequester(next) { teardownEvents.push(next ? 'attach' : 'detach'); teardownRequester = next; },
+  async stopForegroundFrames() { teardownEvents.push('drain'); },
+};
+const teardownHost = {
+  device,
+  setForegroundServiceActive(active) { teardownEvents.push(active ? 'host-on' : 'host-off'); },
+  runForegroundFrame(run) { return run(); },
+};
+const teardownForeground = connectKimodoSharedDeviceForeground({ prototype: teardownPrototype, host: teardownHost, sharedGpu });
+teardownForeground.attachProducer(producer);
+await teardownForeground.beginRun('teardown-active-run');
+const teardownOne = teardownForeground.dispose();
+const teardownTwo = teardownForeground.dispose();
+assert.equal(teardownOne, teardownTwo, 'dispose is one idempotent asynchronous teardown promise');
+await teardownOne;
+assert.deepEqual(teardownEvents.slice(-3), ['drain', 'detach', 'host-off'], 'teardown drains before detaching and relinquishing scene ownership');
+assert.equal(teardownRequester, null);
+
+const failedTeardownEvents = [];
+let failedTeardownRequester = null;
+const failedTeardownPrototype = {
+  foregroundGpuContext: () => ({ device, queue: device.queue, active: true, renderer: 'ordinary-volume', productFrameOwner: 'prototype' }),
+  setForegroundOpportunityRequester(next) {
+    failedTeardownEvents.push(next ? 'attach' : 'detach');
+    failedTeardownRequester = next;
+  },
+  async pauseForegroundFrames() { failedTeardownEvents.push('pause'); },
+  async stopForegroundFrames() { failedTeardownEvents.push('drain'); },
+};
+const failedTeardownForeground = connectKimodoSharedDeviceForeground({
+  prototype: failedTeardownPrototype,
+  host: {
+    device,
+    setForegroundServiceActive(active) { failedTeardownEvents.push(active ? 'host-on' : 'host-off'); },
+    runForegroundFrame() { throw new Error('teardown-frame-failed'); },
+  },
+  sharedGpu,
+});
+failedTeardownForeground.attachProducer(producer);
+const failedTeardownRun = await failedTeardownForeground.beginRun('failed-teardown-active-run');
+const failedTeardownFrame = failedTeardownRequester({
+  requestId: 'failed-teardown-frame',
+  run(service) {
+    service.submit([{}]);
+    return { status: 'submitted' };
+  },
+});
+await assert.rejects(
+  () => failedTeardownRun.foregroundOpportunity({ phase: 'transformer-pass', step: 0, numSteps: 1, pass: 'conditioned' }),
+  /foreground.*failed/i,
+);
+await failedTeardownFrame.completion;
+await assert.rejects(
+  () => failedTeardownForeground.dispose(),
+  /foreground.*failed/i,
+  'teardown preserves an active-run foreground failure as its terminal result',
+);
+assert.equal(failedTeardownRequester, null, 'failed teardown still detaches the requester');
+assert.deepEqual(
+  failedTeardownEvents.slice(-4),
+  ['pause', 'drain', 'detach', 'host-off'],
+  'failed teardown drains and relinquishes scene ownership before returning its failure',
+);
 
 console.log('Kimodo shared-device foreground host contracts passed');

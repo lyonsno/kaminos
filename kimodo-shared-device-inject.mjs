@@ -101,6 +101,9 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
     frameIntervals: [],
     foregroundReceipts: [],
     runs: [],
+    progressSequence: 0,
+    progress: null,
+    teardown: null,
     lastError: null,
   };
   window.__kimodoSharedDevice = state;
@@ -116,6 +119,14 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
   let raf = 0;
   let lastPaintAt = 0;
   let generationSequence = 0;
+  let loadLifecycle = null;
+  let generationLifecycle = null;
+  let teardownPromise = null;
+
+  const heartbeat = (phase, detail = {}) => {
+    state.progressSequence += 1;
+    state.progress = { sequence: state.progressSequence, phase, atMs: performance.now(), ...detail };
+  };
 
   const frame = now => {
     const flame = prototype.debugState();
@@ -155,12 +166,15 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
     prototype,
     host,
     sharedGpu,
-    onReceipt: receipt => state.foregroundReceipts.push(receipt),
+    onReceipt: receipt => {
+      state.foregroundReceipts.push(receipt);
+      heartbeat('foreground-receipt', { requestId: receipt.requestId, status: receipt.status });
+    },
   });
 
   $('cancel').onclick = () => controller?.abort('operator-cancel');
-  $('load').onclick = async () => {
-    if (producer) return;
+  async function loadProducer() {
+    if (producer) return producer;
     $('load').disabled = true;
     $('embed').disabled = true;
     state.status = 'loading';
@@ -170,6 +184,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       if (!response.ok) throw new Error(`Kimodo source manifest unavailable (${response.status})`);
       state.source = await response.json();
       if (state.source.status !== 'built') throw new Error('Kimodo derived library is incomplete');
+      heartbeat('source-manifest-loaded');
       producer = await createKimodoProducer({
         device: sharedGpu.device,
         adapter: sharedGpu.adapter,
@@ -177,6 +192,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
         assetBase: './artifacts/kimodo-shared-device/assets',
         embedUrl: $('embed').value,
         onLoadProgress: ({ loaded, total }) => {
+          heartbeat('model-load-progress', { loaded, total: total ?? null });
           $('stage').textContent = `loading weights · ${(loaded / 1048576).toFixed(0)} MiB`;
           if (total) $('progress').value = 100 * loaded / total;
         },
@@ -187,6 +203,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       foreground.attachProducer(producer);
       state.producerIdentity = producer.identity;
       state.status = 'loaded';
+      heartbeat('model-loaded');
       $('stage').textContent = 'model loaded · persistent foreground service connected';
       $('progress').value = 0;
       $('run').disabled = false;
@@ -198,10 +215,18 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       producer?.dispose();
       producer = null;
       $('load').disabled = false;
+      throw error;
     }
+    return producer;
+  }
+
+  $('load').onclick = () => {
+    if (loadLifecycle) return loadLifecycle;
+    loadLifecycle = loadProducer().finally(() => { loadLifecycle = null; });
+    return loadLifecycle;
   };
 
-  $('run').onclick = async () => {
+  async function generateMotion() {
     if (!producer || !foreground || activeGeneration) return;
     const prompt = $('prompt').value.trim();
     const steps = Number($('steps').value);
@@ -227,6 +252,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       deviceTopology: 'same-device',
       foregroundReceiptStart: state.foregroundReceipts.length,
       frameIntervalStart: state.frameIntervals.length,
+      sampleStart: state.samples.length,
       flameBefore: prototype.debugState(),
     };
     state.runs.push(record);
@@ -250,10 +276,12 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
         embedUrl: $('embed').value,
         onStage: (name, event) => {
           telemetry.stage(name, event);
+          heartbeat('generation-stage', { name, event });
           $('stage').textContent = `${name} · ${event}`;
         },
         onProgress: progress => {
           telemetry.progress(progress);
+          heartbeat('generation-progress', { pct: progress.pct, step: progress.step ?? null });
           $('progress').value = progress.pct;
         },
         foregroundWindow: (phase, work) => run.withForeground(phase, work),
@@ -269,8 +297,9 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       record.receipt = result.receipt;
       record.submission = result.submission;
       record.motion = { numFrames: motion.numFrames, numJoints: motion.numJoints, fps: motion.fps };
-      record.status = 'succeeded';
-      state.status = 'succeeded';
+      record.modelStatus = 'succeeded';
+      record.status = 'finishing';
+      state.status = 'finishing';
     } catch (error) {
       generationError = error;
       telemetry.fail(error);
@@ -293,6 +322,10 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
           }
         }
       }
+      if (!generationError && !record.foregroundFinishError) {
+        record.status = 'succeeded';
+        state.status = 'succeeded';
+      }
       record.endedAtMs = performance.now();
       record.wallMs = record.endedAtMs - record.startedAtMs;
       record.frameIntervals = state.frameIntervals.slice(record.frameIntervalStart);
@@ -301,6 +334,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       record.pageMaxMs = record.frameIntervals.length ? Math.max(...record.frameIntervals) : null;
       record.frameIntervalsOver33Ms = record.frameIntervals.filter(value => value > 33).length;
       record.frameIntervalsOver100Ms = record.frameIntervals.filter(value => value > 100).length;
+      record.samples = state.samples.slice(record.sampleStart);
       record.telemetry = telemetry.snapshot();
       record.foregroundReceipts = state.foregroundReceipts.slice(record.foregroundReceiptStart);
       record.flameAfter = prototype.debugState();
@@ -313,16 +347,58 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       $('run').disabled = false;
       for (const id of ['prompt', 'steps', 'duration']) $(id).disabled = false;
     }
+  }
+
+  $('run').onclick = () => {
+    if (generationLifecycle) return generationLifecycle;
+    generationLifecycle = generateMotion().finally(() => { generationLifecycle = null; });
+    return generationLifecycle;
   };
 
-  addEventListener('pagehide', () => {
-    cancelAnimationFrame(raf);
-    controller?.abort('pagehide');
-    Promise.resolve(activeGeneration).catch(() => {}).finally(async () => {
-      try { await foreground?.dispose(); } catch {}
-      producer?.dispose();
+  function teardownComposition(reason = 'teardown') {
+    if (teardownPromise) return teardownPromise;
+    teardownPromise = (async () => {
+      state.teardown = { status: 'draining', reason, startedAtMs: performance.now() };
+      heartbeat('teardown-start', { reason });
+      controller?.abort(reason);
+      cancelAnimationFrame(raf);
+      await loadLifecycle?.catch(() => undefined);
+      await generationLifecycle?.catch(() => undefined);
+      let teardownError = null;
+      try {
+        await foreground?.dispose();
+      } catch (error) {
+        teardownError = error;
+      }
+      try {
+        producer?.dispose();
+      } catch (error) {
+        teardownError ||= error;
+      }
+      if (teardownError) throw teardownError;
+      state.teardown = { ...state.teardown, status: 'succeeded', endedAtMs: performance.now() };
+      heartbeat('teardown-succeeded');
+      return state.teardown;
+    })().catch(error => {
+      state.teardown = {
+        ...(state.teardown || { reason }),
+        status: 'failed',
+        endedAtMs: performance.now(),
+        error: error?.message || String(error),
+      };
+      state.lastError = { phase: 'teardown', message: state.teardown.error };
+      throw error;
     });
+    return teardownPromise;
+  }
+
+  window.__kimodoSharedDeviceTeardown = teardownComposition;
+  addEventListener('pagehide', () => {
+    void teardownComposition('pagehide').catch(error => console.error('Kimodo shared-device teardown failed:', error));
   }, { once: true });
 
-  return Object.freeze({ state, deviceReceipt });
+  state.status = 'mounted';
+  state.mount = { foregroundConnected: true, loadHandlerInstalled: typeof $('load').onclick === 'function' };
+  heartbeat('composition-mounted');
+  return Object.freeze({ state, deviceReceipt, ...state.mount });
 }

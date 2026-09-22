@@ -10,13 +10,22 @@ if (!checkout) throw new Error('Usage: node scripts/build-kimodo-shared-device.m
 const root = await realpath(checkout);
 const out = path.join(host, 'artifacts/kimodo-shared-device');
 const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
+const hostGit = (...args) => execFileSync('git', ['-C', host, ...args], { encoding: 'utf8' }).trim();
 if (git('status', '--porcelain', '--untracked-files=no')) {
   throw new Error('Kimodo tracked source must be clean before producing an admitted composition build');
+}
+if (hostGit('status', '--porcelain', '--untracked-files=no')) {
+  throw new Error('Kaminos tracked source must be clean before producing an admitted composition build');
 }
 const sourceCommit = git('rev-parse', 'HEAD');
 const sourcePackage = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 if (sourcePackage.devDependencies?.['@kaminos/webgpu-inference-kit'] !== '^0.1.52') {
   throw new Error('Kimodo composition source must consume @kaminos/webgpu-inference-kit ^0.1.52');
+}
+const kimodoKitPackage = JSON.parse(await readFile(path.join(root, 'node_modules/@kaminos/webgpu-inference-kit/package.json'), 'utf8'));
+const hostKitPackage = JSON.parse(await readFile(path.join(host, 'node_modules/@kaminos/webgpu-inference-kit/package.json'), 'utf8'));
+if (kimodoKitPackage.version !== '0.1.52' || hostKitPackage.version !== '0.1.52') {
+  throw new Error(`shared-device build requires exact installed kit 0.1.52 (kimodo=${kimodoKitPackage.version}, host=${hostKitPackage.version})`);
 }
 const { build } = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')));
 await mkdir(out, { recursive: true });
@@ -63,14 +72,28 @@ for (const name of await readdir(path.join(out, 'lib'))) {
   const bytes = await readFile(path.join(out, 'lib', name));
   bundles[name] = { bytes: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') };
 }
+const servedFiles = {};
+for (const name of [
+  'index.html',
+  'kimodo-shared-device.html',
+  'kimodo-shared-device-host.mjs',
+  'kimodo-shared-device-inject.mjs',
+  'kimodo-shared-device-route.mjs',
+  'volume-core.js',
+]) {
+  const bytes = await readFile(path.join(host, name));
+  servedFiles[name] = { bytes: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') };
+}
 const manifest = {
   status: 'built',
   topology: 'one-host-owned-gpu-device-exact-queue',
   sourceRepo: 'lyonsno/kimodo-webgpu',
   sourceCommit,
   sourceRoot: root,
-  hostCommit: execFileSync('git', ['-C', host, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  hostCommit: hostGit('rev-parse', 'HEAD'),
   kitVersion: '0.1.52',
+  installedKitVersions: { kimodo: kimodoKitPackage.version, host: hostKitPackage.version },
+  servedFiles,
   assets,
   bundles,
 };

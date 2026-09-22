@@ -9585,6 +9585,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   let foregroundRequester = null;
   let foregroundPending = null;
+  let foregroundPendingSettled = null;
+  let foregroundStopping = false;
   let foregroundSequence = 0;
 
   function setForegroundOpportunityRequester(requester) {
@@ -9604,11 +9606,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function render(now) {
     if (!foregroundRequester) return renderOrdinaryFrame(now);
     raf = 0;
-    if (!state.active || selectiveHeadLiveCapturePaused || foregroundPending) return;
+    if (!state.active || foregroundStopping || selectiveHeadLiveCapturePaused || foregroundPending) return;
     const requestId = `ordinary-flame-frame-${++foregroundSequence}`;
     const requester = foregroundRequester;
     foregroundPending = { requestId };
-    Promise.resolve().then(() => {
+    foregroundPendingSettled = Promise.resolve().then(() => {
       const handle = requester({
         requestId,
         metadata: {
@@ -9642,8 +9644,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       emitStatus({ phase: 'foreground-frame-error', error: state.error });
     }).finally(() => {
       foregroundPending = null;
-      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      foregroundPendingSettled = null;
+      if (!foregroundStopping && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     });
+  }
+
+  async function pauseForegroundFrames() {
+    foregroundStopping = true;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    const pending = foregroundPendingSettled;
+    if (pending) await pending;
+    emitStatus({ phase: 'foreground-frames-paused' });
+  }
+
+  async function stopForegroundFrames() {
+    await pauseForegroundFrames();
+    state.active = false;
+    canvas.classList.remove('active');
+    emitStatus({ phase: 'foreground-frames-drained' });
   }
 
   function renderOrdinaryFrame(now, foregroundService = null) {
@@ -13745,6 +13764,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         try {
           await ensureGpu();
           await ensureBrowserResidualModel();
+          foregroundStopping = false;
           state.active = true;
           state.error = null;
           canvas.classList.add('active');
@@ -13767,6 +13787,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
     },
     setForegroundOpportunityRequester,
+    pauseForegroundFrames,
+    stopForegroundFrames,
     foregroundGpuContext() {
       return {
         device,

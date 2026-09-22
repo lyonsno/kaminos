@@ -54,7 +54,7 @@ assert.match(
 );
 assert.match(
   indexSource,
-  /mountComposition\(\{[^}]*prototype:\s*volumePrototype[^}]*sharedGpu[^}]*host:\s*compositionHost/,
+  /mountKaminosSharedDeviceComposition\(\{[^}]*compositionModule[^}]*prototype:\s*volumePrototype[^}]*sharedGpu[^}]*host:\s*compositionHost/,
   'the composition module receives the effective shared-device host rather than acquiring a fallback device',
 );
 

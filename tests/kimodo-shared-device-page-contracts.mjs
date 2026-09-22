@@ -12,6 +12,8 @@ assert.ok(
   'the persistent foreground requester is connected before the long model load begins',
 );
 assert.match(source, /foreground\.attachProducer\(producer\)/, 'the loaded producer is admitted only after exact shared-device validation');
+assert.match(source, /generationLifecycle/, 'page teardown tracks the whole generation through foreground finish, not only the producer promise');
+assert.match(source, /__kimodoSharedDeviceTeardown/, 'the browser witness can await the same quiescent teardown chain used by pagehide');
 assert.match(source, /await\s+foreground\.beginRun\(runId\)[\s\S]*producer\.generate\([\s\S]*foregroundOpportunity:\s*boundary\s*=>\s*\{[\s\S]*telemetry\.foreground\(boundary\)[\s\S]*run\.foregroundOpportunity\(boundary\)[\s\S]*finally\s*\{[\s\S]*await\s+run\.finish\(\)/, 'every generation reserves, observes, services, and drains one persistent foreground run');
 assert.match(source, /deviceTopology:\s*'same-device'/, 'human-visible evidence names exact shared topology');
 assert.match(source, /foregroundReceipts/, 'composition retains actual foreground service receipts');
