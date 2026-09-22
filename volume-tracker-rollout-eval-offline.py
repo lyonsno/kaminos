@@ -62,12 +62,12 @@ def setup(sid):
 
 
 def main():
+    archive = TRACKER.load_checkpoint(WEIGHTS)
     import mlx.core as mx
 
     n0 = int(START.split("-")[-1])
     states = [f"coefficient-state-{n:03d}" for n in range(n0, n0 - 2 * (HOPS + 1), -2)]
-    archive = np.load(WEIGHTS)
-    weights = {k[len("weight."):]: mx.array(archive[k]) for k in archive.files if k.startswith("weight.")}
+    weights = {k[len("weight."):]: mx.array(archive[k]) for k in archive if k.startswith("weight.")}
     model = TRACKER.DeltaTracker(TRACKER.FEATURE_DIM, 0, weights=weights)
     # v1.1 weights expect the v1.1 feature dim (132); rebuild features accordingly
     feat_dim = int(archive["weight.w1"].shape[0])

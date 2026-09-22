@@ -47,6 +47,56 @@ CENTER_DELTA_SCALE_CELLS = 2.0   # max useful center move per frame, in cells
 SHAPE_DELTA_SCALE = 0.1          # raw cholesky deltas
 APPEARANCE_DELTA_SCALE = 0.5     # raw emission/extinction deltas (v1's 0.1 capped the diffuse-body fix)
 TRIL_INDICES = np.tril_indices(3)
+# Old archives have no identity and were trained on chol(physical covariance),
+# which is incompatible with the repaired inverse chol(covariance - floor*I).
+RAW_PARAMETERIZATION = "physical-covariance-minus-bandlimit-floor-v1"
+RAW_PARAMETERIZATION_KEY = "__raw_parameterization__"
+
+
+def load_checkpoint(path: Path) -> dict[str, np.ndarray]:
+    """Admit only weights trained in the current raw covariance coordinates."""
+    with np.load(path, allow_pickle=False) as archive:
+        identity = archive[RAW_PARAMETERIZATION_KEY] if RAW_PARAMETERIZATION_KEY in archive else None
+        if (
+            identity is None
+            or identity.shape != ()
+            or identity.dtype.kind != "U"
+            or identity.item() != RAW_PARAMETERIZATION
+        ):
+            raise ValueError(
+                f"tracker checkpoint {path} has incompatible raw parameterization "
+                f"{identity!r}; expected {RAW_PARAMETERIZATION!r}. Preserve this archive "
+                "for replay on its original source; train a new checkpoint for this route."
+            )
+        return {key: archive[key] for key in archive.files}
+
+
+def save_checkpoint(path: Path, *, step: int, weights: dict, optimizer_state: dict) -> None:
+    """Save current-coordinate weights and Adam state without migrating old archives."""
+    path = Path(path)
+    if path.is_file():
+        load_checkpoint(path)
+    payload = {
+        "__step__": np.asarray(step),
+        RAW_PARAMETERIZATION_KEY: np.asarray(RAW_PARAMETERIZATION),
+    }
+    for key, value in weights.items():
+        payload[f"weight.{key}"] = np.asarray(value)
+
+    def walk(node, prefix):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                walk(value, f"{prefix}/{key}" if prefix else str(key))
+        else:
+            try:
+                payload[f"opt.{prefix}"] = np.asarray(node)
+            except Exception:
+                pass
+
+    walk(optimizer_state, "")
+    tmp = path.with_suffix(".tmp.npz")
+    np.savez(tmp, **payload)
+    tmp.replace(path)
 
 
 def _load_module(name: str, filename: str) -> Any:
@@ -324,20 +374,21 @@ def train(
     on_yield=None,
     log_every: int = 10,
 ) -> dict[str, Any]:
+    checkpoint_path = Path(checkpoint_path)
+    archive = load_checkpoint(checkpoint_path) if checkpoint_path.is_file() else None
+
     import mlx.core as mx
     import mlx.optimizers as optim
 
     model = DeltaTracker(FEATURE_DIM, seed)
     start_step = 0
     loaded_opt = None
-    checkpoint_path = Path(checkpoint_path)
-    if checkpoint_path.is_file():
-        archive = np.load(checkpoint_path)
+    if archive is not None:
         start_step = int(archive["__step__"])
         model.weights = {
-            k[len("weight."):]: mx.array(archive[k]) for k in archive.files if k.startswith("weight.")
+            k[len("weight."):]: mx.array(archive[k]) for k in archive if k.startswith("weight.")
         }
-        loaded_opt = {k[len("opt."):]: archive[k] for k in archive.files if k.startswith("opt.")}
+        loaded_opt = {k[len("opt."):]: archive[k] for k in archive if k.startswith("opt.")}
 
     prepared = []
     for pair in pairs:
@@ -404,24 +455,7 @@ def train(
             node[parts[-1]] = mx.array(value)
 
     def save(step: int) -> None:
-        payload = {"__step__": np.asarray(step)}
-        for k, v in model.weights.items():
-            payload[f"weight.{k}"] = np.asarray(v)
-
-        def walk(node, prefix):
-            if isinstance(node, dict):
-                for k, v in node.items():
-                    walk(v, f"{prefix}/{k}" if prefix else str(k))
-            else:
-                try:
-                    payload[f"opt.{prefix}"] = np.asarray(node)
-                except Exception:
-                    pass
-
-        walk(optimizer.state, "")
-        tmp = checkpoint_path.with_suffix(".tmp.npz")
-        np.savez(tmp, **payload)
-        tmp.replace(checkpoint_path)
+        save_checkpoint(checkpoint_path, step=step, weights=model.weights, optimizer_state=optimizer.state)
 
     from functools import partial
 

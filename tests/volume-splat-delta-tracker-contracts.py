@@ -15,10 +15,12 @@ Load-bearing properties:
 from __future__ import annotations
 
 import importlib.util
+import builtins
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -57,6 +59,92 @@ def tiny_pair():
         "extinction": 0.5 + rng.random(n),
     }
     return medium, state_a, lattice_b
+
+
+class TrackerCheckpointCompatibilityContracts(unittest.TestCase):
+    """Archive admission is CPU-only and precedes model or target work."""
+
+    def setUp(self):
+        self.scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(self.scratch.cleanup)
+        self.checkpoint = Path(self.scratch.name) / "tracker-weights.npz"
+        # Historical archive layout: no parameterization identity.
+        np.savez(self.checkpoint, __step__=7, **{
+            "weight.w1": np.ones((TRACKER.FEATURE_DIM, 2)),
+            "opt.step": np.asarray(7),
+        })
+        self.before = self.checkpoint.read_bytes()
+
+    def cpu_only(self):
+        original = builtins.__import__
+
+        def guarded(name, *args, **kwargs):
+            if name == "mlx" or name.startswith("mlx."):
+                raise AssertionError("checkpoint reached MLX before compatibility rejection")
+            return original(name, *args, **kwargs)
+
+        return patch("builtins.__import__", side_effect=guarded)
+
+    def test_training_rejects_unversioned_archive_before_mlx(self):
+        with self.cpu_only(), self.assertRaisesRegex(ValueError, "parameterization"):
+            TRACKER.train(
+                pairs=[], cameras=[], fit_width=1, fit_samples_per_cell=1,
+                iterations=1, learning_rate=1e-3, seed=0,
+                checkpoint_path=self.checkpoint,
+            )
+        self.assertEqual(self.checkpoint.read_bytes(), self.before)
+
+    def test_rollout_rejects_unversioned_archive_before_mlx(self):
+        module = load("tracker_rollout_admission", "volume-tracker-rollout-eval-offline.py")
+        with patch.object(module, "WEIGHTS", self.checkpoint), self.cpu_only():
+            with self.assertRaisesRegex(ValueError, "parameterization"):
+                module.main()
+        self.assertEqual(self.checkpoint.read_bytes(), self.before)
+
+    def test_anatomy_rejects_unversioned_archive_before_target_work(self):
+        module = load("tracker_anatomy_admission", "volume-tracker-error-anatomy-offline.py")
+        with patch.object(module, "OUT", self.checkpoint.parent), self.cpu_only():
+            with patch.object(module, "fitted", side_effect=AssertionError(
+                "checkpoint reached target work before compatibility rejection"
+            )):
+                with self.assertRaisesRegex(ValueError, "parameterization"):
+                    module.main()
+        self.assertEqual(self.checkpoint.read_bytes(), self.before)
+
+    def test_save_does_not_relabel_an_existing_legacy_archive(self):
+        with self.cpu_only(), self.assertRaisesRegex(ValueError, "parameterization"):
+            TRACKER.save_checkpoint(self.checkpoint, step=0, weights={}, optimizer_state={})
+        self.assertEqual(self.checkpoint.read_bytes(), self.before)
+
+    def test_loader_rejects_mismatched_or_malformed_identity(self):
+        for identity in ("legacy-full-covariance", "unknown-future-version", 1,
+                         [TRACKER.RAW_PARAMETERIZATION]):
+            with self.subTest(identity=identity):
+                np.savez(self.checkpoint, **{TRACKER.RAW_PARAMETERIZATION_KEY: identity})
+                before = self.checkpoint.read_bytes()
+                with self.cpu_only(), self.assertRaisesRegex(ValueError, "parameterization"):
+                    TRACKER.load_checkpoint(self.checkpoint)
+                self.assertEqual(self.checkpoint.read_bytes(), before)
+
+    def test_current_checkpoint_roundtrip_preserves_identity_and_training_state(self):
+        path = self.checkpoint.parent / "corrected-tracker.npz"
+        weight = np.arange(6, dtype=np.float32).reshape(3, 2)
+        moment = weight / 8
+        with self.cpu_only():
+            TRACKER.save_checkpoint(path, step=11, weights={"w1": weight},
+                                    optimizer_state={"step": 11, "m": {"w1": moment}})
+            archive = TRACKER.load_checkpoint(path)
+            self.assertEqual(archive[TRACKER.RAW_PARAMETERIZATION_KEY].item(), TRACKER.RAW_PARAMETERIZATION)
+            self.assertEqual(archive["__step__"].item(), 11)
+            self.assertEqual(archive["opt.step"].item(), 11)
+            np.testing.assert_array_equal(archive["weight.w1"], weight)
+            np.testing.assert_array_equal(archive["opt.m/w1"], moment)
+            # Additive metadata does not change admission authority.
+            np.savez(path, **archive, future_metadata="preserve")
+            self.assertEqual(TRACKER.load_checkpoint(path)["future_metadata"].item(), "preserve")
+            TRACKER.save_checkpoint(path, step=12, weights={"w1": weight}, optimizer_state={"step": 12})
+            self.assertEqual(TRACKER.load_checkpoint(path)["__step__"].item(), 12)
+        self.assertEqual(self.checkpoint.read_bytes(), self.before)
 
 
 class DeltaTrackerContracts(unittest.TestCase):

@@ -68,6 +68,7 @@ def save_png(path, img, scale=None):
 
 
 def main():
+    archive = TRACKER.load_checkpoint(OUT / "tracker-weights.npz")
     sid_a, sid_b = PAIR
     state_a = fitted(sid_a)
     state_b = fitted(sid_b)  # oracle's own fit at B = ceiling arm
@@ -76,8 +77,7 @@ def main():
 
     # tracker arm
     import mlx.core as mx
-    archive = np.load(OUT / "tracker-weights.npz")
-    weights = {k[len("weight."):]: mx.array(archive[k]) for k in archive.files if k.startswith("weight.")}
+    weights = {k[len("weight."):]: mx.array(archive[k]) for k in archive if k.startswith("weight.")}
     model = TRACKER.DeltaTracker(TRACKER.FEATURE_DIM, 0, weights=weights)
     features = TRACKER.splat_features(state_a, lat_a, lat_b, med_b)
     raw = TRACKER.state_to_raw_np(state_a, med_b)
