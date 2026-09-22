@@ -95,7 +95,7 @@ with tempfile.TemporaryDirectory(prefix="kaminos-basin-session-http-") as tempor
             method="POST",
             document={"session": session_document(serve.VOLUME_BASIN_SESSION_STORE)},
         )
-        assert status == 200
+        assert status == 200, receipt
         assert receipt["effective"]["storePath"] == str(serve.VOLUME_BASIN_SESSION_STORE)
         artifact_id = receipt["effective"]["artifactId"]
 
@@ -106,6 +106,22 @@ with tempfile.TemporaryDirectory(prefix="kaminos-basin-session-http-") as tempor
         status, index = request_json(f"{origin}/api/volume-basin-drive-sessions")
         assert status == 200
         assert [entry["artifactId"] for entry in index["entries"]] == [artifact_id]
+
+        # Internally consistent but incomplete inventories must still be rejected
+        # against the serving schema after removing the recorder's historical cap.
+        incomplete = session_document(serve.VOLUME_BASIN_SESSION_STORE)
+        removed = next(item for item in incomplete["controlSchema"]["inventory"] if item["axis"] == "basin")
+        incomplete["controlSchema"]["inventory"].remove(removed)
+        incomplete["controlSchema"]["basinControlCount"] -= 1
+        for state in ("initialState", "finalState"):
+            del incomplete[state]["basin"][removed["id"]]
+        status, failure = request_json(
+            f"{origin}/api/volume-basin-drive-sessions",
+            method="POST",
+            document={"session": incomplete},
+        )
+        assert status == 400, failure
+        assert "canonical control schema mismatch" in failure["error"].lower()
 
         truncated = session_document(serve.VOLUME_BASIN_SESSION_STORE)
         truncated["eventCount"] = 1
