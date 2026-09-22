@@ -14813,6 +14813,11 @@ async function replayLastVolumeBasinDriveSession() {
       || artifact.artifactPath !== lastVolumeBasinDriveArtifactPath) {
       throw new Error('basin drive artifact identity or effective path mismatch');
     }
+    const compatibility = artifact.replayCompatibility;
+    if (compatibility?.identity !== 'kaminos.volume.basin-drive-replay-compatibility.v0'
+      || compatibility.compatible !== true) {
+      throw new Error(`basin drive replay incompatible: ${compatibility?.reasons?.join(', ') || 'missing compatibility receipt'}; capture is preserved; use its recorded source/schema`);
+    }
     const session = parseVolumeBasinDriveSession(`${JSON.stringify(artifact.session)}\n`);
     let replayStartedAt = null;
     const receipt = await replayVolumeBasinDriveSession(session, {

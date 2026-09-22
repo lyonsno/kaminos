@@ -110,7 +110,7 @@ def read_volume_basin_drive_session(store_path, session_ref):
         or document.get("artifactId") != artifact_id
     ):
         raise ValueError("volume basin drive session artifact identity mismatch")
-    normalized = _normalize_volume_basin_drive_session(document.get("session"))
+    normalized = _normalize_volume_basin_drive_session(document.get("session"), require_current_runtime=False)
     content_hash = _volume_basin_drive_session_content_hash(normalized)
     if document.get("contentHash") != f"sha256:{content_hash}" or artifact_id != f"vds-{content_hash}":
         raise ValueError("volume basin drive session artifact content hash mismatch")
@@ -119,6 +119,7 @@ def read_volume_basin_drive_session(store_path, session_ref):
         "session": normalized,
         "artifactPath": str(artifact_path),
         "storePath": str(store),
+        "replayCompatibility": volume_basin_drive_replay_compatibility(normalized),
     }
 
 
@@ -142,6 +143,7 @@ def list_volume_basin_drive_sessions(store_path):
             "markCount": session["markCount"],
             "sourceCommit": session["source"]["commit"],
             "writtenAt": document.get("writtenAt"),
+            "replayCompatibility": document["replayCompatibility"],
         })
     entries.sort(key=lambda entry: (entry.get("writtenAt") or "", entry["artifactId"]), reverse=True)
     return {
@@ -151,7 +153,7 @@ def list_volume_basin_drive_sessions(store_path):
     }
 
 
-def _normalize_volume_basin_drive_session(session):
+def _normalize_volume_basin_drive_session(session, *, require_current_runtime=True):
     if not isinstance(session, dict):
         raise ValueError("volume basin drive session must be a JSON object")
     result = subprocess.run(
@@ -172,6 +174,8 @@ def _normalize_volume_basin_drive_session(session):
         raise ValueError(f"volume basin drive session validator returned invalid JSON: {error}") from error
     if not isinstance(normalized, dict):
         raise ValueError("volume basin drive session validator returned a non-object")
+    if not require_current_runtime:
+        return normalized
     canonical_schema = _canonical_volume_basin_drive_control_schema()
     authored_schema = normalized.get("controlSchema") or {}
     for field in (
@@ -186,6 +190,28 @@ def _normalize_volume_basin_drive_session(session):
     if normalized.get("source", {}).get("commit") != server_source.get("commit"):
         raise ValueError("volume basin drive session source commit does not match the effective server")
     return normalized
+
+
+def volume_basin_drive_replay_compatibility(session):
+    canonical = _canonical_volume_basin_drive_control_schema()
+    recorded = session["controlSchema"]
+    source = volume_settings_server_source()
+    reasons = []
+    if any(recorded.get(field) != value for field, value in canonical.items()):
+        reasons.append("control-schema-mismatch")
+    if session["source"]["commit"] != source.get("commit"):
+        reasons.append("source-commit-mismatch")
+    if source.get("dirty") is not False:
+        reasons.append("server-source-dirty")
+    return {
+        "identity": "kaminos.volume.basin-drive-replay-compatibility.v0",
+        "compatible": not reasons,
+        "reasons": reasons,
+        "recordedSourceCommit": session["source"]["commit"],
+        "effectiveSourceCommit": source.get("commit"),
+        "recordedControlSchemaSha256": recorded["sha256"],
+        "effectiveControlSchemaSha256": canonical["sha256"],
+    }
 
 
 def _canonical_volume_basin_drive_control_schema():
