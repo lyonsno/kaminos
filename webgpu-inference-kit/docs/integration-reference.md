@@ -546,7 +546,13 @@ const plan = createWebGpuWeightRepresentationPlan({
 
 const storage = plan.effectiveRepresentation === "f16-packed-u32"
   ? packFp16WeightsToU32(fp16Bits)
-  : fp16Bits;
+  : (() => {
+      const aligned = new Uint16Array(
+        plan.storageByteLength / Uint16Array.BYTES_PER_ELEMENT,
+      );
+      aligned.set(fp16Bits);
+      return aligned;
+    })();
 const weightBuffer = runtime.createBuffer({
   label: "vision.encoder.weight",
   size: plan.storageByteLength,

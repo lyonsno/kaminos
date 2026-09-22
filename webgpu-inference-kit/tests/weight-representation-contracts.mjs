@@ -24,6 +24,19 @@ assert.equal(native.savedVsExpandedFp32ByteLength, 16_777_216);
 assert.equal(native.accumulatorDtype, 'fp32');
 assert.equal(native.valueLoadOperation, 'wgsl-f16-load-cast-f32');
 
+const nativeOdd = createWebGpuWeightRepresentationPlan({
+  sourceDtype: 'fp16',
+  elementCount: 5,
+  candidates: ['f16-native'],
+  adapterFeatures: ['shader-f16'],
+});
+const nativeOddUpload = new Uint16Array(
+  nativeOdd.storageByteLength / Uint16Array.BYTES_PER_ELEMENT,
+);
+nativeOddUpload.set(new Uint16Array([0x3c00, 0xc000, 0x3555, 0x7bff, 0x0001]));
+assert.equal(nativeOddUpload.byteLength, nativeOdd.storageByteLength);
+assert.deepEqual([...nativeOddUpload], [0x3c00, 0xc000, 0x3555, 0x7bff, 0x0001, 0]);
+
 const portable = createWebGpuWeightRepresentationPlan({
   sourceDtype: 'fp16',
   elementCount: 5,
@@ -56,6 +69,16 @@ const words = packFp16WeightsToU32(new Uint16Array([
 assert.ok(words instanceof Uint32Array);
 assert.deepEqual([...words], [0xc0003c00, 0x7bff3555, 0x00000001]);
 assert.equal(words[2] >>> 16, 0);
+
+assert.throws(
+  () => createWebGpuWeightRepresentationPlan({
+    sourceDtype: 'fp32',
+    elementCount: 8,
+    candidates: ['f16-packed-u32'],
+    adapterFeatures: [],
+  }),
+  /unsupported sourceDtype fp32/,
+);
 
 assert.throws(
   () => createWebGpuWeightRepresentationPlan({
