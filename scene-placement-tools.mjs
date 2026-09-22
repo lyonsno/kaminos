@@ -93,7 +93,7 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
     } else if(field)hud.textContent='Edit value · drag axis label to adjust · Enter confirm · Esc cancel';
     else if(navigationText)hud.textContent=navigationText;
     else hud.textContent=id?`${id} · G Move · R Rotate · S Scale · X/Y/Z constrain · Ctrl snap · Shift precision · F frame selected · ⌘/Ctrl Z undo`:'Select an object to place it';
-    if(!m && !field && !navigationText)hud.textContent+=' · MMB orbit · Shift MMB pan · Ctrl MMB dolly · Wheel zoom · Numpad views · Home frame all';
+    if(!m && !field && !navigationText)hud.textContent+=' · Right drag orbit · Shift right drag pan · Cmd/Ctrl right drag zoom · Wheel zoom · Numpad views · Home frame all';
     overlay.setAttribute('viewBox',`0 0 ${viewport.clientWidth} ${viewport.clientHeight}`);
     let lines='';
     const line=(a,b,color,opacity=1,dash='')=>{if([a.x,a.y,b.x,b.y].every(Number.isFinite))lines+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${color}" opacity="${opacity}" stroke-width="1.3" ${dash?`stroke-dasharray="${dash}"`:''}/>`;};

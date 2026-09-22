@@ -120,8 +120,10 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
   listen(canvas, 'pointerenter', () => hover = true);
   listen(canvas, 'pointerleave', () => hover = false);
   listen(canvas, 'pointerdown', e => {
-    if (e.button !== 1 || e.pointerType === 'touch') return;
-    take(e); // Browser autoscroll and OrbitControls must never also acquire MMB.
+    if (![1, 2].includes(e.button) || e.pointerType === 'touch') return;
+    // The viewport's capture handler owns modal transform cancellation before
+    // this canvas handler. Otherwise RMB and MMB share the same navigation.
+    take(e);
     if (gesture || !permitted()) return;
     const before = pose(), pivot = sample(e);
     gesture = {pointerId:e.pointerId, x:e.clientX, y:e.clientY, mode:modeFor(e), pivot, before};
@@ -154,7 +156,8 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     if (gesture?.pointerId === e.pointerId) finish(true);
   });
   listen(window, 'blur', () => finish(true));
-  listen(canvas, 'auxclick', e => {if (e.button === 1) take(e);});
+  listen(canvas, 'auxclick', e => {if ([1, 2].includes(e.button)) take(e);});
+  listen(canvas, 'contextmenu', take);
   listen(canvas, 'wheel', e => {
     take(e);
     if (gesture || !permitted()) return;

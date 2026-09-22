@@ -104,6 +104,29 @@ test('keyboard and wheel respect focus, modal ownership and controls suspension'
  }
 });
 
+test('right-drag orbit, Shift pan and Cmd zoom match the existing middle-button gestures',()=>{
+ for(const modifiers of [{},{shiftKey:true},{metaKey:true}]){
+  const states=[];
+  for(const button of [1,2]){
+   const f=fixture();const before=f.nav.state();
+   emit(f.canvas,'pointerdown',{button,pointerId:1,clientX:450,clientY:300,...modifiers});
+   assert.equal(f.nav.state().gesture,modifiers.shiftKey?'pan':modifiers.metaKey?'dolly':'orbit');
+   emit(f.canvas,'pointermove',{pointerId:1,clientX:480,clientY:330,...modifiers});
+   emit(f.canvas,'pointerup',{button,pointerId:1,...modifiers});
+   assert.equal(f.nav.state().gesture,null);assert.notDeepEqual(f.nav.state().position,before.position);
+   states.push(f.nav.state());
+  }
+  assert.deepEqual(states[1],states[0],'button choice must not change camera math');
+ }
+ const f=fixture();assert.equal(emit(f.canvas,'contextmenu').defaultPrevented,true,'viewport navigation must not open a browser menu');
+ for(const gate of ['blocked','disabled']){
+  const f=fixture();f.blocked=gate==='blocked';f.controls.enabled=gate!=='disabled';const before=f.nav.state();
+  emit(f.canvas,'pointerdown',{button:2,pointerId:1,clientX:450,clientY:300});
+  emit(f.canvas,'pointermove',{pointerId:1,clientX:480,clientY:330});
+  assert.deepEqual(f.nav.state(),before,'edit ownership prevents right-drag camera mutation');
+ }
+});
+
 test('top and bottom orbit continue across each pole through the effective controls update', async t=>{
  if(!process.env.KAMINOS_ORBIT_CONTROLS_SOURCE){t.skip('set KAMINOS_ORBIT_CONTROLS_SOURCE to the observed three0.171.0 OrbitControls.js');return;}
  const coreUrl=new URL('../lib/three.core.js',import.meta.url).href;
