@@ -729,6 +729,7 @@ def build_asset_entry(root, path):
         "size": size,
         "mtime": path.stat().st_mtime,
         "source": "/api/read?" + urlencode({"root": root_id, "path": rel_path}),
+        **({'sha256': image_metadata['sha256']} if image_metadata else {}),
         "correction": correction_document.get("correction") if correction_document else None,
         "display": display,
         "renderability": inspect_splat_renderability(path) if kind == "splat" else {

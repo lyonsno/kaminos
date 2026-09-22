@@ -6,7 +6,8 @@ import { spawnSync } from 'node:child_process';
 
 const witness = new URL('../sam-image-witness.mjs', import.meta.url);
 assert.ok(existsSync(witness), 'the actual Kaminos consumer needs a rerunnable image-to-export witness');
-const { validateSamConsumerOutput } = await import(witness);
+const consumer = await import(witness);
+const { validateSamConsumerOutput } = consumer;
 const output = { invocationId: 'new', promptText: 'wheel', outputAuthority: 'actual-webgpu-readback',
   verificationState: 'not-attached', effectiveRouteId: 'sam3.detr-encoder.phase-program.webgpu-local.v0',
   receiptChain: ['sam3.mask-tail.phase-program.webgpu-local.v0'],
@@ -24,6 +25,32 @@ for (const override of [{ outputAuthority: 'cpu-oracle' }, { verificationState: 
 }
 assert.throws(() => validateSamConsumerOutput(output, { ...expected, previousId: 'new' }), /reused/);
 assert.throws(() => validateSamConsumerOutput(output, { ...expected, empty: true }), /empty/);
+const live = { sameDevice: true, sameRendererDevice: true, invocation: { invocationId: 'new', startedAtMs: 10, completedAtMs: 100 },
+  foreground: { failure: null, inputs: [{ id: 1, receivedAtMs: 30, type: 'wheel', trusted: true, zoom: 2, panX: 0, panY: 0 }],
+    frames: [{ submittedAtMs: 5, inputIds: [], zoom: 1, panX: 0, panY: 0 },
+      { submittedAtMs: 40, inputIds: [1], zoom: 2, panX: 0, panY: 0 }] } };
+assert.equal(typeof consumer.validateSamConsumerInteraction, 'function', 'live consumer gate must inspect input-correlated submissions inside inference bounds');
+consumer.validateSamConsumerInteraction(live, 'new');
+for (const change of [
+  { sameDevice: false }, { sameRendererDevice: false }, { invocation: { ...live.invocation, invocationId: 'old' } },
+  { foreground: { ...live.foreground, inputs: [] } },
+  { foreground: { ...live.foreground, frames: [live.foreground.frames[0]] } },
+  { foreground: { ...live.foreground, frames: [live.foreground.frames[0], { ...live.foreground.frames[1], submittedAtMs: 101 }] } },
+  { foreground: { ...live.foreground, frames: [live.foreground.frames[0], { ...live.foreground.frames[1], zoom: 1 }] } },
+]) assert.throws(() => consumer.validateSamConsumerInteraction({ ...live, ...change }, 'new'));
+assert.equal(typeof consumer.validateSamConsumerExport, 'function', 'persisted export gate must inspect decoded pixels and identity, not just a download event');
+const exported = { mimeType: 'image/png', width: 2, height: 1, pixels: Uint8Array.from([255, 255, 255, 255, 0, 0, 0, 255]),
+  sha256: 'sha256:export', source: '/api/read?root=image-inbox&path=export.png', name: 'wheel-mask.png' };
+const sourcePixels = Uint8Array.from([42, 43, 44, 255, 10, 20, 30, 255]);
+const exportContract = { kind: 'mask', width: 2, height: 1, mask: Uint8Array.from([1, 0]), sourcePixels,
+  libraryEntry: { ...exported, pixels: undefined } };
+consumer.validateSamConsumerExport(exported, exportContract);
+for (const change of [{ width: 1 }, { mimeType: 'image/jpeg' }, { pixels: new Uint8Array(8) },
+  { sha256: 'sha256:stale' }, { source: '/old.png' }]) {
+  assert.throws(() => consumer.validateSamConsumerExport({ ...exported, ...change }, exportContract));
+}
+consumer.validateSamConsumerExport({ ...exported, pixels: Uint8Array.from([42, 43, 44, 255, 0, 0, 0, 0]) }, { ...exportContract, kind: 'cutout' });
+assert.throws(() => consumer.validateSamConsumerExport({ ...exported, pixels: sourcePixels }, { ...exportContract, kind: 'cutout' }), /alpha/);
 const out = mkdtempSync(join(tmpdir(), 'kaminos-sam-consumer-'));
 const result = spawnSync(process.execPath, [witness.pathname, '--out-dir', out, '--expected-commit', 'not-the-source'], { encoding: 'utf8' });
 assert.notEqual(result.status, 0);

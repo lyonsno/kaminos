@@ -8853,7 +8853,7 @@ async function ensureSamImageTools() {
     await sceneInitialization;
     const { createSamImageTools } = await import('./sam-image-tools.js');
     const inferenceSession = samHostContext?.inferenceSession || { device: renderer.backend.device };
-    samImageTools = createSamImageTools({ inferenceSession, config: samHostConfig,
+    samImageTools = createSamImageTools({ inferenceSession, rendererDevice: renderer.backend.device, config: samHostConfig,
       onAsset() { if (pipelineDockState.activeAssetPalette === 'image') void loadPipelineAssetBrowser(); },
       async onScene(entry, provenance) {
         await showImagePlane(entry.source, { clear: false, metadata: { source: entry.source, fileName: entry.name,

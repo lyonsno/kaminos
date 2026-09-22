@@ -3,7 +3,7 @@ import { createSamWorkbenchForeground } from './webgpu-inference-kit/smokes/sam-
 
 const COLORS = [[50, 203, 222], [233, 184, 78], [208, 115, 185], [129, 217, 137]];
 
-export function createSamImageTools({ inferenceSession, config, onAsset, onScene }) {
+export function createSamImageTools({ inferenceSession, rendererDevice, config, onAsset, onScene }) {
   const el = id => document.getElementById(`sam-image-${id}`);
   const canvas = el('canvas');
   const picker = el('instances');
@@ -12,6 +12,7 @@ export function createSamImageTools({ inferenceSession, config, onAsset, onScene
   let failure = null, view = 'overlay';
   let executionDevice = null;
   let operation = null;
+  let invocation = null;
   const display = document.createElement('canvas');
 
   function status(text, failed = false) {
@@ -127,9 +128,10 @@ export function createSamImageTools({ inferenceSession, config, onAsset, onScene
     busy = true; output = null; picker.replaceChildren(); controls(); redraw();
     const invocationId = crypto.randomUUID();
     const start = performance.now();
+    invocation = { invocationId, startedAtMs: start, completedAtMs: null };
     el('result').textContent = '';
-    runtime ||= createRuntime();
     try {
+      runtime ||= createRuntime();
       operation = runtime.run(config.manifestUrl, { invocationId, promptText, verificationMode: 'execution-only',
         sourceImage: { url: source.source, sha256: source.sha256, artifactId: source.artifactId, encodedResolution: source.encodedResolution },
       });
@@ -149,7 +151,7 @@ export function createSamImageTools({ inferenceSession, config, onAsset, onScene
       status(output.instances.length ? `${output.instances.length} instances - ${(elapsed / 1000).toFixed(1)}s` : `No matching instances - ${(elapsed / 1000).toFixed(1)}s`);
       el('result').textContent = `${promptText} | WebGPU | image cache ${output.imageCache.status}`;
     } catch (error) { fail(error); }
-    finally { operation = null; busy = false; controls(); }
+    finally { invocation.completedAtMs = performance.now(); operation = null; busy = false; controls(); }
     return output;
   }
   async function save(kind, addToScene = false) {
@@ -216,9 +218,10 @@ export function createSamImageTools({ inferenceSession, config, onAsset, onScene
     open, run, save,
     setActive(value) { active = value; if (active && foreground) foreground.drawNow(); },
     output: () => output,
-    evidence: () => ({ source, elapsedMs: elapsed, busy, error: failure?.message || null,
+    evidence: () => ({ source, elapsedMs: elapsed, busy, invocation: invocation && { ...invocation }, error: failure?.message || null,
       runtime: runtime?.evidence() || null, foreground: foreground?.evidence() || null,
       sameDevice: executionDevice ? executionDevice === inferenceSession.device : null,
+      sameRendererDevice: rendererDevice === inferenceSession.device,
     }),
     async close() { window.removeEventListener('paste', paste); await runtime?.close(); foreground?.close(); },
   };

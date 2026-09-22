@@ -33,6 +33,8 @@ export async function createSamWorkbenchForeground({ device, canvas, image, onEr
   const sampler = device.createSampler({ minFilter: 'linear', magFilter: 'linear' });
   context.configure({ device, format, alphaMode: 'opaque' });
   const events = [];
+  const inputs = [];
+  let pendingInputIds = [];
   let texture = null, bindGroup = null, frame = null, closed = false;
   let demandAt = null, zoom = 1, panX = 0, panY = 0, drag = null;
   let frameWaiters = [], yieldCount = 0, demandYieldCount = 0;
@@ -43,6 +45,8 @@ export async function createSamWorkbenchForeground({ device, canvas, image, onEr
     if (closed || demandAt === null) return;
     const requestedAt = demandAt;
     demandAt = null;
+    const inputIds = pendingInputIds;
+    pendingInputIds = [];
     try {
       device.queue.writeBuffer(uniform, 0, new Float32Array([zoom, panX, panY, 0]));
       const encoder = device.createCommandEncoder({ label: 'sam-source-foreground' });
@@ -53,7 +57,7 @@ export async function createSamWorkbenchForeground({ device, canvas, image, onEr
       pass.draw(3);
       pass.end();
       device.queue.submit([encoder.finish()]);
-      events.push({ requestedAtMs: requestedAt, submittedAtMs: now(), afterYieldCount: yieldCount, zoom, panX, panY });
+      events.push({ requestedAtMs: requestedAt, submittedAtMs: now(), afterYieldCount: yieldCount, inputIds, zoom, panX, panY });
       for (const waiter of frameWaiters) waiter.resolve();
     } catch (error) {
       failure = error;
@@ -66,6 +70,14 @@ export async function createSamWorkbenchForeground({ device, canvas, image, onEr
     if (closed) return;
     demandAt ??= now();
     if (frame === null) frame = requestFrame(draw);
+  }
+
+  function inputDraw(event, type) {
+    const id = inputs.length + 1;
+    inputs.push({ id, type, trusted: event.isTrusted === true, receivedAtMs: now(),
+      eventTimestampMs: event.timeStamp, zoom, panX, panY });
+    pendingInputIds.push(id);
+    requestDraw();
   }
 
   function setImage(next, { resetView = true } = {}) {
@@ -84,17 +96,17 @@ export async function createSamWorkbenchForeground({ device, canvas, image, onEr
   }
 
   const listeners = {
-    wheel(event) { event.preventDefault(); zoom = Math.max(1, zoom * Math.exp(-event.deltaY * 0.001)); requestDraw(); },
+    wheel(event) { event.preventDefault(); zoom = Math.max(1, zoom * Math.exp(-event.deltaY * 0.001)); inputDraw(event, 'wheel'); },
     pointerdown(event) { drag = { x: event.clientX, y: event.clientY }; canvas.setPointerCapture(event.pointerId); },
     pointermove(event) {
       if (!drag) return;
       const rect = canvas.getBoundingClientRect();
       panX -= (event.clientX - drag.x) / rect.width / zoom;
       panY -= (event.clientY - drag.y) / rect.height / zoom;
-      drag = { x: event.clientX, y: event.clientY }; requestDraw();
+      drag = { x: event.clientX, y: event.clientY }; inputDraw(event, 'pointermove');
     },
     pointerup() { drag = null; }, pointercancel() { drag = null; },
-    dblclick() { zoom = 1; panX = 0; panY = 0; requestDraw(); },
+    dblclick(event) { zoom = 1; panX = 0; panY = 0; inputDraw(event, 'dblclick'); },
   };
   for (const [name, listener] of Object.entries(listeners)) canvas.addEventListener(name, listener, { passive: false });
   setImage(image);
@@ -121,7 +133,7 @@ export async function createSamWorkbenchForeground({ device, canvas, image, onEr
     },
     async yield(metadata) { yieldCount += 1; return cooperativeYield(metadata); },
     evidence() { return { mode: 'shared-device-input-driven-source-render', yieldCount, demandYieldCount, failure: failure?.message || null,
-      frames: events.slice(), authority: 'same-device-queue-submissions-not-presentation-or-frame-budget-verification' }; },
+      frames: events.slice(), inputs: inputs.slice(), authority: 'same-device-queue-submissions-not-presentation-or-frame-budget-verification' }; },
     close() {
       closed = true;
       if (frame !== null) cancelFrame(frame);

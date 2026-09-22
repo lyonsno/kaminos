@@ -38,6 +38,9 @@ assert.equal(submitCount, 1, 'idle boundaries must not manufacture foreground wo
 listeners.wheel({ preventDefault() {}, deltaY: -100 });
 frame();
 assert.ok(renderer.evidence().frames[1].zoom > 1);
+assert.equal(renderer.evidence().inputs?.length, 1, 'foreground evidence must retain the input received by the real handler');
+assert.deepEqual(renderer.evidence().frames[1].inputIds, [renderer.evidence().inputs[0].id]);
+assert.ok(renderer.evidence().inputs[0].receivedAtMs < renderer.evidence().frames[1].submittedAtMs);
 assert.equal(renderer.evidence().frames.length, 2);
 renderer.drawNow();
 assert.equal(submitCount, 3, 'capture must synchronously submit a fresh current canvas texture');

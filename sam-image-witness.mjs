@@ -6,6 +6,8 @@ import { resolve, join, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { validateSamConsumerInteraction } from './sam-image-witness-checks.js';
+export { validateSamConsumerInteraction, validateSamConsumerExport } from './sam-image-witness-checks.js';
 
 export function validateSamConsumerOutput(output, { prompt, empty, previousId, cache }) {
   assert.ok(output, 'missing live output');
@@ -174,8 +176,7 @@ async function main() {
       validateSamConsumerOutput(output, { prompt, cache, empty, previousId });
       previousId = output.invocationId;
       const evidence = await page.evaluate(() => window.kaminosSamImageTools.evidence());
-      assert.equal(evidence.sameDevice, true, 'inference did not use the host device');
-      assert.equal(evidence.foreground.failure, null);
+      const interaction = validateSamConsumerInteraction(evidence, output.invocationId);
       assert.equal(evidence.source.sha256, report.inputs[inputKey].sha256);
       const comparison = baseline ? { exactMasks: true, exactScoresAndBoxes: true, exactSelectedLogits: true } : null;
       if (baseline) {
@@ -188,13 +189,99 @@ async function main() {
         assert.deepEqual(output.logits, Float32Array.from(baseline.logits));
       }
       snapshotResult.archive();
-      report.runs.push({ label, wallMilliseconds: performance.now() - start, output, evidence, comparison, cadence,
+      const duringInference = cadence.filter(time => time >= interaction.start && time <= interaction.end);
+      const boundaries = [interaction.start, ...duringInference, interaction.end];
+      const gaps = boundaries.slice(1).map((time, index) => time - boundaries[index]);
+      report.runs.push({ label, witnessWallMilliseconds: performance.now() - start,
+        inferenceWallMilliseconds: interaction.end - interaction.start, output, evidence, comparison, interaction, cadence,
+        longestBrowserCallbackGapMs: Math.max(...gaps),
         cadenceAuthority: 'browser-rAF-and-input-to-GPU-submit-not-physical-display-timing' });
       saveReport(); await capture(label);
     }
 
+    async function saveExport(kind, label, addToScene = false) {
+      report.failurePhase = label; saveReport();
+      const responsePromise = page.waitForResponse(response => {
+        const address = new URL(response.url());
+        return address.pathname === '/api/ingest-image' && address.searchParams.get('name')?.endsWith(`-${kind}.png`);
+      });
+      const downloadPromise = addToScene ? null : page.waitForEvent('download');
+      downloadPromise?.catch(() => {});
+      await checked(page.locator(addToScene ? '#sam-image-add-cutout' : `#sam-image-save-${kind}`).click());
+      const response = await checked(responsePromise);
+      const receipt = await response.json();
+      assert.equal(response.status(), 200, JSON.stringify(receipt));
+      const entry = receipt.entry;
+      assert.ok(entry?.source, 'save did not return an asset');
+      const binary = await fetch(new URL(entry.source, url));
+      assert.equal(binary.status, 200);
+      const bytes = Buffer.from(await binary.arrayBuffer());
+      const path = join(out, `${label}.png`);
+      writeFileSync(path, bytes);
+      const sha256 = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+      assert.equal(sha256, entry.sha256, 'saved bytes do not match ingest receipt');
+      let download = null;
+      if (downloadPromise) {
+        const saved = await checked(downloadPromise);
+        const downloadedPath = join(out, `${label}-download.png`);
+        await saved.saveAs(downloadedPath);
+        assert.deepEqual(readFileSync(downloadedPath), bytes, 'download is not the persisted export');
+        download = { path: downloadedPath, filename: saved.suggestedFilename() };
+      }
+      const inspection = await checked(page.evaluate(async ({ entry, kind }) => {
+        const { validateSamConsumerExport } = await import('./sam-image-witness-checks.js');
+        const { createSam3SourceMask } = await import('./webgpu-inference-kit/src/sam.js');
+        const tools = window.kaminosSamImageTools, output = tools.output(), source = tools.evidence().source;
+        const selection = document.getElementById('sam-image-instances').value;
+        const indices = selection === 'all' ? output.instances.map(row => row.index) : [Number(selection)];
+        async function pixels(address) {
+          const response = await fetch(address);
+          if (!response.ok) throw new Error(`export inspection read failed: ${response.status}`);
+          const blob = await response.blob(), bytes = await blob.arrayBuffer();
+          const sha256 = `sha256:${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), n => n.toString(16).padStart(2, '0')).join('')}`;
+          const objectUrl = URL.createObjectURL(blob), image = new Image();
+          try { image.src = objectUrl; await image.decode(); } finally { URL.revokeObjectURL(objectUrl); }
+          const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+          const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+          return { width: canvas.width, height: canvas.height, mimeType: response.headers.get('content-type'), sha256,
+            pixels: context.getImageData(0, 0, canvas.width, canvas.height).data };
+        }
+        const sourceImage = await pixels(source.source), exported = await pixels(entry.source);
+        if (sourceImage.sha256 !== source.sha256) throw new Error('source changed before export inspection');
+        const library = await (await fetch('/api/assets?kind=image')).json();
+        const libraryEntry = library.entries.find(row => row.id === entry.id);
+        const comparison = validateSamConsumerExport({ ...exported, source: entry.source, name: entry.name }, {
+          kind, width: sourceImage.width, height: sourceImage.height, sourcePixels: sourceImage.pixels,
+          mask: createSam3SourceMask(output, indices, sourceImage.width, sourceImage.height), libraryEntry,
+        });
+        return { comparison, indices, invocationId: output.invocationId, promptText: output.promptText,
+          sourceImage: source.source, libraryEntry, sha256: exported.sha256 };
+      }, { entry, kind }));
+      assert.equal(inspection.sha256, sha256);
+      report.exports ||= [];
+      report.exports.push({ kind, label, path, sha256, entry, download, inspection }); saveReport();
+      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+      if (addToScene) {
+        await checked(page.waitForFunction(() => document.querySelector('.tab.active')?.dataset.tab === 'assets'));
+        report.sceneObjects = await page.evaluate(() => window.kaminosSceneObjectDebugState());
+        const object = report.sceneObjects.find(row => row.type === 'image' && row.source === entry.source);
+        assert.ok(object, 'exact persisted cutout is not registered in scene');
+        assert.equal(object.image.assetSource, entry.source);
+        assert.equal(object.image.width, inspection.comparison.width);
+        assert.equal(object.image.height, inspection.comparison.height);
+        assert.deepEqual(object.image.maskProvenance, { sourceImage: inspection.sourceImage,
+          promptText: inspection.promptText, invocationId: inspection.invocationId, indices: inspection.indices });
+        await checked(page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
+        const scenePath = join(out, `${label}-scene.png`);
+        await checked(page.screenshot({ path: scenePath }));
+        report.captures.push({ name: `${label}-scene`, path: scenePath, visualInspection: 'pending-owner-pixel-read' }); saveReport();
+      }
+    }
+
     report.failurePhase = 'image-ingress'; saveReport();
-    await checked(page.locator('#sam-image-file').setInputFiles(values.image));
+    // The accepted source bytes keep numerical parity while the name exercises export persistence.
+    await checked(page.locator('#sam-image-file').setInputFiles({ name: `${'a'.repeat(230)}.jpg`,
+      mimeType: 'image/jpeg', buffer: readFileSync(values.image) }));
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
     await capture('source-desktop');
     const baseline = values.baseline ? JSON.parse(readFileSync(values.baseline, 'utf8')) : null;
@@ -203,22 +290,38 @@ async function main() {
     await run('windows', 'windows', 'hit');
     await page.locator('#sam-image-canvas').dblclick();
     await capture('windows-desktop');
-    report.failurePhase = 'source-size-export'; saveReport();
-    const download = page.waitForEvent('download');
-    await page.locator('#sam-image-save-mask').click();
-    const saved = await checked(download); await saved.saveAs(join(out, 'windows-mask.png'));
-    report.maskExport = { path: join(out, 'windows-mask.png'), filename: saved.suggestedFilename() };
-    await checked(page.locator('#sam-image-add-cutout').click());
-    await checked(page.waitForFunction(() => document.querySelector('.tab.active')?.dataset.tab === 'assets'));
-    report.sceneObjects = await page.evaluate(() => window.kaminosSceneObjectDebugState());
-    assert.ok(report.sceneObjects.some(object => object.type === 'image' || object.kind === 'image'), 'cutout not registered in scene');
-    await checked(page.screenshot({ path: join(out, 'cutout-scene.png') }));
+    const firstWindow = await page.evaluate(() => String(window.kaminosSamImageTools.output().instances[0].index));
+    await page.locator('#sam-image-instances').selectOption(firstWindow);
+    await capture('windows-single');
+    await saveExport('mask', 'windows-single-mask');
+    assert.ok(Buffer.byteLength(report.exports.at(-1).entry.name) > 255, 'long export name not exercised');
+    await page.locator('#sam-image-instances').selectOption('all');
+    await saveExport('cutout', 'windows-all-cutout', true);
     await page.locator('[data-tab="masks"]').click();
     await page.setViewportSize({ width: 390, height: 844 });
     await capture('windows-mobile');
     await page.setViewportSize({ width: 1440, height: 960 });
     await run('negative', 'a purple submarine with zebra stripes', 'hit', true, baseline?.negativeControl.visualEvidence.output);
     assert.equal(await page.locator('#sam-image-save-mask').isDisabled(), true);
+    report.failurePhase = 'webp-ingress'; saveReport();
+    const webp = await checked(page.evaluate(async () => {
+      const source = window.kaminosSamImageTools.evidence().source;
+      const image = new Image(); image.src = source.source; await image.decode();
+      const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      canvas.getContext('2d').drawImage(image, 0, 0);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp'));
+      if (blob?.type !== 'image/webp') throw new Error('browser did not encode WebP');
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let text = '';
+      for (let i = 0; i < bytes.length; i += 32768) text += String.fromCharCode(...bytes.subarray(i, i + 32768));
+      return btoa(text);
+    }));
+    const webpBytes = Buffer.from(webp, 'base64'), webpPath = join(out, 'source.webp');
+    writeFileSync(webpPath, webpBytes);
+    report.inputs.webp = { path: webpPath, sha256: `sha256:${createHash('sha256').update(webpBytes).digest('hex')}` }; saveReport();
+    await checked(page.locator('#sam-image-file').setInputFiles({ name: 'source.webp', mimeType: 'image/webp', buffer: webpBytes }));
+    await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+    await run('webp-wheel', 'wheel', 'miss', false, null, 'webp');
     if (values['second-image']) {
       report.failurePhase = 'drop-image'; saveReport();
       const bytes = readFileSync(values['second-image']).toString('base64');
@@ -243,7 +346,9 @@ async function main() {
     await page.locator('#sam-image-file').setInputFiles(values.image);
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
     await capture('recovered-source');
-    report.status = 'passed'; report.failurePhase = null;
+    report.status = 'captured'; report.failurePhase = null;
+    report.checks = { numericalRegression: baseline ? 'passed' : 'not-requested', inputDuringInference: 'passed',
+      persistedExports: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
   } catch (error) {
     report.status = 'failed'; report.error = String(error.stack || error); process.exitCode = 1;
     if (page) try { await page.screenshot({ path: join(out, 'failure.png') }); } catch {}
