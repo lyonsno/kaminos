@@ -1,5 +1,5 @@
-source: lyonsno/sf3d-webgpu cc/slow-foreground-service-0920 a2f9a924a7c8ce59796aaebdb753efc92db72107 clean
+source: lyonsno/sf3d-webgpu cc/slow-foreground-service-0920 740b6098b716f65840f955451a1366f0af53ed3a clean
 build: npx vite build -c vite.lib.config.js; vendored 2026-09-21
-sf3d-producer.js sha256: b165c979757b5e77a83480cccfd46f33d2e2c78ac2100a1435274a83d131a295
+sf3d-producer.js sha256: 9157b9ebeee3455788fe82579c9d27719fb3cf7c0024acf72ecb69a78a329349
 Runtime commit identity is supplied explicitly by sf3d-host-device.mjs; the generic library build default is dev.
 Code and five generated workers only. weights.bin and tets/ are separately mounted, not included in this source copy.
