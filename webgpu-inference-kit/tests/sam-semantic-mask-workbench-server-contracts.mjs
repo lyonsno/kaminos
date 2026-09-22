@@ -86,25 +86,23 @@ try {
   const stalePortProbe = createServer();
   await new Promise(resolveListen => stalePortProbe.listen(0, '127.0.0.1', resolveListen));
   const { port: stalePort } = stalePortProbe.address();
-  await new Promise(resolveClose => stalePortProbe.close(resolveClose));
-  let staleStderr = '';
-  const staleChild = spawn(process.execPath, [
-    serverPath,
-    '--kit-root', kitRoot,
-    '--packet-root', packetRoot,
-    '--sample-root', sampleRoot,
-    '--port', String(stalePort),
-    '--commit', '0000000000000000000000000000000000000000',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
-  staleChild.stderr.on('data', chunk => { staleStderr += chunk.toString(); });
-  const staleExit = await Promise.race([
-    new Promise(resolveExit => staleChild.once('exit', (code, signal) => resolveExit({ code, signal }))),
-    new Promise(resolveTimeout => setTimeout(() => resolveTimeout(null), 1_000)),
-  ]);
-  if (!staleExit) staleChild.kill('SIGTERM');
-  assert.notEqual(staleExit, null, 'server must refuse a stale requested commit before it starts listening');
-  assert.notEqual(staleExit.code, 0, 'stale requested commit must exit unsuccessfully');
-  assert.match(staleStderr, /requested commit[^]*does not match[^]*tracked commit/i);
+  try {
+    // Keep the port occupied so a regression cannot leave a live server behind.
+    // The error must still be revision rejection, not an address-in-use failure.
+    const staleExit = spawnSync(process.execPath, [
+      serverPath,
+      '--kit-root', kitRoot,
+      '--packet-root', packetRoot,
+      '--sample-root', sampleRoot,
+      '--port', String(stalePort),
+      '--commit', '0000000000000000000000000000000000000000',
+    ], { encoding: 'utf8' });
+    assert.equal(staleExit.error, undefined);
+    assert.notEqual(staleExit.status, 0, 'stale requested commit must exit unsuccessfully');
+    assert.match(staleExit.stderr, /requested commit[^]*does not match[^]*tracked commit/i);
+  } finally {
+    await new Promise(resolveClose => stalePortProbe.close(resolveClose));
+  }
 } finally {
   child.kill('SIGTERM');
   rmSync(fixtureRoot, { recursive: true, force: true });
