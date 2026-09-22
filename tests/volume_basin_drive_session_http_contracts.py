@@ -102,10 +102,26 @@ with tempfile.TemporaryDirectory(prefix="kaminos-basin-session-http-") as tempor
         status, artifact = request_json(f"{origin}/api/volume-basin-drive-session?id={artifact_id}")
         assert status == 200
         assert artifact["session"] == session_document(serve.VOLUME_BASIN_SESSION_STORE)
+        assert artifact["replayCompatibility"]["compatible"] is True
 
         status, index = request_json(f"{origin}/api/volume-basin-drive-sessions")
         assert status == 200
         assert [entry["artifactId"] for entry in index["entries"]] == [artifact_id]
+
+        # Source evolution changes replay admission, not immutable read access.
+        serve.volume_settings_server_source = lambda: {**SOURCE, "commit": "2" * 40}
+        status, prior = request_json(f"{origin}/api/volume-basin-drive-session?id={artifact_id}")
+        assert status == 200, prior
+        assert prior["session"] == artifact["session"]
+        assert prior["replayCompatibility"]["reasons"] == ["source-commit-mismatch"]
+        status, mixed_index = request_json(f"{origin}/api/volume-basin-drive-sessions")
+        assert status == 200, mixed_index
+        assert mixed_index["entries"][0]["replayCompatibility"]["compatible"] is False
+        status, stale_write = request_json(f"{origin}/api/volume-basin-drive-sessions",
+            method="POST", document={"session": artifact["session"]})
+        assert status == 400, stale_write
+        assert "source commit" in stale_write["error"]
+        serve.volume_settings_server_source = lambda: dict(SOURCE)
 
         # Internally consistent but incomplete inventories must still be rejected
         # against the serving schema after removing the recorder's historical cap.
