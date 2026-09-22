@@ -10,6 +10,8 @@ assert.equal(packageJson.exports['./sam'], './src/sam.js', 'publish the SAM entr
 // Use the JavaScript module linker, not text matching, to inspect transitive imports.
 const modules = new Map();
 async function load(url) {
+  const name = new URL(url).pathname.split('/').at(-1);
+  assert.doesNotMatch(name, /^(sam|moge-|sharp-|sf3d-|kimodo-)/, `core loads model implementation: ${name}`);
   if (!modules.has(url)) {
     const source = await readFile(new URL(url), 'utf8');
     modules.set(url, new SourceTextModule(source, { identifier: url }));
@@ -18,10 +20,6 @@ async function load(url) {
 }
 const coreModule = await load(new URL('src/core.js', packageRoot).href);
 await coreModule.link((specifier, parent) => load(new URL(specifier, parent.identifier).href));
-for (const url of modules.keys()) {
-  const name = new URL(url).pathname.split('/').at(-1);
-  assert.doesNotMatch(name, /^(sam|moge-|sharp-|sf3d-|kimodo-)/, `core loads model implementation: ${name}`);
-}
 
 const root = await import('@kaminos/webgpu-inference-kit');
 const core = await import('@kaminos/webgpu-inference-kit/core');
