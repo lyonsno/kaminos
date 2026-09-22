@@ -246,8 +246,16 @@ class CovarianceParameterizationContracts(unittest.TestCase):
         expected = np.broadcast_to(self.floor * np.eye(3), decoded["covariances"].shape)
         np.testing.assert_allclose(decoded["covariances"], expected, rtol=1e-14, atol=0.0)
 
-    def test_covariance_at_or_below_floor_fails_without_mutation(self) -> None:
-        for minimum in (self.floor, self.floor / 2):
+    def test_decoded_floor_boundary_can_be_reencoded_without_widening(self) -> None:
+        raw = ORACLE.state_to_raw(self.state, self.medium)
+        raw["rawCholesky"] = np.zeros_like(raw["rawCholesky"])
+        raw["rawCholesky"][:, np.arange(3), np.arange(3)] = -100.0
+        physical = ORACLE.raw_to_state(raw, self.medium)
+        result = ORACLE.raw_to_state(ORACLE.state_to_raw(physical, self.medium), self.medium)
+        np.testing.assert_allclose(result["covariances"], physical["covariances"], rtol=1e-14, atol=0)
+
+    def test_covariance_below_floor_fails_without_mutation(self) -> None:
+        for minimum in (self.floor / 2, -self.floor):
             with self.subTest(minimum=minimum):
                 state = {key: value.copy() for key, value in self.state.items()}
                 state["covariances"][0] = np.diag([minimum, 2 * self.floor, 3 * self.floor])

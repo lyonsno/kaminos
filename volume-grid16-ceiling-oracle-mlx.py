@@ -196,18 +196,28 @@ def softplus_inverse(value: np.ndarray) -> np.ndarray:
 def state_to_raw(state: dict[str, np.ndarray], medium: Any) -> dict[str, np.ndarray]:
     """Encode physical covariance, which already includes the bandlimit floor.
 
-    The residual must be positive definite; silently lifting an incompatible
-    state would change the physical population before any optimizer update.
+    The residual must be positive semidefinite; only roundoff at the floor
+    boundary may be lifted to make its Cholesky factor representable.
     Previously trained trackers see different raw features with this inverse.
     """
     covariances = np.asarray(state["covariances"], dtype=np.float64)
     floor = (0.3 * float(np.mean(medium.spacing))) ** 2
+    eye = np.eye(3)[None, :, :]
+    residual = covariances - floor * eye
     try:
-        cholesky = np.linalg.cholesky(covariances - floor * np.eye(3)[None, :, :])
+        cholesky = np.linalg.cholesky(residual)
     except np.linalg.LinAlgError as error:
-        raise ValueError(
-            f"physical covariance must be strictly above the bandlimit floor ({floor:g})"
-        ) from error
+        # A decoded tiny factor can round to the floor exactly. Preserve that
+        # state to floating-point precision, without projecting genuinely
+        # below-floor covariances into a different physical population.
+        roundoff = 8 * np.finfo(np.float64).eps * np.linalg.norm(covariances, axis=(1, 2))
+        smallest = np.linalg.eigvalsh(residual)[:, 0]
+        if np.any(smallest < -roundoff):
+            raise ValueError(
+                f"physical covariance is below the bandlimit floor ({floor:g})"
+            ) from error
+        correction = np.maximum(0.0, roundoff - smallest)
+        cholesky = np.linalg.cholesky(residual + correction[:, None, None] * eye)
     diag_indices = np.arange(3)
     raw_chol = cholesky.copy()
     raw_chol[:, diag_indices, diag_indices] = softplus_inverse(cholesky[:, diag_indices, diag_indices])
