@@ -13,7 +13,7 @@ assert.match(tail, /return cross\(/, 'evaluate the production force return');
 const js = tail
   .replaceAll('vec3<f32>', 'vec3')
   .replace(/vec3\(([^()]*)\)\s*\+\s*vec3\(([^()]*)\)/g, 'add(vec3($1), vec3($2))')
-  .replace(/\bgradient\s*\/\s*magnitude\b/g, 'divide(gradient, magnitude)')
+  .replace(/\bgradient\s*\/\s*(magnitude|gradientScale)\b/g, 'divide(gradient, $1)')
   .replaceAll('curlAtCell(c)', 'omega')
   .replace(/return cross\(([^;]*)\)\s*\*\s*amount\s*;/g, 'return scale(cross($1), amount);');
 const f = Math.fround;
@@ -30,11 +30,11 @@ const cross = (a, b) => [
 ];
 const evaluate = new Function(
   'magX', 'magY', 'magZ', 'omega', 'amount',
-  'vec3', 'add', 'divide', 'scale', 'length', 'normalize', 'cross', js,
+  'vec3', 'add', 'divide', 'scale', 'length', 'normalize', 'cross', 'max', 'abs', js,
 );
 const force = (gradient, omega, amount = 1) => evaluate(
   ...gradient.map(f), omega.map(f), f(amount),
-  vec3, add, divide, scale, length, normalize, cross,
+  vec3, add, divide, scale, length, normalize, cross, Math.max, Math.abs,
 );
 const near = (actual, expected, tolerance = 3e-7) => actual.forEach((v, i) => {
   assert.ok(Number.isFinite(v), `component ${i} must remain finite: ${actual}`);
@@ -58,14 +58,23 @@ test('nonzero gradients retain the existing cross-product direction and gain', (
 });
 
 test('zero-safe normalization adds no weak-gradient amplitude mask', () => {
-  for (const magnitude of [1e-10, 1e-7, 1e-4, 1, 10]) {
+  for (const magnitude of [1e-30, 1e-23, 1e-10, 1e-7, 1e-4, 1, 10]) {
     near(force([magnitude, 0, 0], [0, 0, 2], 0.5), [0, -1, 0]);
   }
 });
 
 test('rotating the sampled fields around gravity rotates the force with them', () => {
-  for (const gradient of [[0.003, -0.006, 0.001], [1e-7, 0, 0], [0, 0, 0]]) {
+  for (const gradient of [[0.003, -0.006, 0.001], [1e-7, 0, 0], [1e-23, 2e-23, -3e-23], [0, 0, 0]]) {
     const omega = [0.04, -0.03, 0.02];
     near(force(rotateY(gradient), rotateY(omega), 0.21), rotateY(force(gradient, omega, 0.21)));
   }
+});
+
+test('normalization retains direction below the float32 square-underflow boundary', () => {
+  near(force([1e-23, 0, 0], [0, 0, 2], 0.5), [0, -1, 0]);
+  near(force([0, 3e-30, 4e-30], [2, 0, 0], 0.25), [0, 0.4, -0.3]);
+  const tinyGradient = [1e-23, 2e-23, -3e-23];
+  const reference = force([1, 2, -3], [0.04, -0.03, 0.02]);
+  near(force(tinyGradient, [0.04, -0.03, 0.02]), reference);
+  near(force(rotateY(tinyGradient), rotateY([0.04, -0.03, 0.02])), rotateY(reference));
 });
