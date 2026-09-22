@@ -158,15 +158,17 @@ async function main() {
         window.samFrameHandle = requestAnimationFrame(tick);
       });
       const rect = await page.locator('#sam-image-canvas').boundingBox();
-      await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
       let moving = true, motionError = null;
-      const motion = (async () => {
-        let direction = -1;
-        while (moving) { await page.mouse.wheel(0, 40 * direction); direction *= -1; await sleep(80); }
-      })().catch(error => { motionError = error; });
+      let motion = Promise.resolve();
       const start = performance.now();
       try {
         await checked(page.locator('#sam-image-run').click());
+        // The click moves the pointer to the button; restore it before exercising the viewport.
+        await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
+        motion = (async () => {
+          let direction = -1;
+          while (moving) { await page.mouse.wheel(0, 40 * direction); direction *= -1; await sleep(80); }
+        })().catch(error => { motionError = error; });
         await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
       } finally { moving = false; await motion; }
       if (motionError) throw motionError;
