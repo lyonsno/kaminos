@@ -57,20 +57,53 @@ export function verifyIdentityMap({ root, identities, label }) {
   return identities;
 }
 
-export function verifyRuntimeKitSource({ packageRoot, runtimeKit }) {
+function verifyRegistryIdentity(identity, label) {
   for (const field of ['version', 'resolved', 'integrity']) {
-    if (runtimeKit?.[field] !== KIT_REGISTRY_IDENTITY[field]) {
-      throw new Error(`inference-kit registry identity mismatch: ${field}`);
+    if (identity?.[field] !== KIT_REGISTRY_IDENTITY[field]) {
+      throw new Error(`${label} registry identity mismatch: ${field}`);
     }
   }
+}
+
+function assertIdentityMapsEqual(actual, expected, message) {
+  const actualNames = Object.keys(actual || {}).sort();
+  const expectedNames = Object.keys(expected || {}).sort();
+  if (actualNames.length !== expectedNames.length
+    || actualNames.some((name, index) => name !== expectedNames[index])
+    || actualNames.some(name => actual[name]?.bytes !== expected[name]?.bytes
+      || actual[name]?.sha256 !== expected[name]?.sha256)) {
+    throw new Error(message);
+  }
+}
+
+export function verifyCanonicalKitSource({ packageRoot, canonicalKit, label = 'inference-kit source' }) {
+  verifyRegistryIdentity(canonicalKit, 'inference-kit canonical artifact');
   const installedPackage = JSON.parse(readFileSync(resolve(packageRoot, 'package.json'), 'utf8'));
   if (installedPackage.version !== KIT_REGISTRY_IDENTITY.version) {
     throw new Error(`inference-kit installed version mismatch: ${installedPackage.version}`);
   }
+  const actualFiles = collectIdentityMap(resolve(packageRoot, 'src'));
+  assertIdentityMapsEqual(
+    actualFiles,
+    canonicalKit.files,
+    `${label} does not match the SRI-verified canonical source map`,
+  );
   verifyIdentityMap({
     root: resolve(packageRoot, 'src'),
-    identities: runtimeKit.files,
-    label: 'inference-kit source',
+    identities: canonicalKit.files,
+    label,
   });
+  return canonicalKit;
+}
+
+export function verifyRuntimeKitSource({ packageRoot, runtimeKit, canonicalKit }) {
+  verifyRegistryIdentity(runtimeKit, 'inference-kit');
+  verifyRegistryIdentity(canonicalKit, 'inference-kit canonical artifact');
+  assertIdentityMapsEqual(
+    runtimeKit?.files,
+    canonicalKit?.files,
+    'inference-kit manifest does not match the SRI-verified canonical source map',
+  );
+  verifyCanonicalKitSource({ packageRoot, canonicalKit, label: 'inference-kit source' });
   return runtimeKit;
 }

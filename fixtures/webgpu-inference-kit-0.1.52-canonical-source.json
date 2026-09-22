@@ -1,0 +1,197 @@
+{
+  "schema": "kaminos.webgpu-inference-kit.canonical-source.v1",
+  "version": "0.1.52",
+  "resolved": "https://registry.npmjs.org/@kaminos/webgpu-inference-kit/-/webgpu-inference-kit-0.1.52.tgz",
+  "integrity": "sha512-oO/z66LktX6Utofa3mL+6TY2P6ocfRA16wGcvKODAf1dLih2njG3+DKxxiMN9c2gbUz76SO53hfbLYoW8pWg/g==",
+  "files": {
+    "adaptive-command-duty.js": {
+      "bytes": 13292,
+      "sha256": "4203f2c1ef15d25b059ec77ac091fe8caf86040867a8cc4d0fc2564541329a07"
+    },
+    "bounded-gpu-submission.js": {
+      "bytes": 13971,
+      "sha256": "c8cd2fcccb33c0c79b6ac081e854739f01978e88a0a94fb739d9955267935b7e"
+    },
+    "command-duty-descriptor.js": {
+      "bytes": 15519,
+      "sha256": "5d280aafe22fbbf200b96057bbc1b38d1cc1379e1f223a8e61418fcb745eaddd"
+    },
+    "cooperative-adapter-conformance.js": {
+      "bytes": 22102,
+      "sha256": "7e5f0b26451580ee500508b6726b2ff7a008e7ca43dc3bf330a23a7907fdf10c"
+    },
+    "cooperative-boundary-manifest.js": {
+      "bytes": 8847,
+      "sha256": "99d4ac5a03de1bf72d57485a17d37672a8b03d81d77e3dd58b454d95cb9f0957"
+    },
+    "cooperative-execution.js": {
+      "bytes": 43093,
+      "sha256": "817fcbcbeda6bb19111ec0856b0e0c51010dc8ba81229163265624779c616cad"
+    },
+    "cooperative-report-validation.js": {
+      "bytes": 22763,
+      "sha256": "d570c0e27f72c486c7344d56864397f43cb32f0a7cf6f55faf2df2ae143d8451"
+    },
+    "foreground-budget-governor.js": {
+      "bytes": 26339,
+      "sha256": "0613b0eb159687c4fc7581c456d91b89d4a5b2f3daa0a825c16f6e9866de85b9"
+    },
+    "foreground-opportunity.js": {
+      "bytes": 22484,
+      "sha256": "d10bd2cdf0d834dc25255675215093a5c4f2226a5e1e92c13ab0652095dc1071"
+    },
+    "gpu-environment.js": {
+      "bytes": 9519,
+      "sha256": "2c8294ddf5e58c686b6ddb456c0c830da917a9f8aafbcb42325dd90a198ce9e7"
+    },
+    "host-phase-recorder.js": {
+      "bytes": 10160,
+      "sha256": "3814d8d388b58b45f44f6f90ea95e7e637f510a10d10bead8b678040068da01a"
+    },
+    "index.js": {
+      "bytes": 10134,
+      "sha256": "e2f87c57c6fbc10a0a0ff132147b0de40e69e174183dfd94153a91000c2f5694"
+    },
+    "inference-coordinator.js": {
+      "bytes": 8723,
+      "sha256": "7c501a8dfe0ffa225a82f38d18eb0947b8ccc7a66bd8b29dba1cf3d2d9d3721c"
+    },
+    "inference-queue.js": {
+      "bytes": 15228,
+      "sha256": "54991f3a873b9896b2a73ccbc08523eaa30ef1306fc7607bf74104cc60756c0a"
+    },
+    "inference-runtime.js": {
+      "bytes": 46322,
+      "sha256": "7a52a282a90fa69bc0840964b1210a4fb5d5a6d4a5ea23a880716d70cb264a87"
+    },
+    "inference-session.js": {
+      "bytes": 21133,
+      "sha256": "67aa2acd11b7a889180fc7cb8b1637c28fe83bbaf191c5a60e0ee4b7ebeb33fd"
+    },
+    "kernel-profile.js": {
+      "bytes": 3471,
+      "sha256": "ab65b651b07af386d1da1b9c1ddfc4f4ecbd816581771bdacbdd12a7582a6f7e"
+    },
+    "kimodo-route.js": {
+      "bytes": 9786,
+      "sha256": "e1235d83b18777b4c9959fde32c19623bb61632e2e9dbea1806bfa22d8bca3f4"
+    },
+    "model-resource-cache-storage.js": {
+      "bytes": 5544,
+      "sha256": "2187802990585be29d5e8ba81072963d37d4bbdf6a02453adb116a3e014d667a"
+    },
+    "model-resource-chunk-plan.js": {
+      "bytes": 37127,
+      "sha256": "7196d9fc4205d4576a1e9cdb6d615ed137473083a732fad08fb9d2bb3d054a92"
+    },
+    "model-resource-fetch-options.js": {
+      "bytes": 9172,
+      "sha256": "ad61fe6864ad5f6db1406fb17c2564835ddde56525b17d683651579310d0c4d9"
+    },
+    "model-resource-manifest.js": {
+      "bytes": 36699,
+      "sha256": "eec04e76b11b2db7b6fa1e25cc456caf8bbacefffd2addc109afce32dbdec111"
+    },
+    "model-resource-package.js": {
+      "bytes": 36781,
+      "sha256": "98fc8b3d13c5470fbd83196327666853c0b8917ec969205c389fe7aa6273039f"
+    },
+    "model-resource-source.js": {
+      "bytes": 17281,
+      "sha256": "6a24441746ccfeb1908a24452243992ad51ba8fbe418776c5f82bbd7af1fd22f"
+    },
+    "moge-route.js": {
+      "bytes": 5783,
+      "sha256": "382553e33e03591b95e9006aef3acee1c6e0ff99068e455bc0e9b5a39b89d8bd"
+    },
+    "parity-primitives.js": {
+      "bytes": 13158,
+      "sha256": "a0b8814d685b86ce0259248b95033c4bdb063a2720ca5a50c54afc7583eb76ea"
+    },
+    "phase-program.js": {
+      "bytes": 10053,
+      "sha256": "08d6008236e27a944d74a0a2df39827d02a8ce651c5a3210e64118955932a8ba"
+    },
+    "phase-resource-working-set.js": {
+      "bytes": 21523,
+      "sha256": "1dd7a8904f4a763e45c0ace5374713faa7224289eb26747b0897add1d696ec2a"
+    },
+    "resource-factory.js": {
+      "bytes": 12206,
+      "sha256": "475c405c990bf56bc584b79f55b17106b5207c5d05c353da9f0bdc5c79dfa29e"
+    },
+    "resource-residency.js": {
+      "bytes": 16347,
+      "sha256": "81d9359cd5f1e106c5aa49b5171086ee1bb95f51bb6606734610658f51832d62"
+    },
+    "route-boundary.js": {
+      "bytes": 16140,
+      "sha256": "97bf40a7dba490fcde3a54c853b37edc0e9b406451e24d1d2a26471f8c987c7d"
+    },
+    "route-receipt-consumer.js": {
+      "bytes": 9319,
+      "sha256": "0ba5de311509b5131be3acc7303c4e235fcf465c2a23f9381d6f78d5a514dc22"
+    },
+    "route-receipt-helper.js": {
+      "bytes": 3076,
+      "sha256": "f69c6fef952cde68e29cbafd61a857abf4e3cd2caf24ada59750e533ac0ae668"
+    },
+    "route-receipt.js": {
+      "bytes": 5247,
+      "sha256": "db2d8fb0a5553fe5d0bcabe1f1d04a74d13bdd2ad5b9ecb8592841503d9e496f"
+    },
+    "route-schema-contract.js": {
+      "bytes": 1518,
+      "sha256": "2f936915b9524f0e8765b0747c3e913ee17dffd09245527a5ff5b948a12a452c"
+    },
+    "runtime-primitives.js": {
+      "bytes": 11445,
+      "sha256": "f625ae07bbe28475a5710e280c5d08a257e45f021e5ff9b5af15c504fd83c845"
+    },
+    "runtime-profile.js": {
+      "bytes": 5040,
+      "sha256": "34576de7ecb9a45506f12e032c23b1dd3590f3948a98da26f2c53915e6ffe22c"
+    },
+    "scheduler-application.js": {
+      "bytes": 19334,
+      "sha256": "f2a7fb4a1f22c7ca8069e6df782009f4bf60d482e42a9f552f5bce8cc048a318"
+    },
+    "scheduler-backpressure.js": {
+      "bytes": 13227,
+      "sha256": "86a35503d9981bf20fe0509c36789de5f04ab0a435a8a5c9ac2b85788327afb9"
+    },
+    "scheduler-verification-receipt.js": {
+      "bytes": 17752,
+      "sha256": "ab1991041e5fc9548fdf5ef2088230708f4b8a385d59ee83908f1eda438a38c0"
+    },
+    "scratch-arena.js": {
+      "bytes": 16668,
+      "sha256": "a37faaf9ed09cee0e21bed7a760371bc2397604d5d50705650d99e7c18b89b60"
+    },
+    "sf3d-route.js": {
+      "bytes": 5480,
+      "sha256": "231f38486bbfd0f14395180e83298ff2d04cc2132df571d5dff9b31fe5996db6"
+    },
+    "sharp-breathing-room-validation.js": {
+      "bytes": 14617,
+      "sha256": "d4dae78fbdf79f68bc1df3bd4de387e033890c7054ae93723b7f1b0b288d901e"
+    },
+    "sharp-route.js": {
+      "bytes": 5532,
+      "sha256": "faed83e0194b7f78c9e68e493e0b50234c641cb84dd1145076c7c49b144cff3f"
+    },
+    "staged-profile.js": {
+      "bytes": 3416,
+      "sha256": "c51b219f1c46e28527120b5974e3bdae62fb185f8845c3acd35755247947a65d"
+    },
+    "tensor-manifest.js": {
+      "bytes": 2802,
+      "sha256": "f5fc298bf3619e2200c87abb9dcc0ec09727840e71f4fc440faeb73cdfc13674"
+    },
+    "worker-phase.js": {
+      "bytes": 22619,
+      "sha256": "2045b5ac0c7ae7aced149ceaa48712f8f19ddcba0c54b141ceb7e77150b0e31e"
+    }
+  }
+}
+

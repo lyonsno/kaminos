@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   KIT_REGISTRY_IDENTITY,
-  collectIdentityMap,
+  verifyCanonicalKitSource,
 } from '../kimodo-shared-device-source-admission.mjs';
 
 const host = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -28,6 +28,7 @@ if (sourcePackage.devDependencies?.['@kaminos/webgpu-inference-kit'] !== '^0.1.5
 }
 const kimodoKitPackage = JSON.parse(await readFile(path.join(root, 'node_modules/@kaminos/webgpu-inference-kit/package.json'), 'utf8'));
 const hostKitPackage = JSON.parse(await readFile(path.join(host, 'node_modules/@kaminos/webgpu-inference-kit/package.json'), 'utf8'));
+const canonicalKit = JSON.parse(await readFile(path.join(host, 'fixtures/webgpu-inference-kit-0.1.52-canonical-source.json'), 'utf8'));
 const kimodoLock = JSON.parse(await readFile(path.join(root, 'package-lock.json'), 'utf8'));
 const hostLock = JSON.parse(await readFile(path.join(host, 'package-lock.json'), 'utf8'));
 const kimodoKitLock = kimodoLock.packages?.['node_modules/@kaminos/webgpu-inference-kit'];
@@ -42,6 +43,16 @@ for (const [owner, identity] of [['kimodo', kimodoKitLock], ['host', hostKitLock
     }
   }
 }
+verifyCanonicalKitSource({
+  packageRoot: path.join(host, 'node_modules/@kaminos/webgpu-inference-kit'),
+  canonicalKit,
+  label: 'host inference-kit source',
+});
+verifyCanonicalKitSource({
+  packageRoot: path.join(root, 'node_modules/@kaminos/webgpu-inference-kit'),
+  canonicalKit,
+  label: 'Kimodo inference-kit source',
+});
 const { build } = await import(pathToFileURL(path.join(root, 'node_modules/vite/dist/node/index.js')));
 await mkdir(out, { recursive: true });
 await writeFile(path.join(out, 'manifest.json'), JSON.stringify({ status: 'building', sourceCommit }));
@@ -94,15 +105,13 @@ for (const name of [
   'kimodo-shared-device-host.mjs',
   'kimodo-shared-device-inject.mjs',
   'kimodo-shared-device-route.mjs',
+  'fixtures/webgpu-inference-kit-0.1.52-canonical-source.json',
   'volume-core.js',
 ]) {
   const bytes = await readFile(path.join(host, name));
   servedFiles[name] = { bytes: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') };
 }
-const runtimeKit = {
-  ...KIT_REGISTRY_IDENTITY,
-  files: collectIdentityMap(path.join(host, 'node_modules/@kaminos/webgpu-inference-kit/src')),
-};
+const runtimeKit = canonicalKit;
 const manifest = {
   status: 'built',
   topology: 'one-host-owned-gpu-device-exact-queue',

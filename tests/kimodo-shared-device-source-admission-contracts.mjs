@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   KIT_REGISTRY_IDENTITY,
   collectIdentityMap,
+  verifyCanonicalKitSource,
   verifyIdentityMap,
   verifyRuntimeKitSource,
 } from '../kimodo-shared-device-source-admission.mjs';
@@ -32,10 +33,12 @@ try {
     ...KIT_REGISTRY_IDENTITY,
     files: collectIdentityMap(join(kitRoot, 'src')),
   };
+  const canonicalKit = structuredClone(runtimeKit);
 
   assert.deepEqual(verifyIdentityMap({ root: bundleRoot, identities: bundles, label: 'bundle' }), bundles);
   assert.deepEqual(verifyIdentityMap({ root: assetRoot, identities: assets, label: 'asset' }), assets);
-  assert.deepEqual(verifyRuntimeKitSource({ packageRoot: kitRoot, runtimeKit }), runtimeKit);
+  assert.deepEqual(verifyCanonicalKitSource({ packageRoot: kitRoot, canonicalKit, label: 'fixture kit' }), canonicalKit);
+  assert.deepEqual(verifyRuntimeKitSource({ packageRoot: kitRoot, runtimeKit, canonicalKit }), runtimeKit);
 
   writeFileSync(join(bundleRoot, 'producer.js'), 'export const producer = false;\n');
   assert.throws(
@@ -70,19 +73,34 @@ try {
 
   writeFileSync(join(kitRoot, 'src/runtime.js'), 'export const runtime = false;\n');
   assert.throws(
-    () => verifyRuntimeKitSource({ packageRoot: kitRoot, runtimeKit }),
-    /inference-kit source identity mismatch: runtime\.js/,
+    () => verifyRuntimeKitSource({ packageRoot: kitRoot, runtimeKit, canonicalKit }),
+    /inference-kit source does not match the SRI-verified canonical source map/,
     'a changed kit implementation cannot pass on the unchanged package version alone',
+  );
+
+  const alreadyMutatedKit = {
+    ...KIT_REGISTRY_IDENTITY,
+    files: collectIdentityMap(join(kitRoot, 'src')),
+  };
+  assert.throws(
+    () => verifyRuntimeKitSource({ packageRoot: kitRoot, runtimeKit: alreadyMutatedKit, canonicalKit }),
+    /does not match the SRI-verified canonical source map/,
+    'a kit changed before manifest construction cannot mint its own accepted baseline',
   );
 
   assert.throws(
     () => verifyRuntimeKitSource({
       packageRoot: kitRoot,
       runtimeKit: { ...runtimeKit, integrity: 'sha512-wrong' },
+      canonicalKit,
     }),
     /registry identity mismatch/,
     'the installed kit must retain the reviewed public-registry tarball identity',
   );
+
+  const buildSource = readFileSync(new URL('../scripts/build-kimodo-shared-device.mjs', import.meta.url), 'utf8');
+  assert.match(buildSource, /verifyCanonicalKitSource\(\{[\s\S]*packageRoot: path\.join\(host/, 'build verifies the directly served host kit tree');
+  assert.match(buildSource, /verifyCanonicalKitSource\(\{[\s\S]*packageRoot: path\.join\(root/, 'build verifies the Kimodo bundling kit tree');
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

@@ -111,6 +111,7 @@ let embeddingFixture = null;
 report.failurePhase = 'source-preflight';
 try {
   const sourceManifest = JSON.parse(readFileSync(join(hostRoot, 'artifacts/kimodo-shared-device/manifest.json')));
+  const canonicalKit = JSON.parse(readFileSync(join(hostRoot, 'fixtures/webgpu-inference-kit-0.1.52-canonical-source.json')));
   const effectiveHostCommit = git(hostRoot, 'rev-parse', 'HEAD');
   const effectiveKimodoCommit = git(resolve(kimodoCheckout), 'rev-parse', 'HEAD');
   if (git(hostRoot, 'status', '--porcelain', '--untracked-files=no')) throw new Error('Kaminos tracked source is dirty');
@@ -135,6 +136,7 @@ try {
   const runtimeKit = verifyRuntimeKitSource({
     packageRoot: join(hostRoot, 'node_modules/@kaminos/webgpu-inference-kit'),
     runtimeKit: sourceManifest.runtimeKit,
+    canonicalKit,
   });
   report.effective = {
     sourcePreflight: {
