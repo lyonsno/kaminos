@@ -8,18 +8,18 @@ Prepare a model package once using `tools/sam-detr-stack-mlx-packet.py` from an 
 
 ```sh
 python tools/sam-detr-stack-mlx-packet.py \
-  --out-dir /absolute/path/sam-model-224 \
+  --out-dir /absolute/path/sam-model-1008 \
   --image /absolute/path/sam3/assets/images/truck.jpg \
-  --prompt truck --resolution 224 --image-fpn-neck-ingress \
-  --score-threshold 0.1
+  --prompt truck --resolution 1008 --image-fpn-neck-ingress \
+  --execution-only --score-threshold 0.5
 
 node tools/sam-semantic-mask-workbench-server.mjs \
-  --packet-root /absolute/path/sam-model-224 \
+  --packet-root /absolute/path/sam-model-1008 \
   --sample-root /absolute/path/sam3/assets/images \
   --port 18596 --receipt /absolute/path/sam-route.json
 ```
 
-Run these commands from `webgpu-inference-kit`. The sample root comes from Meta's SAM reference repository and must contain `truck.jpg`, `groceries.jpg`, and `test_image.jpg`. The exporter includes reference tensors for optional verification; the serving page does not acquire those tensors. CPU-only export is possible by setting MLX's default device to `mx.cpu` before invoking the exporter.
+Run these commands from `webgpu-inference-kit`. The sample root comes from Meta's SAM reference repository and must contain `truck.jpg`, `groceries.jpg`, and `test_image.jpg`. The native-1008 example exports raw reference observations without attaching calibrated numerical acceptance; the serving page does not acquire reference tensors. CPU-only export is possible by setting MLX's default device to `mx.cpu` before invoking the exporter. For the smaller calibrated diagnostic route, use a separate `sam-model-224` directory, set `--resolution 224`, and omit `--execution-only`; its coarse masks are not the native visual baseline.
 
 For an experimental resolution not covered by the pinned calibration, add `--execution-only` to the exporter command and choose `--resolution` explicitly. That path preserves raw, identity-bound `referenceObservations` but publishes no attached verification or tolerance budget. A reference-parity invocation rejects such a packet before GPU acquisition. Export success alone establishes neither browser execution nor numerical accuracy at the new resolution.
 
@@ -39,7 +39,7 @@ Open `http://127.0.0.1:8095/?sam=1`. The Masks tab accepts PNG, JPEG, and WebP f
 
 Run a text prompt, then select all retained instances or one instance. Source, Overlay, and Mask views share the same zoom/pan viewport. Save Mask produces an opaque black/white PNG; Save Cutout preserves source RGB and alpha inside the selection and clears alpha outside it. Add Cutout to Scene imports the saved image as a registered image plane, with source/prompt/invocation provenance. Exports have the decoded source image dimensions. They bilinearly interpolate mask logits with `align_corners=False` before thresholding; they do not enlarge a thresholded low-resolution mask. The native logits and binary instance masks remain available unchanged from the runtime.
 
-Use a native-1008 package for the detailed image workflow (288-by-288 native mask logits); the 224 preparation example above is a smaller diagnostic route, not the native visual baseline. To prepare native 1008, replace both `sam-model-224` paths with `sam-model-1008`, set `--resolution 1008`, and add `--execution-only`. Model preparation remains an offline step. Unload Model releases SAM's route and model leases without destroying Kaminos's shared rendering device.
+Use the native-1008 package above for the detailed image workflow (288-by-288 native mask logits). Model preparation remains an offline step. Unload Model releases SAM's route and model leases without destroying Kaminos's shared rendering device.
 
 This host integration and the APIs below are source-checkout additions, not a claim about the currently published npm version. The native isolated-workbench evidence below remains the accepted regression baseline; actual Kaminos input cadence and image-to-scene verification are separate consumer gates.
 
