@@ -9,6 +9,7 @@ import queue
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -702,9 +703,15 @@ def build_asset_entry(root, path):
         rel_path = path.relative_to(root_path.resolve()).as_posix()
     size = path.stat().st_size
     kind = root.get("kind")
+    image_metadata = None
+    if kind == "image" and root_id == "image-inbox":
+        sidecar = path.with_name(f'.{path.name}.json')
+        if sidecar.is_file():
+            image_metadata = json.loads(sidecar.read_text())
+    name = image_metadata['name'] if image_metadata else path.name
     correction_document = load_splat_asset_correction(root_id, rel_path) if kind == "splat" else None
     display = build_asset_display_metadata(
-        path,
+        Path(name),
         root_label=root.get("label") or root_id,
         stage=root.get("stage", "experimental"),
         size=size,
@@ -717,7 +724,7 @@ def build_asset_entry(root, path):
         "stage": root.get("stage", "experimental"),
         "root_id": root_id,
         "root_label": root.get("label") or root_id,
-        "name": path.name,
+        "name": name,
         "path": rel_path,
         "size": size,
         "mtime": path.stat().st_mtime,
@@ -881,15 +888,29 @@ def ingest_image_asset(filename, content):
     root_path = Path(root['path']).expanduser().resolve()
     root_path.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(content).hexdigest()
-    directory = root_path / digest
+    directory = (root_path / digest).resolve()
+    if not directory.is_relative_to(root_path):
+        raise PermissionError("Path traversal")
     directory.mkdir(exist_ok=True)
-    target = directory / filename
+    # Keep the complete display name in metadata, independent of filesystem name limits.
+    storage_name = hashlib.sha256(filename.encode('utf-8')).hexdigest() + Path(filename).suffix.lower()
+    target = (directory / storage_name).resolve()
+    if not target.is_relative_to(directory):
+        raise PermissionError("Path traversal")
     try:
         with target.open('xb') as handle:
             handle.write(content)
     except FileExistsError:
         if target.read_bytes() != content:
             raise ValueError('image asset content identity collision')
+    metadata = {'schema': 'kaminos.image-asset.v0', 'name': filename, 'sha256': f'sha256:{digest}'}
+    with tempfile.NamedTemporaryFile(mode='w', dir=directory, prefix='.image-', delete=False) as handle:
+        temporary = Path(handle.name)
+        json.dump(metadata, handle)
+    try:
+        os.replace(temporary, target.with_name(f'.{target.name}.json'))
+    finally:
+        temporary.unlink(missing_ok=True)
     entry = build_asset_entry(root, target)
     entry['sha256'] = f'sha256:{digest}'
     return entry
@@ -1259,6 +1280,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except (ValueError, PermissionError) as error:
             self.send_json({'error': str(error)}, 400)
             return
+        except OSError as error:
+            self.send_json({'error': str(error), 'phase': 'image-persistence'}, 500)
+            return
         self.send_json({'schema': 'kaminos.asset-ingest.v0', 'kind': 'image', 'entry': entry})
 
     def handle_splat_correction_get(self, params):
@@ -1492,10 +1516,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp",
                 ".glb": "model/gltf-binary", ".gltf": "model/gltf+json",
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             }
