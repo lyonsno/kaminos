@@ -1,7 +1,14 @@
 import * as THREE from './lib/three.core.js';
 export function frameObject(object,camera,controls) {
-  if(!object)return false;
-  const box=new THREE.Box3().setFromObject(object);
+  return frameObjects(object ? [object] : [],camera,controls);
+}
+export function frameObjects(objects,camera,controls) {
+  const box=new THREE.Box3();
+  for(const object of objects) {
+    if(!object?.visible)continue;
+    object.updateWorldMatrix(true,true);
+    box.union(new THREE.Box3().setFromObject(object));
+  }
   if(box.isEmpty())return false;
   const center=box.getCenter(new THREE.Vector3()),radius=box.getSize(new THREE.Vector3()).length()/2;
   if(!Number.isFinite(radius)||radius<=0)return false;

@@ -3319,7 +3319,8 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { installParameterTools } from './scene-parameter-tools.mjs';
 import { createSelectionFeedback } from './scene-selection-tools.mjs';
-import { frameObject } from './scene-frame-selected.mjs';
+import { frameObject, frameObjects } from './scene-frame-selected.mjs';
+import { installSceneNavigation } from './scene-navigation.mjs';
 let scenePlacementTools = null, sceneParameterTools = null, selectionFeedback = null;
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
@@ -9750,23 +9751,23 @@ async function initScene() {
   console.log('WebGPU renderer initialized, backend:', renderer.backend?.constructor?.name || 'unknown');
 
   controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
+  controls.enableDamping = false;
   controls.dampingFactor = 0.06;
-  controls.rotateSpeed = -0.72;
+  controls.rotateSpeed = 0.72;
   controls.panSpeed = 0.45;
   controls.zoomSpeed = 0.85;
   controls.screenSpacePanning = true;
   controls.mouseButtons = {
-    LEFT: THREE.MOUSE.ROTATE,
-    MIDDLE: THREE.MOUSE.DOLLY,
-    RIGHT: THREE.MOUSE.PAN,
+    LEFT: null,
+    MIDDLE: THREE.MOUSE.ROTATE,
+    RIGHT: null,
   };
   controls.touches = {
     ONE: THREE.TOUCH.ROTATE,
     TWO: THREE.TOUCH.DOLLY_PAN,
   };
-  controls.minDistance = 0.5;
-  controls.maxDistance = 10;
+  controls.minDistance = camera.near * 2;
+  controls.maxDistance = Infinity;
   controls.target.set(0, 0, 0);
 
   pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -10049,6 +10050,7 @@ async function initScene() {
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
   window._kaminosDirty = markDirty;
+  let navigation = null;
   scenePlacementTools = installScenePlacementTools({
     viewport: viewportEl, camera, controls, gizmo: transformControls,
     selected: () => activeSceneObjectId,
@@ -10059,12 +10061,21 @@ async function initScene() {
     allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
     busy: () => authoringBusy,
     frameSelected: () => { frameObject(currentMesh, camera, controls); markDirty(); },
+    navigationBusy: () => !!navigation?.state().gesture,
     selectionFeedback: target => selectionFeedback?.update(target),
   });
   sceneParameterTools = installAuthoredParameterControls();
   window.kaminosSetAuthoredParameter = sceneParameterTools.set;
   window.kaminosAuthoredParameterState = sceneParameterTools.state;
   window.kaminosFrameSelected = () => frameObject(currentMesh, camera, controls);
+  navigation = installSceneNavigation({
+    canvas: renderer.domElement, viewport: viewportEl, camera, controls,
+    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object), groundPlane, annularBurner?.group, fireLightWitnessGroup],
+    frameAll: () => frameObjects(sceneObjects.map(entry => entry.object), camera, controls),
+    blocked: () => !!scenePlacementTools.state().active || transformControls.dragging || authoringBusy,
+    status: text => scenePlacementTools.navigationStatus(text),
+  });
+  window.kaminosNavigationState = navigation.state;
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
 

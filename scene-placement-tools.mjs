@@ -1,11 +1,12 @@
 import { Vector3, Vector2, Raycaster, Plane } from './lib/three.core.js';
 import { createSceneEdits, transformPose, axisVector } from './scene-edit-session.mjs';
 
-export function installScenePlacementTools({viewport, camera, controls, gizmo, selected, read, write, object, refresh, allowed, busy, frameSelected = () => {}, selectionFeedback = () => {}}) {
+export function installScenePlacementTools({viewport, camera, controls, gizmo, selected, read, write, object, refresh, allowed, busy, frameSelected = () => {}, navigationBusy = () => false, selectionFeedback = () => {}}) {
   const hud=document.createElement('div');hud.id='scene-edit-hud';hud.setAttribute('role','status');
   const overlay=document.createElementNS('http://www.w3.org/2000/svg','svg');overlay.id='scene-edit-overlay';
   overlay.setAttribute('aria-hidden','true');viewport.append(overlay,hud);
   let modal=null,field=null,lastPointer={x:0,y:0},hover=false,suppressClick=false,gizmoEditing=false,gizmoPrior=null,pointerOrigin=null;
+  let navigationText = '';
   const priorControls=()=>({controls:controls.enabled,gizmo:gizmo.enabled,helper:gizmo.getHelper().visible});
   const restoreControls=prior=>{if(prior){controls.enabled=prior.controls;gizmo.enabled=prior.gizmo;gizmo.getHelper().visible=prior.helper;}};
   const edits=createSceneEdits({read,write,admit:()=>{
@@ -32,7 +33,7 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
   }
   function begin(id,label){try{edits.begin(id,label);return true;}catch(error){hud.textContent=error.message;return false;}}
   function start(operation) {
-    if(!allowed() || busy() || !selected())return false;
+    if(navigationBusy() || !allowed() || busy() || !selected())return false;
     if(field)finish(true);
     if(!modal) {
       if(!begin(selected(),'Placement'))return false;
@@ -90,7 +91,9 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
       const value=m.numeric || (m.operation==='rotate'?((m.amount||0)*180/Math.PI).toFixed(1)+'°':(m.amount??(m.operation==='scale'?1:0)).toFixed(3));
       hud.textContent=`${{translate:'Move',rotate:'Rotate',scale:'Scale'}[m.operation]} ${m.axis?(m.plane?'plane ⟂ ':'')+m.axis.toUpperCase():''} · ${m.axis?m.frame:'view'} · ${value} · ${m.snap?'Snap '+(m.operation==='rotate'?'5°':'0.1')+' · ':''}Enter / LMB confirm · Esc / RMB cancel`;
     } else if(field)hud.textContent='Edit value · drag axis label to adjust · Enter confirm · Esc cancel';
+    else if(navigationText)hud.textContent=navigationText;
     else hud.textContent=id?`${id} · G Move · R Rotate · S Scale · X/Y/Z constrain · Ctrl snap · Shift precision · F frame selected · ⌘/Ctrl Z undo`:'Select an object to place it';
+    if(!m && !field && !navigationText)hud.textContent+=' · MMB orbit · Shift MMB pan · Ctrl MMB dolly · Wheel zoom · Numpad views · Home frame all';
     overlay.setAttribute('viewBox',`0 0 ${viewport.clientWidth} ${viewport.clientHeight}`);
     let lines='';
     const line=(a,b,color,opacity=1,dash='')=>{if([a.x,a.y,b.x,b.y].every(Number.isFinite))lines+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${color}" opacity="${opacity}" stroke-width="1.3" ${dash?`stroke-dasharray="${dash}"`:''}/>`;};
@@ -130,6 +133,7 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
     if(modal || suppressClick){steal(e);if(type==='click' || type==='contextmenu')suppressClick=false;}
   },true);
   document.addEventListener('keydown',e=>{
+    if(navigationBusy())return;
     if(gizmoEditing && e.key==='Escape'){steal(e);finish(false);return;}
     if(field && e.key==='Escape'){steal(e);const input=field.input;finish(false);input.blur();refresh();return;}
     if(field && e.key==='Enter'){steal(e);const input=field.input;finish(true);input.blur();return;}
@@ -192,6 +196,7 @@ export function installScenePlacementTools({viewport, camera, controls, gizmo, s
   gizmo.addEventListener('mouseUp',()=>{if(gizmoEditing){const prior=gizmoPrior;finish(true);queueMicrotask(()=>restoreControls(prior));}});
   draw();
   return {edits,state,start,finish,selectionChanged:changeSelection,draw,
+    navigationStatus(text){navigationText=text;draw();},
     clear(){finish(false);edits.clear();draw();},
     suspendVisuals(value){selectionFeedback(value?null:object(selected()));overlay.style.visibility=value?'hidden':'';hud.style.visibility=value?'hidden':'';}};
 }
