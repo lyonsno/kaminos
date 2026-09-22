@@ -89,25 +89,54 @@ function currentPresetArtifact() {
 }
 
 const additiveFineBreakupLocalization = schema.controls.find(control => control.key === 'volume-fine-breakup-localization');
-assert.equal(additiveFineBreakupLocalization?.additiveSinceControlCount, schema.controlCount,
+assert.equal(additiveFineBreakupLocalization?.additiveSinceControlCount, 210,
   'the Fine Breakup localization control declares the exact schema count at which it became additive');
 const legacyFineBreakupArtifact = currentPresetArtifact();
-delete legacyFineBreakupArtifact.preset.domControls[additiveFineBreakupLocalization.key];
 const legacyFineBreakupRoute = new URL(legacyFineBreakupArtifact.preset.route);
-legacyFineBreakupRoute.searchParams.delete(additiveFineBreakupLocalization.param);
+const additionsSinceFineBreakup = schema.controls.filter(control => control.additiveSinceControlCount >= 210);
+for (const control of additionsSinceFineBreakup) {
+  delete legacyFineBreakupArtifact.preset.domControls[control.key];
+  legacyFineBreakupRoute.searchParams.delete(control.param);
+}
 legacyFineBreakupArtifact.preset.route = legacyFineBreakupRoute.href;
-legacyFineBreakupArtifact.controlCount -= 1;
-legacyFineBreakupArtifact.preset.controlCount -= 1;
+legacyFineBreakupArtifact.controlCount = 209;
+legacyFineBreakupArtifact.preset.controlCount = 209;
 const legacyFineBreakupReceipt = validateVolumeSettingsPresetDocument(
   legacyFineBreakupArtifact,
   legacyFineBreakupArtifact.presetId,
   schema,
 );
-assert.deepEqual(legacyFineBreakupReceipt.retirementMigration?.addedControlIds, [additiveFineBreakupLocalization.key]);
+assert.deepEqual(legacyFineBreakupReceipt.retirementMigration?.addedControlIds, additionsSinceFineBreakup.map(control => control.key));
 assert.equal(legacyFineBreakupReceipt.preset.domControls[additiveFineBreakupLocalization.key].value, 0);
 assert.equal(legacyFineBreakupReceipt.presetRoute.searchParams.get(additiveFineBreakupLocalization.param), '0');
 assert.equal(legacyFineBreakupReceipt.preset.controlCount, schema.controlCount,
-  'a valid immediately-pre-addition basin migrates only the declared default control before exact current-schema validation');
+  'the original basin traverses successive declared additions before exact current-schema validation');
+
+const commonGasTransport = schema.controls.find(control => control.key === 'volume-common-gas-transport');
+assert.equal(commonGasTransport?.additiveSinceControlCount, 211);
+const legacyTransportArtifact = currentPresetArtifact();
+delete legacyTransportArtifact.preset.domControls[commonGasTransport.key];
+const legacyTransportRoute = new URL(legacyTransportArtifact.preset.route);
+legacyTransportRoute.searchParams.delete(commonGasTransport.param);
+legacyTransportArtifact.preset.route = legacyTransportRoute.href;
+legacyTransportArtifact.controlCount -= 1;
+legacyTransportArtifact.preset.controlCount -= 1;
+const legacyTransportReceipt = validateVolumeSettingsPresetDocument(legacyTransportArtifact, legacyTransportArtifact.presetId, schema);
+assert.deepEqual(legacyTransportReceipt.retirementMigration?.addedControlIds, [commonGasTransport.key]);
+assert.equal(legacyTransportReceipt.preset.domControls[commonGasTransport.key].value, false);
+assert.equal(legacyTransportReceipt.presetRoute.searchParams.get(commonGasTransport.param), 'false');
+assert.equal(legacyFineBreakupReceipt.preset.domControls[commonGasTransport.key].value, false,
+  'both 209- and 210-control basins retain the legacy gas transport law');
+assert.equal(validateVolumeSettingsPresetDocument(currentPresetArtifact(), parentArtifact.presetId, schema)
+  .preset.domControls[commonGasTransport.key].value, false);
+const enabledTransportArtifact = currentPresetArtifact();
+enabledTransportArtifact.preset.domControls[commonGasTransport.key].value = true;
+const enabledTransportRoute = new URL(enabledTransportArtifact.preset.route);
+enabledTransportRoute.searchParams.set(commonGasTransport.param, 'true');
+enabledTransportArtifact.preset.route = enabledTransportRoute.href;
+assert.equal(validateVolumeSettingsPresetDocument(enabledTransportArtifact, enabledTransportArtifact.presetId, schema)
+  .preset.domControls[commonGasTransport.key].value, true,
+  'a saved opt-in choice survives validation rather than being replaced by its compatibility default');
 
 const malformedDomCount = currentPresetArtifact();
 malformedDomCount.controlCount = 999;

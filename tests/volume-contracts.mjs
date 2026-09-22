@@ -1139,7 +1139,7 @@ assert.doesNotMatch(core, /let lickWarp = turbulentDetailForce/, 'fire-lick brea
 assert.doesNotMatch(core, /sin\(p\.x \* 43\.0 \+ p\.y \* 61\.0 - p\.z \* 37\.0/, 'visible microdetail must not use the old single coherent diagonal phase wave');
 assert.match(core, /shredOperatorGain/, 'Shred slider has explicit nonlinear leverage for the exaggerated end of the range');
 assert.match(core, /fireLickOperatorGain/, 'Fire Licks slider has explicit nonlinear leverage for the exaggerated end of the range');
-assert.match(core, /var material = thermalAdvection/, 'fluid compute shader advects material channels through thermal transport');
+assert.match(core, /material = thermalAdvection\(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection\)/, 'legacy transport retains its thermal material backtrace');
 assert.match(core, /thermalAdvection/, 'fluid compute shader treats heat as an explicit thermal-advection channel');
 assert.match(core, /thermalBuoyancyForce/, 'fluid compute shader derives buoyancy from transported heat');
 assert.match(core, /thermalExpansionForce/, 'fluid compute shader expands hot flow from heat gradients');

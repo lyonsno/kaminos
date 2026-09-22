@@ -1731,6 +1731,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="force-contribution-gloss">0 keeps legacy broad support; 1 confines Fine breakup to reaction-front, material-interface, and curl-shear support.</span>
       <span class="slider-val" id="volume-fine-breakup-localization-val">0.00 broad</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Common gas transport</span>
+      <input type="checkbox" id="volume-common-gas-transport" data-volume-settings-param="volume_common_gas_transport">
+      <span class="slider-val" id="volume-common-gas-transport-val">legacy split</span>
+    </div>
+    <span class="slider-help">Carry material, flame activity and microdetail with the gas velocity, without separate layer lift. Live switching keeps evolved state; forces and reactions are unchanged.</span>
     <div class="slider-row" data-volume-visual-cost-knob="presentation-exposure">
       <span class="slider-label">Exposure</span>
       <input type="range" id="volume-exposure" min="0" max="3" step="any" value="1">
@@ -13323,6 +13329,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['phasedSway', 'volume_phased_sway'],
   ['proceduralDetailForces', 'volume_procedural_detail_forces'],
   ['fineBreakupLocalization', 'volume_fine_breakup_localization'],
+  ['commonGasTransport', 'volume_common_gas_transport'],
   ['volumeExposure', 'volume_exposure'],
   ['density', 'volume_density'],
   ['fire', 'volume_fire'],
@@ -18414,6 +18421,7 @@ function readVolumeControls() {
       fine: document.getElementById('volume-force-fine-breakup').checked,
     },
     fineBreakupLocalization: parseFloat(document.getElementById('volume-fine-breakup-localization').value),
+    commonGasTransport: document.getElementById('volume-common-gas-transport').checked,
     volumeExposure: parseFloat(document.getElementById('volume-exposure').value),
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
@@ -18694,6 +18702,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-force-interface-shred-val').textContent = c.detailForceContributions.shred ? 'on' : 'off';
   document.getElementById('volume-force-fine-breakup-val').textContent = c.detailForceContributions.fine ? 'on' : 'off';
   document.getElementById('volume-fine-breakup-localization-val').textContent = `${c.fineBreakupLocalization.toFixed(2)}${c.fineBreakupLocalization === 0 ? ' broad' : ' localized'}`;
+  document.getElementById('volume-common-gas-transport-val').textContent = c.commonGasTransport ? 'common gas' : 'legacy split';
   document.getElementById('volume-exposure-val').textContent = c.volumeExposure.toFixed(2);
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
@@ -19818,6 +19827,7 @@ async function initKaminosVolumeRoute() {
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
     ['volume-fine-breakup-localization', 'volume_fine_breakup_localization'],
+    ['volume-common-gas-transport', 'volume_common_gas_transport'],
   ]) {
     if (params.has(param)) setVolumeControlValue(id, params.get(param));
   }
@@ -20079,6 +20089,7 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-shear-width',
     'volume-emitter-edge-entrainment',
     'volume-fixed-source-dephase',
+    'volume-common-gas-transport',
   ]) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);

@@ -3620,10 +3620,22 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
-  let localMaterial = readSlot(cellI, 1u);
-  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
-  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayerRiseDirection);
-  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
+  // A shared characteristic for gas-carried state. This changes transport only;
+  // the existing force, source, reaction, decay and pressure terms still apply.
+  let commonGasTransport = u.reserved_source_extension_2.y > 0.5;
+  var material = vec4<f32>(0.0);
+  var fireLayer = vec4<f32>(0.0);
+  var microLayer = vec4<f32>(0.0);
+  if (commonGasTransport) {
+    material = sampleFluidSlot(backCell, 1u);
+    fireLayer = sampleFluidSlot(backCell, 2u);
+    microLayer = sampleFluidSlot(backCell, 3u);
+  } else {
+    let localMaterial = readSlot(cellI, 1u);
+    material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
+    fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayerRiseDirection);
+    microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
+  }
   var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
@@ -12287,6 +12299,7 @@ export function createKaminosVolumePrototype({
     uniforms[344] = controlsSnapshot.fixedSourceDephase === false ? 0 : 1;
     uniforms.set(detailForceContributionMask(controlsSnapshot.detailForceContributions), 348);
     uniforms[352] = normalizeFineBreakupLocalization(controlsSnapshot.fineBreakupLocalization);
+    uniforms[353] = controlsSnapshot.commonGasTransport === true ? 1 : 0;
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,
@@ -12411,6 +12424,12 @@ export function createKaminosVolumePrototype({
     state.proceduralDetailForces = uniforms[366] >= 0.5;
     state.detailForceIsolation = detailForceContributionReceipt({ ...controlsSnapshot, volumeScene: state.volumeScene });
     state.fineBreakupSupport = fineBreakupSupportReceipt(controlsSnapshot);
+    state.gasTransport = {
+      identity: 'common-gas-transport-v0',
+      requested: controlsSnapshot.commonGasTransport === true ? 'common-gas' : 'legacy-split',
+      effective: uniforms[353] >= 0.5 ? 'common-gas' : 'legacy-split',
+      scope: 'backtrace-only-forces-sources-reactions-decay-pressure-unchanged',
+    };
     state.proceduralTransportSlip = false;
     state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
     state.fixedSourceDephase = uniforms[344] >= 0.5;
@@ -19861,6 +19880,7 @@ export function createKaminosVolumePrototype({
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
         detailForceIsolation: state.detailForceIsolation,
+        gasTransport: state.gasTransport,
         tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         reactionFuelScale: state.reactionFuelScale,
@@ -20237,6 +20257,7 @@ export function createKaminosVolumePrototype({
       detailScale: state.detailScale,
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
       detailForceIsolation: state.detailForceIsolation,
+      gasTransport: state.gasTransport,
       tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       reactionFuelScale: state.reactionFuelScale,
