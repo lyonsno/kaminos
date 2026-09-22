@@ -318,6 +318,10 @@ def _validate_settings_preset_schema(schema):
     return schema
 
 
+class UnsupportedVolumeSettingsControls(ValueError):
+    """Saved controls require a different renderer/schema version."""
+
+
 def normalize_volume_settings_preset_payload(payload, schema=None):
     """Project a compatible older payload through schema-owned additive defaults."""
     schema = _validate_settings_preset_schema(
@@ -366,7 +370,7 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         retired_by_key = retired_by_axis[field]
         unknown = sorted(set(source_controls) - set(expected_by_key) - set(retired_by_key))
         if unknown:
-            raise ValueError(f"settings preset {field} contain unknown controls: {','.join(unknown)}")
+            raise UnsupportedVolumeSettingsControls(f"settings preset {field} contain unknown controls: {','.join(unknown)}")
         for key in sorted(set(source_controls) & set(retired_by_key)):
             descriptor = source_controls.pop(key)
             expected = retired_by_key[key]
@@ -1107,6 +1111,7 @@ def list_volume_settings_presets(store_path, schema=None):
     aliases_dir = store / "aliases"
     aliases_dir.mkdir(parents=True, exist_ok=True)
     entries = []
+    unavailable_entries = []
     for alias_path in aliases_dir.glob("*.json"):
         try:
             alias_document = _read_json_object(alias_path, "alias")
@@ -1115,7 +1120,18 @@ def list_volume_settings_presets(store_path, schema=None):
         alias = alias_document.get("alias")
         if alias_path.stem != alias:
             raise ValueError(f"volume settings preset alias filename mismatch: {alias_path.name}")
-        document = read_volume_settings_preset(store, alias, schema)
+        try:
+            document = read_volume_settings_preset(store, alias, schema)
+        except UnsupportedVolumeSettingsControls as error:
+            unavailable_entries.append({
+                "alias": alias,
+                "label": alias_document["label"],
+                "presetId": alias_document["presetId"],
+                "updatedAt": alias_document.get("updatedAt"),
+                "source": alias_document.get("source") or {},
+                "error": str(error),
+            })
+            continue
         entries.append({
             "alias": alias,
             "label": document["label"],
@@ -1131,6 +1147,7 @@ def list_volume_settings_presets(store_path, schema=None):
             "source": alias_document.get("source") or {},
         })
     entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
+    unavailable_entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
     return {
         "identity": "kaminos-volume-settings-preset-index-v1",
         "storePath": str(store),
@@ -1139,6 +1156,7 @@ def list_volume_settings_presets(store_path, schema=None):
         "rendererControlCount": len(schema.get("rendererControls") or []),
         "presentationControlCount": len(schema.get("presentationControls") or []),
         "entries": entries,
+        "unavailableEntries": unavailable_entries,
     }
 
 

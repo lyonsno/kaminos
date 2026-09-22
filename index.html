@@ -504,6 +504,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-readout .field-key { white-space: nowrap; }
 .volume-readout .field-val { max-width: 220px; text-align: right; }
 #volume-settings-preset-state { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; user-select: text; text-align: left; }
+#settings-preset-select { min-width: 0; max-width: 100%; }
 .basin-drive-recorder { display: grid; gap: 6px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #2a2a2a; }
 .basin-drive-recorder-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 30px); gap: 5px; align-items: center; }
 .basin-drive-recorder-mark { display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 5px; align-items: center; }
@@ -14424,11 +14425,13 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     if (!response.ok) throw new Error(index.error || `preset index failed: ${response.status}`);
     validateVolumeSettingsPresetIndex(index);
     volumeSettingsPresetIndex = index;
+    const unavailable = index.unavailableEntries || [];
     if (select) {
       const previous = selectedPresetId || select.value;
       select.replaceChildren();
       if (!index.entries.length) {
-        select.add(new Option('No saved presets', ''));
+        select.add(new Option(unavailable.length ? 'No compatible presets' : 'No saved presets', ''));
+        select.value = '';
       } else {
         for (const entry of index.entries) {
           const option = new Option(`${entry.label} | ${entry.presetId.slice(0, 16)}`, entry.presetId);
@@ -14437,9 +14440,16 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         }
         select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
       }
+      for (const entry of unavailable) {
+        const option = new Option(`${entry.label} | unavailable on this version`, entry.presetId);
+        option.disabled = true;
+        option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId} | ${entry.error}`;
+        select.add(option);
+      }
     }
     volumeSettingsPresetStatus(
-      `${index.entries.length} presets | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      `${index.entries.length} presets${unavailable.length ? ` | ${unavailable.length} unavailable on this version` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      unavailable.length > 0,
     );
     return index;
   } catch (error) {

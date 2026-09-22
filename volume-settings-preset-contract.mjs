@@ -132,6 +132,16 @@ export function validateVolumeSettingsPresetIndex(index) {
     || !Array.isArray(index.entries)) {
     throw new Error('preset index identity or schema mismatch');
   }
+  if (Object.hasOwn(index, 'unavailableEntries') && (
+    !Array.isArray(index.unavailableEntries)
+    || index.unavailableEntries.some(entry => !entry
+      || typeof entry.alias !== 'string' || !entry.alias
+      || typeof entry.label !== 'string' || !entry.label
+      || !/^vsp-[0-9a-f]{64}$/.test(String(entry.presetId || ''))
+      || typeof entry.error !== 'string' || !entry.error.trim())
+  )) {
+    throw new Error('preset index unavailable entries are invalid');
+  }
   return true;
 }
 
