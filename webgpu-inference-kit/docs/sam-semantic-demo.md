@@ -27,6 +27,55 @@ Open `http://127.0.0.1:18596/`. The server prints and optionally writes its effe
 
 ## Shared Runtime Composition
 
+### Kaminos Image Authoring
+
+The source checkout also embeds SAM directly in the main Kaminos workbench. It does not run an inference iframe. From the repository root, mount an existing full image-FPN-neck model package:
+
+```sh
+KAMINOS_SAM3_PACKET_ROOT=/absolute/path/sam-model-1008 python3 serve.py 8095
+```
+
+Open `http://127.0.0.1:8095/?sam=1`. The Masks tab accepts PNG, JPEG, and WebP files through Open Image, image drop, or clipboard paste. Use Selected Image takes an image already selected in Assets or Pipeline; an image graph node also exposes Create Masks. Source bytes and exported images are stored in the existing image inbox, under the configured `KAMINOS_ASSETS_DIR` (or an explicit `KAMINOS_IMAGE_INBOX_DIR`).
+
+Run a text prompt, then select all retained instances or one instance. Source, Overlay, and Mask views share the same zoom/pan viewport. Save Mask produces an opaque black/white PNG; Save Cutout preserves source RGB and alpha inside the selection and clears alpha outside it. Add Cutout to Scene imports the saved image as a registered image plane, with source/prompt/invocation provenance. Exports have the decoded source image dimensions. They bilinearly interpolate mask logits with `align_corners=False` before thresholding; they do not enlarge a thresholded low-resolution mask. The native logits and binary instance masks remain available unchanged from the runtime.
+
+Use a native-1008 package for the detailed image workflow (288-by-288 native mask logits); the 224 preparation example above is a smaller diagnostic route, not the native visual baseline. To prepare native 1008, replace both `sam-model-224` paths with `sam-model-1008`, set `--resolution 1008`, and add `--execution-only`. Model preparation remains an offline step. Unload Model releases SAM's route and model leases without destroying Kaminos's shared rendering device.
+
+This host integration and the APIs below are source-checkout additions, not a claim about the currently published npm version. The native isolated-workbench evidence below remains the accepted regression baseline; actual Kaminos input cadence and image-to-scene verification are separate consumer gates.
+
+### Caller-Owned Image Runtime
+
+Applications can import the model-neutral session from `./core` and the SAM runtime from `./sam`. The legacy root entrypoint keeps its compatible bindings. A host owns one runtime instance, supplies an authenticated same-origin image URL and decoded dimensions, and closes that runtime when it no longer needs the model:
+
+```js
+import { createSam3BrowserImageRuntime, createSam3SourceMask }
+  from '@kaminos/webgpu-inference-kit/sam';
+
+const sam = createSam3BrowserImageRuntime({
+  baseUrl: location.href,
+  inferenceSession: applicationSession,
+  yield: serviceForeground,
+});
+
+const output = await sam.run('/sam3-packet/tensor-manifest.json', {
+  invocationId: crypto.randomUUID(),
+  promptText: 'windows',
+  verificationMode: 'execution-only',
+  sourceImage: {
+    url: imageUrl,
+    sha256: imageDigest,
+    artifactId: imageArtifactId,
+    encodedResolution: [imageWidth, imageHeight],
+  },
+});
+const sourceMask = createSam3SourceMask(
+  output, output.instances.map(instance => instance.index), imageWidth, imageHeight,
+);
+await sam.close();
+```
+
+`imageDigest` is `sha256:` followed by the encoded image bytes' digest. The runtime fetches and verifies those bytes and the decoded dimensions; it does not trust the caller's label alone. `output.instances` includes each retained instance's score, box, native binary mask, and native logits. The returned source mask is a `Uint8Array` of zero/one values. Use the same runtime for subsequent prompts to reuse the image features. `close()` waits for its active invocation and releases only SAM-owned resources; the application retains session/device ownership.
+
 - Static artifacts load sequentially through `route.loadModelResourcePackageFromSources()`. Each has an independent digest and semantic manifest. SAM does not assemble a second whole-model bundle.
 - The model keeps authenticated host views for tensor binding and persistent GPU weights. Sequential source acquisition does not imply that the complete model fits in the largest artifact's memory footprint.
 - Serving invocations enter a registered session route's queue. Terminal completion, current execution receipts, and cached image provenance remain distinct.
