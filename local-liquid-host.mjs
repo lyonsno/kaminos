@@ -84,7 +84,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       if (!Number.isInteger(width) || width<2) throw Error('Host environment extent unavailable');
       environmentTarget=new THREE.RenderTarget(width,Math.ceil(width/2),targetOptions);
       const material=new THREE.NodeMaterial(); material.toneMapped=false;
-      material.fragmentNode=vec4(pmremTexture(source,environmentRotation.mul(equirectDirection(uv())),0).rgb.mul(environmentIntensity),1);
+      // The retained sampler uses v=acos(worldY)/PI: north is the top row.
+      material.fragmentNode=vec4(pmremTexture(source,environmentRotation.mul(equirectDirection(uv().flipY())),0).rgb.mul(environmentIntensity),1);
       environmentQuad=new THREE.QuadMesh(material); environmentSource=source;
     }
     environmentRotation.value.setFromMatrix4(new THREE.Matrix4().makeRotationFromEuler(scene.environmentRotation).transpose());
@@ -106,6 +107,9 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       if (advance && !paused) solver.step(1/60);
       renderEnvironment();
       renderer.setRenderTarget(colorTarget); pipeline.render();
+      // The retained liquid pass overlays/discards; every destination pixel
+      // must begin with this frame's host image, including no-water pixels.
+      renderer.copyTextureToTexture(colorTarget.texture,outputTarget.texture);
       scene.overrideMaterial=depthMaterial; scene.background=null;
       renderer.setRenderObjectFunction((...args)=>{
         depthMaterial.side=args[4].side; renderer.renderObject(...args);

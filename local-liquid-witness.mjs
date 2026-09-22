@@ -106,8 +106,14 @@ try {
   const saved=await(await fetch(`${manifest.origin}/api/read?root=scenes&path=${encodeURIComponent(savedReceipt.saved)}`)).json();
   await fs.writeFile(path.join(args.out,'saved-scene.json'),JSON.stringify(saved,null,2));
   assert.deepEqual(saved.localLiquid,report.beforeSave.setup);assert.equal(saved.localLiquid.particleState,undefined);
-  report.reopenUrl=compositionRestoreUrl(null,savedReceipt.saved,manifest.origin);await page.goto(report.reopenUrl);
+  report.reopenUrl=compositionRestoreUrl(null,savedReceipt.saved,manifest.origin);
+  report.beforeReopenTimeOrigin=await page.evaluate(()=>performance.timeOrigin);
+  // Hash-only navigation keeps the same document alive. Reopen from a new
+  // document so saved values cannot pass by remaining in the current runtime.
+  await page.goto('about:blank');await page.goto(report.reopenUrl);
   report.reopened=await waitFrame(120);assert.deepEqual(report.reopened.setup,saved.localLiquid);
+  assert.notEqual(await page.evaluate(()=>performance.timeOrigin),report.beforeReopenTimeOrigin);
+  assert.notEqual(report.reopened.lastFrame.cameraIdentity,report.beforeSave.lastFrame.cameraIdentity);
   for(let i=0;i<3;i++)assert.ok(Math.abs(report.reopened.solver.cameraEvidence.position[i]-saved.camera.position[i])<1e-5*Math.max(1,Math.abs(saved.camera.position[i])));
   assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),0);
   await shot('04-reopened');
@@ -120,6 +126,15 @@ try {
     return {elapsedMs:elapsed,renderedFrames:after-before,observedFramesPerSecond:(after-before)*1000/elapsed,intervals,
       meaning:'browser cadence while this witness records video; not isolated GPU timing'};
   });
+  report.phase='host-without-water';
+  await page.evaluate(()=>window.kaminosSetAuthoredParameter('liquid.rate',0));
+  await page.locator('#local-liquid-restart').click();
+  await page.waitForFunction(()=>{const s=window.kaminosLocalLiquidState?.();return s?.mounted && !s?.loading && s?.setup?.source.rate===0;});
+  await waitFrame(30);await shot('05-host-without-water');
+  report.phase='resized-host';
+  await page.setViewportSize({width:1280,height:900});
+  await page.waitForFunction(()=>window.kaminosLocalLiquidState?.().lastFrame?.height===900);
+  await shot('06-resized-host-without-water');
   assert.equal(report.errors.length,0,JSON.stringify(report.errors));
   const gpuErrors=report.console.filter(x=>x.type==='error');assert.deepEqual(gpuErrors,[],'console errors require inspection');
   report.status='passed';report.phase='complete';report.effectiveRoute=route;
@@ -131,7 +146,27 @@ try {
   }
   console.error(report.error);
 } finally {
-  if(context)await context.tracing.stop({path:path.join(args.out,'trace.zip')}).catch(error=>{report.traceError=error.message;});
-  await browser?.close().catch(error=>{report.closeError=error.message;});
+  const finalizationErrors=[];
+  const failed=(phase,error)=>finalizationErrors.push({phase,error:error.stack || error.message || String(error)});
+  if(context) {
+    await context.tracing.stop({path:path.join(args.out,'trace.zip')}).catch(error=>failed('trace',error));
+    await context.close().catch(error=>failed('context-video-flush',error));
+    try {
+      report.recordingArtifacts=[];
+      const files=[path.join(args.out,'trace.zip')];
+      if(page) {
+        const video=page.video();assert.ok(video,'recorded page video is missing');files.push(await video.path());
+      }
+      for(const file of files) {
+        const stat=await fs.stat(file);assert.ok(stat.size>0,`empty recording artifact: ${file}`);
+        report.recordingArtifacts.push({path:file,bytes:stat.size});
+      }
+    } catch(error) {failed('artifact-verification',error);}
+  }
+  await browser?.close().catch(error=>failed('browser-close',error));
+  if(finalizationErrors.length) {
+    report.finalizationErrors=finalizationErrors;report.status='failed';
+    report.failurePhase ??='artifact-finalization';process.exitCode=1;
+  }
   report.finishedAt=new Date().toISOString();await save();
 }
