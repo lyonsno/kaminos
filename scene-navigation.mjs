@@ -87,7 +87,7 @@ const textInput = target => !!target?.closest?.('input,textarea,select,[contente
 const modeFor = e => e.shiftKey ? 'pan' : e.ctrlKey || e.metaKey ? 'dolly' : 'orbit';
 const take = e => { e.preventDefault(); e.stopImmediatePropagation(); };
 
-export function installSceneNavigation({canvas, viewport, camera, controls, roots, frameAll,
+export function installSceneNavigation({canvas, viewport, camera, controls, roots, frameAll, gizmo = null,
   blocked = () => false, status = () => {}, document = globalThis.document, window = globalThis.window}) {
   let gesture = null, hover = false, lastDepth = null;
   const listen = (node, type, fn, options) => {
@@ -112,6 +112,7 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     gesture = null;
     if (cancel) {camera.position.copy(old.before.position); controls.target.copy(old.before.target); changed();}
     if (canvas.hasPointerCapture(old.pointerId)) canvas.releasePointerCapture(old.pointerId);
+    if (old.gizmo) {gizmo.enabled = old.gizmo.enabled; gizmo.getHelper().visible = old.gizmo.visible;}
     controls.dispatchEvent({type:'end'});
     status('');
   };
@@ -123,6 +124,10 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     if (gesture || !permitted()) return;
     const before = pose(), pivot = sample(e);
     gesture = {pointerId:e.pointerId, x:e.clientX, y:e.clientY, mode:modeFor(e), pivot, before};
+    if (gizmo) {
+      gesture.gizmo = {enabled:gizmo.enabled, visible:gizmo.getHelper().visible};
+      gizmo.enabled = false; gizmo.axis = null; gizmo.getHelper().visible = false;
+    }
     canvas.setPointerCapture(e.pointerId);
     controls.dispatchEvent({type:'start'});
     status(`${gesture.mode === 'orbit' ? 'Orbit' : gesture.mode === 'pan' ? 'Pan' : 'Dolly'} · Auto depth · Esc cancel`);

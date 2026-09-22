@@ -10069,7 +10069,7 @@ async function initScene() {
   window.kaminosAuthoredParameterState = sceneParameterTools.state;
   window.kaminosFrameSelected = () => frameObject(currentMesh, camera, controls);
   navigation = installSceneNavigation({
-    canvas: renderer.domElement, viewport: viewportEl, camera, controls,
+    canvas: renderer.domElement, viewport: viewportEl, camera, controls, gizmo: transformControls,
     roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object), groundPlane, annularBurner?.group, fireLightWitnessGroup],
     frameAll: () => frameObjects(sceneObjects.map(entry => entry.object), camera, controls),
     blocked: () => !!scenePlacementTools.state().active || transformControls.dragging || authoringBusy,
