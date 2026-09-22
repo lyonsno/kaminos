@@ -51,6 +51,7 @@
     "test:live:sam31-mask-conditioned-tracker-webgpu": "node tools/sam31-two-frame-tracker-browser-parity-smoke.mjs --episode-mode mask-conditioning",
     "test:live:sam31-two-image-ingress-meta": "node tests/sam31-two-image-ingress-meta-packet-contracts.mjs",
     "test:live:sam31-two-image-tracker-meta": "node tests/sam31-two-image-tracker-meta-packet-contracts.mjs",
-    "test:live:sam31-two-image-tracker-webgpu": "node tools/sam31-two-image-tracker-browser-parity-smoke.mjs"
+    "test:live:sam31-two-image-tracker-webgpu": "node tools/sam31-two-image-tracker-browser-parity-smoke.mjs",
+    "test:weight-representation": "node tests/weight-representation-contracts.mjs"
   }
 }

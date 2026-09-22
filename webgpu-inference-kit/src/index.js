@@ -32,6 +32,12 @@ export {
 } from './runtime-primitives.js';
 
 export {
+  WEBGPU_WEIGHT_REPRESENTATION_PLAN_SCHEMA,
+  createWebGpuWeightRepresentationPlan,
+  packFp16WeightsToU32,
+} from './weight-representation.js';
+
+export {
   WEBGPU_PHASE_PROGRAM_RUN_SCHEMA,
   WEBGPU_PHASE_PROGRAM_SCHEMA,
   defineWebGpuPhaseProgram,
