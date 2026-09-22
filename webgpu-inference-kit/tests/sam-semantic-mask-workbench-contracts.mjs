@@ -5,10 +5,10 @@ import { setImmediate as settle } from 'node:timers/promises';
 
 const html = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.html', import.meta.url), 'utf8');
 const workbench = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.js', import.meta.url), 'utf8');
-const runner = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
+const runner = readFileSync(new URL('../src/sam3-browser-image-runtime.js', import.meta.url), 'utf8');
 const wrapperSource = runner.slice(runner.indexOf('let activeResidentTensorResolver'), runner.indexOf('const SUPPORTED_ROUTE_IDS'));
 const foregroundYield = async () => {};
-const wrapperContext = { window: { sam3CooperativeYield: foregroundYield },
+const wrapperContext = { options: { yield: foregroundYield },
   runSam3MaskDecoderIslandRoute: input => input, runSam3MaskDecoderIslandRouteRaw: input => input };
 runInNewContext(`${wrapperSource}\nglobalThis.islandInput = runSam3MaskDecoderIslandRoute({});`, wrapperContext);
 assert.equal(wrapperContext.islandInput.yield, foregroundYield, 'browser island caller must inject the foreground hook');
@@ -46,11 +46,11 @@ assert.match(workbench, /selectedCandidateCount\s*===\s*0/, 'workbench must expo
 assert.match(runner, /verificationMode/, 'runtime must distinguish execution-only from reference-parity invocations');
 assert.match(runner, /promptText/, 'runtime must accept a dynamic browser prompt');
 assert.match(runner, /sourceImage/, 'runtime must accept dynamic source-image authority');
-assert.match(runner, /sourceImageUrl\.origin\s*!==\s*window\.location\.origin/, 'dynamic source images must be same-origin');
-assert.match(runner, /sourceImageUrl\.pathname\.startsWith\(['"]\/sam3-samples\/['"]\)/, 'dynamic workbench images must remain inside the authenticated sample namespace');
+assert.match(runner, /sourceImageUrl\.origin\s*!==\s*new URL\(baseUrl\).origin/, 'dynamic source images must be same-origin');
+assert.match(runner, /effectiveSourceImageSha256 !== identity.sha256/, 'arbitrary caller images retain authenticated byte identity');
 assert.match(runner, /runtimeOwner\s*===\s*['"]browser-workbench['"][\s\S]*manifest\.sourceImage\.file/, 'browser-workbench source inputs must bypass package-root artifact resolution only after same-origin validation');
 assert.match(runner, /readArtifactText:\s*file\s*=>\s*fetchTextRaw\(resolveManifestFile\(file\)\)/, 'split package bootstrap JSON must use resolver-owned hash verification before the static cache is configured');
-assert.match(runner, /window\.samMaskIslandVisualOutput/, 'runtime must expose actual mask output to a same-origin workbench');
+assert.match(runner, /output: \(\) => visualOutput/, 'runtime must expose actual mask output to its host');
 assert.match(runner, /outputAuthority:\s*['"]actual-webgpu-readback['"]/, 'runtime output must identify actual GPU readback authority');
 assert.match(runner, /verificationState:\s*['"]not-attached['"]/, 'execution-only dynamic work must not counterfeit parity passage');
 assert.match(runner, /selectedCandidateCount\s*===\s*0[\s\S]*new Uint32Array/, 'runtime must not render candidate zero after an empty selection');
@@ -68,7 +68,7 @@ const visualContext = {
   gpuBinary: new Uint32Array([1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1]),
   gpuLogits: null, visualShape: { width: 2, height: 2 }, selectedMaskIndex: 2,
   selectedMaskIndexSource: 'gpu', invocationId: 'current', manifest: {},
-  debugReadbackSamples: { selectedScore: [0.9] }, state: {}, window: {}, verificationAttached: false,
+  debugReadbackSamples: { selectedScore: [0.9] }, state: {}, options: {}, verificationAttached: false,
 };
 runInNewContext(`${visualBoundary}\nglobalThis.output = visualOutput;`, visualContext);
 assert.deepEqual(Array.from(visualContext.output.instances || [], row => row.index), [0, 2],

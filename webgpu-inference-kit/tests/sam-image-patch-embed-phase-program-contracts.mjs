@@ -6,7 +6,7 @@ import { createWebGpuInferenceSession } from '../src/inference-session.js';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSourceUrl = new URL('../src/sam-image-patch-embed-phase-program.js', import.meta.url);
-const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
+const smokeJs = readFileSync(new URL('../src/sam3-browser-image-runtime.js', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const stackExporter = readFileSync(new URL('../tools/sam-detr-stack-mlx-packet.py', import.meta.url), 'utf8');
 const encoderExporter = readFileSync(new URL('../tools/sam-detr-encoder-mlx-packet.py', import.meta.url), 'utf8');

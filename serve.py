@@ -2,6 +2,7 @@
 """Kaminos dev server with directory browsing API."""
 
 import http.server
+import hashlib
 import json
 import os
 import queue
@@ -40,6 +41,7 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
     "KAMINOS_IMAGE_INBOX_DIR",
     str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
 )).expanduser()
+SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_SAM3_PACKET_ROOT') else None
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
@@ -129,6 +131,11 @@ def runtime_config():
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
+        "sam3": {
+            "manifestUrl": "/sam3-packet/tensor-manifest.json",
+            "modelRoot": str(SAM3_PACKET_ROOT),
+            "mounted": (SAM3_PACKET_ROOT / "tensor-manifest.json").is_file(),
+        } if SAM3_PACKET_ROOT else None,
     }
 
 
@@ -863,6 +870,31 @@ def ingest_splat_asset(filename, content):
     return build_asset_entry(root, target)
 
 
+def ingest_image_asset(filename, content):
+    if Path(filename).name != filename or '/' in filename or '\\' in filename:
+        raise PermissionError("Path traversal")
+    if Path(filename).suffix.lower() not in IMAGE_EXTENSIONS:
+        raise ValueError("image must be PNG, JPEG, or WebP")
+    if not content:
+        raise ValueError("empty image")
+    root = next(row for row in ASSET_ROOTS if row['id'] == 'image-inbox')
+    root_path = Path(root['path']).expanduser().resolve()
+    root_path.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(content).hexdigest()
+    directory = root_path / digest
+    directory.mkdir(exist_ok=True)
+    target = directory / filename
+    try:
+        with target.open('xb') as handle:
+            handle.write(content)
+    except FileExistsError:
+        if target.read_bytes() != content:
+            raise ValueError('image asset content identity collision')
+    entry = build_asset_entry(root, target)
+    entry['sha256'] = f'sha256:{digest}'
+    return entry
+
+
 def greenroom_output_roots():
     """Roots that can lawfully serve receipt output_dir files."""
     roots = [Path.home().resolve()]
@@ -930,6 +962,17 @@ def record_job_output_event(event):
 
 
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
+    def translate_path(self, path):
+        parsed = urlparse(path)
+        if parsed.path.startswith('/sam3-packet/') and SAM3_PACKET_ROOT:
+            from urllib.parse import unquote
+            relative = unquote(parsed.path[len('/sam3-packet/'):])
+            target = (SAM3_PACKET_ROOT / relative).resolve()
+            if not target.is_relative_to(SAM3_PACKET_ROOT):
+                return str(ROOT / '.sam3-path-rejected')
+            return str(target)
+        return super().translate_path(path)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
@@ -974,6 +1017,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_run_pipeline()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
+        elif parsed.path == "/api/ingest-image":
+            self.handle_ingest_image(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-capture":
@@ -1201,6 +1246,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "kind": "splat",
             "entry": entry,
         })
+
+    def handle_ingest_image(self, params):
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            if length <= 0:
+                raise ValueError('non-empty image body required')
+            content = self.rfile.read(length)
+            if len(content) != length:
+                raise ValueError('incomplete image body')
+            entry = ingest_image_asset(params.get('name', [''])[0], content)
+        except (ValueError, PermissionError) as error:
+            self.send_json({'error': str(error)}, 400)
+            return
+        self.send_json({'schema': 'kaminos.asset-ingest.v0', 'kind': 'image', 'entry': entry})
 
     def handle_splat_correction_get(self, params):
         root_id = params.get("root", [""])[0]

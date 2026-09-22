@@ -68,17 +68,18 @@ export async function createSamWorkbenchForeground({ device, canvas, image, onEr
     if (frame === null) frame = requestFrame(draw);
   }
 
-  function setImage(next) {
+  function setImage(next, { resetView = true } = {}) {
     if (closed) throw new Error('source viewport is closed');
     texture?.destroy();
-    texture = device.createTexture({ size: [next.naturalWidth, next.naturalHeight], format: 'rgba8unorm',
+    const width = next.naturalWidth || next.width, height = next.naturalHeight || next.height;
+    texture = device.createTexture({ size: [width, height], format: 'rgba8unorm',
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
-    device.queue.copyExternalImageToTexture({ source: next }, { texture }, [next.naturalWidth, next.naturalHeight]);
+    device.queue.copyExternalImageToTexture({ source: next }, { texture }, [width, height]);
     bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
       { binding: 0, resource: texture.createView() }, { binding: 1, resource: sampler },
       { binding: 2, resource: { buffer: uniform } },
     ] });
-    zoom = 1; panX = 0; panY = 0;
+    if (resetView) { zoom = 1; panX = 0; panY = 0; }
     requestDraw();
   }
 

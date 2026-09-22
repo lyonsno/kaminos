@@ -11,7 +11,7 @@ import {
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const routeSourceUrl = new URL('../src/sam-prompt-text-ingress-phase-program.js', import.meta.url);
 const stackExporterUrl = new URL('../tools/sam-detr-stack-mlx-packet.py', import.meta.url);
-const browserSmokeUrl = new URL('../smokes/sam-mask-island-parity.js', import.meta.url);
+const browserSmokeUrl = new URL('../src/sam3-browser-image-runtime.js', import.meta.url);
 const witnessUrl = new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url);
 
 assert.match(packageJson.scripts.test, /sam-prompt-text-ingress-phase-program-contracts\.mjs/, 'default test must include portable prompt/text ingress phase-program contracts');

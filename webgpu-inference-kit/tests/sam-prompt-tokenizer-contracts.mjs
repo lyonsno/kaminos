@@ -92,7 +92,7 @@ assert.match(exporterSource, /"referenceInputIdsRole": "prompt-input-ids"/, 'pac
 assert.match(exporterSource, /"referenceAttentionMaskRole": "prompt-attention-mask"/, 'packet attention mask must remain explicitly reference-only evidence');
 assert.match(exporterSource, /export_prompt_tokenizer_assets\(out_dir, shape\["promptTokens"\]\)/, 'tokenizer context length must bind the exported text-encoder shape');
 
-const browserSmokeSource = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
+const browserSmokeSource = readFileSync(new URL('../src/sam3-browser-image-runtime.js', import.meta.url), 'utf8');
 assert.match(browserSmokeSource, /createSam3ClipTokenizer/, 'browser smoke must instantiate the SAM3 CLIP tokenizer');
 assert.match(browserSmokeSource, /manifest\.promptTokenizer/, 'browser smoke must consume the packet tokenizer contract');
 assert.match(browserSmokeSource, /browserPromptTokenizerEvidence/, 'browser smoke must expose tokenizer ownership evidence');

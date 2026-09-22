@@ -85,14 +85,14 @@ assert.equal(detached.manifest.packageId, modelPackage.packageId);
 assert.equal(detached.manifest.invocationId, invocation.invocationId);
 
 // Exercise the serving caller's actual handoff, not a separately assembled package.
-const servingSource = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
-const servingCreation = servingSource.slice(servingSource.indexOf('const servingResources ='), servingSource.indexOf("window.addEventListener('pagehide'"));
+const servingSource = readFileSync(new URL('../src/sam3-browser-image-runtime.js', import.meta.url), 'utf8');
+const servingCreation = servingSource.slice(servingSource.indexOf('const servingResources ='), servingSource.indexOf('function encodeFloat32Diagnostic'));
 let foregroundDevice = null;
 const sharedDevice = { queue: {} };
-const createServing = new Function('createSam3BrowserServingResources', 'applicationSession', 'window',
+const createServing = new Function('createSam3BrowserServingResources', 'applicationSession', 'options',
   `${servingCreation} return servingResources;`);
 const foregroundResources = createServing(kit.createSam3BrowserServingResources,
-  { adapter: {}, device: sharedDevice }, { sam3OnExecutionContext: async context => { foregroundDevice = context.device; } });
+  { adapter: {}, device: sharedDevice }, { onExecutionContext: async context => { foregroundDevice = context.device; } });
 await foregroundResources.executionContext();
 assert.strictEqual(foregroundDevice, sharedDevice, 'foreground renderer must receive the exact inference device before execution');
 const resolutionStart = servingSource.indexOf('    const { manifest, modelPackage, evidence: packageInvocationEvidence } = await resolveBrowserManifest');
@@ -282,7 +282,7 @@ await invalidModelResources.close();
 assert.equal(invalidModelDeviceDestroyCount, 1, 'rejected model acquisition must still release the borrowed serving device');
 
 const workbench = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.js', import.meta.url), 'utf8');
-const runtime = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
+const runtime = readFileSync(new URL('../src/sam3-browser-image-runtime.js', import.meta.url), 'utf8');
 assert.match(workbench, /sam-mask-island-serving\.html/, 'workbench must enter a serving route rather than the parity page');
 assert.match(runtime, /resolveBrowserManifest\(rootManifest,\s*\{\s*includeVerification:\s*verificationAttached\s*\}\)/, 'execution-only runtime must detach verification before artifact resolution');
 assert.match(runtime, /createSam3BrowserServingResources/, 'runtime must own resident WebGPU and image resources');

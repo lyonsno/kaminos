@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
 <title>Kaminos</title>
+<link rel="stylesheet" href="./sam-image-tools.css">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
@@ -535,6 +536,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab" data-tab="masks">Masks</div>
     <div class="tab" data-tab="forge">Forge</div>
     <div class="tab" data-tab="motion">Motion</div>
     <div class="tab" data-tab="volume">Volume</div>
@@ -549,6 +551,28 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
   </div>
 
   <!-- Assets Tab -->
+  <div class="tab-content" id="tab-masks">
+    <h2>Image Masks</h2>
+    <div class="sam-image-actions">
+      <button type="button" class="btn" id="sam-image-open">Open Image</button>
+      <button type="button" class="btn" id="sam-image-use-selected">Use Selected Image</button>
+      <input type="file" id="sam-image-file" accept="image/png,image/jpeg,image/webp" hidden>
+    </div>
+    <form id="sam-image-form">
+      <label for="sam-image-prompt">Text prompt</label>
+      <input class="gen-input" id="sam-image-prompt" placeholder="windows" autocomplete="off" required>
+      <button type="submit" class="btn" id="sam-image-run" disabled>Run Masks</button>
+    </form>
+    <select class="select-input" id="sam-image-instances" aria-label="Mask instances" disabled></select>
+    <div class="sam-image-actions">
+      <button type="button" class="btn" id="sam-image-save-mask" disabled>Save Mask</button>
+      <button type="button" class="btn" id="sam-image-save-cutout" disabled>Save Cutout</button>
+      <button type="button" class="btn" id="sam-image-add-cutout" disabled>Add Cutout to Scene</button>
+    </div>
+    <div id="sam-image-status" role="status" aria-live="polite">Not loaded</div>
+    <div id="sam-image-result"></div>
+    <div class="sam-image-actions"><button type="button" class="btn" id="sam-image-unload" disabled>Unload Model</button></div>
+  </div>
   <div class="tab-content active" id="tab-assets">
     <div id="drop-zone" onclick="document.getElementById('folder-input').click()">
       Drop a receipt directory here<br>or click to browse
@@ -2418,6 +2442,18 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 </div>
 
 <div id="viewport">
+  <div id="sam-image-viewport" hidden>
+    <div class="sam-image-viewbar">
+      <span id="sam-image-name">Image Masks</span>
+      <div class="sam-image-modes" role="group" aria-label="Image view">
+        <button type="button" data-sam-image-view="source" aria-pressed="false">Source</button>
+        <button type="button" data-sam-image-view="overlay" aria-pressed="true">Overlay</button>
+        <button type="button" data-sam-image-view="mask" aria-pressed="false">Mask</button>
+      </div>
+    </div>
+    <div class="sam-image-stage"><canvas id="sam-image-canvas" width="1" height="1" aria-label="Image and semantic masks"></canvas><div id="sam-image-empty">No image selected</div></div>
+    <div id="sam-image-dimensions">No source</div>
+  </div>
   <div id="env-loading">Loading environment...</div>
   <div id="pipeline-main-browser" hidden>
     <div class="pipeline-browser-shell">
@@ -8806,6 +8842,52 @@ const HDR_ENVS = {
 const envCache = {};
 
 // --- Three.js Setup ---
+let samHostContext = null;
+let samHostConfig = null;
+let samImageTools = null;
+let samImageToolsPromise = null;
+
+async function ensureSamImageTools() {
+  if (samImageToolsPromise) return samImageToolsPromise;
+  samImageToolsPromise = (async () => {
+    await sceneInitialization;
+    const { createSamImageTools } = await import('./sam-image-tools.js');
+    const inferenceSession = samHostContext?.inferenceSession || { device: renderer.backend.device };
+    samImageTools = createSamImageTools({ inferenceSession, config: samHostConfig,
+      onAsset() { if (pipelineDockState.activeAssetPalette === 'image') void loadPipelineAssetBrowser(); },
+      async onScene(entry, provenance) {
+        await showImagePlane(entry.source, { clear: false, metadata: { source: entry.source, fileName: entry.name,
+          label: entry.display?.title || entry.name, image: { maskProvenance: provenance } } });
+        setActiveTab('assets');
+      },
+    });
+    window.kaminosSamImageTools = samImageTools;
+    samImageTools.setActive(document.querySelector('.tab.active')?.dataset.tab === 'masks');
+    document.getElementById('sam-image-use-selected').onclick = () => {
+      const selected = selectedPipelineBrowserAsset()?.kind === 'image' ? selectedPipelineBrowserAsset() : selectedSceneObjectEntry();
+      if (!selected || !['image', 'image-plane'].includes(selected.kind || selected.type)) {
+        document.getElementById('sam-image-status').textContent = 'No image selected in Assets or Pipeline';
+        return;
+      }
+      void samImageTools.open(selected.source, selected).catch(() => {});
+    };
+    return samImageTools;
+  })().catch(error => {
+    samImageToolsPromise = null;
+    document.getElementById('sam-image-status').textContent = error.message;
+    throw error;
+  });
+  return samImageToolsPromise;
+}
+
+window.kaminosOpenImageMasks = async (source, metadata = {}) => {
+  setActiveTab('masks');
+  return (await ensureSamImageTools()).open(source, metadata);
+};
+window.addEventListener('pagehide', () => {
+  void samImageTools?.close().finally(() => samHostContext?.inferenceSession.close());
+}, { once: true });
+
 async function initScene() {
   await initializeHybridSplatOverlayModuleUrl();
   const vp = document.getElementById('viewport');
@@ -8814,7 +8896,22 @@ async function initScene() {
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGPURenderer({ antialias: true });
+  try {
+    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
+    if (response.ok) samHostConfig = (await response.json()).sam3 || null;
+  } catch (error) { console.warn('SAM runtime configuration unavailable', error); }
+  if (samHostConfig?.mounted) {
+    const { createWebGpuDeviceRequest } = await import('./webgpu-inference-kit/src/gpu-environment.js');
+    const { createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/inference-session.js');
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+    if (!adapter) throw new Error('SAM host WebGPU adapter unavailable');
+    const request = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
+    const device = await adapter.requestDevice({ requiredFeatures: request.requiredFeatures, requiredLimits: request.requiredLimits });
+    const inferenceSession = await createWebGpuInferenceSession({ sessionId: `kaminos-images:${crypto.randomUUID()}`, adapter, device,
+      adapterName: adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter', deviceOwnership: 'borrowed' });
+    samHostContext = { adapter, device, inferenceSession };
+  }
+  renderer = new THREE.WebGPURenderer({ antialias: true, ...(samHostContext ? { device: samHostContext.device } : {}) });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -9553,6 +9650,10 @@ function ensureFingerJuiceTabFrameLoaded() {
 }
 
 function setActiveTab(tabName) {
+  document.body.classList.toggle('sam-image-active', tabName === 'masks');
+  document.getElementById('sam-image-viewport').hidden = tabName !== 'masks';
+  samImageTools?.setActive(tabName === 'masks');
+  if (tabName === 'masks') void ensureSamImageTools().catch(error => console.error(error));
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
   const fingerJuiceHostPanel = document.getElementById('finger-juice-host-operator-panel');
@@ -15576,6 +15677,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
     });
   }
   if (node?.kind === 'image' && node.source) {
+    actions.push({ label: 'Create Masks', action: () => window.kaminosOpenImageMasks(node.source, { fileName: node.title }) });
     actions.push({
       label: 'Change Image',
       runningMessage: 'Opening Images palette for this graph node...',
@@ -22110,7 +22212,8 @@ window.addEventListener('keydown', e => {
 grInit();
 initKaminosFingerFluidBenchRoute();
 initKaminosFingerJuiceHostRoute();
-initScene().then(() => {
+const sceneInitialization = initScene();
+sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
@@ -22160,7 +22263,9 @@ initScene().then(() => {
     const imageRoute = kaminosImageAssetRouteFromSearch(params);
     if (imageRoute) {
       await loadKaminosImageAssetRoute(imageRoute);
+      if (params.get('sam') === '1') await window.kaminosOpenImageMasks(imageRoute.effectiveUrl, { fileName: imageRoute.fileName });
     }
+    if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
   initKaminosVolumeRoute();
   initKaminosMotionAgencyRoute();
