@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {SF3D_PRODUCER_COMMIT} from '../sf3d-host-device.mjs';
 
 const source = readFileSync(new URL('../sf3d-live-flame-inject.mjs', import.meta.url), 'utf8');
 const mountSource = source.slice(source.indexOf('export async function mountComposition'));
@@ -27,7 +28,7 @@ if (source.includes('createSharedDeviceSf3dProducer')) host = await import('../s
 await run({prototype: {}, params: new URLSearchParams(), sharedGpu});
 assert.equal(calls[0].device, device, 'mount must pass the exact host device into the real producer factory');
 assert.equal(calls[0].adapter, sharedGpu.adapter);
-assert.equal(calls[0].commit, '0ff8dc4527ba5513f2f6a9f5a7a6497e710af691');
+assert.equal(calls[0].commit, SF3D_PRODUCER_COMMIT, 'producer factory and host receipt must share one commit authority');
 assert.equal(window.__compositionRoute.deviceTopology, 'same-device');
 assert.equal(window.__compositionRoute.foregroundScheduling, 'producer-foreground-opportunities');
 assert.equal(window.__compositionRoute.deviceReceipt.effectiveLimits.maxBufferSize, device.limits.maxBufferSize, 'effective device, not adapter capacity');
