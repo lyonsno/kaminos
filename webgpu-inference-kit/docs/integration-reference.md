@@ -522,6 +522,46 @@ const hostPhaseReport = runtime.finishHostPhases();
 const commandDutyReport = runtime.finishCommandDuties();
 ```
 
+### Lossless FP16 weight storage
+
+When a model checkpoint already stores binary16 values, keep those values in their
+original representation when the model shader supports it. The planner selects
+only from the caller's ordered candidates: native FP16 needs `shader-f16`, while
+the portable packed form stores two binary16 bit patterns in each `u32` word and
+loads values with WGSL `unpack2x16float`.
+
+```js
+import {
+  createWebGpuWeightRepresentationPlan,
+  packFp16WeightsToU32,
+} from "@kaminos/webgpu-inference-kit";
+
+// fp16Bits contains checkpoint binary16 bit patterns, not converted float32 values.
+const plan = createWebGpuWeightRepresentationPlan({
+  sourceDtype: "fp16",
+  elementCount: fp16Bits.length,
+  candidates: ["f16-native", "f16-packed-u32"],
+  adapterFeatures: runtime.device.features,
+});
+
+const storage = plan.effectiveRepresentation === "f16-packed-u32"
+  ? packFp16WeightsToU32(fp16Bits)
+  : fp16Bits;
+const weightBuffer = runtime.createBuffer({
+  label: "vision.encoder.weight",
+  size: plan.storageByteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+runtime.writeBuffer(weightBuffer, storage);
+```
+
+The port selects a kernel whose weight load matches `plan.valueLoadOperation`.
+The packed plan's `elementCount` is the logical FP16 count; packed storage has
+`ceil(elementCount / 2)` `u32` words. Use the direct buffer above or translate
+that word count before creating a typed tensor or model-manifest descriptor.
+The plan returns representation metadata; the port chooses its allocation,
+upload, and model-memory policy.
+
 That `profile` is the runtime receipt substrate a route can attach to its outputs. It records the effective adapter/device identity, kernel profile, stage timings, required stages, and yield metadata for the run that actually happened.
 
 ## Load And Share Model Weights
