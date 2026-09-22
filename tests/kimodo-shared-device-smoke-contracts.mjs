@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../scripts/smoke-kimodo-shared-device.mjs', import.meta.url), 'utf8');
+const injectSource = readFileSync(new URL('../kimodo-shared-device-inject.mjs', import.meta.url), 'utf8');
 
 assert.match(source, /writeReport\(['"]starting['"]\)/, 'the witness writes a durable receipt before browser launch');
 assert.match(source, /finally\s*\{[\s\S]*writeReport/, 'the witness publishes its terminal state even when launch, load, or generation fails');
@@ -18,6 +19,7 @@ assert.match(source, /total-timeout-ms/, 'the witness has a bounded total produc
 assert.match(source, /no-progress-timeout-ms/, 'the witness distinguishes a no-progress wedge from merely slow generation');
 assert.match(source, /lastRun\.foregroundReceipts/, 'the witness adjudicates receipts from the current run rather than page-global history');
 assert.match(source, /validateSuccessfulRun/, 'the witness delegates same-run receipt and flame-progress adjudication to the executable contract');
+assert.match(injectSource, /scheduleMode:\s*scheduling\.mode/, 'the producer receives the selected schedule identity alongside its numeric knobs');
 assert.match(source, /__kaminosCompositionSetup[\s\S]*mounted/, 'the witness rejects a partial HUD/device receipt when composition mount failed');
 assert.match(
   source,

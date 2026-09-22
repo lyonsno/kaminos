@@ -56,6 +56,122 @@ assert.throws(
   /schedule/,
   'requested split cannot close on missing or full-pass effective scheduling',
 );
+
+function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGenerationId = generationId } = {}) {
+  const runId = 'run-current';
+  const layersPerDuty = 4, chunksPerPass = 4, maxInFlightDuties = 4, steps = 1;
+  const passNames = ['cond-root', 'cond-body', 'uncond-root', 'uncond-body'];
+  const passes = [], duties = [];
+  for (let step = 1; step <= steps; step++) {
+    for (const pass of passNames) {
+      for (let chunkIndex = 1; chunkIndex <= chunksPerPass; chunkIndex++) {
+        const dutyId = `g${generationId}-s${step}-${pass}-c${chunkIndex}`;
+        passes.push({
+          dutyId, step, numSteps: steps, pass, chunkIndex, chunkCount: chunksPerPass,
+          layerStart: (chunkIndex - 1) * layersPerDuty,
+          layerEnd: chunkIndex * layersPerDuty,
+        });
+        duties.push({ dutyId, sequence: duties.length + 1, status: 'completed' });
+      }
+    }
+  }
+  const expected = steps * passNames.length * chunksPerPass;
+  const summary = {
+    status: 'drained', maxInFlightDuties, maxObservedInFlightDuties: maxInFlightDuties,
+    submittedDutyCount: expected, completedDutyCount: expected, failedDutyCount: 0, inFlightDutyCount: 0,
+  };
+  return {
+    ...successfulRun.runs[0],
+    runId,
+    generationId,
+    steps,
+    scheduling: { mode: 'fence-light', layersPerDuty, chunksPerPass, maxInFlightDuties },
+    receipt: { generationId, metadata: { gpuSubmission: summary } },
+    submission: summary,
+    diagnostics: {
+      generationId: diagnosticGenerationId,
+      numSteps: steps,
+      scheduleMode: 'fence-light',
+      scheduling: { mode: 'fence-light', layersPerDuty, chunksPerPass, maxInFlightDuties },
+      passes,
+      submissionReport: { status: 'drained', duties, ...summary },
+    },
+    telemetry: {
+      status: 'succeeded', generationId,
+      submission: summary,
+      scheduler: {
+        mode: 'cooperative-foreground-boundary',
+        requestedMaxInFlightDuties: maxInFlightDuties,
+        boundariesPerStep: 16,
+        expectedForegroundBoundaryCount: expected,
+        observedForegroundBoundaryCount: observedBoundaries,
+        lastBoundary: { phase: 'ddim-sampling', ...passes.at(-1) },
+      },
+    },
+  };
+}
+const scheduledTerminal = run => ({ status: 'succeeded', runs: [run] });
+assert.equal(validateSuccessfulRun(scheduledTerminal(scheduledRun()), 'fence-light').generationId, 9);
+assert.throws(
+  () => validateSuccessfulRun(scheduledTerminal(scheduledRun({ diagnosticGenerationId: 1 })), 'fence-light'),
+  /generation/,
+  'a stale producer diagnostic generation cannot close a current receipt',
+);
+assert.throws(
+  () => validateSuccessfulRun(scheduledTerminal({ ...scheduledRun(), telemetry: { status: 'succeeded', generationId: 9 } }), 'fence-light'),
+  /boundary|telemetry/,
+  'missing scheduler telemetry cannot imply complete foreground opportunities',
+);
+assert.throws(
+  () => validateSuccessfulRun(scheduledTerminal(scheduledRun({ observedBoundaries: 1 })), 'fence-light'),
+  /boundary|telemetry/,
+  'one observed boundary cannot close sixteen expected opportunities',
+);
+assert.throws(
+  () => validateSuccessfulRun(scheduledTerminal({ ...scheduledRun(), telemetry: { ...scheduledRun().telemetry, generationId: 1 } }), 'fence-light'),
+  /generation|telemetry/,
+  'stale telemetry generation cannot close a current producer run',
+);
+assert.throws(
+  () => validateSuccessfulRun(scheduledTerminal({ ...scheduledRun(), telemetry: { ...scheduledRun().telemetry, scheduler: { ...scheduledRun().telemetry.scheduler, lastBoundary: { dutyId: 'g1-s1-uncond-body-c4' } } } }), 'fence-light'),
+  /boundary/,
+  'a stale or partial last-boundary row cannot close the schedule',
+);
+for (const [label, alter] of [
+  ['duplicate', rows => { rows[1] = { ...rows[0] }; }],
+  ['missing', rows => { rows.pop(); }],
+  ['out-of-order', rows => { [rows[0], rows[1]] = [rows[1], rows[0]]; }],
+  ['wrong-step', rows => { rows[0] = { ...rows[0], dutyId: rows[0].dutyId.replace('-s1-', '-s2-') }; }],
+]) {
+  const run = scheduledRun();
+  const passes = [...run.diagnostics.passes];
+  alter(passes);
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, diagnostics: { ...run.diagnostics, passes } }), 'fence-light'),
+    /duty|chunk|generation|schedule/,
+    `${label} producer duty identity is rejected`,
+  );
+}
+{
+  const run = scheduledRun();
+  const passes = [...run.diagnostics.passes];
+  passes[0] = { ...passes[0], step: 2 };
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, diagnostics: { ...run.diagnostics, passes } }), 'fence-light'),
+    /duty|chunk|generation|schedule/,
+    'producer pass rows carry and enforce their sampling-step identity',
+  );
+}
+{
+  const run = scheduledRun();
+  const duties = [...run.diagnostics.submissionReport.duties];
+  duties[0] = { ...duties[0], dutyId: 'g1-s1-cond-root-c1' };
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, diagnostics: { ...run.diagnostics, submissionReport: { ...run.diagnostics.submissionReport, duties } } }), 'fence-light'),
+    /duty|chunk|generation|schedule/,
+    'current receipt summary cannot hide a stale raw submission row',
+  );
+}
 assert.throws(
   () => validateSuccessfulRun({ ...successfulRun, runs: [{ ...successfulRun.runs[0], foregroundReceipts: [] }] }),
   /current-run/,

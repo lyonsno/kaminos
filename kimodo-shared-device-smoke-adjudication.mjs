@@ -19,30 +19,81 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
   if (requestedSchedule !== null) {
     const split = requestedSchedule === 'fence-light';
     const layers = split ? 4 : 16, chunks = split ? 4 : 1, capacity = split ? 4 : 2;
-    const expected = run?.steps * 4 * chunks;
+    const passNames = ['cond-root', 'cond-body', 'uncond-root', 'uncond-body'];
+    const generationId = run?.generationId;
+    const steps = run?.steps;
+    const expected = steps * passNames.length * chunks;
     const submission = run?.receipt?.metadata?.gpuSubmission;
+    const scheduler = run?.telemetry?.scheduler;
+    const rawSubmission = run?.diagnostics?.submissionReport;
+    const countFields = [
+      'status', 'maxInFlightDuties', 'maxObservedInFlightDuties',
+      'submittedDutyCount', 'completedDutyCount', 'failedDutyCount', 'inFlightDutyCount', 'hostSubmissionCount',
+    ];
+    const summariesAgree = (...summaries) => summaries.every(summary => summary != null)
+      && countFields.every(field => summaries.every(summary => summary[field] === summaries[0][field]));
     if (!['full-pass', 'fence-light'].includes(requestedSchedule)
+      || !Number.isSafeInteger(generationId) || generationId <= 0
+      || !Number.isSafeInteger(steps) || steps <= 0
       || run?.scheduling?.mode !== requestedSchedule
       || run.scheduling.layersPerDuty !== layers || run.scheduling.chunksPerPass !== chunks
       || run.scheduling.maxInFlightDuties !== capacity
+      || run.diagnostics?.generationId !== generationId
+      || run.diagnostics?.numSteps !== steps
+      || run.diagnostics?.scheduleMode !== requestedSchedule
+      || run.diagnostics?.scheduling?.mode !== requestedSchedule
       || run.diagnostics?.scheduling?.layersPerDuty !== layers
       || run.diagnostics?.scheduling?.chunksPerPass !== chunks
+      || run.diagnostics?.scheduling?.maxInFlightDuties !== capacity
+      || run.receipt?.generationId !== generationId
+      || run.telemetry?.generationId !== generationId
       || !Number.isSafeInteger(expected) || expected < 4
       || run.diagnostics?.passes?.length !== expected
-      || run.diagnostics?.submissionReport?.duties?.length !== expected
+      || rawSubmission?.duties?.length !== expected
+      || rawSubmission.status !== 'drained' || rawSubmission.maxInFlightDuties !== capacity
+      || !Number.isSafeInteger(rawSubmission.maxObservedInFlightDuties)
+      || rawSubmission.maxObservedInFlightDuties < 1 || rawSubmission.maxObservedInFlightDuties > capacity
+      || rawSubmission.submittedDutyCount !== expected || rawSubmission.completedDutyCount !== expected
+      || rawSubmission.failedDutyCount !== 0 || rawSubmission.inFlightDutyCount !== 0
       || submission?.status !== 'drained' || submission.maxInFlightDuties !== capacity
       || submission.submittedDutyCount !== expected || submission.completedDutyCount !== expected
       || submission.failedDutyCount !== 0 || submission.inFlightDutyCount !== 0
+      || !summariesAgree(submission, run.submission, run.telemetry?.submission)
+      || run.telemetry?.scheduler?.requestedMaxInFlightDuties !== capacity
+      || run.telemetry?.scheduler?.boundariesPerStep !== 4 * chunks
+      || run.telemetry?.scheduler?.expectedForegroundBoundaryCount !== expected
+      || run.telemetry?.scheduler?.observedForegroundBoundaryCount !== expected
       || run.telemetry?.status !== 'succeeded') {
-      throw new Error('Requested Kimodo schedule lacks matching effective diagnostics and terminal receipt');
+      throw new Error('Requested Kimodo schedule lacks current-generation diagnostics, complete telemetry, and matching terminal receipts');
     }
-    for (let i = 0; i < expected; i++) {
-      const pass = run.diagnostics.passes[i], duty = run.diagnostics.submissionReport.duties[i];
-      if (pass.chunkIndex !== i % chunks + 1 || pass.chunkCount !== chunks
-        || pass.layerStart !== (i % chunks) * layers || pass.layerEnd !== (i % chunks + 1) * layers
-        || pass.dutyId !== duty.dutyId || duty.status !== 'completed') {
-        throw new Error('Kimodo effective schedule contains partial or conflicting chunk identity');
+    let ordinal = 0;
+    let finalExpected = null;
+    for (let step = 1; step <= steps; step++) {
+      for (const passName of passNames) {
+        for (let chunkIndex = 1; chunkIndex <= chunks; chunkIndex++) {
+          const dutyId = `g${generationId}-s${step}-${passName}${chunks > 1 ? `-c${chunkIndex}` : ''}`;
+          const layerStart = (chunkIndex - 1) * layers;
+          const layerEnd = layerStart + layers;
+          const pass = run.diagnostics.passes[ordinal];
+          const duty = rawSubmission.duties[ordinal];
+          if (pass.dutyId !== dutyId || pass.step !== step || pass.numSteps !== steps || pass.pass !== passName
+            || pass.chunkIndex !== chunkIndex || pass.chunkCount !== chunks
+            || pass.layerStart !== layerStart || pass.layerEnd !== layerEnd
+            || duty.dutyId !== dutyId || duty.status !== 'completed'
+            || (duty.sequence != null && duty.sequence !== ordinal + 1)) {
+            throw new Error('Kimodo effective schedule contains a missing, extra, stale, reordered, or conflicting duty identity');
+          }
+          finalExpected = { dutyId, step, pass: passName, chunkIndex, chunkCount: chunks, layerStart, layerEnd };
+          ordinal++;
+        }
       }
+    }
+    const last = scheduler.lastBoundary;
+    if (last?.phase !== 'ddim-sampling' || last.step !== finalExpected.step || last.numSteps !== steps
+      || last.pass !== finalExpected.pass || last.dutyId !== finalExpected.dutyId
+      || last.chunkIndex !== finalExpected.chunkIndex || last.chunkCount !== chunks
+      || last.layerStart !== finalExpected.layerStart || last.layerEnd !== finalExpected.layerEnd) {
+      throw new Error('Kimodo foreground telemetry last-boundary identity does not match the final scheduled duty');
     }
   }
   if (!run?.foregroundRunReport) throw new Error('Generation succeeded without a persistent foreground run report');

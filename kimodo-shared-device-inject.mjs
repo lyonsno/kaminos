@@ -307,6 +307,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
         steps,
         duration,
         generationId,
+        scheduleMode: scheduling.mode,
         layersPerDuty: scheduling.layersPerDuty,
         maxInFlightDuties: scheduling.maxInFlightDuties,
         signal: controller.signal,
