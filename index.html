@@ -25512,7 +25512,13 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
       if (!await saveToServer(data, null)) return;
       sceneFile = currentSceneFile;
     }
-    location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
+    const restoreUrl = new URL(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
+    const currentUrl = new URL(location.href);
+    const sameDocument = restoreUrl.origin === currentUrl.origin && restoreUrl.pathname === currentUrl.pathname && restoreUrl.search === currentUrl.search;
+    location.assign(restoreUrl.href);
+    // A scene in the fragment needs a fresh host even when the URL's document
+    // is unchanged; assigning only that fragment would leave the old scene alive.
+    if (sameDocument) location.reload();
     return;
   }
   activeSceneComposition = restorePlan.composition;

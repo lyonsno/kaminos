@@ -117,6 +117,24 @@ try {
   for(let i=0;i<3;i++)assert.ok(Math.abs(report.reopened.solver.cameraEvidence.position[i]-saved.camera.position[i])<1e-5*Math.max(1,Math.abs(saved.camera.position[i])));
   assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),0);
   await shot('04-reopened');
+  report.phase='scene-list-load';
+  // Loading this same saved URL must discard an unsaved edit and construct a
+  // new host; unchanged live values cannot count as persistence evidence.
+  await page.evaluate(()=>window.kaminosSetAuthoredParameter('liquid.x',-1.2));
+  assert.equal((await state()).setup.source.x,-1.2);
+  report.beforeSceneListLoad=await state();
+  report.beforeSceneListTimeOrigin=await page.evaluate(()=>performance.timeOrigin);
+  await page.locator('#composition-library').click();
+  // The filename is the persistent identity; labels may be duplicated.
+  const load=page.locator(`#scenes-list .gr-name[title^="${savedReceipt.saved}"]`).locator('..').getByRole('button',{name:'Load',exact:true});
+  await load.click();
+  await page.waitForFunction(previous=>performance.timeOrigin!==previous,report.beforeSceneListTimeOrigin);
+  report.sceneListLoaded=await waitFrame(120);
+  assert.deepEqual(report.sceneListLoaded.setup,saved.localLiquid);
+  assert.notEqual(report.sceneListLoaded.lastFrame.cameraIdentity,report.beforeSceneListLoad.lastFrame.cameraIdentity);
+  assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),0);
+  assert.equal(page.url(),report.reopenUrl);
+  await shot('04b-scene-list-loaded');
   report.phase='observed-cadence';
   report.cadence=await page.evaluate(async()=>{
     const start=performance.now(),before=window.kaminosLocalLiquidState().frameCount;

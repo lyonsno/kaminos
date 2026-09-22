@@ -34,7 +34,7 @@ const burnerUnchanged = await vm.runInContext('collectSceneComposition()', conte
 context.burnerRecipe.ringCount = 8;
 assert.throws(burnerUnchanged, /changed/, 'burner edits before sampling must reject the earlier saved recipe');
 
-const empty = vm.createContext({ sceneObjects: [], volumePrimitives: [],
+const empty = vm.createContext({ sceneObjects: [], volumePrimitives: [], localLiquidSetup: null,
   volumePrototype: { debugState: () => ({ active: true }) }, isFireLightFieldRoute: () => false });
 vm.runInContext(between('function sceneIsEmpty()', 'function sceneSaveIsBlocked()'), empty);
 assert.equal(vm.runInContext('sceneIsEmpty()', empty), true, 'unsupported standalone basin must not save an unloadable scene');
