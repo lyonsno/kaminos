@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -193,6 +194,67 @@ class CeilingOracleContracts(unittest.TestCase):
             report = json.loads((output_dir / "report.json").read_text())
             self.assertEqual(report["status"], "failed")
             self.assertEqual(report["failurePhase"], "inputs")
+
+
+class CovarianceParameterizationContracts(unittest.TestCase):
+    """Physical-state boundaries, entirely NumPy: no MLX or GPU execution."""
+
+    def setUp(self) -> None:
+        self.medium = SimpleNamespace(spacing=np.array([0.04, 0.05, 0.06]))
+        self.floor = (0.3 * np.mean(self.medium.spacing)) ** 2
+        factors = np.array([
+            [[0.03, 0.0, 0.0], [0.02, 0.01, 0.0], [-0.01, 0.005, 0.02]],
+            [[0.01, 0.0, 0.0], [-0.015, 0.04, 0.0], [0.005, 0.01, 0.025]],
+        ])
+        self.state = {
+            "centers": np.array([[0.1, -0.2, 0.3], [-0.4, 0.5, 0.6]]),
+            "covariances": factors @ factors.transpose(0, 2, 1) + self.floor * np.eye(3),
+            "emission": np.array([[0.1, 2.0, 3.0], [4.0, 0.2, 5.0]]),
+            "extinction": np.array([0.25, 1.5]),
+        }
+
+    def assert_physical_state_equal(self, actual, expected) -> None:
+        for key in expected:
+            np.testing.assert_allclose(actual[key], expected[key], rtol=1e-12, atol=1e-12,
+                                       err_msg=f"physical {key} changed without an update")
+
+    def test_repeated_roundtrip_preserves_physical_state_and_inputs(self) -> None:
+        original = {key: value.copy() for key, value in self.state.items()}
+        current = self.state
+        for _ in range(8):
+            current = ORACLE.raw_to_state(ORACLE.state_to_raw(current, self.medium), self.medium)
+            self.assert_physical_state_equal(current, original)
+        for key in original:
+            np.testing.assert_array_equal(self.state[key], original[key])
+
+    def test_tracker_numpy_zero_delta_preserves_physical_state(self) -> None:
+        tracker = load("tracker_physical_identity_contract", "volume-splat-delta-tracker-mlx.py")
+        raw = tracker.state_to_raw_np(self.state, self.medium)
+        unchanged = {key: value + np.zeros_like(value) for key, value in raw.items()}
+        self.assert_physical_state_equal(tracker.raw_to_state_np(unchanged, self.medium), self.state)
+
+    def test_finer_rung_reencoding_preserves_physical_covariance(self) -> None:
+        finer = SimpleNamespace(spacing=self.medium.spacing / 2)
+        result = ORACLE.raw_to_state(ORACLE.state_to_raw(self.state, finer), finer)
+        self.assert_physical_state_equal(result, self.state)
+
+    def test_decoder_keeps_explicit_bandlimit_floor(self) -> None:
+        raw = ORACLE.state_to_raw(self.state, self.medium)
+        raw["rawCholesky"] = np.zeros_like(raw["rawCholesky"])
+        raw["rawCholesky"][:, np.arange(3), np.arange(3)] = -100.0
+        decoded = ORACLE.raw_to_state(raw, self.medium)
+        expected = np.broadcast_to(self.floor * np.eye(3), decoded["covariances"].shape)
+        np.testing.assert_allclose(decoded["covariances"], expected, rtol=1e-14, atol=0.0)
+
+    def test_covariance_at_or_below_floor_fails_without_mutation(self) -> None:
+        for minimum in (self.floor, self.floor / 2):
+            with self.subTest(minimum=minimum):
+                state = {key: value.copy() for key, value in self.state.items()}
+                state["covariances"][0] = np.diag([minimum, 2 * self.floor, 3 * self.floor])
+                original = state["covariances"].copy()
+                with self.assertRaisesRegex(ValueError, "covariance.*bandlimit floor"):
+                    ORACLE.state_to_raw(state, self.medium)
+                np.testing.assert_array_equal(state["covariances"], original)
 
 
 class CheckpointedRenderContracts(unittest.TestCase):

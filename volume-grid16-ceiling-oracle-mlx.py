@@ -194,8 +194,20 @@ def softplus_inverse(value: np.ndarray) -> np.ndarray:
 
 
 def state_to_raw(state: dict[str, np.ndarray], medium: Any) -> dict[str, np.ndarray]:
+    """Encode physical covariance, which already includes the bandlimit floor.
+
+    The residual must be positive definite; silently lifting an incompatible
+    state would change the physical population before any optimizer update.
+    Previously trained trackers see different raw features with this inverse.
+    """
     covariances = np.asarray(state["covariances"], dtype=np.float64)
-    cholesky = np.linalg.cholesky(covariances)
+    floor = (0.3 * float(np.mean(medium.spacing))) ** 2
+    try:
+        cholesky = np.linalg.cholesky(covariances - floor * np.eye(3)[None, :, :])
+    except np.linalg.LinAlgError as error:
+        raise ValueError(
+            f"physical covariance must be strictly above the bandlimit floor ({floor:g})"
+        ) from error
     diag_indices = np.arange(3)
     raw_chol = cholesky.copy()
     raw_chol[:, diag_indices, diag_indices] = softplus_inverse(cholesky[:, diag_indices, diag_indices])
