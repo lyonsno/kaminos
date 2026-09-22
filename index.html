@@ -8889,9 +8889,20 @@ async function initScene() {
   scenePointerNdc = new THREE.Vector2();
 
   // --- GTAO Compute AO via Three TSL/RenderPipeline ---
+  // The query selects an initial setting, not a capability lockout. Build AO
+  // only when enabled so an AO-off view does not require storage textures.
+  const aoToggle = document.getElementById('ao-toggle');
+  if (new URLSearchParams(window.location.search).get('gtao') === '0') {
+    aoToggle.checked = false;
+    document.getElementById('ao-controls').style.display = 'none';
+  }
   postProcessing = null;
+  const aoResScale = 0.5;
+  let depthRT = null;
 
-  renderPipeline = new THREE.RenderPipeline(renderer);
+  function ensureAOPipeline() {
+    if (renderPipeline) return;
+    renderPipeline = new THREE.RenderPipeline(renderer);
 
   const prePass = pass(scene, camera);
   prePass.name = 'Pre-Pass';
@@ -8904,9 +8915,8 @@ async function initScene() {
 
   scenePass = pass(scene, camera);
 
-  const aoResScale = 0.5;
   const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
-  let depthRT = new THREE.RenderTarget(
+  depthRT = new THREE.RenderTarget(
     Math.round(drawSize.x * aoResScale),
     Math.round(drawSize.y * aoResScale),
     { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }
@@ -8920,15 +8930,20 @@ async function initScene() {
   const normalTexNode = texture(normalTexture);
   aoPass = aoCompute(depthTexNode, normalTexNode, camera);
   aoPass.setDepthPass(depthRT, depthMaterial, scene);
+  aoPass.radius.value = parseFloat(document.getElementById('ao-radius').value);
+  aoPass.scale.value = parseFloat(document.getElementById('ao-scale').value);
+  aoPass.thickness.value = parseFloat(document.getElementById('ao-thickness').value);
+  aoPass.distanceFallOff.value = parseFloat(document.getElementById('ao-falloff').value);
 
   const aoResolved = convertToTexture(aoPass.getTextureNode());
   const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
 
-  aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
-  const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
-  renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
+    aoIntensity = uniform(aoToggle.checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
+    const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
+    renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
+  }
   window.kaminosAODebugState = () => ({
-    route: 'three-tsl-render-pipeline-gtao-compute',
+    route: aoToggle.checked ? 'three-tsl-render-pipeline-gtao-compute' : 'three-webgpu-direct-no-gtao',
     hasRenderPipeline: !!renderPipeline,
     hasAoPass: !!aoPass,
     hasAoIntensity: !!aoIntensity,
@@ -8947,7 +8962,7 @@ async function initScene() {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
+    if (depthRT) depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
     needsRender = true;
   });
 
@@ -9009,7 +9024,10 @@ async function initScene() {
     if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
       const t0 = performance.now();
 
-      renderPipeline.render();
+      if (aoToggle.checked) {
+        ensureAOPipeline();
+        renderPipeline.render();
+      } else renderer.render(scene, camera);
 
       const frameMs = performance.now() - t0;
       fpsFrames++;
@@ -22114,9 +22132,19 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('gtao') === '0') {
+    document.getElementById('ao-toggle').checked = false;
+    document.getElementById('ao-controls').style.display = 'none';
+  }
+  // A deep-linked mesh is useful before an optional HDR environment finishes
+  // loading. Do not make its registration depend on that network/GPU work.
+  const meshRoute = kaminosMeshAssetRouteFromSearch(params);
+  if (meshRoute) {
+    void loadKaminosMeshAssetRoute(meshRoute);
+  }
   // Load HDR environment first, then auto-load deep-linked splat if present
   loadEnvironment('studio').then(async () => {
-    const params = new URLSearchParams(window.location.search);
     const loadSplat = params.get('load');
     if (loadSplat) {
       // Deep-link: ?load=splat-inbox/evil_orb_trimmed_050.ply
@@ -22148,10 +22176,6 @@ initScene().then(() => {
         console.error('Deep-link load failed:', err);
         setInfo(`Deep-link load failed: ${err.message || err}`);
       }
-    }
-    const meshRoute = kaminosMeshAssetRouteFromSearch(params);
-    if (meshRoute) {
-      await loadKaminosMeshAssetRoute(meshRoute);
     }
     const splatRoute = kaminosSplatAssetRouteFromSearch(params);
     if (splatRoute) {
