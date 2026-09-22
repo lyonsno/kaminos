@@ -26,6 +26,7 @@ const device = makeDevice();
 const sharedGpu = {
   device,
   queue: device.queue,
+  requirements: { requiredFeatures: [], requiredLimits: {} },
   backendIdentity: {
     kind: 'webgpu-local',
     runtime: 'browser',
@@ -45,6 +46,14 @@ assert.throws(
   /exact queue/,
   'a foreign queue fails before model work',
 );
+assert.throws(
+  () => snapshotKimodoSharedDevice({
+    ...sharedGpu,
+    requirements: { requiredFeatures: [], requiredLimits: { maxStorageBufferBindingSize: (1 << 30) + 1 } },
+  }),
+  /requirements failed/,
+  'the exact composed host requirements are validated against the borrowed device before allocation',
+);
 
 let requester = null;
 let hostServiceActive = false;
@@ -59,9 +68,26 @@ const host = {
   runForegroundFrame(run) { hostFrameCount += 1; return run(); },
 };
 const producer = { device, deviceInjected: true };
-const foreground = connectKimodoSharedDeviceForeground({ producer, prototype, host, sharedGpu });
+const foreground = connectKimodoSharedDeviceForeground({ prototype, host, sharedGpu });
 assert.equal(typeof requester, 'function');
 assert.equal(hostServiceActive, true);
+const loadFrame = requester({
+  requestId: 'ordinary-during-model-load',
+  metadata: { phase: 'model-load' },
+  run(service) {
+    service.submit([{}], { metadata: { phase: 'model-load' } });
+    return { status: 'submitted', phase: 'model-load' };
+  },
+});
+assert.equal((await loadFrame.completion).status, 'completed');
+assert.equal(hostFrameCount, 1, 'the persistent requester services an ordinary flame frame before producer attachment');
+await assert.rejects(
+  () => foreground.beginRun('producer-not-attached'),
+  /attach the exact shared-device Kimodo producer/,
+  'generation cannot begin before the loaded producer proves exact borrowed-device identity',
+);
+foreground.attachProducer(producer);
+assert.equal(foreground.snapshot().producerAttached, true);
 
 const run = await foreground.beginRun('contract-run');
 const request = requester({
@@ -80,22 +106,19 @@ await run.foregroundOpportunity({
 });
 const receipt = await request.completion;
 assert.equal(receipt.status, 'completed');
-assert.equal(hostFrameCount, 1);
+assert.equal(hostFrameCount, 2);
 await run.finish();
 assert.equal(foreground.snapshot().activeRun, null);
 await foreground.dispose();
 assert.equal(requester, null);
 assert.equal(hostServiceActive, false);
 
+const foreignProducerForeground = connectKimodoSharedDeviceForeground({ prototype, host, sharedGpu });
 assert.throws(
-  () => connectKimodoSharedDeviceForeground({
-    producer: { device: makeDevice(), deviceInjected: true },
-    prototype,
-    host,
-    sharedGpu,
-  }),
-  /device mismatch/,
+  () => foreignProducerForeground.attachProducer({ device: makeDevice(), deviceInjected: true }),
+  /producer device mismatch/,
   'a producer-owned or foreign device cannot impersonate same-device composition',
 );
+await foreignProducerForeground.dispose();
 
 console.log('Kimodo shared-device foreground host contracts passed');

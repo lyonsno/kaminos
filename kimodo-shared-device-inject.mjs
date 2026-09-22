@@ -147,6 +147,17 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
   };
   raf = requestAnimationFrame(frame);
 
+  // Seat the persistent requester before source fetch and model allocation so
+  // the ordinary flame remains the product frame owner throughout model load,
+  // between generations, and after generation. Producer admission remains a
+  // separate exact-device check once its buffers exist.
+  foreground = connectKimodoSharedDeviceForeground({
+    prototype,
+    host,
+    sharedGpu,
+    onReceipt: receipt => state.foregroundReceipts.push(receipt),
+  });
+
   $('cancel').onclick = () => controller?.abort('operator-cancel');
   $('load').onclick = async () => {
     if (producer) return;
@@ -173,13 +184,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       if (producer.identity.model.weightsHash !== state.source.assets['kimodo.bin'].sha256) {
         throw new Error('loaded Kimodo weights differ from the source manifest');
       }
-      foreground = connectKimodoSharedDeviceForeground({
-        producer,
-        prototype,
-        host,
-        sharedGpu,
-        onReceipt: receipt => state.foregroundReceipts.push(receipt),
-      });
+      foreground.attachProducer(producer);
       state.producerIdentity = producer.identity;
       state.status = 'loaded';
       $('stage').textContent = 'model loaded · persistent foreground service connected';
@@ -221,6 +226,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       status: 'running',
       deviceTopology: 'same-device',
       foregroundReceiptStart: state.foregroundReceipts.length,
+      frameIntervalStart: state.frameIntervals.length,
       flameBefore: prototype.debugState(),
     };
     state.runs.push(record);
@@ -289,6 +295,12 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       }
       record.endedAtMs = performance.now();
       record.wallMs = record.endedAtMs - record.startedAtMs;
+      record.frameIntervals = state.frameIntervals.slice(record.frameIntervalStart);
+      record.pageP95Ms = percentile(record.frameIntervals, .95);
+      record.pageP99Ms = percentile(record.frameIntervals, .99);
+      record.pageMaxMs = record.frameIntervals.length ? Math.max(...record.frameIntervals) : null;
+      record.frameIntervalsOver33Ms = record.frameIntervals.filter(value => value > 33).length;
+      record.frameIntervalsOver100Ms = record.frameIntervals.filter(value => value > 100).length;
       record.telemetry = telemetry.snapshot();
       record.foregroundReceipts = state.foregroundReceipts.slice(record.foregroundReceiptStart);
       record.flameAfter = prototype.debugState();

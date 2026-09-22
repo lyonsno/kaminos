@@ -226,8 +226,10 @@ try {
     if (!terminal.foregroundReceipts?.length) throw new Error('Generation succeeded without any actual foreground frame receipts');
     phase('generation-succeeded', {
       runId: lastRun.runId,
-      elapsedMs: lastRun.elapsedMs,
+      wallMs: lastRun.wallMs,
       pageP95Ms: lastRun.pageP95Ms,
+      pageP99Ms: lastRun.pageP99Ms,
+      pageMaxMs: lastRun.pageMaxMs,
       frameCount: lastRun.flameAfter?.frameCount,
       simStepCount: lastRun.flameAfter?.simStepCount,
       foregroundReceipts: terminal.foregroundReceipts.length,

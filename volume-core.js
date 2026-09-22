@@ -573,8 +573,6 @@ export const KAMINOS_VOLUME_GPU_DEVICE_REQUIREMENTS = Object.freeze({
   requiredLimits: Object.freeze({
     maxStorageBufferBindingSize: fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES)),
     maxStorageBuffersPerShaderStage: 10,
-    maxStorageBuffersInFragmentStage: 5,
-    maxStorageBuffersInVertexStage: 4,
   }),
 });
 

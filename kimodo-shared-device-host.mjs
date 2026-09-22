@@ -22,7 +22,8 @@ export function snapshotKimodoSharedDevice(sharedGpu) {
   if (!device || sharedGpu.queue !== device.queue || typeof device.queue?.submit !== 'function') {
     throw new Error('Kimodo shared-device composition requires the host GPUDevice and its exact queue');
   }
-  const requirementValidation = validateWebGpuDeviceRequirements(device, sharedGpuDeviceRequirements);
+  const effectiveRequirements = sharedGpu.requirements ?? sharedGpuDeviceRequirements;
+  const requirementValidation = validateWebGpuDeviceRequirements(device, effectiveRequirements);
   if (!requirementValidation.ok) {
     throw new Error(`Kimodo shared device requirements failed: ${requirementValidation.errors.join('; ')}`);
   }
@@ -37,11 +38,11 @@ export function snapshotKimodoSharedDevice(sharedGpu) {
     queueTopology: 'exact-device-queue',
     hostIdentity: sharedGpu.identity ?? null,
     backendIdentity: sharedGpu.backendIdentity,
+    requirements: effectiveRequirements,
   });
 }
 
 export function connectKimodoSharedDeviceForeground({
-  producer,
   prototype,
   host,
   sharedGpu,
@@ -53,10 +54,7 @@ export function connectKimodoSharedDeviceForeground({
     throw new Error('Kimodo foreground service requires the active prototype-owned ordinary volume renderer');
   }
   if (
-    !producer
-    || producer.deviceInjected !== true
-    || producer.device !== sharedGpu.device
-    || host?.device !== sharedGpu.device
+    host?.device !== sharedGpu.device
     || context.device !== sharedGpu.device
     || context.queue !== sharedGpu.device.queue
   ) {
@@ -69,6 +67,7 @@ export function connectKimodoSharedDeviceForeground({
     queue: sharedGpu.device.queue,
   });
   let activeRun = null;
+  let attachedProducer = null;
   let boundarySequence = 0;
   let disposed = false;
 
@@ -93,8 +92,25 @@ export function connectKimodoSharedDeviceForeground({
   });
   host.setForegroundServiceActive(true);
 
+  function attachProducer(producer) {
+    if (disposed) throw new Error('Kimodo foreground service is disposed');
+    if (
+      !producer
+      || producer.deviceInjected !== true
+      || producer.device !== sharedGpu.device
+    ) {
+      throw new Error('Kimodo shared-device foreground service producer device mismatch');
+    }
+    if (attachedProducer && attachedProducer !== producer) {
+      throw new Error('Kimodo foreground service already has a different producer');
+    }
+    attachedProducer = producer;
+    return snapshot();
+  }
+
   async function beginRun(runId) {
     if (disposed) throw new Error('Kimodo foreground service is disposed');
+    if (!attachedProducer) throw new Error('attach the exact shared-device Kimodo producer before beginning a generation');
     if (activeRun) throw new Error(`Kimodo foreground run ${activeRun.runId} is still active`);
     const kitRun = await service.beginRun(runId);
     const run = {
@@ -136,6 +152,7 @@ export function connectKimodoSharedDeviceForeground({
     return Object.freeze({
       routeId: KIMODO_SHARED_DEVICE_ROUTE,
       deviceReceipt,
+      producerAttached: Boolean(attachedProducer),
       activeRun: activeRun?.runId ?? null,
       foregroundService: service.snapshot(),
     });
@@ -150,5 +167,5 @@ export function connectKimodoSharedDeviceForeground({
     await service.dispose();
   }
 
-  return Object.freeze({ deviceReceipt, beginRun, snapshot, dispose });
+  return Object.freeze({ deviceReceipt, attachProducer, beginRun, snapshot, dispose });
 }

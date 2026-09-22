@@ -9,6 +9,8 @@ assert.match(source, /deviceTopology\s*!==\s*['"]same-device['"]/, 'the witness 
 assert.match(source, /queueTopology\s*!==\s*['"]exact-device-queue['"]/, 'the witness rejects separate or merely compatible queues');
 assert.match(source, /source\.status\s*!==\s*['"]built['"]/, 'the witness rejects a missing or partial derived source manifest');
 assert.match(source, /frameCount[\s\S]*simStepCount/, 'the witness records live flame progress rather than page nonblankness alone');
+assert.match(source, /wallMs:\s*lastRun\.wallMs/, 'the witness reports the run duration field actually retained by the page');
+assert.doesNotMatch(source, /elapsedMs:\s*lastRun\.elapsedMs/, 'the witness cannot silently publish an undefined legacy duration field');
 assert.match(source, /foregroundReceipts/, 'the witness retains the foreground service receipts that establish actual scheduled frames');
 assert.match(source, /embeddingAuthority/, 'the witness distinguishes a live encoder from a replayed embedding fixture');
 assert.match(source, /embeddingFixtureSha256/, 'a replayed embedding is tied to exact fixture bytes');

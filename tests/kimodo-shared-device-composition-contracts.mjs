@@ -16,6 +16,11 @@ assert.match(
   /export\s+async\s+function\s+requestKaminosSharedWebGpuDevice/,
   'Kaminos exposes one host-owned WebGPU device acquisition seam',
 );
+assert.doesNotMatch(
+  volumeSource,
+  /maxStorageBuffersIn(?:Fragment|Vertex)Stage/,
+  'the composed descriptor contains only real WebGPU limit names that the public kit can validate on the acquired device',
+);
 assert.match(
   volumeSource,
   /configuredSharedGpuContext\?\.device[\s\S]*Shared Pyro GPU context queue does not belong/,

@@ -7,9 +7,18 @@ assert.match(source, /export\s*\{\s*sharedGpuDeviceRequirements\s*\}/, 'composit
 assert.doesNotMatch(source, /initGPU|requestAdapter|navigator\.gpu/, 'composition has no producer-owned device fallback');
 assert.match(source, /createKimodoProducer\(\{[\s\S]*device:\s*sharedGpu\.device[\s\S]*backendIdentity:\s*sharedGpu\.backendIdentity/, 'producer receives the exact host device and effective backend identity');
 assert.match(source, /connectKimodoSharedDeviceForeground/, 'composition uses the public-kit persistent foreground adapter');
+assert.ok(
+  source.indexOf('foreground = connectKimodoSharedDeviceForeground') < source.indexOf('producer = await createKimodoProducer'),
+  'the persistent foreground requester is connected before the long model load begins',
+);
+assert.match(source, /foreground\.attachProducer\(producer\)/, 'the loaded producer is admitted only after exact shared-device validation');
 assert.match(source, /await\s+foreground\.beginRun\(runId\)[\s\S]*producer\.generate\([\s\S]*foregroundOpportunity:\s*boundary\s*=>\s*\{[\s\S]*telemetry\.foreground\(boundary\)[\s\S]*run\.foregroundOpportunity\(boundary\)[\s\S]*finally\s*\{[\s\S]*await\s+run\.finish\(\)/, 'every generation reserves, observes, services, and drains one persistent foreground run');
 assert.match(source, /deviceTopology:\s*'same-device'/, 'human-visible evidence names exact shared topology');
 assert.match(source, /foregroundReceipts/, 'composition retains actual foreground service receipts');
+assert.match(source, /frameIntervalStart:\s*state\.frameIntervals\.length/, 'each run records the start of its own uncapped frame interval window');
+assert.match(source, /record\.pageP95Ms\s*=\s*percentile\(record\.frameIntervals,\s*\.95\)/, 'each run computes p95 from its own frame interval window');
+assert.match(source, /record\.pageP99Ms\s*=\s*percentile\(record\.frameIntervals,\s*\.99\)/, 'each run computes p99 from its own frame interval window');
+assert.match(source, /record\.pageMaxMs\s*=\s*record\.frameIntervals\.length\s*\?\s*Math\.max\(\.\.\.record\.frameIntervals\)\s*:\s*null/, 'each run records the worst observed frame interval without inventing an empty-run value');
 assert.doesNotMatch(source, /frameIntervals\.length\s*>|samples\.length\s*>|\.splice\(|\.shift\(\)/, 'diagnostic history remains uncapped so a long run cannot erase its own contention evidence');
 assert.doesNotMatch(source, /layerChunk|chunkSize|four-layer/i, 'the shared-device assay preserves the full-pass Kimodo comparison class');
 
