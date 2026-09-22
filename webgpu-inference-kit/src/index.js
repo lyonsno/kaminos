@@ -374,6 +374,15 @@ export {
 } from './sam-image-patch-embed-phase-program.js';
 
 export {
+  TRELLIS_DINOV3_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
+  createTrellisDinoV3PatchEmbedDispatchPlan,
+  createTrellisDinoV3PatchEmbedPhaseProgramCpuOracle,
+  createTrellisDinoV3PatchEmbedPhaseProgramRouteDefinition,
+  createTrellisDinoV3PatchEmbedPhaseProgramRouteReceipt,
+  runTrellisDinoV3PatchEmbedPhaseProgramRoute,
+} from './trellis-dinov3-patch-embed-phase-program.js';
+
+export {
   SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
   createSam3ImageVitPrefixDispatchPlan,
   createSam3ImageVitPrefixPhaseProgramCpuOracle,
