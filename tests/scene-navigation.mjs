@@ -86,7 +86,7 @@ test('MMB modifiers choose orbit/pan/dolly, and interruptions restore the comple
   emit(f.canvas,'pointermove',{pointerId:1,clientX:440,clientY:330,...modifiers});assert.notDeepEqual(f.nav.state().position,before.position);
   if(mode==='dolly')assert.deepEqual(f.nav.state().target,before.target);
   else if(mode==='pan')near(f.c.position.clone().sub(f.controls.target),new THREE.Vector3(0,0,10));
-  emit(f.doc,'keydown',{key:'Escape'});assert.deepEqual(f.nav.state().position,before.position);assert.deepEqual(f.nav.state().target,before.target);assert.equal(f.canvas.captures.size,0);
+  emit(f.doc,'keydown',{key:'Escape'});assert.deepEqual(f.nav.state().position,before.position);assert.deepEqual(f.nav.state().target,before.target);assert.deepEqual(f.nav.state().up,before.up);assert.equal(f.canvas.captures.size,0);
  }
  for(const type of ['blur','pointercancel','lostpointercapture']){
   const f=fixture();emit(f.canvas,'pointerdown',{button:1,pointerId:2,clientX:300,clientY:250});emit(f.canvas,'pointermove',{pointerId:2,clientX:350,clientY:260});
@@ -102,4 +102,53 @@ test('keyboard and wheel respect focus, modal ownership and controls suspension'
   emit(f.doc,'keydown',{key:'3',code:'Numpad3'});assert.deepEqual(f.nav.state().position,before.position);
   if(gate!=='text'){emit(f.canvas,'wheel',{deltaY:120,deltaMode:0,clientX:400,clientY:300});assert.deepEqual(f.nav.state().position,before.position);}
  }
+});
+
+test('top and bottom orbit continue across each pole through the effective controls update', async t=>{
+ if(!process.env.KAMINOS_ORBIT_CONTROLS_SOURCE){t.skip('set KAMINOS_ORBIT_CONTROLS_SOURCE to the observed three0.171.0 OrbitControls.js');return;}
+ const coreUrl=new URL('../lib/three.core.js',import.meta.url).href;
+ const source=readFileSync(process.env.KAMINOS_ORBIT_CONTROLS_SOURCE,'utf8').replace("from 'three'",`from '${coreUrl}'`);
+ const {OrbitControls}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ for(const sign of [-1,1]){
+  const c=cameraAt(),controls=new OrbitControls(c,null);controls.enableDamping=false;
+  const pivot=new THREE.Vector3(1,.5,0),projected=pivot.clone().project(c);
+  orbitCamera(c,controls.target,pivot,0,sign*Math.PI/2);controls.update();const pole=c.position.clone();
+  orbitCamera(c,controls.target,pivot,0,sign*Math.PI/12);controls.update();
+  assert.ok(c.position.distanceTo(pole)>1,'vertical navigation must continue past the pole');
+  assert.ok(pivot.clone().project(c).distanceTo(projected)<1e-4,'effective controls must preserve the off-center pivot');
+ }
+ for(const bottom of [false,true]){
+  const f=fixture(),controls=new OrbitControls(f.c,null);controls.enableDamping=false;
+  f.controls.update=()=>{controls.target.copy(f.controls.target);controls.update();};
+  emit(f.doc,'keydown',{key:'7',code:'Numpad7',ctrlKey:bottom});const before=f.c.position.clone();
+  emit(f.doc,'keydown',{key:bottom?'2':'8',code:bottom?'Numpad2':'Numpad8'});assert.ok(f.c.position.distanceTo(before)>1,'cardinal pole view must allow further vertical orbit');
+ }
+ const f=fixture(),controls=new OrbitControls(f.c,null);controls.enableDamping=false;
+ f.controls.update=()=>{controls.target.copy(f.controls.target);controls.update();};
+ const before=f.nav.state();emit(f.canvas,'pointerdown',{button:1,pointerId:3,clientX:450,clientY:300});
+ const pivot=new THREE.Vector3(...f.nav.state().depth.point),projected=pivot.clone().project(f.c);
+ emit(f.canvas,'pointermove',{pointerId:3,clientX:450,clientY:300-Math.PI/.01});const pole=f.c.position.clone();
+ emit(f.canvas,'pointermove',{pointerId:3,clientX:450,clientY:300-Math.PI/.01-60});
+ assert.ok(f.c.position.distanceTo(pole)>1,'MMB must continue across the pole');
+ assert.ok(pivot.clone().project(f.c).distanceTo(projected)<1e-4,'MMB keeps its off-center pivot on screen');
+ emit(f.doc,'keydown',{key:'Escape'});near(f.c.position,new THREE.Vector3(...before.position));near(f.c.up,new THREE.Vector3(...before.up));
+});
+
+test('actual scene camera fields retain expanded clipping and orientation through a fresh camera',()=>{
+ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const build=source.indexOf('function buildSceneData('),start=source.indexOf('    camera:',build),end=source.indexOf('    environment:',start);
+ const cameraFields=source.slice(start,end);
+ const restore=source.slice(source.indexOf('  // Apply camera\n'),source.indexOf('  // Apply material state\n'));
+ const c=cameraAt(),target=new THREE.Vector3(),controls={target,update(){c.lookAt(target);c.updateMatrixWorld(true);}};
+ const objects=[-50,50].map(x=>{const m=new THREE.Mesh(new THREE.BoxGeometry(10,10,10),new THREE.MeshBasicMaterial());m.position.x=x;return m;});
+ frameObjects(objects,c,controls);
+ const saved=Function('camera','controls',`return ({${cameraFields}}).camera;`)(c,controls);
+ const fresh=cameraAt(3),freshControls={target:new THREE.Vector3(),update(){fresh.lookAt(this.target);fresh.updateMatrixWorld(true);}};
+ Function('camera','controls','data',restore)(fresh,freshControls,{camera:saved});
+ for(const o of objects)for(const x of [-5,5])for(const y of [-5,5])for(const z of [-5,5]){
+  const p=new THREE.Vector3(x,y,z).add(o.position).project(fresh);assert.ok(p.z<1 && p.z>-1,'fresh reopen must retain framed geometry inside depth clipping');assert.ok(Math.abs(p.x)<1 && Math.abs(p.y)<1,'fresh reopen retains the framed bounds');
+ }
+ c.up.set(0,-1,0);controls.update();const inverted=Function('camera','controls',`return ({${cameraFields}}).camera;`)(c,controls);
+ Function('camera','controls','data',restore)(fresh,freshControls,{camera:inverted});near(fresh.up,c.up,'saved view orientation');
+ Function('camera','controls','data',restore)(fresh,freshControls,{camera:{position:[0,0,10],target:[0,0,0],fov:40}});near(fresh.up,new THREE.Vector3(0,1,0),'legacy scenes default upright');
 });

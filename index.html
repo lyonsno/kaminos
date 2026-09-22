@@ -24907,7 +24907,10 @@ function buildSceneData(capture = null) {
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
+      up: camera.up.toArray(),
       fov: camera.fov,
+      near: camera.near,
+      far: camera.far,
     },
     environment: {
       name: currentEnvName,
@@ -25496,6 +25499,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (data.camera) {
     camera.position.fromArray(data.camera.position);
     controls.target.fromArray(data.camera.target);
+    camera.up.fromArray(data.camera.up || [0, 1, 0]);
+    camera.near = data.camera.near ?? .01;
+    camera.far = data.camera.far ?? 100;
     if (data.camera.fov) camera.fov = data.camera.fov;
     camera.updateProjectionMatrix();
     controls.update();

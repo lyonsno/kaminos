@@ -1,4 +1,4 @@
-import {Vector2, Vector3, Quaternion, Matrix4, Spherical, Plane, Raycaster} from './lib/three.core.js';
+import {Vector2, Vector3, Quaternion, Plane, Raycaster} from './lib/three.core.js';
 
 const Y = new Vector3(0, 1, 0);
 const finite = v => v.toArray().every(Number.isFinite);
@@ -43,17 +43,16 @@ export function adoptNavigationDepth(camera, target, point) {
 }
 
 export function orbitCamera(camera, target, pivot, yaw, pitch) {
-  const toY = new Quaternion().setFromUnitVectors(camera.up.clone().normalize(), Y);
-  const spherical = new Spherical().setFromVector3(camera.position.clone().sub(target).applyQuaternion(toY));
-  spherical.theta += yaw;
-  spherical.phi += pitch;
-  spherical.makeSafe();
-  const direction = new Vector3().setFromSpherical(spherical).applyQuaternion(toY.invert());
-  const next = new Quaternion().setFromRotationMatrix(new Matrix4().lookAt(direction, new Vector3(), camera.up));
-  const rotation = next.clone().multiply(camera.quaternion.clone().invert());
+  // Pitch around the screen's horizontal axis, without a spherical pole stop.
+  // Carry screen-up through the turn so the shared controls' lookAt preserves
+  // the view after passing over the top or underneath the object.
+  const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const rotation = new Quaternion().setFromAxisAngle(Y, yaw)
+    .multiply(new Quaternion().setFromAxisAngle(right, pitch));
   camera.position.sub(pivot).applyQuaternion(rotation).add(pivot);
   target.sub(pivot).applyQuaternion(rotation).add(pivot);
-  camera.quaternion.copy(next);
+  camera.quaternion.premultiply(rotation).normalize();
+  camera.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
   camera.updateMatrixWorld(true);
 }
 
@@ -79,6 +78,8 @@ export function zoomCamera(camera, target, factor) {
 export function viewCamera(camera, target, direction) {
   const distance = camera.position.distanceTo(target);
   camera.position.copy(target).addScaledVector(direction.clone().normalize(), distance);
+  camera.up.set(0, 1, 0);
+  if (Math.abs(direction.y) === direction.length()) camera.up.set(0, 0, -Math.sign(direction.y));
   camera.lookAt(target);
   camera.updateMatrixWorld(true);
 }
@@ -105,12 +106,12 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     lastDepth = {point:pivot.point.toArray(), source:pivot.source, object:pivot.object};
     return pivot.point;
   };
-  const pose = () => ({position:camera.position.clone(), target:controls.target.clone()});
+  const pose = () => ({position:camera.position.clone(), target:controls.target.clone(), up:camera.up.clone()});
   const finish = cancel => {
     if (!gesture) return;
     const old = gesture;
     gesture = null;
-    if (cancel) {camera.position.copy(old.before.position); controls.target.copy(old.before.target); changed();}
+    if (cancel) {camera.position.copy(old.before.position); controls.target.copy(old.before.target); camera.up.copy(old.before.up); changed();}
     if (canvas.hasPointerCapture(old.pointerId)) canvas.releasePointerCapture(old.pointerId);
     if (old.gizmo) {gizmo.enabled = old.gizmo.enabled; gizmo.getHelper().visible = old.gizmo.visible;}
     controls.dispatchEvent({type:'end'});
@@ -190,7 +191,7 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     if (action) {take(e); action(); changed();}
   }, true);
   return {
-    state: () => ({gesture:gesture?.mode || null, depth:lastDepth, position:camera.position.toArray(), target:controls.target.toArray(), fov:camera.fov, projection:'perspective', autoDepth:true, zoomToMouse:false}),
+    state: () => ({gesture:gesture?.mode || null, depth:lastDepth, position:camera.position.toArray(), target:controls.target.toArray(), up:camera.up.toArray(), near:camera.near, far:camera.far, fov:camera.fov, projection:'perspective', autoDepth:true, zoomToMouse:false}),
     cancel: () => finish(true),
     dispose: () => {finish(true); for (const dispose of disposers) dispose();},
   };
