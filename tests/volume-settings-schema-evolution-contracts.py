@@ -156,7 +156,64 @@ def presentation_descriptor(value):
     }
 
 
+def check_mixed_version_index():
+    for field, schema_field in (
+        ("domControls", "controls"),
+        ("rendererControls", "rendererControls"),
+        ("presentationControls", "presentationControls"),
+    ):
+        future_schema = copy.deepcopy(SCHEMA)
+        future_schema[schema_field].append({
+            "key": "volume-future-control", "param": "volume_future_control",
+            "tagName": "INPUT", "type": "range", "additiveDefault": 0.75,
+        })
+        future_schema["controlCount"] = len(future_schema["controls"])
+        future, _ = serve.normalize_volume_settings_preset_payload(legacy_payload(), future_schema)
+        compatible, _ = serve.normalize_volume_settings_preset_payload(legacy_payload(), SCHEMA)
+        with tempfile.TemporaryDirectory() as temporary:
+            store = Path(temporary)
+            newer = serve.write_volume_settings_preset(store, "Newer basin", future, {}, future_schema)
+            newer_id = newer["effective"]["presetId"]
+            newer_alias = newer["effective"]["alias"]
+            current = serve.write_volume_settings_preset(store, "Current basin", compatible, {}, SCHEMA)
+            saved_bytes = {path: path.read_bytes() for path in store.rglob("*.json")}
+
+            index = serve.list_volume_settings_presets(store, SCHEMA)
+            assert [entry["presetId"] for entry in index["entries"]] == [current["effective"]["presetId"]]
+            assert len(index["unavailableEntries"]) == 1
+            unavailable = index["unavailableEntries"][0]
+            assert unavailable["alias"] == newer_alias
+            assert unavailable["label"] == "Newer basin"
+            assert unavailable["presetId"] == newer_id
+            assert unavailable["error"] == f"settings preset {field} contain unknown controls: volume-future-control"
+            for ref in (newer_id, newer_alias):
+                try:
+                    serve.read_volume_settings_preset(store, ref, SCHEMA)
+                except ValueError as error:
+                    assert "unknown controls: volume-future-control" in str(error)
+                else:
+                    raise AssertionError("index compatibility handling weakened direct preset reads")
+            assert saved_bytes == {path: path.read_bytes() for path in store.rglob("*.json")}
+            assert serve.read_volume_settings_preset(store, newer_id, future_schema)["preset"][field]["volume-future-control"]["value"] == 0.75
+
+            (store / "aliases" / f"{current['effective']['alias']}.json").unlink()
+            all_unavailable = serve.list_volume_settings_presets(store, SCHEMA)
+            assert all_unavailable["entries"] == []
+            assert len(all_unavailable["unavailableEntries"]) == 1
+            artifact_path = store / "presets" / f"{newer_id}.json"
+            corrupt = json.loads(artifact_path.read_text())
+            corrupt["contentHash"] = "sha256:" + "0" * 64
+            artifact_path.write_text(json.dumps(corrupt))
+            try:
+                serve.list_volume_settings_presets(store, SCHEMA)
+            except ValueError as error:
+                assert "content hash mismatch" in str(error)
+            else:
+                raise AssertionError("corruption was misrepresented as a version incompatibility")
+
+
 def main():
+    check_mixed_version_index()
     source = legacy_payload()
     normalized, projection = serve.normalize_volume_settings_preset_payload(source, SCHEMA)
     assert source["controlCount"] == 1, "normalization mutated the immutable source payload"

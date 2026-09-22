@@ -14312,11 +14312,13 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     if (!response.ok) throw new Error(index.error || `preset index failed: ${response.status}`);
     validateVolumeSettingsPresetIndex(index);
     volumeSettingsPresetIndex = index;
+    const unavailable = index.unavailableEntries || [];
     if (select) {
       const previous = selectedPresetId || select.value;
       select.replaceChildren();
       if (!index.entries.length) {
-        select.add(new Option('No saved presets', ''));
+        select.add(new Option(unavailable.length ? 'No compatible presets' : 'No saved presets', ''));
+        select.value = '';
       } else {
         for (const entry of index.entries) {
           const option = new Option(`${entry.label} | ${entry.presetId.slice(0, 16)}`, entry.presetId);
@@ -14325,9 +14327,16 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         }
         select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
       }
+      for (const entry of unavailable) {
+        const option = new Option(`${entry.label} | unavailable on this version`, entry.presetId);
+        option.disabled = true;
+        option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId} | ${entry.error}`;
+        select.add(option);
+      }
     }
     volumeSettingsPresetStatus(
-      `${index.entries.length} presets | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      `${index.entries.length} presets${unavailable.length ? ` | ${unavailable.length} unavailable on this version` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      unavailable.length > 0,
     );
     return index;
   } catch (error) {
