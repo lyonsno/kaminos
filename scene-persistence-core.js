@@ -98,7 +98,8 @@ export function hasVolumePrimitives(data) {
 
 export function sceneDocumentIsLoadable(data) {
   if (!data?.version) return false;
-  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition);
+  const localLiquid = normalizeLocalLiquidSetup(data.localLiquid);
+  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition) || !!localLiquid;
 }
 
 export function isReloadableSceneObjectRecord(record) {
@@ -129,6 +130,7 @@ export function planSceneRestore(data) {
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
+    localLiquid: normalizeLocalLiquidSetup(data.localLiquid),
   };
 }
 
@@ -141,6 +143,7 @@ export function buildSceneDocument({
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   composition = null,
+  localLiquid = null,
   capture = null,
   camera = null,
   environment = null,
@@ -167,6 +170,7 @@ export function buildSceneDocument({
     } : null,
     provenance: cloneJson(provenance),
     composition: normalizeComposition(composition),
+    localLiquid: normalizeLocalLiquidSetup(localLiquid),
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
@@ -179,3 +183,4 @@ export function buildSceneDocument({
   if (backdropBrightness !== undefined) document.backdropBrightness = backdropBrightness;
   return document;
 }
+import { normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
