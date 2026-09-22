@@ -52,6 +52,11 @@ const successfulRun = {
 };
 assert.equal(validateSuccessfulRun(successfulRun), successfulRun.runs[0]);
 assert.throws(
+  () => validateSuccessfulRun(successfulRun, 'fence-light'),
+  /schedule/,
+  'requested split cannot close on missing or full-pass effective scheduling',
+);
+assert.throws(
   () => validateSuccessfulRun({ ...successfulRun, runs: [{ ...successfulRun.runs[0], foregroundReceipts: [] }] }),
   /current-run/,
   'historical page receipts cannot substitute for current-run evidence',

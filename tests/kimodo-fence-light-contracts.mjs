@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { kimodoSubmissionSchedule, yieldKimodoFrame } from '../kimodo-shared-device-host.mjs';
+
+assert.deepEqual(kimodoSubmissionSchedule('full-pass'), { mode: 'full-pass', layersPerDuty: 16, chunksPerPass: 1, maxInFlightDuties: 2 });
+assert.deepEqual(kimodoSubmissionSchedule('fence-light'), { mode: 'fence-light', layersPerDuty: 4, chunksPerPass: 4, maxInFlightDuties: 4 });
+assert.throws(() => kimodoSubmissionSchedule('unknown'), /Unknown/);
+let callback, settled = false;
+const pending = yieldKimodoFrame(null, cb => { callback = cb; return 42; }, () => assert.fail('unexpected cancel'));
+pending.then(() => { settled = true; });
+await Promise.resolve();
+assert.equal(settled, false);
+callback();
+await pending;
+assert.equal(settled, true, 'browser admission resolves without access to any GPU fence');
+const signal = new AbortController();
+let cancelled;
+const aborted = yieldKimodoFrame(signal.signal, () => 43, id => { cancelled = id; });
+signal.abort();
+await assert.rejects(aborted, { name: 'AbortError' });
+assert.equal(cancelled, 43);
+await assert.rejects(yieldKimodoFrame(signal.signal, () => assert.fail('pre-aborted rAF requested'), () => {}), { name: 'AbortError' });
+console.log('Kimodo fence-light frame admission contracts passed');

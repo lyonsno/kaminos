@@ -8,6 +8,31 @@ import {
 
 export const KIMODO_SHARED_DEVICE_ROUTE = KIMODO_TEXT_TO_MOTION_ROUTE_ID;
 
+export function kimodoSubmissionSchedule(mode) {
+  if (mode === 'full-pass') return Object.freeze({ mode, layersPerDuty: 16, chunksPerPass: 1, maxInFlightDuties: 2 });
+  if (mode === 'fence-light') return Object.freeze({ mode, layersPerDuty: 4, chunksPerPass: 4, maxInFlightDuties: 4 });
+  throw new Error(`Unknown Kimodo submission schedule: ${mode}`);
+}
+
+// A browser opportunity, not GPU completion. The existing ordinary renderer
+// remains the only frame requester; the kit then services its pending demand.
+export function yieldKimodoFrame(signal, requestFrame = requestAnimationFrame, cancelFrame = cancelAnimationFrame) {
+  return new Promise((resolve, reject) => {
+    let frame;
+    const abort = () => {
+      if (frame !== undefined) cancelFrame(frame);
+      signal?.removeEventListener('abort', abort);
+      reject(new DOMException('Kimodo frame yield canceled', 'AbortError'));
+    };
+    if (signal?.aborted) return abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    frame = requestFrame(() => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    });
+  });
+}
+
 function foregroundFailure(message, detail = null) {
   const error = new Error(message);
   error.name = 'KimodoForegroundError';
@@ -195,6 +220,10 @@ export function connectKimodoSharedDeviceForeground({
             step: Number.isFinite(step) ? step : null,
             numSteps: Number.isFinite(Number(boundary.numSteps)) ? Number(boundary.numSteps) : null,
             pass,
+            chunkIndex: boundary.chunkIndex ?? 1,
+            chunkCount: boundary.chunkCount ?? 1,
+            layerStart: boundary.layerStart ?? 0,
+            layerEnd: boundary.layerEnd ?? 16,
           },
         });
         try {

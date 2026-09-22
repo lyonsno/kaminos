@@ -1,12 +1,11 @@
-import {
-  KIMODO_DEFAULT_MAX_IN_FLIGHT_DUTIES,
-  createKimodoProducer,
-} from './artifacts/kimodo-shared-device/lib/producer.js';
+import { createKimodoProducer } from './artifacts/kimodo-shared-device/lib/producer.js';
 import { createFrontendTelemetry, KIMODO_ROUTE_ID } from './artifacts/kimodo-shared-device/lib/telemetry.js';
 import {
   connectKimodoSharedDeviceForeground,
   sharedGpuDeviceRequirements,
   snapshotKimodoSharedDevice,
+  kimodoSubmissionSchedule,
+  yieldKimodoFrame,
 } from './kimodo-shared-device-host.mjs';
 
 export { sharedGpuDeviceRequirements };
@@ -63,10 +62,11 @@ function injectHud() {
     #kimodo-shared-error{color:#ff9b92;white-space:pre-wrap}#kimodo-shared-motion{width:100%;height:178px;background:#07111c;border:1px solid #294b64;border-radius:6px}
   </style>
   <h1>Kimodo × live flame</h1>
-  <p class="sub">One host-owned GPUDevice · exact shared queue · full 16-layer passes · persistent inference-kit foreground service.</p>
+  <p class="sub">One host-owned GPUDevice · exact shared queue · same 16-layer math · persistent inference-kit foreground service.</p>
   <label>Prompt<textarea id="kimodo-shared-prompt" rows="2">a person dances</textarea></label>
   <div class="pair"><label>Seconds<input id="kimodo-shared-duration" type="number" min="1" max="18" value="6"></label><label>DDIM steps<input id="kimodo-shared-steps" type="number" min="1" value="100"></label></div>
   <label>Embedding endpoint<input id="kimodo-shared-embed" value="http://127.0.0.1:8098/embed"></label>
+  <label>Submission schedule<select id="kimodo-shared-schedule"><option value="full-pass">Full pass (reference)</option><option value="fence-light">Four-layer submissions · no foreground GPU wait</option></select></label>
   <div class="pair"><button id="kimodo-shared-load">Load Kimodo</button><button id="kimodo-shared-run" disabled>Generate motion</button><button id="kimodo-shared-cancel" disabled>Cancel</button></div>
   <progress id="kimodo-shared-progress" max="100" value="0"></progress>
   <dl><dt>Topology</dt><dd id="kimodo-shared-topology">same-device verification pending</dd>
@@ -173,7 +173,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       backend: flame.backend,
       active: flame.active,
       error: flame.error ?? null,
-      foreground: flame.ordinaryForeground ?? null,
+      foreground: flame.ordinaryForeground ? { ...flame.ordinaryForeground } : null,
     });
     drawMotion(motion, motionStartedAtMs);
     if (now - lastPaintAt >= 250) {
@@ -263,6 +263,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
     const prompt = $('prompt').value.trim();
     const steps = Number($('steps').value);
     const duration = Number($('duration').value);
+    const scheduling = kimodoSubmissionSchedule($('schedule').value);
     if (!prompt || !Number.isSafeInteger(steps) || steps < 1 || !Number.isFinite(duration) || duration < 1 || duration > 18) {
       $('error').textContent = 'Use a prompt, a positive integer step count, and 1–18 seconds.';
       return;
@@ -270,7 +271,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
     $('error').textContent = '';
     $('run').disabled = true;
     $('cancel').disabled = false;
-    for (const id of ['prompt', 'steps', 'duration']) $(id).disabled = true;
+    for (const id of ['prompt', 'steps', 'duration', 'schedule']) $(id).disabled = true;
     const generationId = ++generationSequence;
     const runId = `kimodo-shared-${Date.now()}-${generationId}`;
     const record = {
@@ -279,6 +280,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       prompt,
       steps,
       duration,
+      scheduling,
       startedAtMs: performance.now(),
       status: 'running',
       deviceTopology: 'same-device',
@@ -293,7 +295,8 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
     const telemetry = createFrontendTelemetry({
       generationId,
       numSteps: steps,
-      requestedMaxInFlightDuties: KIMODO_DEFAULT_MAX_IN_FLIGHT_DUTIES,
+      requestedMaxInFlightDuties: scheduling.maxInFlightDuties,
+      boundariesPerStep: 4 * scheduling.chunksPerPass,
     });
     let run = null;
     let generationError = null;
@@ -304,6 +307,8 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
         steps,
         duration,
         generationId,
+        layersPerDuty: scheduling.layersPerDuty,
+        maxInFlightDuties: scheduling.maxInFlightDuties,
         signal: controller.signal,
         embedUrl: $('embed').value,
         onStage: (name, event) => {
@@ -317,8 +322,9 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
           $('progress').value = progress.pct;
         },
         foregroundWindow: (phase, work) => run.withForeground(phase, work),
-        foregroundOpportunity: boundary => {
+        foregroundOpportunity: async boundary => {
           telemetry.foreground(boundary);
+          if (scheduling.mode === 'fence-light') await yieldKimodoFrame(boundary.signal);
           return run.foregroundOpportunity(boundary);
         },
       });
@@ -328,6 +334,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       telemetry.succeed(result.receipt, result.submission);
       record.receipt = result.receipt;
       record.submission = result.submission;
+      record.diagnostics = result.diagnostics;
       record.motion = { numFrames: motion.numFrames, numJoints: motion.numJoints, fps: motion.fps };
       record.modelStatus = 'succeeded';
       record.status = 'finishing';
@@ -337,6 +344,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       telemetry.fail(error);
       record.status = controller.signal.aborted ? 'canceled' : 'failed';
       record.error = { phase: error?.phase || 'generation', message: error?.message || String(error) };
+      record.diagnostics = error?.diagnostics ?? null;
       state.lastError = record.error;
       state.status = record.status;
       $('error').textContent = record.error.message;
@@ -379,7 +387,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       controller = null;
       $('cancel').disabled = true;
       $('run').disabled = false;
-      for (const id of ['prompt', 'steps', 'duration']) $(id).disabled = false;
+      for (const id of ['prompt', 'steps', 'duration', 'schedule']) $(id).disabled = false;
     }
   }
 

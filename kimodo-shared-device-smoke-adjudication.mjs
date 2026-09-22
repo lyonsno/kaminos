@@ -13,9 +13,38 @@ export function validateMountedComposition(snapshot) {
   return state;
 }
 
-export function validateSuccessfulRun(terminal) {
+export function validateSuccessfulRun(terminal, requestedSchedule = null) {
   if (terminal?.status !== 'succeeded') throw new Error(terminal?.lastError?.message || `Generation ended as ${terminal?.status || 'missing'}`);
   const run = terminal.runs?.at(-1);
+  if (requestedSchedule !== null) {
+    const split = requestedSchedule === 'fence-light';
+    const layers = split ? 4 : 16, chunks = split ? 4 : 1, capacity = split ? 4 : 2;
+    const expected = run?.steps * 4 * chunks;
+    const submission = run?.receipt?.metadata?.gpuSubmission;
+    if (!['full-pass', 'fence-light'].includes(requestedSchedule)
+      || run?.scheduling?.mode !== requestedSchedule
+      || run.scheduling.layersPerDuty !== layers || run.scheduling.chunksPerPass !== chunks
+      || run.scheduling.maxInFlightDuties !== capacity
+      || run.diagnostics?.scheduling?.layersPerDuty !== layers
+      || run.diagnostics?.scheduling?.chunksPerPass !== chunks
+      || !Number.isSafeInteger(expected) || expected < 4
+      || run.diagnostics?.passes?.length !== expected
+      || run.diagnostics?.submissionReport?.duties?.length !== expected
+      || submission?.status !== 'drained' || submission.maxInFlightDuties !== capacity
+      || submission.submittedDutyCount !== expected || submission.completedDutyCount !== expected
+      || submission.failedDutyCount !== 0 || submission.inFlightDutyCount !== 0
+      || run.telemetry?.status !== 'succeeded') {
+      throw new Error('Requested Kimodo schedule lacks matching effective diagnostics and terminal receipt');
+    }
+    for (let i = 0; i < expected; i++) {
+      const pass = run.diagnostics.passes[i], duty = run.diagnostics.submissionReport.duties[i];
+      if (pass.chunkIndex !== i % chunks + 1 || pass.chunkCount !== chunks
+        || pass.layerStart !== (i % chunks) * layers || pass.layerEnd !== (i % chunks + 1) * layers
+        || pass.dutyId !== duty.dutyId || duty.status !== 'completed') {
+        throw new Error('Kimodo effective schedule contains partial or conflicting chunk identity');
+      }
+    }
+  }
   if (!run?.foregroundRunReport) throw new Error('Generation succeeded without a persistent foreground run report');
   if (!run.runId || run.foregroundRunReport.runId !== run.runId) {
     throw new Error('Generation succeeded with a mismatched foreground run report identity');

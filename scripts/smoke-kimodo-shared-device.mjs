@@ -25,6 +25,7 @@ const { values } = parseArgs({
     prompt: { type: 'string', default: 'a person dances' },
     duration: { type: 'string', default: '6' },
     steps: { type: 'string', default: '100' },
+    schedule: { type: 'string', default: 'full-pass' },
     'total-timeout-ms': { type: 'string', default: '600000' },
     'no-progress-timeout-ms': { type: 'string', default: '120000' },
     'embedding-fixture': { type: 'string' },
@@ -37,6 +38,7 @@ if (!values.url || !values['output-dir']) {
   throw new Error('Usage: smoke-kimodo-shared-device.mjs --url URL --output-dir DIR [--mode load|generate]');
 }
 if (!['load', 'generate'].includes(values.mode)) throw new Error(`Unsupported smoke mode: ${values.mode}`);
+if (!['full-pass', 'fence-light'].includes(values.schedule)) throw new Error('Unsupported submission schedule');
 const steps = Number(values.steps);
 const duration = Number(values.duration);
 const totalTimeoutMs = Number(values['total-timeout-ms']);
@@ -67,6 +69,7 @@ const report = {
     prompt: values.prompt,
     duration,
     steps,
+    schedule: values.schedule,
     totalTimeoutMs,
     noProgressTimeoutMs,
     browser: values.browser,
@@ -333,15 +336,17 @@ try {
 
   if (values.mode === 'generate') {
     report.failurePhase = 'generation';
-    await page.evaluate(({ prompt, duration, steps }) => {
+    await page.evaluate(({ prompt, duration, steps, schedule }) => {
       document.querySelector('#kimodo-shared-prompt').value = prompt;
       document.querySelector('#kimodo-shared-duration').value = String(duration);
       document.querySelector('#kimodo-shared-steps').value = String(steps);
-    }, { prompt: values.prompt, duration, steps });
+      document.querySelector('#kimodo-shared-schedule').value = schedule;
+    }, { prompt: values.prompt, duration, steps, schedule: values.schedule });
     await page.click('#kimodo-shared-run');
     const terminalSnapshot = await waitForProgress('generation', snapshot => ['succeeded', 'failed', 'canceled'].includes(snapshot?.state?.status));
     const terminal = terminalSnapshot.state;
-    const lastRun = validateSuccessfulRun(terminal);
+    const lastRun = validateSuccessfulRun(terminal, values.schedule);
+    report.effective.scheduling = lastRun.scheduling;
     phase('generation-succeeded', {
       runId: lastRun.runId,
       wallMs: lastRun.wallMs,
