@@ -12,6 +12,8 @@ body.sam-image-active #viewport { min-width: 0; }
 #sam-image-status { font-size: 12px; color: #b7d6c5; line-height: 1.5; margin-top: 12px; overflow-wrap: anywhere; }
 #sam-image-status[data-failed="true"] { color: #efa8a0; }
 #sam-image-result { font-size: 10px; line-height: 1.5; color: #92a1a5; margin-top: 6px; overflow-wrap: anywhere; }
+body.sam-image-active #viewport #transform-bar,
+body.sam-image-active #viewport #info-bar { display: none; }
 #sam-image-viewport { position: absolute; inset: 0; z-index: 9; background: #101515; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
 #sam-image-viewport[hidden] { display: none; }
 .sam-image-viewbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid #303938; padding: 12px 16px; }
