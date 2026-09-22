@@ -280,7 +280,7 @@ async function main() {
 
     report.failurePhase = 'image-ingress'; saveReport();
     // The accepted source bytes keep numerical parity while the name exercises export persistence.
-    await checked(page.locator('#sam-image-file').setInputFiles({ name: `${'a'.repeat(230)}.jpg`,
+    await checked(page.locator('#sam-image-file').setInputFiles({ name: `${'a'.repeat(245)}.jpg`,
       mimeType: 'image/jpeg', buffer: readFileSync(values.image) }));
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
     await capture('source-desktop');
