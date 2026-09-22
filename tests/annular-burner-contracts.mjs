@@ -40,6 +40,11 @@ assert.equal(source.radius, 0.52);
 assert.equal(source.width, 0.104);
 assert.equal(source.sourceLaw, 'shallow-primary');
 assert.equal(source.axialHalfExtent, compiled.descriptor.sourceDepth / 2);
+const tilted = compileVolumeEmitterFamily({ family:'ring', ringRadius:.12, radius:.024,
+  origin:[.3,-.45,.1], direction:[1,0,0], supportAxis:[0,0,1] });
+const tiltedSource = burnerSource({...receipt, compilerReceipt:tilted});
+assert.ok(tiltedSource, 'aiming a placed ring source must not make its burner disappear');
+assert.deepEqual(tiltedSource.axis,[1,0,0]);
 for (const sourceLaw of ['legacy-volume', 'shallow-primary']) {
   for (const sourceDepth of [0.0069421094369548, 0.24, 0.36]) {
     const actual = compileVolumeEmitterFamily({ family: 'ring', ringRadius: 0.08, radius: 0.016, sourceLaw, sourceDepth });

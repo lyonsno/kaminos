@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {FLAME_EMITTER_TYPE} from '../scene-flame-emitter.mjs';
 
 test('pose preview preserves the current gizmo attachment and visibility',()=>{
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const source=html.slice(html.indexOf('function applyAuthoredScenePose('),html.indexOf('window.kaminosSetSceneObjectTransform ='));
   const object={},record={id:'kiln',object,type:'glb'};
   let attachments=0,refreshes=0;
-  const context={sceneObjects:[record],activeSceneObjectId:'kiln',
+  const context={sceneObjects:[record],activeSceneObjectId:'kiln',FLAME_EMITTER_TYPE,
     applySceneObjectTransformState:(o,pose)=>Object.assign(o,pose),updateTransformInspector:()=>refreshes++,
     transformControls:{object,visible:false,detach(){},attach(){attachments++;this.visible=true;}},
     splatCorrectionTransformTarget:()=>null,

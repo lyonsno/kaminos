@@ -224,4 +224,17 @@ assert.throws(
   /unsupported runtime emitter family: bonfire/,
 );
 
+const movedEmitter = apply('ring', makePrototype(), { emitterPose: {
+  position: [0.3, -0.45, 0.1], rotation: [0, 0, Math.PI / 2], scale: [1.5, 1.5, 1.5],
+} });
+assert.deepEqual(movedEmitter.receipt.compilerReceipt.descriptor.origin, [0.3, -0.45, 0.1],
+  'placement moves the injection source rather than leaving it at the fixed default');
+assert.ok(Math.abs(movedEmitter.receipt.compilerReceipt.descriptor.axis[0] + 1) < 1e-12,
+  'rotation changes injection direction');
+assert.ok(Math.abs(movedEmitter.receipt.compilerReceipt.descriptor.extent - 0.18) < 1e-12,
+  'uniform scale changes the source aperture');
+assert.throws(() => apply('ring', makePrototype(), { emitterPose: {
+  position: [0, -0.76, 0], rotation: [0, 0, 0], scale: [1, 2, 1],
+} }), /uniform/i, 'a circular analytic source cannot silently accept anisotropic scale');
+
 console.log('volume analytic emitter runtime contracts passed');
