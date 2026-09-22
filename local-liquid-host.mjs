@@ -67,6 +67,9 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
   let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false;
+  const onGpuError=event=>{failure=event.error?.message || 'Host WebGPU error';};
+  device.addEventListener('uncapturederror',onGpuError);
+  device.lost.then(info=>{if(!disposed)failure=info.message || 'Host WebGPU device lost';});
   const nativeTexture = target => renderer.backend.get(target.texture).texture;
 
   function renderEnvironment() {
@@ -94,6 +97,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     if (disposed) throw Error('Local liquid host disposed');
     if (failure) throw Error(failure);
     const previousTarget=renderer.getRenderTarget(), previousOverride=scene.overrideMaterial, previousBackground=scene.background;
+    const previousRenderObject=renderer.getRenderObjectFunction();
     const clearColor=renderer.getClearColor(new THREE.Color()), clearAlpha=renderer.getClearAlpha();
     try {
       const size=renderer.getDrawingBufferSize(new THREE.Vector2()), width=size.x, height=size.y;
@@ -103,9 +107,13 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       renderEnvironment();
       renderer.setRenderTarget(colorTarget); pipeline.render();
       scene.overrideMaterial=depthMaterial; scene.background=null;
+      renderer.setRenderObjectFunction((...args)=>{
+        depthMaterial.side=args[4].side; renderer.renderObject(...args);
+      });
       renderer.setClearColor(new THREE.Color(camera.far,0,0),1);
       renderer.setRenderTarget(depthTarget); renderer.render(scene,camera);
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
+      renderer.setRenderObjectFunction(previousRenderObject);
       renderer.setClearColor(clearColor,clearAlpha);
       const generation=frameCount+1, frameId=`local-liquid-${generation}`;
       const cameraSnapshot=cameraFrame(camera,width,height,generation);
@@ -131,6 +139,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     } catch(error) { failure=error.message || String(error); throw error; }
     finally {
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
+      renderer.setRenderObjectFunction(previousRenderObject);
       renderer.setClearColor(clearColor,clearAlpha); renderer.setRenderTarget(previousTarget);
     }
   }
@@ -146,7 +155,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
       frameCount,paused,failure,setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
     dispose() {
-      disposed=true; solver.destroy(); scene.remove(group);
+      disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});
       for(const material of materials)material.dispose();
       for(const target of [colorTarget,depthTarget,outputTarget,environmentTarget])target?.dispose();

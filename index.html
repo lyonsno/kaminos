@@ -3182,7 +3182,7 @@ let fireLightFieldPass = null;
 let ordinarySceneDepthProvider = null;
 let localLiquidSetup = null, localLiquidHost = null, localLiquidLoading = false, localLiquidFailure = null;
 const localLiquidFields = [['x','Source X',.01],['y','Source Y',.01],['z','Source Z',.01],
-  ['radius','Aperture',.001],['strength','Jet strength',.01],['rate','Particles / second',10]];
+  ['radius','Aperture radius',.001],['strength','Jet speed',.01],['rate','Particles / second',10]];
 for (const [key,label,step] of localLiquidFields) {
   const row=document.createElement('div');row.className='burner-field';
   const caption=document.createElement('label');caption.htmlFor='local-liquid-'+key;caption.textContent=label;
@@ -3190,6 +3190,12 @@ for (const [key,label,step] of localLiquidFields) {
   row.append(caption,input);document.getElementById('local-liquid-fields').append(row);
 }
 function localLiquidStatus(message) {document.getElementById('local-liquid-status').textContent=message;}
+function showLocalLiquidSourceStatus() {
+  const inlet=localLiquidHost?.state().solver.liveInlets.inlets[0];
+  if(!inlet)return;
+  const requested=inlet.requested.particleReleaseRate,effective=inlet.effective.particleReleaseRate;
+  localLiquidStatus(`Live water · ${effective.toFixed(0)} particles/s${effective===requested?'':` (${requested} requested; source capacity reached)`}. Undo changes settings; restart clears water.`);
+}
 async function mountLocalLiquid(setup) {
   if (localLiquidLoading) throw Error('Local water is already loading');
   const next=normalizeLocalLiquidSetup(setup);
@@ -3201,7 +3207,7 @@ async function mountLocalLiquid(setup) {
     if (next) {
       const {createLocalLiquidHost}=await import('./local-liquid-host.mjs');
       localLiquidHost=await createLocalLiquidHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup:next});
-      localLiquidStatus('Live water · undo changes settings; restart clears the water.');
+      showLocalLiquidSourceStatus();
       document.getElementById('local-liquid-pause').textContent='Pause water';
     }
     sceneParameterTools?.sync();window._kaminosDirty?.();
@@ -3209,8 +3215,11 @@ async function mountLocalLiquid(setup) {
     localLiquidFailure=error.message || String(error);localLiquidStatus('Water stopped: '+localLiquidFailure);throw error;
   } finally {localLiquidLoading=false;}
 }
-window.kaminosLocalLiquidState=()=>localLiquidHost?.state() || {requestedRoute:localLiquidSetup?'kaminos/finger-fluid/local-analytic-host-frame-v0':null,
-  effectiveRoute:null,registered:Boolean(localLiquidSetup),mounted:false,loading:localLiquidLoading,failure:localLiquidFailure,setup:localLiquidSetup};
+window.kaminosLocalLiquidState=()=>({...(localLiquidHost?.state() || {requestedRoute:localLiquidSetup?'kaminos/finger-fluid/local-analytic-host-frame-v0':null,
+  effectiveRoute:null,registered:Boolean(localLiquidSetup),mounted:false,loading:localLiquidLoading,failure:localLiquidFailure,setup:localLiquidSetup}),
+  hostBackend:renderer?.backend?.constructor?.name || null,
+  adapter:sharedGpu?.adapter?.info ? {vendor:sharedGpu.adapter.info.vendor,architecture:sharedGpu.adapter.info.architecture,
+    device:sharedGpu.adapter.info.device,description:sharedGpu.adapter.info.description} : null});
 document.getElementById('local-liquid-pause').onclick=()=>{
   if(!localLiquidHost)return;
   const paused=localLiquidHost.setPaused(!localLiquidHost.paused);
@@ -25350,7 +25359,7 @@ function installAuthoredParameterControls() {
         normalizeLocalLiquidSetup({...localLiquidSetup,source:{...localLiquidSetup.source,[key]:value}});
       },
       write:value=>{
-        const source={...localLiquidSetup.source,[key]:value};localLiquidHost.setSource(source);localLiquidSetup={...localLiquidSetup,source};window._kaminosDirty?.();
+        const source={...localLiquidSetup.source,[key]:value};localLiquidHost.setSource(source);localLiquidSetup={...localLiquidSetup,source};showLocalLiquidSourceStatus();window._kaminosDirty?.();
       }});
   }
   return installParameterTools({edits:scenePlacementTools.edits,descriptors,report:message=>{document.getElementById('scene-edit-hud').textContent=message;}});
