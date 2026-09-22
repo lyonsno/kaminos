@@ -216,6 +216,12 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
   status(config?.mounted ? 'No image selected' : 'SAM model not mounted');
   return {
     open, run, save,
+    progress: () => ({ busy, source }),
+    interactionEvidence: () => ({ source, elapsedMs: elapsed, busy, invocation: invocation && { ...invocation }, error: failure?.message || null,
+      foreground: foreground?.evidence() || null,
+      sameDevice: executionDevice ? executionDevice === inferenceSession.device : null,
+      sameRendererDevice: rendererDevice === inferenceSession.device,
+    }),
     setActive(value) { active = value; if (active && foreground) foreground.drawNow(); },
     output: () => output,
     evidence: () => ({ source, elapsedMs: elapsed, busy, invocation: invocation && { ...invocation }, error: failure?.message || null,

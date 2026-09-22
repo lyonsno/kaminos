@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { validateSamConsumerInteraction } from './sam-image-witness-checks.js';
+import { persistSamEvidenceArtifact, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
 export { validateSamConsumerInteraction, validateSamConsumerExport } from './sam-image-witness-checks.js';
 
 export function validateSamConsumerOutput(output, { prompt, empty, previousId, cache }) {
@@ -44,6 +45,7 @@ async function main() {
     startedAt: new Date().toISOString(), errors: [] };
   const saveReport = () => writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2));
   let server, browser, page;
+  let lastTrustedEvidence = null;
   const serverLog = createWriteStream(join(out, 'server.log'));
   let failRuntime;
   const fatal = new Promise((_, reject) => { failRuntime = reject; });
@@ -93,7 +95,34 @@ async function main() {
     report.failurePhase = 'host-load'; saveReport();
     await checked(page.goto(url, { waitUntil: 'load' }));
     await checked(page.waitForFunction(() => Boolean(window.kaminosSamImageTools)));
+    await checked(page.evaluate(() => {
+      const transfers = new Map();
+      window.__samEvidenceTransfers = transfers;
+      window.__beginSamEvidenceTransfer = value => {
+        const text = JSON.stringify(value) ?? 'null';
+        const transferId = crypto.randomUUID();
+        transfers.set(transferId, text);
+        return { transferId, totalLength: text.length };
+      };
+    }));
     report.effectiveUrl = page.url();
+
+    async function persistBrowserTransfer(label, descriptor) {
+      const reference = await persistSamEvidenceArtifact({ outDir: out, label,
+        transferId: descriptor.transferId, totalLength: descriptor.totalLength,
+        readChunk: request => checked(page.evaluate(({ transferId, offset, totalLength, length }) => {
+          const text = window.__samEvidenceTransfers?.get(transferId);
+          if (typeof text !== 'string') throw new Error(`evidence transfer unavailable: ${transferId}`);
+          if (text.length !== totalLength) throw new Error('evidence transfer length changed');
+          let end = Math.min(offset + length, totalLength);
+          if (end < totalLength && text.charCodeAt(end - 1) >= 0xd800 && text.charCodeAt(end - 1) <= 0xdbff) end -= 1;
+          return { transferId, offset, totalLength, text: text.slice(offset, end) };
+        }, request)),
+      });
+      lastTrustedEvidence = reference;
+      await checked(page.evaluate(transferId => window.__samEvidenceTransfers.delete(transferId), descriptor.transferId));
+      return reference;
+    }
 
     async function capture(name) {
       const pixels = await checked(page.evaluate(() => {
@@ -120,12 +149,18 @@ async function main() {
       report.captures.push({ name, path, pixels }); saveReport();
     }
     async function snapshot(label) {
-      const output = await checked(page.evaluate(() => {
+      const captured = await checked(page.evaluate(() => {
         const o = window.kaminosSamImageTools.output();
         if (!o) return null;
-        return { ...o, mask: null, logits: null, instances: o.instances.map(i => ({ ...i, mask: null, logits: null })) };
+        const imageCache = o.imageCache ? { ...o.imageCache, resources: null } : o.imageCache;
+        const cleanOutput = { ...o, imageCache, mask: null, logits: null,
+          instances: o.instances.map(i => ({ ...i, mask: null, logits: null })) };
+        const resourceTransfer = o.imageCache?.resources == null ? null : window.__beginSamEvidenceTransfer(o.imageCache.resources);
+        return { output: cleanOutput, resourceTransfer };
       }));
-      if (!output) throw new Error(await page.locator('#sam-image-status').innerText());
+      if (!captured) throw new Error(await page.locator('#sam-image-status').innerText());
+      const { output } = captured;
+      if (captured.resourceTransfer) output.imageCache.resources = await persistBrowserTransfer(`${label}-resources`, captured.resourceTransfer);
       const files = [];
       for (const index of [null, ...output.instances.map(i => i.index)]) for (const field of ['mask', 'logits']) {
         const encoded = await checked(page.evaluate(({ index, field }) => {
@@ -169,7 +204,7 @@ async function main() {
           let direction = -1;
           while (moving) { await page.mouse.wheel(0, 40 * direction); direction *= -1; await sleep(80); }
         })().catch(error => { motionError = error; });
-        await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+        await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
       } finally { moving = false; await motion; }
       if (motionError) throw motionError;
       const cadence = await page.evaluate(() => { cancelAnimationFrame(window.samFrameHandle); return window.samFrameTimes; });
@@ -177,9 +212,14 @@ async function main() {
       const { output } = snapshotResult;
       validateSamConsumerOutput(output, { prompt, cache, empty, previousId });
       previousId = output.invocationId;
-      const evidence = await page.evaluate(() => window.kaminosSamImageTools.evidence());
-      const interaction = validateSamConsumerInteraction(evidence, output.invocationId);
-      assert.equal(evidence.source.sha256, report.inputs[inputKey].sha256);
+      const evidenceTransfer = await checked(page.evaluate(() => ({
+        interaction: window.kaminosSamImageTools.interactionEvidence(),
+        archive: window.__beginSamEvidenceTransfer(window.kaminosSamImageTools.evidence()),
+      })));
+      const interactionEvidence = evidenceTransfer.interaction;
+      const interaction = validateSamConsumerInteraction(interactionEvidence, output.invocationId);
+      assert.equal(interactionEvidence.source.sha256, report.inputs[inputKey].sha256);
+      const evidence = await persistBrowserTransfer(`${label}-runtime`, evidenceTransfer.archive);
       const comparison = baseline ? { exactMasks: true, exactScoresAndBoxes: true, exactSelectedLogits: true } : null;
       if (baseline) {
         assert.deepEqual(output.instances.map(i => i.index), baseline.instances.map(i => i.index));
@@ -233,7 +273,7 @@ async function main() {
       const inspection = await checked(page.evaluate(async ({ entry, kind }) => {
         const { validateSamConsumerExport } = await import('./sam-image-witness-checks.js');
         const { createSam3SourceMask } = await import('./webgpu-inference-kit/src/sam.js');
-        const tools = window.kaminosSamImageTools, output = tools.output(), source = tools.evidence().source;
+        const tools = window.kaminosSamImageTools, output = tools.output(), source = tools.progress().source;
         const selection = document.getElementById('sam-image-instances').value;
         const indices = selection === 'all' ? output.instances.map(row => row.index) : [Number(selection)];
         async function pixels(address) {
@@ -262,7 +302,7 @@ async function main() {
       assert.equal(inspection.sha256, sha256);
       report.exports ||= [];
       report.exports.push({ kind, label, path, sha256, entry, download, inspection }); saveReport();
-      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
       if (addToScene) {
         await checked(page.waitForFunction(() => document.querySelector('.tab.active')?.dataset.tab === 'assets'));
         report.sceneObjects = await page.evaluate(() => window.kaminosSceneObjectDebugState());
@@ -284,7 +324,7 @@ async function main() {
     // The accepted source bytes keep numerical parity while the name exercises export persistence.
     await checked(page.locator('#sam-image-file').setInputFiles({ name: `${'a'.repeat(245)}.jpg`,
       mimeType: 'image/jpeg', buffer: readFileSync(values.image) }));
-    await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+    await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
     await capture('source-desktop');
     const baseline = values.baseline ? JSON.parse(readFileSync(values.baseline, 'utf8')) : null;
     await run('cold-wheel', 'wheel', 'miss', false, baseline?.visualEvidence.output);
@@ -307,7 +347,7 @@ async function main() {
     assert.equal(await page.locator('#sam-image-save-mask').isDisabled(), true);
     report.failurePhase = 'webp-ingress'; saveReport();
     const webp = await checked(page.evaluate(async () => {
-      const source = window.kaminosSamImageTools.evidence().source;
+      const source = window.kaminosSamImageTools.progress().source;
       const image = new Image(); image.src = source.source; await image.decode();
       const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
       canvas.getContext('2d').drawImage(image, 0, 0);
@@ -322,7 +362,7 @@ async function main() {
     writeFileSync(webpPath, webpBytes);
     report.inputs.webp = { path: webpPath, sha256: `sha256:${createHash('sha256').update(webpBytes).digest('hex')}` }; saveReport();
     await checked(page.locator('#sam-image-file').setInputFiles({ name: 'source.webp', mimeType: 'image/webp', buffer: webpBytes }));
-    await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+    await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
     await run('webp-wheel', 'wheel', 'miss', false, null, 'webp');
     if (values['second-image']) {
       report.failurePhase = 'drop-image'; saveReport();
@@ -333,11 +373,11 @@ async function main() {
         return transfer;
       }, { bytes, name: basename(values['second-image']) });
       await page.locator('#sam-image-viewport').dispatchEvent('drop', { dataTransfer: transfer });
-      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
       await run('second-image', 'grocery bags', 'miss', false, null, 'second-image');
       report.failurePhase = 'paste-image'; saveReport();
       await page.evaluate(transfer => window.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer })), transfer);
-      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
       await run('pasted-image', 'grocery bags', 'hit', false, null, 'second-image');
       await transfer.dispose();
     }
@@ -346,20 +386,42 @@ async function main() {
     assert.equal(await page.locator('#sam-image-canvas').isHidden(), true, 'failed ingress left a stale visible image');
     assert.equal(await page.locator('#sam-image-run').isDisabled(), true);
     await page.locator('#sam-image-file').setInputFiles(values.image);
-    await checked(page.waitForFunction(() => !window.kaminosSamImageTools.evidence().busy));
+    await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
     await capture('recovered-source');
     report.status = 'captured'; report.failurePhase = null;
     report.checks = { numericalRegression: baseline ? 'passed' : 'not-requested', inputDuringInference: 'passed',
       persistedExports: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
   } catch (error) {
     report.status = 'failed'; report.error = String(error.stack || error); process.exitCode = 1;
+    const transport = error?.evidenceTransport || null;
+    if (transport) lastTrustedEvidence = transport;
+    try {
+      report.failureReceipt = writeSamTerminalFailure({ outDir: out, phase: report.failurePhase, error,
+        lastTrustedEvidence, startedAt: report.startedAt });
+    } catch (receiptError) {
+      report.failureReceiptError = String(receiptError.stack || receiptError);
+    }
     if (page) try { await page.screenshot({ path: join(out, 'failure.png') }); } catch {}
     console.error(report.error);
   } finally {
-    report.completedAt = new Date().toISOString(); saveReport();
-    await browser?.close();
-    if (server && server.exitCode === null) { server.kill('SIGTERM'); await new Promise(resolve => server.once('exit', resolve)); }
-    serverLog.end();
+    report.completedAt = new Date().toISOString();
+    try { saveReport(); }
+    catch (error) {
+      report.status = 'failed';
+      process.exitCode = 1;
+      console.error(`Could not persist terminal report: ${error.stack || error}`);
+      try {
+        report.failureReceipt = writeSamTerminalFailure({ outDir: out, phase: 'terminal-report-write', error,
+          lastTrustedEvidence, startedAt: report.startedAt });
+      } catch (receiptError) { console.error(`Could not persist terminal failure receipt: ${receiptError.stack || receiptError}`); }
+    }
+    try { await browser?.close(); }
+    catch (error) { console.error(`Browser cleanup failed: ${error.stack || error}`); process.exitCode = 1; }
+    try {
+      if (server && server.exitCode === null) { server.kill('SIGTERM'); await new Promise(resolve => server.once('exit', resolve)); }
+    } catch (error) { console.error(`Server cleanup failed: ${error.stack || error}`); process.exitCode = 1; }
+    try { serverLog.end(); }
+    catch (error) { console.error(`Server log close failed: ${error.stack || error}`); process.exitCode = 1; }
   }
   console.log(JSON.stringify({ status: report.status, report: join(out, 'report.json'), failurePhase: report.failurePhase }));
 }
