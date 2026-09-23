@@ -7,6 +7,29 @@ function cloneJson(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
 
+function normalizeCombustionBinding(binding, objectId) {
+  if (binding == null) return null;
+  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) {
+    throw new Error(`scene object ${objectId} combustion binding must be an object`);
+  }
+  if (binding.schema !== 'kaminos.object-combustion-binding.v0') {
+    throw new Error(`scene object ${objectId} combustion binding schema mismatch`);
+  }
+  if (String(binding.objectId || '') !== objectId) {
+    throw new Error(`scene object ${objectId} combustion binding object identity mismatch`);
+  }
+  if (typeof binding.assetIdentity !== 'string' || !/^sha256:[0-9a-f]{64}$/i.test(binding.assetIdentity)) {
+    throw new Error(`scene object ${objectId} combustion binding asset identity is invalid`);
+  }
+  if (typeof binding.structuralProfile !== 'string' || !binding.structuralProfile.trim()) {
+    throw new Error(`scene object ${objectId} combustion binding structural profile is invalid`);
+  }
+  if (!Number.isFinite(binding.burnRate) || binding.burnRate <= 0) {
+    throw new Error(`scene object ${objectId} combustion binding burn rate is invalid`);
+  }
+  return cloneJson(binding);
+}
+
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
   const id = String(record.id || record.fileName || record.source || 'object');
@@ -24,6 +47,9 @@ function normalizeSceneObjectRecord(record) {
       scale: [1, 1, 1],
     }),
     materials: cloneJson(record.materials ?? null),
+    ...(record.combustionBinding == null
+      ? {}
+      : { combustionBinding: normalizeCombustionBinding(record.combustionBinding, id) }),
     splat: cloneJson(record.splat ?? null),
     image: cloneJson(record.image ?? null),
     renderRoute: record.renderRoute ?? null,
@@ -66,6 +92,7 @@ export function sceneObjectToLegacyModel(data) {
     label: data.model.fileName || 'legacy model',
     transform: cloneJson(data.transform),
     materials: cloneJson(data.materials),
+    ...(data.combustionBinding == null ? {} : { combustionBinding: cloneJson(data.combustionBinding) }),
   };
 }
 
