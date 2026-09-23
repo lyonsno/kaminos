@@ -393,10 +393,13 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
       viewportCue: (() => {
         const cue = document.querySelector('#skinned-pose-cast-marker');
         const label = document.querySelector('#skinned-pose-cast-marker-label');
+        const dot = document.querySelector('#skinned-pose-cast-marker-dot');
         const viewport = document.querySelector('#viewport');
-        if (!cue || !label || !viewport) return null;
+        const panel = document.querySelector('#skinned-pose-panel');
+        if (!cue || !label || !dot || !viewport || !panel) return null;
         const rect = label.getBoundingClientRect();
         const viewportRect = viewport.getBoundingClientRect();
+        const rig = window.kaminosSkinnedRigDebugState(panel.dataset.objectId);
         return {
           visible: !cue.hidden && getComputedStyle(cue).display !== 'none' && getComputedStyle(cue).visibility !== 'hidden',
           label: label.textContent.trim(),
@@ -405,6 +408,9 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
           top: rect.top - viewportRect.top,
           width: rect.width,
           height: rect.height,
+          dotX: Number(dot.getAttribute('cx')),
+          dotY: Number(dot.getAttribute('cy')),
+          viewportBoundsCenters: rig.meshes.map(mesh => mesh.viewportBoundsCenter),
         };
       })(),
       degrees: document.querySelector('#skinned-pose-degrees')?.value || '',
@@ -480,6 +486,21 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     };
   })()`);
 
+  const readCurrentViewportCue = async () => evaluate(ws, `(() => {
+    const panel = document.querySelector('#skinned-pose-panel');
+    const cue = document.querySelector('#skinned-pose-cast-marker');
+    const dot = document.querySelector('#skinned-pose-cast-marker-dot');
+    if (!panel || !cue || !dot) return null;
+    return {
+      selectedCast: panel.dataset.meshIndex || null,
+      meshName: cue.dataset.meshName || null,
+      visible: !cue.hidden && getComputedStyle(cue).display !== 'none' && getComputedStyle(cue).visibility !== 'hidden',
+      dotX: Number(dot.getAttribute('cx')),
+      dotY: Number(dot.getAttribute('cy')),
+      viewportBoundsCenters: window.kaminosSkinnedRigDebugState(panel.dataset.objectId).meshes.map(mesh => mesh.viewportBoundsCenter),
+    };
+  })()`);
+
   const boneSelections = [];
   const castASelected = await selectBoneViaControl(0, 'hindlimb-left-hip');
   await delay(500);
@@ -495,19 +516,66 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     Object.entries(mesh.boneQuaternions).map(([name, quaternion]) =>
       Math.hypot(...quaternion.map((value, axis) => value - castSelectionPose.meshes[meshIndex].boneQuaternions[name][axis])))));
   const castCuePixels = viewportPixelDelta(castASelectionShot.path, castBSelectionShot.path);
+  const markerCenterDistance = (cue, center) => Math.hypot(cue.dotX - center.x, cue.dotY - center.y);
+  const markerCenterCheck = (selection, selectedIndex) => {
+    const centers = selection.viewportCue?.viewportBoundsCenters || [];
+    const selectedCenter = centers[selectedIndex];
+    const otherCenter = centers[1 - selectedIndex];
+    if (!selectedCenter || !otherCenter) return { selectedCenter, otherCenter, selectedDistance: Infinity, wrongAnchorDistance: Infinity, selectedCenterMatched: false, wrongAnchorRejected: false };
+    const selectedDistance = markerCenterDistance(selection.viewportCue, selectedCenter);
+    const wrongAnchorDistance = markerCenterDistance(selection.viewportCue, otherCenter);
+    return {
+      selectedCenter,
+      otherCenter,
+      selectedDistance,
+      wrongAnchorDistance,
+      selectedCenterMatched: selectedDistance <= 45,
+      wrongAnchorRejected: wrongAnchorDistance > 45,
+    };
+  };
+  const castACueCenterCheck = markerCenterCheck(castASelected, 0);
+  const castBCueCenterCheck = markerCenterCheck(castBSelected, 1);
   const expectedCastMeshes = before.meshes.map(mesh => mesh.name);
   if (!castASelected.viewportCue?.visible || castASelected.viewportCue.meshName !== expectedCastMeshes[0]
       || castASelected.viewportCue.label !== 'CAST A · SELECTED'
       || !castBSelected.viewportCue?.visible || castBSelected.viewportCue.meshName !== expectedCastMeshes[1]
       || castBSelected.viewportCue.label !== 'CAST B · SELECTED'
       || castASelected.viewportCue.left === castBSelected.viewportCue.left
+      || !castACueCenterCheck.selectedCenterMatched || !castACueCenterCheck.wrongAnchorRejected
+      || !castBCueCenterCheck.selectedCenterMatched || !castBCueCenterCheck.wrongAnchorRejected
       || selectionPoseError > 0.000001 || castCuePixels.changedPixels < 50 || unchangedPixels.changedPixels !== 0) {
-    throw new Error('cast selection did not move the visible viewport cue to the selected rig: ' + JSON.stringify({ castASelected, castBSelected, selectionPoseError, castCuePixels, unchangedPixels }));
+    throw new Error('cast selection cue did not match the independently projected selected-mesh bounds center, or the wrong-anchor control was not rejected: ' + JSON.stringify({ castASelected, castBSelected, castACueCenterCheck, castBCueCenterCheck, selectionPoseError, castCuePixels, unchangedPixels }));
   }
   if (!castASelected.status.includes('Cast A · Left hip') || !castASelected.status.includes('local Z 0°')
       || !castBSelected.status.includes('Cast B · Left hip') || !castBSelected.status.includes('local Z 0°')) {
     throw new Error('pose status did not track the selected cast and bone: ' + JSON.stringify({ castASelected, castBSelected }));
   }
+  const poseCueBeforeLargeRotation = await selectBoneViaControl(0, 'pelvis');
+  const largePoseAction = await applyViaControl(0, 'pelvis', 60);
+  await delay(150);
+  const poseCueAfterLargeRotation = await readCurrentViewportCue();
+  const rigAfterLargeRotation = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const poseBoundsDelta = Math.max(
+    ...before.meshes[0].bounds.center.map((value, axis) => Math.abs(value - rigAfterLargeRotation.meshes[0].bounds.center[axis])),
+    ...before.meshes[0].bounds.size.map((value, axis) => Math.abs(value - rigAfterLargeRotation.meshes[0].bounds.size[axis])),
+  );
+  const poseCueDelta = Math.hypot(
+    poseCueAfterLargeRotation.dotX - poseCueBeforeLargeRotation.viewportCue.dotX,
+    poseCueAfterLargeRotation.dotY - poseCueBeforeLargeRotation.viewportCue.dotY,
+  );
+  const poseCueSelectedCenterCheck = markerCenterCheck({ viewportCue: poseCueAfterLargeRotation }, 0);
+  if (poseBoundsDelta < 0.01) {
+    throw new Error('large-pose marker fixture did not move the selected mesh bounds enough to test attachment: ' + JSON.stringify({ poseCueBeforeLargeRotation, largePoseAction, rigAfterLargeRotation, poseBoundsDelta }));
+  }
+  if (poseCueDelta < 4) {
+    throw new Error('selected-cast viewport cue stayed at its pre-pose location during live bone rotation: ' + JSON.stringify({ poseCueBeforeLargeRotation, largePoseAction, poseCueAfterLargeRotation, poseBoundsDelta, poseCueDelta }));
+  }
+  if (!poseCueSelectedCenterCheck.selectedCenterMatched || !poseCueSelectedCenterCheck.wrongAnchorRejected) {
+    throw new Error('selected-cast cue did not follow the deformed mesh center, or the wrong-cast anchor passed the negative control: ' + JSON.stringify({ poseCueSelectedCenterCheck, poseCueAfterLargeRotation }));
+  }
+  await evaluate(ws, `document.querySelector('#skinned-pose-reset').click()`);
+  await delay(250);
+  const poseCueAfterReset = await selectBoneViaControl(0, 'hindlimb-left-hip');
   boneSelections.push(await selectBoneViaControl(0, 'hindlimb-right-stifle'));
   if (boneSelections[0].selectedBoneLabel !== 'Right stifle' || boneSelections[0].rotationControlCount !== 1) {
     throw new Error('bone selection did not retarget the rotation controls: ' + JSON.stringify(boneSelections[0]));
@@ -599,16 +667,24 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   const posedPixels = viewportPixelDelta(castBSelectionShot.path, posedShot.path);
   const restoredPixels = viewportPixelDelta(castBSelectionShot.path, restoredShot.path);
   const status = await evaluate(ws, `document.querySelector('#skinned-pose-status')?.textContent || ''`);
+  const resetStatusMatchesSelectedCard = status.includes('Both casts reset.')
+    && status.includes('Cast B · Left hip')
+    && status.includes('local Z 0°');
   lastEvidence.meshSkinnedPoseControls = {
     objectId, expectedAssetSha256, loadedSha256, panel, boneSelections, before, beforeShot,
     castASelected, castASelectionShot, castBSelected, castBSelectionShot, castBUnchangedShot, unchangedPixels, castSelectionPose, selectionPoseError, castCuePixels,
+    castACueCenterCheck, castBCueCenterCheck,
+    poseCueBeforeLargeRotation, largePoseAction, poseCueAfterLargeRotation, poseBoundsDelta, poseCueDelta, poseCueSelectedCenterCheck, poseCueAfterReset,
     firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot, firstCastPixels,
     secondAction, axisAction, secondCastNumericPose, fractionalInput, fractionalInputPoseError, outOfRangeInput, emptyNumericInput, invalidInputPoseError,
     bothCastPose, secondHipError, firstPosePreservedError, secondCastPixels, posedShot,
-    restored, resetErrors, restoredShot, status, identicalControl, posedPixels, restoredPixels,
+    restored, resetErrors, restoredShot, status, resetStatusMatchesSelectedCard, identicalControl, posedPixels, restoredPixels,
   };
   if (identicalControl.changedPixels !== 0 || posedPixels.changedPixels < 500 || restoredPixels.changedPixels !== 0) {
     throw new Error('pose controls did not produce visible reversible deformation: ' + JSON.stringify({ identicalControl, unchangedPixels, posedPixels, restoredPixels, castBSelectionShot, restoredShot }));
+  }
+  if (!resetStatusMatchesSelectedCard) {
+    throw new Error('reset acknowledgment did not retain the visible selected-cast/bone/axis context: ' + JSON.stringify({ status, resetStatusMatchesSelectedCard }));
   }
 }
 

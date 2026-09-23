@@ -5495,6 +5495,7 @@ function applyTransformInspectorField(input) {
     transformControls.visible = true;
     document.getElementById('transform-bar').classList.add('visible');
   }
+  updateSkinnedPoseCastMarkerFrame();
   window._kaminosDirty?.();
   setInfo(`Transform updated: ${entry.label || entry.fileName || entry.id}`);
 }
@@ -5988,21 +5989,29 @@ function setSkinnedPoseCastMarkerTarget(objectId, mesh, meshIndex) {
   mesh.updateWorldMatrix(true, false);
   const previousBoundingBox = mesh.boundingBox;
   let bounds;
+  let anchorLocal;
   try {
     mesh.boundingBox = null;
     mesh.computeBoundingBox();
+    anchorLocal = mesh.boundingBox?.getCenter(new THREE.Vector3()) || null;
     bounds = mesh.boundingBox?.clone().applyMatrix4(mesh.matrixWorld) || null;
   } finally {
     mesh.boundingBox = previousBoundingBox;
   }
-  if (!bounds || bounds.isEmpty()) {
+  if (!bounds || bounds.isEmpty() || !anchorLocal) {
     skinnedPoseCastMarkerTarget = null;
     marker.hidden = true;
     return;
   }
-  const anchor = bounds.getCenter(new THREE.Vector3());
-  skinnedPoseCastMarkerTarget = { objectId, meshIndex, mesh, meshName: mesh.name || `Skinned cast ${meshIndex + 1}`, anchor };
+  skinnedPoseCastMarkerTarget = { objectId, meshIndex, mesh, meshName: mesh.name || `Skinned cast ${meshIndex + 1}`, anchorLocal };
   marker.dataset.meshName = skinnedPoseCastMarkerTarget.meshName;
+  updateSkinnedPoseCastMarkerFrame();
+}
+
+function refreshSkinnedPoseCastMarkerAnchor(mesh) {
+  const target = skinnedPoseCastMarkerTarget;
+  if (!target || target.mesh !== mesh || !mesh?.boundingBox || mesh.boundingBox.isEmpty()) return;
+  target.anchorLocal = mesh.boundingBox.getCenter(new THREE.Vector3());
   updateSkinnedPoseCastMarkerFrame();
 }
 
@@ -6019,8 +6028,9 @@ function updateSkinnedPoseCastMarkerFrame() {
     if (marker) marker.hidden = true;
     return;
   }
+  target.mesh.updateWorldMatrix(true, false);
   camera.updateMatrixWorld();
-  const projected = target.anchor.clone().project(camera);
+  const projected = target.anchorLocal.clone().applyMatrix4(target.mesh.matrixWorld).project(camera);
   if (projected.z < -1 || projected.z > 1) {
     marker.hidden = true;
     return;
@@ -6116,7 +6126,7 @@ function ensureSkinnedPosePanelEvents(panel) {
     }
     const status = panel.querySelector('#skinned-pose-status');
     updateSkinnedPosePanel(entry);
-    if (status) status.textContent = 'Both casts reset to their imported poses.';
+    if (status) status.textContent = `Both casts reset. ${status.textContent}`;
   });
 }
 
@@ -6152,6 +6162,7 @@ function applySkinnedPosePanelInput(panel, axisOverride, degrees) {
   if (!mesh?.skeleton?.bones.some(bone => bone.name === boneName)) return;
   try {
     window.kaminosSetSkinnedBoneDelta(entry.id, meshIndex, boneName, axis, degrees);
+    refreshSkinnedPoseCastMarkerAnchor(mesh);
     const offsets = skinnedPosePreviewOffsets.get(mesh) || new Map();
     offsets.set(boneName, { axis, degrees });
     skinnedPosePreviewOffsets.set(mesh, offsets);
@@ -6255,20 +6266,34 @@ function updateSkinnedPosePanel(entry) {
   setSkinnedPoseCastMarkerTarget(entry.id, mesh, selectedIndex);
 }
 
+function skinnedPoseViewportBoundsCenter(box) {
+  const viewport = document.getElementById('viewport');
+  if (!box || box.isEmpty() || !camera || !viewport?.clientWidth || !viewport?.clientHeight) return null;
+  camera.updateMatrixWorld();
+  const projected = box.getCenter(new THREE.Vector3()).project(camera);
+  return {
+    x: (projected.x + 1) * 0.5 * viewport.clientWidth,
+    y: (1 - projected.y) * 0.5 * viewport.clientHeight,
+    depth: projected.z,
+  };
+}
+
 window.kaminosSkinnedRigDebugState = function(id) {
   return {
     objectId: id,
     meshes: sceneObjectSkinnedMeshes(id).map(mesh => {
       mesh.computeBoundingBox();
       const box = new THREE.Box3().setFromObject(mesh);
+      const center = box.getCenter(new THREE.Vector3());
       return {
         name: mesh.name,
         bones: mesh.skeleton.bones.map(bone => bone.name),
         boneQuaternions: Object.fromEntries(mesh.skeleton.bones.map(bone => [bone.name, bone.quaternion.toArray()])),
         bounds: {
-          center: box.getCenter(new THREE.Vector3()).toArray(),
+          center: center.toArray(),
           size: box.getSize(new THREE.Vector3()).toArray(),
         },
+        viewportBoundsCenter: skinnedPoseViewportBoundsCenter(box),
       };
     }),
   };
