@@ -140,7 +140,7 @@ assert.equal(Object.hasOwn(attentionOnlyTransfers,'block1AttentionToNorm2'),fals
 const fullBlockTransfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:true});
 assert.equal(fullBlockTransfers.block1AttentionToNorm2,'same-runtime-device-buffer');
 assert.equal(fullBlockTransfers.norm2ToMlp,'same-runtime-device-buffer');
-assert.equal(Object.hasOwn(fullBlockTransfers,'block1MlpOutputToBlock2Norm1'),false,
+assert.equal(Object.hasOwn(fullBlockTransfers,'block1OutputToBlock2Norm1'),false,
   'the full-block-1 mode must not claim the later block-2 norm1 handoff');
 const block2Transfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:true,residentBlock2Norm1Probe:true});
 assert.equal(block2Transfers.block1OutputToBlock2Norm1,'same-runtime-device-buffer');
