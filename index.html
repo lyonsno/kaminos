@@ -414,6 +414,20 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .transform-input { width: 100%; min-width: 0; height: 24px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #bbb; font: 10px 'SF Mono', monospace; padding: 2px 4px; outline: none; }
 .transform-input:focus { border-color: #1976d2; color: #fff; background: #151b22; }
 .transform-input:disabled { opacity: 0.45; cursor: not-allowed; }
+.skinned-pose-panel { border-top: 1px solid #2a2a2a; padding-top: 9px; display: flex; flex-direction: column; gap: 8px; }
+.skinned-pose-panel[hidden] { display: none; }
+.skinned-pose-title { color: #ddd; font-size: 11px; font-weight: 700; }
+.skinned-pose-note { color: #777; font-size: 10px; line-height: 1.35; }
+.skinned-pose-cast { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; align-items: center; color: #888; font-size: 10px; }
+.skinned-pose-cast select, .skinned-pose-axis, .skinned-pose-degrees { min-width: 0; height: 24px; background: #181818; border: 1px solid #333; border-radius: 4px; color: #bbb; font: 10px 'SF Mono', monospace; padding: 2px 5px; }
+.skinned-pose-joints { display: flex; flex-direction: column; gap: 6px; }
+.skinned-pose-joint { display: grid; grid-template-columns: minmax(68px, 0.8fr) 42px minmax(70px, 1fr) 50px; gap: 5px; align-items: center; }
+.skinned-pose-bone { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #aaa; font: 9px 'SF Mono', monospace; }
+.skinned-pose-range { width: 100%; min-width: 0; accent-color: #79a9c7; }
+.skinned-pose-degrees { width: 50px; text-align: right; }
+.skinned-pose-actions { display: flex; gap: 6px; }
+.skinned-pose-actions .btn { margin: 0; flex: 1; }
+.skinned-pose-status { min-height: 24px; color: #8fc7d6; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
 
 /* Volume prototype */
 .route-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid #28414a; border-radius: 5px; color: #8fc7d6; background: #102025; font: 10px 'SF Mono', monospace; }
@@ -637,6 +651,16 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y"></label>
             <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z"></label>
           </div>
+        </div>
+        <div class="skinned-pose-panel" id="skinned-pose-panel" hidden>
+          <div class="skinned-pose-title">Live joint preview</div>
+          <div class="skinned-pose-note">Offsets are measured from the imported pose and apply as you adjust each joint. Preview changes are temporary and are not saved into the scene yet.</div>
+          <label class="skinned-pose-cast"><span>Cast</span><select id="skinned-pose-cast" aria-label="Skinned cast"></select></label>
+          <div class="skinned-pose-joints" id="skinned-pose-joints"></div>
+          <div class="skinned-pose-actions">
+            <button type="button" class="btn" id="skinned-pose-reset">Reset imported pose</button>
+          </div>
+          <div class="skinned-pose-status" id="skinned-pose-status" role="status" aria-live="polite"></div>
         </div>
         <div class="splat-correction-panel" id="splat-correction-panel" hidden>
           <div class="transform-inspector-head">
@@ -5218,6 +5242,7 @@ function updateTransformInspector() {
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
   updateSplatCorrectionPanel(entry);
+  updateSkinnedPosePanel(entry);
   if (!entry && activeSceneGroupId) {
     empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
   } else if (!entry) {
@@ -5751,6 +5776,7 @@ window.kaminosSceneObjectBoundsDebugState = function(id) {
 };
 
 const skinnedBoneInitialQuaternions = new WeakMap();
+const skinnedPosePreviewOffsets = new WeakMap();
 
 function sceneObjectSkinnedMeshes(id) {
   const record = sceneObjects.find(item => item.id === id);
@@ -5760,6 +5786,159 @@ function sceneObjectSkinnedMeshes(id) {
     if (child.isSkinnedMesh && child.skeleton) meshes.push(child);
   });
   return meshes;
+}
+
+function ensureSkinnedPosePanelEvents(panel) {
+  if (!panel || panel.dataset.eventsBound === 'true') return;
+  panel.dataset.eventsBound = 'true';
+  panel.addEventListener('change', event => {
+    const target = event.target;
+    if (target.id === 'skinned-pose-cast') {
+      panel.dataset.meshIndex = target.value;
+      updateSkinnedPosePanel(selectedSceneObjectEntry());
+      return;
+    }
+    if (target.matches('[data-skinned-pose-axis]')) {
+      const row = target.closest('[data-skinned-pose-bone]');
+      const degrees = Number(row?.querySelector('[data-skinned-pose-degrees]')?.value ?? 0);
+      applySkinnedPosePanelInput(panel, row, target.value, degrees);
+    }
+    if (target.matches('[data-skinned-pose-degrees]')) {
+      applySkinnedPosePanelInput(panel, target.closest('[data-skinned-pose-bone]'), null, Number(target.value));
+    }
+  });
+  panel.addEventListener('input', event => {
+    const target = event.target;
+    if (!target.matches('[data-skinned-pose-range]')) return;
+    const row = target.closest('[data-skinned-pose-bone]');
+    const degrees = Number(target.value);
+    const numberInput = row?.querySelector('[data-skinned-pose-degrees]');
+    if (numberInput) numberInput.value = String(degrees);
+    applySkinnedPosePanelInput(panel, row, null, degrees);
+  });
+  panel.addEventListener('click', event => {
+    if (!event.target.closest('#skinned-pose-reset')) return;
+    const entry = selectedSceneObjectEntry();
+    const objectId = panel.dataset.objectId;
+    if (!entry || entry.id !== objectId) return;
+    const meshes = sceneObjectSkinnedMeshes(objectId);
+    for (let meshIndex = 0; meshIndex < meshes.length; meshIndex += 1) {
+      const mesh = meshes[meshIndex];
+      for (const bone of mesh.skeleton.bones) {
+        window.kaminosSetSkinnedBoneDelta(objectId, meshIndex, bone.name, 'z', 0);
+      }
+      skinnedPosePreviewOffsets.delete(mesh);
+    }
+    const status = panel.querySelector('#skinned-pose-status');
+    if (status) status.textContent = 'Both casts reset to their imported poses.';
+    updateSkinnedPosePanel(entry);
+  });
+}
+
+function applySkinnedPosePanelInput(panel, row, axisOverride, degrees) {
+  const entry = selectedSceneObjectEntry();
+  if (!entry || entry.id !== panel.dataset.objectId || !row || !Number.isFinite(degrees)) return;
+  const boneName = row.dataset.skinnedPoseBone;
+  const axis = axisOverride || row.querySelector('[data-skinned-pose-axis]')?.value || 'z';
+  const meshIndex = Number(panel.dataset.meshIndex || 0);
+  const mesh = sceneObjectSkinnedMeshes(entry.id)[meshIndex];
+  if (!mesh?.skeleton?.bones.some(bone => bone.name === boneName)) return;
+  try {
+    window.kaminosSetSkinnedBoneDelta(entry.id, meshIndex, boneName, axis, degrees);
+    const offsets = skinnedPosePreviewOffsets.get(mesh) || new Map();
+    offsets.set(boneName, { axis, degrees });
+    skinnedPosePreviewOffsets.set(mesh, offsets);
+    const numeric = row.querySelector('[data-skinned-pose-degrees]');
+    if (numeric && numeric !== document.activeElement) numeric.value = String(degrees);
+    const range = row.querySelector('[data-skinned-pose-range]');
+    if (range) range.value = String(Math.max(-180, Math.min(180, degrees)));
+    const status = panel.querySelector('#skinned-pose-status');
+    const signedDegrees = degrees > 0 ? `+${degrees}` : String(degrees);
+    if (status) status.textContent = `${mesh.name || `Cast ${meshIndex + 1}`} · ${boneName} · local ${axis.toUpperCase()} ${signedDegrees}° from imported pose`;
+  } catch (error) {
+    const status = panel.querySelector('#skinned-pose-status');
+    if (status) status.textContent = `Pose preview failed: ${error.message}`;
+  }
+}
+
+function updateSkinnedPosePanel(entry) {
+  const panel = document.getElementById('skinned-pose-panel');
+  const castSelect = document.getElementById('skinned-pose-cast');
+  const joints = document.getElementById('skinned-pose-joints');
+  if (!panel || !castSelect || !joints) return;
+  ensureSkinnedPosePanelEvents(panel);
+  const meshes = entry ? sceneObjectSkinnedMeshes(entry.id) : [];
+  panel.hidden = meshes.length === 0;
+  if (!meshes.length) {
+    panel.dataset.objectId = '';
+    joints.replaceChildren();
+    castSelect.replaceChildren();
+    return;
+  }
+
+  const isSameObject = panel.dataset.objectId === entry.id;
+  const requestedIndex = isSameObject ? Number(panel.dataset.meshIndex || 0) : 0;
+  const selectedIndex = Math.max(0, Math.min(meshes.length - 1, Number.isInteger(requestedIndex) ? requestedIndex : 0));
+  panel.dataset.objectId = entry.id;
+  panel.dataset.meshIndex = String(selectedIndex);
+  const currentOptions = [...castSelect.options].map(option => option.dataset.meshName);
+  if (!isSameObject || currentOptions.length !== meshes.length || meshes.some((mesh, index) => currentOptions[index] !== mesh.name)) {
+    castSelect.replaceChildren(...meshes.map((mesh, index) => {
+      const option = document.createElement('option');
+      option.value = String(index);
+      option.dataset.meshName = mesh.name;
+      option.textContent = `${index + 1}. ${mesh.name || 'Skinned cast'}`;
+      return option;
+    }));
+  }
+  castSelect.value = String(selectedIndex);
+  const mesh = meshes[selectedIndex];
+  const offsets = skinnedPosePreviewOffsets.get(mesh) || new Map();
+  const authoredBones = mesh.skeleton.bones.filter(bone => !/^neutral_bone(?:_\d+)?$/i.test(bone.name));
+  joints.replaceChildren(...authoredBones.map(bone => {
+    const saved = offsets.get(bone.name) || { axis: 'z', degrees: 0 };
+    const row = document.createElement('div');
+    row.className = 'skinned-pose-joint';
+    row.dataset.skinnedPoseBone = bone.name;
+
+    const name = document.createElement('span');
+    name.className = 'skinned-pose-bone';
+    name.textContent = bone.name;
+    name.title = bone.name;
+
+    const axis = document.createElement('select');
+    axis.className = 'skinned-pose-axis';
+    axis.setAttribute('aria-label', `${bone.name} local rotation axis`);
+    axis.dataset.skinnedPoseAxis = '';
+    for (const axisName of ['x', 'y', 'z']) {
+      const option = document.createElement('option');
+      option.value = axisName;
+      option.textContent = axisName.toUpperCase();
+      axis.append(option);
+    }
+    axis.value = saved.axis;
+
+    const range = document.createElement('input');
+    range.className = 'skinned-pose-range';
+    range.type = 'range';
+    range.min = '-180';
+    range.max = '180';
+    range.step = '1';
+    range.value = String(Math.max(-180, Math.min(180, saved.degrees)));
+    range.dataset.skinnedPoseRange = '';
+    range.setAttribute('aria-label', `${bone.name} preview offset slider`);
+
+    const numeric = document.createElement('input');
+    numeric.className = 'skinned-pose-degrees';
+    numeric.type = 'number';
+    numeric.step = '1';
+    numeric.value = String(saved.degrees);
+    numeric.dataset.skinnedPoseDegrees = '';
+    numeric.setAttribute('aria-label', `${bone.name} preview offset in degrees`);
+
+    row.append(name, axis, range, numeric);
+    return row;
+  }));
 }
 
 window.kaminosSkinnedRigDebugState = function(id) {

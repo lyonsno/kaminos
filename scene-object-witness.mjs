@@ -330,6 +330,122 @@ async function runMeshSkinnedPoseScenario(ws) {
   lastEvidence.meshSkinnedPose = { objectId, expectedAssetSha256, loadedSha256, poseMeshIndex, bone: boneName, axis: 'z', degrees: 12, before, beforeShot, action, after, moved, otherBoneError, posedShot, restored, restoredShot, returnError, quaternionReturnError, identicalControl, posedPixels, restoredPixels };
 }
 
+async function runMeshSkinnedPoseControlsScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-mesh-skinned-pose-controls';
+  if (!/^[a-f0-9]{64}$/.test(expectedAssetSha256 || '')) {
+    throw new Error('mesh-skinned-pose-controls requires --expected-asset-sha256 for the exact asset under test');
+  }
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const requestedSha256 = new URL(url).searchParams.get('mesh_sha256');
+  const loadedSha256 = lastEvidence.meshAssetLink.state.loadedSha256;
+  if (requestedSha256 !== expectedAssetSha256 || loadedSha256 !== expectedAssetSha256) {
+    throw new Error('pose controls are not bound to the expected painted-pair bytes: ' + JSON.stringify({ requestedSha256, loadedSha256, expectedAssetSha256 }));
+  }
+  const panel = await evaluate(ws, `(() => {
+    const panel = document.querySelector('#skinned-pose-panel');
+    const cast = document.querySelector('#skinned-pose-cast');
+    const rows = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')];
+    return {
+      visible: !!panel && !panel.hidden,
+      objectId: panel?.dataset.objectId || null,
+      castOptions: cast ? [...cast.options].map(option => ({ value: option.value, name: option.dataset.meshName })) : [],
+      bones: rows.map(row => row.dataset.skinnedPoseBone),
+      resetButton: !!document.querySelector('#skinned-pose-reset'),
+      unsavedNote: panel?.textContent?.includes('not saved into the scene yet') || false,
+    };
+  })()`);
+  if (!panel.visible || panel.objectId !== objectId || panel.castOptions.length !== 2
+      || panel.bones.length !== 7 || panel.bones.some(name => /^neutral_bone(?:_\d+)?$/i.test(name))
+      || !panel.resetButton || !panel.unsavedNote) {
+    throw new Error('selected painted pair lacks the complete seven-bone temporary pose controls: ' + JSON.stringify(panel));
+  }
+  await evaluate(ws, `document.querySelector('#skinned-pose-panel').scrollIntoView({ block: 'start', behavior: 'instant' })`);
+  await delay(150);
+
+  const before = await evaluate(ws, `window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}) ?? null`);
+  if (!before || before.meshes.length !== 2
+      || !before.meshes[0].bones.includes('hindlimb-left-hip')
+      || !before.meshes[1].bones.includes('hindlimb-left-hip_1')) {
+    throw new Error('pose controls loaded a pair without both independently named rigs: ' + JSON.stringify(before));
+  }
+  const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-before-controls'));
+  const applyViaControl = async (meshIndex, boneName, degrees) => evaluate(ws, `(() => {
+    const panel = document.querySelector('#skinned-pose-panel');
+    const cast = document.querySelector('#skinned-pose-cast');
+    cast.value = ${JSON.stringify(String(meshIndex))};
+    cast.dispatchEvent(new Event('change', { bubbles: true }));
+    const row = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')]
+      .find(candidate => candidate.dataset.skinnedPoseBone === ${JSON.stringify(boneName)});
+    if (!row) throw new Error('pose UI omitted requested imported joint ' + ${JSON.stringify(boneName)});
+    const range = row.querySelector('[data-skinned-pose-range]');
+    range.value = ${JSON.stringify(String(degrees))};
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+    return { selectedCast: cast.value, bone: row.dataset.skinnedPoseBone, degrees: row.querySelector('[data-skinned-pose-degrees]').value };
+  })()`);
+
+  const firstActions = [];
+  for (const [boneName, degrees] of [
+    ['hindlimb-left-hip', 12],
+    ['hindlimb-left-stifle', 8],
+    ['hindlimb-left-hock', 4],
+  ]) {
+    firstActions.push(await applyViaControl(0, boneName, degrees));
+  }
+  await delay(500);
+  const firstCastPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const firstBoneErrors = Object.fromEntries(firstActions.map(action => [action.bone,
+    Math.hypot(...before.meshes[0].boneQuaternions[action.bone].map((value, axis) => value - firstCastPose.meshes[0].boneQuaternions[action.bone][axis]))]));
+  const firstOtherCastError = Math.max(...Object.entries(before.meshes[1].boneQuaternions).map(([name, quaternion]) =>
+    Math.hypot(...quaternion.map((value, axis) => value - firstCastPose.meshes[1].boneQuaternions[name][axis]))));
+  if (Object.values(firstBoneErrors).some(error => error < 0.01) || firstOtherCastError > 0.000001) {
+    throw new Error('multi-joint UI exercise failed to affect only the first cast: ' + JSON.stringify({ firstActions, firstBoneErrors, firstOtherCastError }));
+  }
+  const firstCastShot = await capturePngScreenshot(ws, siblingPngPath('-first-cast-pose'));
+
+  const secondAction = await applyViaControl(1, 'hindlimb-left-hip_1', 12);
+  await delay(500);
+  const bothCastPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const secondHipError = Math.hypot(...before.meshes[1].boneQuaternions['hindlimb-left-hip_1'].map((value, axis) =>
+    value - bothCastPose.meshes[1].boneQuaternions['hindlimb-left-hip_1'][axis]));
+  const firstPosePreservedError = Math.max(...Object.entries(firstCastPose.meshes[0].boneQuaternions).map(([name, quaternion]) =>
+    Math.hypot(...quaternion.map((value, axis) => value - bothCastPose.meshes[0].boneQuaternions[name][axis]))));
+  if (secondHipError < 0.01 || firstPosePreservedError > 0.000001) {
+    throw new Error('cast selector did not isolate the second painted rig: ' + JSON.stringify({ secondHipError, firstPosePreservedError, secondAction }));
+  }
+  const posedShot = await capturePngScreenshot(ws, siblingPngPath('-both-casts-pose'));
+  await evaluate(ws, `document.querySelector('#skinned-pose-reset').click()`);
+  await delay(500);
+  const restored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const resetErrors = before.meshes.map((mesh, meshIndex) => {
+    const restoredMesh = restored.meshes[meshIndex];
+    const quaternionError = Math.max(...Object.entries(mesh.boneQuaternions).map(([name, quaternion]) =>
+      Math.hypot(...quaternion.map((value, axis) => value - restoredMesh.boneQuaternions[name][axis]))));
+    const boundsError = Math.hypot(
+      ...mesh.bounds.center.map((value, axis) => value - restoredMesh.bounds.center[axis]),
+      ...mesh.bounds.size.map((value, axis) => value - restoredMesh.bounds.size[axis]),
+    );
+    return { quaternionError, boundsError };
+  });
+  if (resetErrors.some(error => error.quaternionError > 0.000001 || error.boundsError > 0.000001)) {
+    throw new Error('visible reset control did not restore both imported poses: ' + JSON.stringify(resetErrors));
+  }
+  const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-restored-controls'));
+  const identicalControl = viewportPixelDelta(beforeShot.path, beforeShot.path);
+  const posedPixels = viewportPixelDelta(beforeShot.path, posedShot.path);
+  const restoredPixels = viewportPixelDelta(beforeShot.path, restoredShot.path);
+  if (identicalControl.changedPixels !== 0 || posedPixels.changedPixels < 500 || restoredPixels.changedPixels !== 0) {
+    throw new Error('pose controls did not produce visible reversible deformation: ' + JSON.stringify({ identicalControl, posedPixels, restoredPixels }));
+  }
+  const status = await evaluate(ws, `document.querySelector('#skinned-pose-status')?.textContent || ''`);
+  lastEvidence.meshSkinnedPoseControls = {
+    objectId, expectedAssetSha256, loadedSha256, panel, before, beforeShot,
+    firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot,
+    secondAction, bothCastPose, secondHipError, firstPosePreservedError, posedShot,
+    restored, resetErrors, restoredShot, status, identicalControl, posedPixels, restoredPixels,
+  };
+}
+
 const DIRECT_ASSET_LINK_SCENARIOS = {
   splat: {
     scenario: 'splat-asset-link',
@@ -5033,6 +5149,8 @@ try {
     await runMeshAssetLinkScenario(ws);
   } else if (scenario === 'mesh-skinned-pose') {
     await runMeshSkinnedPoseScenario(ws);
+  } else if (scenario === 'mesh-skinned-pose-controls') {
+    await runMeshSkinnedPoseControlsScenario(ws);
   } else if (scenario === 'splat-asset-link') {
     await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.splat);
   } else if (scenario === 'image-asset-link') {
