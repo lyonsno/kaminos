@@ -312,7 +312,15 @@ try {
     if (result.receipt?.status !== 'real' || result.receipt?.requestedRouteId !== route.routeId || result.receipt?.effectiveRouteId !== route.routeId) throw new Error('WebGPU route receipt is missing, fallback, or does not match requested route identity');
     if (result.receipt?.model?.id !== model.id || result.receipt?.model?.revision !== model.revision || result.receipt?.model?.weightsHash !== model.weightsHash || result.receipt?.model?.dtype !== 'fp32') throw new Error('effective route receipt model/checkpoint/precision identity mismatch');
   }
-  const actual = residentBlock2AttentionMode ? result.debugResidentBlock2Attention : residentBlock1Mode ? result.debugResidentBlock1 : residentHandoffMode ? result.debugResidentHandoff : result.debugReadback;
+  const actual = residentBlock2AttentionMode
+    ? {
+      ...result.debugResidentBlock2Attention,
+      outputValues: {
+        ...(result.debugResidentBlock1?.outputValues || {}),
+        ...(result.debugResidentBlock2Attention?.outputValues || {}),
+      },
+    }
+    : residentBlock1Mode ? result.debugResidentBlock1 : residentHandoffMode ? result.debugResidentHandoff : result.debugReadback;
   if (residentBlock2AttentionMode) {
     if (actual?.operation !== 'dinov3-block2-attention-residual' || !actual.outputValues || Object.values(actual.outputValues).some(values=>!(values instanceof Float32Array))) throw new Error('resident consumer did not return all downstream F32 block-2 diagnostic tensors');
   } else if (residentBlock1Mode) {
