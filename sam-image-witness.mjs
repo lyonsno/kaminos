@@ -590,6 +590,17 @@ async function main() {
         authority: presentedPixels.authority };
       report.captures.push({ name: 'flame-composition-renderer-canvas', ...rendererCanvasCapture,
         validation: 'diagnostic-only-main-render-pipeline-readback' });
+      const alphaMapCanvasMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+        presentedPixels.alphaMapAblation.canvasPng || '');
+      assert.ok(alphaMapCanvasMatch, 'alpha-map ablation did not preserve its renderer canvas');
+      const alphaMapCanvasBytes = Buffer.from(alphaMapCanvasMatch[1], 'base64');
+      const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-disabled.png');
+      writeFileSync(alphaMapCanvasPath, alphaMapCanvasBytes, { flag: 'wx' });
+      report.captures.push({ name: 'flame-composition-alpha-map-disabled', path: alphaMapCanvasPath,
+        width: presentedPixels.backingSize.width, height: presentedPixels.backingSize.height,
+        bytes: alphaMapCanvasBytes.length,
+        sha256: `sha256:${createHash('sha256').update(alphaMapCanvasBytes).digest('hex')}`,
+        authority: presentedPixels.authority, validation: 'diagnostic-only-alpha-map-ablation' });
       saveReport();
       const compositionAttemptPath = join(out, 'flame-composition-attempt.png');
       await checked(page.screenshot({ path: compositionAttemptPath, fullPage: true }));
@@ -603,6 +614,12 @@ async function main() {
             composedRgba: presentedPixels.depthTestAblation.foreground.rgba },
           depthTestDisabledBackground: { sourceRgba: presentedPixels.composed[1].rgba,
             composedRgba: presentedPixels.depthTestAblation.background.rgba } },
+        alphaMapAblation: { alphaMapWasPresent: presentedPixels.alphaMapAblation.alphaMapWasPresent,
+          alphaMapDisabledForeground: { sourceRgba: presentedPixels.composed[0].rgba,
+            composedRgba: presentedPixels.alphaMapAblation.foreground.rgba },
+          alphaMapDisabledBackground: { sourceRgba: presentedPixels.composed[1].rgba,
+            composedRgba: presentedPixels.alphaMapAblation.background.rgba },
+          capture: report.captures.at(-1) },
         foreground: { maskValue: flamePixelScan.foreground.maskValue,
           uv: [flamePixelScan.foreground.u, flamePixelScan.foreground.v],
           pixel: presentedPixels.composed[0].pixel,

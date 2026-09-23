@@ -35,6 +35,13 @@ assert.match(hostSource, /overlay\.material\.depthTest\s*=\s*false[\s\S]*?const 
   'the failing presentation probe must isolate depth occlusion and restore the live overlay material');
 assert.match(witnessSource, /depthTestAblation[\s\S]*?depthTestDisabledForeground/,
   'a failed scene contribution must preserve the same-frame depth-test ablation result');
+assert.ok(/const wasAlphaMap = overlay\.material\.alphaMap;[\s\S]*?overlay\.material\.alphaMap = null;[\s\S]*?const alphaMapDisabled = await sample\(\)[\s\S]*?overlay\.material\.alphaMap = wasAlphaMap/.test(hostSource),
+  'the next controlled probe must isolate alpha-map suppression and restore its texture');
+assert.ok(witnessSource.includes('alphaMapDisabledForeground'),
+  'a failed composition must preserve the alpha-map bypass pixel result');
+const alphaMapCapture = witnessSource.indexOf("const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-disabled.png')");
+assert.ok(alphaMapCapture >= 0 && alphaMapCapture < compositionValidation,
+  'the alpha-map ablation renderer frame must be preserved before scene rollback or validation failure');
 const rendererCanvasCapture = witnessSource.indexOf("const rendererCanvasCapturePath = join(out, 'flame-composition-renderer-canvas.png')");
 assert.ok(rendererCanvasCapture >= 0 && rendererCanvasCapture < compositionValidation,
   'the sampled main-renderer canvas must be durably captured before the composition assertion');

@@ -5766,6 +5766,7 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
   };
   const wasVisible = overlay.visible;
   const wasDepthTest = overlay.material.depthTest;
+  const wasAlphaMap = overlay.material.alphaMap;
   try {
     overlay.visible = false;
     const source = await sample();
@@ -5775,14 +5776,22 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     overlay.material.depthTest = false;
     overlay.material.needsUpdate = true;
     const depthTestDisabled = await sample();
+    overlay.material.depthTest = wasDepthTest;
+    overlay.material.alphaMap = null;
+    overlay.material.needsUpdate = true;
+    const alphaMapDisabled = await sample();
+    const alphaMapDisabledCanvasPng = buffer.toDataURL('image/png');
     return { authority: 'kaminos-main-render-pipeline-canvas-readback',
       canvasRect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
       backingSize: { width: canvas.width, height: canvas.height }, source, composed,
       depthTestAblation: { depthTestWasEnabled: wasDepthTest, foreground: depthTestDisabled[0],
-        background: depthTestDisabled[1] }, composedCanvasPng };
+        background: depthTestDisabled[1] },
+      alphaMapAblation: { alphaMapWasPresent: !!wasAlphaMap, foreground: alphaMapDisabled[0],
+        background: alphaMapDisabled[1], canvasPng: alphaMapDisabledCanvasPng }, composedCanvasPng };
   } finally {
     overlay.visible = wasVisible;
     overlay.material.depthTest = wasDepthTest;
+    overlay.material.alphaMap = wasAlphaMap;
     overlay.material.needsUpdate = true;
     window._kaminosDirty?.();
   }
