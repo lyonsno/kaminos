@@ -38,7 +38,7 @@ if (!values.url || !values['output-dir']) {
   throw new Error('Usage: smoke-kimodo-shared-device.mjs --url URL --output-dir DIR [--mode load|generate]');
 }
 if (!['load', 'generate'].includes(values.mode)) throw new Error(`Unsupported smoke mode: ${values.mode}`);
-if (!['full-pass', 'fence-light', 'single-layer'].includes(values.schedule)) throw new Error('Unsupported submission schedule');
+if (!['full-pass', 'fence-light', 'single-layer', 'single-layer-serial'].includes(values.schedule)) throw new Error('Unsupported submission schedule');
 const steps = Number(values.steps);
 const duration = Number(values.duration);
 const totalTimeoutMs = Number(values['total-timeout-ms']);

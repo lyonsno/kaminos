@@ -78,7 +78,7 @@ function injectHud() {
   <label>Prompt<textarea id="kimodo-shared-prompt" rows="2">a person dances</textarea></label>
   <div class="pair"><label>Seconds<input id="kimodo-shared-duration" type="number" min="1" max="18" value="6"></label><label>DDIM steps<input id="kimodo-shared-steps" type="number" min="1" value="100"></label></div>
   <label>Embedding endpoint<input id="kimodo-shared-embed" value="http://127.0.0.1:8098/embed"></label>
-  <label>Submission schedule<select id="kimodo-shared-schedule"><option value="full-pass">Full pass (reference)</option><option value="fence-light">Four-layer submissions · no foreground GPU wait</option><option value="single-layer">Single-layer submissions · 16 duties/pass</option></select></label>
+  <label>Submission schedule<select id="kimodo-shared-schedule"><option value="full-pass">Full pass (reference)</option><option value="fence-light">Four-layer submissions · no foreground GPU wait</option><option value="single-layer">Single-layer submissions · 16 duties/pass · 4 in flight</option><option value="single-layer-serial">Single-layer serial · 16 duties/pass · 1 in flight</option></select></label>
   <div class="pair"><button id="kimodo-shared-load">Load Kimodo</button><button id="kimodo-shared-run" disabled>Generate motion</button><button id="kimodo-shared-cancel" disabled>Cancel</button></div>
   <progress id="kimodo-shared-progress" max="100" value="0"></progress>
   <dl><dt>Topology</dt><dd id="kimodo-shared-topology">same-device verification pending</dd>

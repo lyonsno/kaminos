@@ -45,6 +45,9 @@ assert.equal(KIMODO_SHARED_DEVICE_ROUTE, 'kimodo.text-to-motion.webgpu-local.v0'
 assert.deepEqual(kimodoSubmissionSchedule('single-layer'), {
   mode: 'single-layer', layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 4,
 }, 'single-layer is explicit, isolated from the full-pass default, and keeps the four-duty capacity fixed');
+assert.deepEqual(kimodoSubmissionSchedule('single-layer-serial'), {
+  mode: 'single-layer-serial', layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 1,
+}, 'serial single-layer keeps the same math and duty count while reducing outstanding GPU work to one');
 assert.throws(
   () => snapshotKimodoSharedDevice({ ...sharedGpu, queue: { submit() {} } }),
   /exact queue/,

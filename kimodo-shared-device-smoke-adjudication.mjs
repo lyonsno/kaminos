@@ -28,6 +28,7 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
       'full-pass': { layers: 16, chunks: 1, capacity: 2 },
       'fence-light': { layers: 4, chunks: 4, capacity: 4 },
       'single-layer': { layers: 1, chunks: 16, capacity: 4 },
+      'single-layer-serial': { layers: 1, chunks: 16, capacity: 1 },
     }[requestedSchedule];
     const { layers, chunks, capacity } = schedule ?? {};
     const passNames = ['cond-root', 'cond-body', 'uncond-root', 'uncond-body'];

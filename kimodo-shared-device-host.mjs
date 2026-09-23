@@ -12,6 +12,7 @@ export function kimodoSubmissionSchedule(mode) {
   if (mode === 'full-pass') return Object.freeze({ mode, layersPerDuty: 16, chunksPerPass: 1, maxInFlightDuties: 2 });
   if (mode === 'fence-light') return Object.freeze({ mode, layersPerDuty: 4, chunksPerPass: 4, maxInFlightDuties: 4 });
   if (mode === 'single-layer') return Object.freeze({ mode, layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 4 });
+  if (mode === 'single-layer-serial') return Object.freeze({ mode, layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 1 });
   throw new Error(`Unknown Kimodo submission schedule: ${mode}`);
 }
 

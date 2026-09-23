@@ -63,6 +63,7 @@ function scheduledRun({ generationId = 9, observedBoundaries = null, diagnosticG
     'full-pass': { layersPerDuty: 16, chunksPerPass: 1, maxInFlightDuties: 2 },
     'fence-light': { layersPerDuty: 4, chunksPerPass: 4, maxInFlightDuties: 4 },
     'single-layer': { layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 4 },
+    'single-layer-serial': { layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 1 },
   }[scheduleMode];
   const { layersPerDuty, chunksPerPass, maxInFlightDuties } = schedule;
   const steps = 1;
@@ -184,6 +185,20 @@ function scheduledRun({ generationId = 9, observedBoundaries = null, diagnosticG
 }
 const scheduledTerminal = run => ({ status: 'succeeded', runs: [run] });
 assert.equal(validateSuccessfulRun(scheduledTerminal(scheduledRun()), 'fence-light').generationId, 9);
+assert.equal(
+  validateSuccessfulRun(scheduledTerminal(scheduledRun({ scheduleMode: 'single-layer-serial', observedBoundaries: null })), 'single-layer-serial').diagnostics.passes.length,
+  64,
+  'serial single-layer terminal acceptance requires all sixteen layer duties in each of four passes',
+);
+{
+  const serialRun = scheduledRun({ scheduleMode: 'single-layer-serial' });
+  serialRun.diagnostics.submissionReport.maxInFlightDuties = 4;
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal(serialRun), 'single-layer-serial'),
+    /matching terminal receipts/,
+    'serial admission cannot close when effective evidence reports a four-duty capacity',
+  );
+}
 assert.equal(
   validateSuccessfulRun(scheduledTerminal(scheduledRun({ scheduleMode: 'single-layer', observedBoundaries: null })), 'single-layer').diagnostics.passes.length,
   64,

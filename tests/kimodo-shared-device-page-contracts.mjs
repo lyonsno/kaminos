@@ -24,7 +24,7 @@ assert.match(source, /record\.pageP95Ms\s*=\s*percentile\(record\.frameIntervals
 assert.match(source, /record\.pageP99Ms\s*=\s*percentile\(record\.frameIntervals,\s*\.99\)/, 'each run computes p99 from its own frame interval window');
 assert.match(source, /record\.pageMaxMs\s*=\s*record\.frameIntervals\.length\s*\?\s*Math\.max\(\.\.\.record\.frameIntervals\)\s*:\s*null/, 'each run records the worst observed frame interval without inventing an empty-run value');
 assert.doesNotMatch(source, /frameIntervals\.length\s*>|samples\.length\s*>|\.splice\(|\.shift\(\)/, 'diagnostic history remains uncapped so a long run cannot erase its own contention evidence');
-assert.match(source, /value="full-pass".*value="fence-light".*value="single-layer"/s, 'the lab retains full-pass and four-layer references alongside the opt-in single-layer schedule');
+assert.match(source, /value="full-pass".*value="fence-light".*value="single-layer".*value="single-layer-serial"/s, 'the lab retains reference schedules alongside the opt-in serial single-layer schedule');
 assert.match(source, /const flame = snapshotFlameState\(prototype\.debugState\(\)\)/, 'sample collection freezes the foreground counters and receipt it observed');
 assert.match(source, /const sampleAtMs = performance\.now\(\)/, 'sample time is captured at the state read, not the earlier animation-frame timestamp');
 assert.match(source, /flameBefore:\s*snapshotFlameState\(prototype\.debugState\(\)\)/, 'run-start flame evidence cannot inherit later foreground counter mutations');
