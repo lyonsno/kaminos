@@ -151,7 +151,7 @@ try {
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
-    assert.equal(result.state.physicalColor.temperature, arm.temperature);
+    assert.equal(result.state.physicalColor.temperature, Math.fround(arm.temperature));
     if (arm.mode === 2) {
       assert.equal(result.state.physicalColor.incidentLight?.model, 'twenty-four-direction-cubic-short-characteristics-v1');
       assert.equal(result.state.physicalColor.incidentLight?.directions, 24);
