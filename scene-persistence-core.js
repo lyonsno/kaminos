@@ -1,4 +1,10 @@
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
+import {
+  LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA,
+  LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE,
+  legacyLocalLiquidEmitterRecord, normalizeLocalLiquidEmitter,
+  normalizeLocalLiquidEmitterPose, normalizeLocalLiquidSetup,
+} from './local-liquid-setup.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 export const SCENE_VERSION = 5;
@@ -11,7 +17,7 @@ function cloneJson(value) {
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
   const id = String(record.id || record.fileName || record.source || 'object');
-  return {
+  const normalized = {
     id,
     source: record.source ?? null,
     type: record.type ?? 'glb',
@@ -31,6 +37,37 @@ function normalizeSceneObjectRecord(record) {
     renderCapabilities: cloneJson(record.renderCapabilities ?? null),
     renderHandoffSchema: record.renderHandoffSchema ?? null,
   };
+  if (normalized.type === LOCAL_LIQUID_EMITTER_TYPE) {
+    if (normalized.source !== LOCAL_LIQUID_EMITTER_SOURCE) throw new Error('Unsupported local liquid emitter source');
+    normalized.transform = normalizeLocalLiquidEmitterPose(normalized.transform);
+    normalized.localLiquidEmitter = normalizeLocalLiquidEmitter(record.localLiquidEmitter, normalized.transform);
+  } else if (record.localLiquidEmitter != null) {
+    throw new Error('Local liquid emitter settings require a water emitter scene object');
+  }
+  return normalized;
+}
+
+function prepareLocalLiquidState(objects, setup) {
+  let localLiquid = normalizeLocalLiquidSetup(setup);
+  const migratedSource = localLiquid?.legacySource || null;
+  if (localLiquid?.legacySource) {
+    const {legacySource, ...canonical} = localLiquid;
+    localLiquid = canonical;
+  }
+  const sceneObjects = objects.map(normalizeSceneObjectRecord);
+  let emitters = sceneObjects.filter(record => record.type === LOCAL_LIQUID_EMITTER_TYPE);
+  if (migratedSource && emitters.length === 0) {
+    const ids = new Set(sceneObjects.map(record => record.id));
+    let id = 'local-liquid-emitter-legacy', suffix = 2;
+    while (ids.has(id)) id = `local-liquid-emitter-legacy-${suffix++}`;
+    sceneObjects.push(legacyLocalLiquidEmitterRecord(migratedSource, id));
+    emitters = sceneObjects.filter(record => record.type === LOCAL_LIQUID_EMITTER_TYPE);
+  }
+  if (emitters.length > LOCAL_LIQUID_EMITTER_CAPACITY) {
+    throw new Error(`Local liquid emitter count ${emitters.length} exceeds retained solver capacity ${LOCAL_LIQUID_EMITTER_CAPACITY}`);
+  }
+  if (emitters.length && !localLiquid) throw new Error('A local liquid setup is required for a water emitter scene object');
+  return {objects: sceneObjects, localLiquid};
 }
 
 function normalizeSceneGroupRecord(record) {
@@ -98,13 +135,14 @@ export function hasVolumePrimitives(data) {
 
 export function sceneDocumentIsLoadable(data) {
   if (!data?.version) return false;
-  const localLiquid = normalizeLocalLiquidSetup(data.localLiquid);
-  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition) || !!localLiquid;
+  const state = prepareLocalLiquidState(getSceneObjectRecords(data), data.localLiquid);
+  return state.objects.length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition) || !!state.localLiquid;
 }
 
 export function isReloadableSceneObjectRecord(record) {
   const type = record?.type || 'glb';
   const source = record?.source;
+  if (type === LOCAL_LIQUID_EMITTER_TYPE) return source === LOCAL_LIQUID_EMITTER_SOURCE;
   if (!['glb', 'pbr', 'splat', 'image'].includes(type) || typeof source !== 'string') return false;
   if (type === 'pbr') return source.startsWith('demos/');
   if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
@@ -114,7 +152,8 @@ export function isReloadableSceneObjectRecord(record) {
 
 export function planSceneRestore(data) {
   if (!sceneDocumentIsLoadable(data)) throw new Error('Invalid scene format');
-  const objects = getSceneObjectRecords(data);
+  const liquid = prepareLocalLiquidState(getSceneObjectRecords(data), data.localLiquid);
+  const objects = liquid.objects;
   const groups = getSceneGroupRecords(data, objects);
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
@@ -130,7 +169,7 @@ export function planSceneRestore(data) {
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
-    localLiquid: normalizeLocalLiquidSetup(data.localLiquid),
+    localLiquid: liquid.localLiquid,
   };
 }
 
@@ -151,7 +190,8 @@ export function buildSceneDocument({
   backdrop = false,
   backdropBrightness = undefined,
 } = {}) {
-  const sceneObjects = objects.map(normalizeSceneObjectRecord);
+  const liquid = prepareLocalLiquidState(objects, localLiquid);
+  const sceneObjects = liquid.objects;
   const sceneGroups = getSceneGroupRecords({ groups }, sceneObjects);
   const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || sceneObjects[0] || null;
   const activeGroup = sceneGroups.find(group => group.id === activeGroupId) || null;
@@ -170,7 +210,7 @@ export function buildSceneDocument({
     } : null,
     provenance: cloneJson(provenance),
     composition: normalizeComposition(composition),
-    localLiquid: normalizeLocalLiquidSetup(localLiquid),
+    localLiquid: liquid.localLiquid,
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
@@ -183,4 +223,3 @@ export function buildSceneDocument({
   if (backdropBrightness !== undefined) document.backdropBrightness = backdropBrightness;
   return document;
 }
-import { normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';

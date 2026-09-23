@@ -8,7 +8,7 @@ test('pose preview preserves the current gizmo attachment and visibility',()=>{
   const source=html.slice(html.indexOf('function applyAuthoredScenePose('),html.indexOf('window.kaminosSetSceneObjectTransform ='));
   const object={},record={id:'kiln',object,type:'glb'};
   let attachments=0,refreshes=0;
-  const context={sceneObjects:[record],activeSceneObjectId:'kiln',
+  const context={LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',sceneObjects:[record],activeSceneObjectId:'kiln',
     applySceneObjectTransformState:(o,pose)=>Object.assign(o,pose),updateTransformInspector:()=>refreshes++,
     transformControls:{object,visible:false,detach(){},attach(){attachments++;this.visible=true;}},
     splatCorrectionTransformTarget:()=>null,

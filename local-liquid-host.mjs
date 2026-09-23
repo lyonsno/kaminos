@@ -47,18 +47,14 @@ function cameraFrame(camera, width, height, generation) {
 
 export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
-  let authored = normalizeLocalLiquidSetup(setup), sourceGeneration = 1;
+  let authored = normalizeLocalLiquidSetup(setup), sourceGeneration = 1, authoredEmitters = [];
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
     particleCount:authored.particleCount, densityIterations:authored.densityIterations,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
-    liveInletPacket:localLiquidInletPacket(authored, sourceGeneration)});
+    liveInletPacket:localLiquidInletPacket(authored, authoredEmitters, sourceGeneration)});
   if (!solver.available) throw Error(solver.reason || 'Local liquid solver unavailable');
   const group = supportMesh(); scene.add(group);
-  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,.2,20), new THREE.MeshStandardMaterial({color:0xe3aa53,metalness:.6,roughness:.3}));
-  nozzle.name = 'Authored water source'; group.add(nozzle);
-  const syncSource = () => {const s=authored.source; nozzle.position.set(s.x,s.y+.1,s.z); nozzle.scale.set(s.radius/.08,1,s.radius/.08);};
-  syncSource();
   const targetOptions = {type:THREE.HalfFloatType, depthBuffer:false, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter};
   const colorTarget = new THREE.RenderTarget(1,1,targetOptions);
   const outputTarget = new THREE.RenderTarget(1,1,targetOptions);
@@ -157,10 +153,13 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   }
 
   return {group,render,
-    setSource(source) {
-      const next=normalizeLocalLiquidSetup({...authored,source});
-      solver.setLiveInletPacket(localLiquidInletPacket(next,++sourceGeneration));
-      authored=next; syncSource();
+    setEmitters(records) {
+      if(!Array.isArray(records))throw Error('Local liquid scene emitters must be an array');
+      const next=structuredClone(records);
+      const packet=localLiquidInletPacket(authored,next,sourceGeneration+1);
+      solver.setLiveInletPacket(packet);
+      authoredEmitters=next;sourceGeneration++;
+      return structuredClone(authoredEmitters);
     },
     setOpticalOptions(options={}) {
       if (!options || typeof options!=='object' || Array.isArray(options)) {
@@ -187,7 +186,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
-      frameCount,paused,failure,setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
+      frameCount,paused,failure,setup:structuredClone(authored),emitters:structuredClone(authoredEmitters),
+      emitterCount:authoredEmitters.length,lastFrame,solver:solver.getDebugState()}),
     dispose() {
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});

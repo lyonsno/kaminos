@@ -714,8 +714,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
     <section id="local-liquid-panel" hidden>
       <h2>Local water</h2>
-      <p>Analytical basin and sphere support. Save keeps the setup; reopen starts fresh water.</p>
-      <div id="local-liquid-fields"></div>
+      <p>Analytical basin and sphere support. Add water emitters from Scene Objects and place them with the usual scene tools. Saving keeps the authored scene; reopening starts fresh water.</p>
       <div class="authoring-actions">
         <button class="btn" id="local-liquid-pause" type="button">Pause water</button>
         <button class="btn" id="local-liquid-restart" type="button">Restart water</button>
@@ -735,8 +734,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="burner-status" role="status"></div>
 
     <h2>Scene Objects</h2>
-    <div class="panel">
+      <div class="panel">
       <div class="scene-object-tools">
+        <button type="button" class="btn" id="local-liquid-add-emitter" hidden>Add Water Emitter</button>
         <button type="button" class="btn" data-scene-group-create>Create Group</button>
       </div>
       <div id="scene-import-status" class="scene-import-status" role="status" aria-live="polite" hidden>
@@ -791,6 +791,17 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
             <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y"></label>
             <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z"></label>
           </div>
+        </div>
+        <div class="splat-correction-panel" id="local-liquid-emitter-inspector" hidden>
+          <div class="transform-inspector-head">
+            <div class="transform-inspector-name">Water Emitter</div>
+            <div class="splat-correction-note">Move and rotate with G/R. Uniform S scaling changes aperture.</div>
+          </div>
+          <div class="transform-row">
+            <label class="transform-axis-field">Jet speed<input class="transform-input" type="number" step="0.01" data-local-liquid-emitter-field="strength"></label>
+            <label class="transform-axis-field">Particles / second<input class="transform-input" type="number" step="10" data-local-liquid-emitter-field="rate"></label>
+          </div>
+          <div class="transform-row"><div class="transform-label">Aperture radius</div><output id="local-liquid-emitter-aperture">0.080</output></div>
         </div>
         <div class="splat-correction-panel" id="splat-correction-panel" hidden>
           <div class="transform-inspector-head">
@@ -3154,7 +3165,12 @@ import {
 import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
 import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contract.mjs';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
-import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
+import {
+  defaultLocalLiquidSetup, normalizeLocalLiquidSetup,
+  LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA,
+  LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE,
+  normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose,
+} from './local-liquid-setup.mjs';
 import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
@@ -3181,20 +3197,49 @@ let sharedGpuFailureReason = null;
 let fireLightFieldPass = null;
 let ordinarySceneDepthProvider = null;
 let localLiquidSetup = null, localLiquidHost = null, localLiquidLoading = false, localLiquidFailure = null;
-const localLiquidFields = [['x','Source X',.01],['y','Source Y',.01],['z','Source Z',.01],
-  ['radius','Aperture radius',.001],['strength','Jet speed',.01],['rate','Particles / second',10]];
-for (const [key,label,step] of localLiquidFields) {
-  const row=document.createElement('div');row.className='burner-field';
-  const caption=document.createElement('label');caption.htmlFor='local-liquid-'+key;caption.textContent=label;
-  const input=document.createElement('input');input.id=caption.htmlFor;input.type='number';input.step=step;input.className='transform-input';
-  row.append(caption,input);document.getElementById('local-liquid-fields').append(row);
-}
+const localLiquidEmitterEditTargets = new Set();
+let localLiquidEmitterParameterEdit = null;
 function localLiquidStatus(message) {document.getElementById('local-liquid-status').textContent=message;}
+function localLiquidEmitterTargetId(id,key) {return `@local-liquid-emitter:${id}:${key}`;}
+function localLiquidEmitterEntries() {return sceneObjects.filter(entry=>entry.type===LOCAL_LIQUID_EMITTER_TYPE);}
+function localLiquidEmitterRecords() {
+  return localLiquidEmitterEntries().map(entry=>({id:entry.id,type:entry.type,
+    transform:sceneObjectTransformState(entry.object),localLiquidEmitter:structuredClone(entry.localLiquidEmitter)}));
+}
+function syncLocalLiquidAddEmitterButton() {
+  const button=document.getElementById('local-liquid-add-emitter');
+  if(!button)return;
+  const count=localLiquidEmitterEntries().length;
+  button.hidden=!localLiquidSetup;
+  button.disabled=!localLiquidSetup||localLiquidLoading||count>=LOCAL_LIQUID_EMITTER_CAPACITY;
+  button.title=count>=LOCAL_LIQUID_EMITTER_CAPACITY?'The retained liquid solver supports five emitters per scene.':'';
+}
 function showLocalLiquidSourceStatus() {
-  const inlet=localLiquidHost?.state().solver.liveInlets.inlets[0];
-  if(!inlet)return;
-  const requested=inlet.requested.particleReleaseRate,effective=inlet.effective.particleReleaseRate;
-  localLiquidStatus(`Live water · ${effective.toFixed(0)} particles/s${effective===requested?'':` (${requested} requested; source capacity reached)`}. Undo changes settings; restart clears water.`);
+  if(!localLiquidSetup)return;
+  const records=localLiquidEmitterEntries();
+  if(!localLiquidHost||!records.length) {
+    localLiquidStatus(`Analytical basin · ${records.length}/${LOCAL_LIQUID_EMITTER_CAPACITY} emitters. Add a Water Emitter in Scene Objects; reopen starts fresh water.`);
+    return;
+  }
+  const requested=records.reduce((sum,entry)=>sum+Number(entry.localLiquidEmitter.rate||0),0);
+  localLiquidStatus(`${records.length}/${LOCAL_LIQUID_EMITTER_CAPACITY} scene emitters · ${requested.toFixed(0)} particles/s requested. Undo restores authored values; restart clears water.`);
+}
+function syncLocalLiquidEmitters() {
+  syncLocalLiquidAddEmitterButton();
+  const records=localLiquidEmitterRecords();
+  if(localLiquidHost)localLiquidHost.setEmitters(records);
+  showLocalLiquidSourceStatus();
+  return records;
+}
+function createLocalLiquidEmitterObject() {
+  const object=new THREE.Group();object.name='Water emitter';
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.052,.068,.2,20),
+    new THREE.MeshStandardMaterial({color:0x438cb2,metalness:.45,roughness:.32}));
+  body.rotation.x=Math.PI/2;body.position.z=-.1;object.add(body);
+  const outlet=new THREE.Mesh(new THREE.TorusGeometry(.045,.008,8,24),
+    new THREE.MeshStandardMaterial({color:0xa9e4f3,metalness:.25,roughness:.28}));
+  object.add(outlet);
+  return object;
 }
 async function mountLocalLiquid(setup) {
   if (localLiquidLoading) throw Error('Local water is already loading');
@@ -3202,18 +3247,19 @@ async function mountLocalLiquid(setup) {
   localLiquidLoading=true;localLiquidFailure=null;
   localLiquidHost?.dispose();localLiquidHost=null;localLiquidSetup=next;
   document.getElementById('local-liquid-panel').hidden=!next;
+  syncLocalLiquidAddEmitterButton();
   localLiquidStatus(next?'Loading local water…':'');
   try {
     if (next) {
       const {createLocalLiquidHost}=await import('./local-liquid-host.mjs');
       localLiquidHost=await createLocalLiquidHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup:next});
-      showLocalLiquidSourceStatus();
+      syncLocalLiquidEmitters();
       document.getElementById('local-liquid-pause').textContent='Pause water';
     }
     sceneParameterTools?.sync();window._kaminosDirty?.();
   } catch(error) {
     localLiquidFailure=error.message || String(error);localLiquidStatus('Water stopped: '+localLiquidFailure);throw error;
-  } finally {localLiquidLoading=false;}
+  } finally {localLiquidLoading=false;syncLocalLiquidAddEmitterButton();}
 }
 window.kaminosLocalLiquidState=()=>({...(localLiquidHost?.state() || {requestedRoute:localLiquidSetup?'kaminos/finger-fluid/local-analytic-host-frame-v0':null,
   effectiveRoute:null,registered:Boolean(localLiquidSetup),mounted:false,loading:localLiquidLoading,failure:localLiquidFailure,setup:localLiquidSetup}),
@@ -5787,6 +5833,7 @@ function updateTransformInspector() {
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
   updateSplatCorrectionPanel(entry);
+  syncLocalLiquidEmitterInspector(entry);
   if (!entry && activeSceneGroupId) {
     empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
   } else if (!entry) {
@@ -5833,7 +5880,12 @@ function applyTransformInspectorField(input) {
     setSceneObjectSceneTransform(entry, transform);
     applySplatCorrectionToRecord(entry);
   } else {
-    applySceneObjectTransformState(entry.object, transform);
+    if(entry.type===LOCAL_LIQUID_EMITTER_TYPE) {
+      const pose=normalizeLocalLiquidEmitterPose(transform);
+      normalizeLocalLiquidEmitter(entry.localLiquidEmitter,pose);
+      applySceneObjectTransformState(entry.object,pose);
+      syncLocalLiquidEmitters();
+    } else applySceneObjectTransformState(entry.object, transform);
   }
   if (transformControls && entry.object === currentMesh && !splatCorrectionTransformTarget()) {
     transformControls.attach(entry.object);
@@ -6235,6 +6287,8 @@ function registerSceneObject(object, metadata = {}) {
     renderCapabilities: metadata.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
     sceneTransform,
+    localLiquidEmitter: metadata.type===LOCAL_LIQUID_EMITTER_TYPE
+      ? normalizeLocalLiquidEmitter(metadata.localLiquidEmitter,sceneObjectTransformState(object)) : null,
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -6250,6 +6304,7 @@ function registerSceneObject(object, metadata = {}) {
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
     sceneTransform: record.sceneTransform,
+    localLiquidEmitter: record.localLiquidEmitter,
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
@@ -6259,10 +6314,173 @@ function registerSceneObject(object, metadata = {}) {
       select: false,
     });
   }
+  if(record.type===LOCAL_LIQUID_EMITTER_TYPE) {
+    registerLocalLiquidEmitterEditTargets(record);
+    syncLocalLiquidEmitters();
+  }
   setActiveSceneObject(id);
   window._kaminosDirty?.();
   return record;
 }
+
+function localLiquidEmitterRecord(id) {
+  const entry=sceneObjects.find(item=>item.id===id&&item.type===LOCAL_LIQUID_EMITTER_TYPE);
+  if(!entry)throw new Error(`Water emitter "${id}" was not found`);
+  return entry;
+}
+
+function writeLocalLiquidEmitterSettings(id,settings) {
+  const entry=localLiquidEmitterRecord(id);
+  const normalized=normalizeLocalLiquidEmitter(settings,sceneObjectTransformState(entry.object));
+  entry.localLiquidEmitter=normalized;
+  entry.object.userData.kaminosSceneObject.localLiquidEmitter=normalized;
+  syncLocalLiquidEmitters();
+  window._kaminosDirty?.();
+  return structuredClone(normalized);
+}
+
+function registerLocalLiquidEmitterEditTargets(entry) {
+  if(!scenePlacementTools?.edits) return;
+  for(const key of ['strength','rate']) {
+    const id=localLiquidEmitterTargetId(entry.id,key);
+    if(localLiquidEmitterEditTargets.has(id))continue;
+    scenePlacementTools.edits.register(id,{
+      read:()=>({value:localLiquidEmitterRecord(entry.id).localLiquidEmitter[key]}),
+      check:state=>{
+        if(!Number.isFinite(state?.value))throw Error(`Water emitter ${key} must be finite`);
+        const current=localLiquidEmitterRecord(entry.id);
+        const normalized=normalizeLocalLiquidEmitter({...current.localLiquidEmitter,[key]:state.value},sceneObjectTransformState(current.object));
+        return {value:normalized[key]};
+      },
+      write:state=>writeLocalLiquidEmitterSettings(entry.id,{...localLiquidEmitterRecord(entry.id).localLiquidEmitter,[key]:state.value}),
+    });
+    localLiquidEmitterEditTargets.add(id);
+  }
+}
+
+function localLiquidEmitterParameterReport(message) {
+  const hud=document.getElementById('scene-edit-hud');
+  if(hud)hud.textContent=message;
+}
+
+function finishLocalLiquidEmitterParameterEdit(commit) {
+  const edit=localLiquidEmitterParameterEdit;
+  if(!edit)return false;
+  localLiquidEmitterParameterEdit=null;
+  const edits=scenePlacementTools?.edits;
+  if(edits?.state().active?.id===edit.targetId) {
+    try {commit?edits.commit():edits.cancel();}
+    catch(error) {edits.cancel();localLiquidEmitterParameterReport(error.message);}
+  }
+  updateTransformInspector();
+  return true;
+}
+
+function beginLocalLiquidEmitterParameterEdit(entry,key,input) {
+  registerLocalLiquidEmitterEditTargets(entry);
+  const targetId=localLiquidEmitterTargetId(entry.id,key);
+  if(localLiquidEmitterParameterEdit?.targetId===targetId)return true;
+  finishLocalLiquidEmitterParameterEdit(true);
+  try {
+    scenePlacementTools.edits.begin(targetId,`Water emitter ${key}`);
+    localLiquidEmitterParameterEdit={targetId,input};
+    return true;
+  } catch(error) {
+    localLiquidEmitterParameterReport(error.message);
+    updateTransformInspector();
+    return false;
+  }
+}
+
+function previewLocalLiquidEmitterParameter(input) {
+  const entry=selectedSceneObjectEntry(),key=input?.dataset?.localLiquidEmitterField;
+  if(!entry||entry.type!==LOCAL_LIQUID_EMITTER_TYPE||!['strength','rate'].includes(key))return;
+  if(!Number.isFinite(input.valueAsNumber))return;
+  if(!beginLocalLiquidEmitterParameterEdit(entry,key,input))return;
+  try {scenePlacementTools.edits.preview({value:input.valueAsNumber});}
+  catch(error) {
+    finishLocalLiquidEmitterParameterEdit(false);
+    localLiquidEmitterParameterReport(error.message);
+  }
+}
+
+function installLocalLiquidEmitterInspectorInputs() {
+  for(const input of document.querySelectorAll('[data-local-liquid-emitter-field]')) {
+    input.step='any';
+    input.addEventListener('input',()=>previewLocalLiquidEmitterParameter(input));
+    input.addEventListener('change',()=>finishLocalLiquidEmitterParameterEdit(true));
+    input.addEventListener('blur',()=>finishLocalLiquidEmitterParameterEdit(true));
+    input.addEventListener('keydown',event=>{
+      if(event.key==='Escape'||event.key==='Enter') {
+        event.preventDefault();event.stopImmediatePropagation();
+        finishLocalLiquidEmitterParameterEdit(event.key==='Enter');input.blur();
+      }
+    },true);
+  }
+  scenePlacementTools?.edits.subscribe(state=>{
+    if(localLiquidEmitterParameterEdit&&state.active?.id!==localLiquidEmitterParameterEdit.targetId) {
+      localLiquidEmitterParameterEdit=null;
+      updateTransformInspector();
+    }
+  });
+}
+
+function syncLocalLiquidEmitterInspector(entry) {
+  const panel=document.getElementById('local-liquid-emitter-inspector');
+  const isEmitter=entry?.type===LOCAL_LIQUID_EMITTER_TYPE;
+  if(!panel)return;
+  panel.hidden=!isEmitter;
+  if(!isEmitter)return;
+  registerLocalLiquidEmitterEditTargets(entry);
+  const settings=normalizeLocalLiquidEmitter(entry.localLiquidEmitter,sceneObjectTransformState(entry.object));
+  for(const input of panel.querySelectorAll('[data-local-liquid-emitter-field]')) {
+    const key=input.dataset.localLiquidEmitterField;
+    if(document.activeElement!==input)input.value=String(settings[key]);
+    input.disabled=localLiquidLoading||authoringBusy;
+  }
+  document.getElementById('local-liquid-emitter-aperture').value=(settings.baseRadius*sceneObjectTransformState(entry.object).scale[0]).toFixed(3);
+}
+
+window.kaminosLocalLiquidEmitterState=()=>localLiquidEmitterEntries().map(entry=>({
+  id:entry.id,label:entry.label,transform:sceneObjectTransformState(entry.object),
+  localLiquidEmitter:structuredClone(entry.localLiquidEmitter),
+}));
+
+window.kaminosSetLocalLiquidEmitterParameter=(id,key,value)=>{
+  if(!['strength','rate'].includes(key))throw Error(`Unsupported water emitter parameter: ${key}`);
+  const entry=localLiquidEmitterRecord(id);registerLocalLiquidEmitterEditTargets(entry);
+  const targetId=localLiquidEmitterTargetId(id,key);
+  scenePlacementTools.edits.apply(targetId,{value},`Water emitter ${key}`);
+  return structuredClone(entry.localLiquidEmitter);
+};
+
+function addLocalLiquidEmitter(record=null) {
+  if(!localLiquidSetup||!localLiquidHost||localLiquidLoading)throw Error('Load the local water setup before adding an emitter');
+  if(localLiquidEmitterEntries().length>=LOCAL_LIQUID_EMITTER_CAPACITY)throw Error(`The retained local liquid solver supports at most ${LOCAL_LIQUID_EMITTER_CAPACITY} scene emitters`);
+  const id=String(record?.id||makeSceneObjectId(LOCAL_LIQUID_EMITTER_TYPE));
+  const object=createLocalLiquidEmitterObject();
+  const defaultTransform={position:[-.35+localLiquidEmitterEntries().length*.24,.4,-1.65],
+    rotation:[Math.atan2(.25,1),0,0],scale:[1,1,1]};
+  const transform=normalizeLocalLiquidEmitterPose(record?.transform||defaultTransform);
+  const settings=normalizeLocalLiquidEmitter(record?.localLiquidEmitter||{
+    schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:.08,strength:1.15,rate:1200,
+  },transform);
+  applySceneObjectTransformState(object,transform);
+  scene.add(object);
+  const entry=registerSceneObject(object,{...record,id,source:LOCAL_LIQUID_EMITTER_SOURCE,
+    type:LOCAL_LIQUID_EMITTER_TYPE,fileName:'Water emitter',label:record?.label||'Water emitter',
+    transform,localLiquidEmitter:settings});
+  setActiveSceneObject(entry.id);
+  updateTransformInspector();
+  syncLocalLiquidEmitters();
+  return entry;
+}
+
+window.kaminosAddLocalLiquidEmitter=()=>addLocalLiquidEmitter();
+document.getElementById('local-liquid-add-emitter').addEventListener('click',()=>{
+  try {addLocalLiquidEmitter();}
+  catch(error) {localLiquidStatus(error.message);}
+});
 
 window.selectSceneObject = function(id) {
   setActiveSceneObject(id);
@@ -6305,6 +6523,8 @@ window.kaminosSceneObjectDebugState = function() {
     renderRoute: record.renderRoute || null,
     renderCapabilities: record.renderCapabilities || null,
     renderHandoffSchema: record.renderHandoffSchema || null,
+    localLiquidEmitter: record.type===LOCAL_LIQUID_EMITTER_TYPE
+      ? structuredClone(record.localLiquidEmitter) : null,
   }));
 };
 
@@ -6470,11 +6690,21 @@ document.querySelector('[data-scene-group-create]')?.addEventListener('click', (
 function applyAuthoredScenePose(id, transform = {}) {
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
+  const authoredTransform = entry.type === LOCAL_LIQUID_EMITTER_TYPE
+    ? normalizeLocalLiquidEmitterPose({...sceneObjectTransformState(entry.object),...transform})
+    : transform;
+  const emitterSettings = entry.type === LOCAL_LIQUID_EMITTER_TYPE
+    ? normalizeLocalLiquidEmitter(entry.localLiquidEmitter, authoredTransform) : null;
   if (entry.type === 'splat') {
-    setSceneObjectSceneTransform(entry, transform);
+    setSceneObjectSceneTransform(entry, authoredTransform);
     applySplatCorrectionToRecord(entry);
   } else {
-    applySceneObjectTransformState(entry.object, transform);
+    applySceneObjectTransformState(entry.object, authoredTransform);
+  }
+  if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) {
+    entry.localLiquidEmitter = emitterSettings;
+    entry.object.userData.kaminosSceneObject.localLiquidEmitter = emitterSettings;
+    syncLocalLiquidEmitters();
   }
   updateTransformInspector();
   // Selection owns gizmo attachment. Pose previews must preserve its mode,
@@ -9304,6 +9534,7 @@ window.removeSceneObject = function(id) {
     renderSceneObjectList();
     updateTransformInspector();
   }
+  if(entry.type===LOCAL_LIQUID_EMITTER_TYPE)syncLocalLiquidEmitters();
   setInfo(`Removed: ${entry.label || entry.fileName || entry.id}`);
   window._kaminosDirty?.();
 };
@@ -10133,6 +10364,8 @@ async function initScene() {
     selectionFeedback: target => selectionFeedback?.update(target),
   });
   sceneParameterTools = installAuthoredParameterControls();
+  installLocalLiquidEmitterInspectorInputs();
+  updateTransformInspector();
   window.kaminosSetAuthoredParameter = sceneParameterTools.set;
   window.kaminosAuthoredParameterState = sceneParameterTools.state;
   window.kaminosFrameSelected = () => frameObject(currentMesh, camera, controls);
@@ -10407,6 +10640,7 @@ function clearScene() {
   document.getElementById('transform-bar').classList.remove('visible');
   renderSceneObjectList();
   updateTransformInspector();
+  syncLocalLiquidEmitters();
 }
 
 function loadTexture(file) {
@@ -24888,6 +25122,8 @@ function serializeSceneObject(entry) {
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
+    localLiquidEmitter: entry.type===LOCAL_LIQUID_EMITTER_TYPE
+      ? structuredClone(entry.localLiquidEmitter) : null,
   };
 }
 
@@ -24899,6 +25135,16 @@ function readNumberControl(id, fallback = 0) {
 
 async function addSceneObjectFromSource(record) {
   if (!record?.source) throw new Error('Scene object missing source');
+  if (record.type===LOCAL_LIQUID_EMITTER_TYPE && record.source===LOCAL_LIQUID_EMITTER_SOURCE) {
+    const transform=normalizeLocalLiquidEmitterPose(record.transform);
+    const localLiquidEmitter=normalizeLocalLiquidEmitter(record.localLiquidEmitter,transform);
+    const object=createLocalLiquidEmitterObject();
+    applySceneObjectTransformState(object,transform);
+    scene.add(object);
+    registerSceneObject(object,{...record,transform,source:LOCAL_LIQUID_EMITTER_SOURCE,
+      type:LOCAL_LIQUID_EMITTER_TYPE,localLiquidEmitter});
+    return object;
+  }
   if (record.type === 'pbr' && isReloadableSceneObjectRecord(record)) {
     const files = await loadDemoFiles(record.source);
     if (!files) throw new Error(`Scene object "${record.fileName || record.id}" demo source "${record.source}" is not readable`);
@@ -25355,18 +25601,6 @@ function installAuthoredParameterControls() {
     descriptors.push({id:'rim.'+key,label:'Rim '+key,inputs:[range,number],grip:range.parentElement.querySelector('label'),step: ['intensity','azimuth','elevation','angle'].includes(key)?.2:.01,
       read:()=>accepted,adopt:()=>{accepted=actual();},validate:value=>{if((number.min!==''&&value<Number(number.min))||(number.max!==''&&value>Number(number.max)))throw Error('Invalid rim '+key);},
       write:value=>{const recipe=readRimLightSettings();if(key.startsWith('target-'))recipe.target['xyz'.indexOf(key.at(-1))]=value;else recipe[key]=value;setRimLight(recipe);accepted=value;}});
-  }
-  for(const [key,label,step] of localLiquidFields) {
-    const input=document.getElementById('local-liquid-'+key);
-    descriptors.push({id:'liquid.'+key,label,inputs:[input],grip:input.parentElement.querySelector('label'),step,
-      read:()=> (localLiquidSetup || defaultLocalLiquidSetup()).source[key],
-      validate:value=>{
-        if(!localLiquidHost || localLiquidLoading || authoringBusy)throw Error('Local water is unavailable for editing');
-        normalizeLocalLiquidSetup({...localLiquidSetup,source:{...localLiquidSetup.source,[key]:value}});
-      },
-      write:value=>{
-        const source={...localLiquidSetup.source,[key]:value};localLiquidHost.setSource(source);localLiquidSetup={...localLiquidSetup,source};showLocalLiquidSourceStatus();window._kaminosDirty?.();
-      }});
   }
   return installParameterTools({edits:scenePlacementTools.edits,descriptors,report:message=>{document.getElementById('scene-edit-hud').textContent=message;}});
 }
