@@ -8,12 +8,15 @@ const root=path.resolve(new URL('..',import.meta.url).pathname);
 const THREE=await import(pathToFileURL(path.join(root,'lib/three.webgpu.js')));
 const {defaultLocalLiquidSetup}=await import(pathToFileURL(path.join(root,'local-liquid-setup.mjs')));
 const hostSource=await fs.readFile(path.join(root,'local-liquid-host.mjs'),'utf8');
+const coreSource=await fs.readFile(path.join(root,'finger-fluid-webgpu-core.js'),'utf8');
 const witnessSource=await fs.readFile(path.join(root,'local-liquid-witness.mjs'),'utf8');
 let environmentUv;
 const calls=[],gpuTextures=new Map();
+let solverDebugState={effectiveRendererMode:'screen_space_refraction',opticalDebugMode:'shaded'};
 const device={lost:new Promise(()=>{}),addEventListener(){},removeEventListener(){},
   createCommandEncoder(){return {finish(){return {};}};},queue:{submit(){calls.push({op:'submit'});}}};
 let currentTarget=null,override=null,clearColor=new THREE.Color(),clearAlpha=1,atSolver=null;
+let pixelReadback=[2.5,1.25,.75,2];
 const nativeTexture=texture=>{
   if(!gpuTextures.has(texture))gpuTextures.set(texture,{name:texture.name, writes:[],createView(){return {texture:this};}});
   return gpuTextures.get(texture);
@@ -26,6 +29,10 @@ const renderer={
   getClearColor(target){return target.copy(clearColor);},getClearAlpha:()=>clearAlpha,
   setClearColor(value,alpha){clearColor.copy(value);clearAlpha=alpha;},
   getDrawingBufferSize(target){return target.set(640,480);},
+  async readRenderTargetPixelsAsync(target,x,y,width,height){
+    calls.push({op:'read-pixel',target:target.texture.name,x,y,width,height});
+    return new Uint16Array(pixelReadback.map(THREE.DataUtils.toHalfFloat));
+  },
   initRenderTarget(target){nativeTexture(target.texture);calls.push({op:'allocate',target:target.texture.name});},
   copyTextureToTexture(source,target){nativeTexture(target).writes=[...nativeTexture(source).writes];},
   render(object){
@@ -38,8 +45,10 @@ const pipeline={outputColorTransform:true,needsUpdate:false,render(){
   nativeTexture(currentTarget.texture).writes.push('host-scene-color');
   calls.push({op:'host-scene-color',target:currentTarget.texture.name});
 }};
-globalThis.__bathtubReviewSolver=async()=>({available:true,step(){},setLiveInletPacket(){},destroy(){},getDebugState(){return {};},
-  render({hostFrame}){
+globalThis.__bathtubReviewSolver=async()=>({available:true,step(){},setLiveInletPacket(){},destroy(){},getDebugState(){return solverDebugState;},
+  render({hostFrame,opticalDebugMode='shaded',rendererMode='screen_space_refraction'}){
+    solverDebugState={effectiveRendererMode:rendererMode,opticalDebugMode,
+      opticalQueryEvidence:{effectiveRoute:'kaminos/finger-fluid/hybrid-optical-query-v0',fallbackReason:null}};
     atSolver={sceneColorWrites:[...hostFrame.sceneColor.view.texture.writes],targetWrites:[...hostFrame.target.view.texture.writes]};
     calls.push({op:'solver',...atSolver});
   }});
@@ -54,7 +63,42 @@ const camera=new THREE.PerspectiveCamera(40,4/3,.01,100);camera.position.set(4.8
 const host=await createLocalLiquidHost({renderer,scene,camera,pipeline,device,setup:defaultLocalLiquidSetup()});
 host.render();
 assert.deepEqual(atSolver.sceneColorWrites,['host-scene-color']);
-test('current host color initializes the liquid destination before overlay',()=>assert.deepEqual(atSolver.targetWrites,['host-scene-color']));
+assert.deepEqual(atSolver.targetWrites,['host-scene-color']);
+assert.equal(typeof host.readOpticalAnchors,'function','local host exposes exact optical anchor readback');
+const queryMetadataBranch=coreSource.match(/if \(opticalDebugMode == 38\) \{([\s\S]*?)\n  \}/)?.[1] || '';
+assert.ok(queryMetadataBranch.includes('refractionQuery.confidence,\n      1.0,'),
+  'query metadata keeps a write alpha of one so source-over blending cannot corrupt the sampled fields');
+const transmissionMissBranch=coreSource.match(/let transmissionQueryValidity = select\(queryValidity, 0\.0, refractionQuery\.hitKind == REFLECTION_HIT_ENVIRONMENT\);([\s\S]*?)if \(opticalDebugMode == 21\)/)?.[1] || '';
+assert.ok(transmissionMissBranch.includes('let refractedRadiance = mix(')
+  && transmissionMissBranch.includes('transmissionQueryValidity,'),
+  'environment misses use the screen-space transmission fallback instead of environment radiance');
+await assert.rejects(host.readOpticalAnchors([{id:'pool',x:8,y:7}]),/paused/, 'anchor readback requires frozen water');
+host.setPaused(true);
+host.setOpticalOptions({opticalDebugMode:'refraction_query_metadata'});
+host.render({advance:false});
+const opticalAnchors=await host.readOpticalAnchors([{id:'pool-center',x:8,y:7}]);
+assert.equal(opticalAnchors.schema,'kaminos.local-liquid-optical-anchor-readback.v0');
+assert.equal(opticalAnchors.coordinateSpace,'host_output_target_texels_top_left_v0');
+assert.equal(opticalAnchors.frameId,'local-liquid-2');
+assert.equal(opticalAnchors.cameraIdentity,camera.uuid);
+assert.equal(opticalAnchors.opticalDebugMode,'refraction_query_metadata');
+assert.deepEqual(opticalAnchors.fields,['hitKindCode','distanceMeters','confidence','writeAlpha']);
+assert.equal(opticalAnchors.opticalQueryRoute,'kaminos/finger-fluid/hybrid-optical-query-v0');
+assert.deepEqual(opticalAnchors.pixels,[{id:'pool-center',x:8,y:7,hasLiquidSupport:true,
+  sampleStatus:'visible_liquid_sample',isVisibleLiquidSample:true,rgba:[2.5,1.25,.75,2]}]);
+pixelReadback=[-1,0,0,1];
+const unsupportedAnchor=await host.readOpticalAnchors([{id:'outside-support',x:8,y:7}]);
+assert.equal(unsupportedAnchor.pixels[0].sampleStatus,'no_liquid_support');
+assert.equal(unsupportedAnchor.pixels[0].hasLiquidSupport,false);
+assert.equal(unsupportedAnchor.pixels[0].isVisibleLiquidSample,false);
+pixelReadback=[-2,0,0,1];
+const occludedAnchor=await host.readOpticalAnchors([{id:'host-occluded',x:8,y:7}]);
+assert.equal(occludedAnchor.pixels[0].sampleStatus,'host_occluded');
+assert.equal(occludedAnchor.pixels[0].hasLiquidSupport,true);
+assert.equal(occludedAnchor.pixels[0].isVisibleLiquidSample,false);
+assert.ok(calls.some(call=>call.op==='read-pixel'&&call.target==='Local liquid composed color'&&call.x===8&&call.y===7),
+  'readback samples the requested host output texel');
+await assert.rejects(host.readOpticalAnchors([{id:'outside',x:640,y:7}]),/outside host output texels/);
 host.dispose();
 delete globalThis.__bathtubReviewSolver;
 

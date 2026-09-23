@@ -3227,7 +3227,7 @@ const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_RESOLUTIONS = Object.freeze({
 });
 export const KAMINOS_FINGER_FLUID_INLET_PROFILES = Object.freeze(['round_poiseuille', 'slot_poiseuille', 'porous_darcy']);
 export const KAMINOS_FINGER_FLUID_RENDERER_MODES = Object.freeze(['screen_space_surface', 'screen_space_refraction', 'sphere_debug']);
-export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'body_transport_path', 'body_transport_residual', 'macro_interface_normal', 'micro_normal_residual', 'interface_roughness', 'transmission_detail_weight']);
+export const KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES = Object.freeze(['shaded', 'depth', 'entry_depth', 'normal', 'exit_depth', 'exit_normal', 'thickness', 'path_length', 'exit_validity', 'refraction_offset', 'fresnel', 'absorption', 'reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'coverage', 'refraction_hit_kind', 'refraction_distance', 'refraction_fallback_delta', 'legacy_interface', 'interface_fidelity', 'transmitted_transport', 'reflected_transport', 'scatter_transport', 'pre_tonemap_luminance', 'normal_variance', 'reflection_footprint', 'exit_normal_variance', 'transmission_footprint', 'body_transport_path', 'body_transport_residual', 'macro_interface_normal', 'micro_normal_residual', 'interface_roughness', 'transmission_detail_weight', 'refraction_query_metadata', 'refraction_query_radiance', 'refraction_fallback_radiance']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES = Object.freeze(['transport_only', 'bounded_ggx', 'legacy_shading']);
 export const KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES = Object.freeze(['resolved_detail', 'variance_filtered']);
 export const KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES = Object.freeze(['resolved_exit', 'dense_exit_filtered']);
@@ -9938,6 +9938,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let dims = vec2<i32>(textureDimensions(surfaceAccumulation));
   let dimsFloat = vec2<f32>(dims);
   let pixel = vec2<i32>(fragmentPosition.xy);
+  let opticalDebugMode = i32(round(params.cameraUp.w));
   let opticalLightingMode = i32(round(params.cameraForward.w));
   let opticalFootprintMode = i32(round(params.cameraPosition.w));
   let transmissionFootprintMode = i32(round(params.opticalModes.x));
@@ -9945,16 +9946,22 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let interfaceFrequencyMode = i32(round(params.opticalModes.z));
   let sceneUv = clamp((vec2<f32>(pixel) + vec2<f32>(0.5)) / dimsFloat, vec2<f32>(0.0), vec2<f32>(1.0));
   let centerAccum = readAccum(pixel);
-  if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
-
   let supportOrderingDepth = readSupportOrderingDepth(pixel);
+  if (centerAccum.z < 0.018 || centerAccum.x < 0.012) {
+    if (opticalDebugMode >= 38 && opticalDebugMode <= 40) {
+      return refractionOutput(vec4<f32>(-1.0, 0.0, 0.0, 1.0), supportOrderingDepth);
+    }
+    discard;
+  }
   if (params.hostFrameControls.x > 0.5) {
     let hostSceneDepth = textureLoad(deferredLinearDepthObject, pixel, 0).x;
     if (hostSceneDepth > 0.0 && supportOrderingDepth >= hostSceneDepth - 0.002) {
+      if (opticalDebugMode >= 38 && opticalDebugMode <= 40) {
+        return refractionOutput(vec4<f32>(-2.0, 0.0, 0.0, 1.0), supportOrderingDepth);
+      }
       discard;
     }
   }
-  let opticalDebugMode = i32(round(params.cameraUp.w));
   if (opticalDebugMode == 16) {
     return refractionOutput(vec4<f32>(1.0, 1.0, 1.0, 1.0), supportOrderingDepth);
   }
@@ -10123,6 +10130,20 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     let distanceView = 1.0 - exp(-refractionQuery.distance * 0.18);
     return refractionOutput(vec4<f32>(distanceView, refractionQuery.confidence, 1.0 - distanceView, 1.0), supportOrderingDepth);
   }
+  if (opticalDebugMode == 38) {
+    return refractionOutput(vec4<f32>(
+      f32(refractionQuery.hitKind),
+      refractionQuery.distance,
+      refractionQuery.confidence,
+      1.0,
+    ), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 39) {
+    return refractionOutput(vec4<f32>(refractionQuery.radiance, 1.0), supportOrderingDepth);
+  }
+  if (opticalDebugMode == 40) {
+    return refractionOutput(vec4<f32>(refractedScene.rgb, 1.0), supportOrderingDepth);
+  }
   var transmissionQuadratureRadiance = refractionQuery.radiance;
   if (queryValidity > 0.5) {
     transmissionQuadratureRadiance = integrateTransmissionQuadrature(
@@ -10145,10 +10166,11 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     interfaceFrequencyMode == 1,
   );
   let robustBodyRadiance = max(bodyRadianceLowFrequency + bodyRadianceDirectionalResidual * transmissionDetailWeight, vec3<f32>(0.0));
+  let transmissionQueryValidity = select(queryValidity, 0.0, refractionQuery.hitKind == REFLECTION_HIT_ENVIRONMENT);
   let refractedRadiance = mix(
     refractedScene.rgb,
     select(transmissionQuadratureRadiance, robustBodyRadiance, bodyTransportMode == 1),
-    queryValidity,
+    transmissionQueryValidity,
   );
   if (opticalDebugMode == 21) {
     let fallbackDelta = abs(refractedRadiance - refractedScene.rgb);

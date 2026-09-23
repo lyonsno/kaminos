@@ -3227,6 +3227,10 @@ window.kaminosLocalLiquidSetOptics=options=>{
   window._kaminosDirty?.();
   return {paused:localLiquidHost.paused,requestedOpticalOptions:opticalOptions,status:'pending',lastCompletedFrameId};
 };
+window.kaminosLocalLiquidReadAnchors=anchors=>{
+  if(!localLiquidHost)throw Error('Local liquid host is not mounted');
+  return localLiquidHost.readOpticalAnchors(anchors);
+};
 document.getElementById('local-liquid-pause').onclick=()=>{
   if(!localLiquidHost)return;
   const paused=localLiquidHost.setPaused(!localLiquidHost.paused);

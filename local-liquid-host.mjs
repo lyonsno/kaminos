@@ -156,7 +156,57 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     }
   }
 
-  return {group,render,
+  async function readOpticalAnchors(anchors) {
+    if (!paused) throw Error('Optical anchor readback requires paused local water');
+    if (!lastFrame || failure) throw Error('Optical anchor readback requires a completed healthy host frame');
+    if (!Array.isArray(anchors) || anchors.length===0) throw Error('Optical anchor readback requires at least one anchor');
+    const frame=lastFrame, solverState=solver.getDebugState();
+    const mode=solverState.effectiveOpticalDebugMode || solverState.opticalDebugMode;
+    const fieldLayout={
+      refraction_query_metadata:['hitKindCode','distanceMeters','confidence','writeAlpha'],
+      refraction_query_radiance:['linearRadianceR','linearRadianceG','linearRadianceB','writeAlpha'],
+      refraction_fallback_radiance:['linearRadianceR','linearRadianceG','linearRadianceB','writeAlpha'],
+    };
+    if (!Object.prototype.hasOwnProperty.call(fieldLayout,mode)) throw Error(`Optical anchor readback is unsupported for debug mode: ${mode}`);
+    const requestedMode=opticalOptions.opticalDebugMode || 'shaded';
+    if(mode!==requestedMode)throw Error(`Optical anchor readback effective mode is stale: ${mode} !== ${requestedMode}`);
+    if(frame.route!==ROUTE)throw Error(`Optical anchor readback route mismatch: ${frame.route} !== ${ROUTE}`);
+    const size=renderer.getDrawingBufferSize(new THREE.Vector2());
+    const width=size.x,height=size.y,seenIds=new Set();
+    const validated=anchors.map(anchor=>{
+      if(!anchor||typeof anchor.id!=='string'||!anchor.id.trim()||seenIds.has(anchor.id))throw Error('Optical anchors require unique non-empty string ids');
+      seenIds.add(anchor.id);
+      if(!Number.isInteger(anchor.x)||!Number.isInteger(anchor.y)||anchor.x<0||anchor.y<0||anchor.x>=width||anchor.y>=height) {
+        throw Error(`Optical anchor ${anchor.id} is outside host output texels ${width}x${height}`);
+      }
+      return {id:anchor.id,x:anchor.x,y:anchor.y};
+    });
+    const readAnchor=async anchor=>{
+      const half=await renderer.readRenderTargetPixelsAsync(outputTarget,anchor.x,anchor.y,1,1);
+      if(!(half instanceof Uint16Array)||half.length!==4)throw Error(`Optical anchor ${anchor.id} readback is missing or partial`);
+      const rgba=Array.from(half,THREE.DataUtils.fromHalfFloat);
+      if(!rgba.every(Number.isFinite))throw Error(`Optical anchor ${anchor.id} readback contains non-finite values`);
+      const sampleStatus=rgba[0]===-1?'no_liquid_support':rgba[0]===-2?'host_occluded':'visible_liquid_sample';
+      return {...anchor,hasLiquidSupport:sampleStatus!=='no_liquid_support',sampleStatus,
+        isVisibleLiquidSample:sampleStatus==='visible_liquid_sample',rgba};
+    };
+    const pixels=await Promise.all(validated.map(readAnchor));
+    return {
+      schema:'kaminos.local-liquid-optical-anchor-readback.v0',
+      requestedRoute:ROUTE,effectiveRoute:ROUTE,
+      frameId:frame.frameId,cameraIdentity:frame.cameraIdentity,cameraGeneration:frame.cameraGeneration,
+      width,height,coordinateSpace:'host_output_target_texels_top_left_v0',
+      format:'rgba16float',colorSpace:'linear_hdr',opticalDebugMode:mode,fields:fieldLayout[mode],
+      rendererMode:solverState.effectiveRendererMode || solverState.rendererMode,
+      opticalQueryRoute:solverState.opticalQueryEvidence?.effectiveRoute || solverState.opticalQueryEvidence?.route || null,
+      opticalQueryFrameId:solverState.opticalQueryEvidence?.queryFrameId || null,
+      environmentSource:frame.environmentSource,environmentGeneration:frame.environmentGeneration,
+      fallbackReason:solverState.opticalQueryEvidence?.fallbackReason || null,
+      pixels,
+    };
+  }
+
+  return {group,render,readOpticalAnchors,
     setSource(source) {
       const next=normalizeLocalLiquidSetup({...authored,source});
       solver.setLiveInletPacket(localLiquidInletPacket(next,++sourceGeneration));
