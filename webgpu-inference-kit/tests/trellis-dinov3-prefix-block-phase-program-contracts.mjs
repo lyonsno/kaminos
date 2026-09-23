@@ -106,6 +106,8 @@ const routeImplementation = implementation.slice(implementation.indexOf('async f
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1LayerNormResident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1AttentionResident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'function');
+assert.equal(typeof residentRoute.assertTrellisDinoV3ResidentAttentionHandoffIdentity, 'function',
+  'the model-local probe must validate the attention input and original block-0 residual as separate identities');
 assert.equal(typeof kit.runTrellisDinoV3Block1LayerNormResident, 'undefined', 'the probe kernel remains model-specific rather than expanding the shared kit root API');
 assert.equal(typeof kit.runTrellisDinoV3Block1AttentionResident, 'undefined', 'block-1 attention remains model-specific rather than expanding the shared kit root API');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'undefined', 'the diagnostic probe is not promoted to the common kit API');
@@ -113,6 +115,23 @@ assert.equal(typeof kit.runTrellisDinoV3PrefixBlockPhaseProgramRoute, 'undefined
 assert.doesNotMatch(publicIndex, /TRELLIS_DINOV3/, 'the model-specific route must not append DINOv3 symbols to the current shared root surface');
 assert.equal(residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID,
   'trellis2.dinov3.block0-to-block1-attention.resident-probe.webgpu-local.v0');
+const block0Identity={name:'block0.live-gpu'};
+const norm1Identity={name:'block1.norm1.live-gpu'};
+assert.equal(residentRoute.assertTrellisDinoV3ResidentAttentionHandoffIdentity({
+  residentHandoff:{inputTensor:norm1Identity,residualTensor:block0Identity},
+  block0HiddenStates:block0Identity,
+  block1Norm1HiddenStates:norm1Identity,
+}),true,'attention must consume normalized block-0 while retaining the original block-0 residual');
+assert.throws(()=>residentRoute.assertTrellisDinoV3ResidentAttentionHandoffIdentity({
+  residentHandoff:{inputTensor:block0Identity,residualTensor:block0Identity},
+  block0HiddenStates:block0Identity,
+  block1Norm1HiddenStates:norm1Identity,
+}),/block-1 norm1 output/,'raw block-0 must not substitute for the attention input after normalization');
+assert.throws(()=>residentRoute.assertTrellisDinoV3ResidentAttentionHandoffIdentity({
+  residentHandoff:{inputTensor:norm1Identity,residualTensor:norm1Identity},
+  block0HiddenStates:block0Identity,
+  block1Norm1HiddenStates:norm1Identity,
+}),/block-0 residual/,'the attention residual must retain the exact live block-0 tensor');
 const residentFilterIndex = routeImplementation.indexOf("program.phases.filter(phase => phase.name !== 'readback-trellis-dinov3-prefix-block0-outputs')");
 const residentConsumerIndex = routeImplementation.indexOf('runTrellisDinoV3Block1LayerNormResident({');
 const attentionConsumerIndex = routeImplementation.indexOf('runTrellisDinoV3Block1AttentionResident({');

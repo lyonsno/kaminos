@@ -599,6 +599,16 @@ export async function runTrellisDinoV3Block1AttentionResident(input = {}) {
   return {operation:'dinov3-block1-attention-residual',inputTensor, residualTensor, tensor:tensors.afterAttention, dtype:'f32', shape:[1,TOKEN_COUNT,CHANNELS]};
 }
 
+export function assertTrellisDinoV3ResidentAttentionHandoffIdentity({ residentHandoff, block0HiddenStates, block1Norm1HiddenStates } = {}) {
+  if (!residentHandoff || residentHandoff.inputTensor !== block1Norm1HiddenStates) {
+    throw new Error('resident attention must consume the exact live block-1 norm1 output');
+  }
+  if (residentHandoff.residualTensor !== block0HiddenStates) {
+    throw new Error('resident attention must retain the exact live block-0 residual');
+  }
+  return true;
+}
+
 async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, { residentHandoffProbe = false } = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   if (input.residentTensorResolver != null) throw new Error('residentTensorResolver is not admitted for pinned input custody without GPU-buffer content attestation');
@@ -646,6 +656,7 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
   let lastCompletedPhase = null;
   let primaryError;
   let residentHandoff = null;
+  let expectedResidentAttentionInputTensor = null;
   try {
     let tensors;
     await runtime.runStage('load-trellis-dinov3-prefix-block0-tensors', async stage => {
@@ -799,6 +810,7 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
             weight:residentWeights.norm1Weight, bias:residentWeights.norm1Bias,
             schedulerInvocation:invocation,
           });
+          expectedResidentAttentionInputTensor = norm1Output.tensor;
           lastCompletedPhase='dinov3-block1-layernorm1-resident';
           phaseIndex+=1;
           failedPhase='dinov3-block1-qkv-projection-resident';
@@ -828,7 +840,11 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
       run={outputs,phaseNames:program.phases.map(phase=>phase.name)};
     });
     if (residentHandoffProbe) {
-      if (!residentHandoff || residentHandoff.inputTensor !== tensors.block0HiddenStates) throw new Error('resident probe did not consume the live block-0 tensor on this runtime');
+      assertTrellisDinoV3ResidentAttentionHandoffIdentity({
+        residentHandoff,
+        block0HiddenStates:tensors.block0HiddenStates,
+        block1Norm1HiddenStates:expectedResidentAttentionInputTensor,
+      });
       return {
         status:'diagnostic-probe-complete', authority:'non-authoritative-diagnostic',
         requestedProbeRouteId:TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID,
