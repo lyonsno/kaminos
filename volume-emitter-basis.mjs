@@ -360,15 +360,16 @@ export function compileVolumeEmitterFamily(request = {}) {
       familyRequested = { supportAxis: requestedSupportAxis, length: extent };
     } else {
       const candidate = request.supportAxis;
-      requestedSupportAxis = Array.isArray(candidate) && candidate.length === 3 && candidate.every(Number.isFinite)
-        ? candidate
-        : [1, 0, 0];
-      try {
-        supportAxis = orthogonalSupportAxis(axis, requestedSupportAxis);
-      } catch {
-        // Wick/nozzle shape geometry does not consume this optional side axis.
-        // Still supply the core with a valid basis for orthogonal aims.
+      if (candidate === undefined) {
+        // Wick/nozzle shape does not consume this side axis, but the core still
+        // needs a deterministic orthogonal basis after an arbitrary aim.
         supportAxis = fallbackOrthogonalSupportAxis(axis);
+        requestedSupportAxis = supportAxis;
+      } else {
+        // An authored basis is authority-bearing input: reject it when it
+        // cannot form a frame instead of silently replacing it.
+        requestedSupportAxis = vec3(candidate, 'supportAxis');
+        supportAxis = orthogonalSupportAxis(axis, requestedSupportAxis);
       }
       familyRequested = { length: extent };
     }
