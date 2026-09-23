@@ -2451,6 +2451,21 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-val" id="volume-pressure-mode-val">Default</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Pressure Solver</span>
+      <select id="volume-pressure-solver" class="select-input" data-volume-settings-param="volume_pressure_solver">
+        <option value="legacy" selected>Legacy Jacobi</option>
+        <option value="converged">Converged, closed top</option>
+        <option value="converged-open-top">Converged, open top</option>
+      </select>
+      <span class="slider-val" id="volume-pressure-solver-val">legacy</span>
+    </div>
+    <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR to a small divergence residual and applies Projection as a plain 0-1 gain; open top vents pressure through the upper face so buoyant gas can leave.</span>
+    <div class="slider-row">
+      <span class="slider-label">Solver Sweeps</span>
+      <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
+      <span class="slider-val" id="volume-pressure-solver-iterations-val">60</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pressure-tier-overlay-val">0.00</span>
@@ -13434,6 +13449,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroCarrierView', 'volume_pyro_carrier_view'],
   ['pyroOverdrive', 'volume_pyro_overdrive'],
   ['pressureMode', 'volume_pressure_mode'],
+  ['pressureSolver', 'volume_pressure_solver'],
+  ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
   ['pressureTierOverlay', 'volume_pressure_tier_overlay'],
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
@@ -18637,6 +18654,8 @@ function readVolumeControls() {
     pyroOverdrive: parseFloat(document.getElementById('volume-pyro-overdrive').value),
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
+    pressureSolver: document.getElementById('volume-pressure-solver').value,
+    pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
     pressureTierLowerMax: parseFloat(document.getElementById('volume-pressure-tier-lower-max').value),
     pressureTierHeroMin: parseFloat(document.getElementById('volume-pressure-tier-hero-min').value),
@@ -18823,6 +18842,14 @@ function updateVolumeControlLabels() {
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
+  {
+    const solver = String(c.pressureSolver || 'legacy');
+    const sweeps = Math.round(Number(c.pressureSolverIterations) || 60);
+    document.getElementById('volume-pressure-solver-val').textContent = solver === 'legacy'
+      ? 'legacy'
+      : `${solver === 'converged-open-top' ? 'converged, open top' : 'converged'} · ${sweeps} sweeps`;
+    document.getElementById('volume-pressure-solver-iterations-val').textContent = solver === 'legacy' ? `${sweeps} (converged only)` : String(sweeps);
+  }
   const pressureTierControls = normalizeVolumePressureTierControls(c);
   if (pressureTierControls.lowerMax !== c.pressureTierLowerMax) setVolumeControlValue('volume-pressure-tier-lower-max', pressureTierControls.lowerMax.toFixed(2));
   if (pressureTierControls.heroMin !== c.pressureTierHeroMin) setVolumeControlValue('volume-pressure-tier-hero-min', pressureTierControls.heroMin.toFixed(2));
@@ -19808,6 +19835,8 @@ async function initKaminosVolumeRoute() {
     ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
+    ['volume-pressure-solver', 'volume_pressure_solver'],
+    ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
   ]) {
     if (params.has(param)) setVolumeControlValue(id, params.get(param));
   }
@@ -20069,6 +20098,8 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-shear-width',
     'volume-emitter-edge-entrainment',
     'volume-fixed-source-dephase',
+    'volume-pressure-solver',
+    'volume-pressure-solver-iterations',
   ]) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);

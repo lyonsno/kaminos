@@ -1346,7 +1346,23 @@ function pressureBufferBytes(gridSize) {
 const SIM_COST_LEDGER_IDENTITY = 'tall-plume-sim-cost-ledger-v0';
 const SIM_COST_LEDGER_EVIDENCE_SOURCE = 'cpu-structural-pass-ledger-plus-raf-queue-proxy';
 const PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE = 'jacobi-inline-divergence-v0';
+const PRESSURE_SOURCE_STRATEGY_RED_BLACK_SOR = 'red-black-sor-warm-start-v0';
 const PRESSURE_SOURCE_STRATEGY_DISABLED = 'disabled';
+// Converged pressure solver: opt-in red-black successive over-relaxation that
+// iterates the same 7-point Laplacian in place to a small divergence residual,
+// warm-started from the previous step's pressure. Legacy keeps the damped 1-3
+// pass Jacobi with material-weighted partial projection so saved basins do not
+// change under anyone.
+export const PRESSURE_SOLVER_LEGACY = 'legacy';
+export const PRESSURE_SOLVER_CONVERGED = 'converged';
+export const PRESSURE_SOLVER_CONVERGED_OPEN_TOP = 'converged-open-top';
+export const PRESSURE_SOLVER_IDENTITY = 'converged-red-black-sor-v0';
+export const PRESSURE_SOLVER_SOR_OMEGA = 1.9;
+export const PRESSURE_SOLVER_DEFAULT_SWEEPS = 60;
+export const PRESSURE_SOLVER_MAX_SWEEPS = 1000;
+export const PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS = 16;
+const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 8;
+const PRESSURE_SOLVER_VALUES = Object.freeze([PRESSURE_SOLVER_LEGACY, PRESSURE_SOLVER_CONVERGED, PRESSURE_SOLVER_CONVERGED_OPEN_TOP]);
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -1914,6 +1930,37 @@ function normalizePressureStrategy(value, scene) {
   return PRESSURE_STRATEGY_GLOBAL;
 }
 
+function normalizePressureSolverSweeps(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return PRESSURE_SOLVER_DEFAULT_SWEEPS;
+  return Math.max(1, Math.min(PRESSURE_SOLVER_MAX_SWEEPS, requested));
+}
+
+export function resolvePressureSolverConfig(controls = {}) {
+  const requestedSolver = controls.pressureSolver === undefined || controls.pressureSolver === null
+    ? PRESSURE_SOLVER_LEGACY
+    : String(controls.pressureSolver).toLowerCase();
+  const requestedSweeps = controls.pressureSolverIterations;
+  const sweeps = normalizePressureSolverSweeps(requestedSweeps);
+  const known = PRESSURE_SOLVER_VALUES.includes(requestedSolver);
+  const converged = known && requestedSolver !== PRESSURE_SOLVER_LEGACY;
+  const projection = Math.max(0, Math.min(1.5, Number.isFinite(Number(controls.projection)) ? Number(controls.projection) : 0.65));
+  return {
+    identity: PRESSURE_SOLVER_IDENTITY,
+    requested: { solver: requestedSolver, iterations: requestedSweeps ?? null },
+    effective: {
+      solver: converged ? PRESSURE_SOLVER_CONVERGED : PRESSURE_SOLVER_LEGACY,
+      openTop: requestedSolver === PRESSURE_SOLVER_CONVERGED_OPEN_TOP,
+      iterations: converged ? sweeps : null,
+      omega: converged ? PRESSURE_SOLVER_SOR_OMEGA : null,
+      // Projection stays an operator gain in converged mode, clamped to full
+      // projection; legacy keeps its material-weighted scene gain in-shader.
+      projectionGain: converged ? Math.min(1, projection) : null,
+      reason: known ? null : 'unknown-solver',
+    },
+  };
+}
+
 function tallPlumePressureIterationStrategy(scene, pressureIterations) {
   return normalizeVolumeScene(scene) === 'tall_plume' && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
@@ -2184,7 +2231,7 @@ struct Uniforms {
   reserved_source_extension_0: vec4<f32>,
   detail_force_isolation: vec4<f32>,
   reserved_source_extension_2: vec4<f32>,
-  reserved_source_extension_3: vec4<f32>,
+  pressure_solver_controls: vec4<f32>,
   reserved_source_extension_4: vec4<f32>,
   artistic_motion_controls: vec4<f32>,
   physical_fire: vec4<f32>,
@@ -2247,7 +2294,13 @@ struct NonRidgeOpticalCaptureRow {
 @group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
+// Per workgroup: [compact: sum|div|, max|div| before, sum, max after], [wide: same]; reduced on the CPU.
+@group(2) @binding(2) var<storage, read_write> pressureResidualPartials: array<vec4<f32>>;
 @group(3) @binding(0) var<storage, read_write> boundarySidecarDst: array<vec4<f32>>;
+var<workgroup> pressureResidualSum: array<f32, 64>;
+var<workgroup> pressureResidualMax: array<f32, 64>;
+var<workgroup> pressureResidualWideSum: array<f32, 64>;
+var<workgroup> pressureResidualWideMax: array<f32, 64>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -2680,6 +2733,39 @@ fn divergenceAtCell(c: vec3<i32>) -> f32 {
   return ((vx1 - vx0) + (vy1 - vy0) + (vz1 - vz0)) * 0.5;
 }
 
+// Compact backward divergence. The converged solver treats each stored velocity
+// component as the flux through the cell's upper face on that axis, so this
+// divergence, the forward pressure gradient, and the 7-point Laplacian are one
+// consistent MAC-style trio: after a converged solve the corrected field has
+// zero compact divergence. The legacy wide stencil above cannot be zeroed by
+// the compact Laplacian it is paired with.
+fn pressureSolverOpenTop() -> bool {
+  return u.pressure_solver_controls.y > 0.5;
+}
+
+// Flux through the upper face of cell c on one axis. The domain is a closed box:
+// the ghost face below cell 0 and the upper face of the last cell carry no flux,
+// except the top face when the open-top option lets buoyant gas leave; that
+// stored flux is then corrected by the forward pressure gradient like any other.
+fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
+  if (c[axis] < 0) {
+    return 0.0;
+  }
+  if (c[axis] >= i32(GRID) - 1) {
+    if (axis == 1u && pressureSolverOpenTop()) {
+      return readSlot(c, 0u)[axis];
+    }
+    return 0.0;
+  }
+  return readSlot(c, 0u)[axis];
+}
+
+fn divergenceCompactAtCell(c: vec3<i32>) -> f32 {
+  return (compactFaceVelocity(c, 0u) - compactFaceVelocity(c - vec3<i32>(1, 0, 0), 0u))
+    + (compactFaceVelocity(c, 1u) - compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u))
+    + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
+}
+
 fn proceduralReceiverActivityCue(c: vec3<i32>) -> f32 {
   let flowEnergy = curlMagnitudeAtCell(c) + abs(divergenceAtCell(c));
   let fireLayer = readSlot(c, 2u);
@@ -2911,6 +2997,175 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
   fluidDst[base + 1u] = material;
   fluidDst[base + 2u] = fireLayer;
   fluidDst[base + 3u] = microLayer;
+}
+
+// Converged pressure solver. Same 7-point Laplacian and wide-stencil divergence
+// as the legacy path, iterated in place by red-black SOR with the previous
+// step's pressure as the warm start. No per-pass damping, no material-weighted
+// correction. Every face is Neumann except that the open-top option holds the
+// pressure above the upper face at zero so buoyant gas can leave the domain.
+fn pressureNeighborInPlace(c: vec3<i32>) -> f32 {
+  if (pressureSolverOpenTop() && c.y >= i32(GRID)) {
+    return 0.0;
+  }
+  return pressureDst[pressureIndexForCell(c)].y;
+}
+
+fn pressureNeighborRead(c: vec3<i32>) -> f32 {
+  if (pressureSolverOpenTop() && c.y >= i32(GRID)) {
+    return 0.0;
+  }
+  return pressureSrc[pressureIndexForCell(c)].y;
+}
+
+fn pressureRedBlackUpdate(previous: f32, neighborPressure: f32, div: f32, omega: f32) -> f32 {
+  let gaussSeidel = (neighborPressure - div) * (1.0 / 6.0);
+  return previous + (gaussSeidel - previous) * omega;
+}
+
+fn pressureRedBlackSweep(gid: vec3<u32>, parity: u32) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  // Cells of one parity read only cells of the other parity, so one dispatch
+  // per color updates the shared buffer without a race.
+  if (((gid.x + gid.y + gid.z) & 1u) != parity) {
+    return;
+  }
+  let c = vec3<i32>(gid);
+  let idx = index3(gid);
+  let cell = pressureDst[idx];
+  let neighborPressure =
+    pressureNeighborInPlace(c + vec3<i32>(-1, 0, 0)) +
+    pressureNeighborInPlace(c + vec3<i32>( 1, 0, 0)) +
+    pressureNeighborInPlace(c + vec3<i32>(0, -1, 0)) +
+    pressureNeighborInPlace(c + vec3<i32>(0,  1, 0)) +
+    pressureNeighborInPlace(c + vec3<i32>(0, 0, -1)) +
+    pressureNeighborInPlace(c + vec3<i32>(0, 0,  1));
+  let omega = clamp(u.pressure_solver_controls.z, 1.0, 1.95);
+  pressureDst[idx] = vec4<f32>(cell.x, pressureRedBlackUpdate(cell.y, neighborPressure, cell.x, omega), 0.0, 0.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csDivergencePressureWarm(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  // Fresh compact divergence in .x; last step's pressure in .y is the warm start.
+  pressureDst[idx] = vec4<f32>(divergenceCompactAtCell(vec3<i32>(gid)), pressureDst[idx].y, 0.0, 0.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csPressureRedBlackEven(@builtin(global_invocation_id) gid: vec3<u32>) {
+  pressureRedBlackSweep(gid, 0u);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csPressureRedBlackOdd(@builtin(global_invocation_id) gid: vec3<u32>) {
+  pressureRedBlackSweep(gid, 1u);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  let base = idx * SLOTS_PER_CELL;
+  let c = vec3<i32>(gid);
+  // Forward gradient: the adjoint of the compact backward divergence.
+  let pressureHere = pressureNeighborRead(c);
+  let pressureGradient = vec3<f32>(
+    pressureNeighborRead(c + vec3<i32>(1, 0, 0)) - pressureHere,
+    pressureNeighborRead(c + vec3<i32>(0, 1, 0)) - pressureHere,
+    pressureNeighborRead(c + vec3<i32>(0, 0, 1)) - pressureHere
+  );
+  let velocityDensity = fluidSrc[base];
+  frontDst[idx] = frontSrc[idx];
+  let projectionGain = clamp(u.pressure_solver_controls.w, 0.0, 1.0);
+  var correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
+  // Closed walls carry no flux: the upper face of the last cell on each axis is
+  // a wall unless it is the open top.
+  let lastCell = i32(GRID) - 1;
+  if (c.x >= lastCell) {
+    correctedVelocity.x = 0.0;
+  }
+  if (c.y >= lastCell && !pressureSolverOpenTop()) {
+    correctedVelocity.y = 0.0;
+  }
+  if (c.z >= lastCell) {
+    correctedVelocity.z = 0.0;
+  }
+  // The legacy per-component velocity bound is retained; the residual probe
+  // measures divergence after it, so anything it reintroduces is visible.
+  fluidDst[base] = vec4<f32>(clamp(correctedVelocity, vec3<f32>(-0.34), vec3<f32>(0.52)), velocityDensity.w);
+  fluidDst[base + 1u] = fluidSrc[base + 1u];
+  fluidDst[base + 2u] = fluidSrc[base + 2u];
+  fluidDst[base + 3u] = fluidSrc[base + 3u];
+}
+
+fn pressureResidualReduce(
+  gid: vec3<u32>,
+  localIndex: u32,
+  workgroupId: vec3<u32>,
+  workgroupCount: vec3<u32>,
+  afterProjection: bool
+) {
+  var compact = 0.0;
+  var wide = 0.0;
+  if (all(gid < vec3<u32>(GRID))) {
+    compact = abs(divergenceCompactAtCell(vec3<i32>(gid)));
+    wide = abs(divergenceAtCell(vec3<i32>(gid)));
+  }
+  pressureResidualSum[localIndex] = compact;
+  pressureResidualMax[localIndex] = compact;
+  pressureResidualWideSum[localIndex] = wide;
+  pressureResidualWideMax[localIndex] = wide;
+  workgroupBarrier();
+  if (localIndex != 0u) {
+    return;
+  }
+  var sum = 0.0;
+  var peak = 0.0;
+  var wideSum = 0.0;
+  var widePeak = 0.0;
+  for (var i = 0u; i < 64u; i = i + 1u) {
+    sum = sum + pressureResidualSum[i];
+    peak = max(peak, pressureResidualMax[i]);
+    wideSum = wideSum + pressureResidualWideSum[i];
+    widePeak = max(widePeak, pressureResidualWideMax[i]);
+  }
+  let partialIndex = 2u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
+  let previousCompact = pressureResidualPartials[partialIndex];
+  let previousWide = pressureResidualPartials[partialIndex + 1u];
+  if (afterProjection) {
+    pressureResidualPartials[partialIndex] = vec4<f32>(previousCompact.x, previousCompact.y, sum, peak);
+    pressureResidualPartials[partialIndex + 1u] = vec4<f32>(previousWide.x, previousWide.y, wideSum, widePeak);
+  } else {
+    pressureResidualPartials[partialIndex] = vec4<f32>(sum, peak, 0.0, 0.0);
+    pressureResidualPartials[partialIndex + 1u] = vec4<f32>(wideSum, widePeak, 0.0, 0.0);
+  }
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csPressureResidualBefore(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(local_invocation_index) localIndex: u32,
+  @builtin(workgroup_id) workgroupId: vec3<u32>,
+  @builtin(num_workgroups) workgroupCount: vec3<u32>
+) {
+  pressureResidualReduce(gid, localIndex, workgroupId, workgroupCount, false);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csPressureResidualAfter(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(local_invocation_index) localIndex: u32,
+  @builtin(workgroup_id) workgroupId: vec3<u32>,
+  @builtin(num_workgroups) workgroupCount: vec3<u32>
+) {
+  pressureResidualReduce(gid, localIndex, workgroupId, workgroupCount, true);
 }
 
 fn vorticityConfinement(c: vec3<i32>, amount: f32) -> vec3<f32> {
@@ -8144,6 +8399,15 @@ export function createKaminosVolumePrototype({
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
+    pressureSolver: {
+      ...resolvePressureSolverConfig(controlsSnapshot),
+      uniform: null,
+      residualProbe: { intervalSteps: PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS, pending: false },
+      residual: null,
+      residualHistory: [],
+      residualError: null,
+    },
+    pressureRedBlackHalfPasses: 0,
     tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
     tallPlumePressureIterationTarget: 0,
     pressureStrategy: normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene),
@@ -8421,6 +8685,12 @@ export function createKaminosVolumePrototype({
   let pressureJacobiTieredHeroPipeline = null;
   let pressureProjectPipeline = null;
   let pressureProjectTieredPipeline = null;
+  let pressureDivergenceWarmPipeline = null;
+  let pressureRedBlackEvenPipeline = null;
+  let pressureRedBlackOddPipeline = null;
+  let pressureProjectConvergedPipeline = null;
+  let pressureResidualBeforePipeline = null;
+  let pressureResidualAfterPipeline = null;
   let boundarySidecarBuildPipeline = null;
   let emissiveLightField = null;
   let emissiveWhiteKelvin = null;
@@ -8467,6 +8737,14 @@ export function createKaminosVolumePrototype({
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
+  let pressureResidualBindGroup = null;
+  let pressureResidualPartialsBuffer = null;
+  let pressureResidualReadbackBuffer = null;
+  let pressureResidualWorkgroupCount = 0;
+  let pressureResidualCopyPending = false;
+  let pressureResidualCopyStep = 0;
+  let pressureResidualCopyFrame = 0;
+  let pressureResidualMapPending = false;
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
@@ -8482,6 +8760,7 @@ export function createKaminosVolumePrototype({
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
   let pressureReadBindGroupLayout = null;
+  let pressureResidualBindGroupLayout = null;
   let emptyBindGroupLayout = null;
   let pipelineLayout = null;
   let analyticEmitterInjectionPipelineLayout = null;
@@ -8495,6 +8774,8 @@ export function createKaminosVolumePrototype({
   let pressureJacobiTieredPipelineLayout = null;
   let pressureProjectPipelineLayout = null;
   let pressureProjectTieredPipelineLayout = null;
+  let pressureRedBlackPipelineLayout = null;
+  let pressureResidualPipelineLayout = null;
   let shader = null;
   let analyticEmitterInjectionShader = null;
   let boundarySplatShader = null;
@@ -9118,6 +9399,8 @@ export function createKaminosVolumePrototype({
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of quenchBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
+    pressureResidualPartialsBuffer?.destroy();
+    pressureResidualReadbackBuffer?.destroy();
     boundarySidecarBuffer?.destroy();
     boundarySplatBuffer?.destroy();
     boundarySplatDrawBuffer?.destroy();
@@ -9184,6 +9467,11 @@ export function createKaminosVolumePrototype({
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
     pressureReadBindGroups = [];
+    pressureResidualBindGroup = null;
+    pressureResidualPartialsBuffer = null;
+    pressureResidualReadbackBuffer = null;
+    pressureResidualWorkgroupCount = 0;
+    pressureResidualCopyPending = false;
   }
 
   function effectiveControlsSignature(snapshot = controlsSnapshot) {
@@ -10132,6 +10420,20 @@ export function createKaminosVolumePrototype({
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
       return buffer;
     });
+    pressureResidualWorkgroupCount = Math.ceil(gridSize / 4) ** 3;
+    const pressureResidualBytes = pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP * Float32Array.BYTES_PER_ELEMENT;
+    pressureResidualPartialsBuffer = device.createBuffer({
+      label: `kaminos pressure residual workgroup partials ${gridSize}^3`,
+      size: pressureResidualBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(pressureResidualPartialsBuffer, 0, new Float32Array(pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP));
+    pressureResidualReadbackBuffer = device.createBuffer({
+      label: `kaminos pressure residual readback ${gridSize}^3`,
+      size: pressureResidualBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    pressureResidualCopyPending = false;
     ensureOracleActivityCueBuffer();
     if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
       const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
@@ -10272,6 +10574,36 @@ export function createKaminosVolumePrototype({
       label: `kaminos velocity tiered pressure projection compute pipeline ${gridSize}^3`,
       layout: pressureProjectTieredPipelineLayout,
       compute: { module: shader, entryPoint: 'csProjectPressureTiered', constants: computePipelineConstants },
+    });
+    pressureDivergenceWarmPipeline = device.createComputePipeline({
+      label: `kaminos ${PRESSURE_SOLVER_IDENTITY} warm divergence compute pipeline ${gridSize}^3`,
+      layout: pressureRedBlackPipelineLayout,
+      compute: { module: shader, entryPoint: 'csDivergencePressureWarm', constants: computePipelineConstants },
+    });
+    pressureRedBlackEvenPipeline = device.createComputePipeline({
+      label: `kaminos ${PRESSURE_SOLVER_IDENTITY} red sweep compute pipeline ${gridSize}^3`,
+      layout: pressureRedBlackPipelineLayout,
+      compute: { module: shader, entryPoint: 'csPressureRedBlackEven', constants: computePipelineConstants },
+    });
+    pressureRedBlackOddPipeline = device.createComputePipeline({
+      label: `kaminos ${PRESSURE_SOLVER_IDENTITY} black sweep compute pipeline ${gridSize}^3`,
+      layout: pressureRedBlackPipelineLayout,
+      compute: { module: shader, entryPoint: 'csPressureRedBlackOdd', constants: computePipelineConstants },
+    });
+    pressureProjectConvergedPipeline = device.createComputePipeline({
+      label: `kaminos ${PRESSURE_SOLVER_IDENTITY} projection compute pipeline ${gridSize}^3`,
+      layout: pressureProjectPipelineLayout,
+      compute: { module: shader, entryPoint: 'csProjectPressureConverged', constants: computePipelineConstants },
+    });
+    pressureResidualBeforePipeline = device.createComputePipeline({
+      label: `kaminos pressure residual probe before-projection compute pipeline ${gridSize}^3`,
+      layout: pressureResidualPipelineLayout,
+      compute: { module: shader, entryPoint: 'csPressureResidualBefore', constants: computePipelineConstants },
+    });
+    pressureResidualAfterPipeline = device.createComputePipeline({
+      label: `kaminos pressure residual probe after-projection compute pipeline ${gridSize}^3`,
+      layout: pressureResidualPipelineLayout,
+      compute: { module: shader, entryPoint: 'csPressureResidualAfter', constants: computePipelineConstants },
     });
     boundarySidecarBuildPipeline = device.createComputePipeline({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} compute pipeline ${gridSize}^3`,
@@ -10580,6 +10912,13 @@ export function createKaminosVolumePrototype({
         ],
       }),
     ];
+    pressureResidualBindGroup = device.createBindGroup({
+      label: `kaminos pressure residual partials bind group ${gridSize}^3`,
+      layout: pressureResidualBindGroupLayout,
+      entries: [
+        { binding: 2, resource: { buffer: pressureResidualPartialsBuffer } },
+      ],
+    });
     pressureReadBindGroups = [
       device.createBindGroup({
         label: `kaminos pressure read bind group ${gridSize}^3 A`,
@@ -11040,6 +11379,16 @@ export function createKaminosVolumePrototype({
         },
       ],
     });
+    pressureResidualBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos pressure residual partials bind group layout',
+      entries: [
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
+        },
+      ],
+    });
     emptyBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos empty bind group layout',
       entries: [],
@@ -11116,6 +11465,16 @@ export function createKaminosVolumePrototype({
     pressureProjectTieredPipelineLayout = device.createPipelineLayout({
       label: 'kaminos tiered pressure projection pipeline layout',
       bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+    });
+    pressureRedBlackPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos pressure red-black sweep pipeline layout',
+      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureWriteBindGroupLayout],
+    });
+    // The compact divergence reads the solver uniform for the open-top flag, so
+    // the probe and warm-divergence kernels take the full fluid layout at group 0.
+    pressureResidualPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos pressure residual probe pipeline layout',
+      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureResidualBindGroupLayout],
     });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution);
@@ -12252,6 +12611,11 @@ export function createKaminosVolumePrototype({
     uniforms.fill(0, 344, 364);
     uniforms[344] = controlsSnapshot.fixedSourceDephase === false ? 0 : 1;
     uniforms.set(detailForceContributionMask(controlsSnapshot.detailForceContributions), 348);
+    const pressureSolverConfig = resolvePressureSolverConfig(controlsSnapshot);
+    uniforms[356] = pressureSolverConfig.effective.solver === PRESSURE_SOLVER_CONVERGED ? 1 : 0;
+    uniforms[357] = pressureSolverConfig.effective.openTop ? 1 : 0;
+    uniforms[358] = pressureSolverConfig.effective.omega ?? 0;
+    uniforms[359] = pressureSolverConfig.effective.projectionGain ?? 0;
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,
@@ -12378,6 +12742,17 @@ export function createKaminosVolumePrototype({
     state.proceduralTransportSlip = false;
     state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
     state.fixedSourceDephase = uniforms[344] >= 0.5;
+    state.pressureSolver = {
+      ...resolvePressureSolverConfig(controlsSnapshot),
+      uniform: { converged: uniforms[356], openTop: uniforms[357], omega: uniforms[358], projectionGain: uniforms[359] },
+      residualProbe: {
+        intervalSteps: PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS,
+        pending: pressureResidualCopyPending || pressureResidualMapPending,
+      },
+      residual: state.pressureSolver?.residual ?? null,
+      residualHistory: state.pressureSolver?.residualHistory ?? [],
+      residualError: state.pressureSolver?.residualError ?? null,
+    };
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -12558,7 +12933,8 @@ export function createKaminosVolumePrototype({
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls);
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
-    const spatialPressureEnabled = pressureEnabled && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
+    const convergedSolver = resolvePressureSolverConfig(controlsSnapshot).effective.solver === PRESSURE_SOLVER_CONVERGED;
+    const spatialPressureEnabled = pressureEnabled && !convergedSolver && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
     const tallPlumePressureStrategy = spatialPressureEnabled
       ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
       : tallPlumePressureIterationStrategy(scene, pressureIterationRequested);
@@ -12609,16 +12985,23 @@ export function createKaminosVolumePrototype({
       : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
     const tallPlumeTransitionBandExtraReadsPerCell = 0;
     const pressureSourceStrategy = pressureEnabled
-      ? PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE
+      ? (convergedSolver ? PRESSURE_SOURCE_STRATEGY_RED_BLACK_SOR : PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE)
       : PRESSURE_SOURCE_STRATEGY_DISABLED;
-    const pressureDivergencePasses = 0;
-    const pressureJacobiPasses = pressureEnabled ? pressureIterations : 0;
+    const pressureDivergencePasses = pressureEnabled && convergedSolver ? 1 : 0;
+    const pressureJacobiPasses = pressureEnabled && !convergedSolver ? pressureIterations : 0;
+    // Each converged sweep is two half-grid dispatches touching every cell once.
+    const pressureRedBlackHalfPasses = pressureEnabled && convergedSolver ? pressureIterations * 2 : 0;
     const pressureJacobiInlineDivergencePasses = pressureJacobiPasses;
     const pressureJacobiFullGridPasses = spatialPressureEnabled ? tierPlan.fullGridPasses : pressureJacobiPasses;
     const pressureJacobiPartialSlabPasses = spatialPressureEnabled ? tierPlan.partialSlabPasses : 0;
-    const pressureJacobiFullGridEquivalentPasses = spatialPressureEnabled ? tierPlan.equivalentPasses : pressureJacobiPasses;
+    const pressureJacobiFullGridEquivalentPasses = spatialPressureEnabled
+      ? tierPlan.equivalentPasses
+      : (convergedSolver ? pressureIterations : pressureJacobiPasses);
     const pressureProjectionPasses = pressureEnabled ? 1 : 0;
-    const fullGridPassesPerFrame = simPassesPerFrame + pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses;
+    const pressureResidualProbePasses = pressureEnabled && pressureResidualPartialsBuffer
+      ? 2 / PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS
+      : 0;
+    const fullGridPassesPerFrame = simPassesPerFrame + pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses + pressureResidualProbePasses;
     const fullGridPassBreakdown = {
       fluidSim: simPassesPerFrame,
       pressureDivergence: pressureDivergencePasses,
@@ -12627,7 +13010,9 @@ export function createKaminosVolumePrototype({
       pressureJacobiFullGrid: pressureJacobiFullGridPasses,
       pressureJacobiPartialSlab: pressureJacobiPartialSlabPasses,
       pressureJacobiFullGridEquivalent: pressureJacobiFullGridEquivalentPasses,
+      pressureRedBlackHalfPasses,
       pressureProjection: pressureProjectionPasses,
+      pressureResidualProbe: pressureResidualProbePasses,
       total: fullGridPassesPerFrame,
     };
     const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
@@ -12689,6 +13074,7 @@ export function createKaminosVolumePrototype({
     state.fireLickOperatorGain = fireLickOperatorGain;
     state.pressureDivergencePasses = pressureDivergencePasses;
     state.pressureJacobiInlineDivergencePasses = pressureJacobiInlineDivergencePasses;
+    state.pressureRedBlackHalfPasses = pressureRedBlackHalfPasses;
     state.fullGridPassBreakdown = fullGridPassBreakdown;
     state.analyticEmitterDispatchActive = analyticEmitterDispatch.active;
     state.analyticEmitterCellVisitsThisFrame = analyticEmitterCellVisitsThisFrame;
@@ -12832,6 +13218,102 @@ export function createKaminosVolumePrototype({
     return finalTimestampWritten;
   }
 
+  let pressureResidualCopySolver = null;
+
+  function beginPressureResidualProbe(encoder) {
+    if (!pressureResidualBeforePipeline || !pressureResidualAfterPipeline || !pressureResidualBindGroup
+      || !pressureResidualPartialsBuffer || !pressureResidualReadbackBuffer) {
+      return false;
+    }
+    if (pressureResidualCopyPending && !pressureResidualMapPending && state.frameCount - pressureResidualCopyFrame > 120) {
+      // A copy that never reached a resolve is dropped, not mapped later as fresh evidence.
+      pressureResidualCopyPending = false;
+      state.pressureSolver = { ...state.pressureSolver, residualError: 'stale-residual-copy-dropped' };
+    }
+    if (pressureResidualCopyPending || pressureResidualMapPending) return false;
+    if (state.simStepCount % PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS !== 0) return false;
+    const workgroups = Math.ceil(gridSize / 4);
+    const pass = encoder.beginComputePass({ label: 'kaminos pressure residual probe before projection' });
+    pass.setPipeline(pressureResidualBeforePipeline);
+    pass.setBindGroup(0, fluidBindGroup());
+    pass.setBindGroup(2, pressureResidualBindGroup);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.end();
+    return true;
+  }
+
+  function finishPressureResidualProbe(encoder) {
+    // Called after the projection pass has flipped the fluid buffers, so the
+    // current read buffer holds the projected velocity.
+    const workgroups = Math.ceil(gridSize / 4);
+    const pass = encoder.beginComputePass({ label: 'kaminos pressure residual probe after projection' });
+    pass.setPipeline(pressureResidualAfterPipeline);
+    pass.setBindGroup(0, fluidBindGroup());
+    pass.setBindGroup(2, pressureResidualBindGroup);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.end();
+    encoder.copyBufferToBuffer(pressureResidualPartialsBuffer, 0, pressureResidualReadbackBuffer, 0, pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP * Float32Array.BYTES_PER_ELEMENT);
+    pressureResidualCopyPending = true;
+    pressureResidualCopyStep = state.simStepCount;
+    pressureResidualCopyFrame = state.frameCount;
+    pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
+  }
+
+  async function resolvePressureResidualProbe() {
+    if (!pressureResidualCopyPending || pressureResidualMapPending || !pressureResidualReadbackBuffer) return;
+    pressureResidualCopyPending = false;
+    pressureResidualMapPending = true;
+    const buffer = pressureResidualReadbackBuffer;
+    const workgroupCount = pressureResidualWorkgroupCount;
+    const step = pressureResidualCopyStep;
+    const grid = gridSize;
+    const solver = pressureResidualCopySolver;
+    try {
+      await buffer.mapAsync(GPUMapMode.READ);
+      const partials = new Float32Array(buffer.getMappedRange()).slice();
+      buffer.unmap();
+      const cells = gridCellCount(grid);
+      const reduceOperator = offset => {
+        let sumBefore = 0;
+        let maxBefore = 0;
+        let sumAfter = 0;
+        let maxAfter = 0;
+        for (let i = 0; i < workgroupCount; i += 1) {
+          const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP + offset;
+          sumBefore += partials[at];
+          maxBefore = Math.max(maxBefore, partials[at + 1]);
+          sumAfter += partials[at + 2];
+          maxAfter = Math.max(maxAfter, partials[at + 3]);
+        }
+        return {
+          before: { meanAbs: sumBefore / cells, maxAbs: maxBefore },
+          after: { meanAbs: sumAfter / cells, maxAbs: maxAfter },
+          meanReduction: sumAfter > 0 ? sumBefore / sumAfter : null,
+        };
+      };
+      const residual = {
+        identity: 'pressure-divergence-residual-probe-v1',
+        authority: 'gpu-workgroup-partials-async-readback',
+        step,
+        grid,
+        cells,
+        workgroups: workgroupCount,
+        solver,
+        // compact: backward divergence the converged solve targets; wide: the
+        // legacy 2h central divergence. Both are measured on the same fields.
+        compact: reduceOperator(0),
+        wide: reduceOperator(4),
+        measuredAtMs: Number(performance.now().toFixed(3)),
+      };
+      const residualHistory = [...(state.pressureSolver?.residualHistory ?? []).slice(-15), residual];
+      state.pressureSolver = { ...state.pressureSolver, residual, residualHistory, residualError: null };
+    } catch (error) {
+      state.pressureSolver = { ...state.pressureSolver, residualError: `residual-readback-failed:${error?.message || String(error)}` };
+    } finally {
+      pressureResidualMapPending = false;
+    }
+  }
+
   function encodePressureProjection(encoder, options = {}) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
@@ -12868,6 +13350,50 @@ export function createKaminosVolumePrototype({
       pass.dispatchWorkgroups(workgroups, tierWorkgroupsY, workgroups);
       pass.end();
     };
+    const solverConfig = resolvePressureSolverConfig(controlsSnapshot);
+    if (solverConfig.effective.solver === PRESSURE_SOLVER_CONVERGED) {
+      if (!pressureDivergenceWarmPipeline || !pressureRedBlackEvenPipeline || !pressureRedBlackOddPipeline
+        || !pressureProjectConvergedPipeline || !pressureWriteBindGroup) {
+        state.pressureProjectionEnabled = false;
+        state.pressureProjectionIterations = 0;
+        updateSimCostLedger();
+        return false;
+      }
+      const sweeps = solverConfig.effective.iterations;
+      const encodeSolverPass = (pipeline, label, readBindGroup, pressureBindGroup, passOptions = {}) => {
+        const pass = encoder.beginComputePass({ label, ...passOptions });
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, readBindGroup);
+        pass.setBindGroup(2, pressureBindGroup);
+        pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+        pass.end();
+      };
+      // Fresh divergence into .x, previous pressure kept in .y as the warm start;
+      // then in-place red/black SOR sweeps; then one full projection.
+      encodeSolverPass(pressureDivergenceWarmPipeline, 'kaminos pressure warm divergence pass', fluidBindGroup(), pressureWriteBindGroup);
+      for (let sweep = 0; sweep < sweeps; sweep += 1) {
+        encodeSolverPass(pressureRedBlackEvenPipeline, `kaminos pressure red sweep ${sweep + 1}`, fluidBindGroup(), pressureWriteBindGroup);
+        encodeSolverPass(pressureRedBlackOddPipeline, `kaminos pressure black sweep ${sweep + 1}`, fluidBindGroup(), pressureWriteBindGroup);
+      }
+      const probe = beginPressureResidualProbe(encoder);
+      encodeSolverPass(
+        pressureProjectConvergedPipeline,
+        'kaminos converged pressure projection pass',
+        fluidBindGroup(),
+        pressureReadBindGroups[0],
+        options.timestampWrites ? { timestampWrites: options.timestampWrites } : {},
+      );
+      currentFluid = 1 - currentFluid;
+      currentFront = 1 - currentFront;
+      if (probe) finishPressureResidualProbe(encoder);
+      state.pressureProjectionEnabled = true;
+      state.pressureProjectionIterations = sweeps;
+      state.frontFieldReadIndex = currentFront;
+      state.frontFieldWriteIndex = 1 - currentFront;
+      state.frontFieldProjectionPassthrough = true;
+      updateSimCostLedger();
+      return true;
+    }
     if (tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY) {
       dispatchPressureTierPass(
         pressureJacobiPipeline,
@@ -12889,6 +13415,7 @@ export function createKaminosVolumePrototype({
         'kaminos pressure spatial tier pass 3 hero-fire-band pressure3',
         fluidBindGroup()
       );
+      const tieredProbe = beginPressureResidualProbe(encoder);
       {
         const pass = encoder.beginComputePass({
           label: 'kaminos tiered pressure projection pass',
@@ -12902,6 +13429,7 @@ export function createKaminosVolumePrototype({
         currentFluid = 1 - currentFluid;
         currentFront = 1 - currentFront;
       }
+      if (tieredProbe) finishPressureResidualProbe(encoder);
       state.pressureProjectionEnabled = true;
       state.pressureProjectionIterations = tierPlan.maxTierIterations;
       state.frontFieldReadIndex = currentFront;
@@ -12920,6 +13448,7 @@ export function createKaminosVolumePrototype({
       pass.end();
       pressureReadIndex = 1 - pressureReadIndex;
     }
+    const legacyProbe = beginPressureResidualProbe(encoder);
     {
       const pass = encoder.beginComputePass({
         label: 'kaminos pressure projection pass',
@@ -12933,6 +13462,7 @@ export function createKaminosVolumePrototype({
       currentFluid = 1 - currentFluid;
       currentFront = 1 - currentFront;
     }
+    if (legacyProbe) finishPressureResidualProbe(encoder);
     state.pressureProjectionEnabled = true;
     state.pressureProjectionIterations = pressureIterationCount;
     state.frontFieldReadIndex = currentFront;
@@ -14570,6 +15100,7 @@ export function createKaminosVolumePrototype({
     });
     device.queue.submit([materializeEncoder.finish()]);
     if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    if (pressureResidualCopyPending) await resolvePressureResidualProbe();
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     let draw = await sampleBoundarySplatDrawState();
     if (!draw || draw.candidateCount <= 0 || draw.sourceCandidateCount <= 0 || draw.instanceCount <= 0) {
@@ -14603,6 +15134,7 @@ export function createKaminosVolumePrototype({
       });
       device.queue.submit([retryEncoder.finish()]);
       if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+      if (pressureResidualCopyPending) await resolvePressureResidualProbe();
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       draw = await sampleBoundarySplatDrawState();
       if (!draw || draw.overflowCount !== 0 || draw.candidateCount !== draw.sourceCandidateCount) {
@@ -15810,6 +16342,7 @@ export function createKaminosVolumePrototype({
       encodeBoundarySplatTelemetry(encoder);
       device.queue.submit([encoder.finish()]);
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
+      if (pressureResidualCopyPending) void resolvePressureResidualProbe();
       state.frameCount += 1;
       if (selectiveHeadLiveExactPause) {
         const exactPause = selectiveHeadLiveExactPause;
@@ -19863,6 +20396,7 @@ export function createKaminosVolumePrototype({
     );
     device.queue.submit([encoder.finish()]);
     if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    if (pressureResidualCopyPending) await resolvePressureResidualProbe();
     if (['matched-presentation-v0', BOUNDARY_SPLAT_OPTICAL_MODE].includes(state.boundarySplatPresentationReceipt?.effectiveMode)
       && state.selectiveHeadLivePassReceipt?.splatApplied) {
       const telemetry = state.boundarySplatPresentationReceipt.effectiveMode === BOUNDARY_SPLAT_OPTICAL_MODE
@@ -19906,6 +20440,7 @@ export function createKaminosVolumePrototype({
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
         detailForceIsolation: state.detailForceIsolation,
+        pressureSolver: state.pressureSolver,
         tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         reactionFuelScale: state.reactionFuelScale,
@@ -20282,6 +20817,7 @@ export function createKaminosVolumePrototype({
       detailScale: state.detailScale,
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
       detailForceIsolation: state.detailForceIsolation,
+      pressureSolver: state.pressureSolver,
       tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       reactionFuelScale: state.reactionFuelScale,
@@ -21210,6 +21746,7 @@ export function createKaminosVolumePrototype({
       raymarchApplied = raymarchEncoded;
       splatApplied = splatEncoded;
       if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+      if (pressureResidualCopyPending) await resolvePressureResidualProbe();
       if (device.queue?.onSubmittedWorkDone) {
         await device.queue.onSubmittedWorkDone();
       }
@@ -21283,6 +21820,7 @@ export function createKaminosVolumePrototype({
         raymarchApplied = raymarchEncoded;
         splatApplied = splatEncoded;
         if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+        if (pressureResidualCopyPending) await resolvePressureResidualProbe();
         if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
         if (Number(state.boundarySplatOverflowCount) > 0) {
           return {
