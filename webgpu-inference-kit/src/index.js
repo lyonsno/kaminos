@@ -386,6 +386,7 @@ export {
   TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID,
   createTrellisDinoV3PrefixBlockDispatchPlan,
   createTrellisDinoV3PrefixCpuOracle,
+  computeTrellisDinoV3PrefixBlockWeightBundleSha256,
   createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition,
   createTrellisDinoV3PrefixBlockPhaseProgramRouteReceipt,
   runTrellisDinoV3PrefixBlockPhaseProgramRoute,

@@ -158,20 +158,6 @@ try {
   state.model = model;
   state.kernel = kernel;
   state.requestedRouteId = 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
-  const route = kit.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel, model });
-  const request = kit.createRouteInvocationRequest(route, {
-    requestId: `trellis-dinov3-prefix-block0-${invocationId}`,
-    inputs: {
-      'source-image': { artifactId: 'assets/shoe_input.png', sha256: `sha256:${sourceHash}`, shape: [manifest.preprocessing.sourceRgbSize[1], manifest.preprocessing.sourceRgbSize[0], 3] },
-      'trellis-dinov3-normalized-pixels': { artifactId: 'mlx-reference/pixel_values.f32', sha256: `sha256:${pixelTensor.sha256}`, shape: pixelTensor.entry.shape },
-      'trellis-dinov3-checkpoint-tensors': { artifactId: `hf:${model.id}@${model.revision}:model.safetensors`, sha256: model.weightsHash },
-    },
-    outputs: {
-      'trellis-dinov3-patch-embeddings': { artifactId: `webgpu:${invocationId}:patch-embeddings`, shape: [1,1024,1024] },
-      'trellis-dinov3-prefix-hidden-states': { artifactId: `webgpu:${invocationId}:prefix-hidden-states`, shape: [1,1029,1024] },
-      'trellis-dinov3-block0-hidden-states': { artifactId: `webgpu:${invocationId}:block0-hidden-states`, shape: [1,1029,1024] },
-    },
-  });
   const weights = {
     patchProjection:references.patch_projection.values, patchBias:references.patch_bias.values,
     classToken:references.class_token.values, registerTokens:references.register_tokens.values,
@@ -187,11 +173,23 @@ try {
     mlpDownWeight:references.layer0_mlp_down_weight.values, mlpDownBias:references.layer0_mlp_down_bias.values,
     layerScale2:references.layer0_layer_scale2.values,
   };
-  const sourceImageArtifact = { artifactId:'assets/shoe_input.png', sha256:`sha256:${sourceHash}`, shape:[512,512,3] };
-  const pixelValuesArtifact = { artifactId:'mlx-reference/pixel_values.f32', sha256:`sha256:${pixelTensor.sha256}`, shape:pixelTensor.entry.shape };
-  const checkpointArtifact = { artifactId:`hf:${model.id}@${model.revision}:model.safetensors`, sha256:model.weightsHash };
+  const tensorBundleHash = await kit.computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights);
+  const route = kit.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel, model });
+  const request = kit.createRouteInvocationRequest(route, {
+    requestId: `trellis-dinov3-prefix-block0-${invocationId}`,
+    inputs: {
+      'source-image': { artifactId: 'assets/shoe_input.png', sha256: `sha256:${sourceHash}`, shape: [manifest.preprocessing.sourceRgbSize[1], manifest.preprocessing.sourceRgbSize[0], 3] },
+      'trellis-dinov3-normalized-pixels': { artifactId: 'mlx-reference/pixel_values.f32', sha256: `sha256:${pixelTensor.sha256}`, shape: pixelTensor.entry.shape },
+      'trellis-dinov3-checkpoint-tensors': { artifactId: `mlx-reference:pinned-block0-tensor-bundle`, sha256: tensorBundleHash },
+    },
+    outputs: {
+      'trellis-dinov3-patch-embeddings': { artifactId: `webgpu:${invocationId}:patch-embeddings`, shape: [1,1024,1024] },
+      'trellis-dinov3-prefix-hidden-states': { artifactId: `webgpu:${invocationId}:prefix-hidden-states`, shape: [1,1029,1024] },
+      'trellis-dinov3-block0-hidden-states': { artifactId: `webgpu:${invocationId}:block0-hidden-states`, shape: [1,1029,1024] },
+    },
+  });
   const routeRequest = request;
-  evidence('matched invocation binds the exact original PNG, normalized F32 pixel bytes, checkpoint revision/hash, and block-0 outputs', { requestId: request.requestId, routeId: route.routeId, model });
+  evidence('matched invocation binds the original PNG, normalized F32 pixel bytes, pinned checkpoint identity, and actual block-0 tensor-bundle bytes', { requestId: request.requestId, routeId: route.routeId, model, tensorBundleHash });
 
   state.precision = { checkpoint:'F32', requested:'fp32', input:'Float32Array', weights:'Float32Array', 'WebGPU storage':'f32', output:'Float32Array', shaderF16Requested:false, execution:'not-yet-observed' };
   const requestedAtol = Number(query.get('atol') || '0.002');
