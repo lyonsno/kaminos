@@ -346,7 +346,7 @@ function createInterlock(input, outsideRun = false) {
       authority: 'foreground-callbacks-settled-before-next-inference-encode-no-gpu-completion-or-presentation-claim',
     });
     state.services.push(clone(service));
-    if (receiptTimingError) throw receiptTimingError;
+    if (receiptTimingError && !outsideRun) throw receiptTimingError;
     return service;
   }
 

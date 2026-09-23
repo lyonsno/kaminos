@@ -161,6 +161,38 @@ if (process.env.KIT_FOREGROUND_BASELINE !== '1') {
     }
   });
 
+  test('an idle receipt timing failure settles its request and releases later renderer requests', async () => {
+    let clockReads = 0;
+    const unhandledRejections = [];
+    const collectUnhandled = reason => unhandledRejections.push(reason);
+    process.on('unhandledRejection', collectUnhandled);
+    const { service, submissions } = fixture({ now() {
+      clockReads += 1;
+      if (clockReads === 6) throw new Error('idle receipt clock failed');
+      return clockReads;
+    } });
+    try {
+      const failed = service.request(frame('idle-clock-failure'));
+      const failedReceipt = await failed.completion;
+      assert.equal(failedReceipt.status, 'failed-after-submission');
+      assert.equal(failedReceipt.settledAtMs, null);
+      assert.equal(failedReceipt.failure.phase, 'foreground-receipt-timing');
+
+      const later = service.request(frame('idle-after-clock-failure'));
+      const laterOutcome = await Promise.race([
+        later.completion.then(receipt => ({ state: 'settled', receipt })),
+        turn().then(() => ({ state: 'pending' })),
+      ]);
+      assert.equal(laterOutcome.state, 'settled', 'one failed idle receipt must not poison later renderer work');
+      assert.equal(laterOutcome.receipt.status, 'completed');
+      assert.deepEqual(submissions, ['idle-clock-failure', 'idle-after-clock-failure']);
+      assert.deepEqual(unhandledRejections, []);
+      await service.dispose();
+    } finally {
+      process.off('unhandledRejection', collectUnhandled);
+    }
+  });
+
   test('idle cancellation, errors, duplicate reservation and expired submit use the interlock contract', async () => {
     const { service, submissions } = fixture();
     const canceled = service.request(frame('canceled'));
