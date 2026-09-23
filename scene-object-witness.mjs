@@ -378,9 +378,19 @@ async function runCorrectedSplatFramePivotScenario(ws) {
         const vz = view[2] * point[0] + view[6] * point[1] + view[10] * point[2] + view[14];
         const x = projection[0] * vx + projection[4] * vy + projection[8] * vz + projection[12];
         const y = projection[1] * vx + projection[5] * vy + projection[9] * vz + projection[13];
+        const z = projection[2] * vx + projection[6] * vy + projection[10] * vz + projection[14];
         const w = projection[3] * vx + projection[7] * vy + projection[11] * vz + projection[15];
-        return [x / w, y / w];
+        return [x / w, y / w, z / w];
       };
+      const boundsCorners = bounds => {
+        if (!bounds?.min || !bounds?.max) throw new Error('corrected splat has no rendered world bounds: ' + JSON.stringify(bounds));
+        const points = [];
+        for (const x of [bounds.min[0], bounds.max[0]])
+          for (const y of [bounds.min[1], bounds.max[1]])
+            for (const z of [bounds.min[2], bounds.max[2]]) points.push([x, y, z]);
+        return points;
+      };
+      const insideClip = point => point.every(Number.isFinite) && Math.abs(point[0]) < 1 && Math.abs(point[1]) < 1 && point[2] >= -1 && point[2] <= 1;
       const authoredPivot = separated.sceneAnchorWorldPosition;
       const beforeNdc = ndc(authoredPivot, beforeCamera);
       if (Math.abs(beforeNdc[0]) < 1 && Math.abs(beforeNdc[1]) < 1) throw new Error('precondition failed: authored pivot was already visible before F: ' + JSON.stringify({ separated, beforeNdc }));
@@ -390,15 +400,18 @@ async function runCorrectedSplatFramePivotScenario(ws) {
       const afterCamera = window.kaminosCameraDebugState();
       const afterNdc = ndc(authoredPivot, afterCamera);
       const after = window.kaminosSplatPivotDebugState?.(record.id);
-      if (Math.abs(afterNdc[0]) >= 1 || Math.abs(afterNdc[1]) >= 1) {
-        throw new Error('F left the corrected splat authored pivot outside the viewport: ' + JSON.stringify({ beforeNdc, afterNdc, separated, after, afterCamera }));
+      const renderedRootNdc = ndc(after.objectPivotWorldPosition, afterCamera);
+      const cloudCornerNdc = boundsCorners(after.renderBoundsWorld).map(point => ndc(point, afterCamera));
+      const offscreenCloudCorners = cloudCornerNdc.filter(point => !insideClip(point));
+      if (!insideClip(afterNdc) || !insideClip(renderedRootNdc) || offscreenCloudCorners.length) {
+        throw new Error('F did not frame the corrected splat authored pivot, rendered root, and complete cloud bounds: ' + JSON.stringify({ beforeNdc, afterNdc, renderedRootNdc, cloudCornerNdc, offscreenCloudCorners, separated, after, afterCamera }));
       }
       const readRequest = performance.getEntriesByType('resource').map(entry => entry.name).find(name => {
         const url = new URL(name, location.href);
         return url.pathname === '/api/read' && url.searchParams.get('root') === 'scratch' && url.searchParams.get('path') === filename;
       });
       if (!readRequest) throw new Error('corrected-splat witness did not fetch its named scratch PLY source');
-      return { objectId: record.id, source, readRequest, fixtureName: filename, separated, beforeNdc, afterNdc, after, beforeCamera, afterCamera };
+      return { objectId: record.id, source, readRequest, fixtureName: filename, separated, beforeNdc, afterNdc, renderedRootNdc, cloudCornerNdc, after, beforeCamera, afterCamera };
     })()
   `, { timeoutMs: 45000 });
   const capturePath = out.replace(/\.png$/i, '-corrected-splat-frame-pivot.png');

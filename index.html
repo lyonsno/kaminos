@@ -6404,12 +6404,18 @@ window.kaminosSplatPivotDebugState = function(id = null) {
   const visualAnchor = visualRoot
     ? visualRoot.localToWorld(new THREE.Vector3(0, 0, 0)).toArray()
     : null;
+  const renderBounds = record.object
+    ? new THREE.Box3().setFromObject(record.object)
+    : null;
   return {
     objectId: record.id,
     sceneAnchorWorldPosition: sceneAnchor,
     objectPivotWorldPosition: objectPivot,
     correctionPivotWorldPosition: correctionPivot,
     visualAnchorWorldPosition: visualAnchor,
+    renderBoundsWorld: renderBounds && !renderBounds.isEmpty()
+      ? { min: renderBounds.min.toArray(), max: renderBounds.max.toArray() }
+      : null,
     visualRootLocalPosition: visualRoot?.position?.toArray?.() || null,
     sceneTransform,
     correction,
