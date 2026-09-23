@@ -68,6 +68,20 @@ assert.match(referenceExporter, /EXPECTED_SOURCE_SHA256 = "abf395cc52d81c26dadae
   'MLX reference export must reject a different source image instead of relabeling its output');
 assert.match(referenceExporter, /sourceFileSha256/,
   'the MLX reference must bind its exact native DINOv3 implementation bytes');
+assert.ok(/residentProbeCompleteTransformerBlockCount": 1/.test(referenceExporter),
+  'reference metadata must state how many complete transformer blocks precede the attention-only probe boundary');
+assert.ok(/residentProbeOutputBoundary": "after complete layer\.0 and block1 attention residual; before block1 norm2 and final model LayerNorm"/.test(referenceExporter),
+  'the attention-only probe boundary must be named separately from the full block-1 output');
+assert.ok(/residentBlock1CompleteTransformerBlockCount": 2/.test(referenceExporter),
+  'reference metadata must state that the full block-1 output includes two completed transformer blocks');
+assert.ok(/residentBlock1OutputBoundary": "after complete layer\.0 and complete layer\.1; before final model LayerNorm"/.test(referenceExporter),
+  'the full block-1 output boundary must remain explicit');
+assert.equal(/"blockCount"\s*:/.test(referenceExporter), false,
+  'an unqualified block count must not obscure that the packet also includes only a partial second block');
+assert.equal(/"outputBoundary"\s*:/.test(referenceExporter), false,
+  'an unqualified output boundary must not collapse the attention-only and full block-1 outputs');
+assert.ok(/complete MLP residual/.test(referenceExporter),
+  'the exporter documentation must describe the full block-1 tensor packet as well as the attention-only probe');
 assert.match(browserSmoke, /dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179/,
   'the browser comparison must reject a checkpoint other than the pinned HF safetensors file');
 assert.match(browserSmoke, /shaderF16Requested:false/,
@@ -107,6 +121,17 @@ assert.match(parityAssay, /referenceManifest:resolve\(referenceDir,'reference-ma
 assert.match(parityAssay, /last trustworthy MLX reference remained valid/,
   'a WebGPU failure must preserve the MLX reference as last trustworthy evidence without implying parity');
 const routeImplementation = implementation.slice(implementation.indexOf('async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal'));
+assert.equal(typeof residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata, 'function');
+assert.match(routeImplementation, /transfer:createTrellisDinoV3ResidentProbeTransferMetadata\(\{ residentBlock1Probe \}\)/,
+  'the probe route must publish the same transfer metadata exercised by the mode-specific contract below');
+const attentionOnlyTransfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:false});
+assert.equal(Object.hasOwn(attentionOnlyTransfers,'norm2ToMlp'),false,
+  'attention-only mode must not claim a norm2-to-MLP transfer it never executes');
+assert.equal(Object.hasOwn(attentionOnlyTransfers,'block1AttentionToNorm2'),false,
+  'attention-only mode must not claim a block1 attention-to-norm2 transfer it never executes');
+const fullBlockTransfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:true});
+assert.equal(fullBlockTransfers.block1AttentionToNorm2,'same-runtime-device-buffer');
+assert.equal(fullBlockTransfers.norm2ToMlp,'same-runtime-device-buffer');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1LayerNormResident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1AttentionResident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1MlpResident, 'function',

@@ -10,6 +10,16 @@ export const TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID = 'trellis2.dino
 export const TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID = 'trellis2.dinov3.block0-to-block1-attention.resident-probe.webgpu-local.v0';
 export const TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_BLOCK1_PROBE_ROUTE_ID = 'trellis2.dinov3.block0-to-block1-full-block.resident-probe.webgpu-local.v0';
 
+export function createTrellisDinoV3ResidentProbeTransferMetadata({ residentBlock1Probe = false } = {}) {
+  return {
+    block0ToBlock1Norm1:'same-runtime-device-buffer',block1Norm1ToAttention:'same-runtime-device-buffer',
+    ...(residentBlock1Probe ? {
+      block1AttentionToNorm2:'same-runtime-device-buffer',norm2ToMlp:'same-runtime-device-buffer',
+    } : {}),
+    block0HostReadback:false,downstreamOutputHostReadback:true,
+  };
+}
+
 const MODEL_ID = 'facebook/dinov3-vitl16-pretrain-lvd1689m';
 const MODEL_REVISION = 'ea8dc2863c51be0a264bab82070e3e8836b02d51';
 const MODEL_WEIGHTS_SHA256 = 'sha256:dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179';
@@ -1030,11 +1040,7 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
         model:{ id:model?.id||route.model?.id, revision:model?.revision||route.model?.revision, weightsHash:model?.weightsHash, dtype:'fp32' },
         precision:{ input:'Float32Array', weights:'Float32Array', storage:'f32', output:'Float32Array' },
         block0Readback:'skipped',
-        transfer:{
-          block0ToBlock1Norm1:'same-runtime-device-buffer',block1Norm1ToAttention:'same-runtime-device-buffer',
-          block1AttentionToNorm2:residentBlock1Probe?'same-runtime-device-buffer':undefined,
-          norm2ToMlp:'same-runtime-device-buffer',block0HostReadback:false,downstreamOutputHostReadback:true,
-        },
+        transfer:createTrellisDinoV3ResidentProbeTransferMetadata({ residentBlock1Probe }),
         downstream:residentBlock1Probe
           ? {operation:residentMlp.operation,inputTensor:residentMlp.inputTensor.name,outputTensor:residentMlp.tensor.name,dtype:residentMlp.dtype,shape:residentMlp.shape}
           : { operation:residentHandoff.operation, inputTensor:residentHandoff.inputTensor.name, outputTensor:residentHandoff.tensor.name, dtype:residentHandoff.dtype, shape:residentHandoff.shape },

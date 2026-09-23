@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Export a pinned f32 DINOv3 patch/prefix/block-0 reference packet.
+"""Export a pinned f32 DINOv3 patch/prefix and resident block-1 reference packet.
 
-The packet also includes block 1's attention residual output as a reference for
-the resident WebGPU handoff probe.
+The packet includes block 1's attention residual for the attention-only
+resident WebGPU handoff probe and its complete MLP residual for the full
+resident-block-1 probe (two complete transformer blocks total).
 
 Run with the trellis2mlx environment and its source checkout on PYTHONPATH.
 The script intentionally stops before TRELLIS' final no-affine LayerNorm.
@@ -247,7 +248,7 @@ def execute(args) -> dict:
         "reference": {"implementation": "trellmlx.models.dinov3.DINOv3ViT", "sourceRoot": str(trellis_root), "sourceRevision": trellis_revision, "sourceFile": str(dinov3_source), "sourceFileSha256": file_sha256(dinov3_source), "device": str(mx.default_device()), "mlxVersion": getattr(mx, "__version__", "unreported"), "loadedTensorCount": loaded_count},
         "model": {"id": MODEL_ID, "revision": REVISION, "files": files, "config": config, "dtype": "float32", "checkpointTensorDtypes": ["F32"]},
         "preprocessing": preprocessing,
-        "computation": {"precision": "float32", "framework": "MLX", "prefixTokens": ["class", "register0", "register1", "register2", "register3"], "patchTokens": 1024, "patchGrid": [32, 32], "sequenceLength": 1029, "hiddenSize": 1024, "ropeTheta": config["rope_theta"], "layerNormEps": config["layer_norm_eps"], "attention": "global-scaled-dot-product", "ropeAppliedTo": "patch q/k tokens only", "layerScale": "learned layer0 layer_scale1/layer_scale2 and block1 layer_scale1/layer_scale2", "blockCount": 1, "residentProbe": "layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1", "residentBlock1Probe": "layer1.norm2(block1_after_attention_hidden_states); layer1.mlp(block1_norm2_hidden_states); block1_after_attention_hidden_states + mlp_output * layer1.layer_scale2", "finalNoAffineLayerNormApplied": False, "outputBoundary": "after complete layer.0 and block1 attention residual; before block1 norm2 and final model LayerNorm", "residentBlock1OutputBoundary": "after complete layer.0 and complete layer.1; before final model LayerNorm"},
+        "computation": {"precision": "float32", "framework": "MLX", "prefixTokens": ["class", "register0", "register1", "register2", "register3"], "patchTokens": 1024, "patchGrid": [32, 32], "sequenceLength": 1029, "hiddenSize": 1024, "ropeTheta": config["rope_theta"], "layerNormEps": config["layer_norm_eps"], "attention": "global-scaled-dot-product", "ropeAppliedTo": "patch q/k tokens only", "layerScale": "learned layer0 layer_scale1/layer_scale2 and block1 layer_scale1/layer_scale2", "residentProbeCompleteTransformerBlockCount": 1, "residentProbe": "layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1", "residentProbeOutputBoundary": "after complete layer.0 and block1 attention residual; before block1 norm2 and final model LayerNorm", "residentBlock1CompleteTransformerBlockCount": 2, "residentBlock1Probe": "layer1.norm2(block1_after_attention_hidden_states); layer1.mlp(block1_norm2_hidden_states); block1_after_attention_hidden_states + mlp_output * layer1.layer_scale2", "finalNoAffineLayerNormApplied": False, "residentBlock1OutputBoundary": "after complete layer.0 and complete layer.1; before final model LayerNorm"},
         "outputs": outputs,
     }
     report_path = out_dir / "reference-manifest.json"
