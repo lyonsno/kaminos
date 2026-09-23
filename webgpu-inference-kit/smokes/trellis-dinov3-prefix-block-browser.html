@@ -1,0 +1,252 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>TRELLIS DINOv3 pinned F32 prefix/block-0 parity</title>
+<pre id="state">starting</pre>
+<script type="module">
+const query = new URL(location.href).searchParams;
+const invocationId = query.get('smokeId');
+const state = {
+  status: 'running', invocationId, phase: 'browser-preflight', lastTrustworthyEvidence: null,
+  evidenceChain: [], actualOutputs: {}, comparisons: {},
+};
+window.trellisDinoPrefixBlockSmoke = state;
+const render = () => { document.querySelector('#state').textContent = JSON.stringify(state, null, 2); };
+function evidence(description, detail = {}) {
+  state.lastTrustworthyEvidence = { description, detail };
+  state.evidenceChain.push(state.lastTrustworthyEvidence);
+  render();
+}
+function setPhase(phase, detail = {}) {
+  state.phase = phase;
+  state.currentPhaseDetail = detail;
+  render();
+}
+async function sha256(value) {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+async function fetchBytes(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+async function readTensor(manifest, name) {
+  const entry = manifest.outputs?.[name];
+  if (!entry || entry.dtype !== 'float32' || !Array.isArray(entry.shape)) throw new Error(`reference tensor ${name} is missing or is not F32`);
+  const bytes = await fetchBytes(`/__reference/${encodeURIComponent(entry.file)}`);
+  const actualHash = await sha256(bytes);
+  const expectedBytes = entry.shape.reduce((count, axis) => count * axis, 1) * 4;
+  if (bytes.byteLength !== expectedBytes || entry.byteLength !== expectedBytes) throw new Error(`reference tensor ${name} byte length is not shape×4: ${bytes.byteLength}/${entry.byteLength} != ${expectedBytes}`);
+  if (actualHash !== entry.sha256) throw new Error(`reference tensor ${name} digest mismatch: ${actualHash} != ${entry.sha256}`);
+  return { values: new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4), bytes, entry, sha256: actualHash };
+}
+function expectedShape(name) {
+  if (name === 'patchEmbeddings') return [1, 1024, 1024];
+  return [1, 1029, 1024];
+}
+async function persistGpuTensor(name, values, reference) {
+  if (!(values instanceof Float32Array)) throw new Error(`WebGPU ${name} output is not a Float32Array`);
+  const shape = expectedShape(name);
+  const expectedBytes = shape.reduce((count, axis) => count * axis, 1) * 4;
+  if (values.length * 4 !== expectedBytes || values.length !== reference.values.length) throw new Error(`WebGPU ${name} is missing or partial: ${values.length*4} bytes expected ${expectedBytes}`);
+  const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
+  const hash = await sha256(bytes);
+  const response = await fetch(`/__output/${name}.f32`, { method: 'POST', headers: { 'content-type': 'application/octet-stream', 'x-output-sha256': hash }, body: bytes });
+  if (!response.ok) throw new Error(`could not persist WebGPU ${name}: HTTP ${response.status}`);
+  state.actualOutputs[name] = { file: `gpu/${name}.f32`, sha256: hash, dtype: 'float32', shape, byteLength: bytes.byteLength };
+  return state.actualOutputs[name];
+}
+function compareTensor(name, actual, expected, atol, rtol) {
+  if (!(actual instanceof Float32Array) || !(expected instanceof Float32Array) || actual.length !== expected.length) throw new Error(`${name} comparison shape/precision mismatch`);
+  let maxAbs = 0;
+  let maxRelative = 0;
+  let sumAbs = 0;
+  let sumSquares = 0;
+  let failures = 0;
+  const absolute = new Float32Array(actual.length);
+  for (let index = 0; index < actual.length; index += 1) {
+    const delta = Math.abs(actual[index] - expected[index]);
+    const allowed = atol + rtol * Math.abs(expected[index]);
+    if (!Number.isFinite(actual[index]) || !Number.isFinite(expected[index])) failures += 1;
+    if (delta > allowed) failures += 1;
+    absolute[index] = delta;
+    maxAbs = Math.max(maxAbs, delta);
+    maxRelative = Math.max(maxRelative, delta / Math.max(Math.abs(expected[index]), atol));
+    sumAbs += delta;
+    sumSquares += delta * delta;
+  }
+  absolute.sort();
+  return {
+    name, elementCount: actual.length, atol, rtol, failureCount: failures,
+    maxAbs, meanAbs: sumAbs / actual.length, rmse: Math.sqrt(sumSquares / actual.length), maxRelative,
+    p95Abs: absolute[Math.floor((absolute.length - 1) * 0.95)], p99Abs: absolute[Math.floor((absolute.length - 1) * 0.99)],
+    pass: failures === 0,
+  };
+}
+
+try {
+  if (!invocationId) throw new Error('smoke invocation identity missing from browser URL');
+  setPhase('load-reference-manifest');
+  const manifestResponse = await fetch('/__reference/reference-manifest.json', { cache: 'no-store' });
+  if (!manifestResponse.ok) throw new Error(`reference manifest returned HTTP ${manifestResponse.status}`);
+  const manifest = await manifestResponse.json();
+  if (manifest.ok !== true || manifest.schema !== 'kaminos.trellis-dinov3-mlx-prefix-block-reference.v0') throw new Error('reference manifest is not a successful pinned MLX export');
+  if (manifest.model?.id !== 'facebook/dinov3-vitl16-pretrain-lvd1689m' || manifest.model?.revision !== 'ea8dc2863c51be0a264bab82070e3e8836b02d51') throw new Error('DINOv3 reference identity mismatch');
+  if (manifest.model?.dtype !== 'float32' || manifest.model?.checkpointTensorDtypes?.length !== 1 || manifest.model.checkpointTensorDtypes[0] !== 'F32') throw new Error('reference checkpoint is not uniformly F32');
+  if (manifest.computation?.precision !== 'float32' || manifest.computation?.sequenceLength !== 1029 || manifest.computation?.prefixTokens?.join(',') !== 'class,register0,register1,register2,register3' || manifest.computation?.patchTokens !== 1024 || manifest.computation?.finalNoAffineLayerNormApplied !== false) throw new Error('reference computation contract differs from the requested block-0 boundary');
+  for (const [name, sha] of Object.entries({
+    'model.safetensors': 'dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179',
+    'config.json': '135ecd23e34a70b6fbed8b083fdecb319b7e3a54e3d849258bbe4ddcf1783bb5',
+    'preprocessor_config.json': '960c41d1f3a7778b936365769a2d90550b318a6c0a53a0296957adacfe5e0dd7',
+  })) if (manifest.model?.files?.[name]?.sha256 !== sha) throw new Error(`pinned ${name} digest mismatch`);
+  if (manifest.reference?.implementation !== 'trellmlx.models.dinov3.DINOv3ViT' || manifest.reference?.sourceRevision !== 'cddaf3cb8a9f28956114956ebe754d6661a3f695' || manifest.reference?.sourceFileSha256 !== '5e56c76b947bbd59e9353c06470101ac28b6462649161cc8dd3740b2cf66403c') throw new Error('MLX reference source is not the independently pinned TRELLIS DINOv3 implementation');
+  if (manifest.preprocessing?.sourceFileSha256 !== 'abf395cc52d81c26dadae9f024072d6c7301679be4e8fc08d572723d7ae32a21') throw new Error('source image does not match the pinned shoe input bytes');
+  evidence('pinned MLX reference manifest and checkpoint/config/preprocessor identities verified', { modelRevision: manifest.model.revision, precision: manifest.computation.precision });
+
+  setPhase('verify-source-image');
+  const sourceImage = await fetchBytes('/__source/source-image.png');
+  const sourceHash = await sha256(sourceImage);
+  if (sourceHash !== manifest.preprocessing.sourceFileSha256) throw new Error(`source image digest differs from MLX preprocessing input: ${sourceHash}`);
+  evidence('original PNG bytes match the MLX reference source image', { sha256: sourceHash, byteLength: sourceImage.byteLength });
+
+  setPhase('load-reference-tensors');
+  const tensorNames = [
+    'pixel_values', 'patch_projection', 'patch_bias', 'class_token', 'register_tokens', 'rope_cos', 'rope_sin',
+    'patch_embeddings', 'prefix_hidden_states', 'block0_hidden_states',
+    'layer0_norm1_weight', 'layer0_norm1_bias', 'layer0_q_weight', 'layer0_q_bias', 'layer0_k_weight',
+    'layer0_v_weight', 'layer0_v_bias', 'layer0_o_weight', 'layer0_o_bias', 'layer0_layer_scale1',
+    'layer0_norm2_weight', 'layer0_norm2_bias', 'layer0_mlp_up_weight', 'layer0_mlp_up_bias',
+    'layer0_mlp_down_weight', 'layer0_mlp_down_bias', 'layer0_layer_scale2',
+  ];
+  const references = {};
+  for (const name of tensorNames) references[name] = await readTensor(manifest, name);
+  const pixelTensor = references.pixel_values;
+  if (pixelTensor.entry.sha256 !== manifest.preprocessing.pixelValuesSha256 || JSON.stringify(pixelTensor.entry.shape) !== '[1,512,512,3]') throw new Error('normalized F32 pixel tensor differs from the exact 512×512 MLX preprocessor output');
+  const referenceHashes = Object.fromEntries(tensorNames.map(name => [name, references[name].sha256]));
+  state.referenceHashes = referenceHashes;
+  evidence('all F32 input weights, RoPE, and MLX stage tensors were hash-verified before WebGPU execution', { tensorCount: tensorNames.length, normalizedPixelsSha256: pixelTensor.sha256 });
+
+  setPhase('acquire-webgpu-device');
+  const kit = await import('../src/index.js');
+  if (!navigator.gpu) throw new Error('WebGPU unavailable: navigator.gpu is missing');
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) throw new Error('WebGPU unavailable: requestAdapter returned null');
+  const adapterInfo = typeof adapter.requestAdapterInfo === 'function' ? await adapter.requestAdapterInfo() : (adapter.info || null);
+  const adapterClassification = adapter.isFallbackAdapter === true ? 'software-fallback' : adapter.isFallbackAdapter === false ? 'non-fallback' : 'unreported';
+  const device = await adapter.requestDevice({ label: 'trellis-dinov3-prefix-block0-f32-parity-device' });
+  const browser = navigator.userAgent;
+  const reportedAdapter = [adapterInfo?.vendor, adapterInfo?.device, adapterInfo?.architecture].filter(value => typeof value === 'string' && value.length > 0).join(' / ');
+  const adapterName = adapterInfo?.description || reportedAdapter || 'adapter identity fields unreported by browser';
+  const limits = {};
+  for (const key of ['maxBufferSize','maxStorageBufferBindingSize','maxComputeWorkgroupsPerDimension','maxComputeInvocationsPerWorkgroup','maxComputeWorkgroupSizeX','maxStorageBuffersPerShaderStage','maxUniformBufferBindingSize']) if (Number.isFinite(device.limits[key])) limits[key] = device.limits[key];
+  const backendIdentity = kit.createWebGpuBackendIdentity({ adapterName, browser, effectiveFeatures: [...device.features], limits, timestampQuery: device.features.has('timestamp-query') ? 'available' : 'unavailable' });
+  state.browser = browser;
+  state.adapterInfo = adapterInfo;
+  state.adapterName = adapterName;
+  state.adapterClassification = adapterClassification;
+  state.device = { label:device.label||null, features:[...device.features], limits };
+  state.requestedFeatures = [];
+  evidence('browser acquired and reported the effective WebGPU adapter/device; no shader-f16 feature was requested', { browser, adapterInfo, adapterName, adapterClassification, limits, features: [...device.features] });
+
+  const model = {
+    id: manifest.model.id, revision: manifest.model.revision,
+    weightsHash: `sha256:${manifest.model.files['model.safetensors'].sha256}`,
+    dtype: 'fp32',
+  };
+  const kernel = { profile: 'trellis2-dinov3-prefix-block0-phase-program-v0', commit: query.get('sourceRevision') || 'unreported-source-revision' };
+  state.model = model;
+  state.kernel = kernel;
+  state.requestedRouteId = 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
+  const route = kit.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel, model });
+  const request = kit.createRouteInvocationRequest(route, {
+    requestId: `trellis-dinov3-prefix-block0-${invocationId}`,
+    inputs: {
+      'source-image': { artifactId: 'assets/shoe_input.png', sha256: `sha256:${sourceHash}`, shape: [manifest.preprocessing.sourceRgbSize[1], manifest.preprocessing.sourceRgbSize[0], 3] },
+      'trellis-dinov3-normalized-pixels': { artifactId: 'mlx-reference/pixel_values.f32', sha256: `sha256:${pixelTensor.sha256}`, shape: pixelTensor.entry.shape },
+      'trellis-dinov3-checkpoint-tensors': { artifactId: `hf:${model.id}@${model.revision}:model.safetensors`, sha256: model.weightsHash },
+    },
+    outputs: {
+      'trellis-dinov3-patch-embeddings': { artifactId: `webgpu:${invocationId}:patch-embeddings`, shape: [1,1024,1024] },
+      'trellis-dinov3-prefix-hidden-states': { artifactId: `webgpu:${invocationId}:prefix-hidden-states`, shape: [1,1029,1024] },
+      'trellis-dinov3-block0-hidden-states': { artifactId: `webgpu:${invocationId}:block0-hidden-states`, shape: [1,1029,1024] },
+    },
+  });
+  const weights = {
+    patchProjection:references.patch_projection.values, patchBias:references.patch_bias.values,
+    classToken:references.class_token.values, registerTokens:references.register_tokens.values,
+    ropeCos:references.rope_cos.values, ropeSin:references.rope_sin.values,
+    norm1Weight:references.layer0_norm1_weight.values, norm1Bias:references.layer0_norm1_bias.values,
+    qWeight:references.layer0_q_weight.values, qBias:references.layer0_q_bias.values,
+    kWeight:references.layer0_k_weight.values,
+    vWeight:references.layer0_v_weight.values, vBias:references.layer0_v_bias.values,
+    oWeight:references.layer0_o_weight.values, oBias:references.layer0_o_bias.values,
+    layerScale1:references.layer0_layer_scale1.values,
+    norm2Weight:references.layer0_norm2_weight.values, norm2Bias:references.layer0_norm2_bias.values,
+    mlpUpWeight:references.layer0_mlp_up_weight.values, mlpUpBias:references.layer0_mlp_up_bias.values,
+    mlpDownWeight:references.layer0_mlp_down_weight.values, mlpDownBias:references.layer0_mlp_down_bias.values,
+    layerScale2:references.layer0_layer_scale2.values,
+  };
+  const sourceImageArtifact = { artifactId:'assets/shoe_input.png', sha256:`sha256:${sourceHash}`, shape:[512,512,3] };
+  const pixelValuesArtifact = { artifactId:'mlx-reference/pixel_values.f32', sha256:`sha256:${pixelTensor.sha256}`, shape:pixelTensor.entry.shape };
+  const checkpointArtifact = { artifactId:`hf:${model.id}@${model.revision}:model.safetensors`, sha256:model.weightsHash };
+  const routeRequest = request;
+  evidence('matched invocation binds the exact original PNG, normalized F32 pixel bytes, checkpoint revision/hash, and block-0 outputs', { requestId: request.requestId, routeId: route.routeId, model });
+
+  state.precision = { checkpoint:'F32', requested:'fp32', input:'Float32Array', weights:'Float32Array', 'WebGPU storage':'f32', output:'Float32Array', shaderF16Requested:false, execution:'not-yet-observed' };
+  const requestedAtol = Number(query.get('atol') || '0.002');
+  const requestedRtol = Number(query.get('rtol') || '0.001');
+  if (!(requestedAtol >= 0) || !(requestedRtol >= 0) || !Number.isFinite(requestedAtol) || !Number.isFinite(requestedRtol)) throw new Error('comparison tolerances must be finite non-negative numbers');
+  setPhase('webgpu-block0-execution');
+  const result = await kit.runTrellisDinoV3PrefixBlockPhaseProgramRoute({
+    request: routeRequest, route, sourceImage, model, kernel, adapter, device, queue:device.queue,
+    adapterName, browser, backendIdentity, invocationId, weights,
+    tensors: { sourceImage, pixelValues:pixelTensor.values, weights, shape:{
+      batch:1,imageHeight:512,imageWidth:512,imageChannels:3,patchSize:16,patchHeight:32,patchWidth:32,patchTokens:1024,
+      prefixTokens:5,tokenCount:1029,hiddenSize:1024,heads:16,headDim:64,intermediateSize:4096,ropeTheta:100,layerNormEpsilon:1e-5,
+    } }, includeReadback:true,
+    onPhase:async ({phase,phaseIndex,lastCompletedPhase})=>{
+      setPhase(phase,{phaseIndex,lastCompletedPhase});
+    },
+  });
+  state.requestedRouteId = route.routeId;
+  state.effectiveRouteId = result.receipt?.effectiveRouteId || null;
+  state.receipt = result.receipt;
+  state.model = model;
+  state.kernel = kernel;
+  state.precision.execution = 'observed-f32-output-readback';
+  if (result.receipt?.status !== 'real' || result.receipt?.requestedRouteId !== route.routeId || result.receipt?.effectiveRouteId !== route.routeId) throw new Error('WebGPU route receipt is missing, fallback, or does not match requested route identity');
+  if (result.receipt?.model?.id !== model.id || result.receipt?.model?.revision !== model.revision || result.receipt?.model?.weightsHash !== model.weightsHash || result.receipt?.model?.dtype !== 'fp32') throw new Error('effective route receipt model/checkpoint/precision identity mismatch');
+  const actual = result.debugReadback;
+  if (actual?.dtype !== 'float32') throw new Error('WebGPU route did not return F32 diagnostic outputs');
+  const comparisons = [
+    ['patchEmbeddings','patch_embeddings'],
+    ['prefixHiddenStates','prefix_hidden_states'],
+    ['block0HiddenStates','block0_hidden_states'],
+  ];
+  for (const [routeName, referenceName] of comparisons) {
+    setPhase(`persist-and-compare-${routeName}`);
+    const actualValues = actual[routeName];
+    await persistGpuTensor(routeName, actualValues, references[referenceName]);
+    state.comparisons[routeName] = compareTensor(routeName, actualValues, references[referenceName].values, requestedAtol, requestedRtol);
+    state.comparisons[routeName].referenceSha256 = references[referenceName].sha256;
+    state.comparisons[routeName].webgpuSha256 = state.actualOutputs[routeName].sha256;
+    evidence(`F32 ${routeName} compared with same-invocation pinned MLX tensor`, state.comparisons[routeName]);
+  }
+  const failedComparisons = Object.values(state.comparisons).filter(comparison=>!comparison.pass);
+  if (failedComparisons.length) throw new Error(`tensor parity failed: ${failedComparisons.map(item=>`${item.name} maxAbs=${item.maxAbs} failures=${item.failureCount}`).join('; ')}`);
+  if (!state.actualOutputs.patchEmbeddings || !state.actualOutputs.prefixHiddenStates || !state.actualOutputs.block0HiddenStates) throw new Error('one or more GPU outputs were not persisted');
+  state.status = 'passed';
+  state.failurePhase = null;
+  state.claim = 'observed: exact pinned F32 MLX/WebGPU patch, prefix, and complete block-0 tensors satisfy the recorded comparison tolerance; not an end-to-end TRELLIS conditioning handoff';
+  render();
+  await device.destroy();
+} catch (error) {
+  state.status = 'failed';
+  state.failurePhase = error?.dinov3FailurePhase || state.phase;
+  state.lastCompletedPhase = error?.dinov3LastCompletedPhase || state.currentPhaseDetail?.lastCompletedPhase || null;
+  state.error = String(error?.stack || error);
+  state.claim = 'intended only; no completed matched F32 block-0 parity observed';
+  render();
+}
+</script>

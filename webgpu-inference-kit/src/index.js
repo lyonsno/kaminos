@@ -383,6 +383,15 @@ export {
 } from './trellis-dinov3-patch-embed-phase-program.js';
 
 export {
+  TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID,
+  createTrellisDinoV3PrefixBlockDispatchPlan,
+  createTrellisDinoV3PrefixCpuOracle,
+  createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition,
+  createTrellisDinoV3PrefixBlockPhaseProgramRouteReceipt,
+  runTrellisDinoV3PrefixBlockPhaseProgramRoute,
+} from './trellis-dinov3-prefix-block-phase-program.js';
+
+export {
   SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
   createSam3ImageVitPrefixDispatchPlan,
   createSam3ImageVitPrefixPhaseProgramCpuOracle,
