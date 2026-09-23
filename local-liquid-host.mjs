@@ -5,6 +5,13 @@ import {
   KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE as SUPPORT,
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE as ROUTE,
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA as FRAME_SCHEMA,
+  resolveFingerFluidRendererMode,
+  resolveFingerFluidOpticalDebugMode,
+  resolveFingerFluidOpticalLightingMode,
+  resolveFingerFluidOpticalFootprintMode,
+  resolveFingerFluidTransmissionFootprintMode,
+  resolveFingerFluidBodyTransportMode,
+  resolveFingerFluidInterfaceFrequencyMode,
 } from './finger-fluid-webgpu-core.js';
 import { normalizeLocalLiquidSetup, localLiquidInletPacket } from './local-liquid-setup.mjs';
 
@@ -67,6 +74,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
   let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false;
+  let opticalOptions={};
   const onGpuError=event=>{failure=event.error?.message || 'Host WebGPU error';};
   device.addEventListener('uncapturederror',onGpuError);
   device.lost.then(info=>{if(!disposed)failure=info.message || 'Host WebGPU device lost';});
@@ -132,7 +140,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         sceneDepth:attachment('host-depth',depthTarget,{format:'r32float',encoding:'linear_view_depth_meters'}),
         environment:attachment('host-environment',environmentTarget,{format:'rgba16float',mapping:'equirectangular_world_radiance'}),
         target:attachment('host-liquid-output',outputTarget,{format:'rgba16float',colorSpace:'linear_hdr'})};
-      solver.render({hostFrame,externalCamera:cameraSnapshot});
+      solver.render({...opticalOptions,hostFrame,externalCamera:cameraSnapshot});
       device.queue.submit([commandEncoder.finish()]);
       renderer.setRenderTarget(previousTarget); presentation.render();
       frameCount=generation;
@@ -154,6 +162,28 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       solver.setLiveInletPacket(localLiquidInletPacket(next,++sourceGeneration));
       authored=next; syncSource();
     },
+    setOpticalOptions(options={}) {
+      if (!options || typeof options!=='object' || Array.isArray(options)) {
+        throw Error('Local liquid optical options must be an object');
+      }
+      const allowed=new Set(['rendererMode','opticalDebugMode','opticalLightingMode','opticalFootprintMode',
+        'transmissionFootprintMode','bodyTransportMode','interfaceFrequencyMode']);
+      const unknown=Object.keys(options).filter(key=>!allowed.has(key));
+      if (unknown.length) throw Error(`Unsupported local liquid optical option: ${unknown.join(', ')}`);
+      const validators={rendererMode:resolveFingerFluidRendererMode,opticalDebugMode:resolveFingerFluidOpticalDebugMode,
+        opticalLightingMode:resolveFingerFluidOpticalLightingMode,opticalFootprintMode:resolveFingerFluidOpticalFootprintMode,
+        transmissionFootprintMode:resolveFingerFluidTransmissionFootprintMode,bodyTransportMode:resolveFingerFluidBodyTransportMode,
+        interfaceFrequencyMode:resolveFingerFluidInterfaceFrequencyMode};
+      for (const [key,value] of Object.entries(options)) {
+        if (typeof value!=='string' || validators[key](value)!==value) throw Error(`Invalid local liquid ${key}: ${value}`);
+      }
+      if (options.rendererMode && options.rendererMode!=='screen_space_refraction') {
+        throw Error('Local liquid host requires screen_space_refraction');
+      }
+      opticalOptions={...opticalOptions,...options};
+      return structuredClone(opticalOptions);
+    },
+    get opticalOptions(){return structuredClone(opticalOptions);},
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,

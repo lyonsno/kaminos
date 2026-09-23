@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 
 const root=path.resolve(new URL('..',import.meta.url).pathname);
 const THREE=await import(pathToFileURL(path.join(root,'lib/three.webgpu.js')));
@@ -39,8 +39,10 @@ const pipeline={outputColorTransform:true,needsUpdate:false,render(){
   calls.push({op:'host-scene-color',target:currentTarget.texture.name});
 }};
 globalThis.__bathtubReviewSolver=async()=>({available:true,step(){},setLiveInletPacket(){},destroy(){},getDebugState(){return {};},
-  render({hostFrame}){
+  render(options){
+    const {hostFrame}=options;
     atSolver={sceneColorWrites:[...hostFrame.sceneColor.view.texture.writes],targetWrites:[...hostFrame.target.view.texture.writes]};
+    atSolver.opticalOptions=Object.fromEntries(Object.entries(options).filter(([key])=>key!=='hostFrame'&&key!=='externalCamera'));
     calls.push({op:'solver',...atSolver});
   }});
 globalThis.__bathtubTestTsl={...THREE.TSL,uv:()=>({x:.5,y:0,flipY(){return {...this,y:1-this.y};}}),equirectDirection(p){environmentUv=p;return THREE.TSL.vec3(0,Math.sin((p.y-.5)*Math.PI),0);}};
@@ -55,7 +57,23 @@ const host=await createLocalLiquidHost({renderer,scene,camera,pipeline,device,se
 host.render();
 assert.deepEqual(atSolver.sceneColorWrites,['host-scene-color']);
 test('current host color initializes the liquid destination before overlay',()=>assert.deepEqual(atSolver.targetWrites,['host-scene-color']));
-host.dispose();
+test('host forwards one validated optical diagnostic override without changing the saved setup',()=>{
+  host.setPaused(true);
+  const setupBefore=host.state().setup;
+  assert.deepEqual(host.setOpticalOptions({opticalDebugMode:'transmitted_transport'}),
+    {opticalDebugMode:'transmitted_transport'});
+  host.render({advance:false});
+  assert.deepEqual(atSolver.opticalOptions,{opticalDebugMode:'transmitted_transport'});
+  assert.deepEqual(host.state().setup,setupBefore);
+  assert.throws(()=>host.setOpticalOptions({rendererMode:'screen_space_surface'}),
+    /Local liquid host requires screen_space_refraction/);
+  assert.deepEqual(host.opticalOptions,{opticalDebugMode:'transmitted_transport'});
+  host.render({advance:false});
+  assert.equal(host.state().failure,null);
+  assert.throws(()=>host.setOpticalOptions({particleCount:1}),/Unsupported local liquid optical option/);
+  assert.throws(()=>host.setOpticalOptions({opticalDebugMode:'made_up'}),/Unsupported finger fluid optical debug mode/);
+});
+after(()=>host.dispose());
 delete globalThis.__bathtubReviewSolver;
 
 test('top of the world-radiance texture addresses the northern hemisphere',()=>assert.equal(Math.sin((environmentUv.y-.5)*Math.PI),1));
