@@ -3,7 +3,37 @@ import { createSamWorkbenchForeground } from './webgpu-inference-kit/smokes/sam-
 
 const COLORS = [[50, 203, 222], [233, 184, 78], [208, 115, 185], [129, 217, 137]];
 
-export function createSamImageTools({ inferenceSession, rendererDevice, config, onAsset, onScene }) {
+export function encodeSamFlameMaskPixels(mask, width, height) {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error('Mask dimensions must be positive integers');
+  }
+  if (!ArrayBuffer.isView(mask) || mask.length !== width * height) throw new Error('Mask size does not match dimensions');
+  const pixels = new Uint8Array(mask.length * 4);
+  for (let index = 0; index < mask.length; index += 1) {
+    const value = mask[index];
+    if (value !== 0 && value !== 1) throw new Error('Mask values must be binary');
+    const channel = value * 255;
+    const offset = index * 4;
+    pixels[offset] = channel;
+    pixels[offset + 1] = channel;
+    pixels[offset + 2] = channel;
+    pixels[offset + 3] = 255;
+  }
+  return pixels;
+}
+
+export function fitSamFlameTexture(flameWidth, flameHeight, maskWidth, maskHeight) {
+  if (![flameWidth, flameHeight, maskWidth, maskHeight].every(value => Number.isFinite(value) && value > 0)) {
+    throw new Error('Flame and mask dimensions must be positive');
+  }
+  const flameAspect = flameWidth / flameHeight;
+  const maskAspect = maskWidth / maskHeight;
+  const scaleX = flameAspect > maskAspect ? 1 : flameAspect / maskAspect;
+  const scaleY = flameAspect > maskAspect ? maskAspect / flameAspect : 1;
+  return { scaleX, scaleY, offsetX: (1 - scaleX) / 2, offsetY: (1 - scaleY) / 2 };
+}
+
+export function createSamImageTools({ inferenceSession, rendererDevice, config, onAsset, onScene, onFlame }) {
   const el = id => document.getElementById(`sam-image-${id}`);
   const canvas = el('canvas');
   const picker = el('instances');
@@ -25,7 +55,7 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
     el('open').disabled = busy;
     el('unload').disabled = busy || !runtime;
     picker.disabled = busy || !output?.instances.length;
-    for (const id of ['save-mask', 'save-cutout', 'add-cutout']) el(id).disabled = busy || !output?.instances.length;
+    for (const id of ['save-mask', 'save-cutout', 'add-cutout', 'flame']) el(id).disabled = busy || !output?.instances.length;
   }
   function fail(error) {
     status(error.message || String(error), true);
@@ -186,6 +216,29 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
     } catch (error) { fail(error); throw error; }
     finally { busy = false; controls(); }
   }
+  async function constrainFlame() {
+    if (busy || !output?.instances.length) return;
+    if (output.outputAuthority !== 'actual-webgpu-readback' || output.verificationState !== 'not-attached') {
+      throw new Error('SAM mask is not an actual unverified browser WebGPU proposal');
+    }
+    if (typeof onFlame !== 'function') throw new Error('Live flame composition is unavailable');
+    const indices = selectedIndices();
+    const width = image.naturalWidth, height = image.naturalHeight;
+    const mask = createSam3SourceMask(output, indices, width, height);
+    if (!mask.some(value => value === 1)) throw new Error('Selected SAM mask has no foreground pixels');
+    const selected = selectedInstances().map(instance => ({ index: instance.index, score: instance.score }));
+    busy = true; controls();
+    try {
+      await onFlame({ schema: 'kaminos.sam-flame-mask-proposal.v0',
+        sourceImage: { source: source.source, name: source.name, sha256: source.sha256, artifactId: source.artifactId },
+        promptText: output.promptText, invocationId: output.invocationId,
+        outputAuthority: output.outputAuthority, verificationState: output.verificationState,
+        width, height, indices, instances: selected, mask,
+      });
+      status('Live flame composed through the selected 2D mask');
+    } catch (error) { fail(error); throw error; }
+    finally { busy = false; controls(); }
+  }
   el('open').onclick = () => el('file').click();
   el('file').onchange = () => { const file = el('file').files[0]; if (file) void open(file).catch(() => {}); el('file').value = ''; };
   el('form').onsubmit = event => { event.preventDefault(); void run(); };
@@ -197,6 +250,7 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
   };
   for (const kind of ['mask', 'cutout']) el(`save-${kind}`).onclick = () => void save(kind).catch(() => {});
   el('add-cutout').onclick = () => void save('cutout', true).catch(() => {});
+  el('flame').onclick = () => void constrainFlame().catch(() => {});
   el('unload').onclick = async () => { const previous = runtime; runtime = null; controls(); await previous?.close(); status('Model unloaded'); };
   const drop = event => {
     if (!active) return;
@@ -215,7 +269,7 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
   controls();
   status(config?.mounted ? 'No image selected' : 'SAM model not mounted');
   return {
-    open, run, save,
+    open, run, save, constrainFlame,
     progress: () => ({ busy, source }),
     interactionEvidence: () => ({ source, elapsedMs: elapsed, busy, invocation: invocation && { ...invocation }, error: failure?.message || null,
       foreground: foreground?.evidence() || null,

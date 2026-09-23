@@ -6,7 +6,7 @@ import { resolve, join, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { validateSamConsumerInteraction } from './sam-image-witness-checks.js';
+import { validateSamConsumerInteraction, validateSamFlameComposition } from './sam-image-witness-checks.js';
 import { persistSamCaptureObservation, persistSamEvidenceArtifact, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
 export { validateSamConsumerInteraction, validateSamConsumerExport } from './sam-image-witness-checks.js';
 
@@ -36,6 +36,7 @@ async function main() {
     'model-root': { type: 'string' }, image: { type: 'string' }, 'second-image': { type: 'string' },
     baseline: { type: 'string' }, port: { type: 'string', default: '18622' },
     playwright: { type: 'string' }, chrome: { type: 'string', default: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
+    'flame-only': { type: 'boolean', default: false },
   } });
   const root = fileURLToPath(new URL('.', import.meta.url));
   const out = resolve(values['out-dir']);
@@ -350,6 +351,46 @@ async function main() {
       mimeType: 'image/jpeg', buffer: readFileSync(values.image) }));
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
     await capture('source-desktop');
+    if (values['flame-only']) {
+      report.failurePhase = 'flame-inference'; saveReport();
+      await page.locator('#sam-image-prompt').fill('flame');
+      await checked(page.locator('#sam-image-run').click());
+      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
+      const snapshotResult = await snapshot('flame-only');
+      const output = snapshotResult.output;
+      assert.equal(output.promptText, 'flame', 'wrong prompt reached SAM');
+      assert.equal(output.outputAuthority, 'actual-webgpu-readback', 'flame proposal is not live WebGPU output');
+      assert.equal(output.verificationState, 'not-attached', 'SAM proposal authority was overstated');
+      assert.equal(output.effectiveRouteId, 'sam3.detr-encoder.phase-program.webgpu-local.v0', 'wrong SAM route');
+      assert.ok(output.instances.length > 0, 'SAM returned no flame candidates');
+      const selected = output.instances[0];
+      assert.equal(selected.mask.length, output.width * output.height, 'selected SAM mask is partial');
+      assert.ok(selected.mask.some(value => value === 1), 'selected SAM mask has no foreground');
+      assert.ok(selected.mask.every(value => value === 0 || value === 1), 'selected SAM mask is not binary');
+      await page.locator('#sam-image-instances').selectOption(String(selected.index));
+      report.failurePhase = 'flame-composition'; saveReport();
+      await checked(page.locator('#sam-image-flame').click());
+      await checked(page.waitForFunction(() => {
+        const bridge = window.__kaminosVolumeMainRendererBridge?.debugState?.();
+        return bridge?.maskOverlay?.visible === true && bridge.maskOverlayCount === 1;
+      }));
+      await checked(page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
+      const observed = await page.evaluate(() => ({
+        bridge: window.__kaminosVolumeMainRendererBridge.debugState(),
+        sceneObject: window.kaminosSceneObjectDebugState().find(row =>
+          row.image?.maskProvenance?.invocationId === window.kaminosSamImageTools.output().invocationId),
+      }));
+      const composition = validateSamFlameComposition({ output, bridge: observed.bridge,
+        sceneObject: observed.sceneObject, sourceSha256: report.inputs.image.sha256 });
+      const screenshotPath = join(out, 'flame-composition.png');
+      await checked(page.screenshot({ path: screenshotPath, fullPage: true }));
+      report.flameComposition = { ...composition, selectedScore: selected.score,
+        bridge: observed.bridge, sceneObjectId: observed.sceneObject.id };
+      report.captures.push({ name: 'flame-composition', path: screenshotPath, visualInspection: 'pending-owner-pixel-read' });
+      report.status = 'captured'; report.failurePhase = null;
+      report.checks = { actualWebgpuMaskToLiveFlameComposition: 'passed', sourceProvenance: 'passed',
+        twoDimensionalMaskContract: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
+    } else {
     const baseline = values.baseline ? JSON.parse(readFileSync(values.baseline, 'utf8')) : null;
     await run('cold-wheel', 'wheel', 'miss', false, baseline?.visualEvidence.output);
     await run('warm-wheel', 'wheel', 'hit', false, baseline?.warmPositive.visualEvidence.output);
@@ -417,6 +458,7 @@ async function main() {
     report.status = 'captured'; report.failurePhase = null;
     report.checks = { numericalRegression: baseline ? 'passed' : 'not-requested', inputDuringInference: 'passed',
       persistedExports: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
+    }
   } catch (error) {
     report.status = 'failed'; report.error = String(error.stack || error); process.exitCode = 1;
     const transport = error?.evidenceTransport || null;

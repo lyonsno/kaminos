@@ -568,6 +568,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <button type="button" class="btn" id="sam-image-save-mask" disabled>Save Mask</button>
       <button type="button" class="btn" id="sam-image-save-cutout" disabled>Save Cutout</button>
       <button type="button" class="btn" id="sam-image-add-cutout" disabled>Add Cutout to Scene</button>
+      <button type="button" class="btn" id="sam-image-flame" disabled>Mask Live Flame</button>
     </div>
     <div id="sam-image-status" role="status" aria-live="polite">Not loaded</div>
     <div id="sam-image-result"></div>
@@ -4115,6 +4116,7 @@ function sceneObjectMetadataFor(object) {
 }
 
 function disposeObjectTree(object) {
+  volumeBridge?.removeMaskOverlaysForTarget?.(object);
   object.traverse(child => {
     if (child.geometry) child.geometry.dispose();
     if (child.material) {
@@ -8846,12 +8848,13 @@ let samHostContext = null;
 let samHostConfig = null;
 let samImageTools = null;
 let samImageToolsPromise = null;
+let samFlameImagePlane = null;
 
 async function ensureSamImageTools() {
   if (samImageToolsPromise) return samImageToolsPromise;
   samImageToolsPromise = (async () => {
     await sceneInitialization;
-    const { createSamImageTools } = await import('./sam-image-tools.js');
+    const { createSamImageTools, encodeSamFlameMaskPixels, fitSamFlameTexture } = await import('./sam-image-tools.js');
     const inferenceSession = samHostContext?.inferenceSession || { device: renderer.backend.device };
     samImageTools = createSamImageTools({ inferenceSession, rendererDevice: renderer.backend.device, config: samHostConfig,
       onAsset() { if (pipelineDockState.activeAssetPalette === 'image') void loadPipelineAssetBrowser(); },
@@ -8859,6 +8862,28 @@ async function ensureSamImageTools() {
         await showImagePlane(entry.source, { clear: false, metadata: { source: entry.source, fileName: entry.name,
           label: entry.display?.title || entry.name, image: { maskProvenance: provenance } } });
         setActiveTab('assets');
+      },
+      async onFlame(proposal) {
+        if (!volumePrototype || !volumeBridge) throw new Error('Live flame renderer is unavailable');
+        const previous = sceneObjectMetadataFor(samFlameImagePlane);
+        if (previous?.id) window.removeSceneObject(previous.id);
+        samFlameImagePlane = null;
+        const imagePlane = await showImagePlane(proposal.sourceImage.source, { clear: false,
+          metadata: { source: proposal.sourceImage.source, fileName: proposal.sourceImage.name,
+            label: `${proposal.promptText} mask flame study`, image: {
+              maskProvenance: { schema: proposal.schema, sourceImage: proposal.sourceImage,
+                promptText: proposal.promptText, invocationId: proposal.invocationId,
+                outputAuthority: proposal.outputAuthority, verificationState: proposal.verificationState,
+                dimensions: [proposal.width, proposal.height], indices: proposal.indices, instances: proposal.instances },
+              flameComposition: { method: '2d-image-space-mask', fireSimulationModified: false, persistence: 'live-only' },
+            } } });
+        if (!imagePlane) throw new Error('Could not create the source image plane for flame composition');
+        volumeBridge.addMaskOverlay(imagePlane, proposal, { encodeSamFlameMaskPixels, fitSamFlameTexture });
+        samFlameImagePlane = imagePlane;
+        await volumePrototype.setActive(true);
+        setActiveTab('assets');
+        setInfo('Live flame composited through the selected SAM 2D mask');
+        window._kaminosDirty?.();
       },
     });
     window.kaminosSamImageTools = samImageTools;
@@ -18190,17 +18215,87 @@ function createVolumeMainRendererBridge() {
   };
   scene.add(mesh);
 
+  const maskedOverlays = new Set();
   const direction = new THREE.Vector3();
+  function removeMaskOverlay(record) {
+    record.target.remove(record.mesh);
+    record.material.map = null;
+    record.material.alphaMap = null;
+    record.maskTexture.dispose();
+    record.material.dispose();
+    record.mesh.geometry.dispose();
+    maskedOverlays.delete(record);
+  }
+  function clearMaskOverlays(target = null) {
+    for (const record of [...maskedOverlays]) {
+      if (!target || record.target === target) removeMaskOverlay(record);
+    }
+  }
   return {
     identity: 'volume-main-renderer-bridge-v0',
     mesh,
     texture: sourceTexture,
+    addMaskOverlay(target, proposal, { encodeSamFlameMaskPixels, fitSamFlameTexture }) {
+      if (!target?.isMesh || !Number.isFinite(target.geometry?.parameters?.width) || !Number.isFinite(target.geometry?.parameters?.height)) {
+        throw new Error('SAM flame mask requires a source image plane');
+      }
+      if (proposal?.outputAuthority !== 'actual-webgpu-readback' || proposal?.verificationState !== 'not-attached') {
+        throw new Error('SAM flame mask proposal has untrusted output authority');
+      }
+      const imageRecord = sceneObjectMetadataFor(target)?.image;
+      if (imageRecord?.width !== proposal.width || imageRecord?.height !== proposal.height) {
+        throw new Error('SAM mask dimensions do not match the source image plane');
+      }
+      const pixelData = encodeSamFlameMaskPixels(proposal.mask, proposal.width, proposal.height);
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = proposal.width;
+      maskCanvas.height = proposal.height;
+      const context = maskCanvas.getContext('2d');
+      const imageData = context.createImageData(proposal.width, proposal.height);
+      imageData.data.set(pixelData);
+      context.putImageData(imageData, 0, 0);
+      const maskTexture = new THREE.CanvasTexture(maskCanvas);
+      maskTexture.generateMipmaps = false;
+      maskTexture.minFilter = THREE.LinearFilter;
+      maskTexture.magFilter = THREE.LinearFilter;
+      maskTexture.wrapS = THREE.ClampToEdgeWrapping;
+      maskTexture.wrapT = THREE.ClampToEdgeWrapping;
+      clearMaskOverlays();
+      const material = new THREE.MeshBasicMaterial({ map: sourceTexture, alphaMap: maskTexture,
+        transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        toneMapped: false, side: THREE.DoubleSide });
+      const overlay = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
+      overlay.name = 'sam-mask-live-flame-overlay';
+      overlay.position.z = 0.002;
+      overlay.renderOrder = 1;
+      overlay.userData.kaminosSamFlameComposition = {
+        schema: proposal.schema, method: '2d-image-space-mask', promptText: proposal.promptText,
+        invocationId: proposal.invocationId, sourceImageSha256: proposal.sourceImage.sha256,
+        instanceIndices: [...proposal.indices], outputAuthority: proposal.outputAuthority,
+        verificationState: proposal.verificationState, fireSimulationModified: false, persistence: 'live-only',
+      };
+      target.add(overlay);
+      maskedOverlays.add({ target, mesh: overlay, material, maskTexture,
+        planeWidth: target.geometry.parameters.width, planeHeight: target.geometry.parameters.height,
+        width: proposal.width, height: proposal.height, fitSamFlameTexture });
+      target.updateMatrixWorld(true);
+    },
+    removeMaskOverlaysForTarget(target) { clearMaskOverlays(target); },
+    clearMaskOverlays() { clearMaskOverlays(); },
     update() {
       const state = volumePrototype.debugState();
       const active = !!state.active;
-      mesh.visible = active;
+      mesh.visible = active && maskedOverlays.size === 0;
       if (!active) return false;
       sourceTexture.needsUpdate = true;
+      const fireCanvas = sourceTexture.image;
+      for (const record of maskedOverlays) {
+        const fit = record.fitSamFlameTexture(fireCanvas.width, fireCanvas.height, record.width, record.height);
+        record.mesh.scale.set(record.planeWidth * fit.scaleX, record.planeHeight * fit.scaleY, 1);
+        record.maskTexture.repeat.set(fit.scaleX, fit.scaleY);
+        record.maskTexture.offset.set(fit.offsetX, fit.offsetY);
+        record.mesh.visible = true;
+      }
       const distance = Math.max(0.2, (camera.near || 0.1) * 2.5);
       camera.getWorldDirection(direction);
       mesh.position.copy(camera.position).addScaledVector(direction, distance);
@@ -18210,6 +18305,8 @@ function createVolumeMainRendererBridge() {
       return true;
     },
     debugState() {
+      const overlay = maskedOverlays.values().next().value;
+      const provenance = overlay?.mesh.userData.kaminosSamFlameComposition || null;
       return {
         identity: 'volume-main-renderer-bridge-v0',
         visible: mesh.visible,
@@ -18217,9 +18314,17 @@ function createVolumeMainRendererBridge() {
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
         composition: mesh.userData.kaminosVolumeBridge.composition,
+        presentation: maskedOverlays.size ? 'source-image-mask-overlay' : 'camera-facing-plane',
+        maskOverlayCount: maskedOverlays.size,
+        maskOverlay: overlay ? { visible: overlay.mesh.visible, method: provenance.method,
+          invocationId: provenance.invocationId, instanceIndices: provenance.instanceIndices,
+          outputAuthority: provenance.outputAuthority, verificationState: provenance.verificationState,
+          sourceImageSha256: provenance.sourceImageSha256,
+          fireSimulationModified: provenance.fireSimulationModified, persistence: provenance.persistence } : null,
       };
     },
     dispose() {
+      clearMaskOverlays();
       scene.remove(mesh);
       sourceTexture.dispose();
       material.dispose();
