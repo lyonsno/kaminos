@@ -30,6 +30,48 @@ export function validateSamConsumerOutput(output, { prompt, empty, previousId, c
   }
 }
 
+export async function waitForSamFlameComposition(page, checked = promise => promise, timeoutMs = 120_000) {
+  try {
+    await checked(page.waitForFunction(() => {
+      const bridge = window.__kaminosVolumeMainRendererBridge?.debugState?.();
+      return bridge?.maskOverlay?.visible === true && bridge.maskOverlayCount === 1
+        && document.querySelector('.tab.active')?.dataset.tab === 'assets'
+        && document.getElementById('sam-image-viewport')?.hidden === true;
+    }, null, { timeout: timeoutMs }));
+  } catch (error) {
+    let compositionDiagnostic;
+    try {
+      compositionDiagnostic = await checked(page.evaluate(() => {
+        const tools = window.kaminosSamImageTools;
+        const output = tools?.output?.();
+        const volumeState = window.__kaminosVolumePrototype?.debugState?.();
+        const sceneObject = window.kaminosSceneObjectDebugState?.().find(row =>
+          row.image?.maskProvenance?.invocationId === output?.invocationId);
+        return {
+          activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+          samImageViewportHidden: document.getElementById('sam-image-viewport')?.hidden === true,
+          samBusy: tools?.progress?.().busy ?? null,
+          samStatus: document.getElementById('sam-image-status')?.textContent || null,
+          promptText: output?.promptText || null,
+          invocationId: output?.invocationId || null,
+          volume: volumeState ? { active: volumeState.active, backend: volumeState.backend,
+            error: volumeState.error, residualStatus: volumeState.volumeResidualStatus,
+            residualModelUrl: volumeState.volumeResidualModelUrl, frameCount: volumeState.frameCount,
+            simStepCount: volumeState.simStepCount } : null,
+          bridge: window.__kaminosVolumeMainRendererBridge?.debugState?.() || null,
+          sceneObject: sceneObject ? { id: sceneObject.id, label: sceneObject.label, type: sceneObject.type,
+            dimensions: [sceneObject.image?.width, sceneObject.image?.height] } : null,
+        };
+      }));
+    } catch (diagnosticError) {
+      compositionDiagnostic = { readError: String(diagnosticError.stack || diagnosticError) };
+    }
+    const failure = error instanceof Error ? error : new Error(String(error));
+    failure.compositionDiagnostic = compositionDiagnostic;
+    throw failure;
+  }
+}
+
 async function main() {
   const { values } = parseArgs({ options: {
     'out-dir': { type: 'string' }, 'expected-commit': { type: 'string' },
@@ -370,13 +412,14 @@ async function main() {
       assert.ok(selected.mask.every(value => value === 0 || value === 1), 'selected SAM mask is not binary');
       await page.locator('#sam-image-instances').selectOption(String(selected.index));
       report.failurePhase = 'flame-composition'; saveReport();
+      const compositionWaitStartedAt = Date.now();
       await checked(page.locator('#sam-image-flame').click());
-      await checked(page.waitForFunction(() => {
-        const bridge = window.__kaminosVolumeMainRendererBridge?.debugState?.();
-        return bridge?.maskOverlay?.visible === true && bridge.maskOverlayCount === 1
-          && document.querySelector('.tab.active')?.dataset.tab === 'assets'
-          && document.getElementById('sam-image-viewport')?.hidden === true;
-      }));
+      try { await waitForSamFlameComposition(page, checked); }
+      catch (error) {
+        report.compositionDiagnostic = { waitMs: Date.now() - compositionWaitStartedAt,
+          state: error.compositionDiagnostic || null };
+        throw error;
+      }
       await checked(page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
       const observed = await page.evaluate(() => ({
         bridge: window.__kaminosVolumeMainRendererBridge.debugState(),
@@ -467,6 +510,9 @@ async function main() {
     }
   } catch (error) {
     report.status = 'failed'; report.error = String(error.stack || error); process.exitCode = 1;
+    if (error.compositionDiagnostic && !report.compositionDiagnostic) {
+      report.compositionDiagnostic = { state: error.compositionDiagnostic };
+    }
     const transport = error?.evidenceTransport || null;
     if (transport) lastTrustedEvidence = transport;
     try {

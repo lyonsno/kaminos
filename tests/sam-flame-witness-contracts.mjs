@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 const { validateSamFlameComposition } = await import('../sam-image-witness-checks.js');
+const { waitForSamFlameComposition } = await import('../sam-image-witness.mjs');
 const output = { outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
   effectiveRouteId: 'sam3.detr-encoder.phase-program.webgpu-local.v0', invocationId: 'invocation-1', promptText: 'windows',
   instances: [{ index: 14 }] };
@@ -37,5 +38,17 @@ assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject: {
 } }, sourceSha256, expectedPrompt: 'windows', presentation }), /overstates the composition/);
 assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256: 'sha256:other',
   expectedPrompt: 'windows', presentation }), /source hash/);
+
+const observedDuringStall = { activeTab: 'masks', samBusy: false,
+  volume: { active: false, error: null }, bridge: { maskOverlayCount: 1, maskOverlay: { visible: false } } };
+const waitFailure = new Error('composition wait timed out');
+await assert.rejects(waitForSamFlameComposition({
+  waitForFunction: (_predicate, _argument, options) => {
+    assert.equal(options.timeout, 120000, 'scene activation needs a bounded witness wait');
+    return Promise.reject(waitFailure);
+  },
+  evaluate: () => Promise.resolve(observedDuringStall),
+}), error => error.compositionDiagnostic === observedDuringStall,
+'a stalled scene activation must preserve its last observable UI and renderer state');
 
 console.log('SAM live-flame witness contracts passed');
