@@ -345,20 +345,25 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   const panel = await evaluate(ws, `(() => {
     const panel = document.querySelector('#skinned-pose-panel');
     const cast = document.querySelector('#skinned-pose-cast');
-    const rows = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')];
+    const bone = document.querySelector('#skinned-pose-bone-select');
+    const rotation = document.querySelector('#skinned-pose-rotation');
     return {
       visible: !!panel && !panel.hidden,
       objectId: panel?.dataset.objectId || null,
       castOptions: cast ? [...cast.options].map(option => ({ value: option.value, name: option.dataset.meshName })) : [],
-      bones: rows.map(row => row.dataset.skinnedPoseBone),
+      bones: bone ? [...bone.options].map(option => option.value) : [],
+      selectedBone: bone?.value || null,
+      selectedBoneLabel: document.querySelector('#skinned-pose-selected-bone')?.textContent || '',
+      rotationControlCount: rotation?.querySelectorAll('[data-skinned-pose-degrees]').length || 0,
       resetButton: !!document.querySelector('#skinned-pose-reset'),
-      unsavedNote: panel?.textContent?.includes('not saved into the scene yet') || false,
+      unsavedNote: panel?.textContent?.includes('not saved into the scene') || false,
     };
   })()`);
   if (!panel.visible || panel.objectId !== objectId || panel.castOptions.length !== 2
       || panel.bones.length !== 7 || panel.bones.some(name => /^neutral_bone(?:_\d+)?$/i.test(name))
-      || !panel.resetButton || !panel.unsavedNote) {
-    throw new Error('selected painted pair lacks the complete seven-bone temporary pose controls: ' + JSON.stringify(panel));
+      || panel.selectedBone !== 'hindlimb-left-hip' || panel.selectedBoneLabel !== 'Left hip'
+      || panel.rotationControlCount !== 1 || !panel.resetButton || !panel.unsavedNote) {
+    throw new Error('selected painted pair lacks the focused cast/bone/rotation pose workflow: ' + JSON.stringify(panel));
   }
   await evaluate(ws, `document.querySelector('#skinned-pose-panel').scrollIntoView({ block: 'start', behavior: 'instant' })`);
   await delay(150);
@@ -370,63 +375,98 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     throw new Error('pose controls loaded a pair without both independently named rigs: ' + JSON.stringify(before));
   }
   const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-before-controls'));
+  const selectBoneViaControl = async (meshIndex, boneName) => evaluate(ws, `(() => {
+    const cast = document.querySelector('#skinned-pose-cast');
+    cast.value = ${JSON.stringify(String(meshIndex))};
+    cast.dispatchEvent(new Event('change', { bubbles: true }));
+    const bone = document.querySelector('#skinned-pose-bone-select');
+    if (![...bone.options].some(option => option.value === ${JSON.stringify(boneName)})) {
+      throw new Error('bone picker omitted requested joint ' + ${JSON.stringify(boneName)});
+    }
+    bone.value = ${JSON.stringify(boneName)};
+    bone.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      selectedCast: cast.value,
+      selectedBone: bone.value,
+      selectedBoneLabel: document.querySelector('#skinned-pose-selected-bone')?.textContent || '',
+      degrees: document.querySelector('#skinned-pose-degrees')?.value || '',
+      rotationControlCount: document.querySelectorAll('#skinned-pose-rotation [data-skinned-pose-degrees]').length,
+    };
+  })()`);
   const applyViaControl = async (meshIndex, boneName, degrees) => evaluate(ws, `(() => {
     const panel = document.querySelector('#skinned-pose-panel');
     const cast = document.querySelector('#skinned-pose-cast');
     cast.value = ${JSON.stringify(String(meshIndex))};
     cast.dispatchEvent(new Event('change', { bubbles: true }));
-    const row = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')]
-      .find(candidate => candidate.dataset.skinnedPoseBone === ${JSON.stringify(boneName)});
-    if (!row) throw new Error('pose UI omitted requested imported joint ' + ${JSON.stringify(boneName)});
-    const range = row.querySelector('[data-skinned-pose-range]');
+    const bone = document.querySelector('#skinned-pose-bone-select');
+    bone.value = ${JSON.stringify(boneName)};
+    bone.dispatchEvent(new Event('change', { bubbles: true }));
+    if (bone.value !== ${JSON.stringify(boneName)} || panel.dataset.boneName !== ${JSON.stringify(boneName)}) {
+      throw new Error('bone selection did not retarget the rotation controls: ' + JSON.stringify({ selectedBone: bone.value, panelBone: panel.dataset.boneName }));
+    }
+    const range = document.querySelector('#skinned-pose-range');
     range.value = ${JSON.stringify(String(degrees))};
     range.dispatchEvent(new Event('input', { bubbles: true }));
-    return { selectedCast: cast.value, bone: row.dataset.skinnedPoseBone, degrees: row.querySelector('[data-skinned-pose-degrees]').value };
+    return { selectedCast: cast.value, bone: bone.value, degrees: document.querySelector('#skinned-pose-degrees').value };
   })()`);
   const applyViaNumericControl = async (meshIndex, boneName, degrees) => evaluate(ws, `(() => {
     const cast = document.querySelector('#skinned-pose-cast');
     cast.value = ${JSON.stringify(String(meshIndex))};
     cast.dispatchEvent(new Event('change', { bubbles: true }));
-    const row = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')]
-      .find(candidate => candidate.dataset.skinnedPoseBone === ${JSON.stringify(boneName)});
-    if (!row) throw new Error('pose UI omitted requested imported joint ' + ${JSON.stringify(boneName)});
-    const numeric = row.querySelector('[data-skinned-pose-degrees]');
+    const bone = document.querySelector('#skinned-pose-bone-select');
+    bone.value = ${JSON.stringify(boneName)};
+    bone.dispatchEvent(new Event('change', { bubbles: true }));
+    if (bone.value !== ${JSON.stringify(boneName)}) throw new Error('bone selection did not retarget the rotation controls');
+    const numeric = document.querySelector('#skinned-pose-degrees');
     numeric.value = ${JSON.stringify(String(degrees))};
     numeric.dispatchEvent(new Event('change', { bubbles: true }));
     return {
       selectedCast: cast.value,
-      bone: row.dataset.skinnedPoseBone,
+      bone: bone.value,
       degrees: numeric.value,
-      sliderDegrees: row.querySelector('[data-skinned-pose-range]').value,
+      sliderDegrees: document.querySelector('#skinned-pose-range').value,
     };
   })()`);
-  const attemptInvalidNumericControl = async (boneName, value) => evaluate(ws, `(() => {
-    const row = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')]
-      .find(candidate => candidate.dataset.skinnedPoseBone === ${JSON.stringify(boneName)});
-    if (!row) throw new Error('pose UI omitted requested imported joint ' + ${JSON.stringify(boneName)});
-    const numeric = row.querySelector('[data-skinned-pose-degrees]');
+  const attemptInvalidNumericControl = async (meshIndex, boneName, value) => evaluate(ws, `(() => {
+    const cast = document.querySelector('#skinned-pose-cast');
+    cast.value = ${JSON.stringify(String(meshIndex))};
+    cast.dispatchEvent(new Event('change', { bubbles: true }));
+    const bone = document.querySelector('#skinned-pose-bone-select');
+    bone.value = ${JSON.stringify(boneName)};
+    bone.dispatchEvent(new Event('change', { bubbles: true }));
+    if (bone.value !== ${JSON.stringify(boneName)}) throw new Error('bone selection did not retarget the rotation controls');
+    const numeric = document.querySelector('#skinned-pose-degrees');
     numeric.value = ${JSON.stringify(value)};
     numeric.dispatchEvent(new Event('change', { bubbles: true }));
     return {
       degrees: numeric.value,
-      sliderDegrees: row.querySelector('[data-skinned-pose-range]').value,
+      sliderDegrees: document.querySelector('#skinned-pose-range').value,
       status: document.querySelector('#skinned-pose-status')?.textContent || '',
     };
   })()`);
-  const changeAxisViaControl = async (boneName, axisName) => evaluate(ws, `(() => {
-    const row = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')]
-      .find(candidate => candidate.dataset.skinnedPoseBone === ${JSON.stringify(boneName)});
-    if (!row) throw new Error('pose UI omitted requested imported joint ' + ${JSON.stringify(boneName)});
-    const axis = row.querySelector('[data-skinned-pose-axis]');
+  const changeAxisViaControl = async (meshIndex, boneName, axisName) => evaluate(ws, `(() => {
+    const cast = document.querySelector('#skinned-pose-cast');
+    cast.value = ${JSON.stringify(String(meshIndex))};
+    cast.dispatchEvent(new Event('change', { bubbles: true }));
+    const bone = document.querySelector('#skinned-pose-bone-select');
+    bone.value = ${JSON.stringify(boneName)};
+    bone.dispatchEvent(new Event('change', { bubbles: true }));
+    if (bone.value !== ${JSON.stringify(boneName)}) throw new Error('bone selection did not retarget the rotation controls');
+    const axis = document.querySelector('#skinned-pose-axis');
     axis.value = ${JSON.stringify(axisName)};
     axis.dispatchEvent(new Event('change', { bubbles: true }));
     return {
       axis: axis.value,
-      degrees: row.querySelector('[data-skinned-pose-degrees]').value,
-      sliderDegrees: row.querySelector('[data-skinned-pose-range]').value,
+      degrees: document.querySelector('#skinned-pose-degrees').value,
+      sliderDegrees: document.querySelector('#skinned-pose-range').value,
     };
   })()`);
 
+  const boneSelections = [];
+  boneSelections.push(await selectBoneViaControl(0, 'hindlimb-right-stifle'));
+  if (boneSelections[0].selectedBoneLabel !== 'Right stifle' || boneSelections[0].rotationControlCount !== 1) {
+    throw new Error('bone selection did not retarget the rotation controls: ' + JSON.stringify(boneSelections[0]));
+  }
   const firstActions = [];
   for (const [boneName, degrees] of [
     ['hindlimb-left-hip', 12],
@@ -434,6 +474,11 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     ['hindlimb-left-hock', 4],
   ]) {
     firstActions.push(await applyViaControl(0, boneName, degrees));
+  }
+  const reselectedHip = await selectBoneViaControl(0, 'hindlimb-left-hip');
+  boneSelections.push(reselectedHip);
+  if (reselectedHip.degrees !== '12' || reselectedHip.selectedBoneLabel !== 'Left hip') {
+    throw new Error('switching bones did not preserve the previous joint rotation: ' + JSON.stringify(reselectedHip));
   }
   await delay(500);
   const firstCastPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
@@ -449,15 +494,15 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   }
 
   const secondAction = await applyViaNumericControl(1, 'hindlimb-left-hip_1', 12);
-  const axisAction = await changeAxisViaControl('hindlimb-left-hip_1', 'x');
+  const axisAction = await changeAxisViaControl(1, 'hindlimb-left-hip_1', 'x');
   await delay(500);
   const secondCastNumericPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const fractionalInput = await attemptInvalidNumericControl('hindlimb-left-hip_1', '12.5');
+  const fractionalInput = await attemptInvalidNumericControl(1, 'hindlimb-left-hip_1', '12.5');
   const fractionalInputPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
   const fractionalInputPoseError = Math.max(...Object.entries(secondCastNumericPose.meshes[1].boneQuaternions).map(([name, quaternion]) =>
     Math.hypot(...quaternion.map((value, axis) => value - fractionalInputPose.meshes[1].boneQuaternions[name][axis]))));
-  const outOfRangeInput = await attemptInvalidNumericControl('hindlimb-left-hip_1', '270');
-  const emptyNumericInput = await attemptInvalidNumericControl('hindlimb-left-hip_1', '');
+  const outOfRangeInput = await attemptInvalidNumericControl(1, 'hindlimb-left-hip_1', '270');
+  const emptyNumericInput = await attemptInvalidNumericControl(1, 'hindlimb-left-hip_1', '');
   const invalidInputPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
   const invalidInputPoseError = Math.max(...Object.entries(secondCastNumericPose.meshes[1].boneQuaternions).map(([name, quaternion]) =>
     Math.hypot(...quaternion.map((value, axis) => value - invalidInputPose.meshes[1].boneQuaternions[name][axis]))));
@@ -513,7 +558,7 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   }
   const status = await evaluate(ws, `document.querySelector('#skinned-pose-status')?.textContent || ''`);
   lastEvidence.meshSkinnedPoseControls = {
-    objectId, expectedAssetSha256, loadedSha256, panel, before, beforeShot,
+    objectId, expectedAssetSha256, loadedSha256, panel, boneSelections, before, beforeShot,
     firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot, firstCastPixels,
     secondAction, axisAction, secondCastNumericPose, fractionalInput, fractionalInputPoseError, outOfRangeInput, emptyNumericInput, invalidInputPoseError,
     bothCastPose, secondHipError, firstPosePreservedError, secondCastPixels, posedShot,
