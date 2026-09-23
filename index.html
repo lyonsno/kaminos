@@ -2742,6 +2742,7 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createSavedMeshCombustionAssembly } from './saved-mesh-combustion.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -2896,6 +2897,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
 let volumeBridge = null;
+let savedMeshCombustionRuntime = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -21925,6 +21927,29 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   }
 }
 
+async function syncSavedSceneCombustionBinding() {
+  const boundEntries = sceneObjects.filter(entry => entry.combustionBinding);
+  if (boundEntries.length > 1) throw new Error(`saved-scene combustion currently supports one bound object; found ${boundEntries.length}`);
+  const entry = boundEntries[0] || null;
+  if (savedMeshCombustionRuntime?.entry === entry) return !!entry;
+  if (savedMeshCombustionRuntime) {
+    volumePrototype?.clearGpuStructuralCombustionAssembly?.();
+    savedMeshCombustionRuntime.runtime.dispose();
+    savedMeshCombustionRuntime = null;
+  }
+  if (!entry) return false;
+  const gpuContext = await volumePrototype.borrowStructuralCombustionGpuContext();
+  const runtime = await createSavedMeshCombustionAssembly({ THREE, entry, gpuContext });
+  try {
+    await volumePrototype.setGpuStructuralCombustionAssembly(runtime.assembly);
+    savedMeshCombustionRuntime = { entry, runtime };
+    return true;
+  } catch (error) {
+    runtime.dispose();
+    throw error;
+  }
+}
+
 function buildSceneData() {
   const objects = sceneObjects.map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
@@ -22088,6 +22113,7 @@ async function loadSceneFile(file) {
   }
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
+  let hasSavedMeshCombustion = false;
 
   try {
     assertSceneObjectsReloadable(objectRecords);
@@ -22131,6 +22157,7 @@ async function loadSceneFile(file) {
   if (objectRecords.length > 0) {
     try {
       await loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId);
+      hasSavedMeshCombustion = await syncSavedSceneCombustionBinding();
     } catch (e) {
       setVolumePrimitivesState(previousVolumePrimitiveState);
       sceneSaveBlockedByFailedRestore = true;
@@ -22140,10 +22167,11 @@ async function loadSceneFile(file) {
     }
   } else {
     clearScene();
+    hasSavedMeshCombustion = await syncSavedSceneCombustionBinding();
   }
 
   setVolumePrimitivesState(restorePlan.volumePrimitives);
-  if (hasVolumePrimitiveScene) {
+  if (hasVolumePrimitiveScene || hasSavedMeshCombustion) {
     setActiveTab('volume');
     await volumePrototype?.setActive?.(true);
   } else {

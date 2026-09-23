@@ -29,6 +29,68 @@ import {
   createSelectiveHeadLiveRuntime,
 } from './selective-head-live-runtime.mjs';
 
+import { COMBUSTIBLE_OBJECT_FIRE_ROUTE, createCombustibleObjectFireReceiver } from './combustible-object-fire-gpu.mjs';
+
+export function replaceOwnedGpuStructuralCombustionAssembly(current, next) {
+  if (current && current !== next) current.destroy();
+  return next || null;
+}
+
+const COMBUSTIBLE_OBJECT_FIRE_RECEIVER_SCHEMA = 'kaminos.pyro-combustible-object-source-consumer.v0';
+const COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID = 'affine-object-world-to-pyro-near-domain-v0';
+export { COMBUSTIBLE_OBJECT_FIRE_RECEIVER_SCHEMA, COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID };
+
+function combustibleObjectNonnegativeInteger(value, label) {
+  const integer = Number(value);
+  if (!Number.isInteger(integer) || integer < 0) throw new Error(`${label} must be a nonnegative integer`);
+  return integer;
+}
+
+export function validateCombustibleObjectSourceDescriptor(descriptor, { device, expectedGeneration = null, expectedTopologyEpoch = null } = {}) {
+  if (!descriptor || typeof descriptor !== 'object') throw new Error('Combustible object source descriptor is required');
+  if (descriptor?.schema !== 'kaminos.combustible-object-source-descriptor.v0') throw new Error('Combustible object source descriptor schema mismatch');
+  if (descriptor.packing !== 'gpu-sparse-combustible-object-source-vec4x8-v0') throw new Error('Combustible object source descriptor packing mismatch');
+  if (!device || descriptor.device !== device) throw new Error('Combustible object source descriptor must use the same GPUDevice as Pyro');
+  if (descriptor.queue !== device.queue) throw new Error('Combustible object source descriptor must use the same GPUQueue as Pyro');
+  if (!descriptor.headerBuffer || !descriptor.recordsBuffer || descriptor.headerBytes !== 80 || descriptor.recordBytes !== 128 || descriptor.recordFloats !== 32) {
+    throw new Error('Combustible object source GPU ABI mismatch');
+  }
+  const capacity = combustibleObjectNonnegativeInteger(descriptor.capacity, 'Combustible object source capacity');
+  if (capacity < 1) throw new Error('Combustible object source descriptor must have positive capacity');
+  const generation = combustibleObjectNonnegativeInteger(descriptor.allocationGeneration, 'Combustible object source generation');
+  const topologyEpoch = combustibleObjectNonnegativeInteger(descriptor.topologyEpoch, 'Combustible object topology epoch');
+  combustibleObjectNonnegativeInteger(descriptor.materialStep, 'Combustible object material step');
+  combustibleObjectNonnegativeInteger(descriptor.writeTick, 'Combustible object source write tick');
+  if (expectedGeneration !== null && generation !== combustibleObjectNonnegativeInteger(expectedGeneration, 'Expected combustible object generation')) {
+    throw new Error(`Combustible object source generation mismatch: expected ${expectedGeneration}, received ${generation}`);
+  }
+  if (expectedTopologyEpoch !== null && topologyEpoch !== combustibleObjectNonnegativeInteger(expectedTopologyEpoch, 'Expected combustible object topology epoch')) {
+    throw new Error(`Combustible object topology epoch mismatch: expected ${expectedTopologyEpoch}, received ${topologyEpoch}`);
+  }
+  if (!Number.isInteger(descriptor.sourceFrameHash) || descriptor.sourceFrameHash === 0 || !String(descriptor.sourceFrameId || '') || !String(descriptor.transformId || '')) {
+    throw new Error('Combustible object source frame identity is unavailable');
+  }
+  if (!Array.isArray(descriptor.objectToWorld) || descriptor.objectToWorld.length !== 16 || descriptor.objectToWorld.some(value => !Number.isFinite(Number(value)))) {
+    throw new Error('Combustible object object-to-world transform must contain 16 finite values');
+  }
+  const sourceCount = combustibleObjectNonnegativeInteger(descriptor.sourceCount, 'Combustible object source count');
+  const packedCount = combustibleObjectNonnegativeInteger(descriptor.packedCount, 'Combustible object packed count');
+  const rejectedCount = combustibleObjectNonnegativeInteger(descriptor.rejectedCount, 'Combustible object rejected count');
+  const overflowCount = combustibleObjectNonnegativeInteger(descriptor.overflowCount, 'Combustible object overflow count');
+  const malformedCount = combustibleObjectNonnegativeInteger(descriptor.malformedCount, 'Combustible object malformed count');
+  if (overflowCount > 0) throw new Error(`Combustible object source overflow is not consumable: ${overflowCount} record(s)`);
+  if (malformedCount > 0) throw new Error(`Combustible object malformed source records are not consumable: ${malformedCount}`);
+  if (sourceCount !== packedCount + rejectedCount + overflowCount) throw new Error('Combustible object source count accounting mismatch');
+  if (packedCount > capacity || (descriptor.gpuAuthoredDynamic !== true && (!Array.isArray(descriptor.records) || descriptor.records.length !== packedCount))) {
+    throw new Error('Combustible object packed record accounting mismatch');
+  }
+  const masses = [descriptor.emittedVolatileMass, descriptor.emittedFuelMass, descriptor.emittedSootMass].map(Number);
+  if (!masses.every(value => Number.isFinite(value) && value >= 0) || Math.abs(masses[0] - masses[1] - masses[2]) > 1e-9 || Math.abs(Number(descriptor.accountingResidual)) > 1e-9) {
+    throw new Error('Combustible object volatile mass accounting mismatch');
+  }
+  return descriptor;
+}
+
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
@@ -5789,6 +5851,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let device = null;
   let gpuInitialized = false;
   let configuredSharedGpuContext = sharedGpuContext;
+  let combustibleObjectSourceReceiver = null;
+  let gpuStructuralCombustionAssembly = null;
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
@@ -8834,6 +8898,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function encodeSim(encoder, options = {}) {
+    if (gpuStructuralCombustionAssembly && fluidBuffers[currentFluid]) {
+      gpuStructuralCombustionAssembly.encode(encoder, fluidBuffers[currentFluid]);
+      combustibleObjectSourceReceiver?.encode(encoder, fluidBuffers[currentFluid]);
+      state.gpuStructuralCombustionAssembly = gpuStructuralCombustionAssembly.debugState();
+      state.combustibleObjectSource = combustibleObjectSourceReceiver?.debug() || null;
+    }
     const pass = encoder.beginComputePass({
       label: 'kaminos fluid sim pass',
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
@@ -9643,6 +9713,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
         state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
         recordBrowserResidualCost({ applied: false });
+      }
+      if (gpuStructuralCombustionAssembly) {
+        gpuStructuralCombustionAssembly.encodePresentation(
+          encoder,
+          currentTexture.createView(),
+          viewProj.elements,
+          { width: state.width, height: state.height },
+        );
+        state.gpuStructuralCombustionAssembly = gpuStructuralCombustionAssembly.debugState();
       }
       encodeHistoryCopy(encoder, currentTexture);
       encodeBoundarySplatTelemetry(encoder);
@@ -13369,6 +13448,57 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       publishVolumePrimitiveState();
       if (device) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
     },
+    async borrowStructuralCombustionGpuContext() {
+      await ensureGpu();
+      return {
+        device,
+        queue: device.queue,
+        format,
+        gridSize,
+        receiverSchema: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_SCHEMA,
+        routeIdentity: COMBUSTIBLE_OBJECT_FIRE_ROUTE,
+        ownership: 'borrowed-device-queue-no-destruction-authority',
+      };
+    },
+    async setGpuStructuralCombustionAssembly(assembly, options = {}) {
+      await ensureGpu();
+      if (!assembly?.encode || !assembly?.encodePresentation || !assembly?.sourceDescriptor || !assembly?.debugState || !assembly?.destroy) {
+        throw new Error('GPU structural combustion assembly contract is incomplete');
+      }
+      const descriptor = validateCombustibleObjectSourceDescriptor(assembly.sourceDescriptor(), { device });
+      if (!combustibleObjectSourceReceiver || combustibleObjectSourceReceiver.gridSize !== gridSize) {
+        combustibleObjectSourceReceiver?.destroy();
+        combustibleObjectSourceReceiver = await createCombustibleObjectFireReceiver({
+          device,
+          gridSize,
+          validateDescriptor: validateCombustibleObjectSourceDescriptor,
+          transformIdentity: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID,
+        });
+      }
+      combustibleObjectSourceReceiver.setSource(descriptor, options.transform || {
+        id: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID,
+        scale: [1, 1, 1],
+        offset: [0, 0, 0],
+      }, options.transfer || [96, 128, 96, 96]);
+      gpuStructuralCombustionAssembly = replaceOwnedGpuStructuralCombustionAssembly(
+        gpuStructuralCombustionAssembly,
+        assembly,
+      );
+      state.gpuStructuralCombustionAssembly = assembly.debugState();
+      state.combustibleObjectSource = combustibleObjectSourceReceiver.debug();
+      emitStatus({ phase: 'gpu-structural-combustion-bound', gpuStructuralCombustionAssembly: state.gpuStructuralCombustionAssembly });
+      return { ...state.gpuStructuralCombustionAssembly };
+    },
+    clearGpuStructuralCombustionAssembly() {
+      combustibleObjectSourceReceiver?.clearSource();
+      gpuStructuralCombustionAssembly = replaceOwnedGpuStructuralCombustionAssembly(
+        gpuStructuralCombustionAssembly,
+        null,
+      );
+      state.gpuStructuralCombustionAssembly = null;
+      state.combustibleObjectSource = null;
+      return { status: 'off', schema: 'kaminos.structural-combustion.node-material.v0' };
+    },
     updateVolumePrimitiveTransform(id, nextTransform) {
       const primitive = volumePrimitives.find(candidate => candidate.id === id);
       if (!primitive) return null;
@@ -13646,6 +13776,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...state,
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
+        gpuStructuralCombustionAssembly: gpuStructuralCombustionAssembly?.debugState() || null,
+        combustibleObjectSource: combustibleObjectSourceReceiver?.debug() || null,
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
@@ -13671,6 +13803,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
+      combustibleObjectSourceReceiver?.destroy();
+      combustibleObjectSourceReceiver = null;
+      gpuStructuralCombustionAssembly = replaceOwnedGpuStructuralCombustionAssembly(
+        gpuStructuralCombustionAssembly,
+        null,
+      );
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();

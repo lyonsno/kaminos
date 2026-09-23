@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   SCENE_SCHEMA,
@@ -199,6 +200,10 @@ assert.equal(isReloadableSceneObjectRecord({
 }), false, 'local PBR material preview without demo source is not silently reloadable');
 assert.equal(isReloadableSceneObjectRecord({ ...objectA, source: 'local-drop.glb' }), false, 'local dropped source is not silently reloadable');
 assert.equal(isReloadableSceneObjectRecord({ ...imageObject, source: 'local-drop.png' }), false, 'local dropped image source is not silently reloadable');
+const savedTrestleFixture = JSON.parse(readFileSync(new URL('../scenes/sinter-forked-timber-combustion.kaminos.json', import.meta.url), 'utf8'));
+assert.equal(sceneDocumentIsLoadable(savedTrestleFixture), true, 'the promoted forked-timber fixture is a loadable saved scene');
+assert.equal(isReloadableSceneObjectRecord(savedTrestleFixture.objects[0]), true, 'repo-authored asset paths survive save and reopen');
+assert.equal(savedTrestleFixture.objects[0].combustionBinding.assetIdentity, 'sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84');
 
 const legacy = {
   version: 2,

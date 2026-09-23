@@ -1,0 +1,93 @@
+{
+  "schema": "kaminos.structural-mesh-asset-descriptor.v0",
+  "assetId": "forked-timber-reliquary-trestle-v0",
+  "title": "Forked Timber Reliquary Trestle V0",
+  "source": {
+    "kind": "authored-generated-cast",
+    "promptBasin": "asymmetric forked timber reliquary trestle with visibly detachable sacrificial crossbrace",
+    "sourceEnvelope": "internal operator mesh-combustion asset consultation, 2026-07-18",
+    "strategyEnvelope": "internal generation-strategy return, 2026-07-18",
+    "routeDecision": "deterministic authored GLB chosen over opaque reconstruction so seam topology and named islands are inspectable"
+  },
+  "coordinateFrame": {
+    "handedness": "right",
+    "upAxis": "+Y",
+    "forwardAxis": "+Z",
+    "unit": "meter",
+    "transformsBaked": true
+  },
+  "bounds": {
+    "min": [
+      -0.735876,
+      -0.099055,
+      -0.336918
+    ],
+    "max": [
+      0.773458,
+      0.985997,
+      0.412754
+    ]
+  },
+  "seam": {
+    "id": "support_loss_tenon_0",
+    "nodeName": "support_loss_tenon_0",
+    "translation": [
+      0,
+      0.43,
+      0.3
+    ],
+    "contract": "authored separation seam; runtime may release sacrificial_crossbrace without cutting triangles"
+  },
+  "islands": [
+    {
+      "id": "reliquary_trestle_body",
+      "nodeName": "reliquary_trestle_body",
+      "role": "load-bearing forked trestle body",
+      "motion": "carrier island",
+      "materialHint": "weathered timber, accepts semantic wood-to-char response"
+    },
+    {
+      "id": "sacrificial_crossbrace",
+      "nodeName": "sacrificial_crossbrace",
+      "role": "detachable support-loss crossbrace",
+      "motion": "separable island at support_loss_tenon_0",
+      "materialHint": "sacrificial timber, expected first failure carrier"
+    }
+  ],
+  "visualRef": {
+    "path": "visual/forked-timber-reliquary-trestle-v0.glb",
+    "nodeNames": [
+      "reliquary_trestle_body",
+      "sacrificial_crossbrace",
+      "support_loss_tenon_0"
+    ],
+    "vertexCount": 448,
+    "triangleCount": 864
+  },
+  "bindingRef": {
+    "path": "binding/forked-timber-reliquary-trestle-v0-binding.glb",
+    "nodeNames": [
+      "reliquary_trestle_body",
+      "sacrificial_crossbrace",
+      "support_loss_tenon_0"
+    ],
+    "vertexCount": 296,
+    "triangleCount": 560
+  },
+  "downgradeState": {
+    "collision": "not-claimed",
+    "runtimeCutting": "excluded",
+    "uvQuality": "plain-material-only",
+    "photorealism": "not-claimed"
+  },
+  "files": {
+    "visual/forked-timber-reliquary-trestle-v0.glb": {
+      "sha256": "1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+      "bytes": 23076
+    },
+    "binding/forked-timber-reliquary-trestle-v0-binding.glb": {
+      "sha256": "ae799136077338053e10b02bfcc5e0c4754fcd703e6553f60cd6188378ac37d0",
+      "bytes": 15776
+    }
+  }
+}
