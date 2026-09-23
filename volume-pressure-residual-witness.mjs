@@ -28,6 +28,14 @@ const sweeps = Number(args.get('--sweeps') || 60);
 // control is the projection gain, so 1.0 is the full solve; the basin's own
 // value (often far below 1) is what the operator currently sees.
 const projectionOverride = args.has('--projection') ? Number(args.get('--projection')) : null;
+// Fault injection: 'never-settling-map' patches GPUBuffer.prototype.mapAsync in
+// the page so the residual readback buffer never maps, then requires the
+// renderer to retire the map within its published timeout, stop claiming a
+// current residual, and recover once the fault is removed. With
+// --fault-projection-off 1 the projection is switched off while the map is
+// stuck, so no later pressure pass can be the thing that rescues it.
+const faultMode = String(args.get('--fault') || '');
+const faultProjectionOff = ['1', 'true', 'on'].includes(String(args.get('--fault-projection-off') || '').toLowerCase());
 const settleSteps = Number(args.get('--settle-steps') || 200);
 const sampleSeconds = Number(args.get('--sample-seconds') || 6);
 const timeoutMs = Number(args.get('--timeout-ms') || 240000);
@@ -42,7 +50,7 @@ const report = {
   status: 'running',
   failurePhase: 'argument-validation',
   failure: null,
-  requested: { basinFile, serverUrl, expectedRepoRoot, expectedCommit, arms, sweeps, settleSteps, sampleSeconds, projectionOverride },
+  requested: { basinFile, serverUrl, expectedRepoRoot, expectedCommit, arms, sweeps, settleSteps, sampleSeconds, projectionOverride, faultMode, faultProjectionOff },
   effective: {},
   arms: [],
   browserErrors: [],
@@ -421,6 +429,87 @@ async function main() {
       stateBeforeSwitch: { simStepCount: before?.simStepCount ?? null, solver: before?.pressureSolver?.effective ?? null },
     });
     report.lastTrustworthyEvidence.lastArm = arm;
+    writeReport();
+  }
+
+  if (faultMode === 'never-settling-map') {
+    report.failurePhase = 'fault-install';
+    const timing = await rendererState();
+    const mapTimeoutMs = Number(timing?.pressureSolver?.residualProbe?.mapTimeoutMs);
+    if (!Number.isFinite(mapTimeoutMs)) throw new TerminalError('renderer receipt does not expose residualProbe.mapTimeoutMs');
+    const stepBeforeFault = timing.simStepCount;
+    await evaluate(`(() => {
+      if (window.__ffdFault) throw new Error('fault already installed');
+      const proto = GPUBuffer.prototype;
+      const original = proto.mapAsync;
+      window.__ffdFault = { original, stalled: 0, restored: false };
+      proto.mapAsync = function patchedMapAsync(...mapArgs) {
+        if (String(this.label || '').includes('pressure residual readback')) {
+          window.__ffdFault.stalled += 1;
+          return new Promise(() => {});
+        }
+        return original.apply(this, mapArgs);
+      };
+      return true;
+    })()`);
+    report.failurePhase = 'fault-stall';
+    const stalled = await waitUntil(async () => {
+      const count = await evaluate('window.__ffdFault.stalled');
+      const state = await rendererState();
+      return count >= 1 && state?.pressureSolver?.residualProbe?.mapPending ? { count, state } : null;
+    }, 'residual map never stalled under the fault', 200, 60000);
+    const stalledAt = Date.now();
+    const generationAtStall = stalled.state.pressureSolver.residualProbe.mapGeneration;
+    if (faultProjectionOff) {
+      await setControl('volume-projection', 0);
+      await waitUntil(async () => {
+        const state = await rendererState();
+        return state.pressureSolver?.effective?.dispatch === 'disabled' ? state : null;
+      }, 'projection did not switch off during the fault', 200, 20000);
+    }
+    report.failurePhase = 'fault-reset';
+    const reset = await waitUntil(async () => {
+      const state = await rendererState();
+      const solverState = state?.pressureSolver;
+      if (!solverState) return null;
+      return solverState.residualError === 'residual-map-timeout-reset'
+        && solverState.residual === null
+        && solverState.residualProbe.mapGeneration > generationAtStall
+        && solverState.residualProbe.mapPending === false
+        ? state
+        : null;
+    }, 'stalled map was not retired within the published timeout', 200, mapTimeoutMs + 20000);
+    const resetAfterMs = Date.now() - stalledAt;
+    report.failurePhase = 'fault-restore';
+    await evaluate(`(() => { GPUBuffer.prototype.mapAsync = window.__ffdFault.original; window.__ffdFault.restored = true; return true; })()`);
+    if (faultProjectionOff) {
+      await setControl('volume-projection', projectionOverride ?? 1);
+    }
+    report.failurePhase = 'fault-recover';
+    const recovered = await waitUntil(async () => {
+      const state = await rendererState();
+      const solverState = state?.pressureSolver;
+      return solverState?.residual && solverState.residualError === null && solverState.residual.step > reset.simStepCount ? state : null;
+    }, 'residual probe did not recover after the fault was removed', 200, 90000);
+    report.fault = {
+      mode: faultMode,
+      projectionOffDuringFault: faultProjectionOff,
+      mapTimeoutMs,
+      stepBeforeFault,
+      stalledMaps: stalled.count,
+      stalledAtStep: stalled.state.simStepCount,
+      residualStepAtStall: stalled.state.pressureSolver.residual?.step ?? null,
+      resetAfterMs,
+      resetWithinTimeoutPlusSlack: resetAfterMs <= mapTimeoutMs + 20000,
+      resetError: reset.pressureSolver.residualError,
+      staleResidualStep: reset.pressureSolver.staleResidual?.step ?? null,
+      residualResetCount: reset.pressureSolver.residualResetCount,
+      dispatchDuringFault: reset.pressureSolver.effective.dispatch,
+      generationAtStall,
+      generationAfterReset: reset.pressureSolver.residualProbe.mapGeneration,
+      recoveredStep: recovered.pressureSolver.residual.step,
+      recoveredCompactAfterMeanAbs: recovered.pressureSolver.residual.compact.after.meanAbs,
+    };
     writeReport();
   }
 

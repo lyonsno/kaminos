@@ -271,7 +271,9 @@ test('converged mode reports partial versus full projection and folds Bonfire ab
   assert.equal(legacy.effective.projection, null);
   assert.match(index, /partial/, 'cockpit label vocabulary names partial projection');
   assert.doesNotMatch(index, /Converged runs red-black SOR to a small divergence residual/, 'cockpit help must not claim a divergence-free result independent of gain');
-  assert.match(index, /leaves \(1 − Projection\) of the divergence/, 'cockpit help states the partial-projection consequence');
+  assert.match(index, /leaves \(1 − gain\) of the divergence/, 'cockpit help states the partial-projection consequence in terms of the effective gain');
+  assert.doesNotMatch(index, /leaves \(1 − Projection\) of the divergence/, 'cockpit help must not use raw Projection where Bonfire uses the effective gain');
+  assert.match(index, /Bonfire scene the gain is Projection × its projection ablation/, 'cockpit help names the Bonfire ablation in the gain');
 });
 
 test('post-correction divergence follows the effective gain and the velocity bound, not the Poisson residual alone', () => {
@@ -300,9 +302,8 @@ test('post-correction divergence follows the effective gain and the velocity bou
   assert.deepEqual(full.after, [0, -0], 'gain 1 with an exact solve is divergence-free before the bound');
   const clamped = column(0.9, 1, true);
   assert.equal(clamped.after[0], 0, 'an exact full correction of a saturating flux lands inside the bound');
-  const saturating = { ...column(-0.9, 1, false) };
-  const boundedFlux = bound(-0.9);
-  assert.notEqual(boundedFlux, -0.9, 'the bound clips the stored flux itself when the flow saturates');
+  // The post-bound divergence of a divergence-free corrected field is the
+  // separate circulation case below.
   // The receipt must say which regime the operator is in.
   assert.equal(core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 0.65 }).effective.projection, 'partial');
   assert.equal(core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1.5 }).effective.projection, 'full');
@@ -318,8 +319,80 @@ test('residual probe freshness bounds the pending map as well as the pending cop
   assert.equal(disposition({ ...base, mapPending: true, mapStartedFrame: 450 }), 'wait');
   assert.equal(disposition({ ...base, mapPending: true, mapStartedFrame: 300 }), 'reset-map', 'an unresolved map past the freshness limit must be reset, not waited on forever');
   assert.equal(disposition({ ...base, copyPending: true, mapPending: true, copyFrame: 300, mapStartedFrame: 490 }), 'wait', 'a fresh map outranks a stale copy flag');
-  assert.match(source, /case 'reset-map':[^]*?pressureResidualMapGeneration \+= 1;[^]*?pressureResidualReadbackBuffer\.destroy\(\);[^]*?pressureResidualReadbackBuffer = device\.createBuffer\(/, 'reset path retires the stuck readback buffer, bumps the map generation, and recreates the buffer');
-  assert.match(source, /residualError: 'residual-map-unresolved-reset'/, 'reset path publishes a visible error');
+  assert.match(source, /case 'reset-map':\s*retirePressureResidualMap\('residual-map-unresolved-reset'\)/, 'frame-based reset retires the stuck readback buffer through the shared path');
+  assert.match(source, /residualError: reason,/, 'the shared retire path publishes the caller-named visible error');
   assert.match(source, /if \(generation !== pressureResidualMapGeneration\)/, 'a late resolve from a retired generation cannot publish or clear the current pending state');
   assert.match(source, /pressureResidualMapStartedFrame = state\.frameCount;/, 'map start frame is recorded when the map begins');
+});
+
+test('the velocity bound reintroduces divergence into a divergence-free corrected field', () => {
+  // Closed 2x2 box. Stored components are upper-face fluxes; the last cell's
+  // upper face and the ghost face below the first cell are walls. A circulation
+  // of strength 0.6 has zero compact divergence everywhere before the bound.
+  const bound = v => Math.max(-0.34, Math.min(0.52, v));
+  const a = 0.6;
+  const fx = { '0,0': a, '0,1': -a };
+  const fy = { '0,0': -a, '1,0': a };
+  const face = (f, x, y) => (x < 0 || y < 0 || x > 1 || y > 1 ? 0 : (f[`${x},${y}`] ?? 0));
+  const divergence = (fxm, fym) => {
+    const out = {};
+    for (let y = 0; y < 2; y += 1) for (let x = 0; x < 2; x += 1) {
+      out[`${x},${y}`] = (face(fxm, x, y) - face(fxm, x - 1, y)) + (face(fym, x, y) - face(fym, x, y - 1));
+    }
+    return out;
+  };
+  const before = divergence(fx, fy);
+  for (const value of Object.values(before)) assert.ok(Math.abs(value) < 1e-12, `circulation must be divergence-free before the bound: ${JSON.stringify(before)}`);
+  const boundedFx = Object.fromEntries(Object.entries(fx).map(([k, v]) => [k, bound(v)]));
+  const boundedFy = Object.fromEntries(Object.entries(fy).map(([k, v]) => [k, bound(v)]));
+  const after = divergence(boundedFx, boundedFy);
+  assert.ok(Math.abs(after['0,0'] - 0.18) < 1e-12 && Math.abs(after['1,1'] + 0.18) < 1e-12, `the bound must leave +-0.18 in opposite corners: ${JSON.stringify(after)}`);
+  assert.ok(Math.abs(after['1,0']) < 1e-12 && Math.abs(after['0,1']) < 1e-12);
+  // This is why the residual probe measures the carried (post-bound) velocity,
+  // and why "full projection" is qualified by the bound in the receipt and help.
+  assert.match(index, /divergence-free up to the solver residual and the velocity bound/, 'help qualifies full projection by the bound');
+});
+
+test('the receipt reports disabled dispatch and the dispatch gate uses the same decision', () => {
+  const zeroIterations = core.resolvePressureSolverConfig({ pressureSolver: 'converged', pressureSolverIterations: 60, pressureIterations: 0, projection: 1 });
+  assert.equal(zeroIterations.effective.dispatch, 'disabled', 'legacy pressure iterations 0 (route or impostor tier) turns converged pressure work off');
+  assert.equal(zeroIterations.effective.projection, 'disabled', 'a mode that runs zero passes must not report full projection');
+  assert.equal(zeroIterations.effective.disabledReason, 'pressure-iterations-zero');
+  assert.equal(zeroIterations.effective.iterations, 0);
+  const zeroProjection = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 0 });
+  assert.equal(zeroProjection.effective.dispatch, 'disabled');
+  assert.equal(zeroProjection.effective.projection, 'disabled');
+  assert.equal(zeroProjection.effective.disabledReason, 'projection-zero');
+  const bonfireZero = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1, volumeScene: 'bonfire_plume', bonfireProjection: 0 });
+  assert.equal(bonfireZero.effective.dispatch, 'disabled');
+  const legacyOff = core.resolvePressureSolverConfig({ pressureIterations: 0, projection: 0.65 });
+  assert.equal(legacyOff.effective.dispatch, 'disabled');
+  assert.equal(legacyOff.effective.projection, null);
+  const legacyOn = core.resolvePressureSolverConfig({ pressureIterations: 3, projection: 0.4 });
+  assert.equal(legacyOn.effective.dispatch, 'legacy');
+  const convergedOn = core.resolvePressureSolverConfig({ pressureSolver: 'converged-open-top', pressureIterations: 2, projection: 1 });
+  assert.equal(convergedOn.effective.dispatch, 'converged');
+  assert.equal(convergedOn.effective.projection, 'full');
+  const encode = source.slice(source.indexOf('  function encodePressureProjection(encoder'), source.indexOf('  function boundarySplatExecutionPlan('));
+  assert.ok(encode.length > 0, 'encodePressureProjection must exist');
+  assert.match(encode, /const solverConfig = resolvePressureSolverConfig\(controlsSnapshot\);[^]*?if \(solverConfig\.effective\.dispatch === 'disabled'\)/, 'the dispatch gate is the resolver decision');
+  assert.doesNotMatch(encode, /projection <= 0\.001 \|\| pressureIterationCount <= 0/, 'no second hand-rolled gate that can drift from the receipt');
+  assert.match(index, /solverConfig\.effective\.dispatch === 'disabled'/, 'cockpit label renders the disabled regime');
+});
+
+test('an unresolved residual map is bounded in time and the freshness check advances without a pressure pass', () => {
+  assert.equal(typeof core.PRESSURE_RESIDUAL_MAP_TIMEOUT_MS, 'number', 'map timeout must be exported');
+  assert.ok(core.PRESSURE_RESIDUAL_MAP_TIMEOUT_MS >= 1000 && core.PRESSURE_RESIDUAL_MAP_TIMEOUT_MS <= 30000);
+  const resolve = source.slice(source.indexOf('  async function resolvePressureResidualProbe()'), source.indexOf('  function encodePressureProjection(encoder'));
+  assert.match(resolve, /Promise\.race\(\[/, 'resolve races mapAsync against a timeout so controlled callers get a bounded outcome');
+  assert.match(resolve, /PRESSURE_RESIDUAL_MAP_TIMEOUT_MS/, 'timeout uses the exported constant');
+  assert.match(resolve, /retirePressureResidualMap\('residual-map-timeout-reset'\)/, 'a timed-out map retires the buffer through the shared path');
+  const encode = source.slice(source.indexOf('  function encodePressureProjection(encoder'), source.indexOf('  function boundarySplatExecutionPlan('));
+  const advanceAt = encode.indexOf('advancePressureResidualFreshness()');
+  const firstReturn = encode.indexOf('return false;');
+  assert.ok(advanceAt > 0 && advanceAt < firstReturn, 'freshness advances before any early return, so a disabled projection cannot suspend it');
+  const retire = source.slice(source.indexOf('  function retirePressureResidualMap('), source.indexOf('  function advancePressureResidualFreshness('));
+  assert.match(retire, /pressureResidualMapGeneration \+= 1;[^]*?pressureResidualReadbackBuffer\.destroy\(\);[^]*?pressureResidualReadbackBuffer = device\.createBuffer\(/, 'shared retire path bumps the generation and replaces the buffer');
+  assert.match(retire, /residualResetCount/, 'resets are counted in the receipt');
+  assert.match(source, /mapTimeoutMs: PRESSURE_RESIDUAL_MAP_TIMEOUT_MS/, 'receipt exposes the map timeout so a witness can bound its wait');
 });
