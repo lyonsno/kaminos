@@ -7855,6 +7855,10 @@ fn boundarySplatPresentationFs(in: BoundarySplatPresentationVertexOut) -> @locat
 const BOUNDARY_SPLAT_OPTICAL_PRESENTATION_WGSL = `
 struct VolumePresentationControls {
   exposure: vec4<f32>,
+  emissive_white_r: vec4<f32>,
+  emissive_white_g: vec4<f32>,
+  emissive_white_b: vec4<f32>,
+  physical_display: vec4<f32>,
 };
 
 struct BoundarySplatOpticalPresentationVertexOut {
@@ -7897,7 +7901,24 @@ fn boundarySplatOpticalPresentationFs(in: BoundarySplatOpticalPresentationVertex
   let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 3.0);
   let exposed = vec3<f32>(1.0) - exp(-color * (0.96 * volumeExposure));
   let grade = exposed * (0.80 + 0.18 * vignette);
-  let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  var current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  if (presentationControls.physical_display.x > 1.5) {
+    let balanced = vec3<f32>(
+      dot(presentationControls.emissive_white_r.xyz, color),
+      dot(presentationControls.emissive_white_g.xyz, color),
+      dot(presentationControls.emissive_white_b.xyz, color)
+    );
+    let emissiveExposed = max(vec3<f32>(0.0), balanced * exp2(presentationControls.physical_display.y));
+    let knee = presentationControls.physical_display.z;
+    let d = 1.0 - knee;
+    let shoulder = vec3<f32>(1.0) - d * d / max(emissiveExposed + vec3<f32>(1.0 - 2.0 * knee), vec3<f32>(d));
+    let emissiveLinear = select(emissiveExposed, shoulder, emissiveExposed > vec3<f32>(knee));
+    current = select(
+      1.055 * pow(emissiveLinear, vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055),
+      emissiveLinear * 12.92,
+      emissiveLinear <= vec3<f32>(0.0031308)
+    );
+  }
   return vec4<f32>(current, 1.0);
 }
 
@@ -8059,7 +8080,8 @@ export function createKaminosVolumePrototype({
   const productLocalCameraPosition = new THREE.Vector3();
   const uniforms = new Float32Array(PHYSICAL_COLOR_UNIFORM_FLOATS);
   uniforms.set(THERMAL_LUT, 376);
-  const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
+  const volumePresentationControls = new Float32Array(20);
+  volumePresentationControls[0] = 1;
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
   let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
   let volumePresentationModeRequestedRaw = 'beauty';
@@ -12632,6 +12654,40 @@ export function createKaminosVolumePrototype({
       material: physicalColorMode === 2 ? { thermalControl: 'hot-soot-optical-density', smokeExtinction: uniforms[EMISSIVE_UNIFORM_OFFSET], scatteringAlbedo: uniforms[EMISSIVE_UNIFORM_OFFSET+1], ambientRadiance: uniforms[EMISSIVE_UNIFORM_OFFSET+2] } : null,
     };
     volumePresentationControls[0] = volumeExposure;
+    const physicalSplatMaterialRequested = Number(controlsSnapshot.physicalColorMode ?? 0) === 2;
+    const physicalSplatMaterialEligible = physicalSplatMaterialRequested
+      && uniforms[276] === fireRenderModeValue('inspect')
+      && uniforms[277] === shellInspectModeValue('boundary_fire');
+    const physicalSplatCoefficientEffective = physicalSplatMaterialEligible && liveCompleteFlameOpticalCoefficientsEnabled;
+    const physicalSplatPresentationEffective = boundarySplatPresentationModeEffective === BOUNDARY_SPLAT_OPTICAL_MODE
+      && physicalSplatCoefficientEffective;
+    volumePresentationControls.set(emissiveWhiteMatrix[0], 4);
+    volumePresentationControls.set(emissiveWhiteMatrix[1], 8);
+    volumePresentationControls.set(emissiveWhiteMatrix[2], 12);
+    volumePresentationControls[16] = physicalSplatPresentationEffective ? 2 : 0;
+    volumePresentationControls[17] = uniforms[373];
+    volumePresentationControls[18] = uniforms[374];
+    state.boundarySplatOpticalMaterialReceipt = {
+      identity: 'boundary-splat-physical-material-route-v0',
+      requested: physicalSplatMaterialRequested ? 'emissive-transport-v2' : 'legacy',
+      effective: physicalSplatPresentationEffective ? 'emissive-transport-v2' : 'legacy',
+      coefficientMaterialEffective: physicalSplatCoefficientEffective ? 'emissive-transport-v2' : 'legacy',
+      materialLawRequested: physicalSplatMaterialRequested ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
+      materialLawEffective: physicalSplatCoefficientEffective
+        ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2')
+        : null,
+      coefficientProducerEffective: physicalSplatCoefficientEffective,
+      presentationTransformEffective: physicalSplatPresentationEffective
+        ? 'fixed-bradford-white-channel-shoulder-srgb-v4'
+        : 'raymarch-matched-exponential-power-grade-v0',
+      fallbackReason: physicalSplatMaterialRequested && !physicalSplatMaterialEligible
+        ? 'physical-material-requires-inspect-boundary-fire-mode'
+        : (physicalSplatMaterialRequested && !liveCompleteFlameOpticalCoefficientsEnabled
+            ? 'live-complete-flame-coefficient-producer-disabled'
+            : (physicalSplatMaterialRequested && !physicalSplatPresentationEffective
+                ? 'matched-optical-presentation-not-effective'
+                : null)),
+    };
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
@@ -17263,6 +17319,11 @@ export function createKaminosVolumePrototype({
     const coefficientUniforms = uniforms.slice();
     coefficientUniforms[307] = APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].uniform;
     coefficientUniforms[316] = 0;
+    const physicalColorMode = Number(controlsSnapshot.physicalColorMode ?? 0);
+    const physicalMaterialEffective = physicalColorMode === 2
+      && uniforms[276] === fireRenderModeValue('inspect')
+      && uniforms[277] === shellInspectModeValue('boundary_fire');
+    if (physicalMaterialEffective) coefficientUniforms[368] = 2;
     device.queue.writeBuffer(liveCompleteFlameCoefficientUniformBuffer, 0, coefficientUniforms);
     device.queue.writeBuffer(
       nonRidgeOpticalCaptureHeaderBuffer,
@@ -17291,7 +17352,17 @@ export function createKaminosVolumePrototype({
         role: state.selectiveHeadLiveEffectiveRole,
         controlsSignature: effectiveControlsSignature(controlsSnapshot),
         coefficientTarget: APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].targetIdentity,
+        materialRequested: physicalColorMode === 2 ? 'emissive-transport-v2' : 'legacy',
+        materialEffective: physicalMaterialEffective ? 'emissive-transport-v2' : (uniforms[368] === 1 ? 'thermal-reaction-v1' : 'legacy'),
+        materialLawEffective: physicalMaterialEffective && Number(controlsSnapshot.physicalMaterialLaw ?? 0) === 1
+          ? 'transported-heat-soot-v1'
+          : (physicalMaterialEffective ? 'mixed-carrier-soot-floor-v2' : null),
       },
+      coefficientMaterialRequested: physicalColorMode === 2 ? 'emissive-transport-v2' : 'legacy',
+      coefficientMaterialEffective: physicalMaterialEffective ? 'emissive-transport-v2' : (uniforms[368] === 1 ? 'thermal-reaction-v1' : 'legacy'),
+      coefficientMaterialLawEffective: physicalMaterialEffective && Number(controlsSnapshot.physicalMaterialLaw ?? 0) === 1
+        ? 'transported-heat-soot-v1'
+        : (physicalMaterialEffective ? 'mixed-carrier-soot-floor-v2' : null),
       cpuCoefficientReadbackApplied: false,
       fallbackReason: null,
     };
