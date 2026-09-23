@@ -16,14 +16,18 @@ export function normalizeCrucibleContext(context) {
   if (context.schema !== CRUCIBLE_CONTEXT_SCHEMA) {
     throw new Error(`Unsupported crucible context schema: ${context.schema || 'missing'}`);
   }
-  const crucibleId = String(context.crucibleId || '').trim();
+  if (typeof context.crucibleId !== 'string') throw new Error('Crucible context crucibleId must be a string');
+  const crucibleId = context.crucibleId.trim();
   if (!crucibleId) throw new Error('Crucible context requires crucibleId');
   const normalized = cloneJson(context);
   normalized.schema = CRUCIBLE_CONTEXT_SCHEMA;
   normalized.crucibleId = crucibleId;
   for (const key of ['makingIntent', 'armatureId', 'firingId', 'receiptRef', 'cartridgeId']) {
-    if (normalized[key] == null || normalized[key] === '') delete normalized[key];
-    else normalized[key] = String(normalized[key]);
+    if (normalized[key] == null || normalized[key] === '') {
+      delete normalized[key];
+    } else if (typeof normalized[key] !== 'string') {
+      throw new Error(`Crucible context ${key} must be a string`);
+    }
   }
   if (normalized.result != null) {
     if (!normalized.result || typeof normalized.result !== 'object' || Array.isArray(normalized.result)) {
@@ -32,10 +36,14 @@ export function normalizeCrucibleContext(context) {
     if (!['armature', 'handle', 'shard', 'cast'].includes(normalized.result.kind)) {
       throw new Error(`Unsupported crucible result kind: ${normalized.result.kind || 'missing'}`);
     }
+    if (typeof normalized.result.id !== 'string') throw new Error('Crucible result id must be a string');
+    if (normalized.result.label != null && typeof normalized.result.label !== 'string') {
+      throw new Error('Crucible result label must be a string');
+    }
     normalized.result = {
       ...normalized.result,
-      id: String(normalized.result.id || '').trim(),
-      label: normalized.result.label == null ? undefined : String(normalized.result.label),
+      id: normalized.result.id.trim(),
+      label: normalized.result.label == null ? undefined : normalized.result.label,
     };
     if (!normalized.result.id) throw new Error('Crucible result requires id');
     if (normalized.result.label === undefined) delete normalized.result.label;
@@ -216,7 +224,7 @@ export function buildSceneDocument({
     postprocessing: cloneJson(postprocessing),
     backdrop: !!backdrop,
   };
-  const normalizedMakingContext = normalizeCrucibleContext(makingContext ?? activeObject?.makingContext);
+  const normalizedMakingContext = normalizeCrucibleContext(makingContext);
   if (normalizedMakingContext) document.makingContext = normalizedMakingContext;
   if (backdropBrightness !== undefined) document.backdropBrightness = backdropBrightness;
   return document;

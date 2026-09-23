@@ -47,6 +47,38 @@ assert.throws(() => normalizeCrucibleContext({
   ...standaloneCrucibleContext,
   crucibleId: '   ',
 }), /requires crucibleId/, 'blank crucible identity fails loud');
+for (const malformedId of [7, {}, []]) {
+  assert.throws(() => normalizeCrucibleContext({
+    ...standaloneCrucibleContext,
+    crucibleId: malformedId,
+  }), /crucibleId must be a string/, `retyped crucible identity ${JSON.stringify(malformedId)} fails loud`);
+  assert.throws(() => normalizeCrucibleContext({
+    ...standaloneCrucibleContext,
+    result: { ...standaloneCrucibleContext.result, id: malformedId },
+  }), /result id must be a string/, `retyped cast identity ${JSON.stringify(malformedId)} fails loud`);
+}
+assert.throws(() => normalizeCrucibleContext({
+  ...standaloneCrucibleContext,
+  firingId: { value: 'sf3d-front-35deg' },
+}), /firingId must be a string/, 'retyped optional firing reference fails loud');
+
+const objectOnlyContextDocument = buildSceneDocument({
+  objects: [{ id: 'context-only-object', makingContext: standaloneCrucibleContext }],
+  activeObjectId: 'context-only-object',
+});
+assert.equal('makingContext' in objectOnlyContextDocument, false, 'object context does not become scene context through selection');
+const sceneContext = { ...standaloneCrucibleContext, crucibleId: 'kiln-session' };
+const differentlySelectedDocuments = ['context-object-a', 'context-object-b'].map(activeObjectId => buildSceneDocument({
+  objects: [
+    { id: 'context-object-a', makingContext: standaloneCrucibleContext },
+    { id: 'context-object-b', makingContext: { ...standaloneCrucibleContext, result: { id: 'alternate-cast', kind: 'cast' } } },
+  ],
+  activeObjectId,
+  makingContext: sceneContext,
+}));
+assert.deepEqual(differentlySelectedDocuments[0].makingContext, differentlySelectedDocuments[1].makingContext, 'changing active object does not change independent scene making context');
+assert.equal(differentlySelectedDocuments[1].objects[0].makingContext.result.id, standaloneCrucibleContext.result.id, 'selection leaves first object making identity intact');
+assert.equal(differentlySelectedDocuments[1].objects[1].makingContext.result.id, 'alternate-cast', 'selection leaves second object making identity intact');
 
 const volumePrimitives = {
   schema: 'kaminos.volume-primitives.v0',

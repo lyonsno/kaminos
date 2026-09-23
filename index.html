@@ -3109,6 +3109,7 @@ let sceneImportStatus = null;
 let sceneGroups = [];
 let activeSceneObjectId = null;
 let activeSceneGroupId = null;
+let sceneMakingContext = null;
 let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
@@ -5695,6 +5696,7 @@ function registerSceneObject(object, metadata = {}) {
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
+  if (!sceneMakingContext && record.makingContext) sceneMakingContext = record.makingContext;
   if (metadata.groupLabel) {
     createSceneGroupForObjects([id], metadata.groupLabel, {
       source: metadata.groupSource ?? metadata.source,
@@ -9298,6 +9300,7 @@ function clearScene() {
   sceneGroups = [];
   activeSceneObjectId = null;
   activeSceneGroupId = null;
+  sceneMakingContext = null;
   currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
@@ -21974,7 +21977,7 @@ function buildSceneData() {
     groups: serializeSceneGroups(),
     activeObjectId: activeSceneObjectId,
     activeGroupId: activeSceneGroupId,
-    makingContext: activeObject?.makingContext ?? null,
+    makingContext: sceneMakingContext,
     provenance,
     camera: {
       position: camera.position.toArray(),
@@ -22180,6 +22183,7 @@ async function loadSceneFile(file) {
   } else {
     clearScene();
   }
+  sceneMakingContext = restorePlan.makingContext ?? null;
 
   setVolumePrimitivesState(restorePlan.volumePrimitives);
   if (hasVolumePrimitiveScene) {

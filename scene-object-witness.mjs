@@ -279,6 +279,80 @@ async function runMeshAssetLinkScenario(ws) {
             throw new Error('reopened scene did not complete and replace the unsaved cast edit with its retained state: ' + JSON.stringify({ restoredInfo, staleX, restored }));
           }
           contextRoundtrip = { savedFile, crucibleId, editedX, makingContext: restored.makingContext };
+          const alternateId = object.id + '-alternate';
+          const sceneContextId = crucibleId + '-session';
+          const multiSceneFile = 'crucible-selection-' + Date.now() + '.kaminos.json';
+          let multiSavedFile = null;
+          try {
+            const multiScene = {
+              ...savedScene,
+              makingContext: { ...savedScene.makingContext, crucibleId: sceneContextId },
+              objects: [
+                savedObject,
+                {
+                  ...savedObject,
+                  id: alternateId,
+                  label: 'Alternate kiln cast',
+                  makingContext: {
+                    ...savedObject.makingContext,
+                    result: { id: 'alternate-kiln-cast', kind: 'cast', label: 'Alternate kiln cast' },
+                  },
+                },
+              ],
+              activeObjectId: object.id,
+            };
+            const multiFile = new File([JSON.stringify(multiScene)], multiSceneFile, { type: 'application/json' });
+            const multiTransfer = new DataTransfer();
+            multiTransfer.items.add(multiFile);
+            input.files = multiTransfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            for (let i = 0; i < 160; i++) {
+              const rows = window.kaminosSceneObjectDebugState?.() || [];
+              const info = document.getElementById('info-bar')?.textContent?.trim() || '';
+              if (info === 'Scene loaded: 2 objects' && rows.some(item => item.id === alternateId)) break;
+              await wait(125);
+            }
+            const multiRows = window.kaminosSceneObjectDebugState?.() || [];
+            if (!multiRows.some(item => item.id === alternateId)) {
+              throw new Error('two-object Crucible scene did not load: ' + JSON.stringify(multiRows));
+            }
+            window.selectSceneObject(alternateId);
+            await wait(1100);
+            const beforeMultiSave = new Set(await listScenes());
+            if (!await window.saveSceneAs()) throw new Error('two-object Crucible scene save-as did not report success');
+            for (let i = 0; i < 120; i++) {
+              const created = (await listScenes()).filter(name => !beforeMultiSave.has(name));
+              if (created.length === 1) {
+                multiSavedFile = created[0];
+                break;
+              }
+              if (created.length > 1) throw new Error('two-object save created multiple files: ' + JSON.stringify(created));
+              await wait(125);
+            }
+            if (!multiSavedFile) throw new Error('two-object Crucible save did not create a scene file');
+            const multiResponse = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(multiSavedFile));
+            const multiSaved = await multiResponse.json();
+            const savedRows = multiSaved.objects || [];
+            if (!multiResponse.ok || multiSaved.error) throw new Error('two-object saved scene could not be read: ' + (multiSaved.error || multiResponse.status));
+            if (
+              multiSaved.makingContext?.crucibleId !== sceneContextId
+              || savedRows.find(item => item.id === object.id)?.makingContext?.result?.id !== savedObject.makingContext.result.id
+              || savedRows.find(item => item.id === alternateId)?.makingContext?.result?.id !== 'alternate-kiln-cast'
+            ) {
+              throw new Error('selection changed scene or object making identity: ' + JSON.stringify({ makingContext: multiSaved.makingContext, objects: savedRows.map(item => ({ id: item.id, makingContext: item.makingContext })) }));
+            }
+            contextRoundtrip.multiObjectSelection = {
+              sceneCrucibleId: multiSaved.makingContext.crucibleId,
+              selectedObjectId: multiSaved.activeObjectId,
+              objectResultIds: savedRows.map(item => [item.id, item.makingContext?.result?.id]),
+            };
+          } finally {
+            if (multiSavedFile) {
+              const cleanupResponse = await fetch('/api/delete-scene?name=' + encodeURIComponent(multiSavedFile));
+              const cleanup = await cleanupResponse.json();
+              if (!cleanupResponse.ok || cleanup.deleted !== multiSavedFile) throw new Error('two-object witness scene cleanup failed: ' + JSON.stringify(cleanup));
+            }
+          }
         } finally {
           if (savedFile) {
             const cleanupResponse = await fetch('/api/delete-scene?name=' + encodeURIComponent(savedFile));

@@ -12,6 +12,11 @@ assert.match(index, /let sceneObjects\s*=\s*\[\]/, 'workbench keeps an explicit 
 assert.match(index, /let sceneGroups\s*=\s*\[\]/, 'workbench keeps an explicit authored scene group registry');
 assert.match(index, /let activeSceneGroupId\s*=\s*null/, 'workbench tracks active group selection separately from active object selection');
 assert.match(index, /let activeSceneObjectId\s*=\s*null/, 'workbench tracks the active object by stable id');
+assert.match(index, /let sceneMakingContext\s*=\s*null/, 'workbench owns scene making context independently of object selection');
+assert.match(index, /makingContext:\s*sceneMakingContext/, 'scene save serializes independent scene making context');
+assert.match(index, /if \(!sceneMakingContext && record\.makingContext\) sceneMakingContext = record\.makingContext/, 'first contextual cast can seed a new making session');
+assert.match(index, /sceneMakingContext = restorePlan\.makingContext \?\? null/, 'scene load restores document context independently of selected object');
+assert.doesNotMatch(persistence, /makingContext\s*\?\?\s*activeObject\?\.makingContext/, 'persistence does not derive scene identity from object selection');
 assert.match(index, /function registerSceneObject\(/, 'load paths register authored objects instead of only replacing currentMesh');
 assert.match(index, /function serializeSceneObject\(/, 'scene save serializes each object independently');
 assert.match(index, /function loadSceneObjects\(/, 'scene load restores multiple objects from one scene file');
