@@ -440,6 +440,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .reaction-front-atlas-state { color: #71848a; font: 9px 'SF Mono', monospace; margin: 5px 0 0; min-height: 13px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
+#viewport.sam-flame-composition-active #kaminos-volume-canvas.active { opacity: 0; pointer-events: none; }
+#viewport.sam-flame-composition-active .kaminos-main-renderer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 4; }
 
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
@@ -5735,11 +5737,17 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
   const overlay = target.children.find(child => child.name === 'sam-mask-live-flame-overlay');
   if (!overlay) throw new Error('SAM flame overlay is missing from the source image plane');
   const canvas = renderer.domElement;
+  const presentationLayer = volumeBridge?.debugState?.().presentationLayer;
+  if (!presentationLayer?.enabled || !presentationLayer.sceneCanvasVisible
+    || presentationLayer.sceneCanvasZIndex <= presentationLayer.volumeCanvasZIndex
+    || presentationLayer.sceneCanvasOpacity <= 0 || presentationLayer.volumeCanvasOpacity !== 0) {
+    throw new Error('SAM flame pixel witness is not reading the visible composition layer');
+  }
   const buffer = document.createElement('canvas');
   buffer.width = canvas.width; buffer.height = canvas.height;
   const context = buffer.getContext('2d', { willReadFrequently: true });
   const sample = async () => {
-    await renderer.render(scene, camera);
+    renderPipeline.render();
     context.drawImage(canvas, 0, 0);
     target.updateWorldMatrix(true, false);
     camera.updateMatrixWorld(true);
@@ -5759,7 +5767,7 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     const source = await sample();
     overlay.visible = wasVisible;
     const composed = await sample();
-    return { authority: 'three-renderer-canvas-readback', source, composed };
+    return { authority: 'kaminos-main-render-pipeline-canvas-readback', source, composed };
   } finally {
     overlay.visible = wasVisible;
     window._kaminosDirty?.();
@@ -8731,6 +8739,10 @@ window.removeSceneObject = function(id) {
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
   const [entry] = sceneObjects.splice(index, 1);
+  if (entry.object === samFlameImagePlane) {
+    samFlameImagePlane = null;
+    volumeBridge?.setCompositionPresentation(false);
+  }
   if (hybridSplatOverlayState.objectId === entry.id) {
     stopHybridSplatOverlay({ silent: true });
   }
@@ -8931,9 +8943,10 @@ async function ensureSamImageTools() {
           setInfo(`SAM live flame composition failed: ${error?.message || error}`);
           throw error;
         }
-        imagePlane.userData.kaminosSceneObject.image.flameComposition.status = 'live';
         if (previous?.id) window.removeSceneObject(previous.id);
         samFlameImagePlane = imagePlane;
+        volumeBridge.setCompositionPresentation(true);
+        imagePlane.userData.kaminosSceneObject.image.flameComposition.status = volumePrototype.debugState().active ? 'active' : 'inactive';
         setActiveTab('assets');
         setInfo('Live flame composited through the selected SAM 2D mask');
         window._kaminosDirty?.();
@@ -8989,6 +9002,7 @@ async function initScene() {
     samHostContext = { adapter, device, inferenceSession };
   }
   renderer = new THREE.WebGPURenderer({ antialias: true, ...(samHostContext ? { device: samHostContext.device } : {}) });
+  renderer.domElement.classList.add('kaminos-main-renderer-canvas');
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -18274,6 +18288,15 @@ function createVolumeMainRendererBridge() {
 
   const maskedOverlays = new Set();
   const direction = new THREE.Vector3();
+  function canvasLayerState(canvas) {
+    if (!canvas) return { visible: false, zIndex: 0, opacity: 0 };
+    const style = getComputedStyle(canvas);
+    const rect = canvas.getBoundingClientRect();
+    const opacity = Number.parseFloat(style.opacity) || 0;
+    return { visible: canvas.isConnected && style.display !== 'none' && style.visibility !== 'hidden'
+        && opacity > 0 && rect.width > 0 && rect.height > 0,
+      zIndex: Number.parseInt(style.zIndex, 10) || 0, opacity };
+  }
   function removeMaskOverlay(record) {
     record.target.remove(record.mesh);
     record.material.map = null;
@@ -18341,12 +18364,23 @@ function createVolumeMainRendererBridge() {
       target.updateMatrixWorld(true);
     },
     removeMaskOverlaysForTarget(target) { clearMaskOverlays(target); },
+    setCompositionPresentation(active) {
+      document.getElementById('viewport')?.classList.toggle('sam-flame-composition-active', !!active);
+      window._kaminosDirty?.();
+    },
     clearMaskOverlays() { clearMaskOverlays(); },
     update() {
       const state = volumePrototype.debugState();
       const active = !!state.active;
       mesh.visible = active && maskedOverlays.size === 0;
-      if (!active) return false;
+      if (!active) {
+        for (const record of maskedOverlays) {
+          record.mesh.visible = false;
+          const composition = sceneObjectMetadataFor(record.target)?.image?.flameComposition;
+          if (composition) composition.status = 'inactive';
+        }
+        return false;
+      }
       sourceTexture.needsUpdate = true;
       const fireCanvas = sourceTexture.image;
       for (const record of maskedOverlays) {
@@ -18355,6 +18389,8 @@ function createVolumeMainRendererBridge() {
         record.maskTexture.repeat.set(fit.scaleX, fit.scaleY);
         record.maskTexture.offset.set(fit.offsetX, fit.offsetY);
         record.mesh.visible = true;
+        const composition = sceneObjectMetadataFor(record.target)?.image?.flameComposition;
+        if (composition) composition.status = 'active';
       }
       const distance = Math.max(0.2, (camera.near || 0.1) * 2.5);
       camera.getWorldDirection(direction);
@@ -18367,6 +18403,9 @@ function createVolumeMainRendererBridge() {
     debugState() {
       const overlay = maskedOverlays.values().next().value;
       const provenance = overlay?.mesh.userData.kaminosSamFlameComposition || null;
+      const presentationActive = document.getElementById('viewport')?.classList.contains('sam-flame-composition-active') === true;
+      const sceneCanvas = canvasLayerState(renderer?.domElement);
+      const volumeCanvas = canvasLayerState(volumePrototype?.canvasElement?.());
       return {
         identity: 'volume-main-renderer-bridge-v0',
         visible: mesh.visible,
@@ -18375,6 +18414,10 @@ function createVolumeMainRendererBridge() {
         renderOrder: mesh.renderOrder,
         composition: mesh.userData.kaminosVolumeBridge.composition,
         presentation: maskedOverlays.size ? 'source-image-mask-overlay' : 'camera-facing-plane',
+        presentationLayer: { enabled: presentationActive, sceneCanvasVisible: sceneCanvas.visible,
+          sceneCanvasZIndex: sceneCanvas.zIndex, sceneCanvasOpacity: sceneCanvas.opacity,
+          volumeCanvasVisible: volumeCanvas.visible, volumeCanvasZIndex: volumeCanvas.zIndex,
+          volumeCanvasOpacity: volumeCanvas.opacity },
         maskOverlayCount: maskedOverlays.size,
         maskOverlay: overlay ? { visible: overlay.mesh.visible, method: provenance.method,
           invocationId: provenance.invocationId, instanceIndices: provenance.instanceIndices,

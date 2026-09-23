@@ -4,9 +4,17 @@ import { readFileSync } from 'node:fs';
 const hostSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const toolsSource = readFileSync(new URL('../sam-image-tools.js', import.meta.url), 'utf8');
 const overlayMethod = hostSource.match(/addMaskOverlay\(target, proposal[\s\S]*?removeMaskOverlaysForTarget\(target\)/)?.[0] || '';
+const bridgeSource = hostSource.match(/function createVolumeMainRendererBridge\(\)[\s\S]*?async function initKaminosVolumeRoute\(\)/)?.[0] || '';
 assert.match(toolsSource, /sourceImageElement:\s*image/, 'mask proposal must carry the exact decoded image whose bytes were hashed');
 assert.match(hostSource, /showImagePlane\(proposal\.sourceImage\.source,\s*\{\s*decodedImage:\s*proposal\.sourceImageElement/, 'flame plane must render the already hashed image instead of re-fetching its URL');
 assert.match(hostSource, /options\.decodedImage\s*\?\s*new THREE\.Texture\(options\.decodedImage\)/, 'image-plane texture creation must support the verified decode');
+assert.match(hostSource, /#viewport\.sam-flame-composition-active #kaminos-volume-canvas\.active[^\n]*opacity:\s*0/, 'composition must keep volume compute active without covering the visible image plane');
+assert.match(hostSource, /#viewport\.sam-flame-composition-active \.kaminos-main-renderer-canvas[^\n]*z-index:\s*4/, 'the actual image-plane render canvas must be above the native volume canvas');
+assert.match(hostSource, /renderer\.domElement\.classList\.add\('kaminos-main-renderer-canvas'\)/, 'the presentation canvas needs an explicit composition-layer identity');
+assert.match(hostSource, /renderPipeline\.render\(\);\s*context\.drawImage\(canvas,\s*0,\s*0\)/, 'pixel evidence must sample the normal presented render pipeline');
+assert.match(bridgeSource, /if \(!active\) \{[\s\S]*?record\.mesh\.visible = false[\s\S]*?composition\.status = 'inactive'/, 'inactive or failed volume rendering must hide the stale matte and status');
+assert.match(bridgeSource, /setCompositionPresentation\(active\)/, 'composition presentation layering must have an owned lifecycle control');
+assert.match(hostSource, /entry\.object === samFlameImagePlane[\s\S]*?setCompositionPresentation\(false\)/, 'removing the composed source plane must restore normal canvas presentation');
 assert.ok(overlayMethod && !overlayMethod.includes('clearMaskOverlays()'),
   'staging a replacement overlay must preserve the previous composition until commit');
 

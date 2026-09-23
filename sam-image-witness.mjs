@@ -31,16 +31,36 @@ export function validateSamConsumerOutput(output, { prompt, empty, previousId, c
 }
 
 export async function waitForSamFlameComposition(page, checked = promise => promise, timeoutMs = 120_000) {
+  const startedAt = Date.now();
   try {
     await checked(page.waitForFunction(() => {
       const bridge = window.__kaminosVolumeMainRendererBridge?.debugState?.();
       const volume = window.__kaminosVolumePrototype?.debugState?.();
+      const layer = bridge?.presentationLayer;
       return bridge?.maskOverlay?.visible === true && bridge.maskOverlayCount === 1
         && volume?.active === true && volume.backend?.startsWith('WebGPU:')
-        && volume.frameCount > 1 && volume.simStepCount > 0
+        && layer?.enabled === true && layer.sceneCanvasVisible === true && layer.sceneCanvasOpacity > 0
+        && layer.sceneCanvasZIndex > layer.volumeCanvasZIndex && layer.volumeCanvasVisible === false
+        && layer.volumeCanvasOpacity === 0
         && document.querySelector('.tab.active')?.dataset.tab === 'assets'
         && document.getElementById('sam-image-viewport')?.hidden === true;
     }, null, { timeout: timeoutMs }));
+    const before = await checked(page.evaluate(() => {
+      const state = window.__kaminosVolumePrototype.debugState();
+      return { active: state.active, frameCount: state.frameCount, simStepCount: state.simStepCount,
+        observedAtMs: performance.now() };
+    }));
+    await checked(page.waitForFunction(previous => {
+      const state = window.__kaminosVolumePrototype?.debugState?.();
+      return state?.active === true && state.frameCount > previous.frameCount
+        && state.simStepCount > previous.simStepCount;
+    }, before, { timeout: Math.max(1, timeoutMs - (Date.now() - startedAt)) }));
+    const after = await checked(page.evaluate(() => {
+      const state = window.__kaminosVolumePrototype.debugState();
+      return { active: state.active, frameCount: state.frameCount, simStepCount: state.simStepCount,
+        observedAtMs: performance.now() };
+    }));
+    return { before, after, observedMs: after.observedAtMs - before.observedAtMs };
   } catch (error) {
     let compositionDiagnostic;
     try {
@@ -451,7 +471,8 @@ async function main() {
       report.failurePhase = 'flame-composition'; saveReport();
       const compositionWaitStartedAt = Date.now();
       await checked(page.locator('#sam-image-flame').click());
-      try { await waitForSamFlameComposition(page, checked); }
+      let advanceEvidence;
+      try { advanceEvidence = await waitForSamFlameComposition(page, checked); }
       catch (error) {
         report.compositionDiagnostic = { waitMs: Date.now() - compositionWaitStartedAt,
           state: error.compositionDiagnostic || null };
@@ -463,7 +484,8 @@ async function main() {
         volume: window.__kaminosVolumePrototype.debugState(),
         selectedIndices: window.kaminosSamImageTools.selectedIndices(),
         presentation: { activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
-          samImageViewportHidden: document.getElementById('sam-image-viewport')?.hidden === true },
+          samImageViewportHidden: document.getElementById('sam-image-viewport')?.hidden === true,
+          compositionLayer: window.__kaminosVolumeMainRendererBridge.debugState().presentationLayer },
         sceneObject: window.kaminosSceneObjectDebugState().find(row =>
           row.image?.maskProvenance?.invocationId === window.kaminosSamImageTools.output().invocationId),
       }));
@@ -516,7 +538,7 @@ async function main() {
       const composition = validateSamFlameComposition({ output, bridge: observed.bridge,
         sceneObject: observed.sceneObject, sourceSha256: report.inputs.image.sha256,
         expectedPrompt: prompt, presentation: observed.presentation, selectedIndices: observed.selectedIndices,
-        volume: observed.volume, pixelEvidence });
+        volume: observed.volume, advanceEvidence, pixelEvidence });
       const screenshotPath = join(out, 'flame-composition.png');
       await checked(page.screenshot({ path: screenshotPath, fullPage: true }));
       report.flameComposition = { ...composition, selectedScore: selected.score,

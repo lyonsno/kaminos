@@ -28,8 +28,21 @@ export function validateSamConsumerInteraction(evidence, invocationId) {
     authority: 'input-to-same-device-submission-liveness; cadence-is-measured-not-a-smoothness-verdict' };
 }
 
+export function validateSamFlameAdvance(before, after, observedMs) {
+  check(before?.active === true && after?.active === true, 'flame stopped during the observation interval');
+  check(Number.isFinite(before.frameCount) && Number.isFinite(after.frameCount)
+    && after.frameCount > before.frameCount, 'flame frame counter did not advance during the observation interval');
+  check(Number.isFinite(before.simStepCount) && Number.isFinite(after.simStepCount)
+    && after.simStepCount > before.simStepCount, 'flame simulation counter did not advance during the observation interval');
+  check(Number.isFinite(observedMs) && observedMs > 0, 'flame advance observation interval is invalid');
+  return { beforeFrameCount: before.frameCount, afterFrameCount: after.frameCount,
+    frameDelta: after.frameCount - before.frameCount,
+    beforeSimStepCount: before.simStepCount, afterSimStepCount: after.simStepCount,
+    simStepDelta: after.simStepCount - before.simStepCount, observedMs };
+}
+
 export function validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256, expectedPrompt, presentation,
-  selectedIndices, volume, pixelEvidence }) {
+  selectedIndices, volume, advanceEvidence, pixelEvidence }) {
   check(output?.outputAuthority === 'actual-webgpu-readback', 'mask is not actual browser WebGPU output');
   check(output?.verificationState === 'not-attached', 'mask verification authority was overstated');
   check(output?.effectiveRouteId === 'sam3.detr-encoder.phase-program.webgpu-local.v0', 'unexpected SAM route');
@@ -40,10 +53,11 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
   check(typeof output?.invocationId === 'string' && output.invocationId.length > 0, 'missing SAM invocation identity');
   check(Array.isArray(output?.instances) && output.instances.length > 0, 'composition has no selected SAM candidates');
   check(Array.isArray(selectedIndices) && selectedIndices.length > 0, 'composition has no selected picker instance');
-  check(volume?.active === true && typeof volume.backend === 'string' && volume.backend.startsWith('WebGPU:')
-    && Number.isFinite(volume.frameCount) && volume.frameCount > 1
-    && Number.isFinite(volume.simStepCount) && volume.simStepCount > 0,
-  'live flame is not active and advancing');
+  check(volume?.active === true && typeof volume.backend === 'string' && volume.backend.startsWith('WebGPU:'),
+    'live flame is not active on WebGPU');
+  const advance = validateSamFlameAdvance(advanceEvidence?.before, advanceEvidence?.after, advanceEvidence?.observedMs);
+  check(advance.afterFrameCount === volume.frameCount && advance.afterSimStepCount === volume.simStepCount,
+    'flame advance witness does not end at the captured live volume state');
   check(bridge?.presentation === 'source-image-mask-overlay' && bridge.maskOverlayCount === 1,
     'live renderer did not select the source-image mask presentation');
   const overlay = bridge.maskOverlay;
@@ -70,9 +84,14 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
   'scene provenance does not match the selected instance');
   check(Array.isArray(provenance?.dimensions) && provenance.dimensions[0] === sceneObject.image.width
     && provenance.dimensions[1] === sceneObject.image.height, 'mask dimensions do not match the source image plane');
-  check(composition?.method === '2d-image-space-mask' && composition.status === 'live' && composition.fireSimulationModified === false
+  check(composition?.method === '2d-image-space-mask' && composition.status === 'active' && composition.fireSimulationModified === false
     && composition.persistence === 'live-only', 'scene metadata overstates the composition');
-  check(pixelEvidence?.authority === 'three-renderer-canvas-readback', 'final scene pixels were not read from the Three.js renderer');
+  const layer = presentation?.compositionLayer;
+  check(layer?.enabled === true && layer.sceneCanvasVisible === true && layer.sceneCanvasOpacity > 0
+    && layer.sceneCanvasZIndex > layer.volumeCanvasZIndex && layer.volumeCanvasVisible === false
+    && layer.volumeCanvasOpacity === 0, 'live flame composition is not visibly layered in the scene renderer');
+  check(pixelEvidence?.authority === 'kaminos-main-render-pipeline-canvas-readback',
+    'final scene pixels were not read from the visible main render pipeline');
   const pixelDistance = (a, b) => {
     check(Array.isArray(a) && a.length === 4 && a.every(Number.isFinite)
       && Array.isArray(b) && b.length === 4 && b.every(Number.isFinite), 'pixel evidence is incomplete');
@@ -88,7 +107,7 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
     presentation, sourceSha256,
     dimensions: provenance.dimensions, instanceIndices: overlay.instanceIndices, method: composition.method,
     outputAuthority: output.outputAuthority, verificationState: output.verificationState,
-    fireSimulationModified: false, persistence: 'live-only' };
+    fireSimulationModified: false, persistence: 'live-only', advance };
 }
 
 export function validateSamConsumerExport(exported, { kind, width, height, mask, sourcePixels, libraryEntry }) {
