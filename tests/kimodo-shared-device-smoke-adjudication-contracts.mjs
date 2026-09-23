@@ -98,7 +98,9 @@ function scheduledRun({ generationId = 9, observedBoundaries = null, diagnosticG
     requestId: `frame-${index + 1}`,
     requestSequence: index + 1,
     status: 'completed',
-    settledAtMs: 1000 + index * 120,
+    requestedAtMs: 998 + index * 120,
+    startedAtMs: 999 + index * 120,
+    settledAtMs: 1000 + index * 120 + 0.1,
     submissionCount: 1,
     submissions: [{
       submissionId: `frame-${index + 1}:submission:1`,
@@ -187,6 +189,30 @@ assert.equal(
   64,
   'single-layer terminal acceptance requires all sixteen layer duties in each of four passes',
 );
+{
+  const run = scheduledRun();
+  const finalReceipt = run.foregroundReceipts.at(-1);
+  const impossibleReceipt = { ...finalReceipt, startedAtMs: finalReceipt.settledAtMs + 1 };
+  const samples = [...run.samples];
+  samples[1] = {
+    ...samples[1],
+    foreground: { ...samples[1].foreground, lastReceipt: impossibleReceipt },
+  };
+  const impossibleRun = {
+    ...run,
+    foregroundReceipts: run.foregroundReceipts.map(row => row.requestId === finalReceipt.requestId ? impossibleReceipt : row),
+    foregroundRunReport: {
+      ...run.foregroundRunReport,
+      receipts: run.foregroundRunReport.receipts.map(row => row.requestId === finalReceipt.requestId ? impossibleReceipt : row),
+    },
+    samples,
+  };
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal(impossibleRun), 'fence-light'),
+    /chronolog|timestamp|settlement|start/i,
+    'a receipt cannot claim service started after its own settlement, even when sample and both ledgers agree',
+  );
+}
 {
   const run = scheduledRun({ scheduleMode: 'single-layer' });
   const samples = [...run.samples];

@@ -161,13 +161,17 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
       if (!receipt.requestId || captureByRequest.has(receipt.requestId)) {
         throw new Error('Generation contains a duplicate current-run foreground frame request');
       }
+      const requestedAtMs = receipt.requestedAtMs;
+      const startedAtMs = receipt.startedAtMs;
       const atMs = receipt.result?.atMs;
       const settledAtMs = receipt.settledAtMs;
       const frameBefore = receipt.metadata?.frameCountBefore;
       const simStepBefore = receipt.metadata?.simStepCountBefore;
       const frameAfter = receipt.result?.frameCount;
       const submissions = Array.isArray(receipt.submissions) ? receipt.submissions : null;
-      if (!Number.isFinite(atMs) || !Number.isSafeInteger(frameBefore)
+      if (!Number.isFinite(requestedAtMs) || !Number.isFinite(startedAtMs)
+        || startedAtMs < requestedAtMs
+        || !Number.isFinite(atMs) || atMs < startedAtMs
         || !Number.isFinite(settledAtMs) || settledAtMs < atMs
         || !Number.isSafeInteger(simStepBefore) || !Number.isSafeInteger(frameAfter)
         || !Number.isSafeInteger(receipt.result?.simStepCount)
@@ -175,7 +179,7 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
         || receipt.result.simStepCount < simStepBefore
         || !submissions
         || submissions.filter(row => row?.submissionStatus === 'queue-submit-returned').length !== receipt.submissionCount) {
-        throw new Error('Generation foreground frame receipt lacks exact settlement, frame-count, non-regressing simulation, or submission-row evidence');
+        throw new Error('Generation foreground frame receipt lacks a chronological request/start/result/settlement, frame-count, non-regressing simulation, or submission-row contract');
       }
       captureByRequest.set(receipt.requestId, receiptSignatureForSample(receipt));
     }
