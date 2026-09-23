@@ -233,6 +233,14 @@ assert.ok(Math.abs(movedEmitter.receipt.compilerReceipt.descriptor.axis[0] + 1) 
   'rotation changes injection direction');
 assert.ok(Math.abs(movedEmitter.receipt.compilerReceipt.descriptor.extent - 0.18) < 1e-12,
   'uniform scale changes the source aperture');
+for (const family of ['wick', 'nozzle']) {
+  const horizontal = apply(family, makePrototype(), { emitterPose: {
+    position: [0, -0.76, 0], rotation: [0, 0, Math.PI / 2], scale: [1, 1, 1],
+  } });
+  const { axis, supportAxis } = horizontal.receipt.compilerReceipt.descriptor;
+  assert.ok(Math.abs(axis.reduce((sum, value, index) => sum + value * supportAxis[index], 0)) < 1e-12,
+    `${family} aim must keep its source basis orthogonal after a quarter-turn`);
+}
 assert.throws(() => apply('ring', makePrototype(), { emitterPose: {
   position: [0, -0.76, 0], rotation: [0, 0, 0], scale: [1, 2, 1],
 } }), /uniform/i, 'a circular analytic source cannot silently accept anisotropic scale');

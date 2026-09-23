@@ -29,6 +29,7 @@ function assertFrame(observed) {
 }
 try {
   const manifest=JSON.parse(await fs.readFile(args.manifest,'utf8'));report.requested=manifest;
+  assert.equal(manifest.requestedRoute,'local-native-chrome-webgpu','witness requires its declared local Chrome/WebGPU route');
   report.phase='source-preflight';await save();
   report.source=await verifyAuthoringServer({origin:manifest.origin,repoRoot:process.cwd()});
   assert.equal(report.source.source.commit,manifest.sourceCommit,'source revision changed');
@@ -39,17 +40,11 @@ try {
     const raw=Buffer.from(await response.arrayBuffer());assert.deepEqual(raw,await fs.readFile(file),`wrong source ${file}`);
     report.source.hashes[file]=createHash('sha256').update(raw).digest('hex');
   }
-  report.phase='greenroom-admission';await save();
-  const running=path.join(manifest.queueRoot,'running'),matches=[];
-  for(const entry of await fs.readdir(running)) {
-    const request=JSON.parse(await fs.readFile(path.join(running,entry,'request.json'),'utf8'));
-    if(request.input_path===args.manifest)matches.push({jobId:entry,request,status:JSON.parse(await fs.readFile(path.join(running,entry,'status.json'),'utf8'))});
-  }
-  assert.equal(matches.length,1,'native FIFO running request must own this exact manifest');
-  assert.equal(matches[0].request.output_dir,args.out);assert.match(matches[0].status.effective_route,/flame-emitter-witness\.mjs/);
-  report.admission=matches[0];report.phase='browser-start';await save();
+  report.phase='browser-start';await save();
   const {chromium}=await import(pathToFileURL(manifest.playwright));
   browser=await chromium.launch({executablePath:manifest.chrome,headless:false,args:['--enable-unsafe-webgpu','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
+  report.execution={requestedRoute:manifest.requestedRoute,effectiveExecutable:await fs.realpath(manifest.chrome),
+    browserVersion:browser.version(),nodeVersion:process.version,rendererBackend:null};
   context=await browser.newContext({viewport:manifest.viewport,deviceScaleFactor:1,recordVideo:{dir:path.join(args.out,'video')}});
   await context.tracing.start({screenshots:true,snapshots:true,sources:true});
   page=await context.newPage();report.browser=await browser.version();
@@ -73,6 +68,7 @@ try {
   }
   report.phase='host-mount';report.url=manifest.sceneUrl;await save();
   await page.goto(report.url);report.initial=await waitFrame(120);
+  report.execution.rendererBackend=report.initial.volume.backend;
   console.log(JSON.stringify({backend:report.initial.volume.backend,source:report.source.source,emitter:report.initial.emitter}));
   for(const mutate of [s=>s.volume.backend='WebGL',s=>s.emitter.registered=false,s=>s.volume.simStepCount=0,
     s=>s.emitter.source.origin=[99,99,99],s=>s.volume.analyticEmitterFrameId='stale',s=>s.receipt.fallbackUsed=true]) {

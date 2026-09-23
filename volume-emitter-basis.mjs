@@ -200,6 +200,12 @@ function orthogonalSupportAxis(direction, supportAxis) {
   return normalize(projected, 'supportAxis projected perpendicular to direction');
 }
 
+function fallbackOrthogonalSupportAxis(direction) {
+  const candidates = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    .sort((left, right) => Math.abs(dot(left, direction)) - Math.abs(dot(right, direction)));
+  return orthogonalSupportAxis(direction, candidates[0]);
+}
+
 function normalizeChemistry(value = {}) {
   const chemistry = { ...DEFAULT_CHEMISTRY, ...value };
   return {
@@ -353,6 +359,17 @@ export function compileVolumeEmitterFamily(request = {}) {
       supportAxis = orthogonalSupportAxis(axis, requestedSupportAxis);
       familyRequested = { supportAxis: requestedSupportAxis, length: extent };
     } else {
+      const candidate = request.supportAxis;
+      requestedSupportAxis = Array.isArray(candidate) && candidate.length === 3 && candidate.every(Number.isFinite)
+        ? candidate
+        : [1, 0, 0];
+      try {
+        supportAxis = orthogonalSupportAxis(axis, requestedSupportAxis);
+      } catch {
+        // Wick/nozzle shape geometry does not consume this optional side axis.
+        // Still supply the core with a valid basis for orthogonal aims.
+        supportAxis = fallbackOrthogonalSupportAxis(axis);
+      }
       familyRequested = { length: extent };
     }
   }
