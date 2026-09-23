@@ -433,6 +433,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .skinned-pose-actions { display: flex; gap: 6px; }
 .skinned-pose-actions .btn { margin: 0; flex: 1; }
 .skinned-pose-status { min-height: 24px; color: #8fc7d6; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
+#skinned-pose-cast-marker { position: absolute; inset: 0; z-index: 7; pointer-events: none; overflow: hidden; }
+#skinned-pose-cast-marker[hidden] { display: none; }
+#skinned-pose-cast-marker svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+#skinned-pose-cast-marker-line { stroke: #8fe4cb; stroke-width: 2; stroke-linecap: round; filter: drop-shadow(0 1px 2px #000); }
+#skinned-pose-cast-marker-dot { fill: #8fe4cb; stroke: #0d201b; stroke-width: 2; }
+#skinned-pose-cast-marker-label { position: absolute; padding: 5px 8px; border: 1px solid #6dc9ad; border-radius: 5px; background: rgba(7,24,20,0.94); box-shadow: 0 2px 8px rgba(0,0,0,0.65); color: #d5fff1; font: 700 10px 'SF Mono', monospace; letter-spacing: 0.03em; white-space: nowrap; }
 
 /* Volume prototype */
 .route-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 7px; border: 1px solid #28414a; border-radius: 5px; color: #8fc7d6; background: #102025; font: 10px 'SF Mono', monospace; }
@@ -2502,6 +2508,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <div id="viewport">
   <div id="navigation-hint" aria-live="polite">Two-finger orbit · Shift pan · Cmd/Ctrl zoom · F frame selected · Home frame all</div>
+  <div id="skinned-pose-cast-marker" hidden aria-hidden="true">
+    <svg aria-hidden="true"><line id="skinned-pose-cast-marker-line" x1="0" y1="0" x2="0" y2="0"></line><circle id="skinned-pose-cast-marker-dot" cx="0" cy="0" r="5"></circle></svg>
+    <span id="skinned-pose-cast-marker-label"></span>
+  </div>
   <div id="sam-image-viewport" hidden>
     <div class="sam-image-viewbar">
       <span id="sam-image-name">Image Masks</span>
@@ -5966,6 +5976,78 @@ window.kaminosSceneObjectBoundsDebugState = function(id) {
 
 const skinnedBoneInitialQuaternions = new WeakMap();
 const skinnedPosePreviewOffsets = new WeakMap();
+let skinnedPoseCastMarkerTarget = null;
+
+function setSkinnedPoseCastMarkerTarget(objectId, mesh, meshIndex) {
+  const marker = document.getElementById('skinned-pose-cast-marker');
+  if (!marker || !mesh || !camera) {
+    skinnedPoseCastMarkerTarget = null;
+    if (marker) marker.hidden = true;
+    return;
+  }
+  mesh.updateWorldMatrix(true, false);
+  const previousBoundingBox = mesh.boundingBox;
+  let bounds;
+  try {
+    mesh.boundingBox = null;
+    mesh.computeBoundingBox();
+    bounds = mesh.boundingBox?.clone().applyMatrix4(mesh.matrixWorld) || null;
+  } finally {
+    mesh.boundingBox = previousBoundingBox;
+  }
+  if (!bounds || bounds.isEmpty()) {
+    skinnedPoseCastMarkerTarget = null;
+    marker.hidden = true;
+    return;
+  }
+  const anchor = bounds.getCenter(new THREE.Vector3());
+  skinnedPoseCastMarkerTarget = { objectId, meshIndex, mesh, meshName: mesh.name || `Skinned cast ${meshIndex + 1}`, anchor };
+  marker.dataset.meshName = skinnedPoseCastMarkerTarget.meshName;
+  updateSkinnedPoseCastMarkerFrame();
+}
+
+function updateSkinnedPoseCastMarkerFrame() {
+  const marker = document.getElementById('skinned-pose-cast-marker');
+  const label = document.getElementById('skinned-pose-cast-marker-label');
+  const line = document.getElementById('skinned-pose-cast-marker-line');
+  const dot = document.getElementById('skinned-pose-cast-marker-dot');
+  const viewport = document.getElementById('viewport');
+  const target = skinnedPoseCastMarkerTarget;
+  const panel = document.getElementById('skinned-pose-panel');
+  if (!marker || !label || !line || !dot || !viewport || !target || panel?.hidden
+      || panel.dataset.objectId !== target.objectId || !camera || !viewport.clientWidth || !viewport.clientHeight) {
+    if (marker) marker.hidden = true;
+    return;
+  }
+  camera.updateMatrixWorld();
+  const projected = target.anchor.clone().project(camera);
+  if (projected.z < -1 || projected.z > 1) {
+    marker.hidden = true;
+    return;
+  }
+  const width = viewport.clientWidth;
+  const height = viewport.clientHeight;
+  const anchorX = THREE.MathUtils.clamp((projected.x + 1) * 0.5 * width, 5, width - 5);
+  const anchorY = THREE.MathUtils.clamp((1 - projected.y) * 0.5 * height, 5, height - 5);
+  const direction = target.meshIndex === 0 ? 1 : -1;
+  const labelX = THREE.MathUtils.clamp(anchorX + direction * 18, 8, width - 8);
+  const labelY = THREE.MathUtils.clamp(anchorY + (target.meshIndex === 0 ? -24 : 24), 18, height - 18);
+  const castLabel = `CAST ${String.fromCharCode(65 + target.meshIndex)} · SELECTED`;
+  label.textContent = castLabel;
+  label.style.left = `${labelX}px`;
+  label.style.top = `${labelY}px`;
+  label.style.transform = target.meshIndex === 0 ? 'translate(0, -50%)' : 'translate(-100%, -50%)';
+  line.setAttribute('x1', String(anchorX));
+  line.setAttribute('y1', String(anchorY));
+  line.setAttribute('x2', String(anchorX + direction * 9));
+  line.setAttribute('y2', String(labelY));
+  dot.setAttribute('cx', String(anchorX));
+  dot.setAttribute('cy', String(anchorY));
+  marker.dataset.anchorX = String(anchorX);
+  marker.dataset.anchorY = String(anchorY);
+  marker.dataset.castLabel = castLabel;
+  marker.hidden = false;
+}
 
 function sceneObjectSkinnedMeshes(id) {
   const record = sceneObjects.find(item => item.id === id);
@@ -6033,8 +6115,8 @@ function ensureSkinnedPosePanelEvents(panel) {
       skinnedPosePreviewOffsets.delete(mesh);
     }
     const status = panel.querySelector('#skinned-pose-status');
-    if (status) status.textContent = 'Both casts reset to their imported poses.';
     updateSkinnedPosePanel(entry);
+    if (status) status.textContent = 'Both casts reset to their imported poses.';
   });
 }
 
@@ -6079,7 +6161,7 @@ function applySkinnedPosePanelInput(panel, axisOverride, degrees) {
     if (range) range.value = String(Math.max(-180, Math.min(180, degrees)));
     const status = panel.querySelector('#skinned-pose-status');
     const signedDegrees = degrees > 0 ? `+${degrees}` : String(degrees);
-    if (status) status.textContent = `Cast ${meshIndex + 1} · ${skinnedPoseBoneLabel(boneName)} · local ${axis.toUpperCase()} ${signedDegrees}° from imported pose`;
+    if (status) status.textContent = `Cast ${String.fromCharCode(65 + meshIndex)} · ${skinnedPoseBoneLabel(boneName)} · local ${axis.toUpperCase()} ${signedDegrees}° from imported pose`;
   } catch (error) {
     const status = panel.querySelector('#skinned-pose-status');
     if (status) status.textContent = `Pose preview failed: ${error.message}`;
@@ -6115,6 +6197,7 @@ function updateSkinnedPosePanel(entry) {
     castSelect.replaceChildren();
     boneSelect.replaceChildren();
     rotation.hidden = true;
+    setSkinnedPoseCastMarkerTarget('', null, 0);
     return;
   }
 
@@ -6166,6 +6249,10 @@ function updateSkinnedPosePanel(entry) {
   if (axis) axis.value = saved.axis;
   if (range) range.value = String(Math.max(-180, Math.min(180, saved.degrees)));
   if (numeric) numeric.value = String(saved.degrees);
+  const status = panel.querySelector('#skinned-pose-status');
+  const signedDegrees = saved.degrees > 0 ? `+${saved.degrees}` : String(saved.degrees);
+  if (status) status.textContent = `Cast ${String.fromCharCode(65 + selectedIndex)} · ${skinnedPoseBoneLabel(selectedBoneName)} · local ${saved.axis.toUpperCase()} ${signedDegrees}° from imported pose`;
+  setSkinnedPoseCastMarkerTarget(entry.id, mesh, selectedIndex);
 }
 
 window.kaminosSkinnedRigDebugState = function(id) {
@@ -9522,6 +9609,7 @@ async function initScene() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    updateSkinnedPoseCastMarkerFrame();
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
     needsRender = true;
@@ -9534,7 +9622,10 @@ async function initScene() {
   const IDLE_THRESHOLD = 3;
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
-  controls.addEventListener('change', markDirty);
+  controls.addEventListener('change', () => {
+    markDirty();
+    updateSkinnedPoseCastMarkerFrame();
+  });
   transformControls.addEventListener('change', () => {
     markDirty();
     if (splatCorrectionTransformTarget()) {

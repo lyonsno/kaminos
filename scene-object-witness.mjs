@@ -389,6 +389,24 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
       selectedCast: cast.value,
       selectedBone: bone.value,
       selectedBoneLabel: document.querySelector('#skinned-pose-selected-bone')?.textContent || '',
+      status: document.querySelector('#skinned-pose-status')?.textContent || '',
+      viewportCue: (() => {
+        const cue = document.querySelector('#skinned-pose-cast-marker');
+        const label = document.querySelector('#skinned-pose-cast-marker-label');
+        const viewport = document.querySelector('#viewport');
+        if (!cue || !label || !viewport) return null;
+        const rect = label.getBoundingClientRect();
+        const viewportRect = viewport.getBoundingClientRect();
+        return {
+          visible: !cue.hidden && getComputedStyle(cue).display !== 'none' && getComputedStyle(cue).visibility !== 'hidden',
+          label: label.textContent.trim(),
+          meshName: cue.dataset.meshName || null,
+          left: rect.left - viewportRect.left,
+          top: rect.top - viewportRect.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      })(),
       degrees: document.querySelector('#skinned-pose-degrees')?.value || '',
       rotationControlCount: document.querySelectorAll('#skinned-pose-rotation [data-skinned-pose-degrees]').length,
     };
@@ -463,6 +481,33 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   })()`);
 
   const boneSelections = [];
+  const castASelected = await selectBoneViaControl(0, 'hindlimb-left-hip');
+  await delay(500);
+  const castASelectionShot = await capturePngScreenshot(ws, siblingPngPath('-cast-a-selection'));
+  const castBSelected = await selectBoneViaControl(1, 'hindlimb-left-hip_1');
+  await delay(500);
+  const castBSelectionShot = await capturePngScreenshot(ws, siblingPngPath('-cast-b-selection'));
+  await delay(500);
+  const castBUnchangedShot = await capturePngScreenshot(ws, siblingPngPath('-cast-b-unchanged'));
+  const unchangedPixels = viewportPixelDelta(castBSelectionShot.path, castBUnchangedShot.path);
+  const castSelectionPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const selectionPoseError = Math.max(...before.meshes.flatMap((mesh, meshIndex) =>
+    Object.entries(mesh.boneQuaternions).map(([name, quaternion]) =>
+      Math.hypot(...quaternion.map((value, axis) => value - castSelectionPose.meshes[meshIndex].boneQuaternions[name][axis])))));
+  const castCuePixels = viewportPixelDelta(castASelectionShot.path, castBSelectionShot.path);
+  const expectedCastMeshes = before.meshes.map(mesh => mesh.name);
+  if (!castASelected.viewportCue?.visible || castASelected.viewportCue.meshName !== expectedCastMeshes[0]
+      || castASelected.viewportCue.label !== 'CAST A · SELECTED'
+      || !castBSelected.viewportCue?.visible || castBSelected.viewportCue.meshName !== expectedCastMeshes[1]
+      || castBSelected.viewportCue.label !== 'CAST B · SELECTED'
+      || castASelected.viewportCue.left === castBSelected.viewportCue.left
+      || selectionPoseError > 0.000001 || castCuePixels.changedPixels < 50 || unchangedPixels.changedPixels !== 0) {
+    throw new Error('cast selection did not move the visible viewport cue to the selected rig: ' + JSON.stringify({ castASelected, castBSelected, selectionPoseError, castCuePixels, unchangedPixels }));
+  }
+  if (!castASelected.status.includes('Cast A · Left hip') || !castASelected.status.includes('local Z 0°')
+      || !castBSelected.status.includes('Cast B · Left hip') || !castBSelected.status.includes('local Z 0°')) {
+    throw new Error('pose status did not track the selected cast and bone: ' + JSON.stringify({ castASelected, castBSelected }));
+  }
   boneSelections.push(await selectBoneViaControl(0, 'hindlimb-right-stifle'));
   if (boneSelections[0].selectedBoneLabel !== 'Right stifle' || boneSelections[0].rotationControlCount !== 1) {
     throw new Error('bone selection did not retarget the rotation controls: ' + JSON.stringify(boneSelections[0]));
@@ -550,20 +595,21 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     throw new Error('visible reset control did not restore both imported poses: ' + JSON.stringify(resetErrors));
   }
   const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-restored-controls'));
-  const identicalControl = viewportPixelDelta(beforeShot.path, beforeShot.path);
-  const posedPixels = viewportPixelDelta(beforeShot.path, posedShot.path);
-  const restoredPixels = viewportPixelDelta(beforeShot.path, restoredShot.path);
-  if (identicalControl.changedPixels !== 0 || posedPixels.changedPixels < 500 || restoredPixels.changedPixels !== 0) {
-    throw new Error('pose controls did not produce visible reversible deformation: ' + JSON.stringify({ identicalControl, posedPixels, restoredPixels }));
-  }
+  const identicalControl = viewportPixelDelta(castBSelectionShot.path, castBSelectionShot.path);
+  const posedPixels = viewportPixelDelta(castBSelectionShot.path, posedShot.path);
+  const restoredPixels = viewportPixelDelta(castBSelectionShot.path, restoredShot.path);
   const status = await evaluate(ws, `document.querySelector('#skinned-pose-status')?.textContent || ''`);
   lastEvidence.meshSkinnedPoseControls = {
     objectId, expectedAssetSha256, loadedSha256, panel, boneSelections, before, beforeShot,
+    castASelected, castASelectionShot, castBSelected, castBSelectionShot, castBUnchangedShot, unchangedPixels, castSelectionPose, selectionPoseError, castCuePixels,
     firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot, firstCastPixels,
     secondAction, axisAction, secondCastNumericPose, fractionalInput, fractionalInputPoseError, outOfRangeInput, emptyNumericInput, invalidInputPoseError,
     bothCastPose, secondHipError, firstPosePreservedError, secondCastPixels, posedShot,
     restored, resetErrors, restoredShot, status, identicalControl, posedPixels, restoredPixels,
   };
+  if (identicalControl.changedPixels !== 0 || posedPixels.changedPixels < 500 || restoredPixels.changedPixels !== 0) {
+    throw new Error('pose controls did not produce visible reversible deformation: ' + JSON.stringify({ identicalControl, unchangedPixels, posedPixels, restoredPixels, castBSelectionShot, restoredShot }));
+  }
 }
 
 const DIRECT_ASSET_LINK_SCENARIOS = {
