@@ -11166,7 +11166,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     timeSeconds: gpuState.stepCount * KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
     basinFillRatio: 0.44,
     activeRatio: 0.34,
-    frameTimeMsEstimate: gpuState.lastFrameCpuMs || fingerFluidBenchLastFrameMs,
+    frameTimeMsEstimate: fingerFluidBenchLastFrameMs,
     solverBackend: gpuState.solver_backend,
     renderBackend: gpuState.render_backend,
     rendererIdentity: gpuState.effectiveRenderer,
@@ -11468,6 +11468,22 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchFinishSolverTimestampCaptureForWitness = () => {
     if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver is unavailable for timestamp capture');
     return fingerFluidBenchSolver.finishSolverGpuTimestampCaptureForWitness();
+  };
+  window.kaminosFingerFluidBenchBeginSolverStageTimestampCaptureForWitness = (querySet, firstQueryIndex, pairCount) => {
+    if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver is unavailable for stage timestamp capture');
+    return fingerFluidBenchSolver.armSolverStageGpuTimestampCaptureForWitness(querySet, firstQueryIndex, pairCount);
+  };
+  window.kaminosFingerFluidBenchFinishSolverStageTimestampCaptureForWitness = () => {
+    if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver is unavailable for stage timestamp capture');
+    return fingerFluidBenchSolver.finishSolverStageGpuTimestampCaptureForWitness();
+  };
+  window.kaminosFingerFluidBenchBeginRendererTimestampCaptureForWitness = (querySet, firstQueryIndex, pairCount) => {
+    if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver is unavailable for renderer timestamp capture');
+    return fingerFluidBenchSolver.armRendererGpuTimestampCaptureForWitness(querySet, firstQueryIndex, pairCount);
+  };
+  window.kaminosFingerFluidBenchFinishRendererTimestampCaptureForWitness = () => {
+    if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver is unavailable for renderer timestamp capture');
+    return fingerFluidBenchSolver.finishRendererGpuTimestampCaptureForWitness();
   };
   window.kaminosFingerFluidBenchSetLiveInletPacket = setFingerFluidBenchLiveInletPacket;
   window.kaminosFingerFluidBenchAnalyticCarrierState = () => ({

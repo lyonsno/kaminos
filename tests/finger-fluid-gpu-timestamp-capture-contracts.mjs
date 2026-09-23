@@ -22,4 +22,18 @@ assert.match(coreSource, /armSolverGpuTimestampCaptureForWitness,\s*finishSolver
   'solver GPU capture is explicit and can be fully disabled after the witness');
 assert.match(benchSource, /kaminosFingerFluidBenchBeginSolverTimestampCaptureForWitness\s*=\s*\(querySet, firstQueryIndex, pairCount\)\s*=>[\s\S]*?armSolverGpuTimestampCaptureForWitness/,
   'bench witness arms the real solver capture API');
+assert.match(coreSource, /KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES[\s\S]*?density_projection[\s\S]*?post_projection_grid_refresh/,
+  'solver pass-stage timing has stable semantic stage names');
+assert.match(coreSource, /pass\.writeTimestamp\(stageCapture\.querySet/,
+  'solver stages are timestamped inside the real compute pass');
+assert.match(coreSource, /encoder\.writeTimestamp\([\s\S]*?rendererTimestampCapture\.querySet/,
+  'direct renderer GPU work is timestamped on its real command encoder');
+assert.match(coreSource, /lastRenderCpuMs: Number\(lastRenderCpuMs\.toFixed\(3\)\)/,
+  'debug state exposes JavaScript renderer submission time separately');
+assert.match(benchSource, /frameTimeMsEstimate: fingerFluidBenchLastFrameMs/,
+  'visible frame CPU estimate reports the complete synchronous bench-frame work');
+assert.match(benchSource, /kaminosFingerFluidBenchBeginSolverStageTimestampCaptureForWitness[\s\S]*?armSolverStageGpuTimestampCaptureForWitness/,
+  'bench witness exposes opt-in stage capture');
+assert.match(benchSource, /kaminosFingerFluidBenchBeginRendererTimestampCaptureForWitness[\s\S]*?armRendererGpuTimestampCaptureForWitness/,
+  'bench witness exposes opt-in renderer capture');
 console.log('finger-fluid GPU timestamp capture contracts passed');

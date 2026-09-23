@@ -5,6 +5,16 @@ export const KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT = 'wgsl-analytic-bo
 export const KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_CONTRACT = 'wgsl-analytic-contact-partial-slip-v0';
 export const KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION = 1.6;
 export const KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT = 'wgsl-per-pass-kinetic-energy-ledger-v0';
+export const KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES = Object.freeze([
+  'predict',
+  'density_projection',
+  'post_projection_grid_refresh',
+  'topology_surface_chemistry',
+  'velocity_vorticity_support',
+  'surface_cohesion',
+  'apply_velocity_interface_contact_compaction',
+  'particle_shift_adaptive',
+]);
 export function createFingerFluidSolverTimestampWrites(querySet, firstQueryIndex) {
   if (!querySet || querySet.type !== 'timestamp' || !Number.isSafeInteger(querySet.count)) {
     throw new TypeError('Finger Fluid solver timestamp capture requires a timestamp query set');
@@ -13749,6 +13759,8 @@ export async function createWebGPUFingerFluidSolver({
   let frameIndex = 0;
   let stepCount = 0;
   let solverGpuTimestampCapture = null;
+  let solverStageGpuTimestampCapture = null;
+  let rendererGpuTimestampCapture = null;
   let liveInletPlanStep = 0;
   let liveInletGeneration = initialLiveInletPublicationState.generation;
   let liveInletReleaseEpochFrame = initialLiveInletPublicationState.releaseEpochFrame;
@@ -13836,6 +13848,7 @@ export async function createWebGPUFingerFluidSolver({
   let lastInterfaceFrequencyFallbackReason = null;
   let lastRendererFallbackReason = null;
   let lastFrameCpuMs = 0;
+  let lastRenderCpuMs = 0;
   let diagnosticsPending = false;
   let diagnosticsRequestCount = 0;
   let diagnosticsCompletionCount = 0;
@@ -14326,6 +14339,75 @@ export async function createWebGPUFingerFluidSolver({
     };
   }
 
+  function armSolverStageGpuTimestampCaptureForWitness(querySet, firstQueryIndex, pairCount) {
+    if (!Number.isSafeInteger(pairCount) || pairCount < 1) {
+      throw new RangeError(`Finger Fluid stage timestamp capture pair count must be a positive integer: ${pairCount}`);
+    }
+    if (solverStageGpuTimestampCapture?.writtenPairs < solverStageGpuTimestampCapture?.pairCount) {
+      throw new Error('Finger Fluid stage timestamp capture is already active');
+    }
+    if (solverGpuTimestampCapture?.writtenPairs < solverGpuTimestampCapture?.pairCount) {
+      throw new Error('Finger Fluid solver timestamp capture is already active');
+    }
+    const queriesPerStep = KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES.length + 3;
+    const requiredQueries = pairCount * queriesPerStep;
+    if (!querySet || querySet.type !== 'timestamp' || !Number.isSafeInteger(querySet.count)) {
+      throw new TypeError('Finger Fluid stage timestamp capture requires a timestamp query set');
+    }
+    if (!Number.isSafeInteger(firstQueryIndex) || firstQueryIndex < 0) {
+      throw new RangeError(`Finger Fluid stage timestamp query index must be a nonnegative integer: ${firstQueryIndex}`);
+    }
+    if (firstQueryIndex + requiredQueries > querySet.count) {
+      throw new RangeError(`Finger Fluid stage timestamp capture requires ${requiredQueries} queries at ${firstQueryIndex}, query set has ${querySet.count}`);
+    }
+    solverStageGpuTimestampCapture = { querySet, firstQueryIndex, pairCount, writtenPairs: 0, queriesPerStep };
+    return {
+      status: 'armed', firstQueryIndex, pairCount, queriesPerStep,
+      stages: [...KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES],
+    };
+  }
+
+  function finishSolverStageGpuTimestampCaptureForWitness() {
+    if (!solverStageGpuTimestampCapture) return { status: 'inactive', requestedPairs: 0, writtenPairs: 0, stages: [] };
+    const capture = solverStageGpuTimestampCapture;
+    solverStageGpuTimestampCapture = null;
+    return {
+      status: capture.writtenPairs === capture.pairCount ? 'complete' : 'incomplete',
+      firstQueryIndex: capture.firstQueryIndex,
+      requestedPairs: capture.pairCount,
+      writtenPairs: capture.writtenPairs,
+      queriesPerStep: capture.queriesPerStep,
+      stages: [...KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES],
+      nextQueryIndex: capture.firstQueryIndex + (capture.writtenPairs * capture.queriesPerStep),
+    };
+  }
+
+  function armRendererGpuTimestampCaptureForWitness(querySet, firstQueryIndex, pairCount) {
+    if (!Number.isSafeInteger(pairCount) || pairCount < 1) {
+      throw new RangeError(`Finger Fluid renderer timestamp capture pair count must be a positive integer: ${pairCount}`);
+    }
+    if (rendererGpuTimestampCapture?.writtenPairs < rendererGpuTimestampCapture?.pairCount) {
+      throw new Error('Finger Fluid renderer timestamp capture is already active');
+    }
+    createFingerFluidSolverTimestampWrites(querySet, firstQueryIndex);
+    createFingerFluidSolverTimestampWrites(querySet, firstQueryIndex + ((pairCount - 1) * 2));
+    rendererGpuTimestampCapture = { querySet, firstQueryIndex, pairCount, writtenPairs: 0 };
+    return { status: 'armed', firstQueryIndex, pairCount };
+  }
+
+  function finishRendererGpuTimestampCaptureForWitness() {
+    if (!rendererGpuTimestampCapture) return { status: 'inactive', requestedPairs: 0, writtenPairs: 0 };
+    const capture = rendererGpuTimestampCapture;
+    rendererGpuTimestampCapture = null;
+    return {
+      status: capture.writtenPairs === capture.pairCount ? 'complete' : 'incomplete',
+      firstQueryIndex: capture.firstQueryIndex,
+      requestedPairs: capture.pairCount,
+      writtenPairs: capture.writtenPairs,
+      nextQueryIndex: capture.firstQueryIndex + (capture.writtenPairs * 2),
+    };
+  }
+
   function step(dt = 1 / 60) {
     if (runtimeLifecycle.stopped) return;
     const startedAt = performance.now();
@@ -14334,13 +14416,23 @@ export async function createWebGPUFingerFluidSolver({
     for (let substep = 0; substep < safeSubsteps; substep += 1) {
       writeSimulationParams(substepDt);
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-simulation-step' });
+      const stageCapture = solverStageGpuTimestampCapture
+        && solverStageGpuTimestampCapture.writtenPairs < solverStageGpuTimestampCapture.pairCount
+        ? solverStageGpuTimestampCapture
+        : null;
+      const stageSampleIndex = stageCapture?.writtenPairs ?? 0;
+      const stageQueryBase = stageCapture
+        ? stageCapture.firstQueryIndex + (stageSampleIndex * stageCapture.queriesPerStep)
+        : null;
       const timestampQueryIndex = solverGpuTimestampCapture
         && solverGpuTimestampCapture.writtenPairs < solverGpuTimestampCapture.pairCount
         ? solverGpuTimestampCapture.firstQueryIndex + (solverGpuTimestampCapture.writtenPairs * 2)
         : null;
       const pass = encoder.beginComputePass({
         label: KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE,
-        ...(timestampQueryIndex === null ? {} : {
+        ...(stageQueryBase !== null ? {
+          timestampWrites: createFingerFluidSolverTimestampWrites(stageCapture.querySet, stageQueryBase),
+        } : timestampQueryIndex === null ? {} : {
           timestampWrites: createFingerFluidSolverTimestampWrites(
             solverGpuTimestampCapture.querySet,
             timestampQueryIndex,
@@ -14348,7 +14440,14 @@ export async function createWebGPUFingerFluidSolver({
         }),
       });
       pass.setBindGroup(0, computeBindGroup);
+      const writeStageBoundaryTimestamp = (boundaryIndex) => {
+        if (stageQueryBase !== null) {
+          pass.writeTimestamp(stageCapture.querySet, stageQueryBase + 2 + boundaryIndex);
+        }
+      };
+      writeStageBoundaryTimestamp(0);
       dispatch(pass, pipelines.predict, safeParticleCount);
+      writeStageBoundaryTimestamp(1);
       for (let iteration = 0; iteration < safeDensityIterations; iteration += 1) {
         dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
         dispatch(pass, pipelines.build, safeParticleCount);
@@ -14358,10 +14457,12 @@ export async function createWebGPUFingerFluidSolver({
         linkedCellGridBuildCount += 1;
         densityIterationCount += 1;
       }
+      writeStageBoundaryTimestamp(2);
       dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
       dispatch(pass, pipelines.build, safeParticleCount);
       linkedCellGridBuildCount += 1;
       postProjectionGridRefreshCount += 1;
+      writeStageBoundaryTimestamp(3);
       dispatch(pass, pipelines.measureTopology, safeParticleCount);
       topologyMeasurementPassCount += 1;
       if (safeChemistryDiffusion > 0) {
@@ -14372,6 +14473,7 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.classifySurface, safeParticleCount);
       freeSurfaceClassificationPassCount += 1;
       dispatchEnergy(pass, energyPipelines.projection);
+      writeStageBoundaryTimestamp(4);
       dispatch(pass, pipelines.velocity, safeParticleCount);
       dispatchEnergy(pass, energyPipelines.viscosity);
       if (frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
@@ -14388,9 +14490,11 @@ export async function createWebGPUFingerFluidSolver({
         dispatch(pass, pipelines.commitUnsupportedSheet, safeParticleCount);
         sheetSupportPassCount += 3;
       }
+      writeStageBoundaryTimestamp(5);
       dispatch(pass, pipelines.cohesion, safeParticleCount);
       surfaceCohesionPassCount += 1;
       dispatchEnergy(pass, energyPipelines.cohesion);
+      writeStageBoundaryTimestamp(6);
       dispatch(pass, pipelines.applyVelocity, safeParticleCount);
       dispatch(pass, pipelines.clearInterface, 1);
       dispatch(pass, pipelines.compactInterface, safeParticleCount);
@@ -14399,6 +14503,7 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.compactLiquidFireContacts, safeParticleCount);
       dispatch(pass, pipelines.finalizeLiquidFireContacts, 1);
       liquidFireContactCompactionPassCount += 1;
+      writeStageBoundaryTimestamp(7);
       if (safeParticleShiftStrength > 0) {
         dispatch(pass, pipelines.computeParticleShift, safeParticleCount);
         dispatch(pass, pipelines.applyParticleShift, safeParticleCount);
@@ -14408,9 +14513,11 @@ export async function createWebGPUFingerFluidSolver({
         dispatch(pass, pipelines.adaptiveDensity, safeBaseParticleCount);
         adaptiveDensityPassCount += 1;
       }
+      writeStageBoundaryTimestamp(8);
       pass.end();
       device.queue.submit([encoder.finish()]);
       if (timestampQueryIndex !== null) solverGpuTimestampCapture.writtenPairs += 1;
+      if (stageQueryBase !== null) solverStageGpuTimestampCapture.writtenPairs += 1;
       stepCount += 1;
       frameIndex += 1;
     }
@@ -14438,6 +14545,7 @@ export async function createWebGPUFingerFluidSolver({
     particleVisibility = 'visible',
   } = {}) {
     if (runtimeLifecycle.stopped) return;
+    const renderStartedAt = performance.now();
     lastHostFrameCompositionEvidence = null;
     analyticCarrierLastFrameDrawCount = 0;
     if (safeHostFrameComposition && !hostFrame) {
@@ -14628,6 +14736,13 @@ export async function createWebGPUFingerFluidSolver({
       ?? device.createCommandEncoder({
         label: `kaminos-finger-fluid-render-frame:${effectiveRendererMode}`,
       });
+    const rendererTimestampCapture = rendererGpuTimestampCapture
+      && rendererGpuTimestampCapture.writtenPairs < rendererGpuTimestampCapture.pairCount
+      ? rendererGpuTimestampCapture
+      : null;
+    if (rendererTimestampCapture && validatedHostFrame) {
+      throw new Error('Finger Fluid renderer timestamp witness requires a solver-owned direct render encoder');
+    }
     const effectiveRefractionCompositeBindGroup = validatedHostFrame
       ? device.createBindGroup({
         label: `kaminos-finger-fluid-host-frame-${validatedHostFrame.frameId}-refraction-bind-group`,
@@ -14652,6 +14767,12 @@ export async function createWebGPUFingerFluidSolver({
     const liquidSupportDiagnostic = effectiveOpticalDebugMode === 'liquid_support';
     const drawAnalyticSupport = safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE;
     if (!validatedHostFrame) {
+    if (rendererTimestampCapture) {
+      encoder.writeTimestamp(
+        rendererTimestampCapture.querySet,
+        rendererTimestampCapture.firstQueryIndex + (rendererTimestampCapture.writtenPairs * 2),
+      );
+    }
     const hdrWorldBackgroundPass = encoder.beginRenderPass({
       label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
       colorAttachments: [{
@@ -14927,10 +15048,18 @@ export async function createWebGPUFingerFluidSolver({
     finalPresentationPass.draw(3);
     finalPresentationPass.end();
     finalPresentationPassCount += 1;
+      if (rendererTimestampCapture) {
+        encoder.writeTimestamp(
+          rendererTimestampCapture.querySet,
+          rendererTimestampCapture.firstQueryIndex + (rendererTimestampCapture.writtenPairs * 2) + 1,
+        );
+      }
       device.queue.submit([encoder.finish()]);
+      if (rendererTimestampCapture) rendererGpuTimestampCapture.writtenPairs += 1;
     }
     directRenderFrameCount += 1;
     lastRenderFrameId = renderFrameId;
+    lastRenderCpuMs = performance.now() - renderStartedAt;
     return lastHostFrameCompositionEvidence;
   }
 
@@ -16252,6 +16381,7 @@ export async function createWebGPUFingerFluidSolver({
       diagnosticsLastDurationMs: Number(diagnosticsLastDurationMs.toFixed(3)),
       directRenderFrameCount,
       lastFrameCpuMs: Number(lastFrameCpuMs.toFixed(3)),
+      lastRenderCpuMs: Number(lastRenderCpuMs.toFixed(3)),
       diagnostics: diagnostics ? {
         ...diagnostics,
         ageMs: Number(Math.max(0, performance.now() - diagnostics.capturedAtMs).toFixed(1)),
@@ -16322,6 +16452,10 @@ export async function createWebGPUFingerFluidSolver({
     step,
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,
+    armSolverStageGpuTimestampCaptureForWitness,
+    finishSolverStageGpuTimestampCaptureForWitness,
+    armRendererGpuTimestampCaptureForWitness,
+    finishRendererGpuTimestampCaptureForWitness,
     render,
     requestDiagnostics,
     setLiveInletPacket,
