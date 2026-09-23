@@ -5913,6 +5913,17 @@ window.kaminosSceneObjectDebugState = function() {
   }));
 };
 
+window.kaminosSceneObjectBoundsDebugState = function(id) {
+  const record = sceneObjects.find(item => item.id === id);
+  if (!record?.object) return null;
+  const box = new THREE.Box3().setFromObject(record.object);
+  if (box.isEmpty()) return null;
+  return {
+    center: box.getCenter(new THREE.Vector3()).toArray(),
+    size: box.getSize(new THREE.Vector3()).toArray(),
+  };
+};
+
 window.kaminosSplatPreviewDebugState = function(id = null) {
   const record = id
     ? sceneObjects.find(item => item.id === id)
@@ -9635,11 +9646,11 @@ async function showGLB(file, options = {}) {
       }
       if (options.normalize !== false) {
         const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3()).length();
-        model.position.sub(center);
         const scale = 2.0 / size;
         model.scale.setScalar(scale);
+        const scaledCenter = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+        model.position.sub(scaledCenter);
       }
       model.traverse(child => {
         if (child.isMesh) {

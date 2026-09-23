@@ -193,6 +193,12 @@ async function runMeshAssetLinkScenario(ws) {
       if (!object || object.type !== 'glb' || object.source !== state.effectiveUrl) {
         throw new Error('mesh asset link did not register the loaded GLB as a scene object: ' + JSON.stringify({ state, object, objects: evidence.objects }));
       }
+      const bounds = window.kaminosSceneObjectBoundsDebugState?.(state.registeredObjectId);
+      const diameter = bounds ? Math.hypot(...bounds.size) : NaN;
+      if (!bounds || bounds.center.some(value => !Number.isFinite(value) || Math.abs(value) > 0.1)
+          || !Number.isFinite(diameter) || Math.abs(diameter - 2) > 0.01) {
+        throw new Error('normalized mesh is not centered in the visible scene: ' + JSON.stringify({ bounds, object, state }));
+      }
       const resourceNames = performance.getEntriesByType('resource').map(entry => entry.name);
       const requestedResource = resourceNames.find(name => {
         const resourceUrl = new URL(name, location.href);
@@ -214,6 +220,8 @@ async function runMeshAssetLinkScenario(ws) {
       return {
         state,
         object,
+        bounds,
+        diameter,
         requestedResource,
         rowText: row.textContent.trim(),
         info: document.getElementById('info-bar')?.textContent?.trim() || null,
