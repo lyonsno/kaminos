@@ -10,6 +10,8 @@ export const TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID = 'trellis2.dino
 
 const MODEL_ID = 'facebook/dinov3-vitl16-pretrain-lvd1689m';
 const MODEL_REVISION = 'ea8dc2863c51be0a264bab82070e3e8836b02d51';
+const MODEL_WEIGHTS_SHA256 = 'sha256:dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179';
+const PINNED_BLOCK0_WEIGHT_BUNDLE_SHA256 = 'sha256:e50bfcdd1060e6b4aea34f846dc3146bd18482d2dad48d4ea9be699ce1c406e9';
 const DEFAULT_KERNEL_PROFILE = 'trellis2-dinov3-prefix-block0-phase-program-v0';
 const PREFIX_TOKENS = 5;
 const PATCH_TOKENS = 1024;
@@ -380,6 +382,16 @@ async function sha256Hex(value) {
   return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
+export async function computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights) {
+  const entries = [];
+  for (const key of REQUIRED_WEIGHT_KEYS) {
+    const value = weights?.[key];
+    if (!(value instanceof Float32Array)) throw new Error(`weights.${key} must be a Float32Array for checkpoint tensor custody`);
+    entries.push([key, await sha256Hex(value)]);
+  }
+  return sha256Hex(new TextEncoder().encode(JSON.stringify(entries)));
+}
+
 export async function runTrellisDinoV3PrefixBlockPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel: input.kernel });
@@ -387,8 +399,12 @@ export async function runTrellisDinoV3PrefixBlockPhaseProgramRoute(input = {}) {
   const pixelValuesArtifact = roleArtifact(input.request.inputs, 'trellis-dinov3-normalized-pixels');
   const checkpointArtifact = roleArtifact(input.request.inputs, 'trellis-dinov3-checkpoint-tensors');
   const { shape, pixelValues, sourceImage, weights } = validateInputs(input.tensors || {});
-  if (input.model?.dtype && input.model.dtype !== 'fp32') throw new Error(`requested DINOv3 precision ${input.model.dtype} is not supported by this F32 reference route`);
-  if (input.model?.revision && input.model.revision !== MODEL_REVISION) throw new Error(`model revision must equal pinned DINOv3 revision ${MODEL_REVISION}`);
+  if (route.model?.id !== MODEL_ID || route.model?.revision !== MODEL_REVISION || route.model?.dtype !== 'fp32') throw new Error('route model identity differs from pinned F32 DINOv3 checkpoint');
+  if (input.model?.id !== MODEL_ID || input.model?.revision !== MODEL_REVISION || input.model?.dtype !== 'fp32' || input.model?.weightsHash !== MODEL_WEIGHTS_SHA256) throw new Error('invocation model identity differs from pinned F32 DINOv3 checkpoint');
+  if (sourceImageArtifact.sha256 !== await sha256Hex(sourceImage)) throw new Error('source-image digest mismatch with uploaded bytes');
+  if (pixelValuesArtifact.sha256 !== await sha256Hex(pixelValues)) throw new Error('normalized-pixels digest mismatch with uploaded F32 bytes');
+  const actualWeightBundleSha256 = await computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights);
+  if (checkpointArtifact.sha256 !== PINNED_BLOCK0_WEIGHT_BUNDLE_SHA256 || actualWeightBundleSha256 !== PINNED_BLOCK0_WEIGHT_BUNDLE_SHA256) throw new Error('checkpoint tensor bundle digest mismatch with pinned F32 block-0 tensors');
   const plan = createTrellisDinoV3PrefixBlockDispatchPlan({ shape, maxWorkgroupsPerDimension: input.device?.limits?.maxComputeWorkgroupsPerDimension });
   const runtime = await createWebGpuInferenceRuntime({
     routeId: TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID,
