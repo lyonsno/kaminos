@@ -29,8 +29,12 @@ assert.ok(presentedPixelEvidencePersistence >= 0 && presentedPixelEvidencePersis
 const compositionAttemptCapture = witnessSource.indexOf("const compositionAttemptPath = join(out, 'flame-composition-attempt.png')");
 assert.ok(compositionAttemptCapture >= 0 && compositionAttemptCapture < compositionValidation,
   'the live composition frame must be preserved before a failed assertion rolls back the scene');
-assert.match(hostSource, /composedCanvasPng:\s*buffer\.toDataURL\('image\/png'\)/,
-  'pixel evidence must preserve the exact main-renderer canvas that was sampled');
+assert.match(hostSource, /const composedCanvasPng\s*=\s*buffer\.toDataURL\('image\/png'\)[\s\S]*?composedCanvasPng\s*\}/,
+  'pixel evidence must preserve the normal main-renderer canvas before the diagnostic ablation');
+assert.match(hostSource, /overlay\.material\.depthTest\s*=\s*false[\s\S]*?const depthTestDisabled\s*=\s*await sample\(\)[\s\S]*?overlay\.material\.depthTest\s*=\s*wasDepthTest/,
+  'the failing presentation probe must isolate depth occlusion and restore the live overlay material');
+assert.match(witnessSource, /depthTestAblation[\s\S]*?depthTestDisabledForeground/,
+  'a failed scene contribution must preserve the same-frame depth-test ablation result');
 const rendererCanvasCapture = witnessSource.indexOf("const rendererCanvasCapturePath = join(out, 'flame-composition-renderer-canvas.png')");
 assert.ok(rendererCanvasCapture >= 0 && rendererCanvasCapture < compositionValidation,
   'the sampled main-renderer canvas must be durably captured before the composition assertion');

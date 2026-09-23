@@ -5765,17 +5765,25 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     });
   };
   const wasVisible = overlay.visible;
+  const wasDepthTest = overlay.material.depthTest;
   try {
     overlay.visible = false;
     const source = await sample();
     overlay.visible = wasVisible;
     const composed = await sample();
+    const composedCanvasPng = buffer.toDataURL('image/png');
+    overlay.material.depthTest = false;
+    overlay.material.needsUpdate = true;
+    const depthTestDisabled = await sample();
     return { authority: 'kaminos-main-render-pipeline-canvas-readback',
       canvasRect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
       backingSize: { width: canvas.width, height: canvas.height }, source, composed,
-      composedCanvasPng: buffer.toDataURL('image/png') };
+      depthTestAblation: { depthTestWasEnabled: wasDepthTest, foreground: depthTestDisabled[0],
+        background: depthTestDisabled[1] }, composedCanvasPng };
   } finally {
     overlay.visible = wasVisible;
+    overlay.material.depthTest = wasDepthTest;
+    overlay.material.needsUpdate = true;
     window._kaminosDirty?.();
   }
 };
