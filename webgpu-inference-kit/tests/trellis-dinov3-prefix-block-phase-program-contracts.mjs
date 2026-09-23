@@ -76,6 +76,10 @@ assert.ok(/residentBlock1CompleteTransformerBlockCount": 2/.test(referenceExport
   'reference metadata must state that the full block-1 output includes two completed transformer blocks');
 assert.ok(/residentBlock1OutputBoundary": "after complete layer\.0 and complete layer\.1; before final model LayerNorm"/.test(referenceExporter),
   'the full block-1 output boundary must remain explicit');
+assert.match(referenceExporter, /block2_norm1_hidden_states = block2\.norm1\(block1_after_mlp_hidden_states\)/,
+  'the pinned MLX reference must apply layer-2 norm1 to the exact completed layer-1 output');
+assert.ok(/residentBlock2Norm1OutputBoundary": "after two complete transformer blocks and block 2 norm1; before block 2 attention and final model LayerNorm"/.test(referenceExporter),
+  'the partial block-2 boundary must not be mislabeled as a complete transformer block');
 assert.equal(/"blockCount"\s*:/.test(referenceExporter), false,
   'an unqualified block count must not obscure that the packet also includes only a partial second block');
 assert.equal(/"outputBoundary"\s*:/.test(referenceExporter), false,
@@ -102,8 +106,12 @@ assert.match(browserRunner, /block1Attention:1029\*1024\*4/,
   'the resident mode must require the exact full-size downstream F32 tensor rather than accepting a partial result');
 assert.match(browserRunner, /block1MlpHidden:1029\*4096\*4/,
   'the resident full-block mode must require the exact 1029×4096 F32 GELU tensor');
+assert.match(browserRunner, /block2Norm1:1029\*1024\*4/,
+  'the resident block-2 norm1 mode must require the complete 1029×1024 F32 output');
 assert.match(parityAssay, /\['block1Attention','block1Norm2','block1MlpHidden','block1MlpProjection','block1Output'\]/,
   'the full-block assay must reject missing raw GPU readbacks at every captured block-1 boundary');
+assert.match(parityAssay, /'block2Norm1'\]/,
+  'block-2 norm1 mode must require its raw GPU output as well as all block-1 boundaries');
 assert.match(browserSmoke, /adapterClassification === 'software-fallback'/,
   'software WebGPU fallback cannot satisfy the resident GPU evidence route');
 assert.match(browserSmoke, /finiteNonzeroCount === 0/,
@@ -122,7 +130,7 @@ assert.match(parityAssay, /last trustworthy MLX reference remained valid/,
   'a WebGPU failure must preserve the MLX reference as last trustworthy evidence without implying parity');
 const routeImplementation = implementation.slice(implementation.indexOf('async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal'));
 assert.equal(typeof residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata, 'function');
-assert.match(routeImplementation, /transfer:createTrellisDinoV3ResidentProbeTransferMetadata\(\{ residentBlock1Probe \}\)/,
+assert.match(routeImplementation, /transfer:createTrellisDinoV3ResidentProbeTransferMetadata\(\{ residentBlock1Probe, residentBlock2Norm1Probe \}\)/,
   'the probe route must publish the same transfer metadata exercised by the mode-specific contract below');
 const attentionOnlyTransfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:false});
 assert.equal(Object.hasOwn(attentionOnlyTransfers,'norm2ToMlp'),false,
@@ -132,14 +140,26 @@ assert.equal(Object.hasOwn(attentionOnlyTransfers,'block1AttentionToNorm2'),fals
 const fullBlockTransfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:true});
 assert.equal(fullBlockTransfers.block1AttentionToNorm2,'same-runtime-device-buffer');
 assert.equal(fullBlockTransfers.norm2ToMlp,'same-runtime-device-buffer');
+assert.equal(Object.hasOwn(fullBlockTransfers,'block1MlpOutputToBlock2Norm1'),false,
+  'the full-block-1 mode must not claim the later block-2 norm1 handoff');
+const block2Transfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:true,residentBlock2Norm1Probe:true});
+assert.equal(block2Transfers.block1OutputToBlock2Norm1,'same-runtime-device-buffer');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1LayerNormResident, 'function');
+assert.equal(typeof residentRoute.runTrellisDinoV3LayerNormResident, 'function',
+  'LayerNorm execution should be parameterized by model layer rather than copied into another block-specific kernel');
+assert.equal(typeof residentRoute.runTrellisDinoV3Block2LayerNorm1Resident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1AttentionResident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1MlpResident, 'function',
   'block-1 norm2, GELU MLP, and LayerScale residual must continue from the live attention-residual tensor');
 assert.equal(typeof residentRoute.assertTrellisDinoV3ResidentMlpHandoffIdentity, 'function',
   'the MLP contract must keep the exact block-1 attention residual as both norm2 input and residual');
+assert.equal(typeof residentRoute.assertTrellisDinoV3ResidentBlock2Norm1HandoffIdentity, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentBlock1Probe, 'function');
+assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentBlock2Norm1Probe, 'function',
+  'block-2 norm1 must continue from the exact resident block-1 output before final diagnostic readback');
+assert.equal(residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_BLOCK2_NORM1_PROBE_ROUTE_ID,
+  'trellis2.dinov3.block0-to-block2-norm1.resident-probe.webgpu-local.v0');
 assert.equal(typeof residentRoute.assertTrellisDinoV3ResidentAttentionHandoffIdentity, 'function',
   'the model-local probe must validate the attention input and original block-0 residual as separate identities');
 assert.equal(typeof kit.runTrellisDinoV3Block1LayerNormResident, 'undefined', 'the probe kernel remains model-specific rather than expanding the shared kit root API');
@@ -147,12 +167,22 @@ assert.equal(typeof kit.runTrellisDinoV3Block1AttentionResident, 'undefined', 'b
 assert.equal(typeof kit.runTrellisDinoV3Block1MlpResident, 'undefined', 'block-1 MLP remains model-specific rather than expanding the shared kit root API');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'undefined', 'the diagnostic probe is not promoted to the common kit API');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentBlock1Probe, 'undefined', 'the full block-1 diagnostic probe is not promoted to the common kit API');
+assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentBlock2Norm1Probe, 'undefined', 'the block-2 norm1 diagnostic probe is not promoted to the common kit API');
+assert.equal(typeof kit.runTrellisDinoV3LayerNormResident, 'undefined', 'parameterized DINO LayerNorm stays model-specific');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockPhaseProgramRoute, 'undefined', 'the model-specific route stays out of the shared kit root API');
 assert.doesNotMatch(publicIndex, /TRELLIS_DINOV3/, 'the model-specific route must not append DINOv3 symbols to the current shared root surface');
 assert.equal(residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID,
   'trellis2.dinov3.block0-to-block1-attention.resident-probe.webgpu-local.v0');
 const block0Identity={name:'block0.live-gpu'};
 const norm1Identity={name:'block1.norm1.live-gpu'};
+const block1OutputIdentity={name:'block1.output.live-gpu'};
+const block2Norm1Identity={name:'block2.norm1.live-gpu'};
+assert.equal(residentRoute.assertTrellisDinoV3ResidentBlock2Norm1HandoffIdentity({
+  residentNorm1:{inputTensor:block1OutputIdentity,tensor:block2Norm1Identity},block1Output:block1OutputIdentity,
+}),true,'block-2 norm1 consumes the exact live complete block-1 output');
+assert.throws(()=>residentRoute.assertTrellisDinoV3ResidentBlock2Norm1HandoffIdentity({
+  residentNorm1:{inputTensor:{name:'stale.block1.output'},tensor:block2Norm1Identity},block1Output:block1OutputIdentity,
+}),/exact live completed block-1 output/,'a copied or stale tensor cannot impersonate the live block-1 handoff');
 assert.equal(residentRoute.assertTrellisDinoV3ResidentAttentionHandoffIdentity({
   residentHandoff:{inputTensor:norm1Identity,residualTensor:block0Identity},
   block0HiddenStates:block0Identity,
@@ -182,6 +212,12 @@ assert.match(routeImplementation.slice(attentionConsumerIndex, attentionConsumer
   'block-1 attention must use the live normalized GPU tensor plus the exact block-0 residual on the same invocation');
 assert.match(routeImplementation, /block0Readback:'skipped'/,
   'the explicit resident probe must report that block-0 was not read back to the host');
+const block2ConsumerIndex=routeImplementation.indexOf('runTrellisDinoV3Block2LayerNorm1Resident({');
+const block2ReadbackIndex=routeImplementation.indexOf("readback-dinov3-block2-norm1-resident-probe");
+assert.ok(block2ConsumerIndex>attentionConsumerIndex&&block2ReadbackIndex>block2ConsumerIndex,
+  'the resident block-2 norm1 kernel must execute after the complete block-1 consumer and before its sole diagnostic readback');
+assert.match(routeImplementation.slice(block2ConsumerIndex,block2ConsumerIndex+360), /inputTensor:residentMlp\.tensor[\s\S]*block2Norm1Weight[\s\S]*block2Norm1Bias/,
+  'block-2 norm1 must bind the exact live block-1 MLP residual and its layer-2 norm weights');
 assert.match(referenceExporter, /block1_norm1_hidden_states = block1\.norm1\(block0_hidden_states\)[\s\S]*block1_attention_output = block1\.attention\(block1_norm1_hidden_states, cos, sin, model\.num_prefix_tokens\)[\s\S]*block1_after_attention_hidden_states = block0_hidden_states \+ block1_attention_output \* block1\.layer_scale1/,
   'the MLX reference must reproduce native DINOv3 block-1 attention and its LayerScale residual as the resident-consumer oracle');
 assert.match(referenceExporter, /import mlx\.nn as nn/,
@@ -194,8 +230,14 @@ assert.match(implementation, /trellis2\.dinov3\.block0-to-block1-full-block\.res
   'the full block-1 probe must have a route identity distinct from the attention-only probe');
 assert.match(browserSmoke, /mode === 'resident-block1'/,
   'the browser harness must expose a separately named full block-1 mode');
+assert.match(browserSmoke, /mode === 'resident-block2-norm1'/,
+  'the browser harness must expose the partial block-2 norm1 mode without relabeling it as a full block');
+assert.match(browserSmoke, /runTrellisDinoV3PrefixBlockResidentBlock2Norm1Probe/,
+  'the block-2 browser mode must execute the model-local resident route');
 assert.match(browserRunner, /resident-block1/,
   'the runner must validate and preserve the full block-1 mode rather than relabeling the attention-only route');
+assert.match(browserRunner, /resident-block2-norm1/,
+  'the browser runner must preserve block-2 norm1 as its own requested/effective route identity');
 assert.match(parityAssay, /residentBlock1Probe/,
   'the composite same-job assay must require the full block-1 reference identity');
 assert.match(browserSmoke, /runTrellisDinoV3PrefixBlockResidentHandoffProbe/,
@@ -225,6 +267,30 @@ assert.equal(residentDispatch.kernel, residentKernel);
 assert.deepEqual(residentDispatch.options.dispatch, [1029]);
 assert.equal(residentReadbacks, 0, 'resident consumer setup/dispatch must not require a host readback');
 assert.deepEqual(residentLayerNorm.shape, [1,1029,1024]);
+
+const block2InputTensor={name:'block1.output.live-gpu',shape:[1,1029,1024],dtype:'f32',usage:WEBGPU_BUFFER_USAGE.storage,buffer:{}};
+const block2LayerNormStages=[];
+const block2LayerNormKernels=[];
+const block2LayerNormRuntime={
+  createTensor(input) { return { ...input,buffer:{} }; },
+  uploadTensor() {},
+  createUniformBuffer(input) { return { ...input,buffer:{} }; },
+  defineComputeKernel(input) { block2LayerNormKernels.push(input); return input; },
+  async runKernel(kernel,options) { block2LayerNormStages.push({kernel,options}); },
+  async readTensor() { throw new Error('block-2 norm1 must not read back before the final diagnostic stage'); },
+};
+const block2LayerNorm=await residentRoute.runTrellisDinoV3Block2LayerNorm1Resident({
+  runtime:block2LayerNormRuntime,inputTensor:block2InputTensor,
+  weight:new Float32Array(1024).fill(1),bias:new Float32Array(1024),
+  schedulerInvocation:{invocationId:'resident-contract-invocation'},
+});
+assert.equal(block2LayerNorm.inputTensor,block2InputTensor);
+assert.equal(block2LayerNormKernels[0].bindings[0].resource,block2InputTensor,
+  'block-2 norm1 binds the exact block-1 GPU output without a host copy');
+assert.equal(block2LayerNormStages[0].options.stage,'dinov3-block2-layernorm1-resident');
+assert.equal(block2LayerNorm.tensor.name,'trellis.dinov3.block2.norm1.output');
+assert.deepEqual(block2LayerNorm.shape,[1,1029,1024]);
+assert.equal(block2LayerNormStages.length,1);
 
 const norm1Tensor={name:'block1.norm1',shape:[1,1029,1024],dtype:'f32',usage:WEBGPU_BUFFER_USAGE.storage,buffer:{}};
 const block1Stages=[];
