@@ -5883,6 +5883,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatRenderPipeline = null;
   let boundarySplatReadbackPipeline = null;
   let bindGroups = [];
+  let tieredPressureBindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
   let pressureWriteBindGroup = null;
@@ -5895,6 +5896,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let selectiveHeadLiveRuntime = null;
   let selectiveHeadLiveBindGroups = null;
   let bindGroupLayout = null;
+  let tieredPressureFluidBindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
   let boundarySidecarReadBindGroupLayout = null;
@@ -6599,7 +6601,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function rebuildFluidBindGroups() {
     if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || quenchBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
     bindGroups = [];
+    tieredPressureBindGroups = [];
     for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
+      if (tieredPressureFluidBindGroupLayout) {
+        tieredPressureBindGroups[fluidIndex] = device.createBindGroup({
+          label: `kaminos tiered pressure fluid bind group ${gridSize}^3 fluid ${fluidIndex}`,
+          layout: tieredPressureFluidBindGroupLayout,
+          entries: [
+            { binding: 0, resource: { buffer: uniformBuffer } },
+            { binding: 1, resource: { buffer: fluidBuffers[fluidIndex] } },
+            { binding: 2, resource: { buffer: fluidBuffers[1 - fluidIndex] } },
+            { binding: 7, resource: { buffer: frontBuffers[fluidIndex] } },
+            { binding: 8, resource: { buffer: frontBuffers[1 - fluidIndex] } },
+          ],
+        });
+      }
       for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {
         bindGroups[fluidIndex * 2 + quenchIndex] = device.createBindGroup({
           label: `kaminos fluid bind group ${gridSize}^3 fluid ${fluidIndex} quench ${quenchIndex}`,
@@ -7758,6 +7774,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    tieredPressureFluidBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos tiered pressure compact fluid bind group layout',
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      ],
+    });
     pressureReadBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos pressure read bind group layout',
       entries: [
@@ -7831,7 +7857,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pressureJacobiTieredPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure tiered jacobi pipeline layout',
-      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+      bindGroupLayouts: [tieredPressureFluidBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     pressureProjectPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure projection pipeline layout',
@@ -7839,7 +7865,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pressureProjectTieredPipelineLayout = device.createPipelineLayout({
       label: 'kaminos tiered pressure projection pipeline layout',
-      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+      bindGroupLayouts: [tieredPressureFluidBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
@@ -8972,19 +8998,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pressureJacobiBindGroups[1],
         tierPlan.dispatches[1].workgroupsY,
         'kaminos pressure spatial tier pass 2 lower-plume pressure2',
-        fluidBindGroup()
+        tieredPressureBindGroups[currentFluid]
       );
       dispatchPressureTierPass(
         pressureJacobiTieredHeroPipeline,
         pressureJacobiBindGroups[0],
         tierPlan.dispatches[2].workgroupsY,
         'kaminos pressure spatial tier pass 3 hero-fire-band pressure3',
-        fluidBindGroup()
+        tieredPressureBindGroups[currentFluid]
       );
       {
         const pass = encoder.beginComputePass({ label: 'kaminos tiered pressure projection pass' });
         pass.setPipeline(pressureProjectTieredPipeline);
-        pass.setBindGroup(0, fluidBindGroup());
+        pass.setBindGroup(0, tieredPressureBindGroups[currentFluid]);
         pass.setBindGroup(2, pressureJacobiBindGroups[1]);
         pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
         pass.end();
