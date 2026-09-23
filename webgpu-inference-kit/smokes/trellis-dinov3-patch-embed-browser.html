@@ -1,0 +1,107 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>TRELLIS DINOv3 patch embed WebGPU smoke</title>
+<pre id="state">starting</pre>
+<script type="module">
+const invocationId = new URL(location.href).searchParams.get('smokeId');
+const state = { status: 'running', invocationId };
+window.trellisPatchEmbedSmoke = state;
+const render = () => { document.querySelector('#state').textContent = JSON.stringify(state, null, 2); };
+async function sha256(value) {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return `sha256:${Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+try {
+  if (!invocationId) throw new Error('smoke invocation identity missing from browser URL');
+  const kit = await import('../src/index.js');
+  const routeId = kit.TRELLIS_DINOV3_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID;
+  state.requestedRouteId = routeId;
+  if (!navigator.gpu) throw new Error('WebGPU unavailable: navigator.gpu is missing');
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) throw new Error('WebGPU unavailable: requestAdapter returned null');
+  const adapterInfo = typeof adapter.requestAdapterInfo === 'function' ? await adapter.requestAdapterInfo() : (adapter.info || null);
+  const adapterClassification = adapter.isFallbackAdapter === true
+    ? 'software-fallback'
+    : adapter.isFallbackAdapter === false ? 'non-fallback' : 'unreported';
+  const device = await adapter.requestDevice({ label: 'trellis-dinov3-patch-embed-smoke-device' });
+  const reportedAdapter = [adapterInfo?.vendor, adapterInfo?.device, adapterInfo?.architecture].filter(value => typeof value === 'string' && value.length > 0).join(' / ');
+  const adapterName = adapterInfo?.description || reportedAdapter || 'adapter identity fields unreported by browser';
+  const browser = navigator.userAgent;
+  const limits = {};
+  for (const key of ['maxBufferSize', 'maxStorageBufferBindingSize', 'maxComputeWorkgroupsPerDimension', 'maxComputeInvocationsPerWorkgroup', 'maxComputeWorkgroupSizeX', 'maxStorageBuffersPerShaderStage', 'maxUniformBufferBindingSize']) {
+    if (Number.isFinite(device.limits[key])) limits[key] = device.limits[key];
+  }
+  const backendIdentity = kit.createWebGpuBackendIdentity({ adapterName, browser, effectiveFeatures: [...device.features], limits, timestampQuery: device.features.has('timestamp-query') ? 'available' : 'unavailable' });
+  const kernel = { profile: 'trellis2-dinov3-patch-embed-phase-program-v0', commit: 'browser-smoke-fixture' };
+  const sourcePixels = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  const pixelValues = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  const projection = new Float32Array([1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]);
+  const bias = new Float32Array([0.5, -0.5]);
+  const weightBytes = new Uint8Array(projection.byteLength + bias.byteLength);
+  weightBytes.set(new Uint8Array(projection.buffer), 0);
+  weightBytes.set(new Uint8Array(bias.buffer), projection.byteLength);
+  const weightHash = await sha256(weightBytes);
+  const fixtureModel = {
+    id: 'kaminos-fixture:trellis-dinov3-patch-embed',
+    revision: 'synthetic-2x2-rgb-v0',
+    weightsHash: weightHash,
+    dtype: 'fp32',
+  };
+  const route = kit.createTrellisDinoV3PatchEmbedPhaseProgramRouteDefinition({ kernel, model: fixtureModel });
+  const request = kit.createRouteInvocationRequest(route, {
+    requestId: `trellis-dinov3-patch-embed-browser-smoke-${invocationId}`,
+    inputs: {
+      'source-image': { artifactId: 'fixture-rgb-2x2', sha256: await sha256(sourcePixels), shape: [2, 2, 3] },
+      'trellis-dinov3-normalized-pixels': { artifactId: 'fixture-normalized-rgb-2x2', sha256: await sha256(pixelValues), shape: [1, 2, 2, 3] },
+      'trellis-dinov3-patch-embed-weights': { artifactId: 'fixture-projection-2x2x3x2', sha256: weightHash, shape: [2, 2, 2, 3] },
+    },
+    outputs: { 'trellis-dinov3-patch-embeddings': { artifactId: 'fixture-patch-embeddings' } },
+  });
+  const tensors = { pixelValues, weights: { projection, bias }, shape: { batch: 1, imageHeight: 2, imageWidth: 2, imageChannels: 3, patchSize: 2, hiddenSize: 2 } };
+  const oracle = kit.createTrellisDinoV3PatchEmbedPhaseProgramCpuOracle(tensors);
+  const result = await kit.runTrellisDinoV3PatchEmbedPhaseProgramRoute({ request, route, tensors, adapter, device, queue: device.queue, adapterName, browser, backendIdentity, kernel, model: fixtureModel, includeReadback: true });
+  const receipt = result.receipt;
+  const actual = result.debugReadback?.patchEmbeddings instanceof Float32Array ? Array.from(result.debugReadback.patchEmbeddings) : null;
+  const actualTokenEnergy = result.debugReadback?.tokenEnergy instanceof Float32Array ? Array.from(result.debugReadback.tokenEnergy) : null;
+  const expected = [22.5, 25.5];
+  const expectedTokenEnergy = [22.5 ** 2 + 25.5 ** 2];
+  const oracleOutput = Array.from(oracle.patchEmbeddings);
+  const weightsInput = request.inputs.find(entry => entry.role === 'trellis-dinov3-patch-embed-weights');
+  const consumerStage = receipt?.timings?.profile?.stages?.find(stage => stage.name === 'consume-trellis-dinov3-patch-embeddings-on-gpu');
+  const failures = [];
+  if (!receipt) failures.push('route receipt missing');
+  if (receipt?.requestedRouteId !== routeId) failures.push('requested route identity mismatch');
+  if (receipt?.effectiveRouteId !== routeId) failures.push('effective route identity mismatch');
+  if (receipt?.status !== 'real') failures.push(`route receipt status=${receipt?.status ?? 'missing'}`);
+  if (receipt?.model?.id !== request.model?.id || receipt?.model?.revision !== request.model?.revision) failures.push('route receipt model identity disagrees with invocation request');
+  if (receipt?.model?.weightsHash !== weightsInput?.sha256) failures.push('route receipt model weights hash disagrees with invocation weight artifact');
+  if (!receipt?.outputs?.some(entry => entry.role === 'trellis-dinov3-patch-embeddings' && /^sha256:[a-f0-9]{64}$/.test(entry.sha256 || '') && JSON.stringify(entry.shape) === '[1,1,2]')) failures.push('valid patch-embedding output receipt missing');
+  if (!actual || actual.length !== expected.length || actual.some((value, index) => Math.abs(value - expected[index]) > 1e-5)) failures.push('GPU patch embeddings disagree with hand-computable expected values');
+  if (oracleOutput.some((value, index) => Math.abs(value - expected[index]) > 1e-5)) failures.push('independent CPU oracle disagrees with hand-computable expected values');
+  if (!actualTokenEnergy || actualTokenEnergy.length !== expectedTokenEnergy.length || actualTokenEnergy.some((value, index) => Math.abs(value - expectedTokenEnergy[index]) > 1e-4)) failures.push('GPU consumer token energy disagrees with independent expected values');
+  if (!consumerStage || !Number.isFinite(consumerStage.ms)) failures.push('GPU-resident consumer stage absent or unmeasured in route profile');
+  if (receipt?.backend?.adapterName !== adapterName || receipt?.backend?.browser !== browser) failures.push('effective backend identity does not match observed adapter/browser');
+  state.status = failures.length === 0 ? 'passed' : 'failed';
+  Object.assign(state, {
+    failures, invocationId, requestedRouteId: routeId, effectiveRouteId: receipt?.effectiveRouteId || null,
+    witnessClaim: state.status === 'passed'
+      ? 'observed: WebGPU API execution on the reported adapter; hardware classification is separate'
+      : 'intended only; no successful route execution observed',
+    browser, adapterInfo, adapterName, adapterClassification, fixtureModel,
+    device: { label: device.label || null, features: [...device.features], limits }, requestedFeatures: [],
+    fixture: { shape: tensors.shape, weightLayout: 'out,kH,kW,in', sourcePixels: Array.from(sourcePixels), pixelValues: Array.from(pixelValues), projection: Array.from(projection), bias: Array.from(bias) },
+    inputHashes: Object.fromEntries(request.inputs.map(entry => [entry.role, entry.sha256])),
+    expectedOutput: expected, actualOutput: actual, expectedTokenEnergy, actualTokenEnergy,
+    consumerEvidence: consumerStage || null, receipt,
+  });
+  render();
+  await device.destroy();
+  if (failures.length) throw new Error(failures.join('; '));
+} catch (error) {
+  state.status = 'failed';
+  state.witnessClaim = 'intended only; no successful route execution observed';
+  state.error = String(error?.stack || error);
+  render();
+}
+</script>
