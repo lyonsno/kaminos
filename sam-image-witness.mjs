@@ -572,16 +572,32 @@ async function main() {
         error.compositionDiagnostic = report.compositionDiagnostic;
         throw error;
       }
-      const compositionAttemptPath = join(out, 'flame-composition-attempt.png');
-      await checked(page.screenshot({ path: compositionAttemptPath, fullPage: true }));
-      report.captures.push({ name: 'flame-composition-attempt', path: compositionAttemptPath,
-        validation: 'diagnostic-only-pre-assertion' });
       const presentedPixels = await page.evaluate(({ sceneObjectId, foreground, background }) =>
         window.__kaminosSampleSamFlamePixels(sceneObjectId, [foreground, background]), {
         sceneObjectId: observed.sceneObject.id, foreground: flamePixelScan.foreground, background: flamePixelScan.background,
       });
+      const compositionCanvasMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(presentedPixels.composedCanvasPng || '');
+      assert.ok(compositionCanvasMatch, 'main renderer did not preserve its sampled composition canvas');
+      const compositionCanvasBytes = Buffer.from(compositionCanvasMatch[1], 'base64');
+      assert.ok(compositionCanvasBytes.length >= 8 && compositionCanvasBytes.subarray(0, 8)
+        .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), 'main renderer canvas capture is not a PNG');
+      const rendererCanvasCapturePath = join(out, 'flame-composition-renderer-canvas.png');
+      writeFileSync(rendererCanvasCapturePath, compositionCanvasBytes, { flag: 'wx' });
+      const rendererCanvasCapture = { path: rendererCanvasCapturePath,
+        width: presentedPixels.backingSize.width, height: presentedPixels.backingSize.height,
+        bytes: compositionCanvasBytes.length,
+        sha256: `sha256:${createHash('sha256').update(compositionCanvasBytes).digest('hex')}`,
+        authority: presentedPixels.authority };
+      report.captures.push({ name: 'flame-composition-renderer-canvas', ...rendererCanvasCapture,
+        validation: 'diagnostic-only-main-render-pipeline-readback' });
+      saveReport();
+      const compositionAttemptPath = join(out, 'flame-composition-attempt.png');
+      await checked(page.screenshot({ path: compositionAttemptPath, fullPage: true }));
+      report.captures.push({ name: 'flame-composition-attempt', path: compositionAttemptPath,
+        validation: 'diagnostic-only-pre-assertion' });
       const pixelEvidence = { authority: presentedPixels.authority,
         canvasRect: presentedPixels.canvasRect, backingSize: presentedPixels.backingSize,
+        rendererCanvasCapture,
         foreground: { maskValue: flamePixelScan.foreground.maskValue,
           uv: [flamePixelScan.foreground.u, flamePixelScan.foreground.v],
           pixel: presentedPixels.composed[0].pixel,

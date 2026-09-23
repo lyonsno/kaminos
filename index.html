@@ -5772,7 +5772,8 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     const composed = await sample();
     return { authority: 'kaminos-main-render-pipeline-canvas-readback',
       canvasRect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
-      backingSize: { width: canvas.width, height: canvas.height }, source, composed };
+      backingSize: { width: canvas.width, height: canvas.height }, source, composed,
+      composedCanvasPng: buffer.toDataURL('image/png') };
   } finally {
     overlay.visible = wasVisible;
     window._kaminosDirty?.();

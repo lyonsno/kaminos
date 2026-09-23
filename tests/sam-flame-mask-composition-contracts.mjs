@@ -29,6 +29,11 @@ assert.ok(presentedPixelEvidencePersistence >= 0 && presentedPixelEvidencePersis
 const compositionAttemptCapture = witnessSource.indexOf("const compositionAttemptPath = join(out, 'flame-composition-attempt.png')");
 assert.ok(compositionAttemptCapture >= 0 && compositionAttemptCapture < compositionValidation,
   'the live composition frame must be preserved before a failed assertion rolls back the scene');
+assert.match(hostSource, /composedCanvasPng:\s*buffer\.toDataURL\('image\/png'\)/,
+  'pixel evidence must preserve the exact main-renderer canvas that was sampled');
+const rendererCanvasCapture = witnessSource.indexOf("const rendererCanvasCapturePath = join(out, 'flame-composition-renderer-canvas.png')");
+assert.ok(rendererCanvasCapture >= 0 && rendererCanvasCapture < compositionValidation,
+  'the sampled main-renderer canvas must be durably captured before the composition assertion');
 assert.match(witnessSource, /const pixelEvidence\s*=\s*\{\s*authority:\s*presentedPixels\.authority,\s*canvasRect:\s*presentedPixels\.canvasRect,\s*backingSize:/,
   'rendered pixel samples must retain their CSS and backing-canvas coordinates');
 assert.match(witnessSource, /brightSamplesInMaskForeground/,
