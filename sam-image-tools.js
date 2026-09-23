@@ -50,6 +50,51 @@ export function fitSamFlameTexture(flameWidth, flameHeight, maskWidth, maskHeigh
   return { scaleX, scaleY, offsetX: (1 - scaleX) / 2, offsetY: (1 - scaleY) / 2 };
 }
 
+export function getSamFlameMaskBounds(mask, width, height) {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+    throw new Error('Mask dimensions must be positive integers');
+  }
+  if (!ArrayBuffer.isView(mask) || mask.length !== width * height) throw new Error('Mask size does not match dimensions');
+  let left = width, top = height, right = -1, bottom = -1;
+  for (let index = 0; index < mask.length; index += 1) {
+    const value = mask[index];
+    if (value !== 0 && value !== 1) throw new Error('Mask values must be binary');
+    if (!value) continue;
+    const x = index % width, y = Math.floor(index / width);
+    left = Math.min(left, x); top = Math.min(top, y);
+    right = Math.max(right, x + 1); bottom = Math.max(bottom, y + 1);
+  }
+  if (right < 0) throw new Error('Mask must contain foreground pixels');
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+export function fitSamFlameTextureToMask(flameWidth, flameHeight, maskWidth, maskHeight, bounds) {
+  if (![flameWidth, flameHeight, maskWidth, maskHeight].every(value => Number.isFinite(value) && value > 0)) {
+    throw new Error('Flame and mask dimensions must be positive');
+  }
+  if (!bounds || ![bounds.left, bounds.top, bounds.right, bounds.bottom, bounds.width, bounds.height]
+    .every(Number.isSafeInteger) || bounds.left < 0 || bounds.top < 0
+    || bounds.right > maskWidth || bounds.bottom > maskHeight
+    || bounds.right <= bounds.left || bounds.bottom <= bounds.top
+    || bounds.width !== bounds.right - bounds.left || bounds.height !== bounds.bottom - bounds.top) {
+    throw new Error('Mask bounds are invalid');
+  }
+  const fit = fitSamFlameTexture(flameWidth, flameHeight, bounds.width, bounds.height);
+  const imageRect = {
+    left: (bounds.left + fit.offsetX * bounds.width) / maskWidth,
+    top: (bounds.top + fit.offsetY * bounds.height) / maskHeight,
+    width: fit.scaleX * bounds.width / maskWidth,
+    height: fit.scaleY * bounds.height / maskHeight,
+  };
+  const uvBottom = 1 - imageRect.top - imageRect.height;
+  return { imageRect, uvTransform: {
+    repeatX: 1 / imageRect.width,
+    repeatY: 1 / imageRect.height,
+    offsetX: -imageRect.left / imageRect.width,
+    offsetY: -uvBottom / imageRect.height,
+  } };
+}
+
 export function createSamImageTools({ inferenceSession, rendererDevice, config, onAsset, onScene, onFlame }) {
   const el = id => document.getElementById(`sam-image-${id}`);
   const canvas = el('canvas');

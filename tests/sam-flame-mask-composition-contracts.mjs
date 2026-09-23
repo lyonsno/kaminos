@@ -26,6 +26,8 @@ assert.match(witnessSource, /brightSamplesInMaskForeground/,
   'flame composition failure must report how many bright native pixels overlap selected foreground');
 assert.match(witnessSource, /nativeFlameCanvasPng/,
   'flame composition failure must preserve raw native canvas pixels for visual diagnosis');
+assert.match(witnessSource, /report\.flameComposition\s*=\s*\{[\s\S]*?texturePlacement:\s*flamePixelScan\.texturePlacement/,
+  'successful composition evidence must retain the exact image-space flame placement');
 
 const toolsModule = await import('../sam-image-tools.js');
 assert.equal(typeof toolsModule.runSamFlameSceneTransaction, 'function', 'flame composition needs a rollback-tested scene transaction');
@@ -47,6 +49,9 @@ assert.deepEqual(overlays, [priorPlane], 'failed activation must remove its over
 const { encodeSamFlameMaskPixels, fitSamFlameTexture } = await import('../sam-image-tools.js');
 assert.equal(typeof encodeSamFlameMaskPixels, 'function', 'SAM-to-flame composition needs an explicit mask texture contract');
 assert.equal(typeof fitSamFlameTexture, 'function', 'live fire must preserve its aspect ratio inside the selected image mask');
+const { getSamFlameMaskBounds, fitSamFlameTextureToMask } = await import('../sam-image-tools.js');
+assert.equal(typeof getSamFlameMaskBounds, 'function', 'flame placement must use the exact selected mask bounds');
+assert.equal(typeof fitSamFlameTextureToMask, 'function', 'native fire texture must map into the selected 2D mask bounds');
 
 assert.deepEqual([...encodeSamFlameMaskPixels(Uint8Array.from([0, 1, 1, 0]), 2, 2)], [
   0, 0, 0, 255, 255, 255, 255, 255,
@@ -59,5 +64,27 @@ assert.throws(() => encodeSamFlameMaskPixels(Uint8Array.from([0]), 0, 1), /posit
 assert.deepEqual(fitSamFlameTexture(200, 100, 100, 100), { scaleX: 1, scaleY: 0.5, offsetX: 0, offsetY: 0.25 });
 assert.deepEqual(fitSamFlameTexture(100, 200, 200, 100), { scaleX: 0.25, scaleY: 1, offsetX: 0.375, offsetY: 0 });
 assert.throws(() => fitSamFlameTexture(0, 100, 100, 100), /positive/);
+
+const bounds = getSamFlameMaskBounds(Uint8Array.from([
+  0, 0, 0, 0, 0,
+  0, 1, 1, 1, 0,
+  0, 1, 1, 1, 0,
+  0, 0, 0, 0, 0,
+]), 5, 4);
+assert.deepEqual(bounds, { left: 1, top: 1, right: 4, bottom: 3, width: 3, height: 2 });
+assert.throws(() => getSamFlameMaskBounds(Uint8Array.from([0, 0]), 2, 1), /foreground/);
+assert.throws(() => getSamFlameMaskBounds(Uint8Array.from([0, 2]), 2, 1), /binary/);
+const placement = fitSamFlameTextureToMask(2, 1, 5, 4, bounds);
+assert.deepEqual(placement.imageRect, { left: 0.2, top: 0.3125, width: 0.6, height: 0.375 });
+for (const [key, expected] of Object.entries({ repeatX: 5 / 3, repeatY: 8 / 3, offsetX: -1 / 3, offsetY: -5 / 6 })) {
+  assert.ok(Math.abs(placement.uvTransform[key] - expected) < 1e-12, `wrong ${key} for image-space mask placement`);
+}
+assert.throws(() => fitSamFlameTextureToMask(2, 1, 5, 4, { left: -1, top: 0, right: 2, bottom: 2, width: 3, height: 2 }), /bounds/);
+assert.match(bridgeSource, /record\.flameTexture\.repeat\.set\(fit\.uvTransform\.repeatX,\s*fit\.uvTransform\.repeatY\)/,
+  'fire texture must be registered into the selected mask bounds');
+assert.match(bridgeSource, /record\.flameTexture\.offset\.set\(fit\.uvTransform\.offsetX,\s*fit\.uvTransform\.offsetY\)/,
+  'fire texture UV offset must follow the source image-space mask bounds');
+assert.match(witnessSource, /kaminos_volume_smoke=1/,
+  'flame composition witness must activate the established visible smoke profile before measuring overlap');
 
 console.log('SAM live-flame mask texture contracts passed');

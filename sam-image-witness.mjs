@@ -142,7 +142,8 @@ async function main() {
     server.stdout.pipe(serverLog, { end: false }); server.stderr.pipe(serverLog, { end: false });
     server.once('error', failRuntime);
     server.once('exit', code => failRuntime(new Error(`server exited: ${code}`)));
-    const url = `http://127.0.0.1:${values.port}/?sam=1&commit=${report.effectiveCommit}`;
+    const volumeProfile = values['flame-only'] ? '&kaminos_volume_smoke=1' : '';
+    const url = `http://127.0.0.1:${values.port}/?sam=1&commit=${report.effectiveCommit}${volumeProfile}`;
     const waitServer = async () => {
       for (;;) {
         try { const response = await fetch(new URL('/api/runtime-config', url)); if (response.ok) return response.json(); }
@@ -489,7 +490,8 @@ async function main() {
         sceneObject: window.kaminosSceneObjectDebugState().find(row =>
           row.image?.maskProvenance?.invocationId === window.kaminosSamImageTools.output().invocationId),
       }));
-      const flamePixelScan = await page.evaluate(sceneObjectId => {
+      const flamePixelScan = await page.evaluate(async sceneObjectId => {
+        const { fitSamFlameTextureToMask, getSamFlameMaskBounds } = await import('./sam-image-tools.js');
         const mask = window.kaminosSamImageTools.selectedMask();
         const imageRecord = window.kaminosSceneObjectDebugState().find(row => row.id === sceneObjectId);
         const [width, height] = imageRecord?.image?.maskProvenance?.dimensions || [];
@@ -502,10 +504,8 @@ async function main() {
         const flameContext = flame.getContext('2d', { willReadFrequently: true });
         flameContext.drawImage(fireCanvas, 0, 0);
         const flamePixels = flameContext.getImageData(0, 0, flame.width, flame.height).data;
-        const flameAspect = flame.width / flame.height, maskAspect = width / height;
-        const scaleX = flameAspect > maskAspect ? 1 : flameAspect / maskAspect;
-        const scaleY = flameAspect > maskAspect ? maskAspect / flameAspect : 1;
-        const offsetX = (1 - scaleX) / 2, offsetY = (1 - scaleY) / 2;
+        const maskBounds = getSamFlameMaskBounds(mask, width, height);
+        const texturePlacement = fitSamFlameTextureToMask(flame.width, flame.height, width, height, maskBounds);
         const isInterior = (x, y, value) => {
           for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
             const sx = x + dx, sy = y + dy;
@@ -538,8 +538,10 @@ async function main() {
               brightBounds.bottom = Math.max(brightBounds.bottom, y);
             }
           }
-          const sourceX = Math.min(width - 1, Math.floor((offsetX + (x + 0.5) / flame.width * scaleX) * width));
-          const sourceY = Math.min(height - 1, Math.floor((offsetY + (y + 0.5) / flame.height * scaleY) * height));
+          const sourceX = Math.min(width - 1, Math.floor((texturePlacement.imageRect.left
+            + (x + 0.5) / flame.width * texturePlacement.imageRect.width) * width));
+          const sourceY = Math.min(height - 1, Math.floor((texturePlacement.imageRect.top
+            + (y + 0.5) / flame.height * texturePlacement.imageRect.height) * height));
           const maskValue = mask[sourceY * width + sourceX];
           if ((maskValue !== 0 && maskValue !== 1) || !isInterior(sourceX, sourceY, maskValue)) continue;
           if (maskValue === 1) interiorForegroundSamples += 1;
@@ -553,6 +555,7 @@ async function main() {
           if (maskValue === 0 && (!background || intensity > background.intensity)) background = candidate;
         }
         return { nativeFlameCanvasPng: flame.toDataURL('image/png'), width: flame.width, height: flame.height,
+          texturePlacement: { maskBounds, ...texturePlacement },
           foreground, background, diagnostics: { interiorForegroundSamples, interiorBackgroundSamples,
             brightSamplesInMaskForeground, brightSamplesInMaskBackground, rgbNonzeroPixels,
             nontransparentPixels, brightPixels, visibleBrightPixels, maxRgbSum, maxAlpha, brightBounds } };
@@ -560,7 +563,8 @@ async function main() {
       const nativeFlameCanvas = persistSamFlameCanvasDiagnostic({ outDir: out,
         dataUrl: flamePixelScan.nativeFlameCanvasPng, width: flamePixelScan.width, height: flamePixelScan.height,
         diagnostics: flamePixelScan.diagnostics });
-      report.compositionDiagnostic = { ...flamePixelScan.diagnostics, nativeFlameCanvas };
+      report.compositionDiagnostic = { ...flamePixelScan.diagnostics,
+        texturePlacement: flamePixelScan.texturePlacement, nativeFlameCanvas };
       lastTrustedEvidence = nativeFlameCanvas;
       saveReport();
       if (!flamePixelScan.foreground || !flamePixelScan.background) {
@@ -588,7 +592,8 @@ async function main() {
       report.flameComposition = { ...composition, selectedScore: selected.score,
         bridge: observed.bridge, volume: { backend: observed.volume.backend, frameCount: observed.volume.frameCount,
           simStepCount: observed.volume.simStepCount, storageBuffersPerShaderStage: observed.volume.storageBuffersPerShaderStage },
-        selectedIndices: observed.selectedIndices, pixelEvidence, sceneObjectId: observed.sceneObject.id };
+        selectedIndices: observed.selectedIndices, texturePlacement: flamePixelScan.texturePlacement,
+        pixelEvidence, sceneObjectId: observed.sceneObject.id };
       report.captures.push({ name: 'flame-composition', path: screenshotPath, visualInspection: 'pending-owner-inspection' });
       report.status = 'captured'; report.failurePhase = null;
       report.checks = { actualWebgpuMaskToLiveFlameComposition: 'passed', sourceProvenance: 'passed',

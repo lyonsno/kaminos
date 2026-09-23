@@ -8904,7 +8904,8 @@ async function ensureSamImageTools() {
   if (samImageToolsPromise) return samImageToolsPromise;
   samImageToolsPromise = (async () => {
     await sceneInitialization;
-    const { createSamImageTools, encodeSamFlameMaskPixels, fitSamFlameTexture, runSamFlameSceneTransaction } = await import('./sam-image-tools.js');
+    const { createSamImageTools, encodeSamFlameMaskPixels, fitSamFlameTextureToMask,
+      getSamFlameMaskBounds, runSamFlameSceneTransaction } = await import('./sam-image-tools.js');
     const inferenceSession = samHostContext?.inferenceSession || { device: renderer.backend.device };
     samImageTools = createSamImageTools({ inferenceSession, rendererDevice: renderer.backend.device, config: samHostConfig,
       onAsset() { if (pipelineDockState.activeAssetPalette === 'image') void loadPipelineAssetBrowser(); },
@@ -8932,7 +8933,9 @@ async function ensureSamImageTools() {
                     fireSimulationModified: false, persistence: 'live-only' },
                 } },
             }),
-            addMaskOverlay: plane => volumeBridge.addMaskOverlay(plane, proposal, { encodeSamFlameMaskPixels, fitSamFlameTexture }),
+            addMaskOverlay: plane => volumeBridge.addMaskOverlay(plane, proposal, {
+              encodeSamFlameMaskPixels, fitSamFlameTextureToMask, getSamFlameMaskBounds,
+            }),
             activateFlame: () => volumePrototype.setActive(true),
             removeImagePlane: plane => {
               const id = sceneObjectMetadataFor(plane)?.id;
@@ -18301,6 +18304,7 @@ function createVolumeMainRendererBridge() {
     record.target.remove(record.mesh);
     record.material.map = null;
     record.material.alphaMap = null;
+    record.flameTexture.dispose();
     record.maskTexture.dispose();
     record.material.dispose();
     record.mesh.geometry.dispose();
@@ -18315,7 +18319,7 @@ function createVolumeMainRendererBridge() {
     identity: 'volume-main-renderer-bridge-v0',
     mesh,
     texture: sourceTexture,
-    addMaskOverlay(target, proposal, { encodeSamFlameMaskPixels, fitSamFlameTexture }) {
+    addMaskOverlay(target, proposal, { encodeSamFlameMaskPixels, fitSamFlameTextureToMask, getSamFlameMaskBounds }) {
       if (!target?.isMesh || !Number.isFinite(target.geometry?.parameters?.width) || !Number.isFinite(target.geometry?.parameters?.height)) {
         throw new Error('SAM flame mask requires a source image plane');
       }
@@ -18334,13 +18338,17 @@ function createVolumeMainRendererBridge() {
       const imageData = context.createImageData(proposal.width, proposal.height);
       imageData.data.set(pixelData);
       context.putImageData(imageData, 0, 0);
+      const maskBounds = getSamFlameMaskBounds(proposal.mask, proposal.width, proposal.height);
       const maskTexture = new THREE.CanvasTexture(maskCanvas);
       maskTexture.generateMipmaps = false;
       maskTexture.minFilter = THREE.LinearFilter;
       maskTexture.magFilter = THREE.LinearFilter;
       maskTexture.wrapS = THREE.ClampToEdgeWrapping;
       maskTexture.wrapT = THREE.ClampToEdgeWrapping;
-      const material = new THREE.MeshBasicMaterial({ map: sourceTexture, alphaMap: maskTexture,
+      const flameTexture = sourceTexture.clone();
+      flameTexture.wrapS = THREE.ClampToEdgeWrapping;
+      flameTexture.wrapT = THREE.ClampToEdgeWrapping;
+      const material = new THREE.MeshBasicMaterial({ map: flameTexture, alphaMap: maskTexture,
         transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
         toneMapped: false, side: THREE.DoubleSide });
       const overlay = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
@@ -18354,9 +18362,9 @@ function createVolumeMainRendererBridge() {
         verificationState: proposal.verificationState, fireSimulationModified: false, persistence: 'live-only',
       };
       target.add(overlay);
-      const record = { target, mesh: overlay, material, maskTexture,
+      const record = { target, mesh: overlay, material, flameTexture, maskTexture, maskBounds,
         planeWidth: target.geometry.parameters.width, planeHeight: target.geometry.parameters.height,
-        width: proposal.width, height: proposal.height, fitSamFlameTexture };
+        width: proposal.width, height: proposal.height, fitSamFlameTextureToMask };
       maskedOverlays.add(record);
       for (const previous of [...maskedOverlays]) {
         if (previous !== record && previous.target === target) removeMaskOverlay(previous);
@@ -18381,13 +18389,15 @@ function createVolumeMainRendererBridge() {
         }
         return false;
       }
-      sourceTexture.needsUpdate = true;
+      if (maskedOverlays.size === 0) sourceTexture.needsUpdate = true;
       const fireCanvas = sourceTexture.image;
       for (const record of maskedOverlays) {
-        const fit = record.fitSamFlameTexture(fireCanvas.width, fireCanvas.height, record.width, record.height);
-        record.mesh.scale.set(record.planeWidth * fit.scaleX, record.planeHeight * fit.scaleY, 1);
-        record.maskTexture.repeat.set(fit.scaleX, fit.scaleY);
-        record.maskTexture.offset.set(fit.offsetX, fit.offsetY);
+        const fit = record.fitSamFlameTextureToMask(fireCanvas.width, fireCanvas.height,
+          record.width, record.height, record.maskBounds);
+        record.flameTexture.repeat.set(fit.uvTransform.repeatX, fit.uvTransform.repeatY);
+        record.flameTexture.offset.set(fit.uvTransform.offsetX, fit.uvTransform.offsetY);
+        record.flameTexture.needsUpdate = true;
+        record.mesh.scale.set(record.planeWidth, record.planeHeight, 1);
         record.mesh.visible = true;
         const composition = sceneObjectMetadataFor(record.target)?.image?.flameComposition;
         if (composition) composition.status = 'active';
