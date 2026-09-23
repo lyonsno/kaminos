@@ -9864,6 +9864,12 @@ fn refractionOutput(color: vec4<f32>, supportOrderingDepth: f32) -> CompositeOut
   return output;
 }
 
+fn refractionDiagnosticOutput(color: vec4<f32>, supportOrderingDepth: f32) -> CompositeOutput {
+  var output = refractionOutput(color, supportOrderingDepth);
+  output.depth = 0.0;
+  return output;
+}
+
 @fragment
 fn fs_composite(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOutput {
   let pixel = vec2<i32>(fragmentPosition.xy);
@@ -9949,7 +9955,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let supportOrderingDepth = readSupportOrderingDepth(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) {
     if (opticalDebugMode >= 38 && opticalDebugMode <= 40) {
-      return refractionOutput(vec4<f32>(-1.0, 0.0, 0.0, 1.0), supportOrderingDepth);
+      return refractionDiagnosticOutput(vec4<f32>(-1.0, 0.0, 0.0, 1.0), supportOrderingDepth);
     }
     discard;
   }
@@ -9957,7 +9963,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     let hostSceneDepth = textureLoad(deferredLinearDepthObject, pixel, 0).x;
     if (hostSceneDepth > 0.0 && supportOrderingDepth >= hostSceneDepth - 0.002) {
       if (opticalDebugMode >= 38 && opticalDebugMode <= 40) {
-        return refractionOutput(vec4<f32>(-2.0, 0.0, 0.0, 1.0), supportOrderingDepth);
+        return refractionDiagnosticOutput(vec4<f32>(-2.0, 0.0, 0.0, 1.0), supportOrderingDepth);
       }
       discard;
     }
@@ -10166,11 +10172,10 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     interfaceFrequencyMode == 1,
   );
   let robustBodyRadiance = max(bodyRadianceLowFrequency + bodyRadianceDirectionalResidual * transmissionDetailWeight, vec3<f32>(0.0));
-  let transmissionQueryValidity = select(queryValidity, 0.0, refractionQuery.hitKind == REFLECTION_HIT_ENVIRONMENT);
   let refractedRadiance = mix(
     refractedScene.rgb,
     select(transmissionQuadratureRadiance, robustBodyRadiance, bodyTransportMode == 1),
-    transmissionQueryValidity,
+    queryValidity,
   );
   if (opticalDebugMode == 21) {
     let fallbackDelta = abs(refractedRadiance - refractedScene.rgb);

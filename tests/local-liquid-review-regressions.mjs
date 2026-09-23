@@ -68,10 +68,15 @@ assert.equal(typeof host.readOpticalAnchors,'function','local host exposes exact
 const queryMetadataBranch=coreSource.match(/if \(opticalDebugMode == 38\) \{([\s\S]*?)\n  \}/)?.[1] || '';
 assert.ok(queryMetadataBranch.includes('refractionQuery.confidence,\n      1.0,'),
   'query metadata keeps a write alpha of one so source-over blending cannot corrupt the sampled fields');
-const transmissionMissBranch=coreSource.match(/let transmissionQueryValidity = select\(queryValidity, 0\.0, refractionQuery\.hitKind == REFLECTION_HIT_ENVIRONMENT\);([\s\S]*?)if \(opticalDebugMode == 21\)/)?.[1] || '';
-assert.ok(transmissionMissBranch.includes('let refractedRadiance = mix(')
-  && transmissionMissBranch.includes('transmissionQueryValidity,'),
-  'environment misses use the screen-space transmission fallback instead of environment radiance');
+const transmissionValidityLine=coreSource.match(/let transmissionQueryValidity[^\n]*/)?.[0] || '';
+assert.equal(transmissionValidityLine,'',
+  'environment query radiance remains eligible until a ray-validity predicate distinguishes valid environment exits');
+const diagnosticOutputHelper=coreSource.match(/fn refractionDiagnosticOutput\([\s\S]*?\n\}/)?.[0] || '';
+assert.ok(diagnosticOutputHelper.includes('output.depth = 0.0;'),
+  'diagnostic sentinel pixels bypass camera-far-dependent projected ordering depth');
+assert.ok(coreSource.includes('return refractionDiagnosticOutput(vec4<f32>(-1.0, 0.0, 0.0, 1.0), supportOrderingDepth);')
+  && coreSource.includes('return refractionDiagnosticOutput(vec4<f32>(-2.0, 0.0, 0.0, 1.0), supportOrderingDepth);'),
+  'unsupported and host-occluded sentinels use the diagnostic-only depth override');
 await assert.rejects(host.readOpticalAnchors([{id:'pool',x:8,y:7}]),/paused/, 'anchor readback requires frozen water');
 host.setPaused(true);
 host.setOpticalOptions({opticalDebugMode:'refraction_query_metadata'});
