@@ -416,8 +416,11 @@ export const WEBGPU_FOREGROUND_SERVICE_SCHEMA = 'kaminos.webgpu-foreground-servi
  * at cooperative GPU boundaries, and wrap CPU/worker-only waits in
  * withForeground(phase, work). That scope settles foreground callbacks before
  * returning to the model; it does not fence GPU execution or preempt a duty.
- * Await finish when model encoding ends, including on failure. dispose drains
- * idle callbacks after the last run; device/resource ownership stays external.
+ * Await finish when model encoding ends, including on failure. A rejected
+ * finish leaves the run latched and does not certify queue completion; retain
+ * model-owned resources. Idle renderer callbacks continue after that failure.
+ * dispose drains idle callbacks after the last run; device/resource ownership
+ * stays external.
  */
 export function createWebGpuForegroundService(input = {}) {
   const options = { ...input, queue: input.queue ?? input.device?.queue };
@@ -463,7 +466,8 @@ export function createWebGpuForegroundService(input = {}) {
       lastOutsideRunReceipt = receipt;
     });
     const finishing = current?.finishing;
-    idleTail = idleTail.then(() => finishing).then(() =>
+    // The model caller observes finish failure; it must not poison idle rendering.
+    idleTail = idleTail.then(() => finishing?.catch(() => undefined)).then(() =>
       interlock.serviceAtBoundary(serviceBoundary(null, 'foreground-idle')));
     return handle;
   }

@@ -10,13 +10,13 @@ const deferred = () => {
 const turn = () => new Promise(resolve => setImmediate(resolve));
 const boundary = { invocationId: 'i', boundaryId: 'b', dutyId: 'd', phase: 'gpu', position: 'before-encode' };
 const frame = requestId => ({ requestId, run: ctx => { ctx.submit([requestId]); return requestId; } });
-function fixture() {
+function fixture(overrides = {}) {
   const submissions = [];
   const device = { queue: { submit: buffers => submissions.push(...buffers) }, destroy() { assert.fail('borrowed device destroyed'); } };
   // Replay the first behavioral falsifier against the pre-existing public primitive.
   const factory = process.env.KIT_FOREGROUND_BASELINE === '1'
     ? kit.createWebGpuForegroundOpportunityInterlock : kit.createWebGpuForegroundService;
-  return { service: factory({ routeId: 'model', runId: 'legacy', device, queue: device.queue }), submissions, device };
+  return { service: factory({ routeId: 'model', runId: 'legacy', device, queue: device.queue, ...overrides }), submissions, device };
 }
 
 test('a frame completes without an inference run or fabricated consumer boundary', async () => {
@@ -117,6 +117,37 @@ if (process.env.KIT_FOREGROUND_BASELINE !== '1') {
     assert.equal((await pending.completion).runId, 'finishing');
     assert.equal((await late.completion).runId, null);
     assert.deepEqual(submissions, ['first', 'pending', 'late']);
+  });
+
+  test('a rejected finish quarantines the model run without blocking later renderer requests', async () => {
+    let clockReads = 0;
+    const unhandledRejections = [];
+    const collectUnhandled = reason => unhandledRejections.push(reason);
+    process.on('unhandledRejection', collectUnhandled);
+    const { service, submissions } = fixture({ now() {
+      clockReads += 1;
+      if (clockReads === 6) throw new Error('finish receipt clock failed');
+      return clockReads;
+    } });
+    try {
+      const run = await service.beginRun('quarantined');
+      service.request(frame('last-model-boundary'));
+
+      await assert.rejects(run.finish(), /finish receipt clock failed/);
+      assert.deepEqual(submissions, ['last-model-boundary']);
+
+      const renderer = service.request(frame('renderer-after-rejection'));
+      await turn();
+      assert.deepEqual(submissions, ['last-model-boundary', 'renderer-after-rejection']);
+      assert.equal((await renderer.completion).runId, null);
+      assert.equal(service.snapshot().activeRun.runId, 'quarantined');
+      assert.equal(service.snapshot().activeRun.finishing, true);
+      assert.throws(() => service.beginRun('must-not-reuse'), /active run/);
+      assert.throws(() => service.dispose(), /active run/);
+      assert.deepEqual(unhandledRejections, [], 'finish rejection must not poison the outside-run service queue');
+    } finally {
+      process.off('unhandledRejection', collectUnhandled);
+    }
   });
 
   test('idle cancellation, errors, duplicate reservation and expired submit use the interlock contract', async () => {
