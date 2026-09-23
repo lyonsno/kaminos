@@ -10325,13 +10325,34 @@ async function initScene() {
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();
+    let emitterScaleError = null;
     if (splatCorrectionTransformTarget()) {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
       const entry = selectedSceneObjectEntry();
-      if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);
+      if (entry?.type === LOCAL_LIQUID_EMITTER_TYPE && transformControls.dragging) {
+        // TransformControls mutates the scene object directly; publish that
+        // live pose as well as recording it in the shared scene edit history.
+        try {
+          normalizeLocalLiquidEmitterPose(sceneObjectTransformState(entry.object));
+          syncLocalLiquidEmitters();
+        } catch (error) {
+          const activeEdit = scenePlacementTools?.state().active;
+          if (!activeEdit || activeEdit.id !== entry.id) throw error;
+          // Emitters use one aperture radius, so reject an invalid scale as a
+          // whole gesture and keep both the visible object and inlet intact.
+          applySceneObjectTransformState(entry.object, activeEdit.before);
+          syncLocalLiquidEmitters();
+          emitterScaleError = error.message;
+          localLiquidStatus(emitterScaleError);
+        }
+      } else if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);
     }
     updateTransformInspector();
+    if (emitterScaleError) {
+      const hud = document.getElementById('scene-edit-hud');
+      if (hud) hud.textContent = emitterScaleError;
+    }
   });
   initTransformInspector();
   const viewportEl = document.getElementById('viewport');
