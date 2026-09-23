@@ -100,6 +100,16 @@ function scheduledRun({ generationId = 9, observedBoundaries = null, diagnosticG
     status: 'completed',
     settledAtMs: 1000 + index * 120,
     submissionCount: 1,
+    submissions: [{
+      submissionId: `frame-${index + 1}:submission:1`,
+      submissionSequence: 1,
+      commandBufferCount: 1,
+      submittedAtMs: 1000 + index * 120,
+      returnedAtMs: 1000 + index * 120,
+      submissionStatus: 'queue-submit-returned',
+      metadata: { simStepCount: 50 + index },
+      authority: 'queue-submit-call-returned-no-gpu-completion-or-presentation-claim',
+    }],
     boundary: {
       phase: 'ddim-sampling',
       position: 'before-encode',
@@ -215,6 +225,102 @@ assert.equal(
     () => validateSuccessfulRun(scheduledTerminal({ ...run, samples }), 'fence-light'),
     /sample.*(receipt|request|identity)/i,
     'a progressed sample must name the same current-run request as both authoritative receipt ledgers',
+  );
+}
+{
+  const run = scheduledRun({ scheduleMode: 'single-layer' });
+  const receipt = run.foregroundReceipts[0];
+  const unsettledReceipt = {
+    ...receipt,
+    settledAtMs: receipt.result.atMs + 0.9,
+  };
+  const capturedReceipts = run.foregroundReceipts.map(row => row.requestId === receipt.requestId ? unsettledReceipt : row);
+  const reportedReceipts = run.foregroundRunReport.receipts.map(row => row.requestId === receipt.requestId ? unsettledReceipt : row);
+  const samples = [
+    run.samples[0],
+    {
+      atMs: receipt.result.atMs + 0.5,
+      status: 'running',
+      frameCount: receipt.result.frameCount,
+      simStepCount: receipt.result.simStepCount,
+      foreground: { lastReceipt: unsettledReceipt },
+    },
+    run.samples[1],
+  ];
+  const withoutSettlement = receiptRow => {
+    const { settledAtMs, ...copy } = receiptRow;
+    return copy;
+  };
+  const mutatedRun = {
+    ...run,
+    foregroundReceipts: capturedReceipts.map(withoutSettlement),
+    foregroundRunReport: {
+      ...run.foregroundRunReport,
+      receipts: reportedReceipts.map(withoutSettlement),
+    },
+    samples: samples.map(sample => sample.foreground?.lastReceipt
+      ? { ...sample, foreground: { ...sample.foreground, lastReceipt: withoutSettlement(sample.foreground.lastReceipt) } }
+      : sample),
+  };
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal(mutatedRun), 'single-layer'),
+    /settlement|settled|timestamp/i,
+    'a progressed sample cannot use callback time as a substitute for missing receipt settlement time',
+  );
+}
+{
+  const run = scheduledRun();
+  const samples = [...run.samples];
+  const finalReceipt = samples[1].foreground.lastReceipt;
+  samples[1] = {
+    ...samples[1],
+    foreground: {
+      ...samples[1].foreground,
+      lastReceipt: { ...finalReceipt, submissions: [] },
+    },
+  };
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, samples }), 'fence-light'),
+    /sample.*(receipt|request|identity)/i,
+    'a progressed sample must carry the same queue-submission rows as both authoritative receipt ledgers',
+  );
+}
+{
+  const run = scheduledRun({ scheduleMode: 'single-layer' });
+  const pausedReceipts = run.foregroundReceipts.map((receipt, index) => {
+    const simStepCountBefore = 49 + Math.max(0, index - 1);
+    const simStepCount = 49 + Math.max(0, index);
+    const result = { ...receipt.result, simStepCount };
+    return {
+      ...receipt,
+      metadata: { ...receipt.metadata, simStepCountBefore },
+      submissions: receipt.submissions.map(submission => ({
+        ...submission,
+        metadata: { ...submission.metadata, simStepCount },
+      })),
+      result,
+    };
+  });
+  const finalReceipt = pausedReceipts.at(-1);
+  const samples = [
+    run.samples[0],
+    {
+      ...run.samples[1],
+      simStepCount: finalReceipt.result.simStepCount,
+      foreground: { ...run.samples[1].foreground, lastReceipt: finalReceipt },
+    },
+  ];
+  const pausedRun = {
+    ...run,
+    foregroundReceipts: pausedReceipts,
+    foregroundRunReport: { ...run.foregroundRunReport, receipts: pausedReceipts },
+    flameAfter: { ...run.flameAfter, simStepCount: finalReceipt.result.simStepCount },
+    samples,
+  };
+  assert.equal(
+    validateSuccessfulRun(scheduledTerminal(pausedRun), 'single-layer'),
+    pausedRun,
+    'a foreground frame with zero simulation increment during pause remains admissible when same-run simulation later advances',
   );
 }
 {

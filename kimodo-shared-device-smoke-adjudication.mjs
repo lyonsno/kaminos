@@ -162,17 +162,20 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
         throw new Error('Generation contains a duplicate current-run foreground frame request');
       }
       const atMs = receipt.result?.atMs;
-      const settledAtMs = receipt.settledAtMs ?? atMs;
+      const settledAtMs = receipt.settledAtMs;
       const frameBefore = receipt.metadata?.frameCountBefore;
       const simStepBefore = receipt.metadata?.simStepCountBefore;
       const frameAfter = receipt.result?.frameCount;
+      const submissions = Array.isArray(receipt.submissions) ? receipt.submissions : null;
       if (!Number.isFinite(atMs) || !Number.isSafeInteger(frameBefore)
         || !Number.isFinite(settledAtMs) || settledAtMs < atMs
         || !Number.isSafeInteger(simStepBefore) || !Number.isSafeInteger(frameAfter)
         || !Number.isSafeInteger(receipt.result?.simStepCount)
         || frameAfter !== frameBefore + 1
-        || receipt.result.simStepCount !== simStepBefore + 1) {
-        throw new Error('Generation foreground frame receipt lacks exact timestamp, frame-count, and simulation-count evidence');
+        || receipt.result.simStepCount < simStepBefore
+        || !submissions
+        || submissions.filter(row => row?.submissionStatus === 'queue-submit-returned').length !== receipt.submissionCount) {
+        throw new Error('Generation foreground frame receipt lacks exact settlement, frame-count, non-regressing simulation, or submission-row evidence');
       }
       captureByRequest.set(receipt.requestId, receiptSignatureForSample(receipt));
     }
@@ -236,13 +239,13 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
       } else {
         const receiptFrame = lastReceipt.result?.frameCount;
         const receiptSimStep = lastReceipt.result?.simStepCount;
-        const receiptAtMs = lastReceipt.settledAtMs ?? lastReceipt.result?.atMs;
+        const receiptAtMs = lastReceipt.settledAtMs;
         if (!Number.isSafeInteger(receiptFrame) || !Number.isSafeInteger(receiptSimStep)
           || receiptFrame !== frameCount || receiptSimStep !== simStepCount
           || !Number.isFinite(receiptAtMs) || receiptAtMs > atMs
           || lastReceipt.metadata?.frameCountBefore !== receiptFrame - 1
-          || lastReceipt.metadata?.simStepCountBefore !== receiptSimStep - 1) {
-          throw new Error('Generation sample foreground receipt frame, simulation count, or timestamp disagrees with the sample');
+          || lastReceipt.metadata?.simStepCountBefore > receiptSimStep) {
+          throw new Error('Generation sample foreground receipt frame, simulation count, or settlement timestamp disagrees with the sample');
         }
         const progressed = frameCount > initialFrame || simStepCount > initialSimStep;
         if (progressed && (lastReceipt.runId !== run.runId
@@ -266,7 +269,7 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
       throw new Error('Generation sampled progress is not covered by the exact foreground receipt stream');
     }
     const observedFrames = run.foregroundReceipts
-      .filter(receipt => receipt.result.atMs <= lastRunningSample.atMs
+      .filter(receipt => receipt.settledAtMs <= lastRunningSample.atMs
         && receipt.result.frameCount > initialFrame
         && receipt.result.frameCount <= maxSampledFrame)
       .map(receipt => receipt.result.frameCount)
@@ -290,19 +293,15 @@ function receiptSignatureForSample(receipt) {
     receipt.requestedAtMs,
     receipt.startedAtMs,
     receipt.settledAtMs,
+    receipt.elapsedMs,
     receipt.submissionCount,
-    receipt.boundary?.invocationId,
-    receipt.boundary?.boundaryId,
-    receipt.boundary?.phase,
-    receipt.boundary?.position,
-    receipt.boundary?.dutyId,
-    boundaryKey(receipt.boundary?.metadata),
-    receipt.metadata?.frameCountBefore,
-    receipt.metadata?.simStepCountBefore,
-    receipt.result?.status,
-    receipt.result?.atMs,
-    receipt.result?.frameCount,
-    receipt.result?.simStepCount,
+    JSON.stringify(receipt.submissions ?? null),
+    JSON.stringify(receipt.boundary ?? null),
+    JSON.stringify(receipt.metadata ?? null),
+    JSON.stringify(receipt.result ?? null),
+    JSON.stringify(receipt.cancellation ?? null),
+    JSON.stringify(receipt.failure ?? null),
+    receipt.authority,
   ]);
 }
 
