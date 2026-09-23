@@ -1553,7 +1553,7 @@ assert.match(core, /GPUBufferUsage\.STORAGE/, 'fluid state lives in WebGPU stora
 assert.match(core, /createComputePipeline/, 'fluid state advances through a WebGPU compute pipeline');
 assert.match(core, /const REQUIRED_PYRO_STORAGE_BUFFERS_PER_SHADER_STAGE = 10/, 'tiered pressure pipelines budget eight fluid and two pressure storage bindings on the volume device');
 assert.match(core, /adapterLimit < requiredStorageBuffersPerShaderStage[\s\S]*?throw new Error\([^)]*storage buffers per shader stage/, 'unsupported adapter storage-binding capacity fails before invalid pipeline creation');
-assert.match(core, /deviceLimit < requiredStorageBuffersPerShaderStage[\s\S]*?shared device exposes/, 'shared devices are checked against the volume pipeline binding contract');
+assert.match(core, /deviceLimit < requiredStorageBuffersPerShaderStage[\s\S]*?selected volume device exposes/, 'the selected volume device is checked against the pipeline binding contract');
 assert.match(core, /requiredLimits\.maxStorageBuffersPerShaderStage = requiredStorageBuffersPerShaderStage/, 'volume device requests the full storage-binding capacity used by tiered pressure pipelines');
 assert.match(core, /storageBuffersPerShaderStage: \{ required: REQUIRED_PYRO_STORAGE_BUFFERS_PER_SHADER_STAGE/, 'debug state preserves requested and effective volume-device binding limits');
 const bindGroupLayoutPosition = core.indexOf('bindGroupLayout = device.createBindGroupLayout');

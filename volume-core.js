@@ -7470,7 +7470,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.storageBuffersPerShaderStage.effective = deviceLimit;
     state.storageBuffersPerShaderStage.source = configuredSharedGpuContext?.device ? 'shared-device' : 'adapter-requested-device';
     if (deviceLimit < requiredStorageBuffersPerShaderStage) {
-      throw new Error(`Pyro tiered pressure pipelines require ${requiredStorageBuffersPerShaderStage} storage buffers per shader stage; shared device exposes ${deviceLimit}`);
+      throw new Error(`Pyro tiered pressure pipelines require ${requiredStorageBuffersPerShaderStage} storage buffers per shader stage; selected volume device exposes ${deviceLimit}`);
     }
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
