@@ -15,6 +15,23 @@ export function persistSamCaptureObservation({ report, name, path, pixels, saveR
   return capture;
 }
 
+export function persistSamFlameCanvasDiagnostic({ outDir, dataUrl, width, height, diagnostics }) {
+  assert.ok(typeof outDir === 'string' && outDir.length, 'flame diagnostic output directory is required');
+  assert.ok(Number.isSafeInteger(width) && width > 0 && Number.isSafeInteger(height) && height > 0,
+    'flame diagnostic dimensions must be positive integers');
+  assert.ok(diagnostics && typeof diagnostics === 'object', 'flame diagnostic metrics are required');
+  const match = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl || '');
+  assert.ok(match, 'flame diagnostic must be a PNG data URL');
+  const bytes = Buffer.from(match[1], 'base64');
+  assert.ok(bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+    'flame diagnostic PNG signature is invalid');
+  mkdirSync(outDir, { recursive: true });
+  const path = join(outDir, 'native-flame-canvas.png');
+  writeFileSync(path, bytes, { flag: 'wx' });
+  return { path, width, height, bytes: bytes.length,
+    sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`, diagnostics };
+}
+
 export async function persistSamEvidenceArtifact({ outDir, label, transferId, totalLength, readChunk, chunkSize = 262144 }) {
   assert.ok(typeof outDir === 'string' && outDir.length, 'evidence output directory is required');
   assert.match(label, /^[a-z0-9-]+$/, 'evidence label must be filesystem-safe');

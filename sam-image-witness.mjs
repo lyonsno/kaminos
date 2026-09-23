@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { validateSamConsumerInteraction, validateSamFlameComposition } from './sam-image-witness-checks.js';
-import { persistSamCaptureObservation, persistSamEvidenceArtifact, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
+import { persistSamCaptureObservation, persistSamEvidenceArtifact, persistSamFlameCanvasDiagnostic, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
 export { validateSamConsumerInteraction, validateSamConsumerExport } from './sam-image-witness-checks.js';
 
 export function validateSamConsumerOutput(output, { prompt, empty, previousId, cache }) {
@@ -489,7 +489,7 @@ async function main() {
         sceneObject: window.kaminosSceneObjectDebugState().find(row =>
           row.image?.maskProvenance?.invocationId === window.kaminosSamImageTools.output().invocationId),
       }));
-      const pixelEvidence = await page.evaluate(async sceneObjectId => {
+      const flamePixelScan = await page.evaluate(sceneObjectId => {
         const mask = window.kaminosSamImageTools.selectedMask();
         const imageRecord = window.kaminosSceneObjectDebugState().find(row => row.id === sceneObjectId);
         const [width, height] = imageRecord?.image?.maskProvenance?.dimensions || [];
@@ -514,27 +514,71 @@ async function main() {
           return true;
         };
         let foreground = null, background = null;
+        let interiorForegroundSamples = 0, interiorBackgroundSamples = 0;
+        let brightSamplesInMaskForeground = 0, brightSamplesInMaskBackground = 0;
+        let rgbNonzeroPixels = 0, nontransparentPixels = 0, brightPixels = 0, visibleBrightPixels = 0;
+        let maxRgbSum = 0, maxAlpha = 0, brightBounds = null;
         for (let y = 0; y < flame.height; y += 1) for (let x = 0; x < flame.width; x += 1) {
+          const pixel = (y * flame.width + x) * 4;
+          const red = flamePixels[pixel], green = flamePixels[pixel + 1], blue = flamePixels[pixel + 2];
+          const alpha = flamePixels[pixel + 3];
+          const intensity = red + green + blue;
+          if (red || green || blue) rgbNonzeroPixels += 1;
+          if (alpha) nontransparentPixels += 1;
+          if (alpha > maxAlpha) maxAlpha = alpha;
+          if (intensity > maxRgbSum) maxRgbSum = intensity;
+          if (intensity >= 80) {
+            brightPixels += 1;
+            if (alpha) visibleBrightPixels += 1;
+            if (!brightBounds) brightBounds = { left: x, top: y, right: x, bottom: y };
+            else {
+              brightBounds.left = Math.min(brightBounds.left, x);
+              brightBounds.top = Math.min(brightBounds.top, y);
+              brightBounds.right = Math.max(brightBounds.right, x);
+              brightBounds.bottom = Math.max(brightBounds.bottom, y);
+            }
+          }
           const sourceX = Math.min(width - 1, Math.floor((offsetX + (x + 0.5) / flame.width * scaleX) * width));
           const sourceY = Math.min(height - 1, Math.floor((offsetY + (y + 0.5) / flame.height * scaleY) * height));
           const maskValue = mask[sourceY * width + sourceX];
           if ((maskValue !== 0 && maskValue !== 1) || !isInterior(sourceX, sourceY, maskValue)) continue;
-          const pixel = (y * flame.width + x) * 4;
-          const intensity = flamePixels[pixel] + flamePixels[pixel + 1] + flamePixels[pixel + 2];
+          if (maskValue === 1) interiorForegroundSamples += 1;
+          else interiorBackgroundSamples += 1;
           if (intensity < 80) continue;
+          if (maskValue === 1) brightSamplesInMaskForeground += 1;
+          else brightSamplesInMaskBackground += 1;
           const candidate = { u: (sourceX + 0.5) / width, v: (sourceY + 0.5) / height,
             maskValue, intensity, sourceX, sourceY };
           if (maskValue === 1 && (!foreground || intensity > foreground.intensity)) foreground = candidate;
           if (maskValue === 0 && (!background || intensity > background.intensity)) background = candidate;
         }
-        if (!foreground || !background) throw new Error('No bright flame samples overlap both selected-mask foreground and background');
-        const samples = await window.__kaminosSampleSamFlamePixels(sceneObjectId, [foreground, background]);
-        return { authority: samples.authority,
-          foreground: { maskValue: foreground.maskValue, uv: [foreground.u, foreground.v],
-            sourceRgba: samples.source[0].rgba, composedRgba: samples.composed[0].rgba },
-          background: { maskValue: background.maskValue, uv: [background.u, background.v],
-            sourceRgba: samples.source[1].rgba, composedRgba: samples.composed[1].rgba } };
+        return { nativeFlameCanvasPng: flame.toDataURL('image/png'), width: flame.width, height: flame.height,
+          foreground, background, diagnostics: { interiorForegroundSamples, interiorBackgroundSamples,
+            brightSamplesInMaskForeground, brightSamplesInMaskBackground, rgbNonzeroPixels,
+            nontransparentPixels, brightPixels, visibleBrightPixels, maxRgbSum, maxAlpha, brightBounds } };
       }, observed.sceneObject.id);
+      const nativeFlameCanvas = persistSamFlameCanvasDiagnostic({ outDir: out,
+        dataUrl: flamePixelScan.nativeFlameCanvasPng, width: flamePixelScan.width, height: flamePixelScan.height,
+        diagnostics: flamePixelScan.diagnostics });
+      report.compositionDiagnostic = { ...flamePixelScan.diagnostics, nativeFlameCanvas };
+      lastTrustedEvidence = nativeFlameCanvas;
+      saveReport();
+      if (!flamePixelScan.foreground || !flamePixelScan.background) {
+        const error = new Error('No bright flame samples overlap both selected-mask foreground and background');
+        error.compositionDiagnostic = report.compositionDiagnostic;
+        throw error;
+      }
+      const presentedPixels = await page.evaluate(({ sceneObjectId, foreground, background }) =>
+        window.__kaminosSampleSamFlamePixels(sceneObjectId, [foreground, background]), {
+        sceneObjectId: observed.sceneObject.id, foreground: flamePixelScan.foreground, background: flamePixelScan.background,
+      });
+      const pixelEvidence = { authority: presentedPixels.authority,
+        foreground: { maskValue: flamePixelScan.foreground.maskValue,
+          uv: [flamePixelScan.foreground.u, flamePixelScan.foreground.v],
+          sourceRgba: presentedPixels.source[0].rgba, composedRgba: presentedPixels.composed[0].rgba },
+        background: { maskValue: flamePixelScan.background.maskValue,
+          uv: [flamePixelScan.background.u, flamePixelScan.background.v],
+          sourceRgba: presentedPixels.source[1].rgba, composedRgba: presentedPixels.composed[1].rgba } };
       const composition = validateSamFlameComposition({ output, bridge: observed.bridge,
         sceneObject: observed.sceneObject, sourceSha256: report.inputs.image.sha256,
         expectedPrompt: prompt, presentation: observed.presentation, selectedIndices: observed.selectedIndices,

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const hostSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const toolsSource = readFileSync(new URL('../sam-image-tools.js', import.meta.url), 'utf8');
+const witnessSource = readFileSync(new URL('../sam-image-witness.mjs', import.meta.url), 'utf8');
 const overlayMethod = hostSource.match(/addMaskOverlay\(target, proposal[\s\S]*?removeMaskOverlaysForTarget\(target\)/)?.[0] || '';
 const bridgeSource = hostSource.match(/function createVolumeMainRendererBridge\(\)[\s\S]*?async function initKaminosVolumeRoute\(\)/)?.[0] || '';
 assert.match(toolsSource, /sourceImageElement:\s*image/, 'mask proposal must carry the exact decoded image whose bytes were hashed');
@@ -17,6 +18,14 @@ assert.match(bridgeSource, /setCompositionPresentation\(active\)/, 'composition 
 assert.match(hostSource, /entry\.object === samFlameImagePlane[\s\S]*?setCompositionPresentation\(false\)/, 'removing the composed source plane must restore normal canvas presentation');
 assert.ok(overlayMethod && !overlayMethod.includes('clearMaskOverlays()'),
   'staging a replacement overlay must preserve the previous composition until commit');
+const canvasDiagnosticPersistence = witnessSource.indexOf('persistSamFlameCanvasDiagnostic(');
+const overlapFailure = witnessSource.indexOf("const error = new Error('No bright flame samples overlap both selected-mask foreground and background')");
+assert.ok(canvasDiagnosticPersistence >= 0 && canvasDiagnosticPersistence < overlapFailure,
+  'native flame pixels and mask-overlap metrics must be persisted before the overlap assertion can fail');
+assert.match(witnessSource, /brightSamplesInMaskForeground/,
+  'flame composition failure must report how many bright native pixels overlap selected foreground');
+assert.match(witnessSource, /nativeFlameCanvasPng/,
+  'flame composition failure must preserve raw native canvas pixels for visual diagnosis');
 
 const toolsModule = await import('../sam-image-tools.js');
 assert.equal(typeof toolsModule.runSamFlameSceneTransaction, 'function', 'flame composition needs a rollback-tested scene transaction');

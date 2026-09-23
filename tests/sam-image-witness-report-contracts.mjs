@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const { persistSamEvidenceArtifact, writeSamTerminalFailure } = await import('../sam-image-witness-report.mjs');
+const { persistSamEvidenceArtifact, persistSamFlameCanvasDiagnostic, writeSamTerminalFailure } = await import('../sam-image-witness-report.mjs');
 const { createSamImageTools } = await import('../sam-image-tools.js');
 const elements = new Map();
 globalThis.document = {
@@ -39,6 +39,19 @@ try {
   assert.equal(reference.sha256, `sha256:${createHash('sha256').update(source).digest('hex')}`);
   assert.equal(readFileSync(reference.path, 'utf8'), source, 'persisted evidence changed during chunk transfer');
   assert.equal(Object.hasOwn(reference, 'evidence'), false, 'aggregate report should carry a reference, not the full evidence object');
+
+  const flamePng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=', 'base64');
+  const flameReference = persistSamFlameCanvasDiagnostic({ outDir: directory,
+    dataUrl: `data:image/png;base64,${flamePng.toString('base64')}`, width: 1, height: 1,
+    diagnostics: { brightSamplesInMaskForeground: 0, brightSamplesInMaskBackground: 0 } });
+  assert.equal(flameReference.width, 1);
+  assert.equal(flameReference.height, 1);
+  assert.equal(flameReference.bytes, flamePng.length);
+  assert.equal(flameReference.sha256, `sha256:${createHash('sha256').update(flamePng).digest('hex')}`);
+  assert.deepEqual(readFileSync(flameReference.path), flamePng, 'native flame pixels were not preserved exactly');
+  assert.deepEqual(flameReference.diagnostics, { brightSamplesInMaskForeground: 0, brightSamplesInMaskBackground: 0 });
+  assert.throws(() => persistSamFlameCanvasDiagnostic({ outDir: directory,
+    dataUrl: 'data:image/jpeg;base64,AA==', width: 1, height: 1, diagnostics: {} }), /PNG data URL/);
 
   await assert.rejects(persistSamEvidenceArtifact({ outDir: directory, label: 'misrouted', transferId: 'expected',
     totalLength: source.length, readChunk({ offset, totalLength }) {
