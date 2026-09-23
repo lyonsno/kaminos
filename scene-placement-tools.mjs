@@ -1,6 +1,23 @@
 import { Vector2, Vector3, Raycaster, Plane } from './lib/three.core.js';
 import { createSceneEdits, transformPose, axisVector } from './scene-edit-session.mjs';
 
+export function getPivotViewState(camera, point, width, height) {
+  camera.updateMatrixWorld(true);
+  const viewPoint = new Vector3(point.x, point.y, point.z).applyMatrix4(camera.matrixWorldInverse);
+  const depth = -viewPoint.z;
+  if (!Number.isFinite(depth) || depth < 0) return { state: 'behind-camera' };
+  if (depth < camera.near || depth > camera.far) return { state: 'outside-view' };
+  const projected = new Vector3(point.x, point.y, point.z).project(camera);
+  if (![projected.x, projected.y, projected.z].every(Number.isFinite) || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1 || projected.z < -1 || projected.z > 1) {
+    return { state: 'outside-view' };
+  }
+  return {
+    state: 'visible',
+    x: (projected.x + 1) * width / 2,
+    y: (1 - projected.y) * height / 2,
+  };
+}
+
 export function installScenePlacementTools({
   viewport, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, frameSelected = () => {},
@@ -137,24 +154,43 @@ export function installScenePlacementTools({
     camera.updateMatrixWorld(true);
     const id = selected(), target = id ? object(id) : null, current = modal;
     const label = target?.userData?.kaminosSceneObject?.label || id;
+    const authoredPose = id ? pose() : null;
+    const pivotState = authoredPose ? getPivotViewState(camera, { x: authoredPose.position[0], y: authoredPose.position[1], z: authoredPose.position[2] }, viewport.clientWidth, viewport.clientHeight) : null;
+    const pivotRecovery = edits.state().active
+      ? 'finish edit with Enter/Esc, then F to frame pivot and object'
+      : 'F to frame pivot and object';
+    const pivotHint = pivotState?.state === 'behind-camera'
+      ? ` · Pivot hidden: selected pivot is behind the camera · ${pivotRecovery}`
+      : pivotState?.state === 'outside-view'
+        ? ` · Pivot hidden: selected pivot is outside the view · ${pivotRecovery}`
+        : '';
+    hud.dataset.alert = String(!!pivotHint);
     hud.dataset.active = String(!!edits.state().active);
     if (current) {
       const value = current.numeric || (current.operation === 'rotate' ? `${((current.amount || 0) * 180 / Math.PI).toFixed(1)}°` : (current.amount ?? (current.operation === 'scale' ? 1 : 0)).toFixed(3));
       hud.textContent = `${{ translate: 'Move', rotate: 'Rotate', scale: 'Scale' }[current.operation]} ${current.axis ? (current.plane ? 'plane ⟂ ' : '') + current.axis.toUpperCase() : ''} · ${current.axis ? current.frame : 'view'} · ${value} · ${current.snap ? 'Snap ' + (current.operation === 'rotate' ? '5°' : '0.1') + ' · ' : ''}Enter / LMB confirm · Esc / RMB cancel`;
     } else if (field) hud.textContent = 'Edit value · drag axis label to adjust · Enter confirm · Esc cancel';
     else hud.textContent = id ? `${label} · G Move · R Rotate · S Scale · X/Y/Z constrain · Ctrl snap · Shift fine · F frame · ⌘/Ctrl Z undo` : 'Select an object to place it';
+    if (id) hud.textContent += pivotHint;
+    if (pivotHint) {
+      const viewportRect = viewport.getBoundingClientRect();
+      const statusRect = document.getElementById('info-bar')?.getBoundingClientRect();
+      hud.style.bottom = statusRect
+        ? `${Math.max(34, viewportRect.bottom - statusRect.top + 8)}px`
+        : '112px';
+    } else hud.style.bottom = '';
     const width = viewport.clientWidth, height = viewport.clientHeight;
     overlay.setAttribute('viewBox', `0 0 ${width} ${height}`);
     let lines = '';
     const line = (a, b, color, opacity = 1, dash = '') => {
       if ([a.x, a.y, b.x, b.y].every(Number.isFinite)) lines += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${color}" opacity="${opacity}" stroke-width="1.3" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
     };
-    if (target) {
+    if (target && pivotState?.state === 'visible') {
       target.updateWorldMatrix(true, true);
-      const origin = screen(new Vector3(...pose().position));
+      const origin = new Vector2(pivotState.x, pivotState.y);
       for (const [a, b] of [[[0, -5], [5, 0]], [[5, 0], [0, 5]], [[0, 5], [-5, 0]], [[-5, 0], [0, -5]]]) line(origin.clone().add(new Vector2(...a)), origin.clone().add(new Vector2(...b)), '#efa544');
       if (current?.axis) {
-        const pivot = new Vector3(...current.base.position), p = screen(pivot);
+        const pivot = new Vector3(...authoredPose.position), p = origin;
         const d = axisVector(current.axis, current.frame, current.frameRotation).multiplyScalar(camera.position.distanceTo(pivot) * .01);
         const axisLine = screen(pivot.clone().add(d)).sub(p).normalize().multiplyScalar(Math.hypot(width, height));
         line(p.clone().sub(axisLine), p.clone().add(axisLine), { x: '#ed6565', y: '#8cca68', z: '#669fee' }[current.axis], .8, '5 3');
@@ -208,7 +244,7 @@ export function installScenePlacementTools({
     if (!(hover || viewport.contains(document.activeElement)) || !allowed() || busy()) return;
     if ((event.ctrlKey || event.metaKey) && key === 'z') { steal(event); try { event.shiftKey ? edits.redo() : edits.undo(); } catch (error) { hud.textContent = error.message; } return; }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (key === 'f' || event.code === 'NumpadDecimal') { steal(event); frameSelected(); return; }
+    if (key === 'f' || event.code === 'NumpadDecimal') { steal(event); frameSelected(); draw(); return; }
     if (['g', 'r', 's'].includes(key)) { steal(event); start({ g: 'translate', r: 'rotate', s: 'scale' }[key]); }
   }, true);
   document.addEventListener('keyup', event => { if (modal && ['Control', 'Shift'].includes(event.key)) { modal.snap = event.ctrlKey; modal.precise = event.shiftKey; preview(); } }, true);
@@ -251,6 +287,11 @@ export function installScenePlacementTools({
   });
   gizmo.addEventListener('mouseUp', () => { if (gizmoEditing) { const prior = gizmoPrior; finish(true); queueMicrotask(() => restoreControls(prior)); } });
   draw();
+  const statusBar = document.getElementById('info-bar');
+  if (statusBar && typeof ResizeObserver !== 'undefined') {
+    const statusResizeObserver = new ResizeObserver(() => draw());
+    statusResizeObserver.observe(statusBar);
+  }
   return {
     edits, state, start, finish, selectionChanged, draw,
     clear() { finish(false); edits.clear(); draw(); },
