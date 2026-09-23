@@ -402,18 +402,32 @@ export function snapshotTrellisDinoV3PrefixBlockInputs({ sourceImage, pixelValue
   };
 }
 
+// Caller callbacks can run after every phase. Bind the receipt and returned
+// request to the claims inspected before any asynchronous execution begins.
+export function snapshotTrellisDinoV3PrefixBlockClaims({ request, model, kernel, route, backendIdentity }) {
+  return {
+    request: structuredClone(request),
+    model: model == null ? model : structuredClone(model),
+    kernel: kernel == null ? kernel : structuredClone(kernel),
+    route: route == null ? route : structuredClone(route),
+    backendIdentity: backendIdentity == null ? backendIdentity : structuredClone(backendIdentity),
+  };
+}
+
 export async function runTrellisDinoV3PrefixBlockPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   if (input.residentTensorResolver != null) throw new Error('residentTensorResolver is not admitted for pinned input custody without GPU-buffer content attestation');
-  const route = input.route || createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel: input.kernel });
-  const sourceImageArtifact = roleArtifact(input.request.inputs, 'source-image');
-  const pixelValuesArtifact = roleArtifact(input.request.inputs, 'trellis-dinov3-normalized-pixels');
-  const checkpointArtifact = roleArtifact(input.request.inputs, 'trellis-dinov3-checkpoint-tensors');
+  const claims = snapshotTrellisDinoV3PrefixBlockClaims(input);
+  const { request, model, kernel, backendIdentity } = claims;
+  const route = claims.route || createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel });
+  const sourceImageArtifact = roleArtifact(request.inputs, 'source-image');
+  const pixelValuesArtifact = roleArtifact(request.inputs, 'trellis-dinov3-normalized-pixels');
+  const checkpointArtifact = roleArtifact(request.inputs, 'trellis-dinov3-checkpoint-tensors');
   const validated = validateInputs(input.tensors || {});
   const { shape } = validated;
   const { pixelValues, sourceImage, weights } = snapshotTrellisDinoV3PrefixBlockInputs(validated);
   if (route.model?.id !== MODEL_ID || route.model?.revision !== MODEL_REVISION || route.model?.dtype !== 'fp32') throw new Error('route model identity differs from pinned F32 DINOv3 checkpoint');
-  if (input.model?.id !== MODEL_ID || input.model?.revision !== MODEL_REVISION || input.model?.dtype !== 'fp32' || input.model?.weightsHash !== MODEL_WEIGHTS_SHA256) throw new Error('invocation model identity differs from pinned F32 DINOv3 checkpoint');
+  if (model?.id !== MODEL_ID || model?.revision !== MODEL_REVISION || model?.dtype !== 'fp32' || model?.weightsHash !== MODEL_WEIGHTS_SHA256) throw new Error('invocation model identity differs from pinned F32 DINOv3 checkpoint');
   if (sourceImageArtifact.sha256 !== await sha256Hex(sourceImage)) throw new Error('source-image digest mismatch with uploaded bytes');
   if (pixelValuesArtifact.sha256 !== await sha256Hex(pixelValues)) throw new Error('normalized-pixels digest mismatch with uploaded F32 bytes');
   const actualWeightBundleSha256 = await computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights);
@@ -423,7 +437,7 @@ export async function runTrellisDinoV3PrefixBlockPhaseProgramRoute(input = {}) {
     routeId: TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID,
     runtimeLabel: input.runtimeLabel || 'trellis-dinov3-prefix-block0-phase-program',
     device: input.device, queue: input.queue, adapter: input.adapter, adapterName: input.adapterName, browser: input.browser,
-    backendIdentity: input.backendIdentity, kernel: input.kernel || route.kernel, requiredStages: REQUIRED_STAGES,
+    backendIdentity, kernel: kernel || route.kernel, requiredStages: REQUIRED_STAGES,
     timingSource: 'queue-submit-wait', waitForSubmittedWorkDone: true, yieldMs: 0, now: input.now, yield: input.yield,
   });
 
@@ -580,13 +594,13 @@ export async function runTrellisDinoV3PrefixBlockPhaseProgramRoute(input = {}) {
       prefixHiddenStates:await sha256Hex(run.outputs.prefixHiddenStates),
       block0HiddenStates:await sha256Hex(run.outputs.block0HiddenStates),
     };
-    const outputRecords = outputArtifacts(input.request,hashes,shape);
+    const outputRecords = outputArtifacts(request,hashes,shape);
     const receipt = createTrellisDinoV3PrefixBlockPhaseProgramRouteReceipt({
       sourceImage:sourceImageArtifact,pixelValues:pixelValuesArtifact,weights:checkpointArtifact,outputs:outputRecords,
-      backend:runtime.backendIdentity,model:{id:input.model?.id||route.model?.id,revision:input.model?.revision||route.model?.revision,weightsHash:input.model?.weightsHash,dtype:'fp32'},
-      kernel:input.kernel||runtime.kernel,profile:runtime.profile,
+      backend:runtime.backendIdentity,model:{id:model?.id||route.model?.id,revision:model?.revision||route.model?.revision,weightsHash:model?.weightsHash,dtype:'fp32'},
+      kernel:kernel||runtime.kernel,profile:runtime.profile,
     });
-    const result=assertAuthoritativeRouteWorkerResult(createRouteWorkerResult(route,{request:input.request,receipt}),route);
+    const result=assertAuthoritativeRouteWorkerResult(createRouteWorkerResult(route,{request,receipt}),route);
     if (input.includeReadback===true) result.debugReadback={mode:'explicit-debug-evidence',dtype:'float32',patchEmbeddings:new Float32Array(run.outputs.patchEmbeddings),prefixHiddenStates:new Float32Array(run.outputs.prefixHiddenStates),block0HiddenStates:new Float32Array(run.outputs.block0HiddenStates),lastCompletedPhase};
     return result;
   } catch(error) {

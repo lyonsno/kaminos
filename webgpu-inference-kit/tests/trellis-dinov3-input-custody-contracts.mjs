@@ -84,4 +84,22 @@ assert.equal(captured.sourceImage[0], originalImageByte, 'post-hash source mutat
 assert.equal(captured.pixelValues[0], originalPixel, 'post-hash pixel mutation cannot change uploaded bytes');
 assert.equal(captured.weights.qWeight[0], originalWeight, 'post-hash weight mutation cannot change uploaded bytes');
 
+assert.equal(typeof routeModule.snapshotTrellisDinoV3PrefixBlockClaims, 'function', 'receipt claims need a private pre-await capture');
+const request = inputWithHashes(digest(sourceImage), digest(pixelValues)).request;
+const originalRequestHash = request.inputs['source-image'].sha256;
+const claimModel = { ...pinnedModel };
+const claimKernel = { profile: 'trellis2-dinov3-prefix-block0-phase-program-v0', commit: 'test-commit' };
+const claimRoute = { routeId: 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0', model: { ...pinnedModel }, kernel: claimKernel };
+const claims = routeModule.snapshotTrellisDinoV3PrefixBlockClaims({ request, model: claimModel, kernel: claimKernel, route: claimRoute });
+request.inputs['source-image'].sha256 = `sha256:${'f'.repeat(64)}`;
+request.outputs['trellis-dinov3-block0-hidden-states'] = { artifactId: 'forged-output' };
+claimModel.weightsHash = `sha256:${'e'.repeat(64)}`;
+claimKernel.commit = 'forged-commit';
+claimRoute.model.revision = 'forged-revision';
+assert.equal(claims.request.inputs['source-image'].sha256, originalRequestHash, 'callback cannot rewrite the validated input hash');
+assert.equal(claims.request.outputs['trellis-dinov3-block0-hidden-states'], undefined, 'callback cannot rewrite output artifact identity');
+assert.equal(claims.model.weightsHash, pinnedModel.weightsHash, 'callback cannot rewrite the pinned model claim');
+assert.equal(claims.kernel.commit, 'test-commit', 'callback cannot rewrite kernel provenance');
+assert.equal(claims.route.model.revision, pinnedModel.revision, 'callback cannot rewrite route model identity');
+
 console.log('TRELLIS DINOv3 direct-route input custody contracts passed');
