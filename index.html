@@ -3236,6 +3236,7 @@ import {
   SCENE_SCHEMA,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
+  normalizeWorldCartridgeContext,
   planSceneRestore,
 } from './scene-persistence-core.js';
 import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
@@ -3335,6 +3336,47 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
+
+function worldCartridgeContextFromRoute(params = initialViewerParams) {
+  const cartridgeId = params.get('world_cartridge');
+  const crucibleId = params.get('world_crucible');
+  if (!cartridgeId && !crucibleId) return null;
+  const resultId = params.get('world_result');
+  const resultKind = params.get('world_result_kind');
+  return normalizeWorldCartridgeContext({
+    schema: 'kaminos.world-cartridge.context.v0',
+    cartridgeId,
+    crucibleId,
+    makingIntent: params.get('world_making_intent'),
+    armatureId: params.get('world_armature'),
+    handleId: params.get('world_handle'),
+    firingId: params.get('world_firing'),
+    receiptRef: params.get('world_receipt'),
+    result: resultId || resultKind ? {
+      id: resultId,
+      kind: resultKind,
+      label: params.get('world_result_label'),
+    } : null,
+  });
+}
+
+let activeWorldCartridgeContext = worldCartridgeContextFromRoute();
+
+function worldCartridgeContextForPipelineArtifact(result, artifact) {
+  if (!activeWorldCartridgeContext) return null;
+  const firingId = result?.runId || result?.clientRunId || result?.jobId || activeWorldCartridgeContext.firingId;
+  const receiptRef = result?.report?.path || result?.bundleIndex?.path || result?.resultPath || activeWorldCartridgeContext.receiptRef;
+  return normalizeWorldCartridgeContext({
+    ...activeWorldCartridgeContext,
+    firingId,
+    receiptRef,
+    result: {
+      id: artifact?.path || firingId || 'pipeline-output',
+      kind: 'cast',
+      label: artifact?.label || artifact?.role || artifact?.path?.split('/').pop() || 'Pipeline Output',
+    },
+  });
+}
 
 const publishVolumeCockpitLayoutPhase = phase => {
   window.__kaminosVolumeCockpitLayoutReceipt = {
@@ -5878,13 +5920,20 @@ function renderSceneObjectRow(record, options = {}) {
   const typeLabel = record.type || 'object';
   const reloadability = sceneObjectReloadabilityLabel(record);
   const source = record.source || 'no source';
+  const cartridgeContext = record.cartridgeContext;
+  const cartridgeLabel = cartridgeContext
+    ? `${cartridgeContext.cartridgeId} / ${cartridgeContext.crucibleId}`
+    : null;
+  const resultKind = cartridgeContext?.result?.kind || 'crucible';
   return `
     <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
         <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name">
         <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
+        ${cartridgeLabel ? `<span class="scene-object-meta" data-scene-object-cartridge-context="${escapeHtml(record.id)}">${escapeHtml(cartridgeLabel)}</span>` : ''}
       </span>
       <span class="scene-object-actions">
+        ${cartridgeLabel ? `<span class="scene-object-chip" title="${escapeHtml(cartridgeLabel)}">${escapeHtml(resultKind)}</span>` : ''}
         <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
         <button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>
       </span>
@@ -6174,6 +6223,7 @@ function registerSceneObject(object, metadata = {}) {
     renderRoute: metadata.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
+    cartridgeContext: normalizeWorldCartridgeContext(metadata.cartridgeContext),
     sceneTransform,
   };
   object.userData.kaminosSceneObject = {
@@ -6189,6 +6239,7 @@ function registerSceneObject(object, metadata = {}) {
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
+    cartridgeContext: record.cartridgeContext,
     sceneTransform: record.sceneTransform,
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
@@ -6245,7 +6296,19 @@ window.kaminosSceneObjectDebugState = function() {
     renderRoute: record.renderRoute || null,
     renderCapabilities: record.renderCapabilities || null,
     renderHandoffSchema: record.renderHandoffSchema || null,
+    cartridgeContext: record.cartridgeContext || null,
   }));
+};
+
+window.kaminosWorldCartridgeContextDebugState = function() {
+  const selected = sceneObjects.find(record => record.id === activeSceneObjectId)?.cartridgeContext || null;
+  return {
+    active: activeWorldCartridgeContext ? structuredClone(activeWorldCartridgeContext) : null,
+    selected: selected ? structuredClone(selected) : null,
+    objects: sceneObjects
+      .filter(record => record.cartridgeContext)
+      .map(record => ({ id: record.id, cartridgeContext: structuredClone(record.cartridgeContext) })),
+  };
 };
 
 window.kaminosSplatPreviewDebugState = function(id = null) {
@@ -18363,6 +18426,7 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
         source: url,
         fileName,
         label: 'Pipeline Output',
+        cartridgeContext: worldCartridgeContextForPipelineArtifact(result, artifact),
         splat: {
           schema: 'kaminos.splat-asset.v0',
           assetSource: url,
@@ -23209,6 +23273,7 @@ async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch
       clear: true,
       metadata: {
         ...greenroomMeshMetadata({ title: route.label }, route.fileName, route.effectiveUrl),
+        cartridgeContext: activeWorldCartridgeContext,
         assetSmokeLink: {
           schema: 'kaminos.asset-smoke-link.v0',
           assetType: 'mesh',
@@ -23271,6 +23336,7 @@ async function loadKaminosSplatAssetRoute(route = kaminosSplatAssetRouteFromSear
         source: route.effectiveUrl,
         fileName: route.fileName,
         label: route.label,
+        cartridgeContext: activeWorldCartridgeContext,
         assetSmokeLink: {
           schema: 'kaminos.asset-smoke-link.v0',
           assetType: 'splat',
@@ -23346,6 +23412,7 @@ async function loadKaminosImageAssetRoute(route = kaminosImageAssetRouteFromSear
         type: 'image',
         fileName: route.fileName,
         label: route.label,
+        cartridgeContext: activeWorldCartridgeContext,
         assetSmokeLink: {
           schema: 'kaminos.asset-smoke-link.v0',
           assetType: 'image',
@@ -24827,6 +24894,7 @@ function serializeSceneObject(entry) {
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
+    cartridgeContext: metadata.cartridgeContext ?? entry.cartridgeContext ?? null,
   };
 }
 
@@ -24924,6 +24992,7 @@ function buildSceneData(capture = null) {
     activeObjectId: activeSceneObjectId,
     activeGroupId: activeSceneGroupId,
     provenance,
+    cartridgeContext: activeWorldCartridgeContext,
     composition: activeSceneComposition,
     capture,
     camera: {
@@ -25613,6 +25682,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
   sceneParameterTools?.sync();
   scenePlacementTools?.edits.clear();
+  activeWorldCartridgeContext = restorePlan.cartridgeContext;
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);

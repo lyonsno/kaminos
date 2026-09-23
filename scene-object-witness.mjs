@@ -222,6 +222,390 @@ async function runMeshAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
+async function runWorldCartridgeContinuityScenario(ws) {
+  phase = 'scenario-world-cartridge-continuity';
+  lastEvidence.worldCartridgeContinuity = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const params = new URLSearchParams(location.search);
+      const expected = {
+        schema: 'kaminos.world-cartridge.context.v0',
+        cartridgeId: params.get('world_cartridge'),
+        crucibleId: params.get('world_crucible'),
+        makingIntent: params.get('world_making_intent'),
+        armatureId: params.get('world_armature'),
+        handleId: params.get('world_handle'),
+        firingId: params.get('world_firing'),
+        receiptRef: params.get('world_receipt'),
+        result: {
+          id: params.get('world_result'),
+          kind: params.get('world_result_kind'),
+          label: params.get('world_result_label'),
+        },
+      };
+      if (!expected.cartridgeId || !expected.crucibleId || !expected.result.id || expected.result.kind !== 'cast') {
+        throw new Error('world cartridge route omitted its required making context: ' + JSON.stringify(expected));
+      }
+      const provenanceExpectation = {
+        root: params.get('mesh_root'),
+        assetPath: params.get('mesh_path'),
+        sha256: params.get('world_result_sha256'),
+        receiptPath: params.get('world_receipt_path'),
+        metadataPath: params.get('world_metadata_path'),
+        producerModel: params.get('world_producer_model'),
+        producerJobId: params.get('world_producer_job_id'),
+        negativeAssetPath: params.get('world_provenance_negative_path'),
+      };
+      if (Object.values(provenanceExpectation).some(value => !value)) {
+        throw new Error('world cartridge route omitted independently checkable SF3D provenance: ' + JSON.stringify(provenanceExpectation));
+      }
+      const assetUrl = path => '/api/read?root=' + encodeURIComponent(provenanceExpectation.root) + '&path=' + encodeURIComponent(path);
+      const fetchJsonAsset = async path => {
+        const response = await fetch(assetUrl(path));
+        const data = await response.json();
+        if (!response.ok || data.error) throw new Error('provenance JSON fetch failed: ' + JSON.stringify({ path, status: response.status, data }));
+        return data;
+      };
+      const fetchAssetBytes = async path => {
+        const response = await fetch(assetUrl(path));
+        if (!response.ok) throw new Error('provenance asset fetch failed: ' + JSON.stringify({ path, status: response.status }));
+        return new Uint8Array(await response.arrayBuffer());
+      };
+      const sha256 = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+        .map(value => value.toString(16).padStart(2, '0')).join('');
+      const isGlb = bytes => bytes.length >= 4 && String.fromCharCode(...bytes.slice(0, 4)) === 'glTF';
+      const listScenes = async () => {
+        const resp = await fetch('/api/browse?root=scenes&path=');
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error('cartridge scene browse failed: ' + (data.error || resp.status));
+        return (data.entries || []).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name);
+      };
+      const readScene = async name => {
+        const resp = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error('cartridge scene read failed: ' + (data.error || resp.status));
+        return data;
+      };
+      const deleteScene = async name => {
+        const resp = await fetch('/api/delete-scene?name=' + encodeURIComponent(name));
+        const data = await resp.json();
+        if (!resp.ok || data.error || data.deleted !== name) {
+          throw new Error('cartridge scene cleanup failed: ' + JSON.stringify({ name, status: resp.status, data }));
+        }
+        const remaining = await listScenes();
+        if (remaining.includes(name)) {
+          throw new Error('cartridge scene cleanup left the saved file mounted: ' + JSON.stringify({ name, remaining }));
+        }
+        return { deleted: data.deleted, remainingCount: remaining.length };
+      };
+      const loadSceneDocument = async (doc, name) => {
+        const input = document.getElementById('scene-file-input');
+        const file = new File([JSON.stringify(doc)], name, { type: 'application/json' });
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const transformPlan = {
+        position: [0.42, -0.31, 0.18],
+        rotation: [0.08, -0.27, 0.14],
+        scale: [0.84, 0.84, 0.84],
+      };
+      const transformMatches = (actual, planned, epsilon = 0.001) => (
+        ['position', 'rotation', 'scale'].every(key => (
+          Array.isArray(actual?.[key]) && actual[key].length === 3 &&
+          actual[key].every((value, index) => Math.abs(Number(value) - Number(planned[key][index])) <= epsilon)
+        ))
+      );
+      const contextMatches = context => (
+        context?.schema === expected.schema &&
+        context.cartridgeId === expected.cartridgeId &&
+        context.crucibleId === expected.crucibleId &&
+        context.makingIntent === expected.makingIntent &&
+        context.armatureId === expected.armatureId &&
+        context.handleId === expected.handleId &&
+        context.firingId === expected.firingId &&
+        context.receiptRef === expected.receiptRef &&
+        context.result?.id === expected.result.id &&
+        context.result?.kind === expected.result.kind &&
+        context.result?.label === expected.result.label
+      );
+      let linkState = null;
+      let objects = [];
+      for (let i = 0; i < 240; i++) {
+        linkState = window.kaminosAssetSmokeLinkDebugState?.() || null;
+        objects = window.kaminosSceneObjectDebugState?.() || [];
+        if (linkState?.status === 'failed') {
+          throw new Error('world cartridge cast failed before registration: ' + JSON.stringify(linkState));
+        }
+        if (linkState?.status === 'loaded' && objects.some(object => object.id === linkState.registeredObjectId)) break;
+        await wait(125);
+      }
+      if (linkState?.status !== 'loaded' || !linkState.registeredObjectId) {
+        throw new Error('world cartridge cast did not load: ' + JSON.stringify({ linkState, objects }));
+      }
+      const objectId = linkState.registeredObjectId;
+      const loadedObject = objects.find(object => object.id === objectId);
+      const contextState = window.kaminosWorldCartridgeContextDebugState?.() || null;
+      if (!contextMatches(contextState?.active) || !contextMatches(loadedObject?.cartridgeContext)) {
+        throw new Error('loaded cast did not inherit the requested cartridge context: ' + JSON.stringify({ expected, contextState, loadedObject }));
+      }
+      const effectiveRoute = new URL(linkState.effectiveUrl, location.href);
+      if (
+        effectiveRoute.pathname !== '/api/read' ||
+        effectiveRoute.searchParams.get('root') !== params.get('mesh_root') ||
+        effectiveRoute.searchParams.get('path') !== params.get('mesh_path')
+      ) {
+        throw new Error('world cartridge cast used the wrong effective asset route: ' + JSON.stringify({ linkState, effectiveRoute: effectiveRoute.href }));
+      }
+      const resourceRequest = performance.getEntriesByType('resource').map(entry => entry.name).find(name => {
+        const candidate = new URL(name, location.href);
+        return candidate.pathname === effectiveRoute.pathname &&
+          candidate.searchParams.get('root') === effectiveRoute.searchParams.get('root') &&
+          candidate.searchParams.get('path') === effectiveRoute.searchParams.get('path');
+      });
+      if (!resourceRequest) {
+        throw new Error('world cartridge cast lacked a matching browser resource request: ' + JSON.stringify({ effectiveRoute: effectiveRoute.href }));
+      }
+      const [assetBytes, receipt, metadata, negativeBytes] = await Promise.all([
+        fetchAssetBytes(provenanceExpectation.assetPath),
+        fetchJsonAsset(provenanceExpectation.receiptPath),
+        fetchJsonAsset(provenanceExpectation.metadataPath),
+        fetchAssetBytes(provenanceExpectation.negativeAssetPath),
+      ]);
+      const [actualSha256, negativeSha256] = await Promise.all([sha256(assetBytes), sha256(negativeBytes)]);
+      if (
+        !isGlb(assetBytes) ||
+        actualSha256 !== provenanceExpectation.sha256 ||
+        receipt.output_sha256 !== provenanceExpectation.sha256 ||
+        !String(receipt.output_glb || '').endsWith('/' + provenanceExpectation.assetPath) ||
+        receipt.model !== provenanceExpectation.producerModel ||
+        metadata.job_type !== 'sf3d' ||
+        metadata.job_id !== provenanceExpectation.producerJobId ||
+        !Array.isArray(metadata.output_files) ||
+        !metadata.output_files.includes('output.glb')
+      ) {
+        throw new Error('SF3D receipt did not authenticate the effective cast bytes: ' + JSON.stringify({ provenanceExpectation, actualSha256, receipt, metadata, glb: isGlb(assetBytes) }));
+      }
+      const sourceAuthority = {
+        kind: 'receipt-authenticated-sf3d-output',
+        effectiveAssetUrl: linkState.effectiveUrl,
+        outputSha256: actualSha256,
+        receiptPath: provenanceExpectation.receiptPath,
+        metadataPath: provenanceExpectation.metadataPath,
+        producerModel: receipt.model,
+        producerJobId: metadata.job_id,
+        producerCodeRevision: null,
+        claimLimit: 'producer-code-revision-unrecorded',
+      };
+      const negativeWouldAuthenticate = isGlb(negativeBytes) && negativeSha256 === provenanceExpectation.sha256;
+      if (!isGlb(negativeBytes) || negativeWouldAuthenticate) {
+        throw new Error('provenance mismatch negative unexpectedly received SF3D authority: ' + JSON.stringify({ path: provenanceExpectation.negativeAssetPath, negativeSha256, expectedSha256: provenanceExpectation.sha256, glb: isGlb(negativeBytes) }));
+      }
+      const rowBeforeSave = document.querySelector('[data-scene-object-id="' + objectId + '"]');
+      if (
+        !rowBeforeSave ||
+        !rowBeforeSave.querySelector('[data-scene-object-cartridge-context="' + objectId + '"]') ||
+        !rowBeforeSave.textContent.includes(expected.cartridgeId + ' / ' + expected.crucibleId) ||
+        !rowBeforeSave.textContent.includes('cast')
+      ) {
+        throw new Error('world cartridge cast lacked visible outliner making context: ' + JSON.stringify({ objectId, rowText: rowBeforeSave?.textContent || null }));
+      }
+      if (typeof window.kaminosSetSceneObjectTransform !== 'function') {
+        throw new Error('world cartridge witness missing the authored transform surface');
+      }
+      window.kaminosSetSceneObjectTransform(objectId, transformPlan);
+      const editedObject = window.kaminosSceneObjectDebugState().find(object => object.id === objectId);
+      if (!transformMatches(editedObject?.transform, transformPlan)) {
+        throw new Error('world cartridge cast did not accept an authored transform: ' + JSON.stringify({ editedObject, transformPlan }));
+      }
+      const beforeFiles = new Set(await listScenes());
+      const saveSucceeded = await window.saveSceneAs();
+      if (!saveSucceeded) throw new Error('world cartridge save-as did not report success');
+      let newFiles = [];
+      for (let i = 0; i < 160; i++) {
+        newFiles = (await listScenes()).filter(name => !beforeFiles.has(name));
+        if (newFiles.length === 1) break;
+        await wait(125);
+      }
+      if (newFiles.length !== 1) {
+        throw new Error('world cartridge save did not create exactly one scene file: ' + JSON.stringify({ beforeFiles: [...beforeFiles], newFiles }));
+      }
+      const savedFile = newFiles[0];
+      const savedScene = await readScene(savedFile);
+      const savedObject = savedScene.objects?.find(object => object.id === objectId);
+      if (!contextMatches(savedScene.cartridgeContext) || !contextMatches(savedObject?.cartridgeContext)) {
+        throw new Error('saved cartridge scene did not preserve the authored cast context: ' + JSON.stringify({ expected, savedContext: savedScene.cartridgeContext, savedObject }));
+      }
+      if (!transformMatches(savedObject?.transform, transformPlan)) {
+        throw new Error('saved cartridge scene did not preserve the authored cast transform: ' + JSON.stringify({ savedObject, transformPlan }));
+      }
+
+      document.querySelector('[data-tab="greenroom"]').click();
+      let sceneEntry = null;
+      for (let i = 0; i < 160; i++) {
+        sceneEntry = [...document.querySelectorAll('#scenes-list .gr-entry')].find(entry => (
+          entry.querySelector('.gr-name')?.title?.split('\\n')[0] === savedFile ||
+          entry.querySelector('.gr-name')?.textContent?.trim() === savedFile.replace('.kaminos.json', '')
+        ));
+        if (sceneEntry) break;
+        await wait(125);
+      }
+      if (!sceneEntry) throw new Error('saved cartridge scene did not appear in the scene library: ' + savedFile);
+      const loadButton = [...sceneEntry.querySelectorAll('button')].find(button => button.textContent.trim() === 'Load');
+      if (!loadButton) throw new Error('saved cartridge scene lacked its Load action: ' + savedFile);
+      loadButton.click();
+      await wait(250);
+
+      let restoredObject = null;
+      let restoredContext = null;
+      let restoredRow = null;
+      for (let i = 0; i < 240; i++) {
+        restoredObject = window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId) || null;
+        restoredContext = window.kaminosWorldCartridgeContextDebugState?.() || null;
+        restoredRow = document.querySelector('[data-scene-object-id="' + objectId + '"]');
+        if (
+          transformMatches(restoredObject?.transform, transformPlan) &&
+          contextMatches(restoredObject?.cartridgeContext) &&
+          contextMatches(restoredContext?.active) &&
+          restoredRow?.querySelector('[data-scene-object-cartridge-context="' + objectId + '"]')
+        ) break;
+        await wait(125);
+      }
+      if (
+        !transformMatches(restoredObject?.transform, transformPlan) ||
+        !contextMatches(restoredObject?.cartridgeContext) ||
+        !contextMatches(restoredContext?.active) ||
+        !restoredRow?.querySelector('[data-scene-object-cartridge-context="' + objectId + '"]')
+      ) {
+        throw new Error('reopened cartridge scene did not restore the authored transform and context: ' + JSON.stringify({ restoredObject, restoredContext, rowText: restoredRow?.textContent || null, transformPlan, expected }));
+      }
+      const cleanup = await deleteScene(savedFile);
+
+      const sceneAuthority = {
+        schema: expected.schema,
+        cartridgeId: 'continuity-scene-authority',
+        crucibleId: 'multi-object-restore',
+        makingIntent: 'Keep scene meaning stable while selecting results with different local histories.',
+      };
+      const objectContextA = { ...sceneAuthority, crucibleId: 'object-a', result: { id: 'cast-a', kind: 'cast', label: 'Cast A' } };
+      const objectContextB = { ...sceneAuthority, crucibleId: 'object-b', result: { id: 'cast-b', kind: 'cast', label: 'Cast B' } };
+      const multiContextScene = {
+        ...savedScene,
+        timestamp: new Date().toISOString(),
+        label: 'Cartridge context authority fixture',
+        cartridgeContext: sceneAuthority,
+        activeObjectId: 'context-free-active',
+        objects: [
+          { ...savedObject, id: 'context-object-a', label: 'Context A', cartridgeContext: objectContextA, transform: { ...savedObject.transform, position: [-0.7, -0.31, 0.18] } },
+          { ...savedObject, id: 'context-object-b', label: 'Context B', cartridgeContext: objectContextB, transform: { ...savedObject.transform, position: [0.7, -0.31, 0.18] } },
+          { ...savedObject, id: 'context-free-active', label: 'Context Free', cartridgeContext: null, transform: { ...savedObject.transform, position: [0, 0.4, 0.18] } },
+        ],
+      };
+      await loadSceneDocument(multiContextScene, 'cartridge-context-authority-fixture.kaminos.json');
+      let multiState = null;
+      for (let i = 0; i < 240; i++) {
+        multiState = window.kaminosWorldCartridgeContextDebugState?.() || null;
+        const rows = window.kaminosSceneObjectDebugState?.() || [];
+        const info = document.getElementById('info-bar')?.textContent?.trim();
+        if (rows.length === 3 && rows.find(row => row.active)?.id === 'context-free-active' && info === 'Scene loaded: 3 objects') break;
+        await wait(125);
+      }
+      if (JSON.stringify(multiState?.active) !== JSON.stringify(sceneAuthority) || multiState?.selected !== null) {
+        throw new Error('multi-context load changed persistent scene cartridge authority: ' + JSON.stringify({ multiState, sceneAuthority }));
+      }
+      document.querySelector('[data-scene-object-id="context-object-a"]').click();
+      document.querySelector('[data-scene-object-id="context-object-b"]').click();
+      document.querySelector('[data-scene-object-id="context-free-active"]').click();
+      const afterSelectionContext = window.kaminosWorldCartridgeContextDebugState?.() || null;
+      if (JSON.stringify(afterSelectionContext?.active) !== JSON.stringify(sceneAuthority) || afterSelectionContext?.selected !== null) {
+        throw new Error('multi-context selection changed persistent scene cartridge authority: ' + JSON.stringify({ afterSelectionContext, sceneAuthority }));
+      }
+      const beforeMultiFiles = new Set(await listScenes());
+      if (!await window.saveSceneAs()) throw new Error('multi-context scene save-as did not report success');
+      let multiFiles = [];
+      for (let i = 0; i < 160; i++) {
+        multiFiles = (await listScenes()).filter(name => !beforeMultiFiles.has(name));
+        if (multiFiles.length === 1) break;
+        await wait(125);
+      }
+      if (multiFiles.length !== 1) throw new Error('multi-context save did not create exactly one scene file: ' + JSON.stringify(multiFiles));
+      const multiSavedFile = multiFiles[0];
+      const multiSavedScene = await readScene(multiSavedFile);
+      if (JSON.stringify(multiSavedScene.cartridgeContext) !== JSON.stringify(sceneAuthority)) {
+        throw new Error('multi-context save changed persistent scene cartridge authority: ' + JSON.stringify({ saved: multiSavedScene.cartridgeContext, sceneAuthority }));
+      }
+      document.querySelector('[data-tab="greenroom"]').click();
+      let multiEntry = null;
+      for (let i = 0; i < 160; i++) {
+        multiEntry = [...document.querySelectorAll('#scenes-list .gr-entry')].find(entry => entry.querySelector('.gr-name')?.title?.split('\\n')[0] === multiSavedFile);
+        if (multiEntry) break;
+        await wait(125);
+      }
+      const multiLoadButton = [...(multiEntry?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === 'Load');
+      if (!multiLoadButton) throw new Error('multi-context scene lacked its reopen action: ' + multiSavedFile);
+      multiLoadButton.click();
+      await wait(250);
+      for (let i = 0; i < 240; i++) {
+        multiState = window.kaminosWorldCartridgeContextDebugState?.() || null;
+        if ((window.kaminosSceneObjectDebugState?.() || []).length === 3 && document.getElementById('info-bar')?.textContent?.trim() === 'Scene loaded: 3 objects') break;
+        await wait(125);
+      }
+      if (JSON.stringify(multiState?.active) !== JSON.stringify(sceneAuthority) || multiState?.selected !== null) {
+        throw new Error('multi-context reopen changed persistent scene cartridge authority: ' + JSON.stringify({ multiState, sceneAuthority }));
+      }
+
+      const failedAuthority = { ...sceneAuthority, cartridgeId: 'failed-scene-must-not-escape', crucibleId: 'failed-source' };
+      const failedScene = {
+        ...multiContextScene,
+        cartridgeContext: failedAuthority,
+        activeObjectId: 'failed-source-object',
+        objects: [{ ...savedObject, id: 'failed-source-object', source: 'demos/missing/world-cartridge-output.glb', fileName: 'world-cartridge-output.glb', cartridgeContext: failedAuthority }],
+      };
+      await loadSceneDocument(failedScene, 'failed-cartridge-context-fixture.kaminos.json');
+      let failedInfo = '';
+      for (let i = 0; i < 240; i++) {
+        failedInfo = document.getElementById('info-bar')?.textContent?.trim() || '';
+        if (failedInfo.startsWith('Scene load failed:')) break;
+        await wait(125);
+      }
+      const afterFailedContext = window.kaminosWorldCartridgeContextDebugState?.() || null;
+      if (!failedInfo.startsWith('Scene load failed:') || JSON.stringify(afterFailedContext?.active) !== JSON.stringify(sceneAuthority)) {
+        throw new Error('failed restore contaminated persistent cartridge authority: ' + JSON.stringify({ failedInfo, afterFailedContext, sceneAuthority, failedAuthority }));
+      }
+      await loadSceneDocument(savedScene, 'retained-kiln-cast-final-frame.kaminos.json');
+      let finalObject = null;
+      let finalContext = null;
+      for (let i = 0; i < 240; i++) {
+        finalObject = window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId) || null;
+        finalContext = window.kaminosWorldCartridgeContextDebugState?.() || null;
+        if (finalObject && contextMatches(finalObject.cartridgeContext) && contextMatches(finalContext?.active)) break;
+        await wait(125);
+      }
+      if (!finalObject || !contextMatches(finalObject.cartridgeContext) || !contextMatches(finalContext?.active)) {
+        throw new Error('world cartridge final frame could not restore the authored retained cast: ' + JSON.stringify({ finalObject, finalContext, expected }));
+      }
+      const multiCleanup = await deleteScene(multiSavedFile);
+      return {
+        sourceAuthority,
+        assetRoute: { requestedRoot: params.get('mesh_root'), requestedPath: params.get('mesh_path'), effectiveUrl: linkState.effectiveUrl, resourceRequest },
+        provenanceMismatchNegative: { path: provenanceExpectation.negativeAssetPath, sha256: negativeSha256, glb: isGlb(negativeBytes), authenticated: negativeWouldAuthenticate },
+        objectId,
+        expectedContext: expected,
+        savedFile,
+        savedContext: savedScene.cartridgeContext,
+        savedObject: { id: savedObject.id, source: savedObject.source, transform: savedObject.transform, cartridgeContext: savedObject.cartridgeContext },
+        restoredObject,
+        restoredContext,
+        restoredRowText: restoredRow.textContent.trim(),
+        cleanup,
+        multiContext: { sceneAuthority, savedFile: multiSavedFile, savedContext: multiSavedScene.cartridgeContext, reopenedContext: multiState, failedInfo, afterFailedContext, cleanup: multiCleanup },
+        finalPresentation: { objectId: finalObject.id, context: finalContext.active, framePurpose: 'human visual inspection of retained cast after continuity checks' },
+      };
+    })()
+  `, { timeoutMs: 90000 });
+}
+
 const DIRECT_ASSET_LINK_SCENARIOS = {
   splat: {
     scenario: 'splat-asset-link',
@@ -397,20 +781,31 @@ function normalizeUrlForWitness(value) {
 }
 
 async function fetchServerRoots(baseUrl) {
-  const resp = await fetch(new URL('/api/roots', baseUrl));
-  const roots = await resp.json();
-  if (!resp.ok || roots.error) {
-    throw new Error(`server root identity unavailable: ${roots.error || resp.status}`);
+  const [rootsResponse, runtimeResponse] = await Promise.all([
+    fetch(new URL('/api/roots', baseUrl)),
+    fetch(new URL('/api/runtime-config', baseUrl)),
+  ]);
+  const roots = await rootsResponse.json();
+  const runtimeConfig = await runtimeResponse.json();
+  if (!rootsResponse.ok || roots.error) {
+    throw new Error(`server root identity unavailable: ${roots.error || rootsResponse.status}`);
   }
-  return roots;
+  if (!runtimeResponse.ok || runtimeConfig.error || runtimeConfig.schema !== 'kaminos.runtime-config.v0') {
+    throw new Error(`server runtime identity unavailable: ${runtimeConfig.error || runtimeResponse.status}`);
+  }
+  return { ...roots, runtimeConfig };
 }
 
 function assertExpectedServerRoot(roots) {
   const scenesPath = roots?.scenes?.path;
   if (!scenesPath) throw new Error('server root identity unavailable: missing scenes root');
   if (!isAbsolute(scenesPath)) throw new Error(`server root identity is not absolute: ${scenesPath}`);
+  const runtimeConfig = roots?.runtimeConfig;
+  const sourceRoot = runtimeConfig?.source?.repoRoot;
+  if (!sourceRoot) throw new Error('server runtime identity unavailable: missing source repoRoot');
+  if (!isAbsolute(sourceRoot)) throw new Error(`server source root identity is not absolute: ${sourceRoot}`);
   if (!expectedServerRoot) return;
-  const effectiveServerRoot = resolve(scenesPath, '..');
+  const effectiveServerRoot = resolve(runtimeConfig.source.repoRoot);
   if (effectiveServerRoot !== expectedServerRoot) {
     throw new Error(`effective server root mismatch: expected ${expectedServerRoot} but server reported ${effectiveServerRoot}`);
   }
@@ -4923,6 +5318,8 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'world-cartridge-continuity') {
+    await runWorldCartridgeContinuityScenario(ws);
   } else if (scenario === 'splat-asset-link') {
     await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.splat);
   } else if (scenario === 'image-asset-link') {

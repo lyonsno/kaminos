@@ -1,11 +1,65 @@
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 5;
+export const WORLD_CARTRIDGE_CONTEXT_SCHEMA = 'kaminos.world-cartridge.context.v0';
+export const WORLD_CARTRIDGE_RESULT_KINDS = ['armature', 'handle', 'shard', 'cast'];
+export const SCENE_VERSION = 6;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
   return value === null ? null : JSON.parse(JSON.stringify(value));
+}
+
+function optionalString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+export function normalizeWorldCartridgeContext(context) {
+  if (context === null || context === undefined) return null;
+  if (!context || typeof context !== 'object' || Array.isArray(context)) {
+    throw new Error('World cartridge context must be an object');
+  }
+  if (context.schema !== WORLD_CARTRIDGE_CONTEXT_SCHEMA) {
+    throw new Error(`World cartridge context schema mismatch: ${context.schema || 'missing'}`);
+  }
+  const cartridgeId = optionalString(context.cartridgeId);
+  const crucibleId = optionalString(context.crucibleId);
+  if (!cartridgeId) throw new Error('World cartridge context must include cartridgeId');
+  if (!crucibleId) throw new Error('World cartridge context must include crucibleId');
+  let result = null;
+  if (context.result !== null && context.result !== undefined) {
+    if (!context.result || typeof context.result !== 'object' || Array.isArray(context.result)) {
+      throw new Error('World cartridge context result must be an object');
+    }
+    const id = optionalString(context.result.id);
+    const kind = optionalString(context.result.kind);
+    if (!id) throw new Error('World cartridge context result must include id');
+    if (!WORLD_CARTRIDGE_RESULT_KINDS.includes(kind)) {
+      throw new Error(`World cartridge context result kind is unknown: ${kind || 'missing'}`);
+    }
+    result = {
+      ...cloneJson(context.result),
+      id,
+      kind,
+      label: optionalString(context.result.label),
+    };
+  }
+  const normalized = {
+    ...cloneJson(context),
+    schema: WORLD_CARTRIDGE_CONTEXT_SCHEMA,
+    cartridgeId,
+    crucibleId,
+    makingIntent: optionalString(context.makingIntent),
+    armatureId: optionalString(context.armatureId),
+    handleId: optionalString(context.handleId),
+    firingId: optionalString(context.firingId),
+    result,
+    receiptRef: optionalString(context.receiptRef),
+  };
+  for (const key of ['makingIntent', 'armatureId', 'handleId', 'firingId', 'result', 'receiptRef']) {
+    if (normalized[key] === null) delete normalized[key];
+  }
+  return normalized;
 }
 
 function normalizeSceneObjectRecord(record) {
@@ -30,6 +84,7 @@ function normalizeSceneObjectRecord(record) {
     renderRoute: record.renderRoute ?? null,
     renderCapabilities: cloneJson(record.renderCapabilities ?? null),
     renderHandoffSchema: record.renderHandoffSchema ?? null,
+    cartridgeContext: normalizeWorldCartridgeContext(record.cartridgeContext),
   };
 }
 
@@ -129,6 +184,7 @@ export function planSceneRestore(data) {
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
+    cartridgeContext: normalizeWorldCartridgeContext(data.cartridgeContext),
   };
 }
 
@@ -140,6 +196,7 @@ export function buildSceneDocument({
   activeGroupId = null,
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
+  cartridgeContext = null,
   composition = null,
   capture = null,
   camera = null,
@@ -166,6 +223,7 @@ export function buildSceneDocument({
       fileName: activeObject.fileName,
     } : null,
     provenance: cloneJson(provenance),
+    cartridgeContext: normalizeWorldCartridgeContext(cartridgeContext),
     composition: normalizeComposition(composition),
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),

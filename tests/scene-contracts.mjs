@@ -5,7 +5,17 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const persistence = readFileSync(join(root, 'scene-persistence-core.js'), 'utf8');
-
+const functionSource = (name, nextName) => {
+  const start = index.indexOf(`function ${name}(`);
+  const end = index.indexOf(`function ${nextName}(`, start + 1);
+  assert.notEqual(start, -1, `${name} function must exist`);
+  assert.notEqual(end, -1, `${nextName} boundary function must exist`);
+  return index.slice(start, end);
+};
+const loadSceneSource = index.slice(
+  index.indexOf('async function loadSceneFile('),
+  index.indexOf('// File input handler for Load Scene'),
+);
 assert.match(persistence, /export const SCENE_SCHEMA\s*=\s*'kaminos\.scene\.v1'/, 'scene files declare the multi-object schema in the shared persistence core');
 assert.match(index, /from '\.\/scene-persistence-core\.js'/, 'workbench imports the shared scene persistence core');
 assert.match(index, /let sceneObjects\s*=\s*\[\]/, 'workbench keeps an explicit authored scene object registry');
@@ -14,6 +24,7 @@ assert.match(index, /let activeSceneGroupId\s*=\s*null/, 'workbench tracks activ
 assert.match(index, /let activeSceneObjectId\s*=\s*null/, 'workbench tracks the active object by stable id');
 assert.match(index, /function registerSceneObject\(/, 'load paths register authored objects instead of only replacing currentMesh');
 assert.match(index, /function serializeSceneObject\(/, 'scene save serializes each object independently');
+assert.match(index, /cartridgeContext:\s*metadata\.cartridgeContext/, 'scene save preserves per-object cartridge/crucible result identity');
 assert.match(index, /function loadSceneObjects\(/, 'scene load restores multiple objects from one scene file');
 assert.match(index, /function sceneObjectTransformState\(/, 'scene object transforms use a shared state serializer');
 assert.match(index, /function applySceneObjectTransformState\(/, 'scene object transforms use a shared state applier');
@@ -57,6 +68,16 @@ assert.match(index, /data-transform-field="position\.x"/, 'transform inspector e
 assert.match(index, /data-transform-field="rotation\.x"/, 'transform inspector exposes axis-addressable rotation fields');
 assert.match(index, /data-transform-field="scale\.x"/, 'transform inspector exposes axis-addressable scale fields');
 assert.match(index, /function renderSceneObjectList\(/, 'scene object registry renders to the editor surface');
+assert.match(index, /data-scene-object-cartridge-context/, 'scene object rows visibly identify cartridge-bound authored results');
+assert.match(index, /function worldCartridgeContextForPipelineArtifact\(/, 'pipeline output imports derive retained result identity from the active cartridge context');
+assert.match(index, /cartridgeContext:\s*worldCartridgeContextForPipelineArtifact\(result, artifact\)/, 'Load Output binds the generated artifact to its cartridge crucible before scene insertion');
+assert.match(functionSource('loadKaminosMeshAssetRoute', 'loadKaminosSplatAssetRoute'), /cartridgeContext:\s*activeWorldCartridgeContext/, 'direct mesh routes enter the active cartridge crucible as authored results');
+assert.match(functionSource('loadKaminosSplatAssetRoute', 'loadKaminosImageAssetRoute'), /cartridgeContext:\s*activeWorldCartridgeContext/, 'direct splat routes enter the active cartridge crucible as authored results');
+assert.match(functionSource('loadKaminosImageAssetRoute', 'greenroomViewMesh'), /cartridgeContext:\s*activeWorldCartridgeContext/, 'direct image routes enter the active cartridge crucible as authored results');
+assert.match(index, /window\.kaminosWorldCartridgeContextDebugState/, 'browser witnesses can inspect the active cartridge and bound scene results without DOM inference');
+assert.doesNotMatch(functionSource('setActiveSceneObject', 'setActiveSceneGroup'), /activeWorldCartridgeContext\s*=/, 'object selection cannot silently replace the scene cartridge authority');
+assert.match(functionSource('buildSceneData', 'isCompositionAuthoring'), /cartridgeContext:\s*activeWorldCartridgeContext\s*,/, 'scene save uses only the persistent scene/crucible context authority');
+assert.match(loadSceneSource, /activeWorldCartridgeContext\s*=\s*restorePlan\.cartridgeContext[\s\S]*sceneSaveBlockedByFailedRestore\s*=\s*false/, 'scene restore commits cartridge authority only on its successful terminal path');
 assert.match(index, /function renderSceneGroupRow\(/, 'scene outliner renders group rows separately from child object rows');
 assert.match(index, /data-scene-group-id/, 'group rows expose stable ids for browser witnesses');
 assert.match(index, /data-scene-group-name/, 'group rows expose editable names');

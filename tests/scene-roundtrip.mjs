@@ -69,6 +69,28 @@ const objectB = {
     transparent: false,
     opacity: 1,
   },
+  cartridgeContext: {
+    schema: 'kaminos.world-cartridge.context.v0',
+    cartridgeId: 'lerms-terrarium',
+    crucibleId: 'lerm-species',
+    makingIntent: 'Keep one generated lerm body editable while its gait and surface continue to change.',
+    armatureId: 'lerm-body-lineage',
+    handleId: 'selected-body-candidate',
+    firingId: 'sf3d-lerm-body-0922',
+    result: {
+      id: 'lerm-body-cast-01',
+      kind: 'cast',
+      label: 'First retained lerm body',
+    },
+    receiptRef: 'greenroom:sf3d-lerm-body-0922',
+  },
+};
+
+const cartridgeContext = {
+  schema: 'kaminos.world-cartridge.context.v0',
+  cartridgeId: 'lerms-terrarium',
+  crucibleId: 'lerm-species',
+  makingIntent: 'Keep one generated lerm body editable while its gait and surface continue to change.',
 };
 
 const imageObject = {
@@ -113,6 +135,7 @@ const document = buildSceneDocument({
     },
   ],
   activeObjectId: objectB.id,
+  cartridgeContext,
   volumePrimitives,
   provenance: { source: objectB.source, kind: 'api-job-output' },
   camera: {
@@ -156,6 +179,8 @@ assert.deepEqual(saved.groups, [
 assert.equal(saved.activeObjectId, 'object-b', 'round-trip scene document preserves active object identity');
 assert.equal(saved.model.source, objectB.source, 'legacy model field mirrors the active object source');
 assert.equal(saved.model.fileName, objectB.fileName, 'legacy model field mirrors the active object filename');
+assert.deepEqual(saved.cartridgeContext, cartridgeContext, 'round-trip scene document preserves the active cartridge and crucible making context');
+assert.deepEqual(saved.objects[1].cartridgeContext, objectB.cartridgeContext, 'round-trip scene document preserves the generated object result inside its crucible');
 assert.deepEqual(saved.volumePrimitives, volumePrimitives, 'round-trip scene document preserves volume primitive state');
 assert.deepEqual(getSceneObjectRecords(saved).map(obj => obj.id), ['object-a', 'object-b', 'image-orb-source'], 'scene loader sees all object records in order');
 assert.deepEqual(getSceneObjectRecords(saved)[2].image, imageObject.image, 'scene loader keeps image metadata for graph-imported image planes');
@@ -164,6 +189,8 @@ assert.deepEqual(getSceneGroupRecords(saved).map(group => [group.id, group.label
 ], 'scene loader sees group records with stable object membership');
 assert.equal(sceneDocumentIsLoadable(saved), true, 'two-object scene with volume primitives is loadable');
 assert.equal(restorePlan.activeObjectId, 'object-b', 'restore plan keeps active object selection');
+assert.deepEqual(restorePlan.cartridgeContext, cartridgeContext, 'restore plan carries the scene cartridge context into continued authoring');
+assert.deepEqual(restorePlan.objects[1].cartridgeContext, objectB.cartridgeContext, 'restore plan carries object-level firing and retained-result identity');
 assert.deepEqual(restorePlan.groups.map(group => [group.id, group.label, group.objectIds]), [
   ['group-demo', 'Demo Pair', ['object-a', 'object-b']],
 ], 'restore plan carries scene group membership');
@@ -173,6 +200,22 @@ assert.deepEqual(restorePlan.objects.map(obj => obj.materials.opacity), [0.74, 1
 assert.equal(isReloadableSceneObjectRecord(objectA), true, 'demo GLB object is reloadable');
 assert.equal(isReloadableSceneObjectRecord(objectB), true, 'API GLB object is reloadable');
 assert.equal(isReloadableSceneObjectRecord(imageObject), true, 'API image object is reloadable');
+assert.throws(() => buildSceneDocument({
+  objects: [objectA],
+  cartridgeContext: {
+    schema: 'kaminos.world-cartridge.context.v0',
+    cartridgeId: 'lerms-terrarium',
+  },
+}), /must include crucibleId/, 'scene persistence rejects a cartridge route that cannot identify its crucible');
+assert.throws(() => buildSceneDocument({
+  objects: [{
+    ...objectB,
+    cartridgeContext: {
+      ...objectB.cartridgeContext,
+      result: { id: 'lerm-body-cast-01', kind: 'preview' },
+    },
+  }],
+}), /result kind is unknown: preview/, 'scene persistence rejects an unclassified retained result instead of silently presenting it as a cast');
 assert.equal(isReloadableSceneObjectRecord({
   id: 'pbr-demo',
   source: 'demos/supermat-ring/',
