@@ -28,10 +28,14 @@ export function validateSamConsumerInteraction(evidence, invocationId) {
     authority: 'input-to-same-device-submission-liveness; cadence-is-measured-not-a-smoothness-verdict' };
 }
 
-export function validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256 }) {
+export function validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256, expectedPrompt, presentation }) {
   check(output?.outputAuthority === 'actual-webgpu-readback', 'mask is not actual browser WebGPU output');
   check(output?.verificationState === 'not-attached', 'mask verification authority was overstated');
   check(output?.effectiveRouteId === 'sam3.detr-encoder.phase-program.webgpu-local.v0', 'unexpected SAM route');
+  check(typeof expectedPrompt === 'string' && output?.promptText === expectedPrompt,
+    'composed mask prompt does not match the requested prompt');
+  check(presentation?.activeTab === 'assets' && presentation.samImageViewportHidden === true,
+    'live flame composition is not visible in the Assets scene');
   check(typeof output?.invocationId === 'string' && output.invocationId.length > 0, 'missing SAM invocation identity');
   check(Array.isArray(output?.instances) && output.instances.length > 0, 'composition has no selected SAM candidates');
   check(bridge?.presentation === 'source-image-mask-overlay' && bridge.maskOverlayCount === 1,
@@ -58,7 +62,8 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
     && provenance.dimensions[1] === sceneObject.image.height, 'mask dimensions do not match the source image plane');
   check(composition?.method === '2d-image-space-mask' && composition.fireSimulationModified === false
     && composition.persistence === 'live-only', 'scene metadata overstates the composition');
-  return { invocationId: output.invocationId, route: output.effectiveRouteId, sourceSha256,
+  return { invocationId: output.invocationId, route: output.effectiveRouteId, promptText: expectedPrompt,
+    presentation, sourceSha256,
     dimensions: provenance.dimensions, instanceIndices: overlay.instanceIndices, method: composition.method,
     outputAuthority: output.outputAuthority, verificationState: output.verificationState,
     fireSimulationModified: false, persistence: 'live-only' };

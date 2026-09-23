@@ -36,7 +36,7 @@ async function main() {
     'model-root': { type: 'string' }, image: { type: 'string' }, 'second-image': { type: 'string' },
     baseline: { type: 'string' }, port: { type: 'string', default: '18622' },
     playwright: { type: 'string' }, chrome: { type: 'string', default: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
-    'flame-only': { type: 'boolean', default: false },
+    'flame-only': { type: 'boolean', default: false }, 'flame-prompt': { type: 'string', default: 'flame' },
   } });
   const root = fileURLToPath(new URL('.', import.meta.url));
   const out = resolve(values['out-dir']);
@@ -347,18 +347,19 @@ async function main() {
 
     report.failurePhase = 'image-ingress'; saveReport();
     // The accepted source bytes keep numerical parity while the name exercises export persistence.
-    await checked(page.locator('#sam-image-file').setInputFiles({ name: `${'a'.repeat(245)}.jpg`,
+    await checked(page.locator('#sam-image-file').setInputFiles({ name: values['flame-only'] ? basename(values.image) : `${'a'.repeat(245)}.jpg`,
       mimeType: 'image/jpeg', buffer: readFileSync(values.image) }));
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
     await capture('source-desktop');
     if (values['flame-only']) {
       report.failurePhase = 'flame-inference'; saveReport();
-      await page.locator('#sam-image-prompt').fill('flame');
+      const prompt = values['flame-prompt'];
+      await page.locator('#sam-image-prompt').fill(prompt);
       await checked(page.locator('#sam-image-run').click());
       await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
       const snapshotResult = await snapshot('flame-only');
       const output = snapshotResult.output;
-      assert.equal(output.promptText, 'flame', 'wrong prompt reached SAM');
+      assert.equal(output.promptText, prompt, 'wrong prompt reached SAM');
       assert.equal(output.outputAuthority, 'actual-webgpu-readback', 'flame proposal is not live WebGPU output');
       assert.equal(output.verificationState, 'not-attached', 'SAM proposal authority was overstated');
       assert.equal(output.effectiveRouteId, 'sam3.detr-encoder.phase-program.webgpu-local.v0', 'wrong SAM route');
@@ -372,16 +373,21 @@ async function main() {
       await checked(page.locator('#sam-image-flame').click());
       await checked(page.waitForFunction(() => {
         const bridge = window.__kaminosVolumeMainRendererBridge?.debugState?.();
-        return bridge?.maskOverlay?.visible === true && bridge.maskOverlayCount === 1;
+        return bridge?.maskOverlay?.visible === true && bridge.maskOverlayCount === 1
+          && document.querySelector('.tab.active')?.dataset.tab === 'assets'
+          && document.getElementById('sam-image-viewport')?.hidden === true;
       }));
       await checked(page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
       const observed = await page.evaluate(() => ({
         bridge: window.__kaminosVolumeMainRendererBridge.debugState(),
+        presentation: { activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+          samImageViewportHidden: document.getElementById('sam-image-viewport')?.hidden === true },
         sceneObject: window.kaminosSceneObjectDebugState().find(row =>
           row.image?.maskProvenance?.invocationId === window.kaminosSamImageTools.output().invocationId),
       }));
       const composition = validateSamFlameComposition({ output, bridge: observed.bridge,
-        sceneObject: observed.sceneObject, sourceSha256: report.inputs.image.sha256 });
+        sceneObject: observed.sceneObject, sourceSha256: report.inputs.image.sha256,
+        expectedPrompt: prompt, presentation: observed.presentation });
       const screenshotPath = join(out, 'flame-composition.png');
       await checked(page.screenshot({ path: screenshotPath, fullPage: true }));
       report.flameComposition = { ...composition, selectedScore: selected.score,
