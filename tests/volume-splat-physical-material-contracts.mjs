@@ -7,6 +7,10 @@ const producerStart = core.indexOf('function encodeLiveCompleteFlameOpticalCoeff
 const producerEnd = core.indexOf('async function sampleLiveCompleteFlameOpticalCoefficientStats', producerStart);
 assert.ok(producerStart >= 0 && producerEnd > producerStart, 'live coefficient producer boundary exists');
 const producer = core.slice(producerStart, producerEnd);
+const selectorStart = core.indexOf('boundarySplatCameraBuffer) {', core.indexOf('const boundarySplatInstanceAllocation = writeBoundarySplatInstanceConsumerState();'));
+const selectorEnd = core.indexOf('const bilinearRequested =', selectorStart);
+assert.ok(selectorStart >= 0 && selectorEnd > selectorStart, 'splat source-selection boundary exists');
+const selector = core.slice(selectorStart, selectorEnd);
 const opticalShaderStart = core.indexOf('const BOUNDARY_SPLAT_OPTICAL_PRESENTATION_WGSL = `');
 const opticalShaderEnd = core.indexOf('\n`;\n', opticalShaderStart);
 assert.ok(opticalShaderStart >= 0 && opticalShaderEnd > opticalShaderStart, 'optical presentation shader boundary exists');
@@ -21,6 +25,16 @@ assert.match(
   producer,
   /coefficientMaterialEffective:\s*physicalMaterialEffective[\s\S]*transported-heat-soot-v1/,
   'the producer receipt must say which physical material law its coefficients actually use',
+);
+assert.match(
+  selector,
+  /boundarySplatLiveCompleteFlameCoefficientBuffer\s*\n\s*&&\s*liveCompleteFlameOpticalCoefficientsEnabled\s*\n\s*\?\s*2\s*:/,
+  'the first frame must select coefficients that the enabled producer writes before splat rendering',
+);
+assert.doesNotMatch(
+  selector,
+  /liveCompleteFlameOpticalCoefficientReceipt\?\.status\s*===\s*'effective'/,
+  'source selection must not wait for the prior frame receipt and mismatch the first-frame display transform',
 );
 assert.match(
   opticalShader,

@@ -12192,7 +12192,7 @@ export function createKaminosVolumePrototype({
         boundarySplatMode === 'kernel_moment_full_flame_union' ? 1 : 0,
         Math.max(0, Math.min(4, Number(controlsSnapshot.reactionBoundaryGradient ?? 2.60))),
         boundarySplatLiveCompleteFlameCoefficientBuffer
-          && state.liveCompleteFlameOpticalCoefficientReceipt?.status === 'effective'
+          && liveCompleteFlameOpticalCoefficientsEnabled
           ? 2
           : (state.boundarySplatLiveUnionOverlayEffectiveIdentity ? 1 : 0),
         0.011764705882352941,
