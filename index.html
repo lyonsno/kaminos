@@ -5985,8 +5985,8 @@ function ensureSkinnedPosePanelEvents(panel) {
         return;
       }
       const degrees = Number(rawDegrees);
-      if (!Number.isFinite(degrees) || degrees < -180 || degrees > 180) {
-        restoreSkinnedPosePanelInput(panel, row, 'Use a degree value from −180° to 180°.');
+      if (!Number.isFinite(degrees) || !Number.isInteger(degrees) || degrees < -180 || degrees > 180) {
+        restoreSkinnedPosePanelInput(panel, row, 'Use a whole degree value from −180° to 180°.');
         return;
       }
       applySkinnedPosePanelInput(panel, row, null, degrees);
@@ -6044,7 +6044,7 @@ function restoreSkinnedPosePanelInput(panel, row, message) {
 
 function applySkinnedPosePanelInput(panel, row, axisOverride, degrees) {
   const entry = selectedSceneObjectEntry();
-  if (!entry || entry.id !== panel.dataset.objectId || !row || !Number.isFinite(degrees) || degrees < -180 || degrees > 180) return;
+  if (!entry || entry.id !== panel.dataset.objectId || !row || !Number.isFinite(degrees) || !Number.isInteger(degrees) || degrees < -180 || degrees > 180) return;
   const boneName = row.dataset.skinnedPoseBone;
   const axis = axisOverride || row.querySelector('[data-skinned-pose-axis]')?.value || 'z';
   const meshIndex = Number(panel.dataset.meshIndex || 0);
