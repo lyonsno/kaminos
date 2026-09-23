@@ -57,9 +57,10 @@ assert.throws(
   'requested split cannot close on missing or full-pass effective scheduling',
 );
 
-function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGenerationId = generationId, scheduleMode = 'fence-light' } = {}) {
+function scheduledRun({ generationId = 9, observedBoundaries = null, diagnosticGenerationId = generationId, scheduleMode = 'fence-light' } = {}) {
   const runId = 'run-current';
   const schedule = {
+    'full-pass': { layersPerDuty: 16, chunksPerPass: 1, maxInFlightDuties: 2 },
     'fence-light': { layersPerDuty: 4, chunksPerPass: 4, maxInFlightDuties: 4 },
     'single-layer': { layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 4 },
   }[scheduleMode];
@@ -70,7 +71,7 @@ function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGen
   for (let step = 1; step <= steps; step++) {
     for (const pass of passNames) {
       for (let chunkIndex = 1; chunkIndex <= chunksPerPass; chunkIndex++) {
-        const dutyId = `g${generationId}-s${step}-${pass}-c${chunkIndex}`;
+        const dutyId = `g${generationId}-s${step}-${pass}${chunksPerPass > 1 ? `-c${chunkIndex}` : ''}`;
         passes.push({
           dutyId, step, numSteps: steps, pass, chunkIndex, chunkCount: chunksPerPass,
           layerStart: (chunkIndex - 1) * layersPerDuty,
@@ -81,6 +82,27 @@ function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGen
     }
   }
   const expected = steps * passNames.length * chunksPerPass;
+  const frameReceipts = passes.map((pass, index) => ({
+    runId,
+    requestId: `frame-${index + 1}`,
+    status: 'completed',
+    submissionCount: 1,
+    boundary: {
+      phase: 'ddim-sampling',
+      position: 'before-encode',
+      metadata: {
+        step: pass.step,
+        numSteps: pass.numSteps,
+        pass: pass.pass,
+        chunkIndex: pass.chunkIndex,
+        chunkCount: pass.chunkCount,
+        layerStart: pass.layerStart,
+        layerEnd: pass.layerEnd,
+      },
+    },
+    metadata: { frameCountBefore: 49 + index },
+    result: { status: 'submitted', atMs: 1000 + index * 120, frameCount: 50 + index },
+  }));
   const summary = {
     status: 'drained', maxInFlightDuties, maxObservedInFlightDuties: maxInFlightDuties,
     submittedDutyCount: expected, completedDutyCount: expected, failedDutyCount: 0, inFlightDutyCount: 0,
@@ -113,6 +135,19 @@ function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGen
         lastBoundary: { phase: 'ddim-sampling', ...passes.at(-1) },
       },
     },
+    foregroundReceipts: frameReceipts,
+    foregroundRunReport: {
+      runId,
+      status: 'succeeded',
+      receipts: frameReceipts,
+      services: [{ runId, status: 'serviced', failures: [] }],
+    },
+    flameBefore: { frameCount: 49, simStepCount: 49 },
+    flameAfter: { frameCount: 49 + frameReceipts.length, simStepCount: 49 + frameReceipts.length },
+    samples: [
+      { atMs: 900, status: 'running', frameCount: 49, simStepCount: 49 },
+      { atMs: 1000 + frameReceipts.length * 120, status: 'running', frameCount: 49 + frameReceipts.length, simStepCount: 49 + frameReceipts.length },
+    ],
   };
 }
 const scheduledTerminal = run => ({ status: 'succeeded', runs: [run] });
@@ -122,6 +157,90 @@ assert.equal(
   64,
   'single-layer terminal acceptance requires all sixteen layer duties in each of four passes',
 );
+{
+  const run = scheduledRun();
+  const receipts = [...run.foregroundReceipts];
+  receipts.shift();
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({
+      ...run,
+      foregroundReceipts: receipts,
+      foregroundRunReport: { ...run.foregroundRunReport, receipts },
+    }), 'fence-light'),
+    /split schedule lacks one foreground frame receipt per scheduled duty/i,
+    'the explicitly frame-yielding split schedule requires one receipt for every scheduled duty',
+  );
+}
+{
+  const run = scheduledRun();
+  const receipts = [
+    ...run.foregroundReceipts,
+    { ...run.foregroundReceipts[0], boundary: { ...run.foregroundReceipts[0].boundary, phase: 'fk-decode' } },
+  ];
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({
+      ...run,
+      foregroundReceipts: receipts,
+      foregroundRunReport: { ...run.foregroundRunReport, receipts },
+    }), 'fence-light'),
+    /duplicate current-run foreground frame request/i,
+    'duplicate request identity cannot impersonate an additional foreground frame',
+  );
+}
+{
+  const run = scheduledRun();
+  const receipts = run.foregroundReceipts.map((receipt, index) => index === 3
+    ? { ...receipt, boundary: { ...receipt.boundary, metadata: { ...receipt.boundary.metadata, layerEnd: 15 } } }
+    : receipt);
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({
+      ...run,
+      foregroundReceipts: receipts,
+      foregroundRunReport: { ...run.foregroundRunReport, receipts },
+    }), 'fence-light'),
+    /unexpected or duplicate sampling frame receipt/i,
+    'a frame receipt with conflicting layer bounds cannot claim an unknown scheduled duty',
+  );
+}
+{
+  const run = scheduledRun({ scheduleMode: 'full-pass' });
+  const receipts = [...run.foregroundReceipts];
+  receipts.pop();
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({
+      ...run,
+      foregroundReceipts: receipts,
+      foregroundRunReport: { ...run.foregroundRunReport, receipts },
+    }), 'full-pass'),
+    /sampled progress.*foreground receipt/i,
+    'the unforced full-pass may skip a duty, but the recorded receipt stream must still explain sampled frames',
+  );
+  const samples = [
+    { atMs: 900, status: 'running', frameCount: 49, simStepCount: 49 },
+    { atMs: 1000 + receipts.length * 120, status: 'running', frameCount: 49 + receipts.length, simStepCount: 49 + receipts.length },
+  ];
+  assert.equal(
+    validateSuccessfulRun(scheduledTerminal({
+      ...run,
+      foregroundReceipts: receipts,
+      foregroundRunReport: { ...run.foregroundRunReport, receipts },
+      flameAfter: { frameCount: 49 + receipts.length, simStepCount: 49 + receipts.length },
+      samples,
+    }), 'full-pass').foregroundReceipts.length,
+    3,
+    'the unforced full-pass reference may serve fewer flame frames than its GPU duties; measured samples and receipts must still agree',
+  );
+}
+{
+  const run = scheduledRun({ scheduleMode: 'full-pass' });
+  const receipts = [...run.foregroundReceipts];
+  receipts.pop();
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, foregroundReceipts: receipts }), 'full-pass'),
+    /page capture and foreground report receipts disagree/i,
+    'page capture cannot silently omit a receipt present in the authoritative foreground run report',
+  );
+}
 assert.throws(
   () => validateSuccessfulRun(scheduledTerminal(scheduledRun({ scheduleMode: 'single-layer', observedBoundaries: 1 })), 'single-layer'),
   /boundary|telemetry/,
