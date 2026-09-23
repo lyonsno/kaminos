@@ -49,6 +49,18 @@ export async function disposeKimodoCompositionResources({ foreground, producer }
   return Object.freeze({ status: 'disposed', foregroundQuiescent: true, producerDisposed: Boolean(producer) });
 }
 
+export function snapshotFlameState(flame) {
+  if (!flame) return null;
+  const foreground = flame?.ordinaryForeground;
+  return {
+    ...flame,
+    ordinaryForeground: foreground ? {
+      ...foreground,
+      lastReceipt: foreground.lastReceipt ? structuredClone(foreground.lastReceipt) : null,
+    } : null,
+  };
+}
+
 function injectHud() {
   const root = document.createElement('aside');
   root.id = 'kimodo-shared-device-hud';
@@ -161,19 +173,20 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
   };
 
   const frame = now => {
-    const flame = prototype.debugState();
+    const flame = snapshotFlameState(prototype.debugState());
+    const sampleAtMs = performance.now();
     const dt = now - lastFrameAt;
     lastFrameAt = now;
     state.frameIntervals.push(dt);
     state.samples.push({
-      atMs: now,
+      atMs: sampleAtMs,
       status: state.status,
       frameCount: flame.frameCount,
       simStepCount: flame.simStepCount,
       backend: flame.backend,
       active: flame.active,
       error: flame.error ?? null,
-      foreground: flame.ordinaryForeground ? { ...flame.ordinaryForeground } : null,
+      foreground: flame.ordinaryForeground,
     });
     drawMotion(motion, motionStartedAtMs);
     if (now - lastPaintAt >= 250) {
@@ -287,7 +300,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       foregroundReceiptStart: state.foregroundReceipts.length,
       frameIntervalStart: state.frameIntervals.length,
       sampleStart: state.samples.length,
-      flameBefore: prototype.debugState(),
+      flameBefore: snapshotFlameState(prototype.debugState()),
     };
     state.runs.push(record);
     state.status = 'running';
@@ -380,7 +393,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       record.foregroundReceipts = state.foregroundReceipts
         .slice(record.foregroundReceiptStart)
         .filter(receipt => receipt.runId === record.runId);
-      record.flameAfter = prototype.debugState();
+      record.flameAfter = snapshotFlameState(prototype.debugState());
       record.foregroundSnapshot = foreground.snapshot();
       $('result').textContent = `${record.status} · ${(record.wallMs / 1000).toFixed(1)} s · ${record.foregroundReceipts.length} ordinary frames`;
       $('stage').textContent = `${record.status} · ${record.telemetry.currentStage}`;

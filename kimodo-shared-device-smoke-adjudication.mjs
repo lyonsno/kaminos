@@ -1,3 +1,10 @@
+function boundaryKey(boundary) {
+  return JSON.stringify([
+    boundary?.step, boundary?.numSteps, boundary?.pass, boundary?.chunkIndex,
+    boundary?.chunkCount, boundary?.layerStart, boundary?.layerEnd,
+  ]);
+}
+
 export function validateMountedComposition(snapshot) {
   const { setup, state, volume } = snapshot || {};
   if (setup?.status !== 'mounted') throw new Error(`composition did not reach mounted state (${setup?.status || 'missing'})`);
@@ -16,10 +23,6 @@ export function validateMountedComposition(snapshot) {
 export function validateSuccessfulRun(terminal, requestedSchedule = null) {
   if (terminal?.status !== 'succeeded') throw new Error(terminal?.lastError?.message || `Generation ended as ${terminal?.status || 'missing'}`);
   const run = terminal.runs?.at(-1);
-  const boundaryKey = boundary => JSON.stringify([
-    boundary?.step, boundary?.numSteps, boundary?.pass, boundary?.chunkIndex,
-    boundary?.chunkCount, boundary?.layerStart, boundary?.layerEnd,
-  ]);
   if (requestedSchedule !== null) {
     const schedule = {
       'full-pass': { layers: 16, chunks: 1, capacity: 2 },
@@ -153,39 +156,32 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
     throw new Error('Generation succeeded with an unhealthy foreground service report');
   }
   if (requestedSchedule !== null) {
-    const receiptSignature = receipt => JSON.stringify([
-      receipt.runId,
-      receipt.requestId,
-      receipt.status,
-      receipt.submissionCount,
-      receipt.boundary?.phase,
-      receipt.boundary?.dutyId,
-      boundaryKey(receipt.boundary?.metadata),
-      receipt.metadata?.frameCountBefore,
-      receipt.result?.status,
-      receipt.result?.atMs,
-      receipt.result?.frameCount,
-    ]);
     const captureByRequest = new Map();
     for (const receipt of run.foregroundReceipts) {
       if (!receipt.requestId || captureByRequest.has(receipt.requestId)) {
         throw new Error('Generation contains a duplicate current-run foreground frame request');
       }
       const atMs = receipt.result?.atMs;
+      const settledAtMs = receipt.settledAtMs ?? atMs;
       const frameBefore = receipt.metadata?.frameCountBefore;
+      const simStepBefore = receipt.metadata?.simStepCountBefore;
       const frameAfter = receipt.result?.frameCount;
       if (!Number.isFinite(atMs) || !Number.isSafeInteger(frameBefore)
-        || !Number.isSafeInteger(frameAfter) || frameAfter !== frameBefore + 1) {
-        throw new Error('Generation foreground frame receipt lacks exact timestamp and frame-count evidence');
+        || !Number.isFinite(settledAtMs) || settledAtMs < atMs
+        || !Number.isSafeInteger(simStepBefore) || !Number.isSafeInteger(frameAfter)
+        || !Number.isSafeInteger(receipt.result?.simStepCount)
+        || frameAfter !== frameBefore + 1
+        || receipt.result.simStepCount !== simStepBefore + 1) {
+        throw new Error('Generation foreground frame receipt lacks exact timestamp, frame-count, and simulation-count evidence');
       }
-      captureByRequest.set(receipt.requestId, receiptSignature(receipt));
+      captureByRequest.set(receipt.requestId, receiptSignatureForSample(receipt));
     }
     const reportByRequest = new Map();
     for (const receipt of run.foregroundRunReport.receipts) {
       if (!receipt.requestId || reportByRequest.has(receipt.requestId)) {
         throw new Error('Generation foreground run report contains a duplicate frame request');
       }
-      reportByRequest.set(receipt.requestId, receiptSignature(receipt));
+      reportByRequest.set(receipt.requestId, receiptSignatureForSample(receipt));
     }
     if (captureByRequest.size !== reportByRequest.size
       || [...captureByRequest].some(([requestId, signature]) => reportByRequest.get(requestId) !== signature)) {
@@ -203,6 +199,63 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
   }
   if (requestedSchedule !== null) {
     const initialFrame = run.flameBefore?.frameCount;
+    const initialSimStep = run.flameBefore?.simStepCount;
+    if (!Number.isSafeInteger(initialFrame) || !Number.isSafeInteger(initialSimStep)) {
+      throw new Error('Generation running samples lack exact initial flame frame and simulation counts');
+    }
+    let previousAtMs = -Infinity;
+    let previousFrame = initialFrame;
+    let previousSimStep = initialSimStep;
+    const captureByRequest = new Map(run.foregroundReceipts.map(receipt => [
+      receipt.requestId,
+      receiptSignatureForSample(receipt),
+    ]));
+    const reportByRequest = new Map(run.foregroundRunReport.receipts.map(receipt => [
+      receipt.requestId,
+      receiptSignatureForSample(receipt),
+    ]));
+    for (const sample of runningSamples) {
+      const frameCount = sample.frameCount;
+      const simStepCount = sample.simStepCount;
+      const atMs = sample.atMs;
+      const lastReceipt = sample.foreground?.lastReceipt;
+      if (!Number.isFinite(atMs) || atMs < previousAtMs
+        || !Number.isSafeInteger(frameCount) || frameCount < previousFrame
+        || !Number.isSafeInteger(simStepCount) || simStepCount < previousSimStep
+        || frameCount < initialFrame || simStepCount < initialSimStep) {
+        throw new Error('Generation running sample flame timestamps and progress must be finite and non-regressing');
+      }
+      if (sample.foreground?.completedFrames !== undefined
+        && sample.foreground.completedFrames !== frameCount) {
+        throw new Error('Generation running sample completed-frame count disagrees with its sampled frame count');
+      }
+      if (!lastReceipt) {
+        if (frameCount !== initialFrame || simStepCount !== initialSimStep) {
+          throw new Error('Generation progressed sample lacks its exact foreground receipt');
+        }
+      } else {
+        const receiptFrame = lastReceipt.result?.frameCount;
+        const receiptSimStep = lastReceipt.result?.simStepCount;
+        const receiptAtMs = lastReceipt.settledAtMs ?? lastReceipt.result?.atMs;
+        if (!Number.isSafeInteger(receiptFrame) || !Number.isSafeInteger(receiptSimStep)
+          || receiptFrame !== frameCount || receiptSimStep !== simStepCount
+          || !Number.isFinite(receiptAtMs) || receiptAtMs > atMs
+          || lastReceipt.metadata?.frameCountBefore !== receiptFrame - 1
+          || lastReceipt.metadata?.simStepCountBefore !== receiptSimStep - 1) {
+          throw new Error('Generation sample foreground receipt frame, simulation count, or timestamp disagrees with the sample');
+        }
+        const progressed = frameCount > initialFrame || simStepCount > initialSimStep;
+        if (progressed && (lastReceipt.runId !== run.runId
+          || !lastReceipt.requestId
+          || captureByRequest.get(lastReceipt.requestId) !== receiptSignatureForSample(lastReceipt)
+          || reportByRequest.get(lastReceipt.requestId) !== receiptSignatureForSample(lastReceipt))) {
+          throw new Error('Generation progressed sample foreground receipt request identity disagrees with both authoritative receipt ledgers');
+        }
+      }
+      previousAtMs = atMs;
+      previousFrame = frameCount;
+      previousSimStep = simStepCount;
+    }
     const lastRunningSample = runningSamples.reduce((latest, sample) => sample.atMs > (latest?.atMs ?? -Infinity) ? sample : latest, null);
     const maxSampledFrame = Math.max(...runningSamples.map(sample => sample.frameCount));
     const sampledFrameDelta = maxSampledFrame - initialFrame;
@@ -224,6 +277,33 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
     }
   }
   return run;
+}
+
+function receiptSignatureForSample(receipt) {
+  return JSON.stringify([
+    receipt.schema,
+    receipt.routeId,
+    receipt.runId,
+    receipt.requestId,
+    receipt.requestSequence,
+    receipt.status,
+    receipt.requestedAtMs,
+    receipt.startedAtMs,
+    receipt.settledAtMs,
+    receipt.submissionCount,
+    receipt.boundary?.invocationId,
+    receipt.boundary?.boundaryId,
+    receipt.boundary?.phase,
+    receipt.boundary?.position,
+    receipt.boundary?.dutyId,
+    boundaryKey(receipt.boundary?.metadata),
+    receipt.metadata?.frameCountBefore,
+    receipt.metadata?.simStepCountBefore,
+    receipt.result?.status,
+    receipt.result?.atMs,
+    receipt.result?.frameCount,
+    receipt.result?.simStepCount,
+  ]);
 }
 
 export function progressFailure({ now, deadline, lastProgressAt, noProgressTimeoutMs, label, totalTimeoutMs }) {

@@ -25,7 +25,20 @@ assert.match(source, /record\.pageP99Ms\s*=\s*percentile\(record\.frameIntervals
 assert.match(source, /record\.pageMaxMs\s*=\s*record\.frameIntervals\.length\s*\?\s*Math\.max\(\.\.\.record\.frameIntervals\)\s*:\s*null/, 'each run records the worst observed frame interval without inventing an empty-run value');
 assert.doesNotMatch(source, /frameIntervals\.length\s*>|samples\.length\s*>|\.splice\(|\.shift\(\)/, 'diagnostic history remains uncapped so a long run cannot erase its own contention evidence');
 assert.match(source, /value="full-pass".*value="fence-light".*value="single-layer"/s, 'the lab retains full-pass and four-layer references alongside the opt-in single-layer schedule');
-assert.match(source, /foreground:\s*flame\.ordinaryForeground\s*\?\s*\{\s*\.\.\.flame\.ordinaryForeground\s*\}/, 'historical foreground counters are copied at sample time');
+assert.match(source, /const flame = snapshotFlameState\(prototype\.debugState\(\)\)/, 'sample collection freezes the foreground counters and receipt it observed');
+assert.match(source, /const sampleAtMs = performance\.now\(\)/, 'sample time is captured at the state read, not the earlier animation-frame timestamp');
+assert.match(source, /flameBefore:\s*snapshotFlameState\(prototype\.debugState\(\)\)/, 'run-start flame evidence cannot inherit later foreground counter mutations');
+const { snapshotFlameState } = await import('../kimodo-shared-device-inject.mjs');
+const changingReceipt = { requestId: 'frame-1', result: { frameCount: 1 } };
+const mutableFlame = {
+  frameCount: 1,
+  ordinaryForeground: { mode: 'producer-foreground-opportunities', completedFrames: 1, lastReceipt: changingReceipt },
+};
+const sampledFlame = snapshotFlameState(mutableFlame);
+changingReceipt.result.frameCount = 2;
+mutableFlame.ordinaryForeground.completedFrames = 2;
+assert.equal(sampledFlame.ordinaryForeground.lastReceipt.result.frameCount, 1, 'captured sample receipt cannot change when the live receipt object is later mutated');
+assert.equal(sampledFlame.ordinaryForeground.completedFrames, 1, 'captured foreground counters cannot change when the live counters later advance');
 
 let unsafeProducerDisposals = 0;
 await assert.rejects(

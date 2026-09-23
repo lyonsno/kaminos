@@ -82,10 +82,23 @@ function scheduledRun({ generationId = 9, observedBoundaries = null, diagnosticG
     }
   }
   const expected = steps * passNames.length * chunksPerPass;
+  const initialForegroundReceipt = {
+    runId: null,
+    requestId: 'ordinary-flame-frame-49',
+    requestSequence: 1,
+    status: 'completed',
+    settledAtMs: 899,
+    submissionCount: 1,
+    boundary: { phase: 'foreground-idle', position: 'before-encode', metadata: {} },
+    metadata: { frameCountBefore: 48, simStepCountBefore: 48 },
+    result: { status: 'submitted', atMs: 899, frameCount: 49, simStepCount: 49 },
+  };
   const frameReceipts = passes.map((pass, index) => ({
     runId,
     requestId: `frame-${index + 1}`,
+    requestSequence: index + 1,
     status: 'completed',
+    settledAtMs: 1000 + index * 120,
     submissionCount: 1,
     boundary: {
       phase: 'ddim-sampling',
@@ -100,8 +113,8 @@ function scheduledRun({ generationId = 9, observedBoundaries = null, diagnosticG
         layerEnd: pass.layerEnd,
       },
     },
-    metadata: { frameCountBefore: 49 + index },
-    result: { status: 'submitted', atMs: 1000 + index * 120, frameCount: 50 + index },
+    metadata: { frameCountBefore: 49 + index, simStepCountBefore: 49 + index },
+    result: { status: 'submitted', atMs: 1000 + index * 120, frameCount: 50 + index, simStepCount: 50 + index },
   }));
   const summary = {
     status: 'drained', maxInFlightDuties, maxObservedInFlightDuties: maxInFlightDuties,
@@ -145,8 +158,15 @@ function scheduledRun({ generationId = 9, observedBoundaries = null, diagnosticG
     flameBefore: { frameCount: 49, simStepCount: 49 },
     flameAfter: { frameCount: 49 + frameReceipts.length, simStepCount: 49 + frameReceipts.length },
     samples: [
-      { atMs: 900, status: 'running', frameCount: 49, simStepCount: 49 },
-      { atMs: 1000 + frameReceipts.length * 120, status: 'running', frameCount: 49 + frameReceipts.length, simStepCount: 49 + frameReceipts.length },
+      {
+        atMs: 900, status: 'running', frameCount: 49, simStepCount: 49,
+        foreground: { lastReceipt: initialForegroundReceipt },
+      },
+      {
+        atMs: 1000 + frameReceipts.length * 120, status: 'running',
+        frameCount: 49 + frameReceipts.length, simStepCount: 49 + frameReceipts.length,
+        foreground: { lastReceipt: frameReceipts.at(-1) },
+      },
     ],
   };
 }
@@ -157,6 +177,84 @@ assert.equal(
   64,
   'single-layer terminal acceptance requires all sixteen layer duties in each of four passes',
 );
+{
+  const run = scheduledRun({ scheduleMode: 'single-layer' });
+  const samples = [...run.samples];
+  const firstReceipt = run.foregroundReceipts[0];
+  samples[0] = {
+    ...samples[0],
+    atMs: firstReceipt.result.atMs + 10,
+    frameCount: firstReceipt.result.frameCount,
+    simStepCount: firstReceipt.result.simStepCount,
+    foreground: {
+      ...samples[0].foreground,
+      completedFrames: firstReceipt.result.frameCount,
+    },
+  };
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, samples }), 'single-layer'),
+    /sample.*(receipt|frame|progress)/i,
+    'an early progressed sample cannot contradict its own captured pre-run receipt even when aggregate receipts cover later progress',
+  );
+}
+{
+  const run = scheduledRun();
+  const samples = [...run.samples];
+  samples[1] = {
+    ...samples[1],
+    atMs: samples[1].foreground.lastReceipt.result.atMs + 10,
+    foreground: {
+      ...samples[1].foreground,
+      lastReceipt: {
+        ...samples[1].foreground.lastReceipt,
+        requestId: 'forged-frame-request',
+      },
+    },
+  };
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, samples }), 'fence-light'),
+    /sample.*(receipt|request|identity)/i,
+    'a progressed sample must name the same current-run request as both authoritative receipt ledgers',
+  );
+}
+{
+  const run = scheduledRun();
+  const samples = [...run.samples];
+  samples[1] = {
+    ...samples[1],
+    foreground: {
+      ...samples[1].foreground,
+      lastReceipt: {
+        ...samples[1].foreground.lastReceipt,
+        settledAtMs: samples[1].atMs + 1,
+      },
+    },
+  };
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, samples }), 'fence-light'),
+    /sample.*(receipt|timestamp|future)/i,
+    'a sample cannot capture a foreground receipt that settles later than the sample',
+  );
+}
+{
+  const run = scheduledRun();
+  const firstProgressed = run.samples[1];
+  const samples = [
+    ...run.samples,
+    {
+      atMs: firstProgressed.atMs + 1,
+      status: 'running',
+      frameCount: run.flameBefore.frameCount,
+      simStepCount: run.flameBefore.simStepCount,
+      foreground: { lastReceipt: run.samples[0].foreground.lastReceipt },
+    },
+  ];
+  assert.throws(
+    () => validateSuccessfulRun(scheduledTerminal({ ...run, samples }), 'fence-light'),
+    /sample.*(regress|monotonic|progress)/i,
+    'sample frame and simulation counts cannot regress after observed progress',
+  );
+}
 {
   const run = scheduledRun();
   const receipts = [...run.foregroundReceipts];
@@ -212,12 +310,18 @@ assert.equal(
       foregroundReceipts: receipts,
       foregroundRunReport: { ...run.foregroundRunReport, receipts },
     }), 'full-pass'),
-    /sampled progress.*foreground receipt/i,
+    /sample.*foreground receipt request identity/i,
     'the unforced full-pass may skip a duty, but the recorded receipt stream must still explain sampled frames',
   );
   const samples = [
-    { atMs: 900, status: 'running', frameCount: 49, simStepCount: 49 },
-    { atMs: 1000 + receipts.length * 120, status: 'running', frameCount: 49 + receipts.length, simStepCount: 49 + receipts.length },
+    run.samples[0],
+    {
+      atMs: 1000 + receipts.length * 120,
+      status: 'running',
+      frameCount: receipts.at(-1).result.frameCount,
+      simStepCount: receipts.at(-1).result.simStepCount,
+      foreground: { lastReceipt: receipts.at(-1) },
+    },
   ];
   assert.equal(
     validateSuccessfulRun(scheduledTerminal({
