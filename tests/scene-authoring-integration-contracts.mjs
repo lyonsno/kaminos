@@ -15,15 +15,31 @@ test('viewport modal edits read and write the same scene-object pose that save s
   assert.match(editTools, /event\.metaKey\) && key === 'z'[\s\S]*edits\.redo\(\) : edits\.undo\(\)/);
 });
 
+test('F frames the selected splat record including its authored scene position', () => {
+  assert.match(html, /import \{[^}]*frameSceneObjectRecord[^}]*\} from '\.\/scene-frame-selected\.mjs'/);
+  assert.match(html, /frameSelected: \(\) => \{ if \(frameSceneObjectRecord\(sceneObjects\.find\(entry => entry\.id === activeSceneObjectId\), camera, controls\)\)/);
+  assert.match(html, /const entry = sceneObjects\.find\(item => item\.id === activeSceneObjectId\);\s*const changed = frameSceneObjectRecord\(entry, camera, controls\)/);
+  const framing = readFileSync(new URL('../scene-frame-selected.mjs', import.meta.url), 'utf8');
+  assert.match(framing, /record\?\.type==='splat'\?record\.sceneTransform\?\.position:null/);
+  assert.match(framing, /frameObjects\(record\?\.object\?\[record\.object\]:\[\],camera,controls,authoredPoint\?\[authoredPoint\]:\[\]\)/);
+});
+
 test('clearing or removing authored scene objects cancels previews and invalidates only their history', () => {
   assert.match(html, /window\.removeSceneObject = function\(id\) \{\s*scenePlacementTools\?\.finish\(false\);\s*scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\);/);
   assert.match(html, /function clearScene\(\) \{\s*scenePlacementTools\?\.clear\(\);\s*sceneMutationToken\+\+;/);
   assert.match(html, /if \(id !== activeSceneObjectId\) scenePlacementTools\?\.selectionChanged\(\);/);
 });
 
-test('active selection stays legible through the scene row and pivot marker without a custom pipeline pass', () => {
+test('selection feedback hides untrustworthy offscreen pivots and names the recovery cue', () => {
   assert.match(html, /\.scene-object-row\.active \{ background: #29251f; border-color: #a97837; color: #fff; \}/);
-  assert.match(editTools, /line\(origin\.clone\(\)\.add\(new Vector2\(\.\.\.a\)\), origin\.clone\(\)\.add\(new Vector2\(\.\.\.b\)\), '#efa544'\)/);
+  assert.match(editTools, /export function getPivotViewState/);
+  assert.match(editTools, /pivotState\?\.state === 'visible'/);
+  assert.match(editTools, /finish.*Enter.*Esc.*then F to frame pivot and object/i);
+  assert.match(editTools, /F to frame pivot and object/);
+  assert.match(editTools, /viewportRect\.bottom - statusRect\.top/);
+  assert.match(editTools, /new ResizeObserver\(\(\) => draw\(\)\)/);
+  assert.match(html, /#info-bar \{[^}]*max-width:min\(560px,calc\(100% - 32px\)\)[^}]*overflow-wrap:anywhere/);
+  assert.match(html, /#scene-edit-hud\[data-alert="true"\] \{[^}]*overflow-wrap:anywhere/);
   assert.match(html, /renderPipeline\.outputNode = scenePass\.mul\(vec4\(vec3\(aoOutput\), 1\)\)/);
   assert.doesNotMatch(html, /createSelectionFeedback|selectionFeedback\.output/);
 });
