@@ -452,6 +452,10 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   const axisAction = await changeAxisViaControl('hindlimb-left-hip_1', 'x');
   await delay(500);
   const secondCastNumericPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const fractionalInput = await attemptInvalidNumericControl('hindlimb-left-hip_1', '12.5');
+  const fractionalInputPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const fractionalInputPoseError = Math.max(...Object.entries(secondCastNumericPose.meshes[1].boneQuaternions).map(([name, quaternion]) =>
+    Math.hypot(...quaternion.map((value, axis) => value - fractionalInputPose.meshes[1].boneQuaternions[name][axis]))));
   const outOfRangeInput = await attemptInvalidNumericControl('hindlimb-left-hip_1', '270');
   const emptyNumericInput = await attemptInvalidNumericControl('hindlimb-left-hip_1', '');
   const invalidInputPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
@@ -459,13 +463,16 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     Math.hypot(...quaternion.map((value, axis) => value - invalidInputPose.meshes[1].boneQuaternions[name][axis]))));
   if (secondAction.degrees !== '12' || secondAction.sliderDegrees !== '12'
       || outOfRangeInput.degrees !== '12' || outOfRangeInput.sliderDegrees !== '12'
-      || !outOfRangeInput.status.includes('Use a degree value from −180° to 180°')
+      || !outOfRangeInput.status.includes('Use a whole degree value from −180° to 180°')
+      || fractionalInput.degrees !== '12' || fractionalInput.sliderDegrees !== '12'
+      || !fractionalInput.status.includes('Use a whole degree value from −180° to 180°')
+      || fractionalInputPoseError > 0.000001
       || axisAction.axis !== 'x' || axisAction.degrees !== '12' || axisAction.sliderDegrees !== '12'
       || !outOfRangeInput.status.includes('local X 12°')
       || emptyNumericInput.degrees !== '12' || emptyNumericInput.sliderDegrees !== '12'
       || !emptyNumericInput.status.includes('Enter a degree value from −180° to 180°')
       || invalidInputPoseError > 0.000001) {
-    throw new Error('numeric/axis pose inputs did not stay synchronized and preserve the last valid pose: ' + JSON.stringify({ secondAction, axisAction, outOfRangeInput, emptyNumericInput, invalidInputPoseError }));
+    throw new Error('numeric/axis pose inputs did not stay synchronized and preserve the last valid pose: ' + JSON.stringify({ secondAction, axisAction, fractionalInput, fractionalInputPoseError, outOfRangeInput, emptyNumericInput, invalidInputPoseError }));
   }
   await delay(500);
   const bothCastPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
@@ -508,7 +515,7 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   lastEvidence.meshSkinnedPoseControls = {
     objectId, expectedAssetSha256, loadedSha256, panel, before, beforeShot,
     firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot, firstCastPixels,
-    secondAction, axisAction, secondCastNumericPose, outOfRangeInput, emptyNumericInput, invalidInputPoseError,
+    secondAction, axisAction, secondCastNumericPose, fractionalInput, fractionalInputPoseError, outOfRangeInput, emptyNumericInput, invalidInputPoseError,
     bothCastPose, secondHipError, firstPosePreservedError, secondCastPixels, posedShot,
     restored, resetErrors, restoredShot, status, identicalControl, posedPixels, restoredPixels,
   };
