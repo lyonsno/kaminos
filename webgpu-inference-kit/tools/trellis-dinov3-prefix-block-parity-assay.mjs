@@ -9,7 +9,7 @@ import { assertCleanGitCheckout } from './trellis-dinov3-source-attestation.mjs'
 const args=new Map();
 for(let index=2;index<process.argv.length;index+=2) args.set(process.argv[index],process.argv[index+1]);
 if(process.argv.includes('--help')) {
-  console.log('Usage: node tools/trellis-dinov3-prefix-block-parity-assay.mjs --model-dir PATH --source-image PATH --trellis-root PATH --evidence-dir PATH --report PATH --receiver ADDRESS [--mode block0-parity|resident-handoff] [--python PATH] [--chrome PATH] [--source-revision SHA] [--debug-port N] [--server-port N]');
+  console.log('Usage: node tools/trellis-dinov3-prefix-block-parity-assay.mjs --model-dir PATH --source-image PATH --trellis-root PATH --evidence-dir PATH --report PATH --receiver ADDRESS [--mode block0-parity|resident-handoff|resident-block1] [--python PATH] [--chrome PATH] [--source-revision SHA] [--debug-port N] [--server-port N]');
   process.exit(0);
 }
 const root=resolve(new URL('..',import.meta.url).pathname);
@@ -59,7 +59,7 @@ function gitRevision(path) {
 function persistReport(extra={}) {
   if(!reportPath) return null;
   const report={
-    schema:mode==='resident-handoff'?'kaminos.trellis-dinov3-resident-handoff-assay.v1':'kaminos.trellis-dinov3-prefix-block0-parity-assay.v0',ok:false,mode,invocationId,
+    schema:mode==='resident-block1'?'kaminos.trellis-dinov3-resident-block1-assay.v0':mode==='resident-handoff'?'kaminos.trellis-dinov3-resident-handoff-assay.v1':'kaminos.trellis-dinov3-prefix-block0-parity-assay.v0',ok:false,mode,invocationId,
     failure_phase:phase,reportPath,startReceiptPath,referenceDir,browserReportPath,stdoutPath,stderrPath,
     evidenceDir,modelDir,sourceImage,trellisRoot,python,chrome,
     lastTrustworthyEvidence,commandIdentity:effectiveCommands,
@@ -82,7 +82,7 @@ function runChild(command,commandArgs,{cwd,env}={}) {
 let report=null;
 try {
   if(!['--model-dir','--source-image','--trellis-root','--evidence-dir','--report','--receiver'].every(key=>args.has(key))) throw new Error('required arguments: --model-dir, --source-image, --trellis-root, --evidence-dir, --report, --receiver');
-  if(!['block0-parity','resident-handoff'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
+  if(!['block0-parity','resident-handoff','resident-block1'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
   const kaminosRevision=gitRevision(root);
   if(args.has('--source-revision')&&args.get('--source-revision')!==kaminosRevision) throw new Error(`requested Kaminos source revision ${args.get('--source-revision')} differs from effective checkout ${kaminosRevision}`);
   checkoutAtStart=assertCleanGitCheckout(root,kaminosRevision);
@@ -106,7 +106,12 @@ try {
   const trellisDinoSource=resolve(trellisRoot,'trellmlx/models/dinov3.py');
   const trellisDinoSourceSha256=await sha256File(trellisDinoSource);
   if(trellisRevision!=='cddaf3cb8a9f28956114956ebe754d6661a3f695'||trellisDinoSourceSha256!=='5e56c76b947bbd59e9353c06470101ac28b6462649161cc8dd3740b2cf66403c') throw new Error(`native MLX reference source drifted: revision=${trellisRevision} source=${trellisDinoSourceSha256}`);
-  const sourceIdentity={mode,referenceBoundary:mode==='resident-handoff'?'block0 + layer1.layer_scale1 × layer1.attention(layer1.norm1(block0))':'complete block0 output',sourceImage:{path:sourceImage,sha256:sourceSha256},model:{id:'facebook/dinov3-vitl16-pretrain-lvd1689m',revision:modelRevision,files:observedFiles},mlxReference:{root:trellisRoot,revision:trellisRevision,sourceFile:trellisDinoSource,sourceFileSha256:trellisDinoSourceSha256},kaminos:{root,revision:kaminosRevision}};
+  const referenceBoundary=mode==='resident-block1'
+    ? 'complete block0 plus block1 attention residual, norm2, GELU MLP, and LayerScale residual'
+    : mode==='resident-handoff'
+      ? 'block0 + layer1.layer_scale1 × layer1.attention(layer1.norm1(block0))'
+      : 'complete block0 output';
+  const sourceIdentity={mode,referenceBoundary,sourceImage:{path:sourceImage,sha256:sourceSha256},model:{id:'facebook/dinov3-vitl16-pretrain-lvd1689m',revision:modelRevision,files:observedFiles},mlxReference:{root:trellisRoot,revision:trellisRevision,sourceFile:trellisDinoSource,sourceFileSha256:trellisDinoSourceSha256},kaminos:{root,revision:kaminosRevision}};
   const pythonArgs=[resolve(root,'tools/trellis-dinov3-mlx-reference.py'),'--model-dir',modelDir,'--source-image',sourceImage,'--trellis-root',trellisRoot,'--out-dir',referenceDir];
   const browserArgs=[resolve(root,'tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs'),'--reference-dir',referenceDir,'--source-image',sourceImage,'--output-dir',evidenceDir,'--report',browserReportPath,'--mode',mode,'--source-revision',kaminosRevision,'--chrome',chrome,'--debug-port',debugPort,'--server-port',serverPort,'--atol','0.002','--rtol','0.001'];
   effectiveCommands={
@@ -115,7 +120,7 @@ try {
     browserParity:{executable:process.execPath,args:browserArgs,cwd:root,route:'headless Chrome WebGPU F32 against the just-exported MLX tensors'},
     queue:{timeout:null,serialization:'one serialized job executes MLX reference then WebGPU comparator; no other GPU job interleaves'},
   };
-  const startReceipt={schema:mode==='resident-handoff'?'kaminos.trellis-dinov3-resident-handoff-assay-start.v1':'kaminos.trellis-dinov3-prefix-block0-parity-assay-start.v0',invocationId,receiver:args.get('--receiver'),startedAt:new Date().toISOString(),sourceIdentity,effectiveCommands,terminalEvidence:{reportPath,referenceManifest:resolve(referenceDir,'reference-manifest.json'),browserReportPath,gpuOutputs:resolve(evidenceDir,'gpu'),stdoutPath,stderrPath}};
+  const startReceipt={schema:mode==='resident-block1'?'kaminos.trellis-dinov3-resident-block1-assay-start.v0':mode==='resident-handoff'?'kaminos.trellis-dinov3-resident-handoff-assay-start.v1':'kaminos.trellis-dinov3-prefix-block0-parity-assay-start.v0',invocationId,receiver:args.get('--receiver'),startedAt:new Date().toISOString(),sourceIdentity,effectiveCommands,terminalEvidence:{reportPath,referenceManifest:resolve(referenceDir,'reference-manifest.json'),browserReportPath,gpuOutputs:resolve(evidenceDir,'gpu'),stdoutPath,stderrPath}};
   writeFileSync(startReceiptPath,JSON.stringify(startReceipt,null,2)+'\n');
   lastTrustworthyEvidence={description:'input manifest independently rehashed; exact image, checkpoint, MLX implementation, and source commits verified',detail:sourceIdentity};
 
@@ -132,15 +137,15 @@ try {
   } else {
     const manifestPath=resolve(referenceDir,'reference-manifest.json');
     const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
-    const expectedManifestIdentity=manifest.ok===true&&manifest.model?.revision===modelRevision&&manifest.model?.files?.['model.safetensors']?.sha256===expected['model.safetensors']&&manifest.preprocessing?.sourceFileSha256===sourceSha256&&manifest.reference?.sourceRevision===trellisRevision&&manifest.reference?.sourceFileSha256===trellisDinoSourceSha256&&manifest.computation?.precision==='float32'&&manifest.computation?.sequenceLength===1029&&(mode!=='resident-handoff'||manifest.computation?.residentProbe==='layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1');
+    const expectedManifestIdentity=manifest.ok===true&&manifest.model?.revision===modelRevision&&manifest.model?.files?.['model.safetensors']?.sha256===expected['model.safetensors']&&manifest.preprocessing?.sourceFileSha256===sourceSha256&&manifest.reference?.sourceRevision===trellisRevision&&manifest.reference?.sourceFileSha256===trellisDinoSourceSha256&&manifest.computation?.precision==='float32'&&manifest.computation?.sequenceLength===1029&&(mode!=='resident-handoff'||manifest.computation?.residentProbe==='layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1')&&(mode!=='resident-block1'||manifest.computation?.residentBlock1Probe==='layer1.norm2(block1_after_attention_hidden_states); layer1.mlp(block1_norm2_hidden_states); block1_after_attention_hidden_states + mlp_output * layer1.layer_scale2');
     if(!expectedManifestIdentity) throw new Error(`MLX exporter completed but its full reference identity did not match the requested source: ${manifestPath}`);
-    lastTrustworthyEvidence={description:mode==='resident-handoff'?'same-job native MLX F32 block-1 attention-residual reference and all reference input hashes verified':'same-job native MLX F32 patch/prefix/block-0 tensors and all reference input hashes verified',detail:{manifestPath,modelRevision,sourceSha256,trellisRevision,trellisDinoSourceSha256,outputs:Object.keys(manifest.outputs||{}).length}};
+    lastTrustworthyEvidence={description:mode==='resident-block1'?'same-job native MLX F32 full block-1 stage tensors and all reference input hashes verified':mode==='resident-handoff'?'same-job native MLX F32 block-1 attention-residual reference and all reference input hashes verified':'same-job native MLX F32 patch/prefix/block-0 tensors and all reference input hashes verified',detail:{manifestPath,modelRevision,sourceSha256,trellisRevision,trellisDinoSourceSha256,outputs:Object.keys(manifest.outputs||{}).length}};
     phase='webgpu-parity-execution';
     const browserRun=await runChild(process.execPath,browserArgs,{cwd:root});
     let browserReport=null;
     try { browserReport=JSON.parse(readFileSync(browserReportPath,'utf8')); } catch {}
     const rawOutputCheck={};
-    const expectedOutputs=mode==='resident-handoff'?['block1Attention']:['patchEmbeddings','prefixHiddenStates','block0HiddenStates'];
+    const expectedOutputs=mode==='resident-block1'?['block1Attention','block1Norm2','block1MlpHidden','block1MlpProjection','block1Output']:mode==='resident-handoff'?['block1Attention']:['patchEmbeddings','prefixHiddenStates','block0HiddenStates'];
     for(const name of expectedOutputs) {
       const record=browserReport?.persistedOutputReceipts?.[`${name}.f32`];
       const exists=record&&existsSync(record.path);
@@ -156,7 +161,7 @@ try {
       ok:parityOk,sourceIdentity,referenceRun,browserRun,referenceManifest:manifestPath,browserReportPath,
       browserReport,rawOutputCheck,sourceAttestation:{checkoutAtStart,checkoutAtEnd,servedSourceAttestation:browserReport?.sourceAttestation||null,ok:sourceAttestationOk},
       claim:parityOk?browserReport.browserState?.claim:`no completed matched F32 ${mode} result; inspect browser failure phase and last trustworthy evidence`,
-      nextSlice:parityOk?(mode==='resident-handoff'?'continue from the block-1 attention residual through block-1 norm2, GELU MLP, and residual with the same image, checkpoint, and precision':'connect the verified block-0 F32 output to the next native TRELLIS conditioning operation without changing image, checkpoint, precision, or route identity'):'repair the named failing route stage, preserving source/precision/reference identity',
+      nextSlice:parityOk?(mode==='resident-block1'?'continue from the completed block-1 F32 output to block-2 norm1 using the same image, checkpoint, preprocessing, precision, and reference':mode==='resident-handoff'?'continue from the block-1 attention residual through block-1 norm2, GELU MLP, and residual with the same image, checkpoint, and precision':'connect the verified block-0 F32 output to the next native TRELLIS conditioning operation without changing image, checkpoint, precision, or route identity'):'repair the named failing route stage, preserving source/precision/reference identity',
     });
     console.log(JSON.stringify({ok:parityOk,reportPath,sourceIdentity,comparisons:browserReport?.comparisons||{},rawOutputCheck,claim:report.claim},null,2));
     if(!parityOk) process.exitCode=1;

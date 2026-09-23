@@ -86,6 +86,10 @@ assert.match(browserRunner, /browserState\?\.requestedRouteId!==requestedRouteId
   'the runner must reject a browser page that exercised another effective route');
 assert.match(browserRunner, /block1Attention:1029\*1024\*4/,
   'the resident mode must require the exact full-size downstream F32 tensor rather than accepting a partial result');
+assert.match(browserRunner, /block1MlpHidden:1029\*4096\*4/,
+  'the resident full-block mode must require the exact 1029×4096 F32 GELU tensor');
+assert.match(parityAssay, /\['block1Attention','block1Norm2','block1MlpHidden','block1MlpProjection','block1Output'\]/,
+  'the full-block assay must reject missing raw GPU readbacks at every captured block-1 boundary');
 assert.match(browserSmoke, /adapterClassification === 'software-fallback'/,
   'software WebGPU fallback cannot satisfy the resident GPU evidence route');
 assert.match(browserSmoke, /finiteNonzeroCount === 0/,
@@ -105,12 +109,19 @@ assert.match(parityAssay, /last trustworthy MLX reference remained valid/,
 const routeImplementation = implementation.slice(implementation.indexOf('async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal'));
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1LayerNormResident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1AttentionResident, 'function');
+assert.equal(typeof residentRoute.runTrellisDinoV3Block1MlpResident, 'function',
+  'block-1 norm2, GELU MLP, and LayerScale residual must continue from the live attention-residual tensor');
+assert.equal(typeof residentRoute.assertTrellisDinoV3ResidentMlpHandoffIdentity, 'function',
+  'the MLP contract must keep the exact block-1 attention residual as both norm2 input and residual');
 assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'function');
+assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentBlock1Probe, 'function');
 assert.equal(typeof residentRoute.assertTrellisDinoV3ResidentAttentionHandoffIdentity, 'function',
   'the model-local probe must validate the attention input and original block-0 residual as separate identities');
 assert.equal(typeof kit.runTrellisDinoV3Block1LayerNormResident, 'undefined', 'the probe kernel remains model-specific rather than expanding the shared kit root API');
 assert.equal(typeof kit.runTrellisDinoV3Block1AttentionResident, 'undefined', 'block-1 attention remains model-specific rather than expanding the shared kit root API');
+assert.equal(typeof kit.runTrellisDinoV3Block1MlpResident, 'undefined', 'block-1 MLP remains model-specific rather than expanding the shared kit root API');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'undefined', 'the diagnostic probe is not promoted to the common kit API');
+assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentBlock1Probe, 'undefined', 'the full block-1 diagnostic probe is not promoted to the common kit API');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockPhaseProgramRoute, 'undefined', 'the model-specific route stays out of the shared kit root API');
 assert.doesNotMatch(publicIndex, /TRELLIS_DINOV3/, 'the model-specific route must not append DINOv3 symbols to the current shared root surface');
 assert.equal(residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID,
@@ -148,6 +159,16 @@ assert.match(routeImplementation, /block0Readback:'skipped'/,
   'the explicit resident probe must report that block-0 was not read back to the host');
 assert.match(referenceExporter, /block1_norm1_hidden_states = block1\.norm1\(block0_hidden_states\)[\s\S]*block1_attention_output = block1\.attention\(block1_norm1_hidden_states, cos, sin, model\.num_prefix_tokens\)[\s\S]*block1_after_attention_hidden_states = block0_hidden_states \+ block1_attention_output \* block1\.layer_scale1/,
   'the MLX reference must reproduce native DINOv3 block-1 attention and its LayerScale residual as the resident-consumer oracle');
+assert.match(referenceExporter, /block1_norm2_hidden_states = block1\.norm2\(block1_after_attention_hidden_states\)[\s\S]*block1_mlp_hidden_states = mx\.gelu\(block1\.mlp\.up_proj\(block1_norm2_hidden_states\)\)[\s\S]*block1_mlp_output = block1\.mlp\.down_proj\(block1_mlp_hidden_states\)[\s\S]*block1_after_mlp_hidden_states = block1_after_attention_hidden_states \+ block1_mlp_output \* block1\.layer_scale2/,
+  'the MLX reference must expose native block-1 norm2, GELU up/down projections, and the exact LayerScale residual');
+assert.match(implementation, /trellis2\.dinov3\.block0-to-block1-full-block\.resident-probe\.webgpu-local\.v0/,
+  'the full block-1 probe must have a route identity distinct from the attention-only probe');
+assert.match(browserSmoke, /mode === 'resident-block1'/,
+  'the browser harness must expose a separately named full block-1 mode');
+assert.match(browserRunner, /resident-block1/,
+  'the runner must validate and preserve the full block-1 mode rather than relabeling the attention-only route');
+assert.match(parityAssay, /residentBlock1Probe/,
+  'the composite same-job assay must require the full block-1 reference identity');
 assert.match(browserSmoke, /runTrellisDinoV3PrefixBlockResidentHandoffProbe/,
   'the live browser witness must exercise the resident probe API');
 
@@ -210,5 +231,63 @@ assert.equal(block1Kernels.find(kernel=>kernel.name.endsWith('attention.layer-sc
   'the DINOv3 block-1 attention residual is rooted at the original block-0 hidden-state buffer');
 assert.equal(residentAttention.operation,'dinov3-block1-attention-residual');
 assert.deepEqual(residentAttention.shape,[1,1029,1024]);
+
+const mlpStages=[];
+const mlpKernels=[];
+const mlpRuntime={
+  createTensor(input) { return { ...input,buffer:{} }; },
+  uploadTensor() {},
+  createUniformBuffer(input) { return { ...input,buffer:{} }; },
+  defineComputeKernel(input) { mlpKernels.push(input); return input; },
+  async runKernel(kernel,options) { mlpStages.push({kernel,options}); },
+};
+const mlpPhaseEvents=[];
+const mlpWeights={
+  norm2Weight:new Float32Array(1024).fill(1),norm2Bias:new Float32Array(1024),
+  mlpUpWeight:new Float32Array(4096*1024),mlpUpBias:new Float32Array(4096),
+  mlpDownWeight:new Float32Array(1024*4096),mlpDownBias:new Float32Array(1024),
+  layerScale2:new Float32Array(1024),
+};
+const residentMlp=await residentRoute.runTrellisDinoV3Block1MlpResident({
+  runtime:mlpRuntime,device:{limits:{maxComputeWorkgroupsPerDimension:65535}},
+  inputTensor:residentAttention.tensor,residualTensor:residentAttention.tensor,...mlpWeights,
+  schedulerInvocation:{invocationId:'resident-contract-invocation'},
+  onPhase:event=>mlpPhaseEvents.push(event.phase),
+});
+assert.equal(residentMlp.inputTensor,residentAttention.tensor,'norm2 consumes the exact live attention-residual tensor');
+assert.equal(residentMlp.residualTensor,residentAttention.tensor,'the MLP residual uses that same attention-residual tensor');
+assert.equal(residentMlp.tensor.usage & WEBGPU_BUFFER_USAGE.copySrc,WEBGPU_BUFFER_USAGE.copySrc,
+  'the final MLP-residual output can be read back only after the resident chain');
+assert.equal(mlpStages.length,4,'block-1 MLP submits norm2, GELU up projection, down projection, then LayerScale residual');
+assert.deepEqual(mlpStages.map(({options})=>options.stage),[
+  'dinov3-block1-layernorm2-resident','dinov3-block1-mlp-up-resident',
+  'dinov3-block1-mlp-down-resident','dinov3-block1-mlp-residual-resident',
+]);
+assert.deepEqual(mlpPhaseEvents,mlpStages.map(({options})=>options.stage),
+  'failure progress must name each exact resident block-1 MLP stage before dispatch');
+assert.deepEqual(residentMlp.mlpHiddenTensor.shape,[1,1029,4096]);
+assert.match(mlpKernels.find(kernel=>kernel.name.endsWith('mlp-up')).code,/gelu_exact_approx/,
+  'the MLP up projection must use the F32 GELU shader law');
+assert.equal(mlpKernels.find(kernel=>kernel.name.endsWith('norm2')).bindings[0].resource,residentAttention.tensor,
+  'block-1 norm2 reads the resident attention residual directly');
+assert.equal(mlpKernels.find(kernel=>kernel.name.endsWith('mlp-up')).bindings[0].resource,residentMlp.norm2Tensor,
+  'the GELU up projection consumes the resident norm2 output');
+assert.equal(mlpKernels.find(kernel=>kernel.name.endsWith('mlp-up')).bindings[3].resource,residentMlp.mlpHiddenTensor,
+  'the GELU up projection writes the resident intermediate tensor');
+assert.equal(mlpKernels.find(kernel=>kernel.name.endsWith('mlp-down')).bindings[0].resource,residentMlp.mlpHiddenTensor,
+  'the down projection consumes the GELU-activated resident intermediate');
+assert.equal(mlpKernels.find(kernel=>kernel.name.endsWith('mlp.layer-scale-residual')).bindings[0].resource,residentAttention.tensor,
+  'block-1 MLP LayerScale residual is rooted at the exact attention-residual tensor');
+assert.equal(residentRoute.assertTrellisDinoV3ResidentMlpHandoffIdentity({
+  residentMlp,attentionResidual:residentAttention.tensor,
+}),true);
+assert.throws(()=>residentRoute.assertTrellisDinoV3ResidentMlpHandoffIdentity({
+  residentMlp:{...residentMlp,inputTensor:sourceTensor},attentionResidual:residentAttention.tensor,
+}),/exact live block-1 attention residual/);
+await assert.rejects(()=>residentRoute.runTrellisDinoV3Block1MlpResident({
+  runtime:mlpRuntime,inputTensor:residentAttention.tensor,residualTensor:residentAttention.tensor,
+  ...mlpWeights,mlpUpWeight:new Uint16Array(4096*1024),
+}),/block1MlpUpWeight must be a Float32Array/,
+'the resident MLP must reject reduced-precision checkpoint weights rather than silently converting them');
 
 console.log('TRELLIS DINOv3 prefix/block-0 phase-program contracts passed');
