@@ -41,7 +41,7 @@ Run a text prompt, then select all retained instances or one instance. Source, O
 
 Use the native-1008 package above for the detailed image workflow (288-by-288 native mask logits). Model preparation remains an offline step. Unload Model releases SAM's route and model leases without destroying Kaminos's shared rendering device.
 
-This host integration and the APIs below are source-checkout additions, not a claim about the currently published npm version. The native isolated-workbench evidence below remains the accepted regression baseline; actual Kaminos input cadence and image-to-scene verification are separate consumer gates.
+This host integration and the APIs below are source-checkout additions, not a claim about the currently published npm version. The native isolated-workbench evidence below remains the accepted regression baseline. The Kaminos consumer also exercises persisted image-to-scene import and same-device, input-driven source rendering during inference; this establishes cooperative submissions at model phase boundaries, not display-frame cadence or frame-budget quality.
 
 ### Caller-Owned Image Runtime
 
