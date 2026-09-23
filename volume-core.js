@@ -1,6 +1,6 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
 import { detailForceContributionMask, detailForceContributionReceipt } from './volume-detail-force-isolation.mjs';
-import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, EMISSIVE_LIGHT_DIRECTION_COUNT, EMISSIVE_LIGHT_TRANSPORT_MODEL, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
+import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, EMISSIVE_LIGHT_DIRECTION_COUNT, EMISSIVE_LIGHT_TRANSPORT_MODEL, cameraWhiteBalance, createEmissiveLightField, snapshotEmissiveFieldFrame } from './volume-emissive-transport.mjs';
 import { encodeIncidentLightBatch } from './volume-gpu-profile.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
@@ -15413,6 +15413,7 @@ export function createKaminosVolumePrototype({
 
   async function sampleEmissiveLightField() {
     if (uniforms[368] !== 2) return { ok: false, reason: 'emissive-mode-unavailable' };
+    const capture = snapshotEmissiveFieldFrame(currentFluid, state);
     const bytes = EMISSIVE_LIGHT_GRID ** 3 * 16;
     const fields = [
       ['coefficients', emissiveLightField.coefficients, bytes],
@@ -15426,7 +15427,7 @@ export function createKaminosVolumePrototype({
     }));
     try {
       const encoder = device.createCommandEncoder({ label: 'same-state emissive field readback' });
-      emissiveLightField.encode(encoder, currentFluid);
+      emissiveLightField.encode(encoder, capture.sourceIndex);
       fields.forEach(([, source], index) => encoder.copyBufferToBuffer(source, 0, readbacks[index], 0, fields[index][2]));
       device.queue.submit([encoder.finish()]);
       await Promise.all(readbacks.map(buffer => buffer.mapAsync(GPUMapMode.READ)));
@@ -15434,13 +15435,10 @@ export function createKaminosVolumePrototype({
       readbacks.forEach(buffer => buffer.unmap());
       return {
         ok: true,
-        authority: 'same-current-fluid-and-uniforms-gpu-field-readback-v0',
+        authority: 'same-submission-fluid-and-uniforms-gpu-field-readback-v1',
         grid: EMISSIVE_LIGHT_GRID,
         directions: EMISSIVE_LIGHT_DIRECTION_COUNT,
-        simStepCount: state.simStepCount,
-        effectiveRoute: state.effectiveRoute,
-        physicalColor: state.physicalColor,
-        backend: state.backend,
+        ...capture,
         coefficients: values[0],
         directionalRadiance: values[1],
         incidentRadiance: values[2],

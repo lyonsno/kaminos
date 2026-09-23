@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { assertArmEquivalent } from './volume-physical-color-witness-contract.mjs';
+import { assertArmEquivalent, validateEmissiveField, validateFieldArm } from './volume-physical-color-witness-contract.mjs';
 const [url, output, expectedRoot, expectedCommit, armsPath] = process.argv.slice(2);
 assert.ok(output, 'usage: URL OUT_DIR REPO_ROOT COMMIT');
 const out = resolve(output);
@@ -114,6 +114,7 @@ try {
   report.arms = arms;
   const earlierRgba = new Map();
   for (const arm of arms) {
+    validateFieldArm(arm);
     assert.match(arm.id,/^[a-z0-9-]+$/, 'unsafe capture identifier');
     assert.ok(!earlierRgba.has(arm.id), 'duplicate capture identifier');
     report.phase = arm.id; save();
@@ -129,12 +130,12 @@ try {
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
       const image = document.createElement('canvas'); image.width=width; image.height=height;
       image.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(rgba),width,height),0,0);
+      const emissiveField = ${arm.field === true && arm.mode === 2} ? await core.sampleEmissiveLightField() : null;
+      if (emissiveField && !emissiveField.ok) throw new Error('native emissive field readback failed: '+JSON.stringify(emissiveField));
       const profile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveLightProfile() : null;
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
       const frameProfile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveFrameProfile() : null;
       if (frameProfile && !frameProfile.ok) throw new Error('native frame timing failed: '+JSON.stringify(frameProfile));
-      const emissiveField = ${arm.field === true && arm.mode === 2} ? await core.sampleEmissiveLightField() : null;
-      if (emissiveField && !emissiveField.ok) throw new Error('native emissive field readback failed: '+JSON.stringify(emissiveField));
       const fieldFiles = emissiveField ? Object.fromEntries(Object.entries({
         coefficients:emissiveField.coefficients,
         directionalRadiance:emissiveField.directionalRadiance,
@@ -157,24 +158,12 @@ try {
       assert.equal(result.state.physicalColor.incidentLight?.directions, 24);
       assert.equal(result.state.physicalColor.incidentLight?.slabs, 20);
     }
-    if (result.emissiveField) {
-      const field = result.emissiveField;
-      assert.equal(field.authority, 'same-current-fluid-and-uniforms-gpu-field-readback-v0');
-      assert.equal(field.grid, 20);
-      assert.equal(field.directions, 24);
-      assert.equal(field.simStepCount, result.state.simStepCount);
-      assert.equal(field.effectiveRoute, result.state.effectiveRoute);
-      assert.equal(field.physicalColor?.effective, 'emissive-transport-v2');
-      const cells = field.grid ** 3;
-      const expectedFieldBytes = {
-        coefficients: cells * 16,
-        directionalRadiance: cells * field.directions * 16,
-        incidentRadiance: cells * 16,
-      };
-      for (const [name, expectedBytes] of Object.entries(expectedFieldBytes)) {
-        const bytes = Buffer.from(result.fieldFiles?.[name] ?? '', 'base64');
-        assert.equal(bytes.byteLength, expectedBytes, `partial or missing ${name} field`);
-        writeFileSync(join(out, `${arm.id}.${name}.f32`), bytes);
+    let fieldValidation = null;
+    if (arm.field === true) {
+      assert.ok(result.emissiveField && result.fieldFiles, 'requested field capture was omitted');
+      fieldValidation = validateEmissiveField(result.emissiveField, result.fieldFiles, result.state);
+      for (const [name, data] of Object.entries(result.fieldFiles)) {
+        writeFileSync(join(out, `${arm.id}.${name}.f32`), Buffer.from(data, 'base64'));
       }
     }
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
@@ -189,6 +178,7 @@ try {
       field: field ? {
         authority:field.authority, grid:field.grid, directions:field.directions, simStepCount:field.simStepCount,
         effectiveRoute:field.effectiveRoute, physicalColor:field.physicalColor, backend:field.backend,
+        validation:fieldValidation,
         coefficients:`${arm.id}.coefficients.f32`, directionalRadiance:`${arm.id}.directionalRadiance.f32`,
         incidentRadiance:`${arm.id}.incidentRadiance.f32`,
       } : null,

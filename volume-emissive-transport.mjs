@@ -60,6 +60,16 @@ export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze(Array.from({ length: 3 * 
 export const EMISSIVE_LIGHT_DIRECTION_COUNT = EMISSIVE_LIGHT_DIRECTIONS.length;
 export const EMISSIVE_LIGHT_TRANSPORT_MODEL = 'twenty-four-direction-cubic-short-characteristics-v1';
 
+export function snapshotEmissiveFieldFrame(sourceIndex, state) {
+  return {
+    sourceIndex,
+    simStepCount: state.simStepCount,
+    effectiveRoute: state.effectiveRoute,
+    physicalColor: structuredClone(state.physicalColor),
+    backend: state.backend,
+  };
+}
+
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
