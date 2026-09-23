@@ -330,402 +330,158 @@ async function runMeshSkinnedPoseScenario(ws) {
   lastEvidence.meshSkinnedPose = { objectId, expectedAssetSha256, loadedSha256, poseMeshIndex, bone: boneName, axis: 'z', degrees: 12, before, beforeShot, action, after, moved, otherBoneError, posedShot, restored, restoredShot, returnError, quaternionReturnError, identicalControl, posedPixels, restoredPixels };
 }
 
-async function runMeshSkinnedPoseControlsScenario(ws) {
+async function runSceneBoneGizmoScenario(ws) {
   await runMeshAssetLinkScenario(ws);
-  phase = 'scenario-mesh-skinned-pose-controls';
+  phase = 'scenario-scene-bone-gizmo';
   if (!/^[a-f0-9]{64}$/.test(expectedAssetSha256 || '')) {
-    throw new Error('mesh-skinned-pose-controls requires --expected-asset-sha256 for the exact asset under test');
+    throw new Error('scene-bone-gizmo requires --expected-asset-sha256 for the exact asset under test');
   }
   const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
   const requestedSha256 = new URL(url).searchParams.get('mesh_sha256');
   const loadedSha256 = lastEvidence.meshAssetLink.state.loadedSha256;
   if (requestedSha256 !== expectedAssetSha256 || loadedSha256 !== expectedAssetSha256) {
-    throw new Error('pose controls are not bound to the expected painted-pair bytes: ' + JSON.stringify({ requestedSha256, loadedSha256, expectedAssetSha256 }));
+    throw new Error('scene bone selection is not bound to the expected painted-pair bytes: ' + JSON.stringify({ requestedSha256, loadedSha256, expectedAssetSha256 }));
   }
-  const panel = await evaluate(ws, `(() => {
-    const panel = document.querySelector('#skinned-pose-panel');
-    const cast = document.querySelector('#skinned-pose-cast');
-    const bone = document.querySelector('#skinned-pose-bone-select');
-    const rotation = document.querySelector('#skinned-pose-rotation');
-    return {
-      visible: !!panel && !panel.hidden,
-      objectId: panel?.dataset.objectId || null,
-      castOptions: cast ? [...cast.options].map(option => ({ value: option.value, name: option.dataset.meshName })) : [],
-      bones: bone ? [...bone.options].map(option => option.value) : [],
-      selectedBone: bone?.value || null,
-      selectedBoneLabel: document.querySelector('#skinned-pose-selected-bone')?.textContent || '',
-      rotationControlCount: rotation?.querySelectorAll('[data-skinned-pose-degrees]').length || 0,
-      resetButton: !!document.querySelector('#skinned-pose-reset'),
-      unsavedNote: panel?.textContent?.includes('not saved into the scene') || false,
-    };
-  })()`);
-  if (!panel.visible || panel.objectId !== objectId || panel.castOptions.length !== 2
-      || panel.bones.length !== 7 || panel.bones.some(name => /^neutral_bone(?:_\d+)?$/i.test(name))
-      || panel.selectedBone !== 'hindlimb-left-hip' || panel.selectedBoneLabel !== 'Left hip'
-      || panel.rotationControlCount !== 1 || !panel.resetButton || !panel.unsavedNote) {
-    throw new Error('selected painted pair lacks the focused cast/bone/rotation pose workflow: ' + JSON.stringify(panel));
-  }
-  await evaluate(ws, `document.querySelector('#skinned-pose-panel').scrollIntoView({ block: 'start', behavior: 'instant' })`);
-  await delay(150);
 
   const before = await evaluate(ws, `window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}) ?? null`);
   if (!before || before.meshes.length !== 2
       || !before.meshes[0].bones.includes('hindlimb-left-hip')
       || !before.meshes[1].bones.includes('hindlimb-left-hip_1')) {
-    throw new Error('pose controls loaded a pair without both independently named rigs: ' + JSON.stringify(before));
+    throw new Error('scene-bone-gizmo loaded a pair without both independently named skinned rigs: ' + JSON.stringify(before));
   }
-  const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-before-controls'));
-  const selectBoneViaControl = async (meshIndex, boneName) => evaluate(ws, `(() => {
-    const cast = document.querySelector('#skinned-pose-cast');
-    cast.value = ${JSON.stringify(String(meshIndex))};
-    cast.dispatchEvent(new Event('change', { bubbles: true }));
-    const bone = document.querySelector('#skinned-pose-bone-select');
-    if (![...bone.options].some(option => option.value === ${JSON.stringify(boneName)})) {
-      throw new Error('bone picker omitted requested joint ' + ${JSON.stringify(boneName)});
+  const pickTargets = await evaluate(ws, `window.kaminosSceneRigPickTargetsDebugState?.(${JSON.stringify(objectId)}) ?? []`);
+  const selectionAttempts = [];
+  let hitTarget = null;
+  let selected = null;
+  for (const candidate of pickTargets.filter(target => Number.isFinite(target.x) && Number.isFinite(target.y))) {
+    await dispatchMouseClick(ws, candidate);
+    await delay(100);
+    const observed = await evaluate(ws, `window.kaminosSelectedSceneBoneDebugState?.() ?? null`);
+    const matched = observed?.objectId === objectId
+      && observed?.boneName === candidate.boneName
+      && observed?.meshName === candidate.meshName
+      && observed?.isBone === true
+      && observed?.helperSegmentMatchesBone === true
+      && observed?.owningMeshMatchesBone === true
+      && observed?.transformControlsAttachedToBone === true;
+    selectionAttempts.push({ candidate, observed, matched });
+    if (matched) {
+      hitTarget = candidate;
+      selected = observed;
+      break;
     }
-    bone.value = ${JSON.stringify(boneName)};
-    bone.dispatchEvent(new Event('change', { bubbles: true }));
-    return {
-      selectedCast: cast.value,
-      selectedBone: bone.value,
-      selectedBoneLabel: document.querySelector('#skinned-pose-selected-bone')?.textContent || '',
-      status: document.querySelector('#skinned-pose-status')?.textContent || '',
-      viewportCue: (() => {
-        const cue = document.querySelector('#skinned-pose-cast-marker');
-        const label = document.querySelector('#skinned-pose-cast-marker-label');
-        const dot = document.querySelector('#skinned-pose-cast-marker-dot');
-        const viewport = document.querySelector('#viewport');
-        const panel = document.querySelector('#skinned-pose-panel');
-        if (!cue || !label || !dot || !viewport || !panel) return null;
-        const rect = label.getBoundingClientRect();
-        const viewportRect = viewport.getBoundingClientRect();
-        const rig = window.kaminosSkinnedRigDebugState(panel.dataset.objectId);
-        return {
-          visible: !cue.hidden && getComputedStyle(cue).display !== 'none' && getComputedStyle(cue).visibility !== 'hidden',
-          label: label.textContent.trim(),
-          meshName: cue.dataset.meshName || null,
-          left: rect.left - viewportRect.left,
-          top: rect.top - viewportRect.top,
-          width: rect.width,
-          height: rect.height,
-          dotX: Number(dot.getAttribute('cx')),
-          dotY: Number(dot.getAttribute('cy')),
-          viewportBoundsCenters: rig.meshes.map(mesh => mesh.viewportBoundsCenter),
-        };
-      })(),
-      degrees: document.querySelector('#skinned-pose-degrees')?.value || '',
-      rotationControlCount: document.querySelectorAll('#skinned-pose-rotation [data-skinned-pose-degrees]').length,
-    };
-  })()`);
-  const applyViaControl = async (meshIndex, boneName, degrees) => evaluate(ws, `(() => {
-    const panel = document.querySelector('#skinned-pose-panel');
-    const cast = document.querySelector('#skinned-pose-cast');
-    cast.value = ${JSON.stringify(String(meshIndex))};
-    cast.dispatchEvent(new Event('change', { bubbles: true }));
-    const bone = document.querySelector('#skinned-pose-bone-select');
-    bone.value = ${JSON.stringify(boneName)};
-    bone.dispatchEvent(new Event('change', { bubbles: true }));
-    if (bone.value !== ${JSON.stringify(boneName)} || panel.dataset.boneName !== ${JSON.stringify(boneName)}) {
-      throw new Error('bone selection did not retarget the rotation controls: ' + JSON.stringify({ selectedBone: bone.value, panelBone: panel.dataset.boneName }));
-    }
-    const range = document.querySelector('#skinned-pose-range');
-    range.value = ${JSON.stringify(String(degrees))};
-    range.dispatchEvent(new Event('input', { bubbles: true }));
-    return { selectedCast: cast.value, bone: bone.value, degrees: document.querySelector('#skinned-pose-degrees').value };
-  })()`);
-  const applyViaNumericControl = async (meshIndex, boneName, degrees) => evaluate(ws, `(() => {
-    const cast = document.querySelector('#skinned-pose-cast');
-    cast.value = ${JSON.stringify(String(meshIndex))};
-    cast.dispatchEvent(new Event('change', { bubbles: true }));
-    const bone = document.querySelector('#skinned-pose-bone-select');
-    bone.value = ${JSON.stringify(boneName)};
-    bone.dispatchEvent(new Event('change', { bubbles: true }));
-    if (bone.value !== ${JSON.stringify(boneName)}) throw new Error('bone selection did not retarget the rotation controls');
-    const numeric = document.querySelector('#skinned-pose-degrees');
-    numeric.value = ${JSON.stringify(String(degrees))};
-    numeric.dispatchEvent(new Event('change', { bubbles: true }));
-    return {
-      selectedCast: cast.value,
-      bone: bone.value,
-      degrees: numeric.value,
-      sliderDegrees: document.querySelector('#skinned-pose-range').value,
-    };
-  })()`);
-  const attemptInvalidNumericControl = async (meshIndex, boneName, value) => evaluate(ws, `(() => {
-    const cast = document.querySelector('#skinned-pose-cast');
-    cast.value = ${JSON.stringify(String(meshIndex))};
-    cast.dispatchEvent(new Event('change', { bubbles: true }));
-    const bone = document.querySelector('#skinned-pose-bone-select');
-    bone.value = ${JSON.stringify(boneName)};
-    bone.dispatchEvent(new Event('change', { bubbles: true }));
-    if (bone.value !== ${JSON.stringify(boneName)}) throw new Error('bone selection did not retarget the rotation controls');
-    const numeric = document.querySelector('#skinned-pose-degrees');
-    numeric.value = ${JSON.stringify(value)};
-    numeric.dispatchEvent(new Event('change', { bubbles: true }));
-    return {
-      degrees: numeric.value,
-      sliderDegrees: document.querySelector('#skinned-pose-range').value,
-      status: document.querySelector('#skinned-pose-status')?.textContent || '',
-    };
-  })()`);
-  const changeAxisViaControl = async (meshIndex, boneName, axisName) => evaluate(ws, `(() => {
-    const cast = document.querySelector('#skinned-pose-cast');
-    cast.value = ${JSON.stringify(String(meshIndex))};
-    cast.dispatchEvent(new Event('change', { bubbles: true }));
-    const bone = document.querySelector('#skinned-pose-bone-select');
-    bone.value = ${JSON.stringify(boneName)};
-    bone.dispatchEvent(new Event('change', { bubbles: true }));
-    if (bone.value !== ${JSON.stringify(boneName)}) throw new Error('bone selection did not retarget the rotation controls');
-    const axis = document.querySelector('#skinned-pose-axis');
-    axis.value = ${JSON.stringify(axisName)};
-    axis.dispatchEvent(new Event('change', { bubbles: true }));
-    return {
-      axis: axis.value,
-      degrees: document.querySelector('#skinned-pose-degrees').value,
-      sliderDegrees: document.querySelector('#skinned-pose-range').value,
-    };
-  })()`);
+  }
+  const selectedBoneTargetMatchesHit = !!hitTarget && !!selected;
+  if (!selectedBoneTargetMatchesHit) {
+    throw new Error('viewport bone clicks did not attach the normal transform gizmo to any exact rig-segment hit: ' + JSON.stringify({ pickTargets, selectionAttempts, selectedBoneTargetMatchesHit }));
+  }
+  const meshIndex = before.meshes.findIndex(mesh => mesh.name === selected.meshName);
+  if (meshIndex < 0) throw new Error('selected viewport bone has no owning skinned cast in the imported pair: ' + JSON.stringify({ selected, before }));
+  const otherMeshIndex = 1 - meshIndex;
 
-  const readCurrentViewportCue = async () => evaluate(ws, `(() => {
-    const panel = document.querySelector('#skinned-pose-panel');
-    const cue = document.querySelector('#skinned-pose-cast-marker');
-    const dot = document.querySelector('#skinned-pose-cast-marker-dot');
-    if (!panel || !cue || !dot) return null;
-    return {
-      selectedCast: panel.dataset.meshIndex || null,
-      meshName: cue.dataset.meshName || null,
-      visible: !cue.hidden && getComputedStyle(cue).display !== 'none' && getComputedStyle(cue).visibility !== 'hidden',
-      dotX: Number(dot.getAttribute('cx')),
-      dotY: Number(dot.getAttribute('cy')),
-      viewportBoundsCenters: window.kaminosSkinnedRigDebugState(panel.dataset.objectId).meshes.map(mesh => mesh.viewportBoundsCenter),
-    };
+  await evaluate(ws, `document.querySelector('#tb-gizmo-rotate')?.click()`);
+  const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-before-scene-bone-gizmo'));
+  const rotateButtonActive = await evaluate(ws, `document.querySelector('#tb-gizmo-rotate')?.classList.contains('active') ?? false`);
+  const rotateTarget = await evaluate(ws, `window.kaminosSelectedSceneBoneDebugState?.() ?? null`);
+  const rotateInfo = await evaluate(ws, `document.querySelector('#info-bar')?.textContent?.trim() || ''`);
+  const gizmoPointerTargets = await evaluate(ws, `window.kaminosTransformGizmoPointerTargetsDebugState?.() ?? []`);
+  const gizmoTargets = gizmoPointerTargets.map(target => ({
+    name: target.name,
+    type: target.type,
+    isLine: target.isLine,
+    projectedPointCount: target.points?.length || 0,
+  }));
+  if (!rotateButtonActive || !gizmoPointerTargets.length || !rotateTarget?.transformControlsAttachedToBone || !rotateInfo.includes('Rotate gizmo: scene bone')) {
+    throw new Error('the existing Rotate toolbar did not remain attached to and identify the selected scene Bone: ' + JSON.stringify({ rotateButtonActive, rotateTarget, rotateInfo, gizmoTargets }));
+  }
+  const pivot = await evaluate(ws, `(() => {
+    const state = window.kaminosSelectedSceneBoneDebugState?.();
+    const rig = window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)});
+    const meshIndex = rig?.meshes.findIndex(mesh => mesh.name === state?.meshName) ?? -1;
+    const targets = window.kaminosSceneRigPickTargetsDebugState?.(${JSON.stringify(objectId)}) ?? [];
+    const target = targets.find(item => item.boneName === state?.boneName && item.meshName === state?.meshName);
+    return target ? { x: target.boneX, y: target.boneY, meshIndex } : null;
   })()`);
-
-  const boneSelections = [];
-  const castASelected = await selectBoneViaControl(0, 'hindlimb-left-hip');
-  await delay(500);
-  const castASelectionShot = await capturePngScreenshot(ws, siblingPngPath('-cast-a-selection'));
-  const castBSelected = await selectBoneViaControl(1, 'hindlimb-left-hip_1');
-  await delay(500);
-  const castBSelectionShot = await capturePngScreenshot(ws, siblingPngPath('-cast-b-selection'));
-  await delay(500);
-  const castBUnchangedShot = await capturePngScreenshot(ws, siblingPngPath('-cast-b-unchanged'));
-  const unchangedPixels = viewportPixelDelta(castBSelectionShot.path, castBUnchangedShot.path);
-  const castSelectionPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const selectionPoseError = Math.max(...before.meshes.flatMap((mesh, meshIndex) =>
-    Object.entries(mesh.boneQuaternions).map(([name, quaternion]) =>
-      Math.hypot(...quaternion.map((value, axis) => value - castSelectionPose.meshes[meshIndex].boneQuaternions[name][axis])))));
-  const castCuePixels = viewportPixelDelta(castASelectionShot.path, castBSelectionShot.path);
-  const markerCenterDistance = (cue, center) => Math.hypot(cue.dotX - center.x, cue.dotY - center.y);
-  const markerCenterCheck = (selection, selectedIndex) => {
-    const centers = selection.viewportCue?.viewportBoundsCenters || [];
-    const selectedCenter = centers[selectedIndex];
-    const otherCenter = centers[1 - selectedIndex];
-    if (!selectedCenter || !otherCenter) return { selectedCenter, otherCenter, selectedDistance: Infinity, wrongAnchorDistance: Infinity, selectedCenterMatched: false, wrongAnchorRejected: false };
-    const selectedDistance = markerCenterDistance(selection.viewportCue, selectedCenter);
-    const wrongAnchorDistance = markerCenterDistance(selection.viewportCue, otherCenter);
-    return {
-      selectedCenter,
-      otherCenter,
-      selectedDistance,
-      wrongAnchorDistance,
-      selectedCenterMatched: selectedDistance <= 1,
-      wrongAnchorRejected: wrongAnchorDistance > 45,
-    };
-  };
-  const castACueCenterCheck = markerCenterCheck(castASelected, 0);
-  const castBCueCenterCheck = markerCenterCheck(castBSelected, 1);
-  const expectedCastMeshes = before.meshes.map(mesh => mesh.name);
-  if (!castASelected.viewportCue?.visible || castASelected.viewportCue.meshName !== expectedCastMeshes[0]
-      || castASelected.viewportCue.label !== 'CAST A · SELECTED'
-      || !castBSelected.viewportCue?.visible || castBSelected.viewportCue.meshName !== expectedCastMeshes[1]
-      || castBSelected.viewportCue.label !== 'CAST B · SELECTED'
-      || castASelected.viewportCue.left === castBSelected.viewportCue.left
-      || !castACueCenterCheck.selectedCenterMatched || !castACueCenterCheck.wrongAnchorRejected
-      || !castBCueCenterCheck.selectedCenterMatched || !castBCueCenterCheck.wrongAnchorRejected
-      || selectionPoseError > 0.000001 || castCuePixels.changedPixels < 50 || unchangedPixels.changedPixels !== 0) {
-    throw new Error('cast selection cue did not match the independently projected selected-mesh bounds center, or the wrong-anchor control was not rejected: ' + JSON.stringify({ castASelected, castBSelected, castACueCenterCheck, castBCueCenterCheck, selectionPoseError, castCuePixels, unchangedPixels }));
-  }
-  if (!castASelected.status.includes('Cast A · Left hip') || !castASelected.status.includes('local Z 0°')
-      || !castBSelected.status.includes('Cast B · Left hip') || !castBSelected.status.includes('local Z 0°')) {
-    throw new Error('pose status did not track the selected cast and bone: ' + JSON.stringify({ castASelected, castBSelected }));
-  }
-  const poseCueBeforeLargeRotation = await selectBoneViaControl(0, 'pelvis');
-  const largePoseAction = await applyViaControl(0, 'pelvis', 60);
-  await delay(150);
-  const poseCueAfterLargeRotation = await readCurrentViewportCue();
-  const rigAfterLargeRotation = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const poseBoundsDelta = Math.max(
-    ...before.meshes[0].bounds.center.map((value, axis) => Math.abs(value - rigAfterLargeRotation.meshes[0].bounds.center[axis])),
-    ...before.meshes[0].bounds.size.map((value, axis) => Math.abs(value - rigAfterLargeRotation.meshes[0].bounds.size[axis])),
-  );
-  const poseCueDelta = Math.hypot(
-    poseCueAfterLargeRotation.dotX - poseCueBeforeLargeRotation.viewportCue.dotX,
-    poseCueAfterLargeRotation.dotY - poseCueBeforeLargeRotation.viewportCue.dotY,
-  );
-  const poseCueSelectedCenterCheck = markerCenterCheck({ viewportCue: poseCueAfterLargeRotation }, 0);
-  if (poseBoundsDelta < 0.01) {
-    throw new Error('large-pose marker fixture did not move the selected mesh bounds enough to test attachment: ' + JSON.stringify({ poseCueBeforeLargeRotation, largePoseAction, rigAfterLargeRotation, poseBoundsDelta }));
-  }
-  if (poseCueDelta < 4) {
-    throw new Error('selected-cast viewport cue stayed at its pre-pose location during live bone rotation: ' + JSON.stringify({ poseCueBeforeLargeRotation, largePoseAction, poseCueAfterLargeRotation, poseBoundsDelta, poseCueDelta }));
-  }
-  if (!poseCueSelectedCenterCheck.selectedCenterMatched || !poseCueSelectedCenterCheck.wrongAnchorRejected) {
-    throw new Error('selected-cast cue did not follow the deformed mesh center, or the wrong-cast anchor passed the negative control: ' + JSON.stringify({ poseCueSelectedCenterCheck, poseCueAfterLargeRotation }));
-  }
-  await evaluate(ws, `document.querySelector('#skinned-pose-reset').click()`);
-  await delay(250);
-  const poseCueAfterReset = await selectBoneViaControl(0, 'hindlimb-left-hip');
-  const directPoseCueBefore = await selectBoneViaControl(0, 'pelvis');
-  const directPoseAction = await evaluate(ws, `window.kaminosSetSkinnedBoneDelta?.(${JSON.stringify(objectId)}, 0, 'pelvis', 'z', 60) ?? null`);
-  if (!directPoseAction) throw new Error('direct skinned-bone pose adapter is unavailable');
-  await delay(150);
-  const directPoseCueAfter = await readCurrentViewportCue();
-  const directPoseShot = await capturePngScreenshot(ws, siblingPngPath('-direct-adapter-pose'));
-  const directPoseBoundsDelta = Math.max(
-    ...before.meshes[0].bounds.center.map((value, axis) => Math.abs(value - directPoseAction.meshes[0].bounds.center[axis])),
-    ...before.meshes[0].bounds.size.map((value, axis) => Math.abs(value - directPoseAction.meshes[0].bounds.size[axis])),
-  );
-  const directPoseCueDelta = Math.hypot(
-    directPoseCueAfter.dotX - directPoseCueBefore.viewportCue.dotX,
-    directPoseCueAfter.dotY - directPoseCueBefore.viewportCue.dotY,
-  );
-  const directPoseSelectedCenterCheck = markerCenterCheck({ viewportCue: directPoseCueAfter }, 0);
-  lastEvidence.meshSkinnedPoseDirectAdapter = {
-    selectedBefore: directPoseCueBefore,
-    action: directPoseAction,
-    cueAfter: directPoseCueAfter,
-    boundsDelta: directPoseBoundsDelta,
-    cueDelta: directPoseCueDelta,
-    selectedCenterCheck: directPoseSelectedCenterCheck,
-    screenshot: directPoseShot,
-  };
-  if (directPoseBoundsDelta < 0.01 || directPoseCueDelta < 4
-      || !directPoseSelectedCenterCheck.selectedCenterMatched || !directPoseSelectedCenterCheck.wrongAnchorRejected) {
-    throw new Error('direct pose adapter left the selected-cast cue stale instead of following the deformed live bounds: ' + JSON.stringify(lastEvidence.meshSkinnedPoseDirectAdapter));
-  }
-  const directPoseReset = await evaluate(ws, `window.kaminosSetSkinnedBoneDelta(${JSON.stringify(objectId)}, 0, 'pelvis', 'z', 0)`);
-  const directPoseRestored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const directPoseResetError = Math.max(
-    ...before.meshes[0].bounds.center.map((value, axis) => Math.abs(value - directPoseRestored.meshes[0].bounds.center[axis])),
-    ...before.meshes[0].bounds.size.map((value, axis) => Math.abs(value - directPoseRestored.meshes[0].bounds.size[axis])),
-    ...before.meshes[0].boneQuaternions.pelvis.map((value, axis) => Math.abs(value - directPoseRestored.meshes[0].boneQuaternions.pelvis[axis])),
-  );
-  lastEvidence.meshSkinnedPoseDirectAdapter.reset = { action: directPoseReset, restored: directPoseRestored, resetError: directPoseResetError };
-  if (directPoseResetError > 0.000001) {
-    throw new Error('direct pose-adapter reset did not restore the selected cast to its imported state: ' + JSON.stringify(lastEvidence.meshSkinnedPoseDirectAdapter.reset));
-  }
-  boneSelections.push(await selectBoneViaControl(0, 'hindlimb-right-stifle'));
-  if (boneSelections[0].selectedBoneLabel !== 'Right stifle' || boneSelections[0].rotationControlCount !== 1) {
-    throw new Error('bone selection did not retarget the rotation controls: ' + JSON.stringify(boneSelections[0]));
-  }
-  const firstActions = [];
-  for (const [boneName, degrees] of [
-    ['hindlimb-left-hip', 12],
-    ['hindlimb-left-stifle', 8],
-    ['hindlimb-left-hock', 4],
-  ]) {
-    firstActions.push(await applyViaControl(0, boneName, degrees));
-  }
-  const reselectedHip = await selectBoneViaControl(0, 'hindlimb-left-hip');
-  boneSelections.push(reselectedHip);
-  if (reselectedHip.degrees !== '12' || reselectedHip.selectedBoneLabel !== 'Left hip') {
-    throw new Error('switching bones did not preserve the previous joint rotation: ' + JSON.stringify(reselectedHip));
-  }
-  await delay(500);
-  const firstCastPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const firstCastShotPath = siblingPngPath('-first-cast-pose');
-  const firstBoneErrors = Object.fromEntries(firstActions.map(action => [action.bone,
-    Math.hypot(...before.meshes[0].boneQuaternions[action.bone].map((value, axis) => value - firstCastPose.meshes[0].boneQuaternions[action.bone][axis]))]));
-  const firstOtherCastError = Math.max(...Object.entries(before.meshes[1].boneQuaternions).map(([name, quaternion]) =>
-    Math.hypot(...quaternion.map((value, axis) => value - firstCastPose.meshes[1].boneQuaternions[name][axis]))));
-  const firstCastShot = await capturePngScreenshot(ws, firstCastShotPath);
-  const firstCastPixels = viewportPixelDelta(beforeShot.path, firstCastShot.path);
-  if (Object.values(firstBoneErrors).some(error => error < 0.01) || firstOtherCastError > 0.000001 || firstCastPixels.changedPixels < 500) {
-    throw new Error('multi-joint UI exercise failed to visibly affect only the first cast: ' + JSON.stringify({ firstActions, firstBoneErrors, firstOtherCastError, firstCastPixels }));
+  if (!pivot || pivot.meshIndex !== meshIndex) {
+    throw new Error('selected bone did not retain a projected in-scene pivot for the rotation gizmo: ' + JSON.stringify({ pivot, meshIndex, selected }));
   }
 
-  const secondAction = await applyViaNumericControl(1, 'hindlimb-left-hip_1', 12);
-  const axisAction = await changeAxisViaControl(1, 'hindlimb-left-hip_1', 'x');
-  await delay(500);
-  const secondCastNumericPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const fractionalInput = await attemptInvalidNumericControl(1, 'hindlimb-left-hip_1', '12.5');
-  const fractionalInputPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const fractionalInputPoseError = Math.max(...Object.entries(secondCastNumericPose.meshes[1].boneQuaternions).map(([name, quaternion]) =>
-    Math.hypot(...quaternion.map((value, axis) => value - fractionalInputPose.meshes[1].boneQuaternions[name][axis]))));
-  const outOfRangeInput = await attemptInvalidNumericControl(1, 'hindlimb-left-hip_1', '270');
-  const emptyNumericInput = await attemptInvalidNumericControl(1, 'hindlimb-left-hip_1', '');
-  const invalidInputPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const invalidInputPoseError = Math.max(...Object.entries(secondCastNumericPose.meshes[1].boneQuaternions).map(([name, quaternion]) =>
-    Math.hypot(...quaternion.map((value, axis) => value - invalidInputPose.meshes[1].boneQuaternions[name][axis]))));
-  if (secondAction.degrees !== '12' || secondAction.sliderDegrees !== '12'
-      || outOfRangeInput.degrees !== '12' || outOfRangeInput.sliderDegrees !== '12'
-      || !outOfRangeInput.status.includes('Use a whole degree value from −180° to 180°')
-      || fractionalInput.degrees !== '12' || fractionalInput.sliderDegrees !== '12'
-      || !fractionalInput.status.includes('Use a whole degree value from −180° to 180°')
-      || fractionalInputPoseError > 0.000001
-      || axisAction.axis !== 'x' || axisAction.degrees !== '12' || axisAction.sliderDegrees !== '12'
-      || !outOfRangeInput.status.includes('local X 12°')
-      || emptyNumericInput.degrees !== '12' || emptyNumericInput.sliderDegrees !== '12'
-      || !emptyNumericInput.status.includes('Enter a degree value from −180° to 180°')
-      || invalidInputPoseError > 0.000001) {
-    throw new Error('numeric/axis pose inputs did not stay synchronized and preserve the last valid pose: ' + JSON.stringify({ secondAction, axisAction, fractionalInput, fractionalInputPoseError, outOfRangeInput, emptyNumericInput, invalidInputPoseError }));
+  const handles = gizmoPointerTargets
+    .filter(target => ['E', 'X', 'Y', 'Z', 'XYZE'].includes(target.name) && target.points?.length)
+    .map(target => {
+      const points = target.points
+        .map(point => ({ ...point, radius: Math.hypot(point.x - pivot.x, point.y - pivot.y) }))
+        .filter(point => point.radius >= 18 && point.radius <= 180)
+        .sort((a, b) => Math.abs(a.radius - 65) - Math.abs(b.radius - 65));
+      return { name: target.name, points };
+    })
+    .filter(target => target.points.length);
+  if (!handles.length) {
+    throw new Error('existing Rotate gizmo has no projected ring geometry around the selected bone: ' + JSON.stringify({ pivot, gizmoTargets }));
   }
-  await delay(500);
-  const bothCastPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const secondHipError = Math.hypot(...before.meshes[1].boneQuaternions['hindlimb-left-hip_1'].map((value, axis) =>
-    value - bothCastPose.meshes[1].boneQuaternions['hindlimb-left-hip_1'][axis]));
-  const firstPosePreservedError = Math.max(...Object.entries(firstCastPose.meshes[0].boneQuaternions).map(([name, quaternion]) =>
-    Math.hypot(...quaternion.map((value, axis) => value - bothCastPose.meshes[0].boneQuaternions[name][axis]))));
-  if (secondHipError < 0.01 || firstPosePreservedError > 0.000001) {
-    throw new Error('cast selector did not isolate the second painted rig: ' + JSON.stringify({ secondHipError, firstPosePreservedError, secondAction }));
+
+  const poseBefore = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  let gizmoDrag = null;
+  let poseAfter = null;
+  for (const handle of handles) {
+    const from = handle.points[0];
+    const angle = Math.atan2(from.y - pivot.y, from.x - pivot.x) + 0.24;
+    const to = { x: pivot.x + from.radius * Math.cos(angle), y: pivot.y + from.radius * Math.sin(angle) };
+    await dispatchMouseDrag(ws, from, to);
+    await delay(250);
+    poseAfter = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+    const beforeQuat = poseBefore.meshes[meshIndex].boneQuaternions[selected.boneName];
+    const afterQuat = poseAfter.meshes[meshIndex].boneQuaternions[selected.boneName];
+    const quaternionDelta = Math.hypot(...beforeQuat.map((value, axis) => value - afterQuat[axis]));
+    gizmoDrag = { handleName: handle.name, from, to, quaternionDelta };
+    if (quaternionDelta > 0.005) break;
   }
-  const posedShot = await capturePngScreenshot(ws, siblingPngPath('-both-casts-pose'));
-  const secondCastPixels = viewportPixelDelta(firstCastShot.path, posedShot.path);
-  if (secondCastPixels.changedPixels < 500) {
-    throw new Error('second-cast numeric control did not visibly deform its cast: ' + JSON.stringify({ secondAction, secondCastPixels }));
+  const selectedBoundsBefore = poseBefore.meshes[meshIndex].bounds;
+  const selectedBoundsAfter = poseAfter?.meshes?.[meshIndex]?.bounds;
+  const gizmoPoseBoundsDelta = selectedBoundsBefore && selectedBoundsAfter
+    ? Math.hypot(
+      ...selectedBoundsBefore.center.map((value, axis) => value - selectedBoundsAfter.center[axis]),
+      ...selectedBoundsBefore.size.map((value, axis) => value - selectedBoundsAfter.size[axis]),
+    )
+    : 0;
+  const otherCastPoseError = poseAfter?.meshes?.[otherMeshIndex]
+    ? Math.max(...Object.entries(before.meshes[otherMeshIndex].boneQuaternions).map(([name, quaternion]) =>
+      Math.hypot(...quaternion.map((value, axis) => value - poseAfter.meshes[otherMeshIndex].boneQuaternions[name][axis]))))
+    : Infinity;
+  const posedShot = await capturePngScreenshot(ws, siblingPngPath('-posed-with-scene-bone-gizmo'));
+  const posedPixels = viewportPixelDelta(beforeShot.path, posedShot.path);
+  if (!gizmoDrag || gizmoDrag.quaternionDelta < 0.005 || gizmoPoseBoundsDelta < 0.005 || otherCastPoseError > 0.000001) {
+    throw new Error('standard Rotate gizmo did not deform only the clicked cast: ' + JSON.stringify({ selected, gizmoDrag, gizmoPoseBoundsDelta, otherCastPoseError, poseBefore, poseAfter, handles, posedPixels }));
   }
-  await evaluate(ws, `document.querySelector('#skinned-pose-reset').click()`);
-  await delay(500);
-  const restored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
-  const resetErrors = before.meshes.map((mesh, meshIndex) => {
-    const restoredMesh = restored.meshes[meshIndex];
-    const quaternionError = Math.max(...Object.entries(mesh.boneQuaternions).map(([name, quaternion]) =>
-      Math.hypot(...quaternion.map((value, axis) => value - restoredMesh.boneQuaternions[name][axis]))));
-    const boundsError = Math.hypot(
-      ...mesh.bounds.center.map((value, axis) => value - restoredMesh.bounds.center[axis]),
-      ...mesh.bounds.size.map((value, axis) => value - restoredMesh.bounds.size[axis]),
-    );
-    return { quaternionError, boundsError };
-  });
-  if (resetErrors.some(error => error.quaternionError > 0.000001 || error.boundsError > 0.000001)) {
-    throw new Error('visible reset control did not restore both imported poses: ' + JSON.stringify(resetErrors));
-  }
-  const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-restored-controls'));
-  const identicalControl = viewportPixelDelta(castBSelectionShot.path, castBSelectionShot.path);
-  const posedPixels = viewportPixelDelta(castBSelectionShot.path, posedShot.path);
-  const restoredPixels = viewportPixelDelta(castBSelectionShot.path, restoredShot.path);
-  const status = await evaluate(ws, `document.querySelector('#skinned-pose-status')?.textContent || ''`);
-  const resetStatusMatchesSelectedCard = status.includes('Both casts reset.')
-    && status.includes('Cast B · Left hip')
-    && status.includes('local Z 0°');
-  lastEvidence.meshSkinnedPoseControls = {
-    objectId, expectedAssetSha256, loadedSha256, panel, boneSelections, before, beforeShot,
-    castASelected, castASelectionShot, castBSelected, castBSelectionShot, castBUnchangedShot, unchangedPixels, castSelectionPose, selectionPoseError, castCuePixels,
-    castACueCenterCheck, castBCueCenterCheck,
-    poseCueBeforeLargeRotation, largePoseAction, poseCueAfterLargeRotation, poseBoundsDelta, poseCueDelta, poseCueSelectedCenterCheck, poseCueAfterReset,
-    directPoseCueBefore, directPoseAction, directPoseCueAfter, directPoseBoundsDelta, directPoseCueDelta, directPoseSelectedCenterCheck, directPoseShot, directPoseReset, directPoseRestored, directPoseResetError,
-    firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot, firstCastPixels,
-    secondAction, axisAction, secondCastNumericPose, fractionalInput, fractionalInputPoseError, outOfRangeInput, emptyNumericInput, invalidInputPoseError,
-    bothCastPose, secondHipError, firstPosePreservedError, secondCastPixels, posedShot,
-    restored, resetErrors, restoredShot, status, resetStatusMatchesSelectedCard, identicalControl, posedPixels, restoredPixels,
+
+  await wsRequest(ws, 'Page.reload', { ignoreCache: true });
+  await delay(settleMs);
+  const restoredLink = await evaluate(ws, `window.kaminosAssetSmokeLinkDebugState?.() ?? null`);
+  const restoredObjectId = restoredLink?.registeredObjectId || null;
+  const restored = restoredObjectId
+    ? await evaluate(ws, `window.kaminosSkinnedRigDebugState?.(${JSON.stringify(restoredObjectId)}) ?? null`)
+    : null;
+  const restoredError = restored?.meshes?.length === before.meshes.length
+    ? Math.max(...before.meshes.flatMap((mesh, index) => [
+      ...Object.entries(mesh.boneQuaternions).map(([name, quaternion]) => Math.hypot(...quaternion.map((value, axis) => value - restored.meshes[index].boneQuaternions[name][axis]))),
+      ...mesh.bounds.center.map((value, axis) => Math.abs(value - restored.meshes[index].bounds.center[axis])),
+      ...mesh.bounds.size.map((value, axis) => Math.abs(value - restored.meshes[index].bounds.size[axis])),
+    ]))
+    : Infinity;
+  lastEvidence.sceneBoneGizmo = {
+    objectId, restoredObjectId, expectedAssetSha256, loadedSha256, requestedSha256, effectiveUrl,
+    hitTarget, selected, selectedBoneTargetMatchesHit, selectionAttempts, meshIndex, otherMeshIndex,
+    rotateButtonActive, rotateTarget, rotateInfo, gizmoTargets,
+    handleCandidateCounts: handles.map(handle => ({ name: handle.name, projectedCandidates: handle.points.length })),
+    gizmoDrag, poseBefore, poseAfter,
+    gizmoPoseBoundsDelta, otherCastPoseError, beforeShot, posedShot, posedPixels,
+    restoredLink, restored, restoredError,
   };
-  if (identicalControl.changedPixels !== 0 || posedPixels.changedPixels < 500 || restoredPixels.changedPixels !== 0) {
-    throw new Error('pose controls did not produce visible reversible deformation: ' + JSON.stringify({ identicalControl, unchangedPixels, posedPixels, restoredPixels, castBSelectionShot, restoredShot }));
+  if (restoredLink?.status !== 'loaded' || restoredLink.loadedSha256 !== expectedAssetSha256 || restoredError > 0.000001) {
+    throw new Error('page reload did not restore the exact imported pair pose after gizmo manipulation: ' + JSON.stringify({ restoredLink, restoredError, restored }));
   }
-  if (!resetStatusMatchesSelectedCard) {
-    throw new Error('reset acknowledgment did not retain the visible selected-cast/bone/axis context: ' + JSON.stringify({ status, resetStatusMatchesSelectedCard }));
-  }
+  const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-restored-scene-bone-gizmo'));
+  lastEvidence.sceneBoneGizmo.restoredShot = restoredShot;
 }
 
 const DIRECT_ASSET_LINK_SCENARIOS = {
@@ -5432,7 +5188,9 @@ try {
   } else if (scenario === 'mesh-skinned-pose') {
     await runMeshSkinnedPoseScenario(ws);
   } else if (scenario === 'mesh-skinned-pose-controls') {
-    await runMeshSkinnedPoseControlsScenario(ws);
+    await runSceneBoneGizmoScenario(ws);
+  } else if (scenario === 'scene-bone-gizmo') {
+    await runSceneBoneGizmoScenario(ws);
   } else if (scenario === 'splat-asset-link') {
     await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.splat);
   } else if (scenario === 'image-asset-link') {
