@@ -5769,6 +5769,7 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
   const wasVisible = overlay.visible;
   const wasDepthTest = overlay.material.depthTest;
   const wasAlphaMap = overlay.material.alphaMap;
+  let alphaMapBypassTexture = null;
   let sceneProbe = null;
   try {
     overlay.visible = false;
@@ -5780,10 +5781,19 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     overlay.material.needsUpdate = true;
     const depthTestDisabled = await sample();
     overlay.material.depthTest = wasDepthTest;
-    overlay.material.alphaMap = null;
+    const alphaMapBypassCanvas = document.createElement('canvas');
+    alphaMapBypassCanvas.width = 1;
+    alphaMapBypassCanvas.height = 1;
+    const alphaMapBypassContext = alphaMapBypassCanvas.getContext('2d');
+    alphaMapBypassContext.fillStyle = '#fff';
+    alphaMapBypassContext.fillRect(0, 0, 1, 1);
+    alphaMapBypassTexture = new THREE.CanvasTexture(alphaMapBypassCanvas);
+    alphaMapBypassTexture.colorSpace = THREE.NoColorSpace;
+    alphaMapBypassTexture.generateMipmaps = false;
+    overlay.material.alphaMap = alphaMapBypassTexture;
     overlay.material.needsUpdate = true;
-    const alphaMapDisabled = await sample();
-    const alphaMapDisabledCanvasPng = buffer.toDataURL('image/png');
+    const alphaMapBypass = await sample();
+    const alphaMapBypassCanvasPng = buffer.toDataURL('image/png');
     const sceneProbeMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, depthTest: false,
       depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
     sceneProbe = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), sceneProbeMaterial);
@@ -5799,8 +5809,8 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
       backingSize: { width: canvas.width, height: canvas.height }, source, composed,
       depthTestAblation: { depthTestWasEnabled: wasDepthTest, foreground: depthTestDisabled[0],
         background: depthTestDisabled[1] },
-      alphaMapAblation: { alphaMapWasPresent: !!wasAlphaMap, foreground: alphaMapDisabled[0],
-        background: alphaMapDisabled[1], canvasPng: alphaMapDisabledCanvasPng },
+      alphaMapBypass: { alphaMapWasPresent: !!wasAlphaMap, foreground: alphaMapBypass[0],
+        background: alphaMapBypass[1], canvasPng: alphaMapBypassCanvasPng },
       sceneTraversalControl: { foreground: sceneTraversalControl[0], background: sceneTraversalControl[1],
         canvasPng: sceneTraversalControlCanvasPng }, composedCanvasPng };
   } finally {
@@ -5812,6 +5822,7 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     overlay.visible = wasVisible;
     overlay.material.depthTest = wasDepthTest;
     overlay.material.alphaMap = wasAlphaMap;
+    alphaMapBypassTexture?.dispose();
     overlay.material.needsUpdate = true;
     window._kaminosDirty?.();
   }

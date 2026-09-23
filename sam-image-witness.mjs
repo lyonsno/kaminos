@@ -591,17 +591,17 @@ async function main() {
       report.captures.push({ name: 'flame-composition-renderer-canvas', ...rendererCanvasCapture,
         validation: 'diagnostic-only-main-render-pipeline-readback' });
       const alphaMapCanvasMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
-        presentedPixels.alphaMapAblation.canvasPng || '');
-      assert.ok(alphaMapCanvasMatch, 'alpha-map ablation did not preserve its renderer canvas');
+        presentedPixels.alphaMapBypass.canvasPng || '');
+      assert.ok(alphaMapCanvasMatch, 'alpha-map bypass did not preserve its renderer canvas');
       const alphaMapCanvasBytes = Buffer.from(alphaMapCanvasMatch[1], 'base64');
-      const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-disabled.png');
+      const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-bypass.png');
       writeFileSync(alphaMapCanvasPath, alphaMapCanvasBytes, { flag: 'wx' });
-      const alphaMapCanvasCapture = { name: 'flame-composition-alpha-map-disabled', path: alphaMapCanvasPath,
+      const alphaMapBypassCapture = { name: 'flame-composition-alpha-map-bypass', path: alphaMapCanvasPath,
         width: presentedPixels.backingSize.width, height: presentedPixels.backingSize.height,
         bytes: alphaMapCanvasBytes.length,
         sha256: `sha256:${createHash('sha256').update(alphaMapCanvasBytes).digest('hex')}`,
-        authority: presentedPixels.authority, validation: 'diagnostic-only-alpha-map-ablation' };
-      report.captures.push(alphaMapCanvasCapture);
+        authority: presentedPixels.authority, validation: 'diagnostic-only-alpha-map-bypass' };
+      report.captures.push(alphaMapBypassCapture);
       const sceneTraversalCanvasMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
         presentedPixels.sceneTraversalControl.canvasPng || '');
       assert.ok(sceneTraversalCanvasMatch, 'scene traversal control did not preserve its renderer canvas');
@@ -627,12 +627,12 @@ async function main() {
             composedRgba: presentedPixels.depthTestAblation.foreground.rgba },
           depthTestDisabledBackground: { sourceRgba: presentedPixels.composed[1].rgba,
             composedRgba: presentedPixels.depthTestAblation.background.rgba } },
-        alphaMapAblation: { alphaMapWasPresent: presentedPixels.alphaMapAblation.alphaMapWasPresent,
-          alphaMapDisabledForeground: { sourceRgba: presentedPixels.composed[0].rgba,
-            composedRgba: presentedPixels.alphaMapAblation.foreground.rgba },
-          alphaMapDisabledBackground: { sourceRgba: presentedPixels.composed[1].rgba,
-            composedRgba: presentedPixels.alphaMapAblation.background.rgba },
-          capture: alphaMapCanvasCapture },
+        alphaMapBypass: { alphaMapWasPresent: presentedPixels.alphaMapBypass.alphaMapWasPresent,
+          alphaMapBypassForeground: { sourceRgba: presentedPixels.composed[0].rgba,
+            composedRgba: presentedPixels.alphaMapBypass.foreground.rgba },
+          alphaMapBypassBackground: { sourceRgba: presentedPixels.composed[1].rgba,
+            composedRgba: presentedPixels.alphaMapBypass.background.rgba },
+          capture: alphaMapBypassCapture },
         sceneTraversalControl: { foreground: presentedPixels.sceneTraversalControl.foreground,
           background: presentedPixels.sceneTraversalControl.background, capture: sceneTraversalCapture },
         foreground: { maskValue: flamePixelScan.foreground.maskValue,

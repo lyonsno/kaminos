@@ -36,17 +36,19 @@ assert.match(hostSource, /overlay\.material\.depthTest\s*=\s*false[\s\S]*?const 
   'the failing presentation probe must isolate depth occlusion and restore the live overlay material');
 assert.match(witnessSource, /depthTestAblation[\s\S]*?depthTestDisabledForeground/,
   'a failed scene contribution must preserve the same-frame depth-test ablation result');
-assert.ok(/const wasAlphaMap = overlay\.material\.alphaMap;[\s\S]*?overlay\.material\.alphaMap = null;[\s\S]*?const alphaMapDisabled = await sample\(\)[\s\S]*?overlay\.material\.alphaMap = wasAlphaMap/.test(hostSource),
-  'the next controlled probe must isolate alpha-map suppression and restore its texture');
-assert.ok(witnessSource.includes('alphaMapDisabledForeground'),
+assert.ok(/alphaMapBypassCanvas\.getContext\('2d'\)[\s\S]*?fillStyle = '#fff'[\s\S]*?alphaMapBypassTexture = new THREE\.CanvasTexture\(alphaMapBypassCanvas\)[\s\S]*?overlay\.material\.alphaMap = alphaMapBypassTexture/.test(hostSource),
+  'the alpha bypass must use a valid white texture rather than nulling a bound WebGPU texture node');
+assert.ok(/overlay\.material\.alphaMap = wasAlphaMap;[\s\S]*?alphaMapBypassTexture\?\.dispose\(\)/.test(hostSource),
+  'the alpha-map probe must restore the product texture and dispose its temporary replacement');
+assert.ok(witnessSource.includes('alphaMapBypassForeground'),
   'a failed composition must preserve the alpha-map bypass pixel result');
-const alphaMapCapture = witnessSource.indexOf("const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-disabled.png')");
+const alphaMapCapture = witnessSource.indexOf("const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-bypass.png')");
 assert.ok(alphaMapCapture >= 0 && alphaMapCapture < compositionValidation,
-  'the alpha-map ablation renderer frame must be preserved before scene rollback or validation failure');
+  'the alpha-map bypass renderer frame must be preserved before scene rollback or validation failure');
 assert.ok(/renderPipeline\.render\(\);\s*await renderer\.backend\.device\.queue\.onSubmittedWorkDone\(\);[\s\S]*?requestAnimationFrame/.test(hostSource),
   'main-renderer pixel evidence must wait for submitted WebGPU work and a presented frame');
-assert.ok(/const alphaMapCanvasCapture\s*=\s*\{[\s\S]*?name: 'flame-composition-alpha-map-disabled'[\s\S]*?capture: alphaMapCanvasCapture/.test(witnessSource),
-  'alpha-map evidence must point at its own artifact, not a later capture');
+assert.ok(/const alphaMapBypassCapture\s*=\s*\{[\s\S]*?name: 'flame-composition-alpha-map-bypass'[\s\S]*?capture: alphaMapBypassCapture/.test(witnessSource),
+  'alpha-map bypass evidence must point at its own artifact, not a later capture');
 assert.ok(/sceneProbe = new THREE\.Mesh[\s\S]*?target\.add\(sceneProbe\)[\s\S]*?finally \{[\s\S]*?sceneProbe\.parent\?\.remove\(sceneProbe\)/.test(hostSource),
   'the flat-color render-path control must be temporary and removed even when sampling fails');
 assert.ok(witnessSource.includes("flame-composition-scene-traversal-control.png")
