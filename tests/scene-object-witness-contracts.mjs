@@ -264,3 +264,10 @@ assert.match(witness, /three-tsl-render-pipeline-gtao-compute/, 'AO route witnes
 assert.match(witness, /rawPipelineActive/, 'AO route witness rejects raw pipeline activation');
 assert.match(witness, /stateOff\.intensity !== 0/, 'AO route witness proves the off capture actually bypasses AO intensity');
 assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tail for debugging');
+
+assert.match(indexHtml, /id="skinned-pose-bone-select"/, 'painted-pair pose preview provides one focused bone picker');
+assert.match(indexHtml, /id="skinned-pose-selected-bone"/, 'painted-pair pose preview names the currently selected joint');
+assert.match(indexHtml, /id="skinned-pose-rotation"/, 'painted-pair pose preview groups rotation controls for the selected joint');
+assert.match(indexHtml, /aria-label="Rotation in degrees"/, 'painted-pair rotation number field remains accessibly named without an extra visible label');
+assert.doesNotMatch(indexHtml, /class="sr-only"/, 'pose preview does not expose an unstyled screen-reader-only label');
+assert.match(witness, /bone selection did not retarget the rotation controls/, 'painted-pair browser witness proves bone selection retargets one rotation card');
