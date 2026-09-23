@@ -529,7 +529,7 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
       otherCenter,
       selectedDistance,
       wrongAnchorDistance,
-      selectedCenterMatched: selectedDistance <= 45,
+      selectedCenterMatched: selectedDistance <= 1,
       wrongAnchorRejected: wrongAnchorDistance > 45,
     };
   };
@@ -576,6 +576,45 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   await evaluate(ws, `document.querySelector('#skinned-pose-reset').click()`);
   await delay(250);
   const poseCueAfterReset = await selectBoneViaControl(0, 'hindlimb-left-hip');
+  const directPoseCueBefore = await selectBoneViaControl(0, 'pelvis');
+  const directPoseAction = await evaluate(ws, `window.kaminosSetSkinnedBoneDelta?.(${JSON.stringify(objectId)}, 0, 'pelvis', 'z', 60) ?? null`);
+  if (!directPoseAction) throw new Error('direct skinned-bone pose adapter is unavailable');
+  await delay(150);
+  const directPoseCueAfter = await readCurrentViewportCue();
+  const directPoseShot = await capturePngScreenshot(ws, siblingPngPath('-direct-adapter-pose'));
+  const directPoseBoundsDelta = Math.max(
+    ...before.meshes[0].bounds.center.map((value, axis) => Math.abs(value - directPoseAction.meshes[0].bounds.center[axis])),
+    ...before.meshes[0].bounds.size.map((value, axis) => Math.abs(value - directPoseAction.meshes[0].bounds.size[axis])),
+  );
+  const directPoseCueDelta = Math.hypot(
+    directPoseCueAfter.dotX - directPoseCueBefore.viewportCue.dotX,
+    directPoseCueAfter.dotY - directPoseCueBefore.viewportCue.dotY,
+  );
+  const directPoseSelectedCenterCheck = markerCenterCheck({ viewportCue: directPoseCueAfter }, 0);
+  lastEvidence.meshSkinnedPoseDirectAdapter = {
+    selectedBefore: directPoseCueBefore,
+    action: directPoseAction,
+    cueAfter: directPoseCueAfter,
+    boundsDelta: directPoseBoundsDelta,
+    cueDelta: directPoseCueDelta,
+    selectedCenterCheck: directPoseSelectedCenterCheck,
+    screenshot: directPoseShot,
+  };
+  if (directPoseBoundsDelta < 0.01 || directPoseCueDelta < 4
+      || !directPoseSelectedCenterCheck.selectedCenterMatched || !directPoseSelectedCenterCheck.wrongAnchorRejected) {
+    throw new Error('direct pose adapter left the selected-cast cue stale instead of following the deformed live bounds: ' + JSON.stringify(lastEvidence.meshSkinnedPoseDirectAdapter));
+  }
+  const directPoseReset = await evaluate(ws, `window.kaminosSetSkinnedBoneDelta(${JSON.stringify(objectId)}, 0, 'pelvis', 'z', 0)`);
+  const directPoseRestored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const directPoseResetError = Math.max(
+    ...before.meshes[0].bounds.center.map((value, axis) => Math.abs(value - directPoseRestored.meshes[0].bounds.center[axis])),
+    ...before.meshes[0].bounds.size.map((value, axis) => Math.abs(value - directPoseRestored.meshes[0].bounds.size[axis])),
+    ...before.meshes[0].boneQuaternions.pelvis.map((value, axis) => Math.abs(value - directPoseRestored.meshes[0].boneQuaternions.pelvis[axis])),
+  );
+  lastEvidence.meshSkinnedPoseDirectAdapter.reset = { action: directPoseReset, restored: directPoseRestored, resetError: directPoseResetError };
+  if (directPoseResetError > 0.000001) {
+    throw new Error('direct pose-adapter reset did not restore the selected cast to its imported state: ' + JSON.stringify(lastEvidence.meshSkinnedPoseDirectAdapter.reset));
+  }
   boneSelections.push(await selectBoneViaControl(0, 'hindlimb-right-stifle'));
   if (boneSelections[0].selectedBoneLabel !== 'Right stifle' || boneSelections[0].rotationControlCount !== 1) {
     throw new Error('bone selection did not retarget the rotation controls: ' + JSON.stringify(boneSelections[0]));
@@ -675,6 +714,7 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     castASelected, castASelectionShot, castBSelected, castBSelectionShot, castBUnchangedShot, unchangedPixels, castSelectionPose, selectionPoseError, castCuePixels,
     castACueCenterCheck, castBCueCenterCheck,
     poseCueBeforeLargeRotation, largePoseAction, poseCueAfterLargeRotation, poseBoundsDelta, poseCueDelta, poseCueSelectedCenterCheck, poseCueAfterReset,
+    directPoseCueBefore, directPoseAction, directPoseCueAfter, directPoseBoundsDelta, directPoseCueDelta, directPoseSelectedCenterCheck, directPoseShot, directPoseReset, directPoseRestored, directPoseResetError,
     firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot, firstCastPixels,
     secondAction, axisAction, secondCastNumericPose, fractionalInput, fractionalInputPoseError, outOfRangeInput, emptyNumericInput, invalidInputPoseError,
     bothCastPose, secondHipError, firstPosePreservedError, secondCastPixels, posedShot,
