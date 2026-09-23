@@ -3220,6 +3220,12 @@ window.kaminosLocalLiquidState=()=>({...(localLiquidHost?.state() || {requestedR
   hostBackend:renderer?.backend?.constructor?.name || null,
   adapter:sharedGpu?.adapter?.info ? {vendor:sharedGpu.adapter.info.vendor,architecture:sharedGpu.adapter.info.architecture,
     device:sharedGpu.adapter.info.device,description:sharedGpu.adapter.info.description} : null});
+window.kaminosLocalLiquidSetOptics=options=>{
+  if(!localLiquidHost)throw Error('Local liquid host is not mounted');
+  const opticalOptions=localLiquidHost.setOpticalOptions(options);
+  window._kaminosDirty?.();
+  return {paused:localLiquidHost.paused,opticalOptions,solver:localLiquidHost.state().solver};
+};
 document.getElementById('local-liquid-pause').onclick=()=>{
   if(!localLiquidHost)return;
   const paused=localLiquidHost.setPaused(!localLiquidHost.paused);
