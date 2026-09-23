@@ -240,18 +240,6 @@ function createInterlock(input, outsideRun = false) {
             const submittedAtMs = now();
             try {
               input.queue.submit(commandBuffers);
-              const row = deepFreeze({
-                submissionId,
-                submissionSequence: submissions.length + 1,
-                commandBufferCount: commandBuffers.length,
-                submittedAtMs,
-                returnedAtMs: now(),
-                submissionStatus: 'queue-submit-returned',
-                metadata: submissionMetadata,
-                authority: 'queue-submit-call-returned-no-gpu-completion-or-presentation-claim',
-              });
-              submissions.push(row);
-              return row;
             } catch (error) {
               submissions.push(deepFreeze({
                 submissionId,
@@ -266,6 +254,29 @@ function createInterlock(input, outsideRun = false) {
               }));
               throw error;
             }
+            let returnedAtMs = null;
+            let timingFailure = null;
+            try {
+              returnedAtMs = now();
+            } catch (error) {
+              timingFailure = {
+                phase: 'foreground-submission-return-timing',
+                error: normalizeError(error),
+              };
+            }
+            const row = deepFreeze({
+              submissionId,
+              submissionSequence: submissions.length + 1,
+              commandBufferCount: commandBuffers.length,
+              submittedAtMs,
+              returnedAtMs,
+              submissionStatus: 'queue-submit-returned',
+              ...(timingFailure ? { timingFailure } : {}),
+              metadata: submissionMetadata,
+              authority: 'queue-submit-call-returned-no-gpu-completion-or-presentation-claim',
+            });
+            submissions.push(row);
+            return row;
           },
         }));
       } catch (error) {

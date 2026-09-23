@@ -193,6 +193,48 @@ if (process.env.KIT_FOREGROUND_BASELINE !== '1') {
     }
   });
 
+  test('a returned queue submission stays successful when return-time telemetry throws', async () => {
+    let clockReads = 0;
+    const { service, submissions } = fixture({ now() {
+      clockReads += 1;
+      if (clockReads === 5) throw new Error('submission return clock failed');
+      return clockReads;
+    } });
+    let callbackContinued = false;
+    const handle = service.request({ requestId: 'post-submit-clock-failure', run(ctx) {
+      ctx.submit(['accepted-by-queue']);
+      callbackContinued = true;
+      return 'callback-continued';
+    } });
+    const receipt = await handle.completion;
+
+    assert.deepEqual(submissions, ['accepted-by-queue'], 'the queue accepted the command before its timing read failed');
+    assert.equal(callbackContinued, true, 'optional return-time telemetry must not throw back through the callback');
+    assert.equal(receipt.status, 'completed');
+    assert.equal(receipt.result, 'callback-continued');
+    assert.equal(receipt.submissionCount, 1);
+    assert.equal(receipt.submissions[0].submissionStatus, 'queue-submit-returned');
+    assert.equal(receipt.submissions[0].returnedAtMs, null);
+    assert.equal(Object.hasOwn(receipt.submissions[0], 'failure'), false, 'timing telemetry is not a queue-submit failure');
+    assert.equal(receipt.submissions[0].timingFailure.phase, 'foreground-submission-return-timing');
+    assert.match(receipt.submissions[0].timingFailure.error.message, /submission return clock failed/);
+    await service.dispose();
+  });
+
+  test('a synchronous queue submit throw remains distinct from return-time telemetry', async () => {
+    const { service } = fixture({ queue: { submit() { throw new Error('queue rejected submission'); } } });
+    const handle = service.request({ requestId: 'queue-submit-throws', run(ctx) {
+      ctx.submit(['not-accepted']);
+    } });
+    const receipt = await handle.completion;
+
+    assert.equal(receipt.status, 'failed-before-submission');
+    assert.equal(receipt.submissionCount, 0);
+    assert.equal(receipt.submissions[0].submissionStatus, 'queue-submit-threw');
+    assert.match(receipt.submissions[0].failure.message, /queue rejected submission/);
+    await service.dispose();
+  });
+
   test('an idle service timing failure is recorded without poisoning later renderer requests', async () => {
     let clockReads = 0;
     const unhandledRejections = [];
