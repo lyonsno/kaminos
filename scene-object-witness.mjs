@@ -383,6 +383,49 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     range.dispatchEvent(new Event('input', { bubbles: true }));
     return { selectedCast: cast.value, bone: row.dataset.skinnedPoseBone, degrees: row.querySelector('[data-skinned-pose-degrees]').value };
   })()`);
+  const applyViaNumericControl = async (meshIndex, boneName, degrees) => evaluate(ws, `(() => {
+    const cast = document.querySelector('#skinned-pose-cast');
+    cast.value = ${JSON.stringify(String(meshIndex))};
+    cast.dispatchEvent(new Event('change', { bubbles: true }));
+    const row = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')]
+      .find(candidate => candidate.dataset.skinnedPoseBone === ${JSON.stringify(boneName)});
+    if (!row) throw new Error('pose UI omitted requested imported joint ' + ${JSON.stringify(boneName)});
+    const numeric = row.querySelector('[data-skinned-pose-degrees]');
+    numeric.value = ${JSON.stringify(String(degrees))};
+    numeric.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      selectedCast: cast.value,
+      bone: row.dataset.skinnedPoseBone,
+      degrees: numeric.value,
+      sliderDegrees: row.querySelector('[data-skinned-pose-range]').value,
+    };
+  })()`);
+  const attemptInvalidNumericControl = async (boneName, value) => evaluate(ws, `(() => {
+    const row = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')]
+      .find(candidate => candidate.dataset.skinnedPoseBone === ${JSON.stringify(boneName)});
+    if (!row) throw new Error('pose UI omitted requested imported joint ' + ${JSON.stringify(boneName)});
+    const numeric = row.querySelector('[data-skinned-pose-degrees]');
+    numeric.value = ${JSON.stringify(value)};
+    numeric.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      degrees: numeric.value,
+      sliderDegrees: row.querySelector('[data-skinned-pose-range]').value,
+      status: document.querySelector('#skinned-pose-status')?.textContent || '',
+    };
+  })()`);
+  const changeAxisViaControl = async (boneName, axisName) => evaluate(ws, `(() => {
+    const row = [...document.querySelectorAll('#skinned-pose-joints [data-skinned-pose-bone]')]
+      .find(candidate => candidate.dataset.skinnedPoseBone === ${JSON.stringify(boneName)});
+    if (!row) throw new Error('pose UI omitted requested imported joint ' + ${JSON.stringify(boneName)});
+    const axis = row.querySelector('[data-skinned-pose-axis]');
+    axis.value = ${JSON.stringify(axisName)};
+    axis.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      axis: axis.value,
+      degrees: row.querySelector('[data-skinned-pose-degrees]').value,
+      sliderDegrees: row.querySelector('[data-skinned-pose-range]').value,
+    };
+  })()`);
 
   const firstActions = [];
   for (const [boneName, degrees] of [
@@ -394,16 +437,36 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   }
   await delay(500);
   const firstCastPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const firstCastShotPath = siblingPngPath('-first-cast-pose');
   const firstBoneErrors = Object.fromEntries(firstActions.map(action => [action.bone,
     Math.hypot(...before.meshes[0].boneQuaternions[action.bone].map((value, axis) => value - firstCastPose.meshes[0].boneQuaternions[action.bone][axis]))]));
   const firstOtherCastError = Math.max(...Object.entries(before.meshes[1].boneQuaternions).map(([name, quaternion]) =>
     Math.hypot(...quaternion.map((value, axis) => value - firstCastPose.meshes[1].boneQuaternions[name][axis]))));
-  if (Object.values(firstBoneErrors).some(error => error < 0.01) || firstOtherCastError > 0.000001) {
-    throw new Error('multi-joint UI exercise failed to affect only the first cast: ' + JSON.stringify({ firstActions, firstBoneErrors, firstOtherCastError }));
+  const firstCastShot = await capturePngScreenshot(ws, firstCastShotPath);
+  const firstCastPixels = viewportPixelDelta(beforeShot.path, firstCastShot.path);
+  if (Object.values(firstBoneErrors).some(error => error < 0.01) || firstOtherCastError > 0.000001 || firstCastPixels.changedPixels < 500) {
+    throw new Error('multi-joint UI exercise failed to visibly affect only the first cast: ' + JSON.stringify({ firstActions, firstBoneErrors, firstOtherCastError, firstCastPixels }));
   }
-  const firstCastShot = await capturePngScreenshot(ws, siblingPngPath('-first-cast-pose'));
 
-  const secondAction = await applyViaControl(1, 'hindlimb-left-hip_1', 12);
+  const secondAction = await applyViaNumericControl(1, 'hindlimb-left-hip_1', 12);
+  const axisAction = await changeAxisViaControl('hindlimb-left-hip_1', 'x');
+  await delay(500);
+  const secondCastNumericPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const outOfRangeInput = await attemptInvalidNumericControl('hindlimb-left-hip_1', '270');
+  const emptyNumericInput = await attemptInvalidNumericControl('hindlimb-left-hip_1', '');
+  const invalidInputPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const invalidInputPoseError = Math.max(...Object.entries(secondCastNumericPose.meshes[1].boneQuaternions).map(([name, quaternion]) =>
+    Math.hypot(...quaternion.map((value, axis) => value - invalidInputPose.meshes[1].boneQuaternions[name][axis]))));
+  if (secondAction.degrees !== '12' || secondAction.sliderDegrees !== '12'
+      || outOfRangeInput.degrees !== '12' || outOfRangeInput.sliderDegrees !== '12'
+      || !outOfRangeInput.status.includes('Use a degree value from −180° to 180°')
+      || axisAction.axis !== 'x' || axisAction.degrees !== '12' || axisAction.sliderDegrees !== '12'
+      || !outOfRangeInput.status.includes('local X 12°')
+      || emptyNumericInput.degrees !== '12' || emptyNumericInput.sliderDegrees !== '12'
+      || !emptyNumericInput.status.includes('Enter a degree value from −180° to 180°')
+      || invalidInputPoseError > 0.000001) {
+    throw new Error('numeric/axis pose inputs did not stay synchronized and preserve the last valid pose: ' + JSON.stringify({ secondAction, axisAction, outOfRangeInput, emptyNumericInput, invalidInputPoseError }));
+  }
   await delay(500);
   const bothCastPose = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
   const secondHipError = Math.hypot(...before.meshes[1].boneQuaternions['hindlimb-left-hip_1'].map((value, axis) =>
@@ -414,6 +477,10 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
     throw new Error('cast selector did not isolate the second painted rig: ' + JSON.stringify({ secondHipError, firstPosePreservedError, secondAction }));
   }
   const posedShot = await capturePngScreenshot(ws, siblingPngPath('-both-casts-pose'));
+  const secondCastPixels = viewportPixelDelta(firstCastShot.path, posedShot.path);
+  if (secondCastPixels.changedPixels < 500) {
+    throw new Error('second-cast numeric control did not visibly deform its cast: ' + JSON.stringify({ secondAction, secondCastPixels }));
+  }
   await evaluate(ws, `document.querySelector('#skinned-pose-reset').click()`);
   await delay(500);
   const restored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
@@ -440,8 +507,9 @@ async function runMeshSkinnedPoseControlsScenario(ws) {
   const status = await evaluate(ws, `document.querySelector('#skinned-pose-status')?.textContent || ''`);
   lastEvidence.meshSkinnedPoseControls = {
     objectId, expectedAssetSha256, loadedSha256, panel, before, beforeShot,
-    firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot,
-    secondAction, bothCastPose, secondHipError, firstPosePreservedError, posedShot,
+    firstActions, firstCastPose, firstBoneErrors, firstOtherCastError, firstCastShot, firstCastPixels,
+    secondAction, axisAction, secondCastNumericPose, outOfRangeInput, emptyNumericInput, invalidInputPoseError,
+    bothCastPose, secondHipError, firstPosePreservedError, secondCastPixels, posedShot,
     restored, resetErrors, restoredShot, status, identicalControl, posedPixels, restoredPixels,
   };
 }
