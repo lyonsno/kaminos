@@ -14343,6 +14343,9 @@ export async function createWebGPUFingerFluidSolver({
     if (!Number.isSafeInteger(pairCount) || pairCount < 1) {
       throw new RangeError(`Finger Fluid stage timestamp capture pair count must be a positive integer: ${pairCount}`);
     }
+    if (!device.features?.has?.('chromium-experimental-timestamp-query-inside-passes')) {
+      throw new Error('Finger Fluid stage timestamp capture requires chromium-experimental-timestamp-query-inside-passes');
+    }
     if (solverStageGpuTimestampCapture?.writtenPairs < solverStageGpuTimestampCapture?.pairCount) {
       throw new Error('Finger Fluid stage timestamp capture is already active');
     }

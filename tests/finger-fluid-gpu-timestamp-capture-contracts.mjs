@@ -26,6 +26,13 @@ assert.match(coreSource, /KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES[\s\S]*?d
   'solver pass-stage timing has stable semantic stage names');
 assert.match(coreSource, /pass\.writeTimestamp\(stageCapture\.querySet/,
   'solver stages are timestamped inside the real compute pass');
+const stageArmStart = coreSource.indexOf('function armSolverStageGpuTimestampCaptureForWitness');
+const stageArmEnd = coreSource.indexOf('function finishSolverStageGpuTimestampCaptureForWitness', stageArmStart);
+assert.ok(stageArmStart >= 0 && stageArmEnd > stageArmStart,
+  'solver stage timestamp capture arm has a bounded implementation');
+assert.match(coreSource.slice(stageArmStart, stageArmEnd),
+  /device\.features\?\.has\?\.\('chromium-experimental-timestamp-query-inside-passes'\)/,
+  'experimental in-pass timestamps are rejected at arm time unless their WebGPU feature is enabled');
 assert.match(coreSource, /encoder\.writeTimestamp\([\s\S]*?rendererTimestampCapture\.querySet/,
   'direct renderer GPU work is timestamped on its real command encoder');
 assert.match(coreSource, /lastRenderCpuMs: Number\(lastRenderCpuMs\.toFixed\(3\)\)/,
