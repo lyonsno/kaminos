@@ -7,7 +7,8 @@ const query = new URL(location.href).searchParams;
 const invocationId = query.get('smokeId');
 const mode = query.get('mode') || 'block0-parity';
 const residentHandoffMode = mode === 'resident-handoff';
-const residentBlock2Norm1Mode = mode === 'resident-block2-norm1';
+const residentBlock2AttentionMode = mode === 'resident-block2-attention';
+const residentBlock2Norm1Mode = mode === 'resident-block2-norm1' || residentBlock2AttentionMode;
 const residentBlock1Mode = mode === 'resident-block1' || residentBlock2Norm1Mode;
 const residentMode = residentHandoffMode || residentBlock1Mode;
 const state = {
@@ -114,10 +115,11 @@ try {
   })) if (manifest.model?.files?.[name]?.sha256 !== sha) throw new Error(`pinned ${name} digest mismatch`);
   if (manifest.reference?.implementation !== 'trellmlx.models.dinov3.DINOv3ViT' || manifest.reference?.sourceRevision !== 'cddaf3cb8a9f28956114956ebe754d6661a3f695' || manifest.reference?.sourceFileSha256 !== '5e56c76b947bbd59e9353c06470101ac28b6462649161cc8dd3740b2cf66403c') throw new Error('MLX reference source is not the independently pinned TRELLIS DINOv3 implementation');
   if (manifest.preprocessing?.sourceFileSha256 !== 'abf395cc52d81c26dadae9f024072d6c7301679be4e8fc08d572723d7ae32a21') throw new Error('source image does not match the pinned shoe input bytes');
-  if (!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1'].includes(mode)) throw new Error(`unsupported smoke mode ${mode}`);
+  if (!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1','resident-block2-attention'].includes(mode)) throw new Error(`unsupported smoke mode ${mode}`);
   if (residentHandoffMode && manifest.computation?.residentProbe !== 'layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1') throw new Error('MLX reference does not identify the resident block-1 attention residual consumer');
   if (residentBlock1Mode && manifest.computation?.residentBlock1Probe !== 'layer1.norm2(block1_after_attention_hidden_states); layer1.mlp(block1_norm2_hidden_states); block1_after_attention_hidden_states + mlp_output * layer1.layer_scale2') throw new Error('MLX reference does not identify the resident full block-1 consumer');
   if (residentBlock2Norm1Mode && manifest.computation?.residentBlock2Norm1Probe !== 'layer2.norm1(block1_after_mlp_hidden_states)') throw new Error('MLX reference does not identify the resident block-2 norm1 consumer');
+  if (residentBlock2AttentionMode && manifest.computation?.residentBlock2AttentionProbe !== 'layer2.attention(block2_norm1_hidden_states); block1_after_mlp_hidden_states + attention_output * layer2.layer_scale1') throw new Error('MLX reference does not identify the resident block-2 attention consumer and residual');
   evidence('pinned MLX reference manifest and checkpoint/config/preprocessor identities verified', { modelRevision: manifest.model.revision, precision: manifest.computation.precision, mode });
 
   setPhase('verify-source-image');
@@ -147,6 +149,10 @@ try {
   );
   if (residentBlock2Norm1Mode) tensorNames.push(
     'block2_norm1_hidden_states','layer2_norm1_weight','layer2_norm1_bias',
+  );
+  if (residentBlock2AttentionMode) tensorNames.push(
+    'block2_after_attention_hidden_states','layer2_q_weight','layer2_q_bias','layer2_k_weight',
+    'layer2_v_weight','layer2_v_bias','layer2_o_weight','layer2_o_bias','layer2_layer_scale1',
   );
   const references = {};
   for (const name of tensorNames) references[name] = await readTensor(manifest, name);
@@ -190,7 +196,9 @@ try {
   state.model = model;
   state.kernel = kernel;
   state.requestedRouteId = residentBlock1Mode
-    ? (residentBlock2Norm1Mode
+    ? (residentBlock2AttentionMode
+      ? 'trellis2.dinov3.block0-to-block2-attention.resident-probe.webgpu-local.v0'
+      : residentBlock2Norm1Mode
       ? 'trellis2.dinov3.block0-to-block2-norm1.resident-probe.webgpu-local.v0'
       : 'trellis2.dinov3.block0-to-block1-full-block.resident-probe.webgpu-local.v0')
     : residentHandoffMode
@@ -229,6 +237,12 @@ try {
     block2Norm1Weight:references.layer2_norm1_weight.values,
     block2Norm1Bias:references.layer2_norm1_bias.values,
   } : null;
+  const block2AttentionWeights = residentBlock2AttentionMode ? {
+    block2QWeight:references.layer2_q_weight.values,block2QBias:references.layer2_q_bias.values,
+    block2KWeight:references.layer2_k_weight.values,block2VWeight:references.layer2_v_weight.values,
+    block2VBias:references.layer2_v_bias.values,block2OWeight:references.layer2_o_weight.values,
+    block2OBias:references.layer2_o_bias.values,block2LayerScale1:references.layer2_layer_scale1.values,
+  } : null;
   const tensorBundleHash = await modelRoute.computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights);
   const route = modelRoute.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel, model });
   const request = kit.createRouteInvocationRequest(route, {
@@ -251,7 +265,7 @@ try {
   const requestedAtol = Number(query.get('atol') || '0.002');
   const requestedRtol = Number(query.get('rtol') || '0.001');
   if (!(requestedAtol >= 0) || !(requestedRtol >= 0) || !Number.isFinite(requestedAtol) || !Number.isFinite(requestedRtol)) throw new Error('comparison tolerances must be finite non-negative numbers');
-  setPhase(residentBlock2Norm1Mode ? 'webgpu-resident-block0-through-block2-norm1' : residentBlock1Mode ? 'webgpu-resident-block0-through-block1-full-block' : residentHandoffMode ? 'webgpu-resident-block0-through-block1-attention' : 'webgpu-block0-execution');
+  setPhase(residentBlock2AttentionMode ? 'webgpu-resident-block0-through-block2-attention' : residentBlock2Norm1Mode ? 'webgpu-resident-block0-through-block2-norm1' : residentBlock1Mode ? 'webgpu-resident-block0-through-block1-full-block' : residentHandoffMode ? 'webgpu-resident-block0-through-block1-attention' : 'webgpu-block0-execution');
   const routeInput = {
     request: routeRequest, route, sourceImage, model, kernel, adapter, device, queue:device.queue,
     adapterName, browser, backendIdentity, invocationId, weights,
@@ -263,7 +277,9 @@ try {
       setPhase(phase,{phaseIndex,lastCompletedPhase});
     },
   };
-  const result = residentBlock2Norm1Mode
+  const result = residentBlock2AttentionMode
+    ? await residentProbe.runTrellisDinoV3PrefixBlockResidentBlock2AttentionProbe({ ...routeInput, block1Norm1Weight, block1Norm1Bias, ...block1AttentionWeights, ...block1MlpWeights, ...block2Norm1Weights, ...block2AttentionWeights })
+    : residentBlock2Norm1Mode
     ? await residentProbe.runTrellisDinoV3PrefixBlockResidentBlock2Norm1Probe({ ...routeInput, block1Norm1Weight, block1Norm1Bias, ...block1AttentionWeights, ...block1MlpWeights, ...block2Norm1Weights })
     : residentBlock1Mode
     ? await residentProbe.runTrellisDinoV3PrefixBlockResidentBlock1Probe({ ...routeInput, block1Norm1Weight, block1Norm1Bias, ...block1AttentionWeights, ...block1MlpWeights })
@@ -273,8 +289,8 @@ try {
   if (residentMode) {
     if (result.status !== 'diagnostic-probe-complete' || result.authority !== 'non-authoritative-diagnostic') throw new Error('resident handoff result is not explicitly diagnostic-only');
     if (result.requestedProbeRouteId !== state.requestedRouteId || result.runtimeRouteId !== state.requestedRouteId) throw new Error('resident handoff probe route identity mismatch');
-    const expectedOperation = residentBlock2Norm1Mode ? 'dinov3-block2-layernorm1' : residentBlock1Mode ? 'dinov3-block1-mlp-residual' : 'dinov3-block1-attention-residual';
-    if (result.block0Readback !== 'skipped' || result.downstream?.operation !== expectedOperation) throw new Error('resident probe did not keep the requested block-1 stages resident until diagnostic readback');
+    const expectedOperation = residentBlock2AttentionMode ? 'dinov3-block2-attention-residual' : residentBlock2Norm1Mode ? 'dinov3-block2-layernorm1' : residentBlock1Mode ? 'dinov3-block1-mlp-residual' : 'dinov3-block1-attention-residual';
+    if (result.block0Readback !== 'skipped' || result.downstream?.operation !== expectedOperation) throw new Error('resident probe did not keep the requested DINO stages resident until diagnostic readback');
     if (result.computeRouteId !== route.routeId) throw new Error('resident probe compute route does not match the pinned block-0 implementation');
     state.effectiveRouteId = result.runtimeRouteId;
     state.backend = result.backend;
@@ -291,18 +307,22 @@ try {
   state.model = model;
   state.kernel = kernel;
   state.precision.execution = residentMode ? 'observed-f32-resident-consumer; block0-readback-skipped' : 'observed-f32-output-readback';
-  if (residentMode) evidence('block-0 output stayed in the same WebGPU runtime/device and fed the requested block-1 stages before block-0 host readback', { requestedProbeRouteId:result.requestedProbeRouteId, runtimeRouteId:result.runtimeRouteId, computeRouteId:result.computeRouteId, transfer:result.transfer, downstream:result.downstream, authority:result.authority });
+  if (residentMode) evidence('block-0 output stayed in the same WebGPU runtime/device and fed the requested resident DINO stages before block-0 host readback', { requestedProbeRouteId:result.requestedProbeRouteId, runtimeRouteId:result.runtimeRouteId, computeRouteId:result.computeRouteId, transfer:result.transfer, downstream:result.downstream, authority:result.authority });
   if (!residentMode) {
     if (result.receipt?.status !== 'real' || result.receipt?.requestedRouteId !== route.routeId || result.receipt?.effectiveRouteId !== route.routeId) throw new Error('WebGPU route receipt is missing, fallback, or does not match requested route identity');
     if (result.receipt?.model?.id !== model.id || result.receipt?.model?.revision !== model.revision || result.receipt?.model?.weightsHash !== model.weightsHash || result.receipt?.model?.dtype !== 'fp32') throw new Error('effective route receipt model/checkpoint/precision identity mismatch');
   }
-  const actual = residentBlock1Mode ? result.debugResidentBlock1 : residentHandoffMode ? result.debugResidentHandoff : result.debugReadback;
-  if (residentBlock1Mode) {
+  const actual = residentBlock2AttentionMode ? result.debugResidentBlock2Attention : residentBlock1Mode ? result.debugResidentBlock1 : residentHandoffMode ? result.debugResidentHandoff : result.debugReadback;
+  if (residentBlock2AttentionMode) {
+    if (actual?.operation !== 'dinov3-block2-attention-residual' || !actual.outputValues || Object.values(actual.outputValues).some(values=>!(values instanceof Float32Array))) throw new Error('resident consumer did not return all downstream F32 block-2 diagnostic tensors');
+  } else if (residentBlock1Mode) {
     if (actual?.operation !== 'dinov3-block1-mlp-residual' || !actual.outputValues || Object.values(actual.outputValues).some(values=>!(values instanceof Float32Array))) throw new Error('resident consumer did not return all downstream F32 block-1 diagnostic tensors');
   } else if (residentHandoffMode) {
     if (actual?.operation !== 'dinov3-block1-attention-residual' || !(actual.outputValues instanceof Float32Array)) throw new Error('resident consumer did not return a downstream F32 attention-residual diagnostic output');
   } else if (actual?.dtype !== 'float32') throw new Error('WebGPU route did not return F32 diagnostic outputs');
-  const comparisons = residentBlock2Norm1Mode
+  const comparisons = residentBlock2AttentionMode
+    ? [['block1Attention','block1_after_attention_hidden_states'],['block1Norm2','block1_norm2_hidden_states'],['block1MlpHidden','block1_mlp_hidden_states'],['block1MlpProjection','block1_mlp_output'],['block1Output','block1_after_mlp_hidden_states'],['block2Norm1','block2_norm1_hidden_states'],['block2Attention','block2_after_attention_hidden_states']]
+    : residentBlock2Norm1Mode
     ? [['block1Attention','block1_after_attention_hidden_states'],['block1Norm2','block1_norm2_hidden_states'],['block1MlpHidden','block1_mlp_hidden_states'],['block1MlpProjection','block1_mlp_output'],['block1Output','block1_after_mlp_hidden_states'],['block2Norm1','block2_norm1_hidden_states']]
     : residentBlock1Mode
     ? [['block1Attention','block1_after_attention_hidden_states'],['block1Norm2','block1_norm2_hidden_states'],['block1MlpHidden','block1_mlp_hidden_states'],['block1MlpProjection','block1_mlp_output'],['block1Output','block1_after_mlp_hidden_states']]
@@ -311,9 +331,11 @@ try {
     : [['patchEmbeddings','patch_embeddings'],['prefixHiddenStates','prefix_hidden_states'],['block0HiddenStates','block0_hidden_states']];
   for (const [routeName, referenceName] of comparisons) {
     setPhase(`persist-and-compare-${routeName}`);
-    const actualValues = routeName==='block2Norm1'
-      ? result.debugResidentBlock2Norm1?.outputValues
-      : residentBlock1Mode ? actual.outputValues[routeName] : residentHandoffMode ? actual.outputValues : actual[routeName];
+    const actualValues = residentBlock2AttentionMode
+      ? actual.outputValues[routeName]
+      : routeName==='block2Norm1'
+        ? result.debugResidentBlock2Norm1?.outputValues
+        : residentBlock1Mode ? actual.outputValues[routeName] : residentHandoffMode ? actual.outputValues : actual[routeName];
     await persistGpuTensor(routeName, actualValues, references[referenceName]);
     state.comparisons[routeName] = compareTensor(routeName, actualValues, references[referenceName].values, requestedAtol, requestedRtol);
     state.comparisons[routeName].referenceSha256 = references[referenceName].sha256;
@@ -322,10 +344,12 @@ try {
   }
   const failedComparisons = Object.values(state.comparisons).filter(comparison=>!comparison.pass);
   if (failedComparisons.length) throw new Error(`tensor parity failed: ${failedComparisons.map(item=>`${item.name} maxAbs=${item.maxAbs} failures=${item.failureCount}`).join('; ')}`);
-  if (residentMode ? !state.actualOutputs.block1Attention : (!state.actualOutputs.patchEmbeddings || !state.actualOutputs.prefixHiddenStates || !state.actualOutputs.block0HiddenStates)) throw new Error('one or more required GPU outputs were not persisted');
+  if (residentMode ? !state.actualOutputs.block1Attention || residentBlock2AttentionMode && !state.actualOutputs.block2Attention : (!state.actualOutputs.patchEmbeddings || !state.actualOutputs.prefixHiddenStates || !state.actualOutputs.block0HiddenStates)) throw new Error('one or more required GPU outputs were not persisted');
   state.status = 'passed';
   state.failurePhase = null;
-  state.claim = residentBlock2Norm1Mode
+  state.claim = residentBlock2AttentionMode
+    ? 'observed: the live F32 tensor passed through complete DINOv3 blocks 0 and 1, then block-2 norm1 and attention on the same WebGPU runtime/device without intermediate host readback; all seven captured F32 boundaries matched same-job pinned MLX F32 within recorded tolerance; diagnostic probe only, not full conditioning'
+    : residentBlock2Norm1Mode
     ? 'observed: the live F32 tensor passed through complete DINOv3 blocks 0 and 1, then fed block-2 norm1 on the same WebGPU runtime/device without intermediate host readback; all six captured F32 boundaries matched same-job pinned MLX F32 within recorded tolerance; diagnostic probe only, not full conditioning'
     : residentBlock1Mode
     ? 'observed: the live block-0 F32 GPU tensor fed block-1 norm1, attention, norm2, GELU MLP, and both LayerScale residuals on the same runtime/device without block-0 host readback; each captured stage tensor matched same-job pinned MLX F32 within recorded tolerance; diagnostic probe only, not full conditioning'

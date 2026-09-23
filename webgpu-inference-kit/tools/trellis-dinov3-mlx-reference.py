@@ -169,11 +169,13 @@ def execute(args) -> dict:
     block1_after_mlp_hidden_states = block1_after_attention_hidden_states + block1_mlp_output * block1.layer_scale2
     block2 = model.layers[2]
     block2_norm1_hidden_states = block2.norm1(block1_after_mlp_hidden_states)
+    block2_attention_output = block2.attention(block2_norm1_hidden_states, cos, sin, model.num_prefix_tokens)
+    block2_after_attention_hidden_states = block1_after_mlp_hidden_states + block2_attention_output * block2.layer_scale1
     mx.eval(
         patch_embeddings, prefix_hidden_states, block0_hidden_states,
         block1_norm1_hidden_states, block1_after_attention_hidden_states,
         block1_norm2_hidden_states, block1_mlp_hidden_states, block1_mlp_output,
-        block1_after_mlp_hidden_states, block2_norm1_hidden_states,
+        block1_after_mlp_hidden_states, block2_norm1_hidden_states, block2_after_attention_hidden_states,
     )
 
     out_dir = Path(args.out_dir).resolve()
@@ -191,6 +193,7 @@ def execute(args) -> dict:
         "block1_mlp_output": (np_f32(mx, block1_mlp_output), "mlmodel-dinov3-block1-mlp-projection-output"),
         "block1_after_mlp_hidden_states": (np_f32(mx, block1_after_mlp_hidden_states), "mlmodel-dinov3-block1-output-before-final-no-affine-norm"),
         "block2_norm1_hidden_states": (np_f32(mx, block2_norm1_hidden_states), "mlmodel-dinov3-block2-norm1-output-before-attention"),
+        "block2_after_attention_hidden_states": (np_f32(mx, block2_after_attention_hidden_states), "mlmodel-dinov3-block2-attention-residual-output-before-norm2"),
         "patch_projection": (np_f32(mx, model.patch_embed.weight), "checkpoint-patch-projection-out-kh-kw-in"),
         "patch_bias": (np_f32(mx, model.patch_embed.bias), "checkpoint-patch-projection-bias"),
         "class_token": (np_f32(mx, model.cls_token), "checkpoint-class-token"),
@@ -221,6 +224,17 @@ def execute(args) -> dict:
         arrays[name] = (np_f32(mx, value), role)
     arrays["layer2_norm1_weight"] = (np_f32(mx, block2.norm1.weight), "checkpoint-layer2-norm1-weight")
     arrays["layer2_norm1_bias"] = (np_f32(mx, block2.norm1.bias), "checkpoint-layer2-norm1-bias")
+    for name, value, role in [
+        ("layer2_q_weight", block2.attention.q_proj.weight, "checkpoint-layer2-q-weight-out-in"),
+        ("layer2_q_bias", block2.attention.q_proj.bias, "checkpoint-layer2-q-bias"),
+        ("layer2_k_weight", block2.attention.k_proj.weight, "checkpoint-layer2-k-weight-out-in"),
+        ("layer2_v_weight", block2.attention.v_proj.weight, "checkpoint-layer2-v-weight-out-in"),
+        ("layer2_v_bias", block2.attention.v_proj.bias, "checkpoint-layer2-v-bias"),
+        ("layer2_o_weight", block2.attention.o_proj.weight, "checkpoint-layer2-o-weight-out-in"),
+        ("layer2_o_bias", block2.attention.o_proj.bias, "checkpoint-layer2-o-bias"),
+        ("layer2_layer_scale1", block2.layer_scale1, "checkpoint-layer2-attention-layer-scale"),
+    ]:
+        arrays[name] = (np_f32(mx, value), role)
     block1 = model.layers[1]
     arrays["layer1_norm2_weight"] = (np_f32(mx, block1.norm2.weight), "checkpoint-layer1-norm2-weight")
     arrays["layer1_norm2_bias"] = (np_f32(mx, block1.norm2.bias), "checkpoint-layer1-norm2-bias")
@@ -254,7 +268,7 @@ def execute(args) -> dict:
         "reference": {"implementation": "trellmlx.models.dinov3.DINOv3ViT", "sourceRoot": str(trellis_root), "sourceRevision": trellis_revision, "sourceFile": str(dinov3_source), "sourceFileSha256": file_sha256(dinov3_source), "device": str(mx.default_device()), "mlxVersion": getattr(mx, "__version__", "unreported"), "loadedTensorCount": loaded_count},
         "model": {"id": MODEL_ID, "revision": REVISION, "files": files, "config": config, "dtype": "float32", "checkpointTensorDtypes": ["F32"]},
         "preprocessing": preprocessing,
-        "computation": {"precision": "float32", "framework": "MLX", "prefixTokens": ["class", "register0", "register1", "register2", "register3"], "patchTokens": 1024, "patchGrid": [32, 32], "sequenceLength": 1029, "hiddenSize": 1024, "ropeTheta": config["rope_theta"], "layerNormEps": config["layer_norm_eps"], "attention": "global-scaled-dot-product", "ropeAppliedTo": "patch q/k tokens only", "layerScale": "learned layer0 layer_scale1/layer_scale2 and block1 layer_scale1/layer_scale2", "residentProbeCompleteTransformerBlockCount": 1, "residentProbe": "layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1", "residentProbeOutputBoundary": "after complete layer.0 and block1 attention residual; before block1 norm2 and final model LayerNorm", "residentBlock1CompleteTransformerBlockCount": 2, "residentBlock1Probe": "layer1.norm2(block1_after_attention_hidden_states); layer1.mlp(block1_norm2_hidden_states); block1_after_attention_hidden_states + mlp_output * layer1.layer_scale2", "residentBlock2Norm1Probe": "layer2.norm1(block1_after_mlp_hidden_states)", "residentBlock2Norm1OutputBoundary": "after two complete transformer blocks and block 2 norm1; before block 2 attention and final model LayerNorm", "finalNoAffineLayerNormApplied": False, "residentBlock1OutputBoundary": "after complete layer.0 and complete layer.1; before final model LayerNorm"},
+        "computation": {"precision": "float32", "framework": "MLX", "prefixTokens": ["class", "register0", "register1", "register2", "register3"], "patchTokens": 1024, "patchGrid": [32, 32], "sequenceLength": 1029, "hiddenSize": 1024, "ropeTheta": config["rope_theta"], "layerNormEps": config["layer_norm_eps"], "attention": "global-scaled-dot-product", "ropeAppliedTo": "patch q/k tokens only", "layerScale": "learned layer0/block1/block2 layer_scale1 and layer0/block1 layer_scale2", "residentProbeCompleteTransformerBlockCount": 1, "residentProbe": "layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1", "residentProbeOutputBoundary": "after complete layer.0 and block1 attention residual; before block1 norm2 and final model LayerNorm", "residentBlock1CompleteTransformerBlockCount": 2, "residentBlock1Probe": "layer1.norm2(block1_after_attention_hidden_states); layer1.mlp(block1_norm2_hidden_states); block1_after_attention_hidden_states + mlp_output * layer1.layer_scale2", "residentBlock2Norm1Probe": "layer2.norm1(block1_after_mlp_hidden_states)", "residentBlock2Norm1OutputBoundary": "after two complete transformer blocks and block 2 norm1; before block 2 attention and final model LayerNorm", "residentBlock2AttentionProbe": "layer2.attention(block2_norm1_hidden_states); block1_after_mlp_hidden_states + attention_output * layer2.layer_scale1", "residentBlock2AttentionOutputBoundary": "after two complete transformer blocks and block 2 attention residual; before block 2 norm2 and final model LayerNorm", "finalNoAffineLayerNormApplied": False, "residentBlock1OutputBoundary": "after complete layer.0 and complete layer.1; before final model LayerNorm"},
         "outputs": outputs,
     }
     report_path = out_dir / "reference-manifest.json"

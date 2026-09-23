@@ -10,7 +10,7 @@ import { assertCleanGitCheckout, createSourceByteReceipt } from './trellis-dinov
 const args = new Map();
 for (let index=2; index<process.argv.length; index+=2) args.set(process.argv[index],process.argv[index+1]);
 if (process.argv.includes('--help')) {
-  console.log('Usage: node tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs --reference-dir PATH --source-image PATH --output-dir PATH --report PATH [--mode block0-parity|resident-handoff|resident-block1|resident-block2-norm1] [--source-revision SHA] [--chrome PATH] [--debug-port N] [--server-port N] [--timeout-ms N] [--atol N] [--rtol N]');
+  console.log('Usage: node tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs --reference-dir PATH --source-image PATH --output-dir PATH --report PATH [--mode block0-parity|resident-handoff|resident-block1|resident-block2-norm1|resident-block2-attention] [--source-revision SHA] [--chrome PATH] [--debug-port N] [--server-port N] [--timeout-ms N] [--atol N] [--rtol N]');
   process.exit(0);
 }
 const root=resolve(new URL('..',import.meta.url).pathname);
@@ -29,14 +29,18 @@ const chrome=process.env.KAMINOS_CHROME||args.get('--chrome')||'/Applications/Go
 const invocationId=randomUUID();
 const requestedRouteId=mode==='resident-block1'
   ? 'trellis2.dinov3.block0-to-block1-full-block.resident-probe.webgpu-local.v0'
-  : mode==='resident-block2-norm1'
+  : mode==='resident-block2-attention'
+    ? 'trellis2.dinov3.block0-to-block2-attention.resident-probe.webgpu-local.v0'
+    : mode==='resident-block2-norm1'
     ? 'trellis2.dinov3.block0-to-block2-norm1.resident-probe.webgpu-local.v0'
   : mode==='resident-handoff'
     ? 'trellis2.dinov3.block0-to-block1-attention.resident-probe.webgpu-local.v0'
     : 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
 const reportSchema=mode==='resident-block1'
   ? 'kaminos.trellis-dinov3-resident-block1-browser-smoke.v0'
-  : mode==='resident-block2-norm1'
+  : mode==='resident-block2-attention'
+    ? 'kaminos.trellis-dinov3-resident-block2-attention-browser-smoke.v0'
+    : mode==='resident-block2-norm1'
     ? 'kaminos.trellis-dinov3-resident-block2-norm1-browser-smoke.v0'
   : mode==='resident-handoff'
     ? 'kaminos.trellis-dinov3-resident-handoff-browser-smoke.v1'
@@ -46,6 +50,7 @@ const outputSizes={
   block1Attention:1029*1024*4,block1Norm2:1029*1024*4,block1MlpHidden:1029*4096*4,
   block1MlpProjection:1029*1024*4,block1Output:1029*1024*4,
   block2Norm1:1029*1024*4,
+  block2Attention:1029*1024*4,
 };
 const allowedOutputNames=new Set(Object.keys(outputSizes).map(name=>`${name}.f32`));
 let userDataDir=null;
@@ -239,7 +244,7 @@ let exitCode=1;
 try {
   phase='local_preflight';
   if(!args.has('--reference-dir')||!args.has('--source-image')||!args.has('--output-dir')||!args.has('--report')) throw new Error('--reference-dir, --source-image, --output-dir, and --report are required');
-  if(!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
+  if(!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1','resident-block2-attention'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
   gitRoot=execFileSync('git',['-C',root,'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
   requiredSourcePaths=[
     resolve(root,'smokes/trellis-dinov3-prefix-block-browser.html'),
@@ -257,6 +262,7 @@ try {
   if(mode==='resident-handoff'&&manifest.computation?.residentProbe!=='layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1') throw new Error('reference manifest does not identify the pinned resident block-1 attention residual operation');
   if(mode==='resident-block1'&&manifest.computation?.residentBlock1Probe!=='layer1.norm2(block1_after_attention_hidden_states); layer1.mlp(block1_norm2_hidden_states); block1_after_attention_hidden_states + mlp_output * layer1.layer_scale2') throw new Error('reference manifest does not identify the pinned resident full block-1 operation');
   if(mode==='resident-block2-norm1'&&manifest.computation?.residentBlock2Norm1Probe!=='layer2.norm1(block1_after_mlp_hidden_states)') throw new Error('reference manifest does not identify the pinned resident block-2 norm1 operation');
+  if(mode==='resident-block2-attention'&&manifest.computation?.residentBlock2AttentionProbe!=='layer2.attention(block2_norm1_hidden_states); block1_after_mlp_hidden_states + attention_output * layer2.layer_scale1') throw new Error('reference manifest does not identify the pinned resident block-2 attention operation and residual');
   mkdirSync(outputDir,{recursive:true});
   phase='start_server';
   await startServer();
