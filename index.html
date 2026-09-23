@@ -11461,6 +11461,14 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
+  window.kaminosFingerFluidBenchBeginSolverTimestampCaptureForWitness = (querySet, firstQueryIndex, pairCount) => {
+    if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver is unavailable for timestamp capture');
+    return fingerFluidBenchSolver.armSolverGpuTimestampCaptureForWitness(querySet, firstQueryIndex, pairCount);
+  };
+  window.kaminosFingerFluidBenchFinishSolverTimestampCaptureForWitness = () => {
+    if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver is unavailable for timestamp capture');
+    return fingerFluidBenchSolver.finishSolverGpuTimestampCaptureForWitness();
+  };
   window.kaminosFingerFluidBenchSetLiveInletPacket = setFingerFluidBenchLiveInletPacket;
   window.kaminosFingerFluidBenchAnalyticCarrierState = () => ({
     ...fingerFluidBenchAnalyticCarrierState,
