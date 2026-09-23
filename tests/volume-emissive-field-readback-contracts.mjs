@@ -43,11 +43,12 @@ const field = {
   directions: 2,
   sourceIndex: 0,
   simStepCount: 7,
+  backend: 'WebGPU:apple',
   effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
   renderPhaseTimeMs: 1000,
   renderPhaseFrame: 160,
   renderPhaseAuthority: 'live-render-phase',
-  physicalColor: { effective: 'emissive-transport-v2', incidentLight: { sourceIndex: 0 }, material: { smokeExtinction: 1, scatteringAlbedo: 0.25, ambientRadiance: 0.1 } },
+  physicalColor: { effective: 'emissive-transport-v2', materialLawEffective: 'transported-heat-soot-v1', temperature: 1900, temperatureSpread: 200, thermalStrength: 1, cleanStrength: 1, exposureEV: 0, incidentLight: { sourceIndex: 0 }, material: { smokeExtinction: 1, scatteringAlbedo: 0.25, ambientRadiance: 0.1 } },
 };
 const expected = { ...field };
 const files = {
@@ -67,6 +68,10 @@ assert.throws(() => witnessContracts.validateEmissiveField(field, files, { ...ex
 assert.throws(() => witnessContracts.validateEmissiveField({ ...field, sourceIndex: 1 }, files, expected, { grid: 1, directions: 2 }), /source index mismatch/);
 assert.throws(() => witnessContracts.validateEmissiveField({ ...field, renderPhaseTimeMs: 1001 }, files, expected, { grid: 1, directions: 2 }), /render phase mismatch/);
 assert.throws(() => witnessContracts.validateEmissiveField({ ...field, physicalColor: { ...field.physicalColor, material: { ...field.physicalColor.material, smokeExtinction: 3 } } }, files, expected, { grid: 1, directions: 2 }), /material state mismatch/);
+assert.throws(() => witnessContracts.validateEmissiveField({ ...field, physicalColor: { ...field.physicalColor, thermalStrength: 2 } }, files, expected, { grid: 1, directions: 2 }), /physical color state mismatch/);
+const missingIdentityField = { ...field, sourceIndex: undefined, effectiveRoute: undefined, backend: undefined, renderPhaseTimeMs: undefined };
+const missingIdentityState = { ...expected, physicalColor: { ...expected.physicalColor, incidentLight: { sourceIndex: undefined } }, effectiveRoute: undefined, backend: undefined, renderPhaseTimeMs: undefined };
+assert.throws(() => witnessContracts.validateEmissiveField(missingIdentityField, files, missingIdentityState, { grid: 1, directions: 2 }), /missing frame identity/);
 const liveState = { simStepCount: 7, effectiveRoute: field.effectiveRoute, backend: 'WebGPU:apple', renderPhaseTimeMs: 1000, renderPhaseFrame: 160, renderPhaseAuthority: 'live-render-phase', physicalColor: { effective: 'emissive-transport-v2', material: { ambientRadiance: 0 } } };
 const snapshot = snapshotEmissiveFieldFrame(0, liveState);
 liveState.simStepCount = 8; liveState.renderPhaseTimeMs = 2000; liveState.physicalColor.material.ambientRadiance = 1;

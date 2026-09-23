@@ -9,6 +9,43 @@ export function validateEmissiveField(field, files, expectedState, expected = { 
   assert.equal(field.authority, 'same-submission-fluid-and-uniforms-gpu-field-readback-v1');
   assert.equal(field.grid, expected.grid);
   assert.equal(field.directions, expected.directions);
+  const requiredString = (value, label) => {
+    assert.equal(typeof value, 'string', `missing frame identity: ${label}`);
+    assert.ok(value.length > 0, `missing frame identity: ${label}`);
+  };
+  const requiredNumber = (value, label) => {
+    assert.equal(typeof value, 'number', `missing frame identity: ${label}`);
+    assert.ok(Number.isFinite(value), `missing frame identity: ${label}`);
+  };
+  const expectedColor = expectedState.physicalColor;
+  const fieldColor = field.physicalColor;
+  const identity = [
+    ['sim step', field.simStepCount, expectedState.simStepCount, 'number'],
+    ['route', field.effectiveRoute, expectedState.effectiveRoute, 'string'],
+    ['backend', field.backend, expectedState.backend, 'string'],
+    ['source index', field.sourceIndex, expectedColor?.incidentLight?.sourceIndex, 'number'],
+    ['render phase time', field.renderPhaseTimeMs, expectedState.renderPhaseTimeMs, 'number'],
+    ['render phase frame', field.renderPhaseFrame, expectedState.renderPhaseFrame, 'number'],
+    ['render phase authority', field.renderPhaseAuthority, expectedState.renderPhaseAuthority, 'string'],
+  ];
+  for (const [label, value, expectedValue, type] of identity) {
+    if (type === 'string') { requiredString(value, label); requiredString(expectedValue, label); }
+    else { requiredNumber(value, label); requiredNumber(expectedValue, label); }
+  }
+  requiredString(fieldColor?.effective, 'physical color mode');
+  requiredString(expectedColor?.effective, 'physical color mode');
+  requiredString(fieldColor?.materialLawEffective, 'material law');
+  requiredString(expectedColor?.materialLawEffective, 'material law');
+  for (const key of ['temperature', 'temperatureSpread', 'thermalStrength', 'cleanStrength', 'exposureEV']) {
+    requiredNumber(fieldColor?.[key], key);
+    requiredNumber(expectedColor?.[key], key);
+  }
+  const fieldMaterial = fieldColor?.material;
+  const expectedMaterial = expectedColor?.material;
+  for (const key of ['smokeExtinction', 'scatteringAlbedo', 'ambientRadiance']) {
+    requiredNumber(fieldMaterial?.[key], key);
+    requiredNumber(expectedMaterial?.[key], key);
+  }
   assert.equal(field.simStepCount, expectedState.simStepCount, 'frame metadata mismatch: sim step');
   assert.equal(field.effectiveRoute, expectedState.effectiveRoute, 'frame metadata mismatch: route');
   assert.equal(field.backend, expectedState.backend, 'frame metadata mismatch: backend');
@@ -17,10 +54,11 @@ export function validateEmissiveField(field, files, expectedState, expected = { 
   assert.equal(field.renderPhaseFrame, expectedState.renderPhaseFrame, 'render phase mismatch: frame');
   assert.equal(field.renderPhaseAuthority, expectedState.renderPhaseAuthority, 'render phase mismatch: authority');
   assert.equal(field.physicalColor?.effective, expectedState.physicalColor?.effective, 'frame metadata mismatch: mode');
-  assert.equal(field.physicalColor?.temperature, expectedState.physicalColor?.temperature, 'frame metadata mismatch: temperature');
-  assert.equal(field.physicalColor?.exposureEV, expectedState.physicalColor?.exposureEV, 'frame metadata mismatch: exposure');
+  for (const key of ['materialLawEffective', 'temperature', 'temperatureSpread', 'thermalStrength', 'cleanStrength', 'exposureEV']) {
+    assert.equal(fieldColor[key], expectedColor[key], `physical color state mismatch: ${key}`);
+  }
   for (const key of ['smokeExtinction', 'scatteringAlbedo', 'ambientRadiance']) {
-    assert.equal(field.physicalColor?.material?.[key], expectedState.physicalColor?.material?.[key], `material state mismatch: ${key}`);
+    assert.equal(fieldMaterial[key], expectedMaterial[key], `material state mismatch: ${key}`);
   }
 
   const cells = field.grid ** 3;
