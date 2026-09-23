@@ -2,9 +2,10 @@
 import { createServer } from 'node:http';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, extname, resolve, sep } from 'node:path';
+import { dirname, extname, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { assertCleanGitCheckout, createSourceByteReceipt } from './trellis-dinov3-source-attestation.mjs';
 
 const args = new Map();
 for (let index=2; index<process.argv.length; index+=2) args.set(process.argv[index],process.argv[index+1]);
@@ -27,12 +28,12 @@ const mode=args.get('--mode')||'block0-parity';
 const chrome=process.env.KAMINOS_CHROME||args.get('--chrome')||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const invocationId=randomUUID();
 const requestedRouteId=mode==='resident-handoff'
-  ? 'trellis2.dinov3.block0-to-block1-norm1.resident-probe.webgpu-local.v0'
+  ? 'trellis2.dinov3.block0-to-block1-attention.resident-probe.webgpu-local.v0'
   : 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
 const reportSchema=mode==='resident-handoff'
-  ? 'kaminos.trellis-dinov3-resident-handoff-browser-smoke.v0'
+  ? 'kaminos.trellis-dinov3-resident-handoff-browser-smoke.v1'
   : 'kaminos.trellis-dinov3-prefix-block0.browser-parity-smoke.v0';
-const outputSizes={ patchEmbeddings:1024*1024*4, prefixHiddenStates:1029*1024*4, block0HiddenStates:1029*1024*4, block1Norm1:1029*1024*4 };
+const outputSizes={ patchEmbeddings:1024*1024*4, prefixHiddenStates:1029*1024*4, block0HiddenStates:1029*1024*4, block1Attention:1029*1024*4 };
 const allowedOutputNames=new Set(Object.keys(outputSizes).map(name=>`${name}.f32`));
 let userDataDir=null;
 let server=null;
@@ -42,12 +43,32 @@ let browserState=null;
 let phase='initializing';
 let stderr='';
 let outputReceipts={};
+let servedSourceReceipts={};
+let sourceAttestationErrors=[];
+let checkoutAtStart=null;
 let sourceImageSha256=null;
 let referenceManifestSummary=null;
 const requestedUrl=`http://127.0.0.1:${serverPort}/smokes/trellis-dinov3-prefix-block-browser.html?smokeId=${invocationId}&mode=${encodeURIComponent(mode)}&sourceRevision=${encodeURIComponent(sourceRevision)}&atol=${atol}&rtol=${rtol}`;
 const delay=ms=>new Promise(resolveDelay=>setTimeout(resolveDelay,ms));
+let gitRoot=null;
+let requiredSourcePaths=[];
 
 function inside(base,candidate) { return candidate===base||candidate.startsWith(`${base}${sep}`); }
+function sourceAttestation() {
+  let checkoutAtEnd=null;
+  let checkoutError=null;
+  try { checkoutAtEnd=assertCleanGitCheckout(root,sourceRevision); }
+  catch(error) { checkoutError=String(error?.message||error); }
+  const receipts=Object.values(servedSourceReceipts);
+  const missingRequiredSourcePaths=requiredSourcePaths.filter(path=>!servedSourceReceipts[path]);
+  const errors=[...sourceAttestationErrors];
+  if(checkoutError) errors.push({phase:'checkout-at-end',error:checkoutError});
+  return {
+    sourceRevision,checkoutAtStart,checkoutAtEnd,requiredSourcePaths,
+    servedSourceReceipts:receipts,missingRequiredSourcePaths,errors,
+    ok:Boolean(checkoutAtStart?.clean&&checkoutAtEnd?.clean&&missingRequiredSourcePaths.length===0&&errors.length===0&&receipts.every(receipt=>receipt.matchesCommittedBytes===true)),
+  };
+}
 function writeReport(extra={}) {
   const actualRoute=browserState?.status==='passed'&&browserState?.receipt ? browserState.receipt.effectiveRouteId : browserState?.effectiveRouteId||null;
   const report={
@@ -63,6 +84,7 @@ function writeReport(extra={}) {
     inputHashes:browserState?.referenceHashes||null, lastTrustworthyEvidence:browserState?.lastTrustworthyEvidence||{description:'local command setup only',detail:{phase}},
     evidenceChain:browserState?.evidenceChain||[], lastCompletedPhase:browserState?.lastCompletedPhase||null,
     comparisons:browserState?.comparisons||{}, actualOutputs:browserState?.actualOutputs||{}, persistedOutputReceipts:outputReceipts,
+    sourceAttestation:sourceAttestation(),
     receipt:browserState?.receipt||null, browserState:browserState||null, stderrTail:stderr.slice(-6000),
     ...extra,
   };
@@ -129,6 +151,20 @@ function startServer() {
       const path=resolve(root,url.pathname.slice(1));
       if (!inside(root,path)) { response.writeHead(403); response.end('forbidden'); return; }
       const body=readFileSync(path);
+      if ((url.pathname.startsWith('/src/')||url.pathname.startsWith('/smokes/'))&&['.html','.js','.mjs'].includes(extname(path).toLowerCase())) {
+        const repoPath=relative(gitRoot,path).split(sep).join('/');
+        try {
+          const receipt=createSourceByteReceipt({root,sourceRevision,repoPath,servedBytes:body});
+          const previous=servedSourceReceipts[repoPath];
+          if(previous&&(previous.sha256!==receipt.sha256||previous.gitBlob!==receipt.gitBlob)) throw new Error(`source changed while the browser route was active: ${repoPath}`);
+          servedSourceReceipts[repoPath]=receipt;
+        } catch(error) {
+          sourceAttestationErrors.push({path:repoPath,error:String(error?.message||error)});
+          response.writeHead(500,{'content-type':'text/plain; charset=utf-8','cache-control':'no-store'});
+          response.end(String(error?.message||error));
+          return;
+        }
+      }
       response.writeHead(200,{
         'content-type':contentType(path),'cache-control':'no-store',
         'cross-origin-opener-policy':'same-origin','cross-origin-embedder-policy':'require-corp',
@@ -175,6 +211,8 @@ async function evaluate(ws,expression) {
 async function waitForState(ws,expectedInvocationId) {
   const deadline=timeoutMs>0?Date.now()+timeoutMs:Infinity;
   while(Date.now()<deadline) {
+    if(sourceAttestationErrors.length) throw new Error(`browser source byte attestation failed before smoke state: ${JSON.stringify(sourceAttestationErrors)}`);
+    if(chromeProcess?.exitCode!=null) throw new Error(`Chrome exited before producing smoke state with code ${chromeProcess.exitCode}`);
     const state=await evaluate(ws,'window.trellisDinoPrefixBlockSmoke||null');
     if(state&&state.invocationId!==expectedInvocationId) throw new Error(`browser invocation identity mismatch: expected ${expectedInvocationId}, got ${state.invocationId||'missing'}`);
     if(state?.status==='passed'||state?.status==='failed') return state;
@@ -189,6 +227,13 @@ try {
   phase='local_preflight';
   if(!args.has('--reference-dir')||!args.has('--source-image')||!args.has('--output-dir')||!args.has('--report')) throw new Error('--reference-dir, --source-image, --output-dir, and --report are required');
   if(!['block0-parity','resident-handoff'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
+  gitRoot=execFileSync('git',['-C',root,'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
+  requiredSourcePaths=[
+    resolve(root,'smokes/trellis-dinov3-prefix-block-browser.html'),
+    resolve(root,'src/index.js'),
+    resolve(root,'src/trellis-dinov3-prefix-block-phase-program.js'),
+  ].map(path=>relative(gitRoot,path).split(sep).join('/'));
+  checkoutAtStart=assertCleanGitCheckout(root,sourceRevision);
   if(!Number.isInteger(debugPort)||debugPort<1||debugPort>65535||!Number.isInteger(serverPort)||serverPort<1||serverPort>65535) throw new Error('debug-port and server-port must be valid TCP ports');
   if(timeoutMs<0||!Number.isFinite(timeoutMs)) throw new Error('timeout-ms must be zero (no time limit) or a positive finite number');
   const manifest=JSON.parse(readFileSync(resolve(referenceDir,'reference-manifest.json'),'utf8'));
@@ -196,7 +241,7 @@ try {
   sourceImageSha256=createHash('sha256').update(readFileSync(sourceImagePath)).digest('hex');
   if(sourceImageSha256!=='abf395cc52d81c26dadae9f024072d6c7301679be4e8fc08d572723d7ae32a21') throw new Error(`source image digest mismatch: ${sourceImageSha256}`);
   if(manifest.ok!==true||manifest.model?.revision!=='ea8dc2863c51be0a264bab82070e3e8836b02d51'||manifest.model?.files?.['model.safetensors']?.sha256!=='dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179') throw new Error('local reference manifest is not the expected pinned F32 DINOv3 export');
-  if(mode==='resident-handoff'&&manifest.computation?.residentProbe!=='layer1.norm1(block0_hidden_states)') throw new Error('reference manifest does not identify the pinned resident block-1 LayerNorm operation');
+  if(mode==='resident-handoff'&&manifest.computation?.residentProbe!=='layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1') throw new Error('reference manifest does not identify the pinned resident block-1 attention residual operation');
   mkdirSync(outputDir,{recursive:true});
   phase='start_server';
   await startServer();
@@ -229,6 +274,7 @@ try {
   if(browserState?.requestedRouteId!==requestedRouteId) throw new Error(`browser route mismatch: requested ${requestedRouteId}, observed ${browserState?.requestedRouteId||'missing'}`);
   const report=writeReport({ok:browserState.status==='passed',failure_phase:browserState.status==='passed'?null:browserState.failurePhase||phase,error:browserState.error||null});
   console.log(JSON.stringify({ok:report.ok,reportPath,mode,requestedRouteId:report.requestedRouteId,effectiveRouteId:report.effectiveRouteId,sourceRevision,browser:report.browserVersion,adapterName:report.adapterName,adapterClassification:report.adapterClassification,precision:report.precision,model:report.model,comparisons:report.comparisons,outputReceipts:report.persistedOutputReceipts,error:browserState.error||null},null,2));
+  if(report.sourceAttestation?.ok!==true) throw new Error(`browser source attestation did not close: ${JSON.stringify(report.sourceAttestation)}`);
   if(!report.ok) throw new Error(browserState.error||'matched WebGPU-vs-MLX comparison failed');
   exitCode=0;
 } catch(error) {

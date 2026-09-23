@@ -84,7 +84,7 @@ assert.match(browserRunner, /browserState\?\.mode!==mode/,
   'the runner must reject a stale/default browser page that silently ignored the requested smoke mode');
 assert.match(browserRunner, /browserState\?\.requestedRouteId!==requestedRouteId/,
   'the runner must reject a browser page that exercised another effective route');
-assert.match(browserRunner, /block1Norm1:1029\*1024\*4/,
+assert.match(browserRunner, /block1Attention:1029\*1024\*4/,
   'the resident mode must require the exact full-size downstream F32 tensor rather than accepting a partial result');
 assert.match(browserSmoke, /adapterClassification === 'software-fallback'/,
   'software WebGPU fallback cannot satisfy the resident GPU evidence route');
@@ -102,26 +102,31 @@ assert.match(parityAssay, /last trustworthy MLX reference remained valid/,
   'a WebGPU failure must preserve the MLX reference as last trustworthy evidence without implying parity');
 const routeImplementation = implementation.slice(implementation.indexOf('async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal'));
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1LayerNormResident, 'function');
+assert.equal(typeof residentRoute.runTrellisDinoV3Block1AttentionResident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'function');
 assert.equal(typeof kit.runTrellisDinoV3Block1LayerNormResident, 'undefined', 'the probe kernel remains model-specific rather than expanding the shared kit root API');
+assert.equal(typeof kit.runTrellisDinoV3Block1AttentionResident, 'undefined', 'block-1 attention remains model-specific rather than expanding the shared kit root API');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'undefined', 'the diagnostic probe is not promoted to the common kit API');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockPhaseProgramRoute, 'undefined', 'the model-specific route stays out of the shared kit root API');
 assert.doesNotMatch(publicIndex, /TRELLIS_DINOV3/, 'the model-specific route must not append DINOv3 symbols to the current shared root surface');
 assert.equal(residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID,
-  'trellis2.dinov3.block0-to-block1-norm1.resident-probe.webgpu-local.v0');
+  'trellis2.dinov3.block0-to-block1-attention.resident-probe.webgpu-local.v0');
 const residentFilterIndex = routeImplementation.indexOf("program.phases.filter(phase => phase.name !== 'readback-trellis-dinov3-prefix-block0-outputs')");
 const residentConsumerIndex = routeImplementation.indexOf('runTrellisDinoV3Block1LayerNormResident({');
-const downstreamReadbackIndex = routeImplementation.indexOf("readback-dinov3-block1-layernorm1-resident-probe");
+const attentionConsumerIndex = routeImplementation.indexOf('runTrellisDinoV3Block1AttentionResident({');
+const downstreamReadbackIndex = routeImplementation.indexOf("readback-dinov3-block1-attention-resident-probe");
 assert.ok(residentFilterIndex >= 0 && residentConsumerIndex > residentFilterIndex,
-  'the resident probe must omit the block-0 output-readback phase and consume block-0 in the downstream operation');
-assert.ok(downstreamReadbackIndex > residentConsumerIndex,
-  'the resident probe may read the downstream diagnostic output only after the same-runtime block-1 operation');
+  'the resident probe must omit the block-0 output-readback phase and consume block-0 in resident block-1 LayerNorm');
+assert.ok(attentionConsumerIndex > residentConsumerIndex && downstreamReadbackIndex > attentionConsumerIndex,
+  'block-1 attention must consume the resident LayerNorm result before the only diagnostic readback');
 assert.match(routeImplementation.slice(residentConsumerIndex, residentConsumerIndex + 500), /runtime, inputTensor:tensors\.block0HiddenStates[\s\S]*schedulerInvocation:invocation/,
   'block-1 LayerNorm must receive the live runtime, block-0 GPU tensor, and current scheduler invocation');
+assert.match(routeImplementation.slice(attentionConsumerIndex, attentionConsumerIndex + 900), /runtime,device:input\.device,inputTensor:norm1Output\.tensor,residualTensor:tensors\.block0HiddenStates[\s\S]*schedulerInvocation:invocation/,
+  'block-1 attention must use the live normalized GPU tensor plus the exact block-0 residual on the same invocation');
 assert.match(routeImplementation, /block0Readback:'skipped'/,
   'the explicit resident probe must report that block-0 was not read back to the host');
-assert.match(referenceExporter, /block1_norm1_hidden_states = model\.layers\[1\]\.norm1\(block0_hidden_states\)/,
-  'the MLX reference must use native DINOv3 layer 1 LayerNorm as the resident-consumer oracle');
+assert.match(referenceExporter, /block1_norm1_hidden_states = block1\.norm1\(block0_hidden_states\)[\s\S]*block1_attention_output = block1\.attention\(block1_norm1_hidden_states, cos, sin, model\.num_prefix_tokens\)[\s\S]*block1_after_attention_hidden_states = block0_hidden_states \+ block1_attention_output \* block1\.layer_scale1/,
+  'the MLX reference must reproduce native DINOv3 block-1 attention and its LayerScale residual as the resident-consumer oracle');
 assert.match(browserSmoke, /runTrellisDinoV3PrefixBlockResidentHandoffProbe/,
   'the live browser witness must exercise the resident probe API');
 
@@ -149,5 +154,40 @@ assert.equal(residentDispatch.kernel, residentKernel);
 assert.deepEqual(residentDispatch.options.dispatch, [1029]);
 assert.equal(residentReadbacks, 0, 'resident consumer setup/dispatch must not require a host readback');
 assert.deepEqual(residentLayerNorm.shape, [1,1029,1024]);
+
+const norm1Tensor={name:'block1.norm1',shape:[1,1029,1024],dtype:'f32',usage:WEBGPU_BUFFER_USAGE.storage,buffer:{}};
+const block1Stages=[];
+const block1Kernels=[];
+const block1Runtime={
+  createTensor(input) { return { ...input,buffer:{} }; },
+  uploadTensor() {},
+  createUniformBuffer(input) { return { ...input,buffer:{} }; },
+  defineComputeKernel(input) { block1Kernels.push(input); return input; },
+  async runKernel(kernel,options) { block1Stages.push({kernel,options}); },
+};
+const block1LinearWeights={
+  qWeight:new Float32Array(1024*1024),qBias:new Float32Array(1024),kWeight:new Float32Array(1024*1024),
+  vWeight:new Float32Array(1024*1024),vBias:new Float32Array(1024),oWeight:new Float32Array(1024*1024),
+  oBias:new Float32Array(1024),layerScale1:new Float32Array(1024),
+  ropeCos:new Float32Array(1024*64),ropeSin:new Float32Array(1024*64),
+};
+const residentAttention=await residentRoute.runTrellisDinoV3Block1AttentionResident({
+  runtime:block1Runtime,inputTensor:norm1Tensor,residualTensor:sourceTensor,...block1LinearWeights,
+  schedulerInvocation:{invocationId:'resident-contract-invocation'},
+});
+assert.equal(residentAttention.inputTensor,norm1Tensor,'attention consumes the exact resident block-1 LayerNorm output');
+assert.equal(residentAttention.residualTensor,sourceTensor,'attention residual uses the exact resident block-0 tensor');
+assert.equal(residentAttention.tensor.usage & WEBGPU_BUFFER_USAGE.copySrc,WEBGPU_BUFFER_USAGE.copySrc,'only the final attention-residual output is eligible for diagnostic readback');
+assert.equal(block1Stages.length,10,'block-1 attention dispatches q/k/v, RoPE, score, softmax, context, projection, and residual without an internal readback');
+assert.deepEqual(block1Stages.map(({options})=>options.stage),[
+  'dinov3-block1-qkv-projection-resident','dinov3-block1-qkv-projection-resident','dinov3-block1-qkv-projection-resident',
+  'dinov3-block1-patch-rope-resident','dinov3-block1-patch-rope-resident',
+  'dinov3-block1-global-attention-resident','dinov3-block1-global-attention-resident','dinov3-block1-global-attention-resident',
+  'dinov3-block1-output-residual-resident','dinov3-block1-output-residual-resident',
+]);
+assert.equal(block1Kernels.find(kernel=>kernel.name.endsWith('attention.layer-scale-residual')).bindings[0].resource,sourceTensor,
+  'the DINOv3 block-1 attention residual is rooted at the original block-0 hidden-state buffer');
+assert.equal(residentAttention.operation,'dinov3-block1-attention-residual');
+assert.deepEqual(residentAttention.shape,[1,1029,1024]);
 
 console.log('TRELLIS DINOv3 prefix/block-0 phase-program contracts passed');

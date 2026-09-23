@@ -99,7 +99,7 @@ try {
   const manifestResponse = await fetch('/__reference/reference-manifest.json', { cache: 'no-store' });
   if (!manifestResponse.ok) throw new Error(`reference manifest returned HTTP ${manifestResponse.status}`);
   const manifest = await manifestResponse.json();
-  if (manifest.ok !== true || manifest.schema !== 'kaminos.trellis-dinov3-mlx-prefix-block-reference.v0') throw new Error('reference manifest is not a successful pinned MLX export');
+  if (manifest.ok !== true || manifest.schema !== 'kaminos.trellis-dinov3-mlx-prefix-block-reference.v1') throw new Error('reference manifest is not a successful pinned MLX export');
   if (manifest.model?.id !== 'facebook/dinov3-vitl16-pretrain-lvd1689m' || manifest.model?.revision !== 'ea8dc2863c51be0a264bab82070e3e8836b02d51') throw new Error('DINOv3 reference identity mismatch');
   if (manifest.model?.dtype !== 'float32' || manifest.model?.checkpointTensorDtypes?.length !== 1 || manifest.model.checkpointTensorDtypes[0] !== 'F32') throw new Error('reference checkpoint is not uniformly F32');
   if (manifest.computation?.precision !== 'float32' || manifest.computation?.sequenceLength !== 1029 || manifest.computation?.prefixTokens?.join(',') !== 'class,register0,register1,register2,register3' || manifest.computation?.patchTokens !== 1024 || manifest.computation?.finalNoAffineLayerNormApplied !== false) throw new Error('reference computation contract differs from the requested block-0/block-1-normalization boundary');
@@ -111,7 +111,7 @@ try {
   if (manifest.reference?.implementation !== 'trellmlx.models.dinov3.DINOv3ViT' || manifest.reference?.sourceRevision !== 'cddaf3cb8a9f28956114956ebe754d6661a3f695' || manifest.reference?.sourceFileSha256 !== '5e56c76b947bbd59e9353c06470101ac28b6462649161cc8dd3740b2cf66403c') throw new Error('MLX reference source is not the independently pinned TRELLIS DINOv3 implementation');
   if (manifest.preprocessing?.sourceFileSha256 !== 'abf395cc52d81c26dadae9f024072d6c7301679be4e8fc08d572723d7ae32a21') throw new Error('source image does not match the pinned shoe input bytes');
   if (mode !== 'block0-parity' && mode !== 'resident-handoff') throw new Error(`unsupported smoke mode ${mode}`);
-  if (residentHandoffMode && manifest.computation?.residentProbe !== 'layer1.norm1(block0_hidden_states)') throw new Error('MLX reference does not identify the resident block-1 LayerNorm consumer');
+  if (residentHandoffMode && manifest.computation?.residentProbe !== 'layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1') throw new Error('MLX reference does not identify the resident block-1 attention residual consumer');
   evidence('pinned MLX reference manifest and checkpoint/config/preprocessor identities verified', { modelRevision: manifest.model.revision, precision: manifest.computation.precision, mode });
 
   setPhase('verify-source-image');
@@ -123,12 +123,14 @@ try {
   setPhase('load-reference-tensors');
   const tensorNames = [
     'pixel_values', 'patch_projection', 'patch_bias', 'class_token', 'register_tokens', 'rope_cos', 'rope_sin',
-    'patch_embeddings', 'prefix_hidden_states', 'block0_hidden_states', 'block1_norm1_hidden_states',
+    'patch_embeddings', 'prefix_hidden_states', 'block0_hidden_states', 'block1_norm1_hidden_states', 'block1_after_attention_hidden_states',
     'layer0_norm1_weight', 'layer0_norm1_bias', 'layer0_q_weight', 'layer0_q_bias', 'layer0_k_weight',
     'layer0_v_weight', 'layer0_v_bias', 'layer0_o_weight', 'layer0_o_bias', 'layer0_layer_scale1',
     'layer0_norm2_weight', 'layer0_norm2_bias', 'layer0_mlp_up_weight', 'layer0_mlp_up_bias',
     'layer0_mlp_down_weight', 'layer0_mlp_down_bias', 'layer0_layer_scale2',
     'layer1_norm1_weight', 'layer1_norm1_bias',
+    'layer1_q_weight', 'layer1_q_bias', 'layer1_k_weight', 'layer1_v_weight', 'layer1_v_bias',
+    'layer1_o_weight', 'layer1_o_bias', 'layer1_layer_scale1',
   ];
   const references = {};
   for (const name of tensorNames) references[name] = await readTensor(manifest, name);
@@ -172,7 +174,7 @@ try {
   state.model = model;
   state.kernel = kernel;
   state.requestedRouteId = residentHandoffMode
-    ? 'trellis2.dinov3.block0-to-block1-norm1.resident-probe.webgpu-local.v0'
+    ? 'trellis2.dinov3.block0-to-block1-attention.resident-probe.webgpu-local.v0'
     : 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
   const weights = {
     patchProjection:references.patch_projection.values, patchBias:references.patch_bias.values,
@@ -191,6 +193,12 @@ try {
   };
   const block1Norm1Weight = references.layer1_norm1_weight.values;
   const block1Norm1Bias = references.layer1_norm1_bias.values;
+  const block1AttentionWeights = {
+    block1QWeight:references.layer1_q_weight.values,block1QBias:references.layer1_q_bias.values,
+    block1KWeight:references.layer1_k_weight.values,block1VWeight:references.layer1_v_weight.values,
+    block1VBias:references.layer1_v_bias.values,block1OWeight:references.layer1_o_weight.values,
+    block1OBias:references.layer1_o_bias.values,block1LayerScale1:references.layer1_layer_scale1.values,
+  };
   const tensorBundleHash = await modelRoute.computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights);
   const route = modelRoute.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel, model });
   const request = kit.createRouteInvocationRequest(route, {
@@ -213,7 +221,7 @@ try {
   const requestedAtol = Number(query.get('atol') || '0.002');
   const requestedRtol = Number(query.get('rtol') || '0.001');
   if (!(requestedAtol >= 0) || !(requestedRtol >= 0) || !Number.isFinite(requestedAtol) || !Number.isFinite(requestedRtol)) throw new Error('comparison tolerances must be finite non-negative numbers');
-  setPhase(residentHandoffMode ? 'webgpu-resident-block0-to-block1-norm1' : 'webgpu-block0-execution');
+  setPhase(residentHandoffMode ? 'webgpu-resident-block0-through-block1-attention' : 'webgpu-block0-execution');
   const routeInput = {
     request: routeRequest, route, sourceImage, model, kernel, adapter, device, queue:device.queue,
     adapterName, browser, backendIdentity, invocationId, weights,
@@ -226,12 +234,12 @@ try {
     },
   };
   const result = residentHandoffMode
-    ? await residentProbe.runTrellisDinoV3PrefixBlockResidentHandoffProbe({ ...routeInput, block1Norm1Weight, block1Norm1Bias })
+    ? await residentProbe.runTrellisDinoV3PrefixBlockResidentHandoffProbe({ ...routeInput, block1Norm1Weight, block1Norm1Bias, ...block1AttentionWeights })
     : await modelRoute.runTrellisDinoV3PrefixBlockPhaseProgramRoute({ ...routeInput, includeReadback:true });
   if (residentHandoffMode) {
     if (result.status !== 'diagnostic-probe-complete' || result.authority !== 'non-authoritative-diagnostic') throw new Error('resident handoff result is not explicitly diagnostic-only');
     if (result.requestedProbeRouteId !== state.requestedRouteId || result.runtimeRouteId !== state.requestedRouteId) throw new Error('resident handoff probe route identity mismatch');
-    if (result.block0Readback !== 'skipped' || result.downstream?.operation !== 'dinov3-block1-layernorm1') throw new Error('resident probe did not consume block-0 before its only diagnostic downstream readback');
+    if (result.block0Readback !== 'skipped' || result.downstream?.operation !== 'dinov3-block1-attention-residual') throw new Error('resident probe did not keep block-1 attention resident until its only diagnostic readback');
     if (result.computeRouteId !== route.routeId) throw new Error('resident probe compute route does not match the pinned block-0 implementation');
     state.effectiveRouteId = result.runtimeRouteId;
     state.backend = result.backend;
@@ -258,7 +266,7 @@ try {
     if (actual?.operation !== 'dinov3-block1-layernorm1' || !(actual.outputValues instanceof Float32Array)) throw new Error('resident consumer did not return a downstream F32 diagnostic output');
   } else if (actual?.dtype !== 'float32') throw new Error('WebGPU route did not return F32 diagnostic outputs');
   const comparisons = residentHandoffMode
-    ? [['block1Norm1','block1_norm1_hidden_states']]
+    ? [['block1Attention','block1_after_attention_hidden_states']]
     : [['patchEmbeddings','patch_embeddings'],['prefixHiddenStates','prefix_hidden_states'],['block0HiddenStates','block0_hidden_states']];
   for (const [routeName, referenceName] of comparisons) {
     setPhase(`persist-and-compare-${routeName}`);
@@ -271,11 +279,11 @@ try {
   }
   const failedComparisons = Object.values(state.comparisons).filter(comparison=>!comparison.pass);
   if (failedComparisons.length) throw new Error(`tensor parity failed: ${failedComparisons.map(item=>`${item.name} maxAbs=${item.maxAbs} failures=${item.failureCount}`).join('; ')}`);
-  if (residentHandoffMode ? !state.actualOutputs.block1Norm1 : (!state.actualOutputs.patchEmbeddings || !state.actualOutputs.prefixHiddenStates || !state.actualOutputs.block0HiddenStates)) throw new Error('one or more required GPU outputs were not persisted');
+  if (residentHandoffMode ? !state.actualOutputs.block1Attention : (!state.actualOutputs.patchEmbeddings || !state.actualOutputs.prefixHiddenStates || !state.actualOutputs.block0HiddenStates)) throw new Error('one or more required GPU outputs were not persisted');
   state.status = 'passed';
   state.failurePhase = null;
   state.claim = residentHandoffMode
-    ? 'observed: the live block-0 F32 GPU tensor fed block-1 LayerNorm on the same runtime/device without block-0 readback; its downstream output matched same-job pinned MLX F32 within recorded tolerance; diagnostic probe only, not full conditioning'
+    ? 'observed: the live block-0 F32 GPU tensor fed block-1 LayerNorm, Q/K/V, RoPE, global attention, output projection, and LayerScale residual on the same runtime/device without block-0 host readback; the attention-residual output matched same-job pinned MLX F32 within recorded tolerance; diagnostic probe only, not full conditioning'
     : 'observed: exact pinned F32 MLX/WebGPU patch, prefix, and complete block-0 tensors satisfy the recorded comparison tolerance; not an end-to-end TRELLIS conditioning handoff';
   render();
   await device.destroy();

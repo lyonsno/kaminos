@@ -7,7 +7,7 @@ import { createWebGpuRouteBackpressureProfile, createWebGpuRouteSchedulerProfile
 import { SAM_VECTOR_LINEAR_GELU_WGSL, SAM_VECTOR_LINEAR_WGSL } from './sam-vector-linear-wgsl.js';
 
 export const TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID = 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
-export const TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID = 'trellis2.dinov3.block0-to-block1-norm1.resident-probe.webgpu-local.v0';
+export const TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID = 'trellis2.dinov3.block0-to-block1-attention.resident-probe.webgpu-local.v0';
 
 const MODEL_ID = 'facebook/dinov3-vitl16-pretrain-lvd1689m';
 const MODEL_REVISION = 'ea8dc2863c51be0a264bab82070e3e8836b02d51';
@@ -47,7 +47,11 @@ const REQUIRED_STAGES = [
 const RESIDENT_HANDOFF_PROBE_STAGES = [
   ...REQUIRED_STAGES.filter(stage => stage !== 'readback-trellis-dinov3-prefix-block0-outputs'),
   'dinov3-block1-layernorm1-resident',
-  'readback-dinov3-block1-layernorm1-resident-probe',
+  'dinov3-block1-qkv-projection-resident',
+  'dinov3-block1-patch-rope-resident',
+  'dinov3-block1-global-attention-resident',
+  'dinov3-block1-output-residual-resident',
+  'readback-dinov3-block1-attention-resident-probe',
 ];
 
 const PATCH_EMBED_WGSL = `
@@ -466,6 +470,135 @@ export async function runTrellisDinoV3Block1LayerNormResident(input = {}) {
   return { operation:'dinov3-block1-layernorm1', inputTensor, tensor:output, dtype:'f32', shape:[1,TOKEN_COUNT,CHANNELS] };
 }
 
+export async function runTrellisDinoV3Block1AttentionResident(input = {}) {
+  const { runtime, inputTensor, residualTensor, schedulerInvocation } = input;
+  if (!runtime || !['createTensor', 'uploadTensor', 'createUniformBuffer', 'defineComputeKernel', 'runKernel'].every(name => typeof runtime[name] === 'function')) {
+    throw new Error('resident attention requires the live WebGPU inference runtime');
+  }
+  for (const [label, tensor] of [['block1 LayerNorm',inputTensor],['block0 residual',residualTensor]]) {
+    if (!tensor?.buffer || tensor.dtype !== 'f32' || JSON.stringify(tensor.shape) !== JSON.stringify([1,TOKEN_COUNT,CHANNELS])) {
+      throw new Error(`${label} must be a live F32 tensor with shape [1,1029,1024]`);
+    }
+    if (!Number.isInteger(tensor.usage) || (tensor.usage & WEBGPU_BUFFER_USAGE.storage) === 0) {
+      throw new Error(`${label} must expose storage usage`);
+    }
+  }
+  const weightShapes = {
+    qWeight:CHANNELS*CHANNELS,qBias:CHANNELS,kWeight:CHANNELS*CHANNELS,
+    vWeight:CHANNELS*CHANNELS,vBias:CHANNELS,oWeight:CHANNELS*CHANNELS,
+    oBias:CHANNELS,layerScale1:CHANNELS,ropeCos:PATCH_TOKENS*HEAD_DIM,ropeSin:PATCH_TOKENS*HEAD_DIM,
+  };
+  const weightValues={};
+  for (const [name,length] of Object.entries(weightShapes)) {
+    weightValues[name]=new Float32Array(ensureF32(input[name],`block1${name[0].toUpperCase()}${name.slice(1)}`,length));
+    for (let index=0;index<weightValues[name].length;index+=1) {
+      if (!Number.isFinite(weightValues[name][index])) throw new Error(`block1 ${name}[${index}] is not finite`);
+    }
+  }
+  const noKeyBias=new Float32Array(CHANNELS);
+  const readonly=WEBGPU_BUFFER_USAGE.storage|WEBGPU_BUFFER_USAGE.copyDst;
+  const scratch=WEBGPU_BUFFER_USAGE.storage;
+  const outputUsage=WEBGPU_BUFFER_USAGE.storage|WEBGPU_BUFFER_USAGE.copySrc;
+  const tensor=(name,shape,usage=scratch)=>runtime.createTensor({name:`trellis.dinov3.block1.${name}`,shape,dtype:'f32',usage});
+  const tensors={
+    qWeight:tensor('attention.q.weight',[CHANNELS,CHANNELS],readonly),qBias:tensor('attention.q.bias',[CHANNELS],readonly),
+    kWeight:tensor('attention.k.weight',[CHANNELS,CHANNELS],readonly),kBias:tensor('attention.k.bias.architecture-zero',[CHANNELS],readonly),
+    vWeight:tensor('attention.v.weight',[CHANNELS,CHANNELS],readonly),vBias:tensor('attention.v.bias',[CHANNELS],readonly),
+    oWeight:tensor('attention.o.weight',[CHANNELS,CHANNELS],readonly),oBias:tensor('attention.o.bias',[CHANNELS],readonly),
+    layerScale1:tensor('attention.layer-scale1',[CHANNELS],readonly),
+    ropeCos:tensor('rope.cos',[PATCH_TOKENS,HEAD_DIM],readonly),ropeSin:tensor('rope.sin',[PATCH_TOKENS,HEAD_DIM],readonly),
+    q:tensor('attention.q',[1,TOKEN_COUNT,CHANNELS]),k:tensor('attention.k',[1,TOKEN_COUNT,CHANNELS]),v:tensor('attention.v',[1,TOKEN_COUNT,CHANNELS]),
+    qRope:tensor('attention.q-rope',[1,TOKEN_COUNT,CHANNELS]),kRope:tensor('attention.k-rope',[1,TOKEN_COUNT,CHANNELS]),
+    scores:tensor('attention.scores-f32',[HEADS,TOKEN_COUNT,TOKEN_COUNT]),
+    context:tensor('attention.context',[1,TOKEN_COUNT,CHANNELS]),projected:tensor('attention.projection',[1,TOKEN_COUNT,CHANNELS]),
+    afterAttention:tensor('attention.residual-output',[1,TOKEN_COUNT,CHANNELS],outputUsage),
+  };
+  for (const [name,value] of Object.entries({ ...weightValues,kBias:noKeyBias })) runtime.uploadTensor(tensors[name],value);
+  const linearDims=runtime.createUniformBuffer({
+    label:'trellis.dinov3.block1.attention.linear-dims',
+    schema:['input_channels','output_channels','total_output','_pad0'].map(name=>({name,type:'u32'})),
+    values:{input_channels:CHANNELS,output_channels:CHANNELS,total_output:TOKEN_COUNT*CHANNELS,_pad0:0},
+  });
+  const ropeDims=runtime.createUniformBuffer({
+    label:'trellis.dinov3.block1.attention.rope-dims',
+    schema:['token_count','prefix_tokens','channels','head_dim','patch_count','total_values','_pad0','_pad1'].map(name=>({name,type:'u32'})),
+    values:{token_count:TOKEN_COUNT,prefix_tokens:PREFIX_TOKENS,channels:CHANNELS,head_dim:HEAD_DIM,patch_count:PATCH_TOKENS,total_values:TOKEN_COUNT*CHANNELS,_pad0:0,_pad1:0},
+  });
+  const attentionDims=runtime.createUniformBuffer({
+    label:'trellis.dinov3.block1.attention.score-dims',
+    schema:['token_count','channels','heads','head_dim','total_scores','_pad0','_pad1','_pad2'].map(name=>({name,type:'u32'})),
+    values:{token_count:TOKEN_COUNT,channels:CHANNELS,heads:HEADS,head_dim:HEAD_DIM,total_scores:HEADS*TOKEN_COUNT*TOKEN_COUNT,_pad0:0,_pad1:0,_pad2:0},
+  });
+  const softmaxDims=runtime.createUniformBuffer({
+    label:'trellis.dinov3.block1.attention.softmax-dims',
+    schema:['row_count','key_count','total_scores','_pad0'].map(name=>({name,type:'u32'})),
+    values:{row_count:HEADS*TOKEN_COUNT,key_count:TOKEN_COUNT,total_scores:HEADS*TOKEN_COUNT*TOKEN_COUNT,_pad0:0},
+  });
+  const contextDims=runtime.createUniformBuffer({
+    label:'trellis.dinov3.block1.attention.context-dims',
+    schema:['token_count','channels','heads','head_dim','total_values','_pad0','_pad1','_pad2'].map(name=>({name,type:'u32'})),
+    values:{token_count:TOKEN_COUNT,channels:CHANNELS,heads:HEADS,head_dim:HEAD_DIM,total_values:TOKEN_COUNT*CHANNELS,_pad0:0,_pad1:0,_pad2:0},
+  });
+  const residualDims=runtime.createUniformBuffer({
+    label:'trellis.dinov3.block1.attention.residual-dims',
+    schema:['total_values','channels','_pad0','_pad1'].map(name=>({name,type:'u32'})),
+    values:{total_values:TOKEN_COUNT*CHANNELS,channels:CHANNELS,_pad0:0,_pad1:0},
+  });
+  const read=(name,resource)=>({name,resource,visibility:WEBGPU_SHADER_STAGE.compute,access:'read-only-storage'});
+  const write=(name,resource)=>({name,resource,visibility:WEBGPU_SHADER_STAGE.compute,access:'storage'});
+  const uniform=(name,resource)=>({name,resource,visibility:WEBGPU_SHADER_STAGE.compute,type:'uniform'});
+  const linear=(name,source,weight,bias,output)=>runtime.defineComputeKernel({
+    name:`trellis.dinov3.block1.${name}`,code:SAM_VECTOR_LINEAR_WGSL,entryPoint:'main',
+    bindings:[read('input_values',source),read('weight',weight),read('bias',bias),write('output_values',output),uniform('dims',linearDims)],
+  });
+  const rope=(name,source,output)=>runtime.defineComputeKernel({
+    name:`trellis.dinov3.block1.${name}`,code:ROPE_WGSL,entryPoint:'main',
+    bindings:[read('input_values',source),read('rope_cos',tensors.ropeCos),read('rope_sin',tensors.ropeSin),write('output_values',output),uniform('dims',ropeDims)],
+  });
+  const qProjection=linear('attention.q-projection',inputTensor,tensors.qWeight,tensors.qBias,tensors.q);
+  const kProjection=linear('attention.k-projection',inputTensor,tensors.kWeight,tensors.kBias,tensors.k);
+  const vProjection=linear('attention.v-projection',inputTensor,tensors.vWeight,tensors.vBias,tensors.v);
+  const qRope=rope('attention.q-rope',tensors.q,tensors.qRope);
+  const kRope=rope('attention.k-rope',tensors.k,tensors.kRope);
+  const scoreKernel=runtime.defineComputeKernel({
+    name:'trellis.dinov3.block1.attention.score',code:ATTENTION_SCORE_WGSL,entryPoint:'main',
+    bindings:[read('q_values',tensors.qRope),read('k_values',tensors.kRope),write('scores',tensors.scores),uniform('dims',attentionDims)],
+  });
+  const softmaxKernel=runtime.defineComputeKernel({
+    name:'trellis.dinov3.block1.attention.softmax',code:ATTENTION_SOFTMAX_WGSL,entryPoint:'main',
+    bindings:[{...read('scores',tensors.scores),access:'storage'},uniform('dims',softmaxDims)],
+  });
+  const contextKernel=runtime.defineComputeKernel({
+    name:'trellis.dinov3.block1.attention.context',code:ATTENTION_CONTEXT_WGSL,entryPoint:'main',
+    bindings:[read('probabilities',tensors.scores),read('v_values',tensors.v),write('output_values',tensors.context),uniform('dims',contextDims)],
+  });
+  const outputProjection=linear('attention.o-projection',tensors.context,tensors.oWeight,tensors.oBias,tensors.projected);
+  const residualKernel=runtime.defineComputeKernel({
+    name:'trellis.dinov3.block1.attention.layer-scale-residual',code:LAYER_SCALE_RESIDUAL_WGSL,entryPoint:'main',
+    bindings:[read('residual',residualTensor),read('update_values',tensors.projected),read('layer_scale',tensors.layerScale1),write('output_values',tensors.afterAttention),uniform('dims',residualDims)],
+  });
+  const maxWorkgroupsPerDimension=input.device?.limits?.maxComputeWorkgroupsPerDimension;
+  const linearDispatch=total=>createLinearDispatch(total,{workgroupSize:64,maxWorkgroupsPerDimension});
+  const dispatch={
+    qkvProjection:linearDispatch(TOKEN_COUNT*CHANNELS),patchRope:linearDispatch(TOKEN_COUNT*CHANNELS),
+    attentionScore:linearDispatch(HEADS*TOKEN_COUNT*TOKEN_COUNT),attentionSoftmax:linearDispatch(HEADS*TOKEN_COUNT),
+    attentionContext:linearDispatch(TOKEN_COUNT*CHANNELS),outputProjection:linearDispatch(TOKEN_COUNT*CHANNELS),
+    attentionResidual:linearDispatch(TOKEN_COUNT*CHANNELS),
+  };
+  const invoke=async (kernel,stage,plan)=>runtime.runKernel(kernel,{stage,dispatch:plan,schedulerInvocation,yieldAfter:true,metadata:{operation:'dinov3-block1-attention',inputTensor:inputTensor.name,residualTensor:residualTensor.name,outputTensor:tensors.afterAttention.name,dtype:'f32'}});
+  await invoke(qProjection,'dinov3-block1-qkv-projection-resident',dispatch.qkvProjection);
+  await invoke(kProjection,'dinov3-block1-qkv-projection-resident',dispatch.qkvProjection);
+  await invoke(vProjection,'dinov3-block1-qkv-projection-resident',dispatch.qkvProjection);
+  await invoke(qRope,'dinov3-block1-patch-rope-resident',dispatch.patchRope);
+  await invoke(kRope,'dinov3-block1-patch-rope-resident',dispatch.patchRope);
+  await invoke(scoreKernel,'dinov3-block1-global-attention-resident',dispatch.attentionScore);
+  await invoke(softmaxKernel,'dinov3-block1-global-attention-resident',dispatch.attentionSoftmax);
+  await invoke(contextKernel,'dinov3-block1-global-attention-resident',dispatch.attentionContext);
+  await invoke(outputProjection,'dinov3-block1-output-residual-resident',dispatch.outputProjection);
+  await invoke(residualKernel,'dinov3-block1-output-residual-resident',dispatch.attentionResidual);
+  return {operation:'dinov3-block1-attention-residual',inputTensor, residualTensor, tensor:tensors.afterAttention, dtype:'f32', shape:[1,TOKEN_COUNT,CHANNELS]};
+}
+
 async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, { residentHandoffProbe = false } = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   if (input.residentTensorResolver != null) throw new Error('residentTensorResolver is not admitted for pinned input custody without GPU-buffer content attestation');
@@ -482,6 +615,14 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
   const residentWeights = residentHandoffProbe ? {
     norm1Weight: new Float32Array(ensureF32(input.block1Norm1Weight, 'block1Norm1Weight', CHANNELS)),
     norm1Bias: new Float32Array(ensureF32(input.block1Norm1Bias, 'block1Norm1Bias', CHANNELS)),
+    qWeight: new Float32Array(ensureF32(input.block1QWeight, 'block1QWeight', CHANNELS*CHANNELS)),
+    qBias: new Float32Array(ensureF32(input.block1QBias, 'block1QBias', CHANNELS)),
+    kWeight: new Float32Array(ensureF32(input.block1KWeight, 'block1KWeight', CHANNELS*CHANNELS)),
+    vWeight: new Float32Array(ensureF32(input.block1VWeight, 'block1VWeight', CHANNELS*CHANNELS)),
+    vBias: new Float32Array(ensureF32(input.block1VBias, 'block1VBias', CHANNELS)),
+    oWeight: new Float32Array(ensureF32(input.block1OWeight, 'block1OWeight', CHANNELS*CHANNELS)),
+    oBias: new Float32Array(ensureF32(input.block1OBias, 'block1OBias', CHANNELS)),
+    layerScale1: new Float32Array(ensureF32(input.block1LayerScale1, 'block1LayerScale1', CHANNELS)),
   } : null;
   if (residentWeights) for (const [name, values] of Object.entries(residentWeights)) {
     for (let index=0; index<values.length; index+=1) if (!Number.isFinite(values[index])) throw new Error(`${name}[${index}] is not finite`);
@@ -495,7 +636,7 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
   const plan = createTrellisDinoV3PrefixBlockDispatchPlan({ shape, maxWorkgroupsPerDimension: input.device?.limits?.maxComputeWorkgroupsPerDimension });
   const runtime = await createWebGpuInferenceRuntime({
     routeId: residentHandoffProbe ? TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID : TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID,
-    runtimeLabel: input.runtimeLabel || (residentHandoffProbe ? 'trellis-dinov3-block0-to-block1-norm1-resident-probe' : 'trellis-dinov3-prefix-block0-phase-program'),
+    runtimeLabel: input.runtimeLabel || (residentHandoffProbe ? 'trellis-dinov3-block0-through-block1-attention-resident-probe' : 'trellis-dinov3-prefix-block0-phase-program'),
     device: input.device, queue: input.queue, adapter: input.adapter, adapterName: input.adapterName, browser: input.browser,
     backendIdentity, kernel: kernel || route.kernel, requiredStages: residentHandoffProbe ? RESIDENT_HANDOFF_PROBE_STAGES : REQUIRED_STAGES,
     timingSource: 'queue-submit-wait', waitForSubmittedWorkDone: true, yieldMs: 0, now: input.now, yield: input.yield,
@@ -653,23 +794,34 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
         if (residentHandoffProbe && phase.name === 'dinov3-prefix-block0-mlp-residual') {
           failedPhase='dinov3-block1-layernorm1-resident';
           await input.onPhase?.({ phase:failedPhase, phaseIndex, lastCompletedPhase });
-          const downstream = await runTrellisDinoV3Block1LayerNormResident({
+          const norm1Output = await runTrellisDinoV3Block1LayerNormResident({
             runtime, inputTensor:tensors.block0HiddenStates,
             weight:residentWeights.norm1Weight, bias:residentWeights.norm1Bias,
             schedulerInvocation:invocation,
           });
           lastCompletedPhase='dinov3-block1-layernorm1-resident';
           phaseIndex+=1;
-          failedPhase='readback-dinov3-block1-layernorm1-resident-probe';
+          failedPhase='dinov3-block1-qkv-projection-resident';
           await input.onPhase?.({ phase:failedPhase, phaseIndex, lastCompletedPhase });
-          const bytes = await runtime.runStage('readback-dinov3-block1-layernorm1-resident-probe', stage => stage.readTensor(downstream.tensor), {
+          const downstream = await runTrellisDinoV3Block1AttentionResident({
+            runtime,device:input.device,inputTensor:norm1Output.tensor,residualTensor:tensors.block0HiddenStates,
+            qWeight:residentWeights.qWeight,qBias:residentWeights.qBias,kWeight:residentWeights.kWeight,
+            vWeight:residentWeights.vWeight,vBias:residentWeights.vBias,oWeight:residentWeights.oWeight,
+            oBias:residentWeights.oBias,layerScale1:residentWeights.layerScale1,
+            ropeCos:weights.ropeCos,ropeSin:weights.ropeSin,schedulerInvocation:invocation,
+          });
+          lastCompletedPhase='dinov3-block1-output-residual-resident';
+          phaseIndex+=1;
+          failedPhase='readback-dinov3-block1-attention-resident-probe';
+          await input.onPhase?.({ phase:failedPhase, phaseIndex, lastCompletedPhase });
+          const bytes = await runtime.runStage('readback-dinov3-block1-attention-resident-probe', stage => stage.readTensor(downstream.tensor), {
             routeId:TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID,
             operation:downstream.operation, inputTensor:downstream.inputTensor.name, outputTensor:downstream.tensor.name,
           });
           residentHandoff = { ...downstream, outputValues:new Float32Array(bytes) };
-          if (residentHandoff.outputValues.length !== TOKEN_COUNT*CHANNELS) throw new Error('resident block-1 LayerNorm readback is missing or partial');
-          for (let index=0; index<residentHandoff.outputValues.length; index+=1) if (!Number.isFinite(residentHandoff.outputValues[index])) throw new Error(`resident block-1 LayerNorm output[${index}] is not finite`);
-          lastCompletedPhase='readback-dinov3-block1-layernorm1-resident-probe';
+          if (residentHandoff.outputValues.length !== TOKEN_COUNT*CHANNELS) throw new Error('resident block-1 attention readback is missing or partial');
+          for (let index=0; index<residentHandoff.outputValues.length; index+=1) if (!Number.isFinite(residentHandoff.outputValues[index])) throw new Error(`resident block-1 attention output[${index}] is not finite`);
+          lastCompletedPhase='readback-dinov3-block1-attention-resident-probe';
           phaseIndex+=1;
         }
       }
@@ -686,7 +838,7 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
         model:{ id:model?.id||route.model?.id, revision:model?.revision||route.model?.revision, weightsHash:model?.weightsHash, dtype:'fp32' },
         precision:{ input:'Float32Array', weights:'Float32Array', storage:'f32', output:'Float32Array' },
         block0Readback:'skipped',
-        transfer:{ block0ToBlock1Norm1:'same-runtime-device-buffer', block0HostReadback:false, downstreamOutputHostReadback:true },
+        transfer:{ block0ToBlock1Norm1:'same-runtime-device-buffer', block1Norm1ToAttention:'same-runtime-device-buffer', block0HostReadback:false, downstreamOutputHostReadback:true },
         downstream:{ operation:residentHandoff.operation, inputTensor:residentHandoff.inputTensor.name, outputTensor:residentHandoff.tensor.name, dtype:residentHandoff.dtype, shape:residentHandoff.shape },
         debugResidentHandoff:{ operation:residentHandoff.operation, outputValues:new Float32Array(residentHandoff.outputValues), lastCompletedPhase },
       };
