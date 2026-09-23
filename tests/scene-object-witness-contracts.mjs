@@ -268,6 +268,10 @@ assert.match(witness, /stderrTail/, 'witness report preserves browser stderr tai
 assert.match(indexHtml, /id="skinned-pose-bone-select"/, 'painted-pair pose preview provides one focused bone picker');
 assert.match(indexHtml, /id="skinned-pose-selected-bone"/, 'painted-pair pose preview names the currently selected joint');
 assert.match(indexHtml, /id="skinned-pose-rotation"/, 'painted-pair pose preview groups rotation controls for the selected joint');
+assert.match(indexHtml, /id="skinned-pose-cast-marker"/, 'painted-pair pose preview visually maps the selected cast into the viewport');
+assert.match(indexHtml, /id="skinned-pose-cast-marker-label"/, 'painted-pair viewport cue names the cast whose controls are active');
 assert.match(indexHtml, /aria-label="Rotation in degrees"/, 'painted-pair rotation number field remains accessibly named without an extra visible label');
 assert.doesNotMatch(indexHtml, /class="sr-only"/, 'pose preview does not expose an unstyled screen-reader-only label');
 assert.match(witness, /bone selection did not retarget the rotation controls/, 'painted-pair browser witness proves bone selection retargets one rotation card');
+assert.match(witness, /cast selection did not move the visible viewport cue to the selected rig/, 'painted-pair browser witness proves the selected-cast cue tracks the selected rig before posing');
+assert.match(witness, /pose status did not track the selected cast and bone/, 'painted-pair browser witness rejects a stale cast/bone status after selection');
