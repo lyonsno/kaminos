@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -21,6 +21,8 @@ const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get
 const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
 const splatAssetName = args.get('--splat-asset-name') || null;
+const expectedAssetSha256 = args.get('--expected-asset-sha256') || null;
+const poseMeshIndex = Number(args.get('--pose-mesh-index') || 0);
 
 let phase = 'initializing';
 let stderr = '';
@@ -55,6 +57,48 @@ function writeReport(report) {
 function assertPngScreenshot(buffer) {
   assert.ok(buffer.length > 1024, 'screenshot is too small to be credible visual evidence');
   assert.equal(buffer.readUInt32BE(0), 0x89504e47, 'screenshot is not a PNG');
+}
+
+function viewportPixelDelta(beforePath, afterPath) {
+  const beforePng = readFileSync(beforePath);
+  const afterPng = readFileSync(afterPath);
+  assertPngScreenshot(beforePng);
+  assertPngScreenshot(afterPng);
+  const width = beforePng.readUInt32BE(16);
+  const height = beforePng.readUInt32BE(20);
+  assert.equal(afterPng.readUInt32BE(16), width, 'visual pair changed screenshot width');
+  assert.equal(afterPng.readUInt32BE(20), height, 'visual pair changed screenshot height');
+  const rgb = path => {
+    const result = spawnSync('ffmpeg', ['-v', 'error', '-i', path, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], {
+      maxBuffer: width * height * 3 + 1024,
+    });
+    if (result.error || result.status !== 0 || result.stdout.length !== width * height * 3) {
+      throw new Error('PNG pixel decode failed: ' + (result.error?.message || result.stderr?.toString() || result.status));
+    }
+    return result.stdout;
+  };
+  const before = rgb(beforePath);
+  const after = rgb(afterPath);
+  const region = [Math.floor(width * 0.43), Math.floor(height * 0.29), Math.floor(width * 0.87), Math.floor(height * 0.70)];
+  const changedBounds = [width, height, -1, -1];
+  let changedPixels = 0;
+  for (let y = region[1]; y < region[3]; y++) {
+    for (let x = region[0]; x < region[2]; x++) {
+      const at = (y * width + x) * 3;
+      const difference = Math.max(
+        Math.abs(before[at] - after[at]),
+        Math.abs(before[at + 1] - after[at + 1]),
+        Math.abs(before[at + 2] - after[at + 2]),
+      );
+      if (difference <= 25) continue;
+      changedPixels++;
+      changedBounds[0] = Math.min(changedBounds[0], x);
+      changedBounds[1] = Math.min(changedBounds[1], y);
+      changedBounds[2] = Math.max(changedBounds[2], x);
+      changedBounds[3] = Math.max(changedBounds[3], y);
+    }
+  }
+  return { width, height, region, changedPixels, changedBounds: changedPixels ? changedBounds : null };
 }
 
 function siblingPngPath(suffix) {
@@ -228,6 +272,62 @@ async function runMeshAssetLinkScenario(ws) {
       };
     })()
   `, { timeoutMs: 45000 });
+}
+
+async function runMeshSkinnedPoseScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-mesh-skinned-pose';
+  if (!/^[a-f0-9]{64}$/.test(expectedAssetSha256 || '')) {
+    throw new Error('mesh-skinned-pose requires --expected-asset-sha256 for the exact asset under test');
+  }
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const requestedSha256 = new URL(url).searchParams.get('mesh_sha256');
+  const loadedSha256 = lastEvidence.meshAssetLink.state.loadedSha256;
+  if (requestedSha256 !== expectedAssetSha256 || loadedSha256 !== expectedAssetSha256) {
+    throw new Error('loaded GLB bytes are not bound to the expected painted pair: ' + JSON.stringify({ requestedSha256, loadedSha256, expectedAssetSha256 }));
+  }
+  const before = await evaluate(ws, `window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}) ?? null`);
+  if (!before || before.meshes.length !== 2
+      || !before.meshes[0].bones.includes('hindlimb-left-hip')
+      || !before.meshes[1].bones.includes('hindlimb-left-hip_1')) {
+    throw new Error('painted pair lacks two independently named skinned rigs: ' + JSON.stringify(before));
+  }
+  if (![0, 1].includes(poseMeshIndex)) throw new Error('painted-pair pose witness needs mesh index 0 or 1');
+  const otherMeshIndex = 1 - poseMeshIndex;
+  const boneName = poseMeshIndex === 0 ? 'hindlimb-left-hip' : 'hindlimb-left-hip_1';
+  const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-before-pose'));
+  const action = await evaluate(ws, `window.kaminosSetSkinnedBoneDelta?.(${JSON.stringify(objectId)}, ${poseMeshIndex}, ${JSON.stringify(boneName)}, 'z', 12) ?? null`);
+  if (!action) throw new Error('live skinned-bone pose control is unavailable');
+  await delay(500);
+  const after = await evaluate(ws, `window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}) ?? null`);
+  if (!after || after.meshes.length !== 2) throw new Error('skinned rigs disappeared after pose');
+  const moved = before.meshes.map((mesh, index) => Math.hypot(...mesh.bounds.center.map((value, axis) => value - after.meshes[index].bounds.center[axis])));
+  const otherBoneError = Math.max(...Object.entries(before.meshes[otherMeshIndex].boneQuaternions).map(([name, quaternion]) =>
+    Math.hypot(...quaternion.map((value, axis) => value - after.meshes[otherMeshIndex].boneQuaternions[name][axis]))));
+  if (moved[poseMeshIndex] < 0.001 || moved[otherMeshIndex] > 0.0001 || otherBoneError > 0.000001) {
+    throw new Error('bone pose failed to move only its own painted carrier: ' + JSON.stringify({ before, after, moved }));
+  }
+  const posedShot = await capturePngScreenshot(ws, siblingPngPath('-posed'));
+  await evaluate(ws, `window.kaminosSetSkinnedBoneDelta(${JSON.stringify(objectId)}, ${poseMeshIndex}, ${JSON.stringify(boneName)}, 'z', 0)`);
+  const restored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const returnError = Math.hypot(
+    ...before.meshes[poseMeshIndex].bounds.center.map((value, axis) => value - restored.meshes[poseMeshIndex].bounds.center[axis]),
+    ...before.meshes[poseMeshIndex].bounds.size.map((value, axis) => value - restored.meshes[poseMeshIndex].bounds.size[axis]),
+  );
+  const quaternionReturnError = Math.hypot(...before.meshes[poseMeshIndex].boneQuaternions[boneName].map((value, axis) =>
+    value - restored.meshes[poseMeshIndex].boneQuaternions[boneName][axis]));
+  if (returnError > 0.000001 || quaternionReturnError > 0.000001) {
+    throw new Error('bone pose did not return to its imported state: ' + JSON.stringify({ before, restored, returnError, quaternionReturnError }));
+  }
+  await delay(250);
+  const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-restored'));
+  const identicalControl = viewportPixelDelta(beforeShot.path, beforeShot.path);
+  const posedPixels = viewportPixelDelta(beforeShot.path, posedShot.path);
+  const restoredPixels = viewportPixelDelta(beforeShot.path, restoredShot.path);
+  if (identicalControl.changedPixels !== 0 || posedPixels.changedPixels < 500 || restoredPixels.changedPixels !== 0) {
+    throw new Error('live pose pixels did not change and restore in the creature viewport: ' + JSON.stringify({ identicalControl, posedPixels, restoredPixels }));
+  }
+  lastEvidence.meshSkinnedPose = { objectId, expectedAssetSha256, loadedSha256, poseMeshIndex, bone: boneName, axis: 'z', degrees: 12, before, beforeShot, action, after, moved, otherBoneError, posedShot, restored, restoredShot, returnError, quaternionReturnError, identicalControl, posedPixels, restoredPixels };
 }
 
 const DIRECT_ASSET_LINK_SCENARIOS = {
@@ -4931,6 +5031,8 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'mesh-skinned-pose') {
+    await runMeshSkinnedPoseScenario(ws);
   } else if (scenario === 'splat-asset-link') {
     await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.splat);
   } else if (scenario === 'image-asset-link') {
