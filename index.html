@@ -5748,10 +5748,12 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
   const context = buffer.getContext('2d', { willReadFrequently: true });
   const canvasRect = canvas.getBoundingClientRect();
   const sample = async () => {
-    renderPipeline.render();
-    context.drawImage(canvas, 0, 0);
     target.updateWorldMatrix(true, false);
     camera.updateMatrixWorld(true);
+    renderPipeline.render();
+    await renderer.backend.device.queue.onSubmittedWorkDone();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    context.drawImage(canvas, 0, 0);
     return sourcePoints.map(point => {
       const position = new THREE.Vector3((point.u - 0.5) * target.geometry.parameters.width,
         (0.5 - point.v) * target.geometry.parameters.height, 0);
@@ -5767,6 +5769,7 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
   const wasVisible = overlay.visible;
   const wasDepthTest = overlay.material.depthTest;
   const wasAlphaMap = overlay.material.alphaMap;
+  let sceneProbe = null;
   try {
     overlay.visible = false;
     const source = await sample();
@@ -5781,14 +5784,31 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     overlay.material.needsUpdate = true;
     const alphaMapDisabled = await sample();
     const alphaMapDisabledCanvasPng = buffer.toDataURL('image/png');
+    const sceneProbeMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, depthTest: false,
+      depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    sceneProbe = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), sceneProbeMaterial);
+    sceneProbe.name = 'sam-flame-scene-traversal-probe';
+    sceneProbe.position.z = 0.01;
+    sceneProbe.renderOrder = 10000;
+    sceneProbe.scale.set(target.geometry.parameters.width, target.geometry.parameters.height, 1);
+    target.add(sceneProbe);
+    const sceneTraversalControl = await sample();
+    const sceneTraversalControlCanvasPng = buffer.toDataURL('image/png');
     return { authority: 'kaminos-main-render-pipeline-canvas-readback',
       canvasRect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
       backingSize: { width: canvas.width, height: canvas.height }, source, composed,
       depthTestAblation: { depthTestWasEnabled: wasDepthTest, foreground: depthTestDisabled[0],
         background: depthTestDisabled[1] },
       alphaMapAblation: { alphaMapWasPresent: !!wasAlphaMap, foreground: alphaMapDisabled[0],
-        background: alphaMapDisabled[1], canvasPng: alphaMapDisabledCanvasPng }, composedCanvasPng };
+        background: alphaMapDisabled[1], canvasPng: alphaMapDisabledCanvasPng },
+      sceneTraversalControl: { foreground: sceneTraversalControl[0], background: sceneTraversalControl[1],
+        canvasPng: sceneTraversalControlCanvasPng }, composedCanvasPng };
   } finally {
+    if (sceneProbe) {
+      sceneProbe.parent?.remove(sceneProbe);
+      sceneProbe.geometry.dispose();
+      sceneProbe.material.dispose();
+    }
     overlay.visible = wasVisible;
     overlay.material.depthTest = wasDepthTest;
     overlay.material.alphaMap = wasAlphaMap;

@@ -12,7 +12,8 @@ assert.match(hostSource, /options\.decodedImage\s*\?\s*new THREE\.Texture\(optio
 assert.match(hostSource, /#viewport\.sam-flame-composition-active #kaminos-volume-canvas\.active[^\n]*opacity:\s*0/, 'composition must keep volume compute active without covering the visible image plane');
 assert.match(hostSource, /#viewport\.sam-flame-composition-active \.kaminos-main-renderer-canvas[^\n]*z-index:\s*4/, 'the actual image-plane render canvas must be above the native volume canvas');
 assert.match(hostSource, /renderer\.domElement\.classList\.add\('kaminos-main-renderer-canvas'\)/, 'the presentation canvas needs an explicit composition-layer identity');
-assert.match(hostSource, /renderPipeline\.render\(\);\s*context\.drawImage\(canvas,\s*0,\s*0\)/, 'pixel evidence must sample the normal presented render pipeline');
+assert.ok(/renderPipeline\.render\(\);[\s\S]*?await renderer\.backend\.device\.queue\.onSubmittedWorkDone\(\);[\s\S]*?context\.drawImage\(canvas,\s*0,\s*0\)/.test(hostSource),
+  'pixel evidence must read the normal render pipeline after submitted work completes');
 assert.match(bridgeSource, /if \(!active\) \{[\s\S]*?record\.mesh\.visible = false[\s\S]*?composition\.status = 'inactive'/, 'inactive or failed volume rendering must hide the stale matte and status');
 assert.match(bridgeSource, /setCompositionPresentation\(active\)/, 'composition presentation layering must have an owned lifecycle control');
 assert.match(hostSource, /entry\.object === samFlameImagePlane[\s\S]*?setCompositionPresentation\(false\)/, 'removing the composed source plane must restore normal canvas presentation');
@@ -42,6 +43,15 @@ assert.ok(witnessSource.includes('alphaMapDisabledForeground'),
 const alphaMapCapture = witnessSource.indexOf("const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-disabled.png')");
 assert.ok(alphaMapCapture >= 0 && alphaMapCapture < compositionValidation,
   'the alpha-map ablation renderer frame must be preserved before scene rollback or validation failure');
+assert.ok(/renderPipeline\.render\(\);\s*await renderer\.backend\.device\.queue\.onSubmittedWorkDone\(\);[\s\S]*?requestAnimationFrame/.test(hostSource),
+  'main-renderer pixel evidence must wait for submitted WebGPU work and a presented frame');
+assert.ok(/const alphaMapCanvasCapture\s*=\s*\{[\s\S]*?name: 'flame-composition-alpha-map-disabled'[\s\S]*?capture: alphaMapCanvasCapture/.test(witnessSource),
+  'alpha-map evidence must point at its own artifact, not a later capture');
+assert.ok(/sceneProbe = new THREE\.Mesh[\s\S]*?target\.add\(sceneProbe\)[\s\S]*?finally \{[\s\S]*?sceneProbe\.parent\?\.remove\(sceneProbe\)/.test(hostSource),
+  'the flat-color render-path control must be temporary and removed even when sampling fails');
+assert.ok(witnessSource.includes("flame-composition-scene-traversal-control.png")
+  && witnessSource.includes('sceneTraversalControl: { foreground:'),
+  'the flat-color control pixels and renderer image must survive a later failed assertion');
 const rendererCanvasCapture = witnessSource.indexOf("const rendererCanvasCapturePath = join(out, 'flame-composition-renderer-canvas.png')");
 assert.ok(rendererCanvasCapture >= 0 && rendererCanvasCapture < compositionValidation,
   'the sampled main-renderer canvas must be durably captured before the composition assertion');

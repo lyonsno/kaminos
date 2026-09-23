@@ -596,11 +596,24 @@ async function main() {
       const alphaMapCanvasBytes = Buffer.from(alphaMapCanvasMatch[1], 'base64');
       const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-disabled.png');
       writeFileSync(alphaMapCanvasPath, alphaMapCanvasBytes, { flag: 'wx' });
-      report.captures.push({ name: 'flame-composition-alpha-map-disabled', path: alphaMapCanvasPath,
+      const alphaMapCanvasCapture = { name: 'flame-composition-alpha-map-disabled', path: alphaMapCanvasPath,
         width: presentedPixels.backingSize.width, height: presentedPixels.backingSize.height,
         bytes: alphaMapCanvasBytes.length,
         sha256: `sha256:${createHash('sha256').update(alphaMapCanvasBytes).digest('hex')}`,
-        authority: presentedPixels.authority, validation: 'diagnostic-only-alpha-map-ablation' });
+        authority: presentedPixels.authority, validation: 'diagnostic-only-alpha-map-ablation' };
+      report.captures.push(alphaMapCanvasCapture);
+      const sceneTraversalCanvasMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+        presentedPixels.sceneTraversalControl.canvasPng || '');
+      assert.ok(sceneTraversalCanvasMatch, 'scene traversal control did not preserve its renderer canvas');
+      const sceneTraversalCanvasBytes = Buffer.from(sceneTraversalCanvasMatch[1], 'base64');
+      const sceneTraversalCanvasPath = join(out, 'flame-composition-scene-traversal-control.png');
+      writeFileSync(sceneTraversalCanvasPath, sceneTraversalCanvasBytes, { flag: 'wx' });
+      const sceneTraversalCapture = { name: 'flame-composition-scene-traversal-control', path: sceneTraversalCanvasPath,
+        width: presentedPixels.backingSize.width, height: presentedPixels.backingSize.height,
+        bytes: sceneTraversalCanvasBytes.length,
+        sha256: `sha256:${createHash('sha256').update(sceneTraversalCanvasBytes).digest('hex')}`,
+        authority: presentedPixels.authority, validation: 'diagnostic-only-flat-color-child-plane' };
+      report.captures.push(sceneTraversalCapture);
       saveReport();
       const compositionAttemptPath = join(out, 'flame-composition-attempt.png');
       await checked(page.screenshot({ path: compositionAttemptPath, fullPage: true }));
@@ -619,7 +632,9 @@ async function main() {
             composedRgba: presentedPixels.alphaMapAblation.foreground.rgba },
           alphaMapDisabledBackground: { sourceRgba: presentedPixels.composed[1].rgba,
             composedRgba: presentedPixels.alphaMapAblation.background.rgba },
-          capture: report.captures.at(-1) },
+          capture: alphaMapCanvasCapture },
+        sceneTraversalControl: { foreground: presentedPixels.sceneTraversalControl.foreground,
+          background: presentedPixels.sceneTraversalControl.background, capture: sceneTraversalCapture },
         foreground: { maskValue: flamePixelScan.foreground.maskValue,
           uv: [flamePixelScan.foreground.u, flamePixelScan.foreground.v],
           pixel: presentedPixels.composed[0].pixel,
