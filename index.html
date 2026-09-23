@@ -3223,8 +3223,9 @@ window.kaminosLocalLiquidState=()=>({...(localLiquidHost?.state() || {requestedR
 window.kaminosLocalLiquidSetOptics=options=>{
   if(!localLiquidHost)throw Error('Local liquid host is not mounted');
   const opticalOptions=localLiquidHost.setOpticalOptions(options);
+  const lastCompletedFrameId=localLiquidHost.state().lastFrame?.frameId || null;
   window._kaminosDirty?.();
-  return {paused:localLiquidHost.paused,opticalOptions,solver:localLiquidHost.state().solver};
+  return {paused:localLiquidHost.paused,requestedOpticalOptions:opticalOptions,status:'pending',lastCompletedFrameId};
 };
 document.getElementById('local-liquid-pause').onclick=()=>{
   if(!localLiquidHost)return;
