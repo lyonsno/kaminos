@@ -98,6 +98,24 @@ export function fitSamFlameTextureToMask(flameWidth, flameHeight, maskWidth, mas
   } };
 }
 
+export function mapSamFlameTexturePixelToSource(imageRect, textureWidth, textureHeight,
+  sourceWidth, sourceHeight, x, y) {
+  if (![textureWidth, textureHeight, sourceWidth, sourceHeight].every(Number.isSafeInteger)
+    || textureWidth < 1 || textureHeight < 1 || sourceWidth < 1 || sourceHeight < 1
+    || !Number.isSafeInteger(x) || !Number.isSafeInteger(y)
+    || x < 0 || x >= textureWidth || y < 0 || y >= textureHeight) {
+    throw new Error('Texture and source coordinates must be in bounds');
+  }
+  if (!imageRect || ![imageRect.left, imageRect.top, imageRect.width, imageRect.height]
+    .every(Number.isFinite) || imageRect.width <= 0 || imageRect.height <= 0) {
+    throw new Error('Texture image rect is invalid');
+  }
+  const sourceU = imageRect.left + (x + 0.5) / textureWidth * imageRect.width;
+  const sourceV = imageRect.top + (y + 0.5) / textureHeight * imageRect.height;
+  if (sourceU < 0 || sourceU >= 1 || sourceV < 0 || sourceV >= 1) return null;
+  return { x: Math.floor(sourceU * sourceWidth), y: Math.floor(sourceV * sourceHeight) };
+}
+
 export function createSamImageTools({ inferenceSession, rendererDevice, config, onAsset, onScene, onFlame }) {
   const el = id => document.getElementById(`sam-image-${id}`);
   const canvas = el('canvas');

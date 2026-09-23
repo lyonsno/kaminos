@@ -53,6 +53,8 @@ assert.match(witnessSource, /nativeFlameCanvasPng/,
   'flame composition failure must preserve raw native canvas pixels for visual diagnosis');
 assert.match(witnessSource, /report\.flameComposition\s*=\s*\{[\s\S]*?texturePlacement:\s*flamePixelScan\.texturePlacement/,
   'successful composition evidence must retain the exact image-space flame placement');
+assert.match(witnessSource, /mapSamFlameTexturePixelToSource[\s\S]*?if\s*\(!sourcePoint\)\s*continue/,
+  'flame diagnostics must discard texture samples outside the source image instead of clamping them to edge pixels');
 
 const toolsModule = await import('../sam-image-tools.js');
 assert.equal(typeof toolsModule.runSamFlameSceneTransaction, 'function', 'flame composition needs a rollback-tested scene transaction');
@@ -74,7 +76,7 @@ assert.deepEqual(overlays, [priorPlane], 'failed activation must remove its over
 const { encodeSamFlameMaskPixels, fitSamFlameTexture } = await import('../sam-image-tools.js');
 assert.equal(typeof encodeSamFlameMaskPixels, 'function', 'SAM-to-flame composition needs an explicit mask texture contract');
 assert.equal(typeof fitSamFlameTexture, 'function', 'live fire must preserve its aspect ratio inside the selected image mask');
-const { getSamFlameMaskBounds, fitSamFlameTextureToMask } = await import('../sam-image-tools.js');
+const { getSamFlameMaskBounds, fitSamFlameTextureToMask, mapSamFlameTexturePixelToSource } = await import('../sam-image-tools.js');
 assert.equal(typeof getSamFlameMaskBounds, 'function', 'flame placement must use the exact selected mask bounds');
 assert.equal(typeof fitSamFlameTextureToMask, 'function', 'native fire texture must map into the selected 2D mask bounds');
 
@@ -107,12 +109,26 @@ for (const [key, expected] of Object.entries({ left: 0.1, top: 0.25, width: 0.8,
 for (const [key, expected] of Object.entries({ repeatX: 1.25, repeatY: 2, offsetX: -0.125, offsetY: -0.5 })) {
   assert.ok(Math.abs(placement.uvTransform[key] - expected) < 1e-12, `wrong ${key} for image-space mask placement`);
 }
-const portraitCover = fitSamFlameTextureToMask(1, 4, 1800, 1200,
+const portraitCover = fitSamFlameTextureToMask(8, 32, 1800, 1200,
   { left: 100, top: 200, right: 1700, bottom: 1000, width: 1600, height: 800 });
 assert.ok(portraitCover.imageRect.width >= 1600 / 1800,
   'portrait flame cover must span the complete horizontal extent of a broad object mask');
 assert.ok(portraitCover.imageRect.height > 800 / 1200,
   'portrait flame cover must preserve aspect ratio and crop outside the mask rather than stretch');
+assert.equal(typeof mapSamFlameTexturePixelToSource, 'function',
+  'flame diagnostics need a source-bounded texture-to-mask pixel mapper');
+assert.deepEqual(mapSamFlameTexturePixelToSource(portraitCover.imageRect, 8, 32, 1800, 1200, 4, 0), null,
+  'texture pixels mapped above the source image must not clamp into its top edge');
+assert.deepEqual(mapSamFlameTexturePixelToSource(portraitCover.imageRect, 8, 32, 1800, 1200, 4, 14),
+  { x: 1000, y: 300 }, 'in-frame texture pixels must retain their exact projected source coordinate');
+const landscapeCover = fitSamFlameTextureToMask(32, 8, 1200, 1800,
+  { left: 200, top: 100, right: 1000, bottom: 1700, width: 800, height: 1600 });
+assert.deepEqual(mapSamFlameTexturePixelToSource(landscapeCover.imageRect, 32, 8, 1200, 1800, 0, 3), null,
+  'texture pixels mapped left of the source image must not clamp into its left edge');
+assert.deepEqual(mapSamFlameTexturePixelToSource(landscapeCover.imageRect, 32, 8, 1200, 1800, 20, 3), null,
+  'texture pixels mapped right of the source image must not clamp into its right edge');
+assert.deepEqual(mapSamFlameTexturePixelToSource(landscapeCover.imageRect, 32, 8, 1200, 1800, 13, 3),
+  { x: 100, y: 800 }, 'horizontal cover preserves exact in-frame pixel projection');
 assert.throws(() => fitSamFlameTextureToMask(2, 1, 5, 4, { left: -1, top: 0, right: 2, bottom: 2, width: 3, height: 2 }), /bounds/);
 assert.match(bridgeSource, /record\.flameTexture\.repeat\.set\(fit\.uvTransform\.repeatX,\s*fit\.uvTransform\.repeatY\)/,
   'fire texture must be registered into the selected mask bounds');

@@ -517,7 +517,8 @@ async function main() {
           row.image?.maskProvenance?.invocationId === window.kaminosSamImageTools.output().invocationId),
       }));
       const flamePixelScan = await page.evaluate(async sceneObjectId => {
-        const { fitSamFlameTextureToMask, getSamFlameMaskBounds } = await import('./sam-image-tools.js');
+        const { fitSamFlameTextureToMask, getSamFlameMaskBounds,
+          mapSamFlameTexturePixelToSource } = await import('./sam-image-tools.js');
         const mask = window.kaminosSamImageTools.selectedMask();
         const imageRecord = window.kaminosSceneObjectDebugState().find(row => row.id === sceneObjectId);
         const [width, height] = imageRecord?.image?.maskProvenance?.dimensions || [];
@@ -564,10 +565,10 @@ async function main() {
               brightBounds.bottom = Math.max(brightBounds.bottom, y);
             }
           }
-          const sourceX = Math.min(width - 1, Math.floor((texturePlacement.imageRect.left
-            + (x + 0.5) / flame.width * texturePlacement.imageRect.width) * width));
-          const sourceY = Math.min(height - 1, Math.floor((texturePlacement.imageRect.top
-            + (y + 0.5) / flame.height * texturePlacement.imageRect.height) * height));
+          const sourcePoint = mapSamFlameTexturePixelToSource(texturePlacement.imageRect,
+            flame.width, flame.height, width, height, x, y);
+          if (!sourcePoint) continue;
+          const { x: sourceX, y: sourceY } = sourcePoint;
           const maskValue = mask[sourceY * width + sourceX];
           if ((maskValue !== 0 && maskValue !== 1) || !isInterior(sourceX, sourceY, maskValue)) continue;
           if (maskValue === 1) interiorForegroundSamples += 1;
