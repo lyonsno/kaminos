@@ -5746,6 +5746,7 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
   const buffer = document.createElement('canvas');
   buffer.width = canvas.width; buffer.height = canvas.height;
   const context = buffer.getContext('2d', { willReadFrequently: true });
+  const canvasRect = canvas.getBoundingClientRect();
   const sample = async () => {
     renderPipeline.render();
     context.drawImage(canvas, 0, 0);
@@ -5758,7 +5759,9 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
       const x = Math.floor((position.x * 0.5 + 0.5) * canvas.width);
       const y = Math.floor((0.5 - position.y * 0.5) * canvas.height);
       if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) throw new Error('SAM flame pixel probe fell outside the renderer canvas');
-      return { uv: [point.u, point.v], rgba: [...context.getImageData(x, y, 1, 1).data] };
+      return { uv: [point.u, point.v], pixel: { x, y, pageX: canvasRect.left + (position.x * 0.5 + 0.5) * canvasRect.width,
+        pageY: canvasRect.top + (0.5 - position.y * 0.5) * canvasRect.height,
+        ndc: [position.x, position.y] }, rgba: [...context.getImageData(x, y, 1, 1).data] };
     });
   };
   const wasVisible = overlay.visible;
@@ -5767,7 +5770,9 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     const source = await sample();
     overlay.visible = wasVisible;
     const composed = await sample();
-    return { authority: 'kaminos-main-render-pipeline-canvas-readback', source, composed };
+    return { authority: 'kaminos-main-render-pipeline-canvas-readback',
+      canvasRect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
+      backingSize: { width: canvas.width, height: canvas.height }, source, composed };
   } finally {
     overlay.visible = wasVisible;
     window._kaminosDirty?.();

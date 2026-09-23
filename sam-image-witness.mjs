@@ -572,16 +572,23 @@ async function main() {
         error.compositionDiagnostic = report.compositionDiagnostic;
         throw error;
       }
+      const compositionAttemptPath = join(out, 'flame-composition-attempt.png');
+      await checked(page.screenshot({ path: compositionAttemptPath, fullPage: true }));
+      report.captures.push({ name: 'flame-composition-attempt', path: compositionAttemptPath,
+        validation: 'diagnostic-only-pre-assertion' });
       const presentedPixels = await page.evaluate(({ sceneObjectId, foreground, background }) =>
         window.__kaminosSampleSamFlamePixels(sceneObjectId, [foreground, background]), {
         sceneObjectId: observed.sceneObject.id, foreground: flamePixelScan.foreground, background: flamePixelScan.background,
       });
       const pixelEvidence = { authority: presentedPixels.authority,
+        canvasRect: presentedPixels.canvasRect, backingSize: presentedPixels.backingSize,
         foreground: { maskValue: flamePixelScan.foreground.maskValue,
           uv: [flamePixelScan.foreground.u, flamePixelScan.foreground.v],
+          pixel: presentedPixels.composed[0].pixel,
           sourceRgba: presentedPixels.source[0].rgba, composedRgba: presentedPixels.composed[0].rgba },
         background: { maskValue: flamePixelScan.background.maskValue,
           uv: [flamePixelScan.background.u, flamePixelScan.background.v],
+          pixel: presentedPixels.composed[1].pixel,
           sourceRgba: presentedPixels.source[1].rgba, composedRgba: presentedPixels.composed[1].rgba } };
       report.compositionDiagnostic.presentationPixelEvidence = pixelEvidence;
       saveReport();

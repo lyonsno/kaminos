@@ -26,6 +26,11 @@ const presentedPixelEvidencePersistence = witnessSource.indexOf('report.composit
 const compositionValidation = witnessSource.indexOf('const composition = validateSamFlameComposition');
 assert.ok(presentedPixelEvidencePersistence >= 0 && presentedPixelEvidencePersistence < compositionValidation,
   'presented source/composed pixel samples must survive a failed composition assertion');
+const compositionAttemptCapture = witnessSource.indexOf("const compositionAttemptPath = join(out, 'flame-composition-attempt.png')");
+assert.ok(compositionAttemptCapture >= 0 && compositionAttemptCapture < compositionValidation,
+  'the live composition frame must be preserved before a failed assertion rolls back the scene');
+assert.match(witnessSource, /const pixelEvidence\s*=\s*\{\s*authority:\s*presentedPixels\.authority,\s*canvasRect:\s*presentedPixels\.canvasRect,\s*backingSize:/,
+  'rendered pixel samples must retain their CSS and backing-canvas coordinates');
 assert.match(witnessSource, /brightSamplesInMaskForeground/,
   'flame composition failure must report how many bright native pixels overlap selected foreground');
 assert.match(witnessSource, /nativeFlameCanvasPng/,
