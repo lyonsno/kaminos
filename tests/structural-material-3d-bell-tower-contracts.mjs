@@ -159,6 +159,26 @@ assert.ok(
   pageSource.includes('authoredBellPreviewCrownWitness'),
   'contact preview must preserve and expose the authored bell crown pivot',
 );
+const visiblePreviewStart = pageSource.indexOf('function visibleContactPreview(preview) {');
+const visiblePreviewEnd = pageSource.indexOf('\n    function visibleBindContactPreview()', visiblePreviewStart);
+const visiblePreviewSource = pageSource.slice(visiblePreviewStart, visiblePreviewEnd);
+assert.ok(
+  visiblePreviewSource.includes('assetAnchor?.acceptedCrownPoint'),
+  'rendered preview error for the authored bell must use its crown pivot, not the body-node center',
+);
+const crownWitnessStart = pageSource.indexOf('function authoredBellPreviewCrownWitness() {');
+const crownWitnessEnd = pageSource.indexOf('\n    function detachedDynamicsHasMovingBodies()', crownWitnessStart);
+const crownWitnessSource = pageSource.slice(crownWitnessStart, crownWitnessEnd);
+assert.ok(
+  crownWitnessSource.includes('preview.contactIdentity') &&
+    crownWitnessSource.includes('previewOffsetMagnitude'),
+  'held crown witness must require the picked n279 contact and a real nonzero preview offset',
+);
+assert.ok(
+  witnessSource.includes("authoredBellPreviewCrown.contactIdentity?.id === 'n279'") &&
+    witnessSource.includes('authoredBellPreviewCrown.previewOffsetMagnitude > 0.000001'),
+  'native held-preview acceptance must fail when the bell did not receive the drag response',
+);
 assert.ok(
   witnessSource.includes('authoredBellPreviewCrownPlacement'),
   'browser witness must check the visible bell crown during incremental contact preview',
@@ -173,6 +193,15 @@ assert.deepEqual(bellAsset.currentTranslation, initialBell.currentCrown);
 assert.deepEqual(bellAsset.acceptedCrownPoint, initialBell.currentCrown);
 assert.deepEqual(bellAsset.acceptedBodyCenter, initialBell.currentBellCenter);
 assert.equal(bellAsset.tumbleEligible, false);
+const crownBodyWorldOffset = {
+  x: (bellAsset.acceptedCrownPoint.x - bellAsset.acceptedBodyCenter.x) * 2.35,
+  y: -(bellAsset.acceptedCrownPoint.y - bellAsset.acceptedBodyCenter.y) * 1.25,
+  z: (bellAsset.acceptedCrownPoint.z - bellAsset.acceptedBodyCenter.z) * 0.95,
+};
+assert.ok(
+  Math.abs(Math.hypot(crownBodyWorldOffset.x, crownBodyWorldOffset.y, crownBodyWorldOffset.z) - 0.1388875) < 0.000001,
+  'the authored pivot is numerically distinct from the structural body center in rendered world space',
+);
 assert.deepEqual(
   masonryAsset.acceptedBodyCenter,
   {

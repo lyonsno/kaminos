@@ -1041,6 +1041,10 @@
       }
       const previewOffset = preview.nodeOffsets.find(entry =>
         entry.nodeId === anchor.structuralNodeId)?.offset || null;
+      const previewOffsetMagnitude = previewOffset &&
+        ['x', 'y', 'z'].every(axis => Number.isFinite(previewOffset[axis]))
+        ? Math.hypot(previewOffset.x, previewOffset.y, previewOffset.z)
+        : null;
       const expectedLocal = worldCoordinate(anchor.acceptedCrownPoint).add(worldOffset(previewOffset));
       const expectedWorld = world.localToWorld(expectedLocal.clone());
       const renderedWorld = bell.getWorldPosition(new THREE.Vector3());
@@ -1049,7 +1053,9 @@
         operationMode: preview.operationMode,
         assetAnchorId: anchor.id,
         structuralNodeId: anchor.structuralNodeId,
+        contactIdentity: preview.contactIdentity,
         previewOffset,
+        previewOffsetMagnitude,
         expectedWorldCrown: expectedWorld.toArray(),
         renderedWorldCrown: renderedWorld.toArray(),
         crownError: renderedWorld.distanceTo(expectedWorld),
@@ -1352,13 +1358,21 @@
         if (!nodeId || !offsetByNodeId.has(nodeId)) continue;
         const node = nodeById.get(nodeId);
         const offset = offsetByNodeId.get(nodeId);
+        const assetAnchor = child.userData.structuralAssetAnchor;
+        const acceptedPoint = assetAnchor?.acceptedCrownPoint
+          ? worldCoordinate(assetAnchor.acceptedCrownPoint)
+          : worldPoint(node);
         const actual = child.getWorldPosition(new THREE.Vector3());
-        const accepted = world.localToWorld(worldPoint(node));
-        const expectedPreview = world.localToWorld(worldCoordinate({
-          x: node.x + node.displacement.x + offset.x,
-          y: node.y + node.displacement.y + offset.y,
-          z: node.z + node.displacement.z + offset.z,
-        }));
+        const accepted = world.localToWorld(acceptedPoint.clone());
+        const expectedPreview = world.localToWorld(
+          assetAnchor?.acceptedCrownPoint
+            ? acceptedPoint.clone().add(worldOffset(offset))
+            : worldCoordinate({
+              x: node.x + node.displacement.x + offset.x,
+              y: node.y + node.displacement.y + offset.y,
+              z: node.z + node.displacement.z + offset.z,
+            }),
+        );
         renderedMaxAcceptedDelta = Math.max(renderedMaxAcceptedDelta, actual.distanceTo(accepted));
         renderedMaxPreviewError = Math.max(renderedMaxPreviewError, actual.distanceTo(expectedPreview));
       }

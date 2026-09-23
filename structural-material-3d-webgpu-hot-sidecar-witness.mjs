@@ -543,6 +543,10 @@ try {
     heldShearPreview.authoredBellPreviewCrown?.status === 'active' &&
     heldShearPreview.authoredBellPreviewCrown.operationMode === 'shear' &&
     heldShearPreview.authoredBellPreviewCrown.assetAnchorId === 'asset-anchor:n279' &&
+    heldShearPreview.authoredBellPreviewCrown.contactIdentity?.kind === 'node' &&
+    heldShearPreview.authoredBellPreviewCrown.contactIdentity?.id === 'n279' &&
+    Number.isFinite(heldShearPreview.authoredBellPreviewCrown.previewOffsetMagnitude) &&
+    heldShearPreview.authoredBellPreviewCrown.previewOffsetMagnitude > 0.000001 &&
     heldShearPreview.authoredBellPreviewCrown.crownError <= 0.000001
   );
   assertCheck(
@@ -984,6 +988,10 @@ try {
     heldBindPreview.authoredBellPreviewCrown?.status === 'active' &&
     heldBindPreview.authoredBellPreviewCrown.operationMode === 'bind' &&
     heldBindPreview.authoredBellPreviewCrown.assetAnchorId === 'asset-anchor:n279' &&
+    heldBindPreview.authoredBellPreviewCrown.contactIdentity?.kind === 'node' &&
+    heldBindPreview.authoredBellPreviewCrown.contactIdentity?.id === 'n279' &&
+    Number.isFinite(heldBindPreview.authoredBellPreviewCrown.previewOffsetMagnitude) &&
+    heldBindPreview.authoredBellPreviewCrown.previewOffsetMagnitude > 0.000001 &&
     heldBindPreview.authoredBellPreviewCrown.crownError <= 0.000001
   );
   report.checks.bindPreviewAdvancedWhileGpuHeld =
