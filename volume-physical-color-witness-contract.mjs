@@ -4,6 +4,13 @@ export function validateFieldArm(arm) {
   if (arm.field === true) assert.equal(arm.mode, 2, `field capture requires emissive transport: ${arm.id}`);
 }
 
+export function assertArmControlsEffective(arm, state) {
+  const expectedMode = arm.controls?.['volume-fire-render-mode'];
+  if (expectedMode !== undefined) {
+    assert.equal(state.fireRenderMode, expectedMode, `effective control mismatch: volume-fire-render-mode (${arm.id})`);
+  }
+}
+
 export function validateEmissiveField(field, files, expectedState, expected = { grid: 20, directions: 24 }) {
   assert.equal(field?.ok, true, 'missing field result');
   assert.equal(field.authority, 'same-submission-fluid-and-uniforms-gpu-field-readback-v1');

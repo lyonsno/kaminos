@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { assertArmEquivalent, validateEmissiveField, validateFieldArm } from './volume-physical-color-witness-contract.mjs';
+import { assertArmControlsEffective, assertArmEquivalent, validateEmissiveField, validateFieldArm } from './volume-physical-color-witness-contract.mjs';
 const [url, output, expectedRoot, expectedCommit, armsPath] = process.argv.slice(2);
 assert.ok(output, 'usage: URL OUT_DIR REPO_ROOT COMMIT');
 const out = resolve(output);
@@ -127,11 +127,14 @@ try {
       const changes = ${JSON.stringify({...arm.controls, 'volume-physical-mode':arm.mode, 'volume-physical-temperature':arm.temperature, 'volume-physical-exposure':arm.ev})};
       for (const [id, value] of Object.entries(changes)) {
         const input = document.getElementById(id); input.value = String(value); input.dispatchEvent(new Event('input', {bubbles:true}));
+        if (input instanceof HTMLSelectElement) input.dispatchEvent(new Event('change', {bubbles:true}));
       }
       const core = window.__kaminosVolumePrototype;
       const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
       if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
       const captureState = core.debugState();
+      const requestedRenderMode = ${JSON.stringify(arm.controls?.['volume-fire-render-mode'] ?? null)};
+      if (requestedRenderMode !== null && captureState.fireRenderMode !== requestedRenderMode) throw new Error('effective control mismatch: volume-fire-render-mode');
       const {width,height,rgba} = sample.image;
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
       const image = document.createElement('canvas'); image.width=width; image.height=height;
@@ -158,6 +161,7 @@ try {
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.renderPhaseTimeMs, result.sample.renderPhaseTimeMs, 'camera state render phase changed before receipt');
     assert.equal(result.state.renderPhaseFrame, result.sample.renderPhaseFrame, 'camera state render frame changed before receipt');
+    assertArmControlsEffective(arm, result.state);
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, Math.fround(arm.temperature));
