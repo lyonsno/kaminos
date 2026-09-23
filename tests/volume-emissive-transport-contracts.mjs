@@ -46,8 +46,8 @@ assert.match(EMISSIVE_TRANSPORT_WGSL,/let hotSoot = emissiveSootPopulation\(cove
 assert.match(EMISSIVE_TRANSPORT_WGSL,/vec3<f32>\(f32\(k&1u\),f32\(\(k>>1u\)&1u\),f32\(\(k>>2u\)&1u\)\)\+vec3<f32>\(0\.5\)\)\*0\.5/,
   'emissive cell samples remain at quarter/three-quarter positions');
 const volumeCore = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
-assert.match(volumeCore,/let jitter = dtBase \* 0\.75;\s*var t = startT \+ jitter;/,
-  'camera-ray sampling phase is shifted independently of the emissive field');
+assert.match(volumeCore,/let jitter = dtBase \* 0\.5;\s*var t = startT \+ jitter;/,
+  'camera ray samples at the established midpoint phase');
 // Production-linked shader contract, not just the CPU reference: channel-wise
 // shoulder and selection must remain on the actual camera path. Existing native
 // captures establish compilation/output; this narrow guard protects the formula.
