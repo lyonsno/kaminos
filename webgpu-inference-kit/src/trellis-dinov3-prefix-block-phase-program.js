@@ -392,13 +392,26 @@ export async function computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights)
   return sha256Hex(new TextEncoder().encode(JSON.stringify(entries)));
 }
 
+// Copy before the first await. The caller retains its own mutable views, so the
+// digest and every later upload must consume these same private bytes.
+export function snapshotTrellisDinoV3PrefixBlockInputs({ sourceImage, pixelValues, weights }) {
+  return {
+    sourceImage: new Uint8Array(sourceImage),
+    pixelValues: new Float32Array(pixelValues),
+    weights: Object.fromEntries(REQUIRED_WEIGHT_KEYS.map(key => [key, new Float32Array(weights[key])])),
+  };
+}
+
 export async function runTrellisDinoV3PrefixBlockPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
+  if (input.residentTensorResolver != null) throw new Error('residentTensorResolver is not admitted for pinned input custody without GPU-buffer content attestation');
   const route = input.route || createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel: input.kernel });
   const sourceImageArtifact = roleArtifact(input.request.inputs, 'source-image');
   const pixelValuesArtifact = roleArtifact(input.request.inputs, 'trellis-dinov3-normalized-pixels');
   const checkpointArtifact = roleArtifact(input.request.inputs, 'trellis-dinov3-checkpoint-tensors');
-  const { shape, pixelValues, sourceImage, weights } = validateInputs(input.tensors || {});
+  const validated = validateInputs(input.tensors || {});
+  const { shape } = validated;
+  const { pixelValues, sourceImage, weights } = snapshotTrellisDinoV3PrefixBlockInputs(validated);
   if (route.model?.id !== MODEL_ID || route.model?.revision !== MODEL_REVISION || route.model?.dtype !== 'fp32') throw new Error('route model identity differs from pinned F32 DINOv3 checkpoint');
   if (input.model?.id !== MODEL_ID || input.model?.revision !== MODEL_REVISION || input.model?.dtype !== 'fp32' || input.model?.weightsHash !== MODEL_WEIGHTS_SHA256) throw new Error('invocation model identity differs from pinned F32 DINOv3 checkpoint');
   if (sourceImageArtifact.sha256 !== await sha256Hex(sourceImage)) throw new Error('source-image digest mismatch with uploaded bytes');
@@ -412,7 +425,6 @@ export async function runTrellisDinoV3PrefixBlockPhaseProgramRoute(input = {}) {
     device: input.device, queue: input.queue, adapter: input.adapter, adapterName: input.adapterName, browser: input.browser,
     backendIdentity: input.backendIdentity, kernel: input.kernel || route.kernel, requiredStages: REQUIRED_STAGES,
     timingSource: 'queue-submit-wait', waitForSubmittedWorkDone: true, yieldMs: 0, now: input.now, yield: input.yield,
-    residentTensorResolver: input.residentTensorResolver,
   });
 
   let failedPhase = REQUIRED_STAGES[0];

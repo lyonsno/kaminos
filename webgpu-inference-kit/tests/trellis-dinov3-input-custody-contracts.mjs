@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { runTrellisDinoV3PrefixBlockPhaseProgramRoute } from '../src/trellis-dinov3-prefix-block-phase-program.js';
+import * as routeModule from '../src/trellis-dinov3-prefix-block-phase-program.js';
+const { runTrellisDinoV3PrefixBlockPhaseProgramRoute } = routeModule;
 
 const digest = value => `sha256:${createHash('sha256').update(Buffer.from(value.buffer, value.byteOffset, value.byteLength)).digest('hex')}`;
 const sourceImage = new Uint8Array([1, 2, 3]);
@@ -58,5 +59,29 @@ await assert.rejects(
   /checkpoint tensor bundle digest mismatch/,
   'a direct route cannot issue a pinned checkpoint receipt for different weight arrays',
 );
+
+await assert.rejects(
+  runTrellisDinoV3PrefixBlockPhaseProgramRoute({
+    ...inputWithHashes(digest(sourceImage), digest(pixelValues)),
+    residentTensorResolver: () => ({ buffer: {} }),
+  }),
+  /residentTensorResolver is not admitted for pinned input custody/,
+  'the route must reject a resolver that can substitute unattested GPU bytes',
+);
+
+assert.equal(typeof routeModule.snapshotTrellisDinoV3PrefixBlockInputs, 'function', 'the pinned route must expose its tested byte snapshot contract');
+const captured = routeModule.snapshotTrellisDinoV3PrefixBlockInputs({ sourceImage, pixelValues, weights });
+assert.notStrictEqual(captured.sourceImage, sourceImage);
+assert.notStrictEqual(captured.pixelValues, pixelValues);
+for (const key of Object.keys(weights)) assert.notStrictEqual(captured.weights[key], weights[key], `weights.${key} must be snapshotted`);
+const originalImageByte = captured.sourceImage[0];
+const originalPixel = captured.pixelValues[0];
+const originalWeight = captured.weights.qWeight[0];
+sourceImage[0] = 71;
+pixelValues[0] = 72;
+weights.qWeight[0] = 73;
+assert.equal(captured.sourceImage[0], originalImageByte, 'post-hash source mutation cannot change the captured receipt bytes');
+assert.equal(captured.pixelValues[0], originalPixel, 'post-hash pixel mutation cannot change uploaded bytes');
+assert.equal(captured.weights.qWeight[0], originalWeight, 'post-hash weight mutation cannot change uploaded bytes');
 
 console.log('TRELLIS DINOv3 direct-route input custody contracts passed');
