@@ -25,6 +25,11 @@ function call(method, params = {}) {
     ws.send(JSON.stringify({ id, method, params }));
   });
 }
+async function evaluateSmall(expression) {
+  const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+  if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
+  return result.result.value;
+}
 async function evaluate(expression) {
   // Native readbacks include multi-megabyte field evidence. Sending one CDP
   // return closed this Chrome connection (1006); transfer ALL text in pieces.
@@ -90,7 +95,7 @@ try {
   let state;
   const deadline = Date.now() + 60000; // Existing browser-load witness deadline; not a data cap.
   do {
-    state = await evaluate('window.__kaminosVolumePrototype?.debugState?.() ?? null');
+    state = await evaluateSmall('window.__kaminosVolumePrototype?.debugState?.() ?? null');
     if (state?.error) throw new Error(state.error);
     if (state?.active && state.frameCount > 2) break;
     await delay(250);

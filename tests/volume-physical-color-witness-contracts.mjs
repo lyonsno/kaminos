@@ -9,4 +9,6 @@ assert.throws(()=>assertArmEquivalent({id:'isolation',equalTo:'missing'},Buffer.
 assert.throws(()=>assertArmEquivalent({id:'isolation',equalTo:'bright'},Buffer.from([3,5,8]),earlier),/raw RGBA differs/);
 assertArmEquivalent({id:'normal'},Buffer.from([1,2,3,255]),earlier);
 assert.match(witness, /physicalColor\.temperature, Math\.fround\(arm\.temperature\)/);
+assert.match(witness, /async function evaluateSmall\(expression\)/, 'small startup state must not cross page contexts in chunked transfer');
+assert.match(witness, /state = await evaluateSmall\('window\.__kaminosVolumePrototype\?\.debugState/);
 console.log('named same-state raw-RGBA arm equivalence passes; altered/partial/missing-reference fail');
