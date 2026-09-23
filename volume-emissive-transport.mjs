@@ -62,7 +62,7 @@ export const EMISSIVE_LIGHT_TRANSPORT_MODEL = 'twenty-four-direction-cubic-short
 
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
-  const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
+  const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
   const coefficients = allocate('emissive material coefficients', cells);
   const directions = allocate('twenty-four-direction incident radiance at cell centers', cells*EMISSIVE_LIGHT_DIRECTION_COUNT);
   const incident = allocate('single-scattering mean incident radiance', cells);
@@ -94,6 +94,8 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   const resolveInput = group(resolve,0,[[14,directions]]);
   const resolveOutput = group(resolve,3,[[3,incident]]);
   return {
+    coefficients,
+    directions,
     incident,
     encode(encoder, sourceIndex, timestampWrites) {
       const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });

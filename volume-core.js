@@ -15411,6 +15411,48 @@ export function createKaminosVolumePrototype({
     pass.end();
   }
 
+  async function sampleEmissiveLightField() {
+    if (uniforms[368] !== 2) return { ok: false, reason: 'emissive-mode-unavailable' };
+    const bytes = EMISSIVE_LIGHT_GRID ** 3 * 16;
+    const fields = [
+      ['coefficients', emissiveLightField.coefficients, bytes],
+      ['directions', emissiveLightField.directions, bytes * EMISSIVE_LIGHT_DIRECTION_COUNT],
+      ['incident', emissiveLightField.incident, bytes],
+    ];
+    const readbacks = fields.map(([name, , size]) => device.createBuffer({
+      label: `emissive ${name} same-state field readback`,
+      size,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    }));
+    try {
+      const encoder = device.createCommandEncoder({ label: 'same-state emissive field readback' });
+      emissiveLightField.encode(encoder, currentFluid);
+      fields.forEach(([, source], index) => encoder.copyBufferToBuffer(source, 0, readbacks[index], 0, fields[index][2]));
+      device.queue.submit([encoder.finish()]);
+      await Promise.all(readbacks.map(buffer => buffer.mapAsync(GPUMapMode.READ)));
+      const values = readbacks.map(buffer => new Float32Array(buffer.getMappedRange().slice(0)));
+      readbacks.forEach(buffer => buffer.unmap());
+      return {
+        ok: true,
+        authority: 'same-current-fluid-and-uniforms-gpu-field-readback-v0',
+        grid: EMISSIVE_LIGHT_GRID,
+        directions: EMISSIVE_LIGHT_DIRECTION_COUNT,
+        simStepCount: state.simStepCount,
+        effectiveRoute: state.effectiveRoute,
+        physicalColor: state.physicalColor,
+        backend: state.backend,
+        coefficients: values[0],
+        directionalRadiance: values[1],
+        incidentRadiance: values[2],
+      };
+    } finally {
+      for (const buffer of readbacks) {
+        if (buffer.mapState === 'mapped') buffer.unmap();
+        buffer.destroy();
+      }
+    }
+  }
+
   async function sampleEmissiveLightProfile() {
     if (uniforms[368] !== 2 || !timestampQueriesAvailable()) return { ok: false, reason: 'emissive-mode-or-gpu-timestamps-unavailable' };
     const repeats = 8;
@@ -22317,6 +22359,7 @@ export function createKaminosVolumePrototype({
     captureSelectiveHeadLiveFrame,
     sampleEmissiveLightProfile,
     sampleEmissiveFrameProfile,
+    sampleEmissiveLightField,
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,

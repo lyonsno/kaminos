@@ -133,7 +133,20 @@ try {
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
       const frameProfile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveFrameProfile() : null;
       if (frameProfile && !frameProfile.ok) throw new Error('native frame timing failed: '+JSON.stringify(frameProfile));
-      return {sample, profile, frameProfile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      const emissiveField = ${arm.field === true && arm.mode === 2} ? await core.sampleEmissiveLightField() : null;
+      if (emissiveField && !emissiveField.ok) throw new Error('native emissive field readback failed: '+JSON.stringify(emissiveField));
+      const fieldFiles = emissiveField ? Object.fromEntries(Object.entries({
+        coefficients:emissiveField.coefficients,
+        directionalRadiance:emissiveField.directionalRadiance,
+        incidentRadiance:emissiveField.incidentRadiance,
+      }).map(([name, values]) => {
+        const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
+        let binary = '';
+        for (let offset=0; offset<bytes.length; offset+=16384) binary += String.fromCharCode(...bytes.subarray(offset,offset+16384));
+        return [name,btoa(binary)];
+      })) : null;
+      const fieldReceipt = emissiveField ? Object.fromEntries(Object.entries(emissiveField).filter(([name]) => !['coefficients','directionalRadiance','incidentRadiance'].includes(name))) : null;
+      return {sample, profile, frameProfile, emissiveField:fieldReceipt, fieldFiles, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
@@ -144,6 +157,26 @@ try {
       assert.equal(result.state.physicalColor.incidentLight?.directions, 24);
       assert.equal(result.state.physicalColor.incidentLight?.slabs, 20);
     }
+    if (result.emissiveField) {
+      const field = result.emissiveField;
+      assert.equal(field.authority, 'same-current-fluid-and-uniforms-gpu-field-readback-v0');
+      assert.equal(field.grid, 20);
+      assert.equal(field.directions, 24);
+      assert.equal(field.simStepCount, result.state.simStepCount);
+      assert.equal(field.effectiveRoute, result.state.effectiveRoute);
+      assert.equal(field.physicalColor?.effective, 'emissive-transport-v2');
+      const cells = field.grid ** 3;
+      const expectedFieldBytes = {
+        coefficients: cells * 16,
+        directionalRadiance: cells * field.directions * 16,
+        incidentRadiance: cells * 16,
+      };
+      for (const [name, expectedBytes] of Object.entries(expectedFieldBytes)) {
+        const bytes = Buffer.from(result.fieldFiles?.[name] ?? '', 'base64');
+        assert.equal(bytes.byteLength, expectedBytes, `partial or missing ${name} field`);
+        writeFileSync(join(out, `${arm.id}.${name}.f32`), bytes);
+      }
+    }
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
     writeFileSync(join(out, `${arm.id}.png`), Buffer.from(result.png, 'base64'));
     writeFileSync(join(out, `${arm.id}.rgba`), Buffer.from(result.sample.image.rgba));
@@ -151,7 +184,15 @@ try {
     assertArmEquivalent(arm,rgba,earlierRgba);
     earlierRgba.set(arm.id,rgba);
     const {image, ...sample} = result.sample;
-    report.captures.push({arm, sample, profile:result.profile, frameProfile:result.frameProfile, state:result.state, image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
+    const field = result.emissiveField;
+    report.captures.push({arm, sample, profile:result.profile, frameProfile:result.frameProfile, state:result.state,
+      field: field ? {
+        authority:field.authority, grid:field.grid, directions:field.directions, simStepCount:field.simStepCount,
+        effectiveRoute:field.effectiveRoute, physicalColor:field.physicalColor, backend:field.backend,
+        coefficients:`${arm.id}.coefficients.f32`, directionalRadiance:`${arm.id}.directionalRadiance.f32`,
+        incidentRadiance:`${arm.id}.incidentRadiance.f32`,
+      } : null,
+      image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
   }
   const screenshot = await call('Page.captureScreenshot', {format:'png'});
   writeFileSync(join(out, 'cockpit.png'), Buffer.from(screenshot.data, 'base64'));
