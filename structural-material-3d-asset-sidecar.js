@@ -1,4 +1,9 @@
 import { deriveAcceptedBellTowerState } from './structural-material-3d-bell-tower.js';
+import BELL_DESCRIPTOR from './artifacts/structural-bell-citadel-v0-2026-07-18/structuralAssetDescriptor.json' with { type: 'json' };
+
+export const STRUCTURAL_BELL_DESCRIPTOR = BELL_DESCRIPTOR;
+export const STRUCTURAL_BELL_VISUAL_REF = `./artifacts/structural-bell-citadel-v0-2026-07-18/${BELL_DESCRIPTOR.visualRef}`;
+export const STRUCTURAL_BELL_PROXY_REF = `./artifacts/structural-bell-citadel-v0-2026-07-18/${BELL_DESCRIPTOR.proxyRef}`;
 
 export const STRUCTURAL_ASSET_SIDECAR_SCHEMA = 'kaminos.structural-material.asset-sidecar.v0';
 export const STRUCTURAL_ASSET_SIDECAR_ROUTE = 'kaminos.structural-material.asset-sidecar.v0';
@@ -16,15 +21,29 @@ const PROTOTYPES = {
     visualStatus: 'deterministic-block-fallback',
   },
   'bell-body': {
-    assetId: 'citadel-bell-v0',
-    instancePolicy: 'single-authored-asset',
-    visualStatus: 'awaiting-handy-candyman-cast',
-    visualRef: null,
-    proxyRef: null,
-    attachmentSocketId: 'bell-crown-v0',
-    materialProfile: 'weathered-cast-bronze-v0',
+    assetId: BELL_DESCRIPTOR.assetId,
+    instancePolicy: BELL_DESCRIPTOR.instancePolicy,
+    visualStatus: 'authored-glb',
+    visualRef: STRUCTURAL_BELL_VISUAL_REF,
+    proxyRef: STRUCTURAL_BELL_PROXY_REF,
+    attachmentSocketId: BELL_DESCRIPTOR.pivot.socketId,
+    materialProfile: BELL_DESCRIPTOR.materialProfile,
+    localBounds: BELL_DESCRIPTOR.localBounds,
+    proxyBounds: BELL_DESCRIPTOR.proxyBounds,
+    structuralAuthority: BELL_DESCRIPTOR.structuralAuthority,
+    collisionStatus: BELL_DESCRIPTOR.collisionStatus,
   },
 };
+
+if (
+  BELL_DESCRIPTOR.schema !== 'kaminos.structural-material.asset-descriptor.v0' ||
+  BELL_DESCRIPTOR.structuralAuthority !== false ||
+  BELL_DESCRIPTOR.collisionStatus !== 'proxy-unverified' ||
+  BELL_DESCRIPTOR.pivot?.socketId !== 'bell-crown-v0' ||
+  BELL_DESCRIPTOR.pivot?.translation?.some(value => value !== 0)
+) {
+  throw new Error('structural asset sidecar rejected bell descriptor authority, schema, or crown pivot');
+}
 
 function finite(value, label) {
   const number = Number(value);

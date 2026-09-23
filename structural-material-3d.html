@@ -156,6 +156,7 @@
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import {
       STRUCTURAL_MATERIAL_3D_ROUTE,
       STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
@@ -227,7 +228,11 @@
       STRUCTURAL_MATERIAL_3D_SYMPATHETIC_EFFIGY_CONSUMER_ROUTE,
       buildSympatheticCitadelProjection,
     } from './structural-material-3d-sympathetic-citadel.js';
-    import { buildStructuralAssetSidecar } from './structural-material-3d-asset-sidecar.js';
+    import {
+      buildStructuralAssetSidecar,
+      STRUCTURAL_BELL_DESCRIPTOR,
+      STRUCTURAL_BELL_VISUAL_REF,
+    } from './structural-material-3d-asset-sidecar.js';
     import {
       advanceAcceptedStructuralBellTower,
       deriveAcceptedBellTowerState,
@@ -271,11 +276,94 @@
     );
     camera.lookAt(0, 0, 0);
 
+    const bellVisualLoadPromise = bellTowerMode
+      ? new GLTFLoader().loadAsync(STRUCTURAL_BELL_VISUAL_REF)
+      : null;
     const renderer = new THREE.WebGPURenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     stage.prepend(renderer.domElement);
     await renderer.init();
+
+    let authoredBellVisualTemplate = null;
+    let authoredBellVisualRoute = {
+      status: bellTowerMode ? 'loading' : 'not-requested',
+      requestedRef: bellTowerMode ? STRUCTURAL_BELL_VISUAL_REF : null,
+      effectiveRef: null,
+      nodeName: null,
+      meshCount: 0,
+      triangleCount: 0,
+      measuredBounds: null,
+      fallbackUsed: false,
+      proxyLoaded: false,
+    };
+    if (bellVisualLoadPromise) {
+      try {
+        const gltf = await bellVisualLoadPromise;
+        const visual = gltf.scene.getObjectByName(STRUCTURAL_BELL_DESCRIPTOR.nodeNames.visual);
+        if (!visual) throw new Error('authored bell GLB is missing BellVisual');
+        visual.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(visual);
+        const measuredSize = bounds.getSize(new THREE.Vector3());
+        const expectedMin = STRUCTURAL_BELL_DESCRIPTOR.localBounds.min;
+        const expectedMax = STRUCTURAL_BELL_DESCRIPTOR.localBounds.max;
+        const measuredBounds = { min: bounds.min.toArray(), max: bounds.max.toArray() };
+        const boundsError = Math.max(
+          ...bounds.min.toArray().map((value, index) => Math.abs(value - expectedMin[index])),
+          ...bounds.max.toArray().map((value, index) => Math.abs(value - expectedMax[index])),
+        );
+        let meshCount = 0;
+        let triangleCount = 0;
+        const renderedMaterials = [];
+        visual.traverse(object => {
+          if (!object.isMesh || !object.geometry) return;
+          meshCount += 1;
+          const index = object.geometry.index;
+          triangleCount += (index ? index.count : object.geometry.getAttribute('position').count) / 3;
+          const adaptMaterial = material => {
+            const adapted = material.clone();
+            if ('metalness' in adapted) adapted.metalness = Math.min(adapted.metalness, 0.34);
+            if ('roughness' in adapted) adapted.roughness = Math.max(adapted.roughness, 0.44);
+            adapted.needsUpdate = true;
+            renderedMaterials.push({
+              name: adapted.name,
+              metalness: adapted.metalness ?? null,
+              roughness: adapted.roughness ?? null,
+            });
+            return adapted;
+          };
+          object.material = Array.isArray(object.material)
+            ? object.material.map(adaptMaterial)
+            : adaptMaterial(object.material);
+        });
+        if (meshCount === 0 || boundsError > 0.001) {
+          throw new Error(`authored bell GLB failed bounds/mesh contract (bounds error ${boundsError})`);
+        }
+        authoredBellVisualTemplate = visual;
+        authoredBellVisualRoute = {
+          status: 'loaded',
+          requestedRef: STRUCTURAL_BELL_VISUAL_REF,
+          effectiveRef: new URL(STRUCTURAL_BELL_VISUAL_REF, window.location.href).href,
+          nodeName: visual.name,
+          meshCount,
+          triangleCount,
+          measuredBounds,
+          descriptorBoundsError: boundsError,
+          renderedMaterials,
+          fallbackUsed: false,
+          proxyLoaded: false,
+          proxyAuthority: 'unverified-not-used',
+        };
+      } catch (error) {
+        authoredBellVisualRoute = {
+          ...authoredBellVisualRoute,
+          status: 'failed',
+          failure: String(error?.message || error),
+          fallbackUsed: true,
+          proxyAuthority: 'unverified-not-used',
+        };
+      }
+    }
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = false;
@@ -742,7 +830,28 @@
       const bellAnchor = structuralAssetSidecar.anchors
         .find(anchor => anchor.structuralRole === 'bell-body');
       if (bellAnchor) {
-        const bellMesh = new THREE.Mesh(bellFallbackGeometry, bellMaterial);
+        const bellMesh = new THREE.Group();
+        let renderedVisual;
+        if (authoredBellVisualTemplate) {
+          renderedVisual = authoredBellVisualTemplate.clone(true);
+          renderedVisual.traverse(object => {
+            if (!object.isMesh) return;
+            object.userData.structuralPick = { kind: 'node', id: bellAnchor.structuralNodeId };
+            object.userData.structuralAssetAnchorId = bellAnchor.id;
+          });
+          bellMesh.add(renderedVisual);
+          const authoredHeight = STRUCTURAL_BELL_DESCRIPTOR.localBounds.max[1] -
+            STRUCTURAL_BELL_DESCRIPTOR.localBounds.min[1];
+          const fallbackHeight = bellFallbackGeometry.boundingBox
+            ? bellFallbackGeometry.boundingBox.getSize(new THREE.Vector3()).y
+            : 0.275;
+          bellMesh.scale.setScalar(fallbackHeight / authoredHeight);
+        } else {
+          renderedVisual = new THREE.Mesh(bellFallbackGeometry, bellMaterial);
+          bellMesh.add(renderedVisual);
+          renderedVisual.userData.structuralPick = { kind: 'node', id: bellAnchor.structuralNodeId };
+          authoredBellVisualRoute.fallbackUsed = true;
+        }
         const previewOffset = contactPreviewOffsetByNodeId.get(bellAnchor.structuralNodeId);
         const dynamicsBody = consumerId === 'represented-citadel'
           ? detachedDynamics.bodies.find(body => body.assetAnchorId === bellAnchor.id) || null
@@ -752,35 +861,49 @@
           y: (dynamicsBody?.position.y ?? bellAnchor.acceptedBodyCenter.y) + (previewOffset?.y || 0),
           z: (dynamicsBody?.position.z ?? bellAnchor.acceptedBodyCenter.z) + (previewOffset?.z || 0),
         };
-        const crownWorld = worldCoordinate(bellAnchor.acceptedCrownPoint);
+        const crownWorld = worldCoordinate({
+          x: bellAnchor.acceptedCrownPoint.x + (previewOffset?.x || 0),
+          y: bellAnchor.acceptedCrownPoint.y + (previewOffset?.y || 0),
+          z: bellAnchor.acceptedCrownPoint.z + (previewOffset?.z || 0),
+        });
         const bodyWorld = worldCoordinate(renderedBodyCenter);
         const renderedAxis = bodyWorld.clone().sub(crownWorld);
-        bellMesh.position.copy(bodyWorld);
+        const baseQuaternion = new THREE.Quaternion();
         if (renderedAxis.lengthSq() > 0.000001) {
-          bellMesh.quaternion.setFromUnitVectors(
+          baseQuaternion.setFromUnitVectors(
             new THREE.Vector3(0, -1, 0),
             renderedAxis.normalize(),
           );
         }
-        bellMesh.userData.detachedDynamicsBaseQuaternion = bellMesh.quaternion.toArray();
+        bellMesh.position.copy(crownWorld);
+        bellMesh.quaternion.copy(baseQuaternion);
         if (dynamicsBody) {
           const tumbleAxis = new THREE.Vector3(
             dynamicsBody.rotationAxis.x * 2.35,
             dynamicsBody.rotationAxis.y * -1.25,
             dynamicsBody.rotationAxis.z * 0.95,
           ).normalize();
-          bellMesh.quaternion.premultiply(
-            new THREE.Quaternion().setFromAxisAngle(tumbleAxis, dynamicsBody.rotationAngle),
-          );
+          const tumble = new THREE.Quaternion().setFromAxisAngle(tumbleAxis, dynamicsBody.rotationAngle);
+          const staticBodyWorld = worldCoordinate({
+            x: bellAnchor.acceptedBodyCenter.x + (previewOffset?.x || 0),
+            y: bellAnchor.acceptedBodyCenter.y + (previewOffset?.y || 0),
+            z: bellAnchor.acceptedBodyCenter.z + (previewOffset?.z || 0),
+          });
+          const crownOffset = crownWorld.sub(staticBodyWorld).applyQuaternion(tumble);
+          bellMesh.position.copy(bodyWorld).add(crownOffset);
+          bellMesh.quaternion.copy(tumble).multiply(baseQuaternion);
         }
+        bellMesh.userData.detachedDynamicsBaseQuaternion = baseQuaternion.toArray();
         bellMesh.userData.sympatheticProjection = {
           consumerId,
-          kind: 'authored-asset-fallback',
+          kind: authoredBellVisualTemplate ? 'authored-asset-visual' : 'authored-asset-fallback',
           assetId: bellAnchor.prototype.assetId,
           assetAnchorId: bellAnchor.id,
           structuralNodeId: bellAnchor.structuralNodeId,
           attached: bellAnchor.attached,
           visualStatus: bellAnchor.prototype.visualStatus,
+          visualRouteStatus: authoredBellVisualRoute.status,
+          pivotAuthority: bellAnchor.pivotAuthority,
           dynamicsBodyId: dynamicsBody?.id || null,
           dynamicsPhase: dynamicsBody?.phase || null,
         };
@@ -827,30 +950,36 @@
       const applied = [];
       citadelWorld.traverse(object => {
         const projection = object.userData?.sympatheticProjection;
-        if (projection?.kind !== 'authored-asset-fallback') return;
+        if (!['authored-asset-visual', 'authored-asset-fallback'].includes(projection?.kind)) return;
         const body = bodiesByAnchor.get(projection.assetAnchorId);
         if (!body) return;
-        const expectedPosition = worldCoordinate(body.position);
-        object.position.copy(expectedPosition);
+        const expectedBodyCenter = worldCoordinate(body.position);
+        const assetAnchor = object.userData.structuralAssetAnchor;
+        if (!assetAnchor?.acceptedCrownPoint || !assetAnchor?.acceptedBodyCenter) return;
+        const staticBodyCenter = worldCoordinate(assetAnchor.acceptedBodyCenter);
+        const crownOffset = worldCoordinate(assetAnchor.acceptedCrownPoint).sub(staticBodyCenter);
         const baseQuaternion = object.userData.detachedDynamicsBaseQuaternion;
-        if (Array.isArray(baseQuaternion)) object.quaternion.fromArray(baseQuaternion);
+        const base = Array.isArray(baseQuaternion)
+          ? new THREE.Quaternion().fromArray(baseQuaternion)
+          : object.quaternion.clone();
         const tumbleAxis = new THREE.Vector3(
           body.rotationAxis.x * 2.35,
           body.rotationAxis.y * -1.25,
           body.rotationAxis.z * 0.95,
         ).normalize();
-        object.quaternion.premultiply(
-          new THREE.Quaternion().setFromAxisAngle(tumbleAxis, body.rotationAngle),
-        );
+        const tumble = new THREE.Quaternion().setFromAxisAngle(tumbleAxis, body.rotationAngle);
+        const expectedCrown = expectedBodyCenter.clone().add(crownOffset.applyQuaternion(tumble));
+        object.position.copy(expectedCrown);
+        object.quaternion.copy(tumble).multiply(base);
         projection.dynamicsBodyId = body.id;
         projection.dynamicsPhase = body.phase;
         applied.push({
           bodyId: body.id,
           assetAnchorId: body.assetAnchorId,
           phase: body.phase,
-          expectedPosition: expectedPosition.toArray(),
+          expectedPosition: expectedCrown.toArray(),
           renderedPosition: object.position.toArray(),
-          positionError: object.position.distanceTo(expectedPosition),
+          positionError: object.position.distanceTo(expectedCrown),
           rotationAngle: body.rotationAngle,
         });
       });
@@ -863,6 +992,30 @@
         authority: DETACHED_DYNAMICS_AUTHORITY,
         transforms: applyDetachedDynamicsTransforms(),
       };
+    }
+
+    function authoredBellRenderWitness() {
+      world.updateMatrixWorld(true);
+      citadelWorld.updateMatrixWorld(true);
+      const consumers = [];
+      for (const group of [world, citadelWorld]) {
+        group.traverse(object => {
+          const projection = object.userData?.sympatheticProjection;
+          if (!['authored-asset-visual', 'authored-asset-fallback'].includes(projection?.kind)) return;
+          consumers.push({
+            consumerId: projection.consumerId,
+            assetId: projection.assetId,
+            assetAnchorId: projection.assetAnchorId,
+            structuralNodeId: projection.structuralNodeId,
+            pivotAuthority: projection.pivotAuthority,
+            visualStatus: projection.visualStatus,
+            visualRouteStatus: projection.visualRouteStatus,
+            worldPosition: object.getWorldPosition(new THREE.Vector3()).toArray(),
+            worldQuaternion: object.getWorldQuaternion(new THREE.Quaternion()).toArray(),
+          });
+        });
+      }
+      return consumers;
     }
 
     function detachedDynamicsHasMovingBodies() {
@@ -988,8 +1141,14 @@
         ? ` | dynamics ${dynamicsBody?.phase || 'attached'} c${detachedDynamics.contactEpoch}`
         : '';
       readout.textContent = `broken ${summary.brokenBondCount} | repaired ${summary.repairedBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}${dynamicsSuffix}`;
+      const assetPrefix = bellTowerMode
+        ? `${STRUCTURAL_BELL_DESCRIPTOR.assetId} visual ${authoredBellVisualRoute.status}${authoredBellVisualRoute.fallbackUsed ? ' (fallback)' : ''} | proxy unverified | `
+        : '';
       route.textContent = sympatheticCitadelMode
-        ? `${STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE} | ${bellTowerMode ? DETACHED_DYNAMICS_ROUTE : 'shared accepted state'}`
+        ? `${assetPrefix}${STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE} | ${bellTowerMode ? DETACHED_DYNAMICS_ROUTE : 'shared accepted state'}`
+        : `${EFFIGY_TILE_GEOMETRY_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
+      route.title = sympatheticCitadelMode
+        ? `${STRUCTURAL_MATERIAL_3D_SYMPATHETIC_CITADEL_ROUTE} | ${bellTowerMode ? DETACHED_DYNAMICS_ROUTE : 'shared accepted state'} | ${authoredBellVisualRoute.effectiveRef || authoredBellVisualRoute.requestedRef || 'no authored asset requested'} | proxy: unverified, not loaded`
         : `${EFFIGY_TILE_GEOMETRY_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
       const latestGpuOperation = latestGpuOperationTracker.snapshot();
       const latestGpuReceipt = latestGpuOperation?.receipt;
@@ -2123,6 +2282,8 @@
       },
       geometryTransitionLedger: structuredClone(geometryTransitionLedger),
       sympatheticCitadel: sympatheticCitadelWitness(),
+      authoredBellVisual: structuredClone(authoredBellVisualRoute),
+      authoredBellConsumers: authoredBellRenderWitness(),
       detachedDynamics: bellTowerMode ? structuredClone(detachedDynamics) : null,
       detachedDynamicsRendered: bellTowerMode ? detachedDynamicsRenderWitness() : null,
       detachedDynamicsClock: bellTowerMode ? {

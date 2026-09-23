@@ -426,7 +426,19 @@ try {
       pageBefore.sympatheticCitadel?.rendered?.citadel?.instancedBlockCount === 216 &&
       assetSidecar.bellAnchor?.structuralRole === 'bell-body' &&
       assetSidecar.bellAnchor?.prototype?.assetId === 'citadel-bell-v0' &&
-      assetSidecar.bellAnchor?.prototype?.visualStatus === 'awaiting-handy-candyman-cast' &&
+      assetSidecar.bellAnchor?.prototype?.visualStatus === 'authored-glb' &&
+      assetSidecar.bellAnchor?.prototype?.structuralAuthority === false &&
+      assetSidecar.bellAnchor?.prototype?.collisionStatus === 'proxy-unverified' &&
+      pageBefore.authoredBellVisual?.status === 'loaded' &&
+      pageBefore.authoredBellVisual?.nodeName === 'BellVisual' &&
+      pageBefore.authoredBellVisual?.triangleCount === 2180 &&
+      pageBefore.authoredBellVisual?.descriptorBoundsError <= 0.001 &&
+      pageBefore.authoredBellVisual?.proxyLoaded === false &&
+      pageBefore.authoredBellConsumers?.length === 2 &&
+      new Set(pageBefore.authoredBellConsumers.map(consumer => consumer.assetAnchorId)).size === 1 &&
+      pageBefore.authoredBellConsumers.every(consumer =>
+        consumer.structuralNodeId === assetSidecar.bellAnchor.structuralNodeId &&
+        consumer.visualStatus === 'authored-glb' && consumer.pivotAuthority === 'bell-crown-v0') &&
       pageBefore.sympatheticCitadel?.bellCrownSocket?.id === 'bell-crown-v0';
     assertCheck(
       report.checks.bellTowerInitialIdentity,

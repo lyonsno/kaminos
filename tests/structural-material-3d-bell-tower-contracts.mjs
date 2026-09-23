@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -21,6 +22,22 @@ const greenroomSource = readFileSync(
   join(root, 'structural-material-3d-bell-tower-greenroom-launch.mjs'),
   'utf8',
 );
+const assetRoot = join(root, 'artifacts/structural-bell-citadel-v0-2026-07-18');
+const assetDescriptor = JSON.parse(readFileSync(join(assetRoot, 'structuralAssetDescriptor.json'), 'utf8'));
+const assetReceipt = JSON.parse(readFileSync(join(assetRoot, 'route-receipt.json'), 'utf8'));
+for (const [role, relativePath] of [
+  ['visual', 'visual/citadel-bell-v0.glb'],
+  ['proxy', 'proxy/citadel-bell-v0-proxy.glb'],
+]) {
+  const bytes = readFileSync(join(assetRoot, relativePath));
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  assert.equal(digest, assetReceipt.outputs[role].sha256, `${role} GLB matches Handy's source receipt`);
+}
+assert.equal(assetDescriptor.structuralAuthority, false);
+assert.equal(assetDescriptor.collisionStatus, 'proxy-unverified');
+assert.equal(assetDescriptor.pivot.socketId, 'bell-crown-v0');
+assert.equal(assetDescriptor.pivot.translation.every(value => value === 0), true);
+assert.equal(assetDescriptor.nodeNames.visual, 'BellVisual');
 
 const topologyProfile = 'three-turret-bell-citadel-v0';
 const bellCitadel = createLayeredStructuralMaterial({
@@ -116,7 +133,20 @@ const bellAsset = initialAssets.anchors.find(anchor => anchor.structuralRole ===
 const masonryAsset = initialAssets.anchors.find(anchor => anchor.structuralRole === 'masonry');
 const masonryCell = geometry.cells.find(cell => cell.structuralNodeId === masonryAsset.structuralNodeId);
 assert.equal(bellAsset.prototype.assetId, 'citadel-bell-v0');
-assert.equal(bellAsset.prototype.visualStatus, 'awaiting-handy-candyman-cast');
+assert.equal(bellAsset.prototype.visualStatus, 'authored-glb');
+assert.equal(
+  bellAsset.prototype.visualRef,
+  './artifacts/structural-bell-citadel-v0-2026-07-18/visual/citadel-bell-v0.glb',
+  'the structural bell anchor points at Handy’s produced visual package',
+);
+assert.equal(
+  bellAsset.prototype.proxyRef,
+  './artifacts/structural-bell-citadel-v0-2026-07-18/proxy/citadel-bell-v0-proxy.glb',
+  'the named proxy remains available without inheriting picking or collision authority',
+);
+assert.match(pageSource, /GLTFLoader/);
+assert.match(pageSource, /BellVisual/);
+assert.equal(bellAsset.prototype.attachmentSocketId, 'bell-crown-v0');
 assert.equal(bellAsset.pivotAuthority, 'bell-crown-v0');
 assert.deepEqual(bellAsset.currentTranslation, initialBell.currentCrown);
 assert.deepEqual(bellAsset.acceptedCrownPoint, initialBell.currentCrown);

@@ -1,0 +1,166 @@
+{
+  "schema": "kaminos.structural-material.camera-browser-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "requestedRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "effectiveRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "requestedCameraAuthority": "operator-camera-controls-v0",
+  "effectiveCameraAuthority": "operator-camera-controls-v0",
+  "requestedConfig": {
+    "url": "http://127.0.0.1:8401/structural-material-3d.html?sympatheticCitadel=1&bellTower=1",
+    "debugPort": 9335,
+    "width": 1280,
+    "height": 820,
+    "deviceScaleFactor": 1,
+    "loadTimeoutMs": 30000,
+    "reportPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-local-smoke-r2.json",
+    "screenshotPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-local-smoke-r2.png"
+  },
+  "effectiveConfig": {
+    "url": "http://127.0.0.1:8401/structural-material-3d.html?sympatheticCitadel=1&bellTower=1",
+    "debugPort": 9335,
+    "loadTimeoutMs": 30000,
+    "initialViewport": {
+      "width": 1280,
+      "height": 820,
+      "deviceScaleFactor": 1
+    },
+    "reportPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-local-smoke-r2.json",
+    "screenshotPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-local-smoke-r2.png",
+    "browserTarget": "first-page-target",
+    "resizeProbeViewport": {
+      "width": 1075,
+      "height": 738,
+      "deviceScaleFactor": 1
+    },
+    "captureViewport": {
+      "width": 1075,
+      "height": 738,
+      "devicePixelRatio": 1
+    }
+  },
+  "checks": {
+    "routeIdentity": true,
+    "cameraAuthority": true,
+    "idlePointerPreservedCamera": true,
+    "buttonIsolationPassed": true,
+    "materialDragPreservedCamera": true,
+    "materialDragProducedForce": true,
+    "materialDragWasPicked": true,
+    "orbitChangedCamera": true,
+    "backgroundDragAuthoredNoForce": true,
+    "postOrbitMaterialPreservedCamera": true,
+    "postOrbitForceFollowedCamera": true,
+    "postOrbitContactStayedPicked": true,
+    "panChangedTarget": true,
+    "postCameraActionsPreservedCamera": true,
+    "zoomChangedDistance": true,
+    "resizePreservedCamera": true,
+    "screenshotWritten": true,
+    "noRuntimeErrors": true,
+    "noCameraInvariantViolations": true
+  },
+  "pixelProbe": {
+    "ok": true,
+    "source": "canvas-blob-pixels",
+    "nonDarkPixels": 1225,
+    "width": 1075,
+    "height": 683,
+    "sampleWidth": 96,
+    "sampleHeight": 96
+  },
+  "runtimeErrors": [],
+  "lastTrustworthyEvidence": {
+    "phase": "visual-evidence",
+    "pixelProbe": {
+      "ok": true,
+      "source": "canvas-blob-pixels",
+      "nonDarkPixels": 1225,
+      "width": 1075,
+      "height": 683,
+      "sampleWidth": 96,
+      "sampleHeight": 96
+    },
+    "screenshotPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-local-smoke-r2.png"
+  },
+  "error": null,
+  "postOrbitInteraction": {
+    "pick": {
+      "authority": "stable-rest-material-contact-v0",
+      "kind": "node",
+      "id": "n279",
+      "point": {
+        "x": 0.5,
+        "y": 0.11111,
+        "z": 1
+      },
+      "displayPoint": {
+        "x": 0.4928283759090151,
+        "y": 0.11923845195142191,
+        "z": 1.0149011148420635
+      },
+      "segmentT": null,
+      "distance": 3.694429069512498
+    },
+    "forceEnvelope": {
+      "kind": "camera-relative-picked-layered-drag",
+      "authority": "camera-relative-picked-contact-force-envelope-v0",
+      "gestureId": "picked-drag-2",
+      "start": {
+        "x": 0.4928283759090151,
+        "y": 0.11923845195142191,
+        "z": 1.0149011148420635
+      },
+      "point": {
+        "x": 0.5,
+        "y": 0.11111,
+        "z": 1
+      },
+      "displayPoint": {
+        "x": 0.4928283759090151,
+        "y": 0.11923845195142191,
+        "z": 1.0149011148420635
+      },
+      "contactIdentity": {
+        "authority": "stable-rest-material-contact-v0",
+        "kind": "node",
+        "id": "n279",
+        "segmentT": null
+      },
+      "visualEnd": {
+        "x": 0.57052,
+        "y": 0.15335,
+        "z": 1.19601
+      },
+      "vector": {
+        "x": 0.38848,
+        "y": 0.17057,
+        "z": 0.90553
+      },
+      "screenBasis": {
+        "right": {
+          "x": 0.38848,
+          "y": 0.17057,
+          "z": 0.90553
+        },
+        "down": {
+          "x": 0.06571,
+          "y": 0.88492,
+          "z": -0.46109
+        }
+      },
+      "screenDelta": {
+        "x": 0.2,
+        "y": 0
+      },
+      "dragLength": 0.2,
+      "magnitude": 0.73,
+      "inputLoad": 0.37436,
+      "contactRamp": 1,
+      "radius": 0.174,
+      "operationMode": "bind",
+      "operationModeRevision": 1
+    },
+    "cameraRelativeDot": 0.9999954161999999
+  }
+}
