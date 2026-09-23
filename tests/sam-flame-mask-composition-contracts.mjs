@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const hostSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.ok(/createWebGpuDeviceRequest\(adapter,\s*\{\s*requirements:\s*\{\s*requiredFeatures:\s*\[\.\.\.adapter\.features\],\s*requiredLimits:\s*\{\s*maxStorageBuffersPerShaderStage:\s*9\s*\}/.test(hostSource),
-  'the shared SAM/flame device must request the nine-storage-buffer capability used by the volume renderer');
+assert.ok(/createWebGpuDeviceRequest\(adapter,\s*\{\s*requirements:\s*\{\s*requiredFeatures:\s*\[\.\.\.adapter\.features\],\s*requiredLimits:\s*\{\s*maxStorageBuffersPerShaderStage:\s*10\s*\}/.test(hostSource),
+  'the shared SAM/flame device must request ten storage buffers for the tiered Jacobi pipeline layout');
 
 const { encodeSamFlameMaskPixels, fitSamFlameTexture } = await import('../sam-image-tools.js');
 assert.equal(typeof encodeSamFlameMaskPixels, 'function', 'SAM-to-flame composition needs an explicit mask texture contract');
