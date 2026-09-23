@@ -10,8 +10,8 @@ const {
   createTrellisDinoV3PatchEmbedDispatchPlan,
   createTrellisDinoV3PatchEmbedPhaseProgramCpuOracle,
   createTrellisDinoV3PatchEmbedPhaseProgramRouteDefinition,
-  validateRouteDefinition,
-} = await import('../src/index.js');
+} = await import('../src/trellis-dinov3-patch-embed-phase-program.js');
+const { validateRouteDefinition } = await import('../src/index.js');
 
 assert.equal(
   TRELLIS_DINOV3_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
@@ -64,7 +64,7 @@ assert.match(browserSmoke, /actualTokenEnergy[\s\S]*expectedTokenEnergy/,
 assert.match(browserSmoke, /const weightHash = await sha256\(weightBytes\)[\s\S]*?fixtureModel\s*=\s*\{[\s\S]*?weightsHash:\s*weightHash/,
   'the authoritative receipt must identify the exact synthetic model weights by their observed bytes');
 assert.ok(
-  browserSmoke.indexOf('const fixtureModel =') < browserSmoke.indexOf('const route = kit.createTrellisDinoV3PatchEmbedPhaseProgramRouteDefinition'),
+  browserSmoke.indexOf('const fixtureModel =') < browserSmoke.indexOf('const route = routeModule.createTrellisDinoV3PatchEmbedPhaseProgramRouteDefinition'),
   'the route must be constructed from the same synthetic model identity later used for its receipt',
 );
 assert.match(browserSmoke, /createTrellisDinoV3PatchEmbedPhaseProgramRouteDefinition\(\{ kernel, model: fixtureModel \}\)/,

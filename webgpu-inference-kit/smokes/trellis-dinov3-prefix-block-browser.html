@@ -140,7 +140,8 @@ try {
 
   setPhase('acquire-webgpu-device');
   const kit = await import('../src/index.js');
-  const residentProbe = residentHandoffMode ? await import('../src/trellis-dinov3-prefix-block-phase-program.js') : null;
+  const modelRoute = await import('../src/trellis-dinov3-prefix-block-phase-program.js');
+  const residentProbe = residentHandoffMode ? modelRoute : null;
   if (!navigator.gpu) throw new Error('WebGPU unavailable: navigator.gpu is missing');
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error('WebGPU unavailable: requestAdapter returned null');
@@ -190,8 +191,8 @@ try {
   };
   const block1Norm1Weight = references.layer1_norm1_weight.values;
   const block1Norm1Bias = references.layer1_norm1_bias.values;
-  const tensorBundleHash = await kit.computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights);
-  const route = kit.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel, model });
+  const tensorBundleHash = await modelRoute.computeTrellisDinoV3PrefixBlockWeightBundleSha256(weights);
+  const route = modelRoute.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({ kernel, model });
   const request = kit.createRouteInvocationRequest(route, {
     requestId: `trellis-dinov3-prefix-block0-${invocationId}`,
     inputs: {
@@ -226,7 +227,7 @@ try {
   };
   const result = residentHandoffMode
     ? await residentProbe.runTrellisDinoV3PrefixBlockResidentHandoffProbe({ ...routeInput, block1Norm1Weight, block1Norm1Bias })
-    : await kit.runTrellisDinoV3PrefixBlockPhaseProgramRoute({ ...routeInput, includeReadback:true });
+    : await modelRoute.runTrellisDinoV3PrefixBlockPhaseProgramRoute({ ...routeInput, includeReadback:true });
   if (residentHandoffMode) {
     if (result.status !== 'diagnostic-probe-complete' || result.authority !== 'non-authoritative-diagnostic') throw new Error('resident handoff result is not explicitly diagnostic-only');
     if (result.requestedProbeRouteId !== state.requestedRouteId || result.runtimeRouteId !== state.requestedRouteId) throw new Error('resident handoff probe route identity mismatch');

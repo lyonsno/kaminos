@@ -15,7 +15,8 @@ async function sha256(value) {
 try {
   if (!invocationId) throw new Error('smoke invocation identity missing from browser URL');
   const kit = await import('../src/index.js');
-  const routeId = kit.TRELLIS_DINOV3_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID;
+  const routeModule = await import('../src/trellis-dinov3-patch-embed-phase-program.js');
+  const routeId = routeModule.TRELLIS_DINOV3_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID;
   state.requestedRouteId = routeId;
   if (!navigator.gpu) throw new Error('WebGPU unavailable: navigator.gpu is missing');
   const adapter = await navigator.gpu.requestAdapter();
@@ -48,7 +49,7 @@ try {
     weightsHash: weightHash,
     dtype: 'fp32',
   };
-  const route = kit.createTrellisDinoV3PatchEmbedPhaseProgramRouteDefinition({ kernel, model: fixtureModel });
+  const route = routeModule.createTrellisDinoV3PatchEmbedPhaseProgramRouteDefinition({ kernel, model: fixtureModel });
   const request = kit.createRouteInvocationRequest(route, {
     requestId: `trellis-dinov3-patch-embed-browser-smoke-${invocationId}`,
     inputs: {
@@ -59,8 +60,8 @@ try {
     outputs: { 'trellis-dinov3-patch-embeddings': { artifactId: 'fixture-patch-embeddings' } },
   });
   const tensors = { pixelValues, weights: { projection, bias }, shape: { batch: 1, imageHeight: 2, imageWidth: 2, imageChannels: 3, patchSize: 2, hiddenSize: 2 } };
-  const oracle = kit.createTrellisDinoV3PatchEmbedPhaseProgramCpuOracle(tensors);
-  const result = await kit.runTrellisDinoV3PatchEmbedPhaseProgramRoute({ request, route, tensors, adapter, device, queue: device.queue, adapterName, browser, backendIdentity, kernel, model: fixtureModel, includeReadback: true });
+  const oracle = routeModule.createTrellisDinoV3PatchEmbedPhaseProgramCpuOracle(tensors);
+  const result = await routeModule.runTrellisDinoV3PatchEmbedPhaseProgramRoute({ request, route, tensors, adapter, device, queue: device.queue, adapterName, browser, backendIdentity, kernel, model: fixtureModel, includeReadback: true });
   const receipt = result.receipt;
   const actual = result.debugReadback?.patchEmbeddings instanceof Float32Array ? Array.from(result.debugReadback.patchEmbeddings) : null;
   const actualTokenEnergy = result.debugReadback?.tokenEnergy instanceof Float32Array ? Array.from(result.debugReadback.tokenEnergy) : null;

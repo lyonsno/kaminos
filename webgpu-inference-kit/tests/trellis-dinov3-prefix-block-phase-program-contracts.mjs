@@ -6,19 +6,20 @@ const referenceExporter = await readFile(new URL('../tools/trellis-dinov3-mlx-re
 const browserSmoke = await readFile(new URL('../smokes/trellis-dinov3-prefix-block-browser.html', import.meta.url), 'utf8');
 const browserRunner = await readFile(new URL('../tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const parityAssay = await readFile(new URL('../tools/trellis-dinov3-prefix-block-parity-assay.mjs', import.meta.url), 'utf8');
+const publicIndex = await readFile(new URL('../src/index.js', import.meta.url), 'utf8');
 const { validateRouteDefinition } = await import('../src/index.js');
 
-const kit = await import('../src/index.js');
 const residentRoute = await import('../src/trellis-dinov3-prefix-block-phase-program.js');
+const kit = await import('../src/index.js');
 
 assert.equal(
-  kit.TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID,
+  residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID,
   'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0',
   'the synthetic patch-only witness does not provide the checkpointed CLS/register/patch prefix and complete DINO block-0 route',
 );
 
-assert.equal(typeof kit.runTrellisDinoV3PrefixBlockPhaseProgramRoute, 'function');
-const route = kit.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({
+assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockPhaseProgramRoute, 'function');
+const route = residentRoute.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({
   kernel: { profile: 'trellis2-dinov3-prefix-block0-phase-program-v0', commit: 'contract-test' },
 });
 assert.equal(validateRouteDefinition(route).ok, true, 'the pinned DINOv3 prefix/block-0 route must satisfy the shared route contract');
@@ -42,13 +43,13 @@ const shape = {
   tokenCount: 1029, hiddenSize: 1024, heads: 16, headDim: 64,
   intermediateSize: 4096, ropeTheta: 100, layerNormEpsilon: 1e-5,
 };
-const dispatch = kit.createTrellisDinoV3PrefixBlockDispatchPlan({ shape });
+const dispatch = residentRoute.createTrellisDinoV3PrefixBlockDispatchPlan({ shape });
 assert.deepEqual(dispatch.layerNorm1, [1029], 'each token needs one full-width F32 LayerNorm group');
 assert.equal(dispatch.attentionScore.length, 2, 'attention-score dispatch must span all 16 global attention matrices without imposing a token cap');
 assert.ok(dispatch.attentionScore[0] * dispatch.attentionScore[1] * 64 >= 16 * 1029 * 1029);
 assert.equal(dispatch.mlpUp[0] * dispatch.mlpUp[1] * 64 >= 1029 * 4096, true);
 
-const prefix = kit.createTrellisDinoV3PrefixCpuOracle({
+const prefix = residentRoute.createTrellisDinoV3PrefixCpuOracle({
   batch: 1, hiddenSize: 2, registerCount: 2, patchCount: 2,
   classToken: new Float32Array([10, 11]),
   registerTokens: new Float32Array([20, 21, 30, 31]),
@@ -104,6 +105,8 @@ assert.equal(typeof residentRoute.runTrellisDinoV3Block1LayerNormResident, 'func
 assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'function');
 assert.equal(typeof kit.runTrellisDinoV3Block1LayerNormResident, 'undefined', 'the probe kernel remains model-specific rather than expanding the shared kit root API');
 assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'undefined', 'the diagnostic probe is not promoted to the common kit API');
+assert.equal(typeof kit.runTrellisDinoV3PrefixBlockPhaseProgramRoute, 'undefined', 'the model-specific route stays out of the shared kit root API');
+assert.doesNotMatch(publicIndex, /TRELLIS_DINOV3/, 'the model-specific route must not append DINOv3 symbols to the current shared root surface');
 assert.equal(residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID,
   'trellis2.dinov3.block0-to-block1-norm1.resident-probe.webgpu-local.v0');
 const residentFilterIndex = routeImplementation.indexOf("program.phases.filter(phase => phase.name !== 'readback-trellis-dinov3-prefix-block0-outputs')");
