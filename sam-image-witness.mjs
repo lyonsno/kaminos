@@ -675,9 +675,9 @@ async function main() {
         pixelEvidence, sceneObjectId: observed.sceneObject.id };
       report.captures.push({ name: 'flame-composition', path: screenshotPath, visualInspection: 'pending-owner-inspection' });
       report.status = 'captured'; report.failurePhase = null;
-      report.checks = { actualWebgpuMaskToLiveFlameComposition: 'passed', sourceProvenance: 'passed',
-        selectedInstance: 'passed', liveFlameAdvancing: 'passed', foregroundMaskContribution: 'passed',
-        backgroundMaskExclusion: 'passed', twoDimensionalMaskContract: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
+      report.checks = { actualWebgpuMaskToLiveFlameCompositionAtSampledPoints: 'passed', sourceProvenance: 'passed',
+        selectedInstance: 'passed', liveFlameAdvancing: 'passed', foregroundMaskContributionAtSampledPoint: 'passed',
+        backgroundMaskExclusionAtSampledPoint: 'passed', twoDimensionalMaskContract: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
     } else {
     const baseline = values.baseline ? JSON.parse(readFileSync(values.baseline, 'utf8')) : null;
     await run('cold-wheel', 'wheel', 'miss', false, baseline?.visualEvidence.output);

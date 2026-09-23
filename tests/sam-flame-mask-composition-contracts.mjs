@@ -4,6 +4,10 @@ import { readFileSync } from 'node:fs';
 const hostSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const toolsSource = readFileSync(new URL('../sam-image-tools.js', import.meta.url), 'utf8');
 const witnessSource = readFileSync(new URL('../sam-image-witness.mjs', import.meta.url), 'utf8');
+assert.match(witnessSource, /report\.checks\s*=\s*\{\s*actualWebgpuMaskToLiveFlameCompositionAtSampledPoints:\s*'passed'[\s\S]*?foregroundMaskContributionAtSampledPoint:\s*'passed'[\s\S]*?backgroundMaskExclusionAtSampledPoint:\s*'passed'/,
+  'visible-pixel checks must disclose that their foreground and background evidence is point-sampled');
+assert.doesNotMatch(witnessSource, /\b(?:actualWebgpuMaskToLiveFlameComposition|foregroundMaskContribution|backgroundMaskExclusion):\s*'passed'/,
+  'sampled-pixel evidence must not be labeled as a whole-mask guarantee');
 const overlayMethod = hostSource.match(/addMaskOverlay\(target, proposal[\s\S]*?removeMaskOverlaysForTarget\(target\)/)?.[0] || '';
 const bridgeSource = hostSource.match(/function createVolumeMainRendererBridge\(\)[\s\S]*?async function initKaminosVolumeRoute\(\)/)?.[0] || '';
 assert.match(toolsSource, /sourceImageElement:\s*image/, 'mask proposal must carry the exact decoded image whose bytes were hashed');
