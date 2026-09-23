@@ -273,5 +273,12 @@ assert.match(indexHtml, /id="skinned-pose-cast-marker-label"/, 'painted-pair vie
 assert.match(indexHtml, /aria-label="Rotation in degrees"/, 'painted-pair rotation number field remains accessibly named without an extra visible label');
 assert.doesNotMatch(indexHtml, /class="sr-only"/, 'pose preview does not expose an unstyled screen-reader-only label');
 assert.match(witness, /bone selection did not retarget the rotation controls/, 'painted-pair browser witness proves bone selection retargets one rotation card');
-assert.match(witness, /cast selection did not move the visible viewport cue to the selected rig/, 'painted-pair browser witness proves the selected-cast cue tracks the selected rig before posing');
+assert.match(witness, /independently projected selected-mesh bounds center/, 'painted-pair browser witness checks the callout dot against each selected mesh bounds center');
+assert.match(witness, /wrongAnchorRejected/, 'painted-pair browser witness includes a deliberate other-cast wrong-anchor control');
+assert.match(witness, /stayed at its pre-pose location during live bone rotation/, 'painted-pair browser witness fails if a selected-cast cue goes stale after pose changes');
+assert.match(indexHtml, /anchorLocal/, 'painted-pair callout stores its attachment in the live mesh local frame');
+assert.match(indexHtml, /refreshSkinnedPoseCastMarkerAnchor/, 'painted-pair callout refreshes its anchor after selected bone rotation');
+assert.match(indexHtml, /viewportBoundsCenter:\s*skinnedPoseViewportBoundsCenter\(box\)/, 'painted-pair debug state exposes an independently projected current mesh bounds center');
+assert.match(witness, /resetStatusMatchesSelectedCard/, 'painted-pair browser witness preserves active cast/bone/axis context after reset');
+assert.ok(witness.includes('restored, resetErrors, restoredShot, status, resetStatusMatchesSelectedCard'), 'painted-pair browser report serializes the verified reset-status predicate');
 assert.match(witness, /pose status did not track the selected cast and bone/, 'painted-pair browser witness rejects a stale cast/bone status after selection');
