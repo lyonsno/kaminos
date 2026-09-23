@@ -109,7 +109,8 @@ def preprocess_source(source: Path) -> tuple[np.ndarray, dict]:
 
 
 def np_f32(mx, value) -> np.ndarray:
-    return np.ascontiguousarray(np.asarray(mx.eval(value), dtype=np.float32))
+    mx.eval(value)
+    return np.ascontiguousarray(np.asarray(value, dtype=np.float32))
 
 
 def execute(args) -> dict:
