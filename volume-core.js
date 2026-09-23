@@ -7452,7 +7452,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
       }
       if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
-        requiredLimits.maxStorageBuffersPerShaderStage = 9;
+        requiredLimits.maxStorageBuffersPerShaderStage = adapter.limits.maxStorageBuffersPerShaderStage;
       }
       const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
       const deviceDescriptor = {};
