@@ -12,8 +12,7 @@ export const KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES = Object.freeze([
   'topology_surface_chemistry',
   'velocity_vorticity_support',
   'surface_cohesion',
-  'apply_velocity_interface_contact_compaction',
-  'particle_shift_adaptive',
+  'apply_velocity_interface_contact_compaction_particle_shift_adaptive',
 ]);
 export function createFingerFluidSolverTimestampWrites(querySet, firstQueryIndex) {
   if (!querySet || querySet.type !== 'timestamp' || !Number.isSafeInteger(querySet.count)) {
@@ -14521,7 +14520,6 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.compactLiquidFireContacts, safeParticleCount);
       dispatch(pass, pipelines.finalizeLiquidFireContacts, 1);
       liquidFireContactCompactionPassCount += 1;
-      advanceStage(7);
       if (safeParticleShiftStrength > 0) {
         dispatch(pass, pipelines.computeParticleShift, safeParticleCount);
         dispatch(pass, pipelines.applyParticleShift, safeParticleCount);

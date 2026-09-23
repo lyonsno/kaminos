@@ -24,6 +24,10 @@ assert.match(benchSource, /kaminosFingerFluidBenchBeginSolverTimestampCaptureFor
   'bench witness arms the real solver capture API');
 assert.match(coreSource, /KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES[\s\S]*?density_projection[\s\S]*?post_projection_grid_refresh/,
   'solver pass-stage timing has stable semantic stage names');
+assert.ok(coreSource.includes("'apply_velocity_interface_contact_compaction_particle_shift_adaptive'"),
+  'optional particle-shift/adaptive dispatches share the always-active final solver timing group');
+assert.doesNotMatch(coreSource, /advanceStage\(7\)/,
+  'solver stage capture does not create a trailing compute pass that can be empty when optional work is disabled');
 assert.doesNotMatch(coreSource, /pass\.writeTimestamp\(/,
   'solver-stage capture does not depend on Chromium-only in-pass timestamp writes');
 const stageArmStart = coreSource.indexOf('function armSolverStageGpuTimestampCaptureForWitness');
