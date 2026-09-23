@@ -169,10 +169,11 @@ canvas { display: block; }
 #viewport-drop-overlay { position: absolute; inset: 0; background: rgba(25,118,210,0.12); border: 2px dashed #1976d2; display: none; align-items: center; justify-content: center; font-size: 16px; color: #1976d2; font-weight: 600; pointer-events: none; z-index: 10; border-radius: 0; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
 
-#info-bar { position: absolute; bottom: 70px; left: 16px; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
+#info-bar { position: absolute; bottom: 70px; left: 16px; max-width:min(560px,calc(100% - 32px)); white-space:normal; overflow-wrap:anywhere; box-sizing:border-box; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
 #scene-edit-overlay { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:9; }
 #scene-edit-hud { position:absolute; bottom:34px; left:16px; max-width:calc(100% - 32px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; z-index:10; padding:2px 6px; border-radius:3px; background:rgba(0,0,0,0.48); font:10px/1.5 'SF Mono','Fira Code',monospace; color:#d2d2d2; text-shadow:0 1px 3px #000; }
 #scene-edit-hud[data-active="true"] { color:#f4c176; }
+#scene-edit-hud[data-alert="true"] { max-width:min(560px,calc(100% - 32px)); overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:anywhere; padding:5px 8px; border:1px solid rgba(169,120,55,.9); background:rgba(26,20,14,.94); color:#ffd18e; }
 
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
@@ -3291,7 +3292,7 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
-import { frameObject, frameObjects, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
@@ -9743,7 +9744,7 @@ async function initScene() {
     gizmo: transformControls,
     roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object), groundPlane],
     frameAll: () => { frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); markDirty(); },
-    frameSelected: () => { if (frameObject(sceneObjectsForFraming(sceneObjects, activeSceneObjectId)[0], camera, controls)) markDirty(); },
+    frameSelected: () => { if (frameSceneObjectRecord(sceneObjects.find(entry => entry.id === activeSceneObjectId), camera, controls)) markDirty(); },
     blocked: () => transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
@@ -9754,8 +9755,8 @@ async function initScene() {
   });
   window.kaminosNavigationState = navigation.state;
   window.kaminosFrameSelected = () => {
-    const object = sceneObjectsForFraming(sceneObjects, activeSceneObjectId)[0];
-    const changed = frameObject(object, camera, controls); if (changed) markDirty(); return changed;
+    const entry = sceneObjects.find(item => item.id === activeSceneObjectId);
+    const changed = frameSceneObjectRecord(entry, camera, controls); if (changed) markDirty(); return changed;
   };
   scenePlacementTools = installScenePlacementTools({
     viewport: viewportEl,

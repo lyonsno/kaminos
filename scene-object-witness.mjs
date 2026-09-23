@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -220,6 +221,189 @@ async function runMeshAssetLinkScenario(ws) {
       };
     })()
   `, { timeoutMs: 45000 });
+}
+
+async function runModalPivotVisibilityScenario(ws) {
+  phase = 'scenario-modal-pivot-visibility';
+  await runMeshAssetLinkScenario(ws);
+  const objectId = lastEvidence.meshAssetLink?.state?.registeredObjectId;
+  if (!objectId) throw new Error('pivot visibility witness has no registered mesh identity');
+  const visibleState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      const get = () => ({
+        pose: window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId)?.transform || null,
+        hud: document.getElementById('scene-edit-hud')?.textContent || null,
+        overlay: document.getElementById('scene-edit-overlay')?.innerHTML || null,
+      });
+      const before = get();
+      if (!before.pose || !before.hud?.includes('G Move')) throw new Error('registered object was not in the active authoring state: ' + JSON.stringify(before));
+      const visibleCapture = await window.kaminosSceneEdits.apply(objectId, { position: [0, 0, 0] }, 'Visible pivot witness');
+      await wait(250);
+      const visible = get();
+      if (!visible.overlay) throw new Error('visible synthetic object did not render its pivot cue: ' + JSON.stringify(visible));
+      return { objectId, visible, camera: window.kaminosCameraDebugState?.() || null };
+    })()
+  `, { timeoutMs: 30000 });
+  const visiblePath = out.replace(/\.png$/i, '-pivot-visible.png');
+  const visibleShot = await capturePngScreenshot(ws, visiblePath);
+  const hiddenState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      await window.kaminosSceneEdits.apply(objectId, { position: [0, 0, 20] }, 'Behind-camera pivot witness');
+      await wait(250);
+      const hidden = {
+        pose: window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId)?.transform || null,
+        hud: document.getElementById('scene-edit-hud')?.textContent || null,
+        overlay: document.getElementById('scene-edit-overlay')?.innerHTML || null,
+        hudRect: document.getElementById('scene-edit-hud')?.getBoundingClientRect().toJSON() || null,
+        infoRect: document.getElementById('info-bar')?.getBoundingClientRect().toJSON() || null,
+      };
+      if (hidden.overlay) throw new Error('behind-camera object still rendered a pivot cue: ' + JSON.stringify(hidden));
+      if (!hidden.hud?.includes('Pivot hidden: selected pivot is behind the camera')) {
+        throw new Error('behind-camera state did not explain the hidden pivot and recovery: ' + JSON.stringify(hidden));
+      }
+      if (hidden.hudRect.bottom > hidden.infoRect.top) throw new Error('pivot warning overlaps viewport status: ' + JSON.stringify(hidden));
+      return { objectId, hidden };
+    })()
+  `, { timeoutMs: 30000 });
+  const behindPath = out.replace(/\.png$/i, '-pivot-behind-camera.png');
+  const behindShot = await capturePngScreenshot(ws, behindPath);
+  const recoveryState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      const key = value => document.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true }));
+      document.getElementById('viewport')?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+      key('g');
+      const duringModal = document.getElementById('scene-edit-hud')?.textContent || '';
+      if (!duringModal.includes('finish edit with Enter/Esc, then F to frame pivot and object')) throw new Error('modal warning offered F without explaining the required edit exit: ' + duringModal);
+      key('f');
+      if (!window.kaminosPlacementDebugState?.().active) throw new Error('F unexpectedly ended or committed the modal edit');
+      key('Escape');await wait(100);
+      key('f');await wait(250);
+      const afterFrame = {
+        pose: window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId)?.transform || null,
+        hud: document.getElementById('scene-edit-hud')?.textContent || null,
+        overlay: document.getElementById('scene-edit-overlay')?.innerHTML || null,
+      };
+      if (!afterFrame.overlay || afterFrame.hud?.includes('Pivot hidden')) throw new Error('F did not frame the authored pivot with the registered geometry: ' + JSON.stringify(afterFrame));
+      return { duringModal, afterFrame };
+    })()
+  `, { timeoutMs: 30000 });
+  const wrappedStatusState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      const info = document.getElementById('info-bar');
+      await window.kaminosSceneEdits.apply(objectId, { position: [10, 0, 20] }, 'Prepare wrapped status witness');
+      info.textContent = 'Synthetic long-status witness: this deliberately verbose status exercises responsive wrapping and warning separation '.repeat(4);
+      await wait(250);
+      const longStatus = { hud: document.getElementById('scene-edit-hud')?.getBoundingClientRect().toJSON(), info: info.getBoundingClientRect().toJSON(), text: info.textContent };
+      if (longStatus.info.height <= 29) throw new Error('long-status witness did not wrap into a taller status bar: ' + JSON.stringify(longStatus));
+      if (longStatus.hud.bottom > longStatus.info.top) throw new Error('pivot warning overlaps wrapped status: ' + JSON.stringify(longStatus));
+      info.textContent = 'Mesh asset loaded: Modal Authoring Fixture';
+      await wait(100);
+      return { longStatus };
+    })()
+  `, { timeoutMs: 30000 });
+  const outsideState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      const initialCamera = ${JSON.stringify(visibleState.camera)};
+      if (!initialCamera?.position || !initialCamera?.target) throw new Error('initial camera pose missing from pivot witness');
+      window.kaminosSetCameraDebugPose({ position: initialCamera.position, target: initialCamera.target });
+      await window.kaminosSceneEdits.apply(objectId, { position: [2.2, 0, 0], scale: [2.5, 2.5, 2.5] }, 'Offscreen pivot visible bounds witness');
+      await wait(250);
+      const outside = {
+        pose: window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId)?.transform || null,
+        hud: document.getElementById('scene-edit-hud')?.textContent || null,
+        overlay: document.getElementById('scene-edit-overlay')?.innerHTML || null,
+        hudRect: document.getElementById('scene-edit-hud')?.getBoundingClientRect().toJSON() || null,
+        infoRect: document.getElementById('info-bar')?.getBoundingClientRect().toJSON() || null,
+      };
+      if (!outside.pose || !outside.hud?.includes('Pivot hidden: selected pivot is outside the view · F to frame')) throw new Error('offscreen pivot was not described precisely: ' + JSON.stringify(outside));
+      if (outside.hudRect.bottom > outside.infoRect.top) throw new Error('offscreen pivot warning overlaps viewport status: ' + JSON.stringify(outside));
+      const mesh = window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId);
+      if (!mesh || Math.max(...mesh.transform.scale) < 2) throw new Error('offscreen-pivot case did not use an enlarged mesh: ' + JSON.stringify(mesh));
+      return { objectId, outside };
+    })()
+  `, { timeoutMs: 30000 });
+  lastEvidence.modalPivotVisibility = {
+    ...visibleState,
+    ...hiddenState,
+    ...recoveryState,
+    ...wrappedStatusState,
+    ...outsideState,
+    visibleScreenshot: visiblePath,
+    visibleScreenshotBytes: visibleShot.bytes,
+    behindScreenshot: behindPath,
+    behindScreenshotBytes: behindShot.bytes,
+  };
+}
+
+async function runCorrectedSplatFramePivotScenario(ws) {
+  phase = 'scenario-corrected-splat-frame-pivot';
+  if (!expectedServerRoot) throw new Error('corrected-splat witness requires an explicit server root');
+  const fixtureName = 'modal-corrected-splat-frame.ply';
+  const fixturePath = resolve(expectedServerRoot, 'scratch', fixtureName);
+  const fixtureSha256 = createHash('sha256').update(readFileSync(fixturePath)).digest('hex');
+  const evidence = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const source = '/api/read?root=scratch&path=${fixtureName}';
+      const filename = ${JSON.stringify(fixtureName)};
+      await window.greenroomImportSplat(source, filename, { title: 'Corrected Splat Pivot Fixture', subtitle: 'Synthetic PLY / witness' }, {
+        clear: true,
+        metadata: { source, fileName: filename, label: 'Corrected Splat Pivot Fixture' },
+      });
+      await wait(500);
+      const record = (window.kaminosSceneObjectDebugState?.() || []).find(item => item.type === 'splat');
+      if (!record?.id) throw new Error('synthetic PLY did not register as a splat scene object: ' + JSON.stringify(record));
+      window.kaminosSetSceneObjectTransform(record.id, { position: [0, 0, 0] });
+      window.kaminosSetSplatCorrectionDebug(record.id, { centroidOffset: [-10, 0, 0] });
+      const separated = window.kaminosSplatPivotDebugState?.(record.id);
+      if (!separated || Math.abs(separated.sceneAnchorWorldPosition[0]) > 1e-6 || Math.abs(separated.objectPivotWorldPosition[0] + 10) > 1e-6) {
+        throw new Error('fixture did not create separate authored and centroid-shifted pivots: ' + JSON.stringify(separated));
+      }
+      window.kaminosSetCameraDebugPose({ position: [-9, 0, 10], target: [-9, 0, 0] });
+      const beforeCamera = window.kaminosCameraDebugState();
+      const ndc = (point, state) => {
+        const view = state.matrixWorldInverse, projection = state.projectionMatrix;
+        const vx = view[0] * point[0] + view[4] * point[1] + view[8] * point[2] + view[12];
+        const vy = view[1] * point[0] + view[5] * point[1] + view[9] * point[2] + view[13];
+        const vz = view[2] * point[0] + view[6] * point[1] + view[10] * point[2] + view[14];
+        const x = projection[0] * vx + projection[4] * vy + projection[8] * vz + projection[12];
+        const y = projection[1] * vx + projection[5] * vy + projection[9] * vz + projection[13];
+        const w = projection[3] * vx + projection[7] * vy + projection[11] * vz + projection[15];
+        return [x / w, y / w];
+      };
+      const authoredPivot = separated.sceneAnchorWorldPosition;
+      const beforeNdc = ndc(authoredPivot, beforeCamera);
+      if (Math.abs(beforeNdc[0]) < 1 && Math.abs(beforeNdc[1]) < 1) throw new Error('precondition failed: authored pivot was already visible before F: ' + JSON.stringify({ separated, beforeNdc }));
+      document.getElementById('viewport')?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true, cancelable: true }));
+      await wait(250);
+      const afterCamera = window.kaminosCameraDebugState();
+      const afterNdc = ndc(authoredPivot, afterCamera);
+      const after = window.kaminosSplatPivotDebugState?.(record.id);
+      if (Math.abs(afterNdc[0]) >= 1 || Math.abs(afterNdc[1]) >= 1) {
+        throw new Error('F left the corrected splat authored pivot outside the viewport: ' + JSON.stringify({ beforeNdc, afterNdc, separated, after, afterCamera }));
+      }
+      const readRequest = performance.getEntriesByType('resource').map(entry => entry.name).find(name => {
+        const url = new URL(name, location.href);
+        return url.pathname === '/api/read' && url.searchParams.get('root') === 'scratch' && url.searchParams.get('path') === filename;
+      });
+      if (!readRequest) throw new Error('corrected-splat witness did not fetch its named scratch PLY source');
+      return { objectId: record.id, source, readRequest, fixtureName: filename, separated, beforeNdc, afterNdc, after, beforeCamera, afterCamera };
+    })()
+  `, { timeoutMs: 45000 });
+  const capturePath = out.replace(/\.png$/i, '-corrected-splat-frame-pivot.png');
+  const screenshot = await capturePngScreenshot(ws, capturePath);
+  lastEvidence.correctedSplatFramePivot = { ...evidence, fixtureSha256, screenshot: capturePath, screenshotBytes: screenshot.bytes };
 }
 
 const DIRECT_ASSET_LINK_SCENARIOS = {
@@ -4923,6 +5107,10 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'modal-pivot-visibility') {
+    await runModalPivotVisibilityScenario(ws);
+  } else if (scenario === 'corrected-splat-frame-pivot') {
+    await runCorrectedSplatFramePivotScenario(ws);
   } else if (scenario === 'splat-asset-link') {
     await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.splat);
   } else if (scenario === 'image-asset-link') {
