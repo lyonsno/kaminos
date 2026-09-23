@@ -79,12 +79,15 @@ export function fitSamFlameTextureToMask(flameWidth, flameHeight, maskWidth, mas
     || bounds.width !== bounds.right - bounds.left || bounds.height !== bounds.bottom - bounds.top) {
     throw new Error('Mask bounds are invalid');
   }
-  const fit = fitSamFlameTexture(flameWidth, flameHeight, bounds.width, bounds.height);
+  const flameAspect = flameWidth / flameHeight;
+  const boundsAspect = bounds.width / bounds.height;
+  const scaleX = flameAspect > boundsAspect ? flameAspect / boundsAspect : 1;
+  const scaleY = flameAspect > boundsAspect ? 1 : boundsAspect / flameAspect;
   const imageRect = {
-    left: (bounds.left + fit.offsetX * bounds.width) / maskWidth,
-    top: (bounds.top + fit.offsetY * bounds.height) / maskHeight,
-    width: fit.scaleX * bounds.width / maskWidth,
-    height: fit.scaleY * bounds.height / maskHeight,
+    left: (bounds.left + (1 - scaleX) * bounds.width / 2) / maskWidth,
+    top: (bounds.top + (1 - scaleY) * bounds.height / 2) / maskHeight,
+    width: scaleX * bounds.width / maskWidth,
+    height: scaleY * bounds.height / maskHeight,
   };
   const uvBottom = 1 - imageRect.top - imageRect.height;
   return { imageRect, uvTransform: {
