@@ -193,6 +193,67 @@ if (process.env.KIT_FOREGROUND_BASELINE !== '1') {
     }
   });
 
+  test('an idle service timing failure is recorded without poisoning later renderer requests', async () => {
+    let clockReads = 0;
+    const unhandledRejections = [];
+    const collectUnhandled = reason => unhandledRejections.push(reason);
+    process.on('unhandledRejection', collectUnhandled);
+    const { service, submissions } = fixture({ now() {
+      clockReads += 1;
+      if (clockReads === 7) throw new Error('idle service clock failed');
+      return clockReads;
+    } });
+    try {
+      const first = service.request(frame('idle-service-clock-failure'));
+      const firstReceipt = await first.completion;
+      assert.equal(firstReceipt.status, 'completed');
+      assert.equal(firstReceipt.submissionCount, 1);
+      await turn();
+      const failedService = service.snapshot().lastOutsideRunService;
+      assert.equal(failedService.status, 'failed');
+      assert.equal(failedService.settledAtMs, null);
+      assert.equal(failedService.failure.phase, 'foreground-service-receipt-timing');
+      assert.match(failedService.failure.error.message, /idle service clock failed/);
+
+      const later = service.request(frame('idle-after-service-clock-failure'));
+      const laterOutcome = await Promise.race([
+        later.completion.then(receipt => ({ state: 'settled', receipt })),
+        turn().then(() => ({ state: 'pending' })),
+      ]);
+      assert.equal(laterOutcome.state, 'settled', 'service timing failure must not poison idle rendering');
+      assert.equal(laterOutcome.receipt.status, 'completed');
+      assert.deepEqual(submissions, ['idle-service-clock-failure', 'idle-after-service-clock-failure']);
+      assert.deepEqual(unhandledRejections, []);
+      await service.dispose();
+    } finally {
+      process.off('unhandledRejection', collectUnhandled);
+    }
+  });
+
+  test('a rejected active-run service timing receipt preserves the run quarantine', async () => {
+    let clockReads = 0;
+    const { service, submissions } = fixture({ now() {
+      clockReads += 1;
+      if (clockReads === 7) throw new Error('active service clock failed');
+      return clockReads;
+    } });
+    const run = await service.beginRun('service-clock-quarantined');
+    const request = service.request(frame('active-service-clock-failure'));
+    await assert.rejects(run.finish(), /active service clock failed/);
+    const receipt = await request.completion;
+    assert.equal(receipt.status, 'completed');
+    assert.deepEqual(submissions, ['active-service-clock-failure']);
+    const failedService = run.foregroundOpportunities.snapshot().services.at(-1);
+    assert.equal(failedService.status, 'failed');
+    assert.equal(failedService.settledAtMs, null);
+    assert.equal(failedService.failure.phase, 'foreground-service-receipt-timing');
+    assert.match(failedService.failure.error.message, /active service clock failed/);
+    assert.equal(service.snapshot().activeRun.runId, 'service-clock-quarantined');
+    assert.equal(service.snapshot().activeRun.finishing, true);
+    assert.throws(() => service.beginRun('cannot-reuse'), /active run/);
+    assert.throws(() => service.dispose(), /active run/);
+  });
+
   test('idle cancellation, errors, duplicate reservation and expired submit use the interlock contract', async () => {
     const { service, submissions } = fixture();
     const canceled = service.request(frame('canceled'));

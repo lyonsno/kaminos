@@ -330,23 +330,38 @@ function createInterlock(input, outsideRun = false) {
       });
     }
 
+    let serviceSettledAtMs = null;
+    let serviceTimingFailure = null;
+    let serviceTimingError = null;
+    try {
+      serviceSettledAtMs = now();
+    } catch (error) {
+      serviceTimingError = error;
+      serviceTimingFailure = {
+        phase: 'foreground-service-receipt-timing',
+        error: normalizeError(error),
+      };
+    }
     const service = deepFreeze({
       schema: WEBGPU_FOREGROUND_OPPORTUNITY_SERVICE_SCHEMA,
-      status: failures.length > 0 ? 'failed' : 'serviced',
+      status: failures.length > 0 || serviceTimingFailure ? 'failed' : 'serviced',
       routeId: state.routeId,
       runId: state.runId,
       serviceSequence: state.serviceSequence,
       boundary,
       startedAtMs: serviceStartedAtMs,
-      settledAtMs: now(),
+      settledAtMs: serviceSettledAtMs,
       capturedRequestCount: captured.length,
       servicedRequestCount: receipts.length,
       receiptIds: receipts.map(receipt => receipt.requestId),
       failures,
+      failure: serviceTimingFailure,
       authority: 'foreground-callbacks-settled-before-next-inference-encode-no-gpu-completion-or-presentation-claim',
     });
     state.services.push(clone(service));
-    if (receiptTimingError && !outsideRun) throw receiptTimingError;
+    if (!outsideRun && (receiptTimingError || serviceTimingFailure)) {
+      throw receiptTimingError || serviceTimingError;
+    }
     return service;
   }
 
@@ -435,8 +450,9 @@ export const WEBGPU_FOREGROUND_SERVICE_SCHEMA = 'kaminos.webgpu-foreground-servi
  * Await finish when model encoding ends, including on failure. A rejected
  * finish leaves the run latched and does not certify queue completion; retain
  * model-owned resources. Idle renderer callbacks continue after that failure.
- * dispose drains idle callbacks after the last run; device/resource ownership
- * stays external.
+ * snapshot().lastOutsideRunService exposes the latest idle service result,
+ * including timing failures with an unknown settledAtMs. dispose drains idle
+ * callbacks after the last run; device/resource ownership stays external.
  */
 export function createWebGpuForegroundService(input = {}) {
   const options = { ...input, queue: input.queue ?? input.device?.queue };
@@ -451,6 +467,7 @@ export function createWebGpuForegroundService(input = {}) {
   let runCount = 0;
   let outsideRunReceiptCount = 0;
   let lastOutsideRunReceipt = null;
+  let lastOutsideRunService = null;
 
   function assertOpen() {
     if (disposal) throw new Error('foreground service is disposed');
@@ -484,7 +501,10 @@ export function createWebGpuForegroundService(input = {}) {
     const finishing = current?.finishing;
     // The model caller observes finish failure; it must not poison idle rendering.
     idleTail = idleTail.then(() => finishing?.catch(() => undefined)).then(() =>
-      interlock.serviceAtBoundary(serviceBoundary(null, 'foreground-idle')));
+      interlock.serviceAtBoundary(serviceBoundary(null, 'foreground-idle'))).then(service => {
+        lastOutsideRunService = service;
+        return service;
+      });
     return handle;
   }
 
@@ -572,6 +592,7 @@ export function createWebGpuForegroundService(input = {}) {
       outsideRunInFlightCount: outside.size,
       outsideRunReceiptCount,
       lastOutsideRunReceipt,
+      lastOutsideRunService,
     });
   }
 
