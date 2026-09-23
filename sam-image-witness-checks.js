@@ -28,7 +28,8 @@ export function validateSamConsumerInteraction(evidence, invocationId) {
     authority: 'input-to-same-device-submission-liveness; cadence-is-measured-not-a-smoothness-verdict' };
 }
 
-export function validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256, expectedPrompt, presentation }) {
+export function validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256, expectedPrompt, presentation,
+  selectedIndices, volume, pixelEvidence }) {
   check(output?.outputAuthority === 'actual-webgpu-readback', 'mask is not actual browser WebGPU output');
   check(output?.verificationState === 'not-attached', 'mask verification authority was overstated');
   check(output?.effectiveRouteId === 'sam3.detr-encoder.phase-program.webgpu-local.v0', 'unexpected SAM route');
@@ -38,6 +39,11 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
     'live flame composition is not visible in the Assets scene');
   check(typeof output?.invocationId === 'string' && output.invocationId.length > 0, 'missing SAM invocation identity');
   check(Array.isArray(output?.instances) && output.instances.length > 0, 'composition has no selected SAM candidates');
+  check(Array.isArray(selectedIndices) && selectedIndices.length > 0, 'composition has no selected picker instance');
+  check(volume?.active === true && typeof volume.backend === 'string' && volume.backend.startsWith('WebGPU:')
+    && Number.isFinite(volume.frameCount) && volume.frameCount > 1
+    && Number.isFinite(volume.simStepCount) && volume.simStepCount > 0,
+  'live flame is not active and advancing');
   check(bridge?.presentation === 'source-image-mask-overlay' && bridge.maskOverlayCount === 1,
     'live renderer did not select the source-image mask presentation');
   const overlay = bridge.maskOverlay;
@@ -47,9 +53,10 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
   check(overlay.outputAuthority === output.outputAuthority && overlay.verificationState === output.verificationState,
     'overlay provenance does not match SAM output authority');
   check(overlay.invocationId === output.invocationId, 'overlay belongs to another SAM invocation');
-  check(Array.isArray(overlay.instanceIndices) && overlay.instanceIndices.length > 0
-    && overlay.instanceIndices.every(index => output.instances.some(instance => instance.index === index)),
-  'overlay candidates do not match the SAM output');
+  check(Array.isArray(overlay.instanceIndices) && overlay.instanceIndices.length === selectedIndices.length
+    && overlay.instanceIndices.every((index, i) => index === selectedIndices[i])
+    && selectedIndices.every(index => output.instances.some(instance => instance.index === index)),
+  'overlay instance does not match the selected instance');
   check(sceneObject?.type === 'image', 'source image plane is not a registered scene object');
   const provenance = sceneObject.image?.maskProvenance;
   const composition = sceneObject.image?.flameComposition;
@@ -58,10 +65,25 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
     'scene image provenance authority does not match SAM output');
   check(provenance?.sourceImage?.sha256 === sourceSha256 && overlay.sourceImageSha256 === sourceSha256,
     'scene composition source hash does not match the ingressed image');
+  check(Array.isArray(provenance?.indices) && provenance.indices.length === selectedIndices.length
+    && provenance.indices.every((index, i) => index === selectedIndices[i]),
+  'scene provenance does not match the selected instance');
   check(Array.isArray(provenance?.dimensions) && provenance.dimensions[0] === sceneObject.image.width
     && provenance.dimensions[1] === sceneObject.image.height, 'mask dimensions do not match the source image plane');
-  check(composition?.method === '2d-image-space-mask' && composition.fireSimulationModified === false
+  check(composition?.method === '2d-image-space-mask' && composition.status === 'live' && composition.fireSimulationModified === false
     && composition.persistence === 'live-only', 'scene metadata overstates the composition');
+  check(pixelEvidence?.authority === 'three-renderer-canvas-readback', 'final scene pixels were not read from the Three.js renderer');
+  const pixelDistance = (a, b) => {
+    check(Array.isArray(a) && a.length === 4 && a.every(Number.isFinite)
+      && Array.isArray(b) && b.length === 4 && b.every(Number.isFinite), 'pixel evidence is incomplete');
+    return a.slice(0, 3).reduce((sum, value, index) => sum + Math.abs(value - b[index]), 0);
+  };
+  check(pixelEvidence.foreground?.maskValue === 1
+    && pixelDistance(pixelEvidence.foreground.sourceRgba, pixelEvidence.foreground.composedRgba) > 24,
+  'masked foreground pixels do not show live flame contribution');
+  check(pixelEvidence.background?.maskValue === 0
+    && pixelDistance(pixelEvidence.background.sourceRgba, pixelEvidence.background.composedRgba) <= 18,
+  'masked background pixels show flame outside the selected mask');
   return { invocationId: output.invocationId, route: output.effectiveRouteId, promptText: expectedPrompt,
     presentation, sourceSha256,
     dimensions: provenance.dimensions, instanceIndices: overlay.instanceIndices, method: composition.method,

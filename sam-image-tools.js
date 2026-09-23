@@ -3,6 +3,23 @@ import { createSamWorkbenchForeground } from './webgpu-inference-kit/smokes/sam-
 
 const COLORS = [[50, 203, 222], [233, 184, 78], [208, 115, 185], [129, 217, 137]];
 
+export async function runSamFlameSceneTransaction({ createImagePlane, addMaskOverlay, activateFlame, removeImagePlane }) {
+  const imagePlane = await createImagePlane();
+  if (!imagePlane) throw new Error('Could not create the source image plane for flame composition');
+  try {
+    addMaskOverlay(imagePlane);
+    await activateFlame();
+    return imagePlane;
+  } catch (error) {
+    try {
+      await removeImagePlane(imagePlane);
+    } catch (rollbackError) {
+      throw new AggregateError([error, rollbackError], 'SAM flame composition failed and scene rollback was incomplete');
+    }
+    throw error;
+  }
+}
+
 export function encodeSamFlameMaskPixels(mask, width, height) {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
     throw new Error('Mask dimensions must be positive integers');
@@ -231,6 +248,7 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
     try {
       await onFlame({ schema: 'kaminos.sam-flame-mask-proposal.v0',
         sourceImage: { source: source.source, name: source.name, sha256: source.sha256, artifactId: source.artifactId },
+        sourceImageElement: image,
         promptText: output.promptText, invocationId: output.invocationId,
         outputAuthority: output.outputAuthority, verificationState: output.verificationState,
         width, height, indices, instances: selected, mask,
@@ -278,6 +296,10 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
     }),
     setActive(value) { active = value; if (active && foreground) foreground.drawNow(); },
     output: () => output,
+    selectedIndices: () => selectedIndices(),
+    selectedMask: () => image && output
+      ? createSam3SourceMask(output, selectedIndices(), image.naturalWidth, image.naturalHeight)
+      : null,
     evidence: () => ({ source, elapsedMs: elapsed, busy, invocation: invocation && { ...invocation }, error: failure?.message || null,
       runtime: runtime?.evidence() || null, foreground: foreground?.evidence() || null,
       sameDevice: executionDevice ? executionDevice === inferenceSession.device : null,

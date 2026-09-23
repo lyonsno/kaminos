@@ -2731,7 +2731,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createKaminosVolumePrototype } from './volume-core.js?v=tiered-pressure-storage-0923';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -5726,6 +5726,44 @@ window.kaminosSceneObjectDebugState = function() {
     renderCapabilities: record.renderCapabilities || null,
     renderHandoffSchema: record.renderHandoffSchema || null,
   }));
+};
+
+window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoints) {
+  const record = sceneObjects.find(item => item.id === sceneObjectId);
+  if (!record || record.type !== 'image') throw new Error('SAM flame source image plane is not registered');
+  const target = record.object;
+  const overlay = target.children.find(child => child.name === 'sam-mask-live-flame-overlay');
+  if (!overlay) throw new Error('SAM flame overlay is missing from the source image plane');
+  const canvas = renderer.domElement;
+  const buffer = document.createElement('canvas');
+  buffer.width = canvas.width; buffer.height = canvas.height;
+  const context = buffer.getContext('2d', { willReadFrequently: true });
+  const sample = async () => {
+    await renderer.render(scene, camera);
+    context.drawImage(canvas, 0, 0);
+    target.updateWorldMatrix(true, false);
+    camera.updateMatrixWorld(true);
+    return sourcePoints.map(point => {
+      const position = new THREE.Vector3((point.u - 0.5) * target.geometry.parameters.width,
+        (0.5 - point.v) * target.geometry.parameters.height, 0);
+      target.localToWorld(position).project(camera);
+      const x = Math.floor((position.x * 0.5 + 0.5) * canvas.width);
+      const y = Math.floor((0.5 - position.y * 0.5) * canvas.height);
+      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) throw new Error('SAM flame pixel probe fell outside the renderer canvas');
+      return { uv: [point.u, point.v], rgba: [...context.getImageData(x, y, 1, 1).data] };
+    });
+  };
+  const wasVisible = overlay.visible;
+  try {
+    overlay.visible = false;
+    const source = await sample();
+    overlay.visible = wasVisible;
+    const composed = await sample();
+    return { authority: 'three-renderer-canvas-readback', source, composed };
+  } finally {
+    overlay.visible = wasVisible;
+    window._kaminosDirty?.();
+  }
 };
 
 window.kaminosSplatPreviewDebugState = function(id = null) {
@@ -8854,7 +8892,7 @@ async function ensureSamImageTools() {
   if (samImageToolsPromise) return samImageToolsPromise;
   samImageToolsPromise = (async () => {
     await sceneInitialization;
-    const { createSamImageTools, encodeSamFlameMaskPixels, fitSamFlameTexture } = await import('./sam-image-tools.js');
+    const { createSamImageTools, encodeSamFlameMaskPixels, fitSamFlameTexture, runSamFlameSceneTransaction } = await import('./sam-image-tools.js');
     const inferenceSession = samHostContext?.inferenceSession || { device: renderer.backend.device };
     samImageTools = createSamImageTools({ inferenceSession, rendererDevice: renderer.backend.device, config: samHostConfig,
       onAsset() { if (pipelineDockState.activeAssetPalette === 'image') void loadPipelineAssetBrowser(); },
@@ -8866,21 +8904,36 @@ async function ensureSamImageTools() {
       async onFlame(proposal) {
         if (!volumePrototype || !volumeBridge) throw new Error('Live flame renderer is unavailable');
         const previous = sceneObjectMetadataFor(samFlameImagePlane);
+        let imagePlane;
+        try {
+          imagePlane = await runSamFlameSceneTransaction({
+            createImagePlane: () => showImagePlane(proposal.sourceImage.source, {
+              decodedImage: proposal.sourceImageElement,
+              clear: false,
+              metadata: { source: proposal.sourceImage.source, fileName: proposal.sourceImage.name,
+                label: `${proposal.promptText} mask flame study`, image: {
+                  maskProvenance: { schema: proposal.schema, sourceImage: proposal.sourceImage,
+                    promptText: proposal.promptText, invocationId: proposal.invocationId,
+                    outputAuthority: proposal.outputAuthority, verificationState: proposal.verificationState,
+                    dimensions: [proposal.width, proposal.height], indices: proposal.indices, instances: proposal.instances },
+                  flameComposition: { method: '2d-image-space-mask', status: 'staging',
+                    fireSimulationModified: false, persistence: 'live-only' },
+                } },
+            }),
+            addMaskOverlay: plane => volumeBridge.addMaskOverlay(plane, proposal, { encodeSamFlameMaskPixels, fitSamFlameTexture }),
+            activateFlame: () => volumePrototype.setActive(true),
+            removeImagePlane: plane => {
+              const id = sceneObjectMetadataFor(plane)?.id;
+              if (id) window.removeSceneObject(id);
+            },
+          });
+        } catch (error) {
+          setInfo(`SAM live flame composition failed: ${error?.message || error}`);
+          throw error;
+        }
+        imagePlane.userData.kaminosSceneObject.image.flameComposition.status = 'live';
         if (previous?.id) window.removeSceneObject(previous.id);
-        samFlameImagePlane = null;
-        const imagePlane = await showImagePlane(proposal.sourceImage.source, { clear: false,
-          metadata: { source: proposal.sourceImage.source, fileName: proposal.sourceImage.name,
-            label: `${proposal.promptText} mask flame study`, image: {
-              maskProvenance: { schema: proposal.schema, sourceImage: proposal.sourceImage,
-                promptText: proposal.promptText, invocationId: proposal.invocationId,
-                outputAuthority: proposal.outputAuthority, verificationState: proposal.verificationState,
-                dimensions: [proposal.width, proposal.height], indices: proposal.indices, instances: proposal.instances },
-              flameComposition: { method: '2d-image-space-mask', fireSimulationModified: false, persistence: 'live-only' },
-            } } });
-        if (!imagePlane) throw new Error('Could not create the source image plane for flame composition');
-        volumeBridge.addMaskOverlay(imagePlane, proposal, { encodeSamFlameMaskPixels, fitSamFlameTexture });
         samFlameImagePlane = imagePlane;
-        await volumePrototype.setActive(true);
         setActiveTab('assets');
         setInfo('Live flame composited through the selected SAM 2D mask');
         window._kaminosDirty?.();
@@ -8929,9 +8982,7 @@ async function initScene() {
     const { createWebGpuDeviceRequest, createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/core.js');
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('SAM host WebGPU adapter unavailable');
-    const request = createWebGpuDeviceRequest(adapter, { requirements: {
-      requiredFeatures: [...adapter.features], requiredLimits: { maxStorageBuffersPerShaderStage: 10 },
-    } });
+    const request = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
     const device = await adapter.requestDevice({ requiredFeatures: request.requiredFeatures, requiredLimits: request.requiredLimits });
     const inferenceSession = await createWebGpuInferenceSession({ sessionId: `kaminos-images:${crypto.randomUUID()}`, adapter, device,
       adapterName: adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter', deviceOwnership: 'borrowed' });
@@ -9317,7 +9368,11 @@ async function showImagePlane(source, options = {}) {
   if (shouldClearSceneForImport(options)) clearScene();
   const loadToken = sceneMutationToken;
   const metadata = options.metadata || {};
-  const texture = await loadTexture(source);
+  const texture = options.decodedImage ? new THREE.Texture(options.decodedImage) : await loadTexture(source);
+  if (options.decodedImage) {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+  }
   const image = texture.image || {};
   const width = Number(image.naturalWidth || image.width || 1) || 1;
   const height = Number(image.naturalHeight || image.height || 1) || 1;
@@ -18262,7 +18317,6 @@ function createVolumeMainRendererBridge() {
       maskTexture.magFilter = THREE.LinearFilter;
       maskTexture.wrapS = THREE.ClampToEdgeWrapping;
       maskTexture.wrapT = THREE.ClampToEdgeWrapping;
-      clearMaskOverlays();
       const material = new THREE.MeshBasicMaterial({ map: sourceTexture, alphaMap: maskTexture,
         transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending,
         toneMapped: false, side: THREE.DoubleSide });
@@ -18277,9 +18331,13 @@ function createVolumeMainRendererBridge() {
         verificationState: proposal.verificationState, fireSimulationModified: false, persistence: 'live-only',
       };
       target.add(overlay);
-      maskedOverlays.add({ target, mesh: overlay, material, maskTexture,
+      const record = { target, mesh: overlay, material, maskTexture,
         planeWidth: target.geometry.parameters.width, planeHeight: target.geometry.parameters.height,
-        width: proposal.width, height: proposal.height, fitSamFlameTexture });
+        width: proposal.width, height: proposal.height, fitSamFlameTexture };
+      maskedOverlays.add(record);
+      for (const previous of [...maskedOverlays]) {
+        if (previous !== record && previous.target === target) removeMaskOverlay(previous);
+      }
       target.updateMatrixWorld(true);
     },
     removeMaskOverlaysForTarget(target) { clearMaskOverlays(target); },

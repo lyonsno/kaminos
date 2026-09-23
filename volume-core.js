@@ -31,6 +31,7 @@ import {
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
+const REQUIRED_PYRO_STORAGE_BUFFERS_PER_SHADER_STAGE = 10;
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
@@ -5324,6 +5325,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     selectiveHeadLive: null,
     backend: 'inactive',
     active: false,
+    storageBuffersPerShaderStage: { required: REQUIRED_PYRO_STORAGE_BUFFERS_PER_SHADER_STAGE, adapter: null, effective: null, source: 'unresolved' },
     width: 0,
     height: 0,
     cssWidth: 0,
@@ -7437,6 +7439,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!navigator.gpu) {
       throw new Error('WebGPU unavailable');
     }
+    const requiredStorageBuffersPerShaderStage = REQUIRED_PYRO_STORAGE_BUFFERS_PER_SHADER_STAGE;
     if (configuredSharedGpuContext?.device) {
       device = configuredSharedGpuContext.device;
       adapter = configuredSharedGpuContext.adapter || null;
@@ -7451,14 +7454,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
         requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
       }
-      if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
-        requiredLimits.maxStorageBuffersPerShaderStage = 9;
+      const adapterLimit = adapter.limits?.maxStorageBuffersPerShaderStage ?? 0;
+      state.storageBuffersPerShaderStage.adapter = adapterLimit;
+      if (adapterLimit < requiredStorageBuffersPerShaderStage) {
+        throw new Error(`Pyro tiered pressure pipelines require ${requiredStorageBuffersPerShaderStage} storage buffers per shader stage; adapter exposes ${adapterLimit}`);
       }
+      requiredLimits.maxStorageBuffersPerShaderStage = requiredStorageBuffersPerShaderStage;
       const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
       const deviceDescriptor = {};
       if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
       if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
       device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
+    }
+    const deviceLimit = device.limits?.maxStorageBuffersPerShaderStage ?? 0;
+    state.storageBuffersPerShaderStage.effective = deviceLimit;
+    state.storageBuffersPerShaderStage.source = configuredSharedGpuContext?.device ? 'shared-device' : 'adapter-requested-device';
+    if (deviceLimit < requiredStorageBuffersPerShaderStage) {
+      throw new Error(`Pyro tiered pressure pipelines require ${requiredStorageBuffersPerShaderStage} storage buffers per shader stage; shared device exposes ${deviceLimit}`);
     }
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
@@ -7526,6 +7538,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .join('\n');
       throw new Error(`Boundary splat WGSL compilation failed:\n${detail}`);
     }
+    device.pushErrorScope('validation');
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
       entries: [
@@ -7777,6 +7790,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos tiered pressure projection pipeline layout',
       bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
+    const layoutError = await device.popErrorScope();
+    if (layoutError) {
+      throw new Error(`fluid bind-group/pipeline layout validation: ${layoutError.message || String(layoutError)}`);
+    }
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
     if (gridSize === 160) {

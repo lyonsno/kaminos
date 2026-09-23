@@ -2,8 +2,30 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const hostSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-assert.ok(/createWebGpuDeviceRequest\(adapter,\s*\{\s*requirements:\s*\{\s*requiredFeatures:\s*\[\.\.\.adapter\.features\],\s*requiredLimits:\s*\{\s*maxStorageBuffersPerShaderStage:\s*10\s*\}/.test(hostSource),
-  'the shared SAM/flame device must request ten storage buffers for the tiered Jacobi pipeline layout');
+const toolsSource = readFileSync(new URL('../sam-image-tools.js', import.meta.url), 'utf8');
+const overlayMethod = hostSource.match(/addMaskOverlay\(target, proposal[\s\S]*?removeMaskOverlaysForTarget\(target\)/)?.[0] || '';
+assert.match(toolsSource, /sourceImageElement:\s*image/, 'mask proposal must carry the exact decoded image whose bytes were hashed');
+assert.match(hostSource, /showImagePlane\(proposal\.sourceImage\.source,\s*\{\s*decodedImage:\s*proposal\.sourceImageElement/, 'flame plane must render the already hashed image instead of re-fetching its URL');
+assert.match(hostSource, /options\.decodedImage\s*\?\s*new THREE\.Texture\(options\.decodedImage\)/, 'image-plane texture creation must support the verified decode');
+assert.ok(overlayMethod && !overlayMethod.includes('clearMaskOverlays()'),
+  'staging a replacement overlay must preserve the previous composition until commit');
+
+const toolsModule = await import('../sam-image-tools.js');
+assert.equal(typeof toolsModule.runSamFlameSceneTransaction, 'function', 'flame composition needs a rollback-tested scene transaction');
+const priorPlane = { id: 'prior-plane' }, nextPlane = { id: 'next-plane' };
+let scenePlanes = [priorPlane], overlays = [priorPlane];
+const activationError = new Error('injected flame activation failure');
+await assert.rejects(toolsModule.runSamFlameSceneTransaction({
+  async createImagePlane() { scenePlanes.push(nextPlane); return nextPlane; },
+  addMaskOverlay(plane) { overlays.push(plane); },
+  async activateFlame() { throw activationError; },
+  removeImagePlane(plane) {
+    scenePlanes = scenePlanes.filter(item => item !== plane);
+    overlays = overlays.filter(item => item !== plane);
+  },
+}), /injected flame activation failure/);
+assert.deepEqual(scenePlanes, [priorPlane], 'failed activation must remove only the new image plane');
+assert.deepEqual(overlays, [priorPlane], 'failed activation must remove its overlay and preserve the prior composition');
 
 const { encodeSamFlameMaskPixels, fitSamFlameTexture } = await import('../sam-image-tools.js');
 assert.equal(typeof encodeSamFlameMaskPixels, 'function', 'SAM-to-flame composition needs an explicit mask texture contract');

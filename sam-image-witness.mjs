@@ -34,7 +34,10 @@ export async function waitForSamFlameComposition(page, checked = promise => prom
   try {
     await checked(page.waitForFunction(() => {
       const bridge = window.__kaminosVolumeMainRendererBridge?.debugState?.();
+      const volume = window.__kaminosVolumePrototype?.debugState?.();
       return bridge?.maskOverlay?.visible === true && bridge.maskOverlayCount === 1
+        && volume?.active === true && volume.backend?.startsWith('WebGPU:')
+        && volume.frameCount > 1 && volume.simStepCount > 0
         && document.querySelector('.tab.active')?.dataset.tab === 'assets'
         && document.getElementById('sam-image-viewport')?.hidden === true;
     }, null, { timeout: timeoutMs }));
@@ -54,13 +57,17 @@ export async function waitForSamFlameComposition(page, checked = promise => prom
           samStatus: document.getElementById('sam-image-status')?.textContent || null,
           promptText: output?.promptText || null,
           invocationId: output?.invocationId || null,
+          selectedIndices: tools?.selectedIndices?.() || null,
           volume: volumeState ? { active: volumeState.active, backend: volumeState.backend,
             error: volumeState.error, residualStatus: volumeState.volumeResidualStatus,
             residualModelUrl: volumeState.volumeResidualModelUrl, frameCount: volumeState.frameCount,
-            simStepCount: volumeState.simStepCount } : null,
+            simStepCount: volumeState.simStepCount,
+            storageBuffersPerShaderStage: volumeState.storageBuffersPerShaderStage || null } : null,
           bridge: window.__kaminosVolumeMainRendererBridge?.debugState?.() || null,
           sceneObject: sceneObject ? { id: sceneObject.id, label: sceneObject.label, type: sceneObject.type,
-            dimensions: [sceneObject.image?.width, sceneObject.image?.height] } : null,
+            dimensions: [sceneObject.image?.width, sceneObject.image?.height],
+            indices: sceneObject.image?.maskProvenance?.indices || null,
+            compositionStatus: sceneObject.image?.flameComposition?.status || null } : null,
         };
       }));
     } catch (diagnosticError) {
@@ -411,6 +418,36 @@ async function main() {
       assert.ok(selected.mask.some(value => value === 1), 'selected SAM mask has no foreground');
       assert.ok(selected.mask.every(value => value === 0 || value === 1), 'selected SAM mask is not binary');
       await page.locator('#sam-image-instances').selectOption(String(selected.index));
+      report.failurePhase = 'flame-rollback-control'; saveReport();
+      await page.evaluate(() => {
+        const volume = window.__kaminosVolumePrototype;
+        volume.__samWitnessSetActive = volume.setActive.bind(volume);
+        volume.setActive = async active => {
+          if (active) throw new Error('injected flame activation failure');
+          return volume.__samWitnessSetActive(active);
+        };
+      });
+      await checked(page.locator('#sam-image-flame').click());
+      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
+      const rollback = await page.evaluate(() => ({
+        bridge: window.__kaminosVolumeMainRendererBridge.debugState(),
+        activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
+        status: document.getElementById('sam-image-status')?.textContent || null,
+        sceneMatches: window.kaminosSceneObjectDebugState().filter(row =>
+          row.image?.maskProvenance?.invocationId === window.kaminosSamImageTools.output().invocationId).length,
+      }));
+      assert.equal(rollback.activeTab, 'masks', 'failed activation must not show Assets as a completed composition');
+      assert.equal(rollback.bridge.maskOverlayCount, 0, 'failed activation left a live mask overlay');
+      assert.equal(rollback.sceneMatches, 0, 'failed activation left a registered scene composition');
+      assert.match(rollback.status, /injected flame activation failure/, 'failure status was hidden from the operator');
+      report.flameRollback = { status: 'passed', ...rollback };
+      report.captures.push({ name: 'flame-composition-rollback', path: join(out, 'flame-composition-rollback.png') });
+      await checked(page.screenshot({ path: join(out, 'flame-composition-rollback.png'), fullPage: true }));
+      await page.evaluate(() => {
+        const volume = window.__kaminosVolumePrototype;
+        volume.setActive = volume.__samWitnessSetActive;
+        delete volume.__samWitnessSetActive;
+      });
       report.failurePhase = 'flame-composition'; saveReport();
       const compositionWaitStartedAt = Date.now();
       await checked(page.locator('#sam-image-flame').click());
@@ -423,22 +460,74 @@ async function main() {
       await checked(page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
       const observed = await page.evaluate(() => ({
         bridge: window.__kaminosVolumeMainRendererBridge.debugState(),
+        volume: window.__kaminosVolumePrototype.debugState(),
+        selectedIndices: window.kaminosSamImageTools.selectedIndices(),
         presentation: { activeTab: document.querySelector('.tab.active')?.dataset.tab || null,
           samImageViewportHidden: document.getElementById('sam-image-viewport')?.hidden === true },
         sceneObject: window.kaminosSceneObjectDebugState().find(row =>
           row.image?.maskProvenance?.invocationId === window.kaminosSamImageTools.output().invocationId),
       }));
+      const pixelEvidence = await page.evaluate(async sceneObjectId => {
+        const mask = window.kaminosSamImageTools.selectedMask();
+        const imageRecord = window.kaminosSceneObjectDebugState().find(row => row.id === sceneObjectId);
+        const [width, height] = imageRecord?.image?.maskProvenance?.dimensions || [];
+        const fireCanvas = window.__kaminosVolumePrototype.canvasElement();
+        if (!mask || mask.length !== width * height || !fireCanvas?.width || !fireCanvas?.height) {
+          throw new Error('Pixel witness is missing the selected source mask or live flame canvas');
+        }
+        const flame = document.createElement('canvas');
+        flame.width = fireCanvas.width; flame.height = fireCanvas.height;
+        const flameContext = flame.getContext('2d', { willReadFrequently: true });
+        flameContext.drawImage(fireCanvas, 0, 0);
+        const flamePixels = flameContext.getImageData(0, 0, flame.width, flame.height).data;
+        const flameAspect = flame.width / flame.height, maskAspect = width / height;
+        const scaleX = flameAspect > maskAspect ? 1 : flameAspect / maskAspect;
+        const scaleY = flameAspect > maskAspect ? maskAspect / flameAspect : 1;
+        const offsetX = (1 - scaleX) / 2, offsetY = (1 - scaleY) / 2;
+        const isInterior = (x, y, value) => {
+          for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
+            const sx = x + dx, sy = y + dy;
+            if (sx < 0 || sx >= width || sy < 0 || sy >= height || mask[sy * width + sx] !== value) return false;
+          }
+          return true;
+        };
+        let foreground = null, background = null;
+        for (let y = 0; y < flame.height; y += 1) for (let x = 0; x < flame.width; x += 1) {
+          const sourceX = Math.min(width - 1, Math.floor((offsetX + (x + 0.5) / flame.width * scaleX) * width));
+          const sourceY = Math.min(height - 1, Math.floor((offsetY + (y + 0.5) / flame.height * scaleY) * height));
+          const maskValue = mask[sourceY * width + sourceX];
+          if ((maskValue !== 0 && maskValue !== 1) || !isInterior(sourceX, sourceY, maskValue)) continue;
+          const pixel = (y * flame.width + x) * 4;
+          const intensity = flamePixels[pixel] + flamePixels[pixel + 1] + flamePixels[pixel + 2];
+          if (intensity < 80) continue;
+          const candidate = { u: (sourceX + 0.5) / width, v: (sourceY + 0.5) / height,
+            maskValue, intensity, sourceX, sourceY };
+          if (maskValue === 1 && (!foreground || intensity > foreground.intensity)) foreground = candidate;
+          if (maskValue === 0 && (!background || intensity > background.intensity)) background = candidate;
+        }
+        if (!foreground || !background) throw new Error('No bright flame samples overlap both selected-mask foreground and background');
+        const samples = await window.__kaminosSampleSamFlamePixels(sceneObjectId, [foreground, background]);
+        return { authority: samples.authority,
+          foreground: { maskValue: foreground.maskValue, uv: [foreground.u, foreground.v],
+            sourceRgba: samples.source[0].rgba, composedRgba: samples.composed[0].rgba },
+          background: { maskValue: background.maskValue, uv: [background.u, background.v],
+            sourceRgba: samples.source[1].rgba, composedRgba: samples.composed[1].rgba } };
+      }, observed.sceneObject.id);
       const composition = validateSamFlameComposition({ output, bridge: observed.bridge,
         sceneObject: observed.sceneObject, sourceSha256: report.inputs.image.sha256,
-        expectedPrompt: prompt, presentation: observed.presentation });
+        expectedPrompt: prompt, presentation: observed.presentation, selectedIndices: observed.selectedIndices,
+        volume: observed.volume, pixelEvidence });
       const screenshotPath = join(out, 'flame-composition.png');
       await checked(page.screenshot({ path: screenshotPath, fullPage: true }));
       report.flameComposition = { ...composition, selectedScore: selected.score,
-        bridge: observed.bridge, sceneObjectId: observed.sceneObject.id };
-      report.captures.push({ name: 'flame-composition', path: screenshotPath, visualInspection: 'pending-owner-pixel-read' });
+        bridge: observed.bridge, volume: { backend: observed.volume.backend, frameCount: observed.volume.frameCount,
+          simStepCount: observed.volume.simStepCount, storageBuffersPerShaderStage: observed.volume.storageBuffersPerShaderStage },
+        selectedIndices: observed.selectedIndices, pixelEvidence, sceneObjectId: observed.sceneObject.id };
+      report.captures.push({ name: 'flame-composition', path: screenshotPath, visualInspection: 'pending-owner-inspection' });
       report.status = 'captured'; report.failurePhase = null;
       report.checks = { actualWebgpuMaskToLiveFlameComposition: 'passed', sourceProvenance: 'passed',
-        twoDimensionalMaskContract: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
+        selectedInstance: 'passed', liveFlameAdvancing: 'passed', foregroundMaskContribution: 'passed',
+        backgroundMaskExclusion: 'passed', twoDimensionalMaskContract: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
     } else {
     const baseline = values.baseline ? JSON.parse(readFileSync(values.baseline, 'utf8')) : null;
     await run('cold-wheel', 'wheel', 'miss', false, baseline?.visualEvidence.output);

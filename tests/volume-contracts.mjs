@@ -1551,6 +1551,18 @@ assert.match(core, /snapshot\.windHeight/, 'temporal reset signature includes ex
 assert.match(core, /materialDetail/, 'fluid renderer consumes a transported fine-detail material tracer');
 assert.match(core, /GPUBufferUsage\.STORAGE/, 'fluid state lives in WebGPU storage buffers');
 assert.match(core, /createComputePipeline/, 'fluid state advances through a WebGPU compute pipeline');
+assert.match(core, /const REQUIRED_PYRO_STORAGE_BUFFERS_PER_SHADER_STAGE = 10/, 'tiered pressure pipelines budget eight fluid and two pressure storage bindings on the volume device');
+assert.match(core, /adapterLimit < requiredStorageBuffersPerShaderStage[\s\S]*?throw new Error\([^)]*storage buffers per shader stage/, 'unsupported adapter storage-binding capacity fails before invalid pipeline creation');
+assert.match(core, /deviceLimit < requiredStorageBuffersPerShaderStage[\s\S]*?shared device exposes/, 'shared devices are checked against the volume pipeline binding contract');
+assert.match(core, /requiredLimits\.maxStorageBuffersPerShaderStage = requiredStorageBuffersPerShaderStage/, 'volume device requests the full storage-binding capacity used by tiered pressure pipelines');
+assert.match(core, /storageBuffersPerShaderStage: \{ required: REQUIRED_PYRO_STORAGE_BUFFERS_PER_SHADER_STAGE/, 'debug state preserves requested and effective volume-device binding limits');
+const bindGroupLayoutPosition = core.indexOf('bindGroupLayout = device.createBindGroupLayout');
+const layoutScopePosition = core.lastIndexOf("device.pushErrorScope('validation');", bindGroupLayoutPosition);
+const layoutPopPosition = core.indexOf('const layoutError = await device.popErrorScope()', bindGroupLayoutPosition);
+assert.ok(layoutScopePosition >= 0 && layoutScopePosition < bindGroupLayoutPosition && layoutPopPosition > bindGroupLayoutPosition,
+  'a validation scope must capture the first bind-group and pipeline-layout error before compute-pipeline creation');
+assert.match(core.slice(layoutPopPosition, layoutPopPosition + 300), /fluid bind-group\/pipeline layout validation/,
+  'layout validation reports its first cause before cascading pipeline errors');
 assert.match(core, /dispatchWorkgroups/, 'fluid sim dispatches compute workgroups each frame');
 assert.match(core, /simStepCount/, 'debug state exposes simulation step count');
 assert.match(core, /simGrid/, 'debug state exposes simulation grid identity');
