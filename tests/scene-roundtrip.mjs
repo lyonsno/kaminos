@@ -50,6 +50,13 @@ const objectA = {
     transparent: true,
     opacity: 0.74,
   },
+  combustionBinding: {
+    schema: 'kaminos.object-combustion-binding.v0',
+    objectId: 'object-a',
+    assetIdentity: 'sha256:' + 'a'.repeat(64),
+    structuralProfile: 'timber-two-island.v0',
+    burnRate: 0.003,
+  },
 };
 
 const objectB = {
@@ -144,6 +151,7 @@ assert.equal(saved.version, SCENE_VERSION, 'round-trip scene document keeps the 
 assert.equal(saved.objects.length, 3, 'round-trip scene document saves all authored objects');
 assert.equal(saved.objects[2].type, 'image', 'round-trip scene document preserves image scene object type');
 assert.deepEqual(saved.objects[2].image, imageObject.image, 'round-trip scene document preserves image import provenance');
+assert.deepEqual(saved.objects[0].combustionBinding, objectA.combustionBinding, 'round-trip scene document preserves an object-scoped combustion binding');
 assert.deepEqual(saved.groups, [
   {
     id: 'group-demo',
@@ -170,6 +178,11 @@ assert.deepEqual(restorePlan.groups.map(group => [group.id, group.label, group.o
 assert.deepEqual(restorePlan.volumePrimitives, volumePrimitives, 'restore plan carries volume primitive state');
 assert.deepEqual(restorePlan.objects.map(obj => obj.transform.position), [[-1.25, 0.1, 0.5], [1.5, 0.4, -0.25], [0.25, 0.75, -0.4]], 'restore plan keeps independent object transforms');
 assert.deepEqual(restorePlan.objects.map(obj => obj.materials.opacity), [0.74, 1, 1], 'restore plan keeps independent material state');
+assert.deepEqual(restorePlan.objects[0].combustionBinding, objectA.combustionBinding, 'restore plan keeps the combustion binding attached to its authored object');
+assert.throws(() => getSceneObjectRecords({ objects: [{
+  ...objectA,
+  combustionBinding: { ...objectA.combustionBinding, objectId: 'object-b' },
+}] }), /combustion binding object identity mismatch/, 'scene loader rejects binding identity that names another object');
 assert.equal(isReloadableSceneObjectRecord(objectA), true, 'demo GLB object is reloadable');
 assert.equal(isReloadableSceneObjectRecord(objectB), true, 'API GLB object is reloadable');
 assert.equal(isReloadableSceneObjectRecord(imageObject), true, 'API image object is reloadable');
