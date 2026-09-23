@@ -130,6 +130,12 @@ assert.deepEqual(mapSamFlameTexturePixelToSource(landscapeCover.imageRect, 32, 8
 assert.deepEqual(mapSamFlameTexturePixelToSource(landscapeCover.imageRect, 32, 8, 1200, 1800, 13, 3),
   { x: 100, y: 800 }, 'horizontal cover preserves exact in-frame pixel projection');
 assert.throws(() => fitSamFlameTextureToMask(2, 1, 5, 4, { left: -1, top: 0, right: 2, bottom: 2, width: 3, height: 2 }), /bounds/);
+assert.throws(() => fitSamFlameTextureToMask(2, 1, 2.5, 4,
+  { left: 0, top: 0, right: 2, bottom: 2, width: 2, height: 2 }), /dimensions/,
+'mask dimensions are pixel counts and must be safe integers');
+assert.throws(() => fitSamFlameTextureToMask(Number.MIN_VALUE, Number.MAX_VALUE, 5, 4,
+  { left: 1, top: 1, right: 4, bottom: 3, width: 3, height: 2 }), /dimensions/,
+'finite but sub-pixel/overflow-scale flame dimensions must not produce non-finite UV placement');
 assert.match(bridgeSource, /record\.flameTexture\.repeat\.set\(fit\.uvTransform\.repeatX,\s*fit\.uvTransform\.repeatY\)/,
   'fire texture must be registered into the selected mask bounds');
 assert.match(bridgeSource, /record\.flameTexture\.offset\.set\(fit\.uvTransform\.offsetX,\s*fit\.uvTransform\.offsetY\)/,

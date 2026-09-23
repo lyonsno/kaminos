@@ -69,8 +69,8 @@ export function getSamFlameMaskBounds(mask, width, height) {
 }
 
 export function fitSamFlameTextureToMask(flameWidth, flameHeight, maskWidth, maskHeight, bounds) {
-  if (![flameWidth, flameHeight, maskWidth, maskHeight].every(value => Number.isFinite(value) && value > 0)) {
-    throw new Error('Flame and mask dimensions must be positive');
+  if (![flameWidth, flameHeight, maskWidth, maskHeight].every(value => Number.isSafeInteger(value) && value > 0)) {
+    throw new Error('Flame and mask dimensions must be positive safe integers');
   }
   if (!bounds || ![bounds.left, bounds.top, bounds.right, bounds.bottom, bounds.width, bounds.height]
     .every(Number.isSafeInteger) || bounds.left < 0 || bounds.top < 0
@@ -90,12 +90,16 @@ export function fitSamFlameTextureToMask(flameWidth, flameHeight, maskWidth, mas
     height: scaleY * bounds.height / maskHeight,
   };
   const uvBottom = 1 - imageRect.top - imageRect.height;
-  return { imageRect, uvTransform: {
+  const uvTransform = {
     repeatX: 1 / imageRect.width,
     repeatY: 1 / imageRect.height,
     offsetX: -imageRect.left / imageRect.width,
     offsetY: -uvBottom / imageRect.height,
-  } };
+  };
+  if (![...Object.values(imageRect), ...Object.values(uvTransform)].every(Number.isFinite)) {
+    throw new Error('Flame placement must contain only finite values');
+  }
+  return { imageRect, uvTransform };
 }
 
 export function mapSamFlameTexturePixelToSource(imageRect, textureWidth, textureHeight,
