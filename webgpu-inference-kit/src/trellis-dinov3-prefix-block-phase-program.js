@@ -1136,6 +1136,9 @@ async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal(input = {}, 
             if (residentBlock2Norm1Probe) {
               residentBlock2Norm1={...residentBlock2Norm1,outputValues:outputValues.block2Norm1};
             }
+            if (residentBlock2AttentionProbe) {
+              residentBlock2Attention={...residentBlock2Attention,outputValues:outputValues.block2Attention};
+            }
             lastCompletedPhase=failedPhase;
             phaseIndex+=1;
           } else {

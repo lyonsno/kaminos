@@ -124,6 +124,8 @@ assert.match(browserSmoke, /actual\?\.operation !== 'dinov3-block1-attention-res
   'the browser consumer must accept the operation returned by the block-1 attention-residual producer');
 assert.match(browserSmoke, /\.\.\.\(result\.debugResidentBlock1\?\.outputValues\s*\|\|\s*\{\}\)[\s\S]*\.\.\.\(result\.debugResidentBlock2Attention\?\.outputValues\s*\|\|\s*\{\}\)/,
   'block-2 attention parity must join the captured block-1 and block-2 diagnostic outputs instead of reading upstream tensors from the downstream-only record');
+assert.match(implementation, /if\s*\(residentBlock2AttentionProbe\)\s*\{\s*residentBlock2Attention\s*=\s*\{\s*\.\.\.residentBlock2Attention\s*,\s*outputValues\s*:\s*outputValues\.block2Attention\s*\}\s*;?\s*\}/,
+  'the producer must attach its validated block-2 attention readback to the returned diagnostic record instead of returning an empty array');
 assert.match(browserRunner, /failure_phase:phase/,
   'the browser smoke must retain the last failure phase when it cannot complete');
 assert.match(parityAssay, /receiver:args.get\('--receiver'\)/,
