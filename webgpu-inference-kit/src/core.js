@@ -122,6 +122,12 @@ export {
 } from './kernel-profile.js';
 
 export {
+  WEBGPU_WEIGHT_REPRESENTATION_PLAN_SCHEMA,
+  createWebGpuWeightRepresentationPlan,
+  packFp16WeightsToU32,
+} from './weight-representation.js';
+
+export {
   createWebGpuRuntimeProfile,
   createWebGpuRuntimeProfileInput,
   validateWebGpuRuntimeProfile,

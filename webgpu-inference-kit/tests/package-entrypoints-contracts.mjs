@@ -45,4 +45,13 @@ for (const name of ['createSharpImageToSplatRouteDefinition', 'createSf3dImageTo
   assert.equal(typeof root[name], 'function', `legacy model adapter: ${name}`);
   assert.equal(name in core, false);
 }
+for (const name of ['createWebGpuWeightRepresentationPlan', 'packFp16WeightsToU32']) {
+  assert.equal(typeof core[name], 'function', `core weight capability: ${name}`);
+  assert.equal(root[name], core[name], `root/core export identity: ${name}`);
+  assert.equal(name in sam, false, `weight capability is model-neutral: ${name}`);
+}
+assert.equal(
+  core.WEBGPU_WEIGHT_REPRESENTATION_PLAN_SCHEMA,
+  'kaminos.webgpu-weight-representation-plan.v0',
+);
 console.log(`package entrypoints passed: ${modules.size} core modules; ${Object.keys(core).length} core and ${Object.keys(sam).length} SAM exports`);

@@ -524,6 +524,43 @@ const commandDutyReport = runtime.finishCommandDuties();
 
 That `profile` is the runtime receipt substrate a route can attach to its outputs. It records the effective adapter/device identity, kernel profile, stage timings, required stages, and yield metadata for the run that actually happened.
 
+### Preserve checkpoint FP16 weight storage
+
+When a checkpoint already stores binary16 values, keep those bits in their original representation. The planner selects only from the caller's ordered candidates: native FP16 requires `shader-f16`; the portable packed form stores two binary16 bit patterns in each `u32` and loads them with WGSL `unpack2x16float`.
+
+```js
+import {
+  createWebGpuWeightRepresentationPlan,
+  packFp16WeightsToU32,
+} from "@kaminos/webgpu-inference-kit/core";
+
+// fp16Bits contains checkpoint binary16 bit patterns, not converted float32 values.
+const plan = createWebGpuWeightRepresentationPlan({
+  sourceDtype: "fp16",
+  elementCount: fp16Bits.length,
+  candidates: ["f16-native", "f16-packed-u32"],
+  adapterFeatures: runtime.device.features,
+});
+
+const storage = plan.effectiveRepresentation === "f16-packed-u32"
+  ? packFp16WeightsToU32(fp16Bits)
+  : (() => {
+      const aligned = new Uint16Array(
+        plan.storageByteLength / Uint16Array.BYTES_PER_ELEMENT,
+      );
+      aligned.set(fp16Bits);
+      return aligned;
+    })();
+const weightBuffer = runtime.createBuffer({
+  label: "vision.encoder.weight",
+  size: plan.storageByteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+runtime.writeBuffer(weightBuffer, storage);
+```
+
+Choose a shader whose load operation matches `plan.valueLoadOperation`. The plan reports logical element count and aligned storage size; the model port still owns shader interpretation, upload, and memory policy. This preserves source FP16 weights while leaving accumulator arithmetic at FP32.
+
 ## Load And Share Model Weights
 
 A shared inference session can verify one content-addressed weight bundle, upload its packed allocation ranges once, and give every registered route an independent lease over the same GPU buffers:
