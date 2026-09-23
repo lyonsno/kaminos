@@ -22,6 +22,10 @@ const canvasDiagnosticPersistence = witnessSource.indexOf('persistSamFlameCanvas
 const overlapFailure = witnessSource.indexOf("const error = new Error('No bright flame samples overlap both selected-mask foreground and background')");
 assert.ok(canvasDiagnosticPersistence >= 0 && canvasDiagnosticPersistence < overlapFailure,
   'native flame pixels and mask-overlap metrics must be persisted before the overlap assertion can fail');
+const presentedPixelEvidencePersistence = witnessSource.indexOf('report.compositionDiagnostic.presentationPixelEvidence = pixelEvidence');
+const compositionValidation = witnessSource.indexOf('const composition = validateSamFlameComposition');
+assert.ok(presentedPixelEvidencePersistence >= 0 && presentedPixelEvidencePersistence < compositionValidation,
+  'presented source/composed pixel samples must survive a failed composition assertion');
 assert.match(witnessSource, /brightSamplesInMaskForeground/,
   'flame composition failure must report how many bright native pixels overlap selected foreground');
 assert.match(witnessSource, /nativeFlameCanvasPng/,

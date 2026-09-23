@@ -583,6 +583,8 @@ async function main() {
         background: { maskValue: flamePixelScan.background.maskValue,
           uv: [flamePixelScan.background.u, flamePixelScan.background.v],
           sourceRgba: presentedPixels.source[1].rgba, composedRgba: presentedPixels.composed[1].rgba } };
+      report.compositionDiagnostic.presentationPixelEvidence = pixelEvidence;
+      saveReport();
       const composition = validateSamFlameComposition({ output, bridge: observed.bridge,
         sceneObject: observed.sceneObject, sourceSha256: report.inputs.image.sha256,
         expectedPrompt: prompt, presentation: observed.presentation, selectedIndices: observed.selectedIndices,
