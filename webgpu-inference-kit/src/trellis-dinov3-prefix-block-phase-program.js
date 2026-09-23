@@ -54,9 +54,9 @@ fn main(@builtin(global_invocation_id) gid:vec3<u32>, @builtin(num_workgroups) g
   let index = gid.x + gid.y * grid.x * 64u + gid.z * grid.x * grid.y * 64u;
   if (index >= dims.total_values) { return; }
   let out_channel = index % dims.hidden_size;
-  let patch = index / dims.hidden_size;
-  let patch_y = patch / dims.patch_width;
-  let patch_x = patch % dims.patch_width;
+  let patch_index = index / dims.hidden_size;
+  let patch_y = patch_index / dims.patch_width;
+  let patch_x = patch_index % dims.patch_width;
   var sum = bias[out_channel];
   for (var ky=0u; ky<dims.patch_size; ky=ky+1u) {
     for (var kx=0u; kx<dims.patch_size; kx=kx+1u) {
@@ -147,12 +147,12 @@ fn main(@builtin(global_invocation_id) gid:vec3<u32>, @builtin(num_workgroups) g
   let channel = index % dims.channels;
   let token = index / dims.channels;
   if (token < dims.prefix_tokens) { output_values[index] = input_values[index]; return; }
-  let patch = token - dims.prefix_tokens;
+  let patch_index = token - dims.prefix_tokens;
   let dim = channel % dims.head_dim;
   let mate = select(dim - dims.head_dim/2u, dim + dims.head_dim/2u, dim < dims.head_dim/2u);
   let mate_index = index - dim + mate;
   let rotated = select(input_values[mate_index], -input_values[mate_index], dim < dims.head_dim/2u);
-  let rope_index = patch*dims.head_dim+dim;
+  let rope_index = patch_index*dims.head_dim+dim;
   output_values[index] = input_values[index]*rope_cos[rope_index] + rotated*rope_sin[rope_index];
 }`;
 
@@ -556,7 +556,7 @@ export async function runTrellisDinoV3PrefixBlockPhaseProgramRoute(input = {}) {
     const receipt = createTrellisDinoV3PrefixBlockPhaseProgramRouteReceipt({
       sourceImage:sourceImageArtifact,pixelValues:pixelValuesArtifact,weights:checkpointArtifact,outputs:outputRecords,
       backend:runtime.backendIdentity,model:{id:input.model?.id||route.model?.id,revision:input.model?.revision||route.model?.revision,weightsHash:input.model?.weightsHash,dtype:'fp32'},
-      kernel:input.kernel||runtime.kernel,profile:runtime.finishProfile({requiredStages:REQUIRED_STAGES,timingSource:'queue-submit-wait'}),
+      kernel:input.kernel||runtime.kernel,profile:runtime.profile,
     });
     const result=assertAuthoritativeRouteWorkerResult(createRouteWorkerResult(route,{request:input.request,receipt}),route);
     if (input.includeReadback===true) result.debugReadback={mode:'explicit-debug-evidence',dtype:'float32',patchEmbeddings:new Float32Array(run.outputs.patchEmbeddings),prefixHiddenStates:new Float32Array(run.outputs.prefixHiddenStates),block0HiddenStates:new Float32Array(run.outputs.block0HiddenStates),lastCompletedPhase};

@@ -82,6 +82,8 @@ assert.match(browserRunner, /failure_phase:phase/,
   'the browser smoke must retain the last failure phase when it cannot complete');
 assert.match(parityAssay, /receiver:args.get\('--receiver'\)/,
   'the long matched command must preserve its caller-provided completion receiver');
+assert.doesNotMatch(implementation, /let patch\s*=/, 'WGSL must not use the reserved patch identifier');
+assert.match(implementation, /profile:runtime\.profile/, 'the route receipt consumes the staged timing profile');
 assert.match(parityAssay, /referenceManifest:resolve\(referenceDir,'reference-manifest\.json'\)/,
   'the durable start receipt must identify both reference and terminal evidence paths');
 assert.match(parityAssay, /last trustworthy MLX reference remained valid/,
