@@ -1077,6 +1077,7 @@ async function main() {
       prototypeIdentity: begin.prototypeIdentity,
       backend: begin.backend,
       grid: begin.grid,
+      gridDimensions: begin.gridDimensions,
       cellCount: begin.cellCount,
       simGridLabel: begin.simGridLabel,
       deterministicReplay: begin.deterministicReplay,

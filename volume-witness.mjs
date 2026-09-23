@@ -73,6 +73,7 @@ function assertCaptureReplayControls({
   state,
   expectedVolumeScene,
   expectedGrid,
+  expectedGridDimensions,
   expectedRaySteps,
   expectedRenderScale,
   expectedDensity,
@@ -95,7 +96,8 @@ function assertCaptureReplayControls({
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'captured volume scene did not reach debug controls');
   }
   if (has('resolution')) {
-    assert.equal(Number(state.simGrid), expectedGrid, `captured grid did not apply as ${expectedGrid}^3`);
+    assert.equal(Number(state.simGrid), expectedGrid, `captured horizontal grid resolution did not apply as ${expectedGrid}`);
+    assert.deepEqual(state.simGridDimensions, expectedGridDimensions, 'captured rectangular grid dimensions did not apply');
   }
   if (has('steps')) assertApprox(Number(state.controls?.raySteps), expectedRaySteps, 'captured ray steps did not apply');
   if (has('renderScale')) {
@@ -1431,6 +1433,9 @@ const requestedGrid = Number(routeParams.get('volume_resolution'));
 const expectedGrid = [32, 48, 64, 96, 128, 136, 140, 160].includes(requestedGrid)
   ? requestedGrid
   : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
+const expectedGridDimensions = [expectedGrid, expectedGrid * 2, expectedGrid];
+const expectedGridCellCount = expectedGridDimensions.reduce((product, dimension) => product * dimension, 1);
+const expectedGridLabel = expectedGridDimensions.join('x');
 function quantizeFlowKernelControl(value, min, max, step, decimals) {
   const clamped = Math.max(min, Math.min(max, value));
   const quantized = min + Math.round((clamped - min) / step) * step;
@@ -2260,6 +2265,7 @@ async function main() {
         state,
         expectedVolumeScene,
         expectedGrid,
+        expectedGridDimensions,
         expectedRaySteps,
         expectedRenderScale,
         expectedDensity,
@@ -2412,10 +2418,11 @@ async function main() {
     }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
-    assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
-    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer+combustion-front-topology-sidecar-v0`, 'fluid sim label does not expose selected grid plus front sidecar identity');
+    assert.equal(state.simGrid, expectedGrid, `fluid sim is not running at the expected horizontal grid resolution ${expectedGrid}`);
+    assert.deepEqual(state.simGridDimensions, expectedGridDimensions, 'fluid sim dimensions do not match the expected rectangular grid');
+    assert.equal(state.simGridLabel, `${expectedGridLabel} velocity-material-fire-microdetail-storage-buffer+combustion-front-topology-sidecar-v0`, 'fluid sim label does not expose selected dimensions plus front sidecar identity');
     assert.equal(state.frontFieldIdentity, 'combustion-front-topology-sidecar-v0', 'front topology sidecar identity did not reach debug state');
-    assert.equal(state.frontFieldBytes, expectedGrid * expectedGrid * expectedGrid * 4, 'front topology sidecar byte cost does not match one scalar per cell');
+    assert.equal(state.frontFieldBytes, expectedGridCellCount * 4, 'front topology sidecar byte cost does not match one scalar per rectangular grid cell');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     let freezeIntegrityProbe = null;
     if (freezeIntegrityProbeRequested) {
@@ -2719,6 +2726,7 @@ async function main() {
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
     assert.equal(stateLedger.routeIdentity, 'native-3d-compute-fluid-raymarch-v0', 'sim cost ledger route identity is missing or stale');
     assert.equal(stateLedger.grid, expectedGrid, 'sim cost ledger grid identity did not match effective route');
+    assert.deepEqual(stateLedger.gridDimensions, expectedGridDimensions, 'sim cost ledger dimensions did not match effective route');
     assert.equal(stateLedger.pressureSourceStrategy, expectedPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match effective projection state');
     assert.equal(stateLedger.pressureStrategy || 'global', expectedPressureStrategy, 'sim cost ledger pressure strategy does not match effective route');
     assert.equal(stateLedger.tallPlumePressureIterationStrategy, expectedTallPlumePressureStrategy, 'sim cost ledger tall-plume pressure iteration strategy does not match effective route');
@@ -2755,7 +2763,7 @@ async function main() {
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
     assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
     assert.equal(stateLedger.fullGridPassBreakdown?.total, stateLedger.fullGridPassesPerFrame, 'sim cost ledger pass breakdown total does not match full-grid pass count');
-    assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGrid ** 3, 'sim cost ledger did not report full-grid cell visits');
+    assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGridCellCount, 'sim cost ledger did not report full rectangular-grid cell visits');
     assert.ok(Number.isFinite(stateLedger.fluidBufferBytes) && stateLedger.fluidBufferBytes > 0, 'sim cost ledger did not report fluid buffer footprint');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
@@ -2860,12 +2868,14 @@ async function main() {
         writeRgbaPng(fieldSliceOut, canonicalFieldSlice.width, canonicalFieldSlice.height, canonicalFieldSlice.rgba);
       }
     }
-    if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
+    if (!sample.simReadback || sample.simReadback.grid !== expectedGrid || !Array.isArray(sample.simReadback.gridDimensions)) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
     }
+    assert.deepEqual(sample.simReadback.gridDimensions, expectedGridDimensions, 'GPU sim readback dimensions do not match the expected rectangular grid');
+    assert.equal(sample.simReadback.cellCount, expectedGridCellCount, 'GPU sim readback cell count does not match the expected rectangular grid');
     if (
       sample.simReadback.frontFieldIdentity !== 'combustion-front-topology-sidecar-v0' ||
-      sample.simReadback.frontFieldBytes !== expectedGrid * expectedGrid * expectedGrid * 4 ||
+      sample.simReadback.frontFieldBytes !== expectedGridCellCount * 4 ||
       !Number.isFinite(sample.simReadback.frontTopologyMean) ||
       !Number.isFinite(sample.simReadback.frontTopologySourcePlugRatio) ||
       !Number.isFinite(sample.simReadback.frontTopologyRisingBodyRatio) ||
@@ -4060,6 +4070,7 @@ async function main() {
       frameCount: state.frameCount,
       simStepCount: sample.simStepCount,
       simGrid: sample.simGrid,
+      simGridDimensions: sample.simReadback?.gridDimensions || null,
       simGridLabel: sample.simGridLabel,
       frontFieldIdentity: sample.frontFieldIdentity,
       frontFieldBytes: sample.frontFieldBytes,

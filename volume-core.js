@@ -1313,8 +1313,8 @@ function minimalPlumeProofDebug(value) {
   };
 }
 
-function gridCellCount(gridSize) {
-  return gridSize * gridSize * gridSize;
+function gridCellCount(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
+  return gridSize * gridHeight * gridDepth;
 }
 
 function nextPowerOfTwo(value) {
@@ -1322,29 +1322,29 @@ function nextPowerOfTwo(value) {
   return 2 ** Math.ceil(Math.log2(finiteValue));
 }
 
-function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize) {
+function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize, gridHeight = gridSize, gridDepth = gridSize) {
   if (candidateCount <= currentCapacity) return currentCapacity;
-  return Math.min(gridCellCount(gridSize), Math.max(currentCapacity, nextPowerOfTwo(candidateCount)));
+  return Math.min(gridCellCount(gridSize, gridHeight, gridDepth), Math.max(currentCapacity, nextPowerOfTwo(candidateCount)));
 }
 
-function fluidBufferBytes(gridSize) {
-  return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+function fluidBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
+  return gridCellCount(gridSize, gridHeight, gridDepth) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
 
-function boundarySidecarBufferBytes(gridSize) {
-  return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
+function boundarySidecarBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
+  return gridCellCount(gridSize, gridHeight, gridDepth) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
-function frontFieldBufferBytes(gridSize) {
-  return gridCellCount(gridSize) * Float32Array.BYTES_PER_ELEMENT;
+function frontFieldBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
+  return gridCellCount(gridSize, gridHeight, gridDepth) * Float32Array.BYTES_PER_ELEMENT;
 }
 
-function quenchFieldBufferBytes(gridSize) {
-  return (gridCellCount(gridSize) + LIQUID_FIRE_SOURCE_STATE_WORDS) * Uint32Array.BYTES_PER_ELEMENT;
+function quenchFieldBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
+  return (gridCellCount(gridSize, gridHeight, gridDepth) + LIQUID_FIRE_SOURCE_STATE_WORDS) * Uint32Array.BYTES_PER_ELEMENT;
 }
 
-function pressureBufferBytes(gridSize) {
-  return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
+function pressureBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
+  return gridCellCount(gridSize, gridHeight, gridDepth) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
 const SIM_COST_LEDGER_IDENTITY = 'tall-plume-sim-cost-ledger-v0';
@@ -1399,8 +1399,9 @@ function externalEmitterBufferBytes() {
   return MAX_EXTERNAL_EMITTERS * EXTERNAL_EMITTER_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
 
-function scalarActivityCueBufferBytes(grid = DEFAULT_GRID_SIZE) {
-  return gridCellCount(normalizeGridSize(grid)) * Float32Array.BYTES_PER_ELEMENT;
+function scalarActivityCueBufferBytes(grid = DEFAULT_GRID_SIZE, gridHeight = grid, gridDepth = grid) {
+  const normalizedGrid = normalizeGridSize(grid);
+  return gridCellCount(normalizedGrid, gridHeight, gridDepth) * Float32Array.BYTES_PER_ELEMENT;
 }
 
 function clampFinite(value, min, max, fallback) {
@@ -1676,8 +1677,9 @@ function analyticEmitterComponentwiseHalfExtent(descriptor, antialiasMargin) {
   ));
 }
 
-export function analyticEmitterInjectionDispatch(descriptor, gridSize) {
+export function analyticEmitterInjectionDispatch(descriptor, gridSize, gridHeight = gridSize, gridDepth = gridSize) {
   const grid = normalizeGridSize(gridSize);
+  const dimensions = [grid, gridHeight, gridDepth];
   const inactive = {
     active: false,
     family: 'cluster',
@@ -1702,11 +1704,11 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize) {
     : normalized.origin;
   const cellMin = center.map((component, index) => Math.max(
     0,
-    Math.min(grid, Math.floor(((component - halfExtent[index]) + 1) * grid * 0.5 - 0.5)),
+    Math.min(dimensions[index], Math.floor(((component - halfExtent[index]) + 1) * grid * 0.5 - 0.5)),
   ));
   const cellMax = center.map((component, index) => Math.max(
     0,
-    Math.min(grid, Math.ceil(((component + halfExtent[index]) + 1) * grid * 0.5 + 0.5)),
+    Math.min(dimensions[index], Math.ceil(((component + halfExtent[index]) + 1) * grid * 0.5 + 0.5)),
   ));
   const cellExtent = cellMax.map((value, index) => Math.max(0, value - cellMin[index]));
   const workgroups = cellExtent.map(cells => Math.ceil(cells / 4));
@@ -1939,16 +1941,18 @@ function normalizePressureTierControls(value = {}) {
   return { lowerMax, heroMin, heroMax, overlay };
 }
 
-function pressureTierDispatchMaxY(gridSize, tierWorkgroupsY) {
-  const cells = Math.max(1, Math.min(gridSize, tierWorkgroupsY * 4));
-  return (cells - 1) / Math.max(1, gridSize - 1);
+function pressureTierDispatchMaxY(gridHeight, tierWorkgroupsY) {
+  const cells = Math.max(1, Math.min(gridHeight, tierWorkgroupsY * 4));
+  return (cells - 1) / Math.max(1, gridHeight - 1);
 }
 
-function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls = {}) {
+function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls = {}, gridHeight = gridSize, gridDepth = gridSize) {
   const spatial = normalizeVolumeScene(scene) === 'tall_plume' && pressureStrategy === PRESSURE_STRATEGY_SPATIAL_TIERS;
   const tierControls = normalizePressureTierControls(pressureTierControls);
-  const workgroups = Math.ceil(gridSize / 4);
-  const fullCells = gridCellCount(gridSize);
+  const workgroupsX = Math.ceil(gridSize / 4);
+  const workgroupsY = Math.ceil(gridHeight / 4);
+  const workgroupsZ = Math.ceil(gridDepth / 4);
+  const fullCells = gridCellCount(gridSize, gridHeight, gridDepth);
   if (!spatial) {
     return {
       strategy: TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE,
@@ -1964,10 +1968,10 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
       bufferOwnership: null,
     };
   }
-  const lowerWorkgroupsY = Math.max(1, Math.min(workgroups, Math.ceil(Math.ceil(gridSize * tierControls.lowerMax) / 4)));
-  const heroWorkgroupsY = Math.max(1, Math.min(workgroups, Math.ceil(Math.ceil(gridSize * tierControls.heroMax) / 4)));
-  const lowerDispatchCells = gridSize * gridSize * Math.min(gridSize, lowerWorkgroupsY * 4);
-  const heroDispatchCells = gridSize * gridSize * Math.min(gridSize, heroWorkgroupsY * 4);
+  const lowerWorkgroupsY = Math.max(1, Math.min(workgroupsY, Math.ceil(Math.ceil(gridHeight * tierControls.lowerMax) / 4)));
+  const heroWorkgroupsY = Math.max(1, Math.min(workgroupsY, Math.ceil(Math.ceil(gridHeight * tierControls.heroMax) / 4)));
+  const lowerDispatchCells = gridSize * gridDepth * Math.min(gridHeight, lowerWorkgroupsY * 4);
+  const heroDispatchCells = gridSize * gridDepth * Math.min(gridHeight, heroWorkgroupsY * 4);
   const equivalentPasses = 1 + lowerDispatchCells / fullCells + heroDispatchCells / fullCells;
   const requestedBounds = {
     pressure1: { minY: 0, maxY: 1, buffer: 'B' },
@@ -1976,8 +1980,8 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
   };
   const effectiveBounds = {
     pressure1: { minY: 0, maxY: 1, buffer: 'B' },
-    pressure2: { minY: 0, maxY: pressureTierDispatchMaxY(gridSize, lowerWorkgroupsY), buffer: 'A' },
-    pressure3: { minY: tierControls.heroMin, maxY: pressureTierDispatchMaxY(gridSize, heroWorkgroupsY), buffer: 'B' },
+    pressure2: { minY: 0, maxY: pressureTierDispatchMaxY(gridHeight, lowerWorkgroupsY), buffer: 'A' },
+    pressure3: { minY: tierControls.heroMin, maxY: pressureTierDispatchMaxY(gridHeight, heroWorkgroupsY), buffer: 'B' },
   };
   return {
     strategy: TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY,
@@ -1987,9 +1991,9 @@ function pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTie
     partialSlabPasses: 2,
     equivalentPasses,
     dispatches: [
-      { tier: 1, label: 'full-volume-pressure1', workgroupsX: workgroups, workgroupsY: workgroups, workgroupsZ: workgroups, pressureBuffer: 'B' },
-      { tier: 2, label: 'lower-plume-pressure2', workgroupsX: workgroups, workgroupsY: lowerWorkgroupsY, workgroupsZ: workgroups, pressureBuffer: 'A' },
-      { tier: 3, label: 'hero-fire-band-pressure3', workgroupsX: workgroups, workgroupsY: heroWorkgroupsY, workgroupsZ: workgroups, pressureBuffer: 'B' },
+      { tier: 1, label: 'full-volume-pressure1', workgroupsX, workgroupsY, workgroupsZ, pressureBuffer: 'B' },
+      { tier: 2, label: 'lower-plume-pressure2', workgroupsX, workgroupsY: lowerWorkgroupsY, workgroupsZ, pressureBuffer: 'A' },
+      { tier: 3, label: 'hero-fire-band-pressure3', workgroupsX, workgroupsY: heroWorkgroupsY, workgroupsZ, pressureBuffer: 'B' },
     ],
     bounds: requestedBounds,
     requestedBounds,
@@ -2119,6 +2123,7 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
 
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
+override GRID_Y: u32 = 128u;
 override TRANSPARENT_CANVAS: f32 = 0.0;
 override LEAN_STOCK_RAYMARCH: bool = false;
 const SLOTS_PER_CELL: u32 = 4u;
@@ -2278,11 +2283,19 @@ fn hash31(p: vec3<f32>) -> f32 {
 }
 
 fn index3(c: vec3<u32>) -> u32 {
-  return c.x + c.y * GRID + c.z * GRID * GRID;
+  return c.x + c.y * GRID + c.z * GRID * GRID_Y;
 }
 
 fn clampCell(c: vec3<i32>) -> vec3<u32> {
-  return vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
+  return vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1)));
+}
+
+fn worldToCell(p: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>((p.x * 0.5 + 0.5) * f32(GRID), (p.y + 1.0) * (0.5 * f32(GRID)), (p.z * 0.5 + 0.5) * f32(GRID));
+}
+
+fn cellToWorld(cell: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>(cell.x * (2.0 / f32(GRID)) - 1.0, cell.y * (2.0 / f32(GRID)) - 1.0, cell.z * (2.0 / f32(GRID)) - 1.0);
 }
 
 fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
@@ -2302,7 +2315,7 @@ fn readQuenchField(c: vec3<i32>) -> f32 {
 }
 
 fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
-  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
   let c000 = readFrontField(i0 + vec3<i32>(0, 0, 0));
@@ -2323,7 +2336,7 @@ fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
 }
 
 fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
-  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
   let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
@@ -2344,27 +2357,27 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
 }
 
 fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
+  let cell = worldToCell(p);
   return sampleFluidSlot(cell, 0u);
 }
 
 fn sampleWorldMaterial(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
+  let cell = worldToCell(p);
   return sampleFluidSlot(cell, 1u);
 }
 
 fn sampleWorldFireLayer(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
+  let cell = worldToCell(p);
   return sampleFluidSlot(cell, 2u);
 }
 
 fn sampleWorldMicrodetail(p: vec3<f32>) -> vec4<f32> {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
+  let cell = worldToCell(p);
   return sampleFluidSlot(cell, 3u);
 }
 
 fn sampleWorldFrontField(p: vec3<f32>) -> f32 {
-  let cell = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID);
+  let cell = worldToCell(p);
   return sampleFrontField(cell);
 }
 
@@ -2373,7 +2386,7 @@ fn sampleBoundarySidecarCell(c: vec3<i32>) -> vec4<f32> {
 }
 
 fn sampleWorldBoundarySidecar(p: vec3<f32>) -> vec4<f32> {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let q = clamp(worldToCell(p) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(q));
   let f = fract(q);
   let c000 = sampleBoundarySidecarCell(i0 + vec3<i32>(0, 0, 0));
@@ -2568,7 +2581,7 @@ fn sampleWorldFlowReconstruction(p: vec3<f32>) -> FlowReconstructionSample {
   if (strength <= 0.0) { return center; }
   let normal = flowReconstructionNormal(p);
   let velocityTangent = center.velocityDensity.xyz - normal * dot(center.velocityDensity.xyz, normal);
-  let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+  let sampleCell = vec3<i32>(floor(clamp(worldToCell(p), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0, f32(GRID_Y) - 1.0, f32(GRID) - 1.0))));
   let curlVector = curlAtCell(sampleCell);
   let curlTangent = curlVector - normal * dot(curlVector, normal);
   let fallbackAxis = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), abs(normal.x) > 0.75);
@@ -2621,7 +2634,7 @@ fn directCellOpticalSupportAtCell(c: vec3<i32>) -> f32 {
 }
 
 fn directCellOpticalSupport(p: vec3<f32>) -> f32 {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let q = clamp(worldToCell(p) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let c = vec3<i32>(floor(q));
   let z0 = max(
     max(directCellOpticalSupportAtCell(c), directCellOpticalSupportAtCell(c + vec3<i32>(1, 0, 0))),
@@ -2635,7 +2648,7 @@ fn directCellOpticalSupport(p: vec3<f32>) -> f32 {
 }
 
 fn directCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let q = clamp(worldToCell(p) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let dqdt = rd * (0.5 * f32(GRID));
   var best = 1.0e6;
   if (abs(dqdt.x) > 0.0001) {
@@ -2694,8 +2707,8 @@ fn proceduralReceiverActivityCue(c: vec3<i32>) -> f32 {
 }
 
 fn rawTruthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
-  let safe = clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1));
-  let idx = u32(safe.x) + u32(safe.y) * GRID + u32(safe.z) * GRID * GRID;
+  let safe = clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1));
+  let idx = u32(safe.x) + u32(safe.y) * GRID + u32(safe.z) * GRID * GRID_Y;
   let externalCue = clamp(oracleActivityCue[idx], 0.0, 1.0);
   let proceduralCue = proceduralReceiverActivityCue(c);
   let externalCueEnabled = step(0.5, u.oracle_activity_controls2.y);
@@ -2746,7 +2759,7 @@ fn pressureReadAlt(c: vec3<i32>) -> vec4<f32> {
 }
 
 fn pressureTierY(c: vec3<i32>) -> f32 {
-  return f32(clamp(c.y, 0, i32(GRID) - 1)) / max(1.0, f32(GRID - 1u));
+  return f32(clamp(c.y, 0, i32(GRID_Y) - 1)) / max(1.0, f32(GRID_Y - 1u));
 }
 
 fn pressureTierLowerMax() -> f32 {
@@ -2794,7 +2807,7 @@ fn pressureReadComposite(c: vec3<i32>) -> vec4<f32> {
 
 @compute @workgroup_size(4, 4, 4)
 fn csDivergencePressure(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(GRID))) {
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
   let c = vec3<i32>(gid);
@@ -2804,7 +2817,7 @@ fn csDivergencePressure(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csPressureJacobi(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(GRID))) {
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
   let c = vec3<i32>(gid);
@@ -2821,10 +2834,10 @@ fn csPressureJacobi(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 
 fn pressureJacobiTiered(gid: vec3<u32>, minY: f32, maxY: f32) {
-  if (any(gid >= vec3<u32>(GRID))) {
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
-  let y = f32(gid.y) / max(1.0, f32(GRID - 1u));
+  let y = f32(gid.y) / max(1.0, f32(GRID_Y - 1u));
   if (y < minY || y > maxY) {
     return;
   }
@@ -2853,7 +2866,7 @@ fn csPressureJacobiTieredHero(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(GRID))) {
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
   let idx = index3(gid);
@@ -2886,7 +2899,7 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(GRID))) {
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
   let idx = index3(gid);
@@ -3483,7 +3496,7 @@ fn boundarySupportAtCell(c: vec3<i32>, supportWeights: vec4<f32>) -> f32 {
 
 @compute @workgroup_size(4, 4, 4)
 fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(GRID))) {
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
   let c = vec3<i32>(gid);
@@ -3535,11 +3548,11 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(GRID))) {
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
   let idx = index3(gid);
-  let sourceWetnessIndex = GRID * GRID * GRID;
+  let sourceWetnessIndex = GRID * GRID_Y * GRID;
   let sourceTemperatureIndex = sourceWetnessIndex + 1u;
   let sourceCombustionIndex = sourceWetnessIndex + 2u;
   let sourceIgnitedIndex = sourceWetnessIndex + 3u;
@@ -3552,7 +3565,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let base = idx * SLOTS_PER_CELL;
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
-  let p = (cell / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  let p = cellToWorld(cell);
   let prev = fluidSrc[base];
   let speed = u.fire_smoke_curl_speed.w;
   let curl = u.fire_smoke_curl_speed.z;
@@ -4732,12 +4745,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFront = combustionFront * bonfireFireCeiling;
   fireLick = fireLick * mix(1.0, max(0.18, bonfireFireCeiling), bonfireScene);
 
-  let wall = max(max(abs(p.x), abs(p.y)), abs(p.z));
+  // Keep the original lower and side walls, but move the upper fade to the
+  // expanded domain ceiling. The old symmetric abs(y) wall would suppress
+  // every added cell above y=1 and silently recreate the old clip.
+  let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
+  let verticalWall = max(-p.y, p.y - expandedTopY + 1.0);
+  let wall = max(max(abs(p.x), verticalWall), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
-  let smokeTopFade = 1.0 - smoothstep(mix(0.66, 0.84, plumeHeight01), 0.995, p.y);
-  let legacyHeatTopFade = 1.0 - smoothstep(mix(0.42, 0.62, plumeHeight01), 0.960, p.y);
-  let tallPlumeHeatTopFade = 1.0 - smoothstep(mix(0.62, 0.84, plumeHeight01), 0.990, p.y);
-  let tallPlumeFireTopFade = 1.0 - smoothstep(mix(0.72, 0.90, plumeHeight01), 0.995, p.y);
+  let smokeTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
+  let legacyHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.42, 0.62, plumeHeight01)), expandedTopY - 0.040, p.y);
+  let tallPlumeHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.62, 0.84, plumeHeight01)), expandedTopY - 0.010, p.y);
+  let tallPlumeFireTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.72, 0.90, plumeHeight01)), expandedTopY - 0.005, p.y);
   let heatTopFade = mix(legacyHeatTopFade, tallPlumeHeatTopFade, tallPlumeScene);
   let fireTopFade = mix(legacyHeatTopFade, tallPlumeFireTopFade, tallPlumeScene);
   smoke = smoke * mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade);
@@ -4888,7 +4906,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
-  let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
+  let hit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));
   if (!fullGridCapture && hit.y <= max(hit.x, 0.0)) {
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
@@ -5022,7 +5040,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
   let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
-  let endT = select(min(hit.y, sceneDepthEndT), 2.0, fullGridCapture);
+  let endT = select(min(hit.y, sceneDepthEndT), 4.0, fullGridCapture);
   let dtBase = (endT - startT) / steps;
   let jitter = dtBase * 0.5;
   var t = startT + jitter;
@@ -5057,7 +5075,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
   let expensiveSampleBudget = u32(ceil(steps));
-  let maxTraversalSteps = GRID * 3u + expensiveSampleBudget + 3u;
+  let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u;
   var expensiveSamples = 0u;
   var traversalSteps = 0u;
   loop {
@@ -5066,8 +5084,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
     let fullGridX = min(u32(floor(in.uv.x * f32(GRID))), GRID - 1u);
-    let fullGridY = min(u32(floor(in.uv.y * f32(GRID))), GRID - 1u);
-    let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
+    let fullGridY = min(u32(floor(in.uv.y * f32(GRID_Y))), GRID_Y - 1u);
+    let fullGridP = cellToWorld(vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5));
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
@@ -5112,7 +5130,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
-    let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+    let sampleCell = vec3<i32>(floor(clamp(worldToCell(p), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0, f32(GRID_Y) - 1.0, f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
@@ -6020,7 +6038,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       max(max(completeFlameEmissionCoefficient.r, completeFlameEmissionCoefficient.g), max(completeFlameEmissionCoefficient.b, completeFlameExtinctionCoefficient))
     );
     if (fullGridCapture) {
-      let cellIndex = fullGridX + fullGridY * GRID + sampleIndex * GRID * GRID;
+      let cellIndex = fullGridX + fullGridY * GRID + sampleIndex * GRID * GRID_Y;
       let sourceBasisReaction = reactionSupport;
       let sourceBasisInterface = edgeSupport;
       let sourceBasisCurl = curlDebug;
@@ -6227,6 +6245,7 @@ fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOut
 
 const ANALYTIC_EMITTER_INJECTION_WGSL = /* wgsl */`
 override GRID: u32 = 64u;
+override GRID_Y: u32 = 128u;
 const SLOTS_PER_CELL: u32 = 4u;
 
 struct AnalyticEmitterInjectionUniforms {
@@ -6245,7 +6264,11 @@ struct AnalyticEmitterInjectionUniforms {
 @group(0) @binding(1) var<storage, read_write> fluid: array<vec4<f32>>;
 
 fn cellIndex(c: vec3<u32>) -> u32 {
-  return c.x + c.y * GRID + c.z * GRID * GRID;
+  return c.x + c.y * GRID + c.z * GRID * GRID_Y;
+}
+
+fn cellToWorld(cell: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>(cell.x * (2.0 / f32(GRID)) - 1.0, cell.y * (2.0 / f32(GRID)) - 1.0, cell.z * (2.0 / f32(GRID)) - 1.0);
 }
 
 fn capsuleSignedDistance(p: vec3<f32>, start: vec3<f32>, end: vec3<f32>, radius: f32) -> f32 {
@@ -6313,8 +6336,8 @@ fn apertureSignedDistance(
 fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   if (any(localId >= emitter.cell_extent.xyz)) { return; }
   let cell = emitter.cell_min_grid.xyz + localId;
-  if (any(cell >= vec3<u32>(GRID))) { return; }
-  let p = (vec3<f32>(cell) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
+  if (any(cell >= vec3<u32>(GRID, GRID_Y, GRID))) { return; }
+  let p = cellToWorld(vec3<f32>(cell) + vec3<f32>(0.5));
   let familyMode = u32(max(0.0, floor(emitter.origin_mode.w + 0.5)));
   if (familyMode == 0u) { return; }
   let origin = emitter.origin_mode.xyz;
@@ -6550,6 +6573,7 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
 const BOUNDARY_SPLAT_WGSL = `
 override GRID: u32 = 64u;
+override GRID_Y: u32 = 128u;
 const SLOTS_PER_CELL: u32 = 4u;
 
 struct BoundarySplat {
@@ -6783,11 +6807,19 @@ fn boundarySplatWriteNestedSelectionCohorts(
 }
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
-  return cell.x + cell.y * GRID + cell.z * GRID * GRID;
+  return cell.x + cell.y * GRID + cell.z * GRID * GRID_Y;
+}
+
+fn boundarySplatWorldToCell(world: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>((world.x * 0.5 + 0.5) * f32(GRID), (world.y + 1.0) * (0.5 * f32(GRID)), (world.z * 0.5 + 0.5) * f32(GRID));
+}
+
+fn boundarySplatCellToWorld(cell: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>(cell.x * (2.0 / f32(GRID)) - 1.0, cell.y * (2.0 / f32(GRID)) - 1.0, cell.z * (2.0 / f32(GRID)) - 1.0);
 }
 
 fn boundarySplatSupportAt(cell: vec3<i32>) -> f32 {
-  let bounded = clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1));
+  let bounded = clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1));
   return boundarySidecar[boundarySplatCellIndex(vec3<u32>(bounded))].x;
 }
 
@@ -6803,7 +6835,7 @@ fn boundarySplatSupportGradient(cell: vec3<u32>) -> vec3<f32> {
 }
 
 fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
-  return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1)));
+  return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1)));
 }
 
 fn boundarySplatReadSlot(cell: vec3<i32>, slot: u32) -> vec4<f32> {
@@ -6815,7 +6847,7 @@ fn boundarySplatReadSidecar(cell: vec3<i32>) -> vec4<f32> {
 }
 
 fn boundarySplatSampleSlot(world: vec3<f32>, slot: u32) -> vec4<f32> {
-  let q = clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let q = clamp(boundarySplatWorldToCell(world) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(q));
   let f = fract(q);
   let x00 = mix(boundarySplatReadSlot(i0, slot), boundarySplatReadSlot(i0 + vec3<i32>(1, 0, 0), slot), f.x);
@@ -6826,7 +6858,7 @@ fn boundarySplatSampleSlot(world: vec3<f32>, slot: u32) -> vec4<f32> {
 }
 
 fn boundarySplatSampleSidecar(world: vec3<f32>) -> vec4<f32> {
-  let q = clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let q = clamp(boundarySplatWorldToCell(world) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(q));
   let f = fract(q);
   let x00 = mix(boundarySplatReadSidecar(i0), boundarySplatReadSidecar(i0 + vec3<i32>(1, 0, 0)), f.x);
@@ -6902,7 +6934,7 @@ fn boundarySplatFlowFrame(world: vec3<f32>) -> BoundarySplatFlowFrame {
   let normalValid = boundarySplatStructureNormal(world);
   let normal = normalValid.xyz;
   let velocityTangent = center.velocityDensity.xyz - normal * dot(center.velocityDensity.xyz, normal);
-  let cell = vec3<i32>(floor(clamp((world * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+  let cell = vec3<i32>(floor(clamp(boundarySplatWorldToCell(world), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0, f32(GRID_Y) - 1.0, f32(GRID) - 1.0))));
   let curlVector = boundarySplatCurl(cell);
   let curlTangent = curlVector - normal * dot(curlVector, normal);
   let fallbackAxis = select(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), abs(normal.x) > 0.75);
@@ -7069,7 +7101,7 @@ fn boundarySplatEnergyCompensation(footprintRadius: f32, sharpness: f32) -> f32 
 
 @compute @workgroup_size(4, 4, 4)
 fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(GRID))) { return; }
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) { return; }
   let cellIndex = boundarySplatCellIndex(gid);
   let admissionSidecar = boundarySidecar[cellIndex];
   let admissionMaterial = fluid[cellIndex * SLOTS_PER_CELL + 1u];
@@ -7100,7 +7132,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
     atomicAdd(&boundarySplatDraw.overflowCount, 1u);
     return;
   }
-  let world = ((vec3<f32>(gid) + vec3<f32>(0.5)) / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  let world = boundarySplatCellToWorld(vec3<f32>(gid) + vec3<f32>(0.5));
   var sidecar = admissionSidecar;
   var material = admissionMaterial;
   var fire = admissionFire;
@@ -7817,6 +7849,31 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
+  const VERTICAL_DOMAIN_EXTENT_MULTIPLIER = 2;
+  const gridHeightForSize = size => size * VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+  const gridShapeLabel = size => `${size}x${gridHeightForSize(size)}x${size}`;
+  function gridCellCount(size) {
+    return size * gridHeightForSize(size) * size;
+  }
+  function fluidBufferBytes(size) {
+    return gridCellCount(size) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+  }
+  function boundarySidecarBufferBytes(size) {
+    return gridCellCount(size) * 4 * Float32Array.BYTES_PER_ELEMENT;
+  }
+  function frontFieldBufferBytes(size) {
+    return gridCellCount(size) * Float32Array.BYTES_PER_ELEMENT;
+  }
+  function quenchFieldBufferBytes(size) {
+    return (gridCellCount(size) + LIQUID_FIRE_SOURCE_STATE_WORDS) * Uint32Array.BYTES_PER_ELEMENT;
+  }
+  function pressureBufferBytes(size) {
+    return gridCellCount(size) * 4 * Float32Array.BYTES_PER_ELEMENT;
+  }
+  function nextBoundarySplatCapacity(currentCapacity, candidateCount, size) {
+    if (candidateCount <= currentCapacity) return currentCapacity;
+    return Math.min(gridCellCount(size), Math.max(currentCapacity, nextPowerOfTwo(candidateCount)));
+  }
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
@@ -7858,6 +7915,7 @@ export function createKaminosVolumePrototype({
   let fourArmHeldStateRuntimeState = null;
   let fourArmHeldStateResidualGrid = null;
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
+  let gridHeight = gridHeightForSize(gridSize);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
   let oracleActivityCueBuffer = null;
   let oracleActivityCueSourceValues = null;
@@ -7999,7 +8057,8 @@ export function createKaminosVolumePrototype({
     pyroCompareMode: normalizePyroCompareMode(controlsSnapshot.pyroCompareMode),
     pyroCompareMuted: false,
     simGrid: gridSize,
-    simGridLabel: `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
+    simGridLabel: `${gridSize}x${gridHeight}x${gridSize} velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
+    simGridDimensions: [gridSize, gridHeight, gridSize],
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
     occupancySkip: 0.35,
@@ -8569,7 +8628,7 @@ export function createKaminosVolumePrototype({
   let liquidFireContactSuppressedFrameCount = 0;
   let analyticEmitterDescriptor = null;
   let analyticEmitterDescriptorSignature = '';
-  let analyticEmitterDispatch = analyticEmitterInjectionDispatch(null, gridSize);
+  let analyticEmitterDispatch = analyticEmitterInjectionDispatch(null, gridSize, gridHeight, gridSize);
   let volumePrimitives = [];
   let boundarySidecarBuffer = null;
   let boundarySidecarOverrideUpload = null;
@@ -8809,7 +8868,7 @@ export function createKaminosVolumePrototype({
 
   function updateAnalyticEmitterDebug() {
     const receipt = analyticEmitterReceipt();
-    analyticEmitterDispatch = analyticEmitterInjectionDispatch(analyticEmitterDescriptor, gridSize);
+    analyticEmitterDispatch = analyticEmitterInjectionDispatch(analyticEmitterDescriptor, gridSize, gridHeight, gridSize);
     state.analyticEmitterMode = receipt.mode;
     state.analyticEmitterFamily = receipt.family;
     state.analyticEmitterRequestedSourceLaw = receipt.requestedSourceLaw;
@@ -8838,16 +8897,17 @@ export function createKaminosVolumePrototype({
     state.analyticEmitterFullGridEquivalentPasses = analyticEmitterDispatch.cellCount / gridCellCount(gridSize);
   }
 
-  function resampleScalarActivityCue(values, sourceGrid, targetGrid) {
+  function resampleScalarActivityCue(values, sourceGrid, targetGrid, targetHeight = gridHeightForSize(normalizeGridSize(targetGrid))) {
     const srcGrid = normalizeScalarActivityCueGridSize(sourceGrid);
     const dstGrid = normalizeGridSize(targetGrid);
+    const dstHeight = targetHeight;
     const source = values instanceof Float32Array ? values : new Float32Array(values || []);
     const sourceCells = srcGrid * srcGrid * srcGrid;
     if (source.length < sourceCells) {
       throw new Error(`truth oracle activity cue expected ${sourceCells} values for ${srcGrid}^3, got ${source.length}`);
     }
-    const target = new Float32Array(dstGrid * dstGrid * dstGrid);
-    if (srcGrid === dstGrid) {
+    const target = new Float32Array(dstGrid * dstHeight * dstGrid);
+    if (srcGrid === dstGrid && dstHeight === srcGrid) {
       for (let index = 0; index < target.length; index += 1) {
         target[index] = clampFinite(source[index], 0, 1, 0);
       }
@@ -8856,12 +8916,16 @@ export function createKaminosVolumePrototype({
     const ratio = srcGrid / dstGrid;
     for (let z = 0; z < dstGrid; z += 1) {
       const sz = Math.max(0, Math.min(srcGrid - 1, Math.floor((z + 0.5) * ratio)));
-      for (let y = 0; y < dstGrid; y += 1) {
-        const sy = Math.max(0, Math.min(srcGrid - 1, Math.floor((y + 0.5) * ratio)));
+      for (let y = 0; y < dstHeight; y += 1) {
         for (let x = 0; x < dstGrid; x += 1) {
+          const dstIndex = x + y * dstGrid + z * dstGrid * dstHeight;
+          if (y >= dstGrid) {
+            target[dstIndex] = 0;
+            continue;
+          }
+          const sy = Math.max(0, Math.min(srcGrid - 1, Math.floor((y + 0.5) * ratio)));
           const sx = Math.max(0, Math.min(srcGrid - 1, Math.floor((x + 0.5) * ratio)));
           const srcIndex = sx + sy * srcGrid + sz * srcGrid * srcGrid;
-          const dstIndex = x + y * dstGrid + z * dstGrid * dstGrid;
           target[dstIndex] = clampFinite(source[srcIndex], 0, 1, 0);
         }
       }
@@ -8886,6 +8950,7 @@ export function createKaminosVolumePrototype({
       externalCueCellCount: oracleActivityCueUpload.externalCueCellCount,
       externalCueSourceGrid: oracleActivityCueUpload.grid,
       receiverGrid: gridSize,
+      receiverGridShape: [gridSize, gridHeight, gridSize],
       frameId: oracleActivityCueUpload.frameId,
       uploadedAtMs: oracleActivityCueUpload.uploadedAtMs,
     };
@@ -8908,6 +8973,7 @@ export function createKaminosVolumePrototype({
       stepWidth: clampFinite(controls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75),
       ridgeGain: clampFinite(controls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1),
       grid: gridSize,
+      gridShape: [gridSize, gridHeight, gridSize],
       bytes: boundarySidecarBufferBytes(gridSize),
       built: state.boundarySidecarBuilt,
       builtThisFrame: state.boundarySidecarBuiltThisFrame,
@@ -8935,8 +9001,8 @@ export function createKaminosVolumePrototype({
   function ensureOracleActivityCueBuffer() {
     if (oracleActivityCueBuffer) return;
     oracleActivityCueBuffer = device.createBuffer({
-      label: `kaminos truth-oracle scalar activity cue ${gridSize}^3`,
-      size: scalarActivityCueBufferBytes(gridSize),
+      label: `kaminos truth-oracle scalar activity cue ${gridShapeLabel(gridSize)}`,
+      size: scalarActivityCueBufferBytes(gridSize, gridHeight),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
@@ -9056,6 +9122,7 @@ export function createKaminosVolumePrototype({
   }
 
   function makeInitialFluid(nextGridSize) {
+    const nextGridHeight = gridHeightForSize(nextGridSize);
     const data = new Float32Array(gridCellCount(nextGridSize) * FLUID_COMPONENTS);
     const initialScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     const isBonfireInitialScene = initialScene === 'bonfire_plume';
@@ -9064,7 +9131,7 @@ export function createKaminosVolumePrototype({
     const seedLateralVelocity = isBonfireInitialScene ? 0 : 0.11;
     const sourcePrimitive = getPrimitiveSource();
     for (let z = 0; z < nextGridSize; z += 1) {
-      for (let y = 0; y < nextGridSize; y += 1) {
+      for (let y = 0; y < nextGridHeight; y += 1) {
         for (let x = 0; x < nextGridSize; x += 1) {
           const fx = (x + 0.5) / nextGridSize * 2 - 1;
           const fy = (y + 0.5) / nextGridSize * 2 - 1;
@@ -9131,7 +9198,7 @@ export function createKaminosVolumePrototype({
             : isBonfireInitialScene
               ? 0.54 + seedNoiseACentered * 0.18 + seedNoiseBCentered * 0.12
               : 0.52 + seedNoiseCCentered * 0.22;
-          const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
+          const i = ((x + y * nextGridSize + z * nextGridSize * nextGridHeight) * FLUID_COMPONENTS);
           data[i] = -dz * source * seedLateralVelocity;
           data[i + 1] = source * 0.22;
           data[i + 2] = dx * source * seedLateralVelocity;
@@ -9289,7 +9356,7 @@ export function createKaminosVolumePrototype({
     for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
       for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {
         bindGroups[fluidIndex * 2 + quenchIndex] = createFluidRenderBindGroup({
-          label: `kaminos fluid bind group ${gridSize}^3 fluid ${fluidIndex} quench ${quenchIndex}`,
+          label: `kaminos fluid bind group ${gridShapeLabel(gridSize)} fluid ${fluidIndex} quench ${quenchIndex}`,
           fluidRead: fluidBuffers[fluidIndex],
           fluidWrite: fluidBuffers[1 - fluidIndex],
           frontRead: frontBuffers[fluidIndex],
@@ -9304,7 +9371,7 @@ export function createKaminosVolumePrototype({
       && liveCompleteFlameCoefficientUniformBuffer
       ? [
           createFluidRenderBindGroup({
-            label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3 A`,
+            label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridShapeLabel(gridSize)} A`,
             fluidRead: fluidBuffers[0],
             fluidWrite: fluidBuffers[1],
             frontRead: frontBuffers[0],
@@ -9313,7 +9380,7 @@ export function createKaminosVolumePrototype({
             uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
           }),
           createFluidRenderBindGroup({
-            label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3 B`,
+            label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridShapeLabel(gridSize)} B`,
             fluidRead: fluidBuffers[1],
             fluidWrite: fluidBuffers[0],
             frontRead: frontBuffers[1],
@@ -9547,13 +9614,13 @@ export function createKaminosVolumePrototype({
   function ensureBoundarySidecarBuffer() {
     if (boundarySidecarBuffer) return;
     boundarySidecarBuffer = device.createBuffer({
-      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} ${gridSize}^3`,
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} ${gridShapeLabel(gridSize)}`,
       size: boundarySidecarBufferBytes(gridSize),
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(boundarySidecarBuffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
     boundarySidecarWriteBindGroup = device.createBindGroup({
-      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} write bind group ${gridSize}^3`,
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} write bind group ${gridShapeLabel(gridSize)}`,
       layout: boundarySidecarWriteBindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: boundarySidecarBuffer } },
@@ -9591,7 +9658,7 @@ export function createKaminosVolumePrototype({
     });
     const cellCount = gridCellCount(gridSize);
     liquidFireContactAccumulationBuffer = device.createBuffer({
-      label: `kaminos liquid-fire transient contact accumulation ${gridSize}^3`,
+      label: `kaminos liquid-fire transient contact accumulation ${gridShapeLabel(gridSize)}`,
       size: cellCount * 16,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
@@ -9609,8 +9676,8 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(liquidFireContactStatsBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_STATS_WORDS));
     writeLiquidFireContactParams();
     liquidFireContactShader = device.createShaderModule({
-      label: `kaminos liquid-fire contact consumer ${gridSize}^3`,
-      code: createLiquidFireContactConsumerShaderWGSL(gridSize),
+      label: `kaminos liquid-fire contact consumer ${gridShapeLabel(gridSize)}`,
+      code: createLiquidFireContactConsumerShaderWGSL(gridSize, gridHeight),
     });
     liquidFireContactBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos liquid-fire contact consumer bind group layout',
@@ -9653,7 +9720,7 @@ export function createKaminosVolumePrototype({
     for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
       for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {
         liquidFireContactBindGroups[fluidIndex * 2 + quenchIndex] = device.createBindGroup({
-          label: `kaminos liquid-fire contact consumer bind group ${gridSize}^3 fluid ${fluidIndex} quench ${quenchIndex}`,
+          label: `kaminos liquid-fire contact consumer bind group ${gridShapeLabel(gridSize)} fluid ${fluidIndex} quench ${quenchIndex}`,
           layout: liquidFireContactBindGroupLayout,
           entries: [
             { binding: 0, resource: { buffer: descriptor.headerBuffer } },
@@ -9888,7 +9955,7 @@ export function createKaminosVolumePrototype({
       || fluidBuffers.length !== 2
     ) return;
     boundarySplatComputeBindGroups = fluidBuffers.map((fluidBuffer, index) => device.createBindGroup({
-      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compute bind group ${gridSize}^3 ${index}`,
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compute bind group ${gridShapeLabel(gridSize)} ${index}`,
       layout: boundarySplatComputeBindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: boundarySidecarBuffer } },
@@ -9904,7 +9971,7 @@ export function createKaminosVolumePrototype({
       ],
     }));
     boundarySplatRenderBindGroup = device.createBindGroup({
-      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} render bind group ${gridSize}^3`,
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} render bind group ${gridShapeLabel(gridSize)}`,
       layout: boundarySplatRenderBindGroupLayout,
       entries: [
         { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
@@ -10099,6 +10166,7 @@ export function createKaminosVolumePrototype({
 
   function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
+    gridHeight = gridHeightForSize(gridSize);
     updateAnalyticEmitterDebug();
     if (boundarySplatLiveUnionOverlay) {
       state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
@@ -10139,7 +10207,7 @@ export function createKaminosVolumePrototype({
     const initialFluid = makeInitialFluid(gridSize);
     fluidBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
-        label: `kaminos fluid state ${gridSize}^3 ${i}`,
+        label: `kaminos fluid state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
         size: nextBufferBytes,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
@@ -10148,7 +10216,7 @@ export function createKaminosVolumePrototype({
     });
     frontBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
-        label: `kaminos ${FRONT_FIELD_IDENTITY} ${gridSize}^3 ${i}`,
+        label: `kaminos ${FRONT_FIELD_IDENTITY} ${gridSize}x${gridHeight}x${gridSize} ${i}`,
         size: nextFrontBufferBytes,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
@@ -10157,7 +10225,7 @@ export function createKaminosVolumePrototype({
     });
     quenchBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
-        label: `kaminos recoverable liquid quench and source state ${gridSize}^3 ${i}`,
+        label: `kaminos recoverable liquid quench and source state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
         size: quenchFieldBufferBytes(gridSize),
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
@@ -10171,7 +10239,7 @@ export function createKaminosVolumePrototype({
     });
     pressureBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
-        label: `kaminos pressure/divergence field ${gridSize}^3 ${i}`,
+        label: `kaminos pressure/divergence field ${gridSize}x${gridHeight}x${gridSize} ${i}`,
         size: nextPressureBufferBytes,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
@@ -10180,7 +10248,7 @@ export function createKaminosVolumePrototype({
     });
     ensureOracleActivityCueBuffer();
     if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
-      const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
+      const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize, gridHeight);
       writeOracleActivityCueBuffer(resampledCue);
       oracleActivityCueUpload = {
         ...oracleActivityCueUpload,
@@ -10190,9 +10258,9 @@ export function createKaminosVolumePrototype({
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = { GRID: gridSize, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
+    const renderPipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
-    const computePipelineConstants = { GRID: gridSize };
+    const computePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight };
     const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
       label,
       layout: pipelineLayout,
@@ -10200,16 +10268,16 @@ export function createKaminosVolumePrototype({
       fragment: { module: shader, entryPoint: 'fs', constants, targets: [{ format: targetFormat }] },
       primitive: { topology: 'triangle-list' },
     });
-    pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
-    readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+    pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridShapeLabel(gridSize)}`);
+    readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridShapeLabel(gridSize)}`);
     leanStockPipeline = makePipeline(
       format,
-      `kaminos volume canvas lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+      `kaminos volume canvas lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
       leanStockRenderPipelineConstants,
     );
     leanStockReadbackPipeline = makePipeline(
       'rgba8unorm',
-      `kaminos volume readback lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+      `kaminos volume readback lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
       leanStockRenderPipelineConstants,
     );
     if (productFrameOwner === 'caller') {
@@ -10232,16 +10300,16 @@ export function createKaminosVolumePrototype({
         primitive: { topology: 'triangle-list' },
       });
       productRaymarchPipeline = makeProductRaymarchPipeline(
-        `kaminos product caller-depth broad-smoke raymarch ${gridSize}^3`,
+        `kaminos product caller-depth broad-smoke raymarch ${gridShapeLabel(gridSize)}`,
         renderPipelineConstants,
       );
       leanStockProductRaymarchPipeline = makeProductRaymarchPipeline(
-        `kaminos product caller-depth lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+        `kaminos product caller-depth lean-stock-direct-cell-raymarch-v0 ${gridShapeLabel(gridSize)}`,
         leanStockRenderPipelineConstants,
       );
     }
     opticalTransportContributionPipeline = device.createRenderPipeline({
-      label: `kaminos shared-transmittance pre-tone-map contribution readback ${gridSize}^3`,
+      label: `kaminos shared-transmittance pre-tone-map contribution readback ${gridShapeLabel(gridSize)}`,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
       fragment: {
@@ -10257,7 +10325,7 @@ export function createKaminosVolumePrototype({
       primitive: { topology: 'triangle-list' },
     });
     browserResidualSourcePipeline = device.createRenderPipeline({
-      label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
+      label: `kaminos volume browser residual shader-material-authority source ${gridShapeLabel(gridSize)}`,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
       fragment: {
@@ -10269,68 +10337,68 @@ export function createKaminosVolumePrototype({
       primitive: { topology: 'triangle-list' },
     });
     browserResidualPipeline = device.createRenderPipeline({
-      label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
+      label: `kaminos volume browser webgpu-direct-residual postprocess ${gridShapeLabel(gridSize)}`,
       layout: browserResidualPipelineLayout,
       vertex: { module: browserResidualShader, entryPoint: 'vs' },
       fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
       primitive: { topology: 'triangle-list' },
     });
     computePipeline = device.createComputePipeline({
-      label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
+      label: `kaminos first fluid sim compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: pipelineLayout,
       compute: { module: shader, entryPoint: 'cs', constants: computePipelineConstants },
     });
     analyticEmitterInjectionPipeline = device.createComputePipeline({
-      label: `kaminos bounded analytic emitter injection ${gridSize}^3`,
+      label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)}`,
       layout: analyticEmitterInjectionPipelineLayout,
       compute: {
         module: analyticEmitterInjectionShader,
         entryPoint: 'injectAnalyticEmitter',
-        constants: { GRID: gridSize },
+        constants: { GRID: gridSize, GRID_Y: gridHeight },
       },
     });
     pressureDivergencePipeline = device.createComputePipeline({
-      label: `kaminos divergence pressure compute pipeline ${gridSize}^3`,
+      label: `kaminos divergence pressure compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: pressureWritePipelineLayout,
       compute: { module: shader, entryPoint: 'csDivergencePressure', constants: computePipelineConstants },
     });
     pressureJacobiPipeline = device.createComputePipeline({
-      label: `kaminos pressure jacobi compute pipeline ${gridSize}^3`,
+      label: `kaminos pressure jacobi compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: pressureJacobiPipelineLayout,
       compute: { module: shader, entryPoint: 'csPressureJacobi', constants: computePipelineConstants },
     });
     pressureJacobiTieredLowerPipeline = device.createComputePipeline({
-      label: `kaminos pressure tiered lower-slab jacobi compute pipeline ${gridSize}^3`,
+      label: `kaminos pressure tiered lower-slab jacobi compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: pressureJacobiTieredPipelineLayout,
       compute: { module: shader, entryPoint: 'csPressureJacobiTieredLower', constants: computePipelineConstants },
     });
     pressureJacobiTieredHeroPipeline = device.createComputePipeline({
-      label: `kaminos pressure tiered hero-band jacobi compute pipeline ${gridSize}^3`,
+      label: `kaminos pressure tiered hero-band jacobi compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: pressureJacobiTieredPipelineLayout,
       compute: { module: shader, entryPoint: 'csPressureJacobiTieredHero', constants: computePipelineConstants },
     });
     pressureProjectPipeline = device.createComputePipeline({
-      label: `kaminos velocity projection compute pipeline ${gridSize}^3`,
+      label: `kaminos velocity projection compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: pressureProjectPipelineLayout,
       compute: { module: shader, entryPoint: 'csProjectPressure', constants: computePipelineConstants },
     });
     pressureProjectTieredPipeline = device.createComputePipeline({
-      label: `kaminos velocity tiered pressure projection compute pipeline ${gridSize}^3`,
+      label: `kaminos velocity tiered pressure projection compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: pressureProjectTieredPipelineLayout,
       compute: { module: shader, entryPoint: 'csProjectPressureTiered', constants: computePipelineConstants },
     });
     boundarySidecarBuildPipeline = device.createComputePipeline({
-      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} compute pipeline ${gridSize}^3`,
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: boundarySidecarPipelineLayout,
       compute: { module: shader, entryPoint: 'csBoundarySidecar', constants: computePipelineConstants },
     });
     boundarySplatCompactPipeline = device.createComputePipeline({
-      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact ${gridSize}^3`,
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact ${gridShapeLabel(gridSize)}`,
       layout: boundarySplatComputePipelineLayout,
       compute: { module: boundarySplatShader, entryPoint: 'compactBoundarySplats', constants: computePipelineConstants },
     });
     boundarySplatFinalizePipeline = device.createComputePipeline({
-      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize ${gridSize}^3`,
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize ${gridShapeLabel(gridSize)}`,
       layout: boundarySplatComputePipelineLayout,
       compute: { module: boundarySplatShader, entryPoint: 'finalizeBoundarySplats', constants: computePipelineConstants },
     });
@@ -10357,10 +10425,10 @@ export function createKaminosVolumePrototype({
       },
       primitive: { topology },
     });
-    boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
+    boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridShapeLabel(gridSize)}`);
     if (productFrameOwner === 'caller') {
       productBoundarySplatRenderPipeline = device.createRenderPipeline({
-        label: `kaminos product shared-depth ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`,
+        label: `kaminos product shared-depth ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridShapeLabel(gridSize)}`,
         layout: boundarySplatRenderPipelineLayout,
         vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
         fragment: {
@@ -10382,25 +10450,25 @@ export function createKaminosVolumePrototype({
         },
       });
     }
-    boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
+    boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridShapeLabel(gridSize)}`);
     boundarySplatBilinearRenderPipeline = makeBoundarySplatRenderPipeline(
       format,
-      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} raster ${gridSize}^3`,
+      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} raster ${gridShapeLabel(gridSize)}`,
       'boundarySplatBilinearVs',
       'boundarySplatBilinearFs',
       'point-list',
     );
     boundarySplatBilinearReadbackPipeline = makeBoundarySplatRenderPipeline(
       'rgba8unorm',
-      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} witness readback ${gridSize}^3`,
+      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} witness readback ${gridShapeLabel(gridSize)}`,
       'boundarySplatBilinearVs',
       'boundarySplatBilinearFs',
       'point-list',
     );
-    boundarySplatHdrPipeline = makeBoundarySplatRenderPipeline(BOUNDARY_SPLAT_HDR_TARGET_FORMAT, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} hdr accumulation ${gridSize}^3`);
+    boundarySplatHdrPipeline = makeBoundarySplatRenderPipeline(BOUNDARY_SPLAT_HDR_TARGET_FORMAT, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} hdr accumulation ${gridShapeLabel(gridSize)}`);
     boundarySplatBilinearHdrPipeline = makeBoundarySplatRenderPipeline(
       BOUNDARY_SPLAT_HDR_TARGET_FORMAT,
-      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} hdr accumulation ${gridSize}^3`,
+      `kaminos ${FULL_SUPPORT_BILINEAR_DEPOSITION_IDENTITY} hdr accumulation ${gridShapeLabel(gridSize)}`,
       'boundarySplatBilinearVs',
       'boundarySplatBilinearFs',
       'point-list',
@@ -10555,7 +10623,7 @@ export function createKaminosVolumePrototype({
     emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
-      label: `kaminos bounded analytic emitter injection ${gridSize}^3 ${index}`,
+      label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)} ${index}`,
       layout: analyticEmitterInjectionBindGroupLayout,
       entries: [
         { binding: 0, resource: { buffer: analyticEmitterInjectionUniformBuffer } },
@@ -10564,7 +10632,7 @@ export function createKaminosVolumePrototype({
     }));
     fluidFrontReadBindGroups = [
       device.createBindGroup({
-        label: `kaminos fluid-front read bind group ${gridSize}^3 A`,
+        label: `kaminos fluid-front read bind group ${gridShapeLabel(gridSize)} A`,
         layout: fluidFrontReadBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
@@ -10572,7 +10640,7 @@ export function createKaminosVolumePrototype({
         ],
       }),
       device.createBindGroup({
-        label: `kaminos fluid-front read bind group ${gridSize}^3 B`,
+        label: `kaminos fluid-front read bind group ${gridShapeLabel(gridSize)} B`,
         layout: fluidFrontReadBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
@@ -10582,7 +10650,7 @@ export function createKaminosVolumePrototype({
     ];
     boundarySidecarReadBindGroups = [
       device.createBindGroup({
-        label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} read bind group ${gridSize}^3 A`,
+        label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} read bind group ${gridShapeLabel(gridSize)} A`,
         layout: boundarySidecarReadBindGroupLayout,
         entries: [
           { binding: 0, resource: { buffer: uniformBuffer } },
@@ -10591,7 +10659,7 @@ export function createKaminosVolumePrototype({
         ],
       }),
       device.createBindGroup({
-        label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} read bind group ${gridSize}^3 B`,
+        label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} read bind group ${gridShapeLabel(gridSize)} B`,
         layout: boundarySidecarReadBindGroupLayout,
         entries: [
           { binding: 0, resource: { buffer: uniformBuffer } },
@@ -10602,7 +10670,7 @@ export function createKaminosVolumePrototype({
     ];
     rebuildBoundarySplatBindGroups();
     pressureWriteBindGroup = device.createBindGroup({
-      label: `kaminos pressure divergence write bind group ${gridSize}^3`,
+      label: `kaminos pressure divergence write bind group ${gridShapeLabel(gridSize)}`,
       layout: pressureWriteBindGroupLayout,
       entries: [
         { binding: 1, resource: { buffer: pressureBuffers[0] } },
@@ -10610,7 +10678,7 @@ export function createKaminosVolumePrototype({
     });
     pressureJacobiBindGroups = [
       device.createBindGroup({
-        label: `kaminos pressure jacobi bind group ${gridSize}^3 A to B`,
+        label: `kaminos pressure jacobi bind group ${gridShapeLabel(gridSize)} A to B`,
         layout: pressureJacobiBindGroupLayout,
         entries: [
           { binding: 0, resource: { buffer: pressureBuffers[0] } },
@@ -10618,7 +10686,7 @@ export function createKaminosVolumePrototype({
         ],
       }),
       device.createBindGroup({
-        label: `kaminos pressure jacobi bind group ${gridSize}^3 B to A`,
+        label: `kaminos pressure jacobi bind group ${gridShapeLabel(gridSize)} B to A`,
         layout: pressureJacobiBindGroupLayout,
         entries: [
           { binding: 0, resource: { buffer: pressureBuffers[1] } },
@@ -10628,14 +10696,14 @@ export function createKaminosVolumePrototype({
     ];
     pressureReadBindGroups = [
       device.createBindGroup({
-        label: `kaminos pressure read bind group ${gridSize}^3 A`,
+      label: `kaminos pressure read bind group ${gridShapeLabel(gridSize)} A`,
         layout: pressureReadBindGroupLayout,
         entries: [
           { binding: 0, resource: { buffer: pressureBuffers[0] } },
         ],
       }),
       device.createBindGroup({
-        label: `kaminos pressure read bind group ${gridSize}^3 B`,
+      label: `kaminos pressure read bind group ${gridShapeLabel(gridSize)} B`,
         layout: pressureReadBindGroupLayout,
         entries: [
           { binding: 0, resource: { buffer: pressureBuffers[1] } },
@@ -10648,7 +10716,8 @@ export function createKaminosVolumePrototype({
     currentQuench = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
-    state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
+    state.simGridLabel = `${gridSize}x${gridHeight}x${gridSize} velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
+    state.simGridDimensions = [gridSize, gridHeight, gridSize];
     state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
     state.frontFieldBytes = nextFrontBufferBytes;
     state.frontFieldReadIndex = currentFront;
@@ -12610,7 +12679,7 @@ export function createKaminosVolumePrototype({
     const pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, scene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, scene);
     const pressureTierControls = normalizePressureTierControls(controlsSnapshot);
-    const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls);
+    const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls, gridHeight);
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
     const spatialPressureEnabled = pressureEnabled && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
@@ -12685,7 +12754,7 @@ export function createKaminosVolumePrototype({
       pressureProjection: pressureProjectionPasses,
       total: fullGridPassesPerFrame,
     };
-    const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
+    const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 2 * Math.ceil(gridHeight / 4);
     const boundarySidecarBuiltThisFrame = options.boundarySidecarBuiltThisFrame ?? state.boundarySidecarBuiltThisFrame;
     const fullGridCells = gridCellCount(gridSize);
     const analyticEmitterCellVisitsThisFrame = analyticEmitterDispatch.active
@@ -12757,6 +12826,7 @@ export function createKaminosVolumePrototype({
       effectiveRoute: state.effectiveRoute,
       volumeScene: scene,
       grid: gridSize,
+      gridDimensions: [gridSize, gridHeight, gridSize],
       workgroupSize: '4x4x4',
       fullGridWorkgroupsPerPass,
       simPassesPerFrame,
@@ -12870,7 +12940,8 @@ export function createKaminosVolumePrototype({
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, fluidBindGroup());
     const workgroups = Math.ceil(gridSize / 4);
-    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    const workgroupsY = Math.ceil(gridHeight / 4);
+    pass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
     pass.end();
     currentFluid = 1 - currentFluid;
     currentFront = 1 - currentFront;
@@ -12890,7 +12961,7 @@ export function createKaminosVolumePrototype({
   function encodePressureProjection(encoder, options = {}) {
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
-    const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot));
+    const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot), gridHeight);
     if (
       !pressureJacobiPipeline ||
       !pressureProjectPipeline ||
@@ -12915,6 +12986,7 @@ export function createKaminosVolumePrototype({
       return false;
     }
     const workgroups = Math.ceil(gridSize / 4);
+    const workgroupsY = Math.ceil(gridHeight / 4);
     const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = fluidFrontReadBindGroups[currentFluid]) => {
       const pass = encoder.beginComputePass({ label });
       pass.setPipeline(pipeline);
@@ -12927,7 +12999,7 @@ export function createKaminosVolumePrototype({
       dispatchPressureTierPass(
         pressureJacobiPipeline,
         pressureJacobiBindGroups[0],
-        workgroups,
+        workgroupsY,
         'kaminos pressure spatial tier pass 1 full-volume pressure1'
       );
       dispatchPressureTierPass(
@@ -12952,7 +13024,7 @@ export function createKaminosVolumePrototype({
         pass.setPipeline(pressureProjectTieredPipeline);
         pass.setBindGroup(0, fluidBindGroup());
         pass.setBindGroup(2, pressureJacobiBindGroups[1]);
-        pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+        pass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
         pass.end();
         currentFluid = 1 - currentFluid;
         currentFront = 1 - currentFront;
@@ -12971,7 +13043,7 @@ export function createKaminosVolumePrototype({
       pass.setPipeline(pressureJacobiPipeline);
       pass.setBindGroup(0, fluidFrontReadBindGroups[currentFluid]);
       pass.setBindGroup(2, pressureJacobiBindGroups[pressureReadIndex]);
-      pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+      pass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
       pass.end();
       pressureReadIndex = 1 - pressureReadIndex;
     }
@@ -12983,7 +13055,7 @@ export function createKaminosVolumePrototype({
       pass.setPipeline(pressureProjectPipeline);
       pass.setBindGroup(0, fluidBindGroup());
       pass.setBindGroup(2, pressureReadBindGroups[pressureReadIndex]);
-      pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+      pass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
       pass.end();
       currentFluid = 1 - currentFluid;
       currentFront = 1 - currentFront;
@@ -13054,7 +13126,8 @@ export function createKaminosVolumePrototype({
     pass.setBindGroup(0, options.readBindGroup || boundarySidecarReadBindGroups[currentFluid]);
     pass.setBindGroup(3, boundarySidecarWriteBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
-    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    const workgroupsY = Math.ceil(gridHeight / 4);
+    pass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
     pass.end();
     state.boundarySidecarBuilt = true;
     state.boundarySidecarBuiltThisFrame = true;
@@ -13744,7 +13817,8 @@ export function createKaminosVolumePrototype({
     const computeBindGroup = hooks.computeBindGroup || boundarySplatComputeBindGroups[currentFluid];
     compactPass.setBindGroup(0, computeBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
-    compactPass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    const workgroupsY = Math.ceil(gridHeight / 4);
+    compactPass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
     compactPass.end();
     const finalizePass = encoder.beginComputePass({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize pass`,
@@ -14437,7 +14511,7 @@ export function createKaminosVolumePrototype({
     const candidateNativeCellIds = new Uint32Array(draw.sourceCandidateCount);
     for (let index = 0; index < draw.sourceCandidateCount; index += 1) {
       const nativeCellId = candidateValues[index * candidateStrideFloats + 20];
-      if (!Number.isInteger(nativeCellId) || nativeCellId < 0 || nativeCellId >= gridSize ** 3) {
+      if (!Number.isInteger(nativeCellId) || nativeCellId < 0 || nativeCellId >= gridCellCount(gridSize)) {
         throw new Error(`boundary-splat-instance-residency-invalid-native-cell-id:${nativeCellId}:${index}`);
       }
       candidateNativeCellIds[index] = nativeCellId;
@@ -14745,7 +14819,7 @@ export function createKaminosVolumePrototype({
           const nativeCellId = values[offset];
           const ridgeAdmitted = values[offset + 1] > 0.5;
           const nonRidgeAdmitted = values[offset + 2] > 0.5;
-          if (!Number.isInteger(nativeCellId) || nativeCellId < 0 || nativeCellId >= gridSize * gridSize * gridSize) {
+          if (!Number.isInteger(nativeCellId) || nativeCellId < 0 || nativeCellId >= gridCellCount(gridSize)) {
             throw new Error(`boundary-splat-union-invalid-native-cell-id:${nativeCellId}:${index}`);
           }
           if (seenNativeCellIds.has(nativeCellId)) {
@@ -16005,10 +16079,10 @@ export function createKaminosVolumePrototype({
       shape: isBoundarySplat
         ? [values.length / BOUNDARY_SPLAT_CHANNELS.length, BOUNDARY_SPLAT_CHANNELS.length]
         : kind === 'fluid'
-        ? [gridSize, gridSize, gridSize, FLUID_COMPONENTS]
+        ? [gridSize, gridHeight, gridSize, FLUID_COMPONENTS]
         : isBoundary
-          ? [gridSize, gridSize, gridSize, 4]
-          : [gridSize, gridSize, gridSize, 1],
+          ? [gridSize, gridHeight, gridSize, 4]
+          : [gridSize, gridHeight, gridSize, 1],
       channelOrder: isBoundarySplat
         ? BOUNDARY_SPLAT_CHANNELS
         : kind === 'fluid'
@@ -16029,6 +16103,7 @@ export function createKaminosVolumePrototype({
       sessionId: session.sessionId,
       createdAtMs: session.createdAtMs,
       grid: session.grid,
+      gridDimensions: [...session.gridDimensions],
       cellCount: session.cellCount,
       completeFieldCoverage: true,
       routeIdentity: ROUTE_IDENTITY,
@@ -16052,6 +16127,7 @@ export function createKaminosVolumePrototype({
         prototypeIdentity: PROTOTYPE_IDENTITY,
         backend: state.backend,
         grid: session.grid,
+        gridDimensions: [...session.gridDimensions],
         cellCount: session.cellCount,
         channelOrder: ['support', 'coverage', 'ridge', 'footprint'],
         boundarySidecarDebug: boundarySidecarDebug(session.derivedBuffers.boundarySidecarSource),
@@ -16622,7 +16698,7 @@ export function createKaminosVolumePrototype({
     liveCompleteFlameCoefficientUniformBuffer?.destroy();
     liveCompleteFlameCoefficientDispatchTexture?.destroy();
     boundarySplatLiveCompleteFlameCoefficientBuffer = device.createBuffer({
-      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} persistent ${gridSize}^3`,
+      label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} persistent ${gridShapeLabel(gridSize)}`,
       size: byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     });
@@ -16853,7 +16929,7 @@ export function createKaminosVolumePrototype({
       ensureNonRidgeOpticalCaptureBuffers();
       idleRowsBuffer = nonRidgeOpticalCaptureRowBuffer;
       exactCoefficientBuffer = device.createBuffer({
-        label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridSize}^3`,
+        label: `kaminos ${LIVE_COMPLETE_FLAME_COEFFICIENT_AUTHORITY} ${gridShapeLabel(gridSize)}`,
         size: byteLength,
         usage: GPUBufferUsage.STORAGE,
       });
@@ -17421,7 +17497,7 @@ export function createKaminosVolumePrototype({
         overflowCount: writePass.overflowCount,
         byteLength,
         values,
-        gridShape: [gridSize, gridSize, gridSize],
+        gridShape: [gridSize, gridHeight, gridSize],
         gridOrigin: [-1, -1, -1],
         gridSpacing: [2 / gridSize, 2 / gridSize, 2 / gridSize],
         captureTimeMs,
@@ -17652,6 +17728,7 @@ export function createKaminosVolumePrototype({
       sessionId: `full-field-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
       createdAtMs: performance.now(),
       grid: gridSize,
+      gridDimensions: [...state.simGridDimensions],
       cellCount: gridCellCount(gridSize),
       deterministicReplay: replaySample ? {
         identity: replaySample.identity,
@@ -17843,11 +17920,18 @@ export function createKaminosVolumePrototype({
     let frontTopologyRadianceCouplingSum = 0;
     let frontTopologyFlameDetailCouplingSum = 0;
     let frontTopologyFireLickCouplingSum = 0;
+    const volumeWorldYMin = -1;
+    const volumeWorldYSpan = 2 * gridHeight / gridSize;
+    const worldYAtGridIndex = y => ((y + 0.5) / gridSize) * 2 - 1;
     const plumeHeightBinCount = 8;
+    const plumeHeightBinIndex = y => Math.max(
+      0,
+      Math.min(plumeHeightBinCount - 1, Math.floor(((worldYAtGridIndex(y) - volumeWorldYMin) / volumeWorldYSpan) * plumeHeightBinCount)),
+    );
     const plumeHeightBins = Array.from({ length: plumeHeightBinCount }, (_, bin) => ({
       bin,
-      yMin: bin / plumeHeightBinCount * 2 - 1,
-      yMax: (bin + 1) / plumeHeightBinCount * 2 - 1,
+      yMin: volumeWorldYMin + bin / plumeHeightBinCount * volumeWorldYSpan,
+      yMax: volumeWorldYMin + (bin + 1) / plumeHeightBinCount * volumeWorldYSpan,
       smokeWeight: 0,
       smokeWeightedX: 0,
       smokeWeightedZ: 0,
@@ -17884,19 +17968,22 @@ export function createKaminosVolumePrototype({
     const sampleCells = new Set();
     const addSampleCell = (x, y, z) => {
       const cx = Math.max(0, Math.min(gridSize - 1, x | 0));
-      const cy = Math.max(0, Math.min(gridSize - 1, y | 0));
+      const cy = Math.max(0, Math.min(gridHeight - 1, y | 0));
       const cz = Math.max(0, Math.min(gridSize - 1, z | 0));
-      const cellIndex = cx + cy * gridSize + cz * gridSize * gridSize;
+      const cellIndex = cx + cy * gridSize + cz * gridSize * gridHeight;
       sampleCells.add(cellIndex);
       return cellIndex;
     };
     const sampleGridCount = Math.min(17, gridSize);
     const sampleGridStep = (gridSize - 1) / Math.max(1, sampleGridCount - 1);
     const sampleGridAxis = axis => Math.round(axis * sampleGridStep);
+    const sampleGridYCount = Math.min(33, gridHeight);
+    const sampleGridYStep = (gridHeight - 1) / Math.max(1, sampleGridYCount - 1);
+    const sampleGridY = axis => Math.round(axis * sampleGridYStep);
     for (let zAxis = 0; zAxis < sampleGridCount; zAxis += 1) {
-      for (let yAxis = 0; yAxis < sampleGridCount; yAxis += 1) {
+      for (let yAxis = 0; yAxis < sampleGridYCount; yAxis += 1) {
         for (let xAxis = 0; xAxis < sampleGridCount; xAxis += 1) {
-          addSampleCell(sampleGridAxis(xAxis), sampleGridAxis(yAxis), sampleGridAxis(zAxis));
+          addSampleCell(sampleGridAxis(xAxis), sampleGridY(yAxis), sampleGridAxis(zAxis));
         }
       }
     }
@@ -17927,18 +18014,19 @@ export function createKaminosVolumePrototype({
       }
     }
     const clampIndex = value => Math.max(0, Math.min(gridSize - 1, value));
+    const clampYIndex = value => Math.max(0, Math.min(gridHeight - 1, value));
     const velocityAt = (x, y, z) => {
       const cx = clampIndex(x);
-      const cy = clampIndex(y);
+      const cy = clampYIndex(y);
       const cz = clampIndex(z);
-      const i = (cx + cy * gridSize + cz * gridSize * gridSize) * FLUID_COMPONENTS;
+      const i = (cx + cy * gridSize + cz * gridSize * gridHeight) * FLUID_COMPONENTS;
       return [data[i], data[i + 1], data[i + 2]];
     };
     const smokeDensityAt = (x, y, z) => {
       const cx = clampIndex(x);
-      const cy = clampIndex(y);
+      const cy = clampYIndex(y);
       const cz = clampIndex(z);
-      const i = (cx + cy * gridSize + cz * gridSize * gridSize) * FLUID_COMPONENTS;
+      const i = (cx + cy * gridSize + cz * gridSize * gridHeight) * FLUID_COMPONENTS;
       return Math.max(0, data[i + 4]);
     };
     const buildCanonicalSmokeFieldSlice = () => {
@@ -17947,7 +18035,7 @@ export function createKaminosVolumePrototype({
       const width = panelWidth * 2;
       const rgba = new Uint8Array(width * height * 4);
       const zStep = Math.max(1, Math.floor(gridSize / 96));
-      const xzY = clampIndex(sourceY + sourceRadius * 3);
+      const xzY = clampYIndex(sourceY + sourceRadius * 3);
       let xyMax = 0;
       let xzMax = 0;
       let xyActivePixels = 0;
@@ -17971,7 +18059,7 @@ export function createKaminosVolumePrototype({
         rgba[dst + 3] = color[3];
       };
       for (let py = 0; py < height; py += 1) {
-        const gy = clampIndex(Math.round((1 - py / Math.max(1, height - 1)) * (gridSize - 1)));
+        const gy = clampYIndex(Math.round((1 - py / Math.max(1, height - 1)) * (gridHeight - 1)));
         for (let px = 0; px < panelWidth; px += 1) {
           const gx = clampIndex(Math.round(px / Math.max(1, panelWidth - 1) * (gridSize - 1)));
           let maxSmoke = 0;
@@ -17993,7 +18081,7 @@ export function createKaminosVolumePrototype({
           setPixel(panelWidth + px, py, smoke);
         }
       }
-      const sourceLineY = Math.max(0, Math.min(height - 1, Math.round((1 - sourceY / Math.max(1, gridSize - 1)) * (height - 1))));
+      const sourceLineY = Math.max(0, Math.min(height - 1, Math.round((1 - (sourceY + 0.5) / gridHeight) * (height - 1))));
       const xzCenter = Math.max(0, Math.min(height - 1, Math.round((1 - center / Math.max(1, gridSize - 1)) * (height - 1))));
       for (let px = 0; px < panelWidth; px += 1) {
         const sourceDst = (sourceLineY * width + px) * 4;
@@ -18031,7 +18119,7 @@ export function createKaminosVolumePrototype({
       };
     };
     const buildReactionFrontAtlas = () => {
-      const cellCount = gridSize * gridSize * gridSize;
+      const cellCount = gridCellCount(gridSize);
       const heatSupport = new Float32Array(cellCount);
       const fuelSupport = new Float32Array(cellCount);
       const flameSupport = new Float32Array(cellCount);
@@ -18055,7 +18143,7 @@ export function createKaminosVolumePrototype({
         topologyWrinkle: [178, 134, 245],
         shellCandidate: [255, 224, 158],
       };
-      const indexAt = (x, y, z) => clampIndex(x) + clampIndex(y) * gridSize + clampIndex(z) * gridSize * gridSize;
+      const indexAt = (x, y, z) => clampIndex(x) + clampYIndex(y) * gridSize + clampIndex(z) * gridSize * gridHeight;
       const flowTopologyAt = (x, y, z) => {
         const vx0 = velocityAt(x - 1, y, z);
         const vx1 = velocityAt(x + 1, y, z);
@@ -18097,7 +18185,7 @@ export function createKaminosVolumePrototype({
         topologyWrinkle[cell] = topologyWrinkleValue;
       }
       for (let z = 0; z < gridSize; z += 1) {
-        for (let y = 0; y < gridSize; y += 1) {
+        for (let y = 0; y < gridHeight; y += 1) {
           for (let x = 0; x < gridSize; x += 1) {
             const cell = indexAt(x, y, z);
             const flowTopology = flowTopologyAt(x, y, z);
@@ -18226,7 +18314,7 @@ export function createKaminosVolumePrototype({
         const panelY = Math.floor(stageIndex / columns) * panelSize;
         const color = colorMaps[stage.key] || [255, 255, 255];
         for (let py = 0; py < panelSize; py += 1) {
-          const gy = clampIndex(Math.round((1 - py / Math.max(1, panelSize - 1)) * (gridSize - 1)));
+          const gy = clampYIndex(Math.round((1 - py / Math.max(1, panelSize - 1)) * (gridHeight - 1)));
           for (let px = 0; px < panelSize; px += 1) {
             const gx = clampIndex(Math.round(px / Math.max(1, panelSize - 1) * (gridSize - 1)));
             let projected = 0;
@@ -18280,8 +18368,8 @@ export function createKaminosVolumePrototype({
     for (const cell of sampleCells) {
       const i = cell * FLUID_COMPONENTS;
       const x = cell % gridSize;
-      const y = Math.floor(cell / gridSize) % gridSize;
-      const z = Math.floor(cell / (gridSize * gridSize));
+      const y = Math.floor(cell / gridSize) % gridHeight;
+      const z = Math.floor(cell / (gridSize * gridHeight));
       const vx = data[i];
       const vy = data[i + 1];
       const vz = data[i + 2];
@@ -18315,7 +18403,7 @@ export function createKaminosVolumePrototype({
       const fuelConsumption = reaction * (0.020 + Math.max(0, Math.min(2.5, controlsSnapshot.flowRate ?? 0.3)) * 0.016);
       if (plumeDriftCells.has(cell)) {
         const nx = x / Math.max(1, gridSize - 1) * 2 - 1;
-        const ny = y / Math.max(1, gridSize - 1) * 2 - 1;
+        const ny = worldYAtGridIndex(y);
         const nz = z / Math.max(1, gridSize - 1) * 2 - 1;
         const smokeWeight = Math.max(0, extinction);
         const fireWeight = Math.max(0, radiance);
@@ -18369,7 +18457,7 @@ export function createKaminosVolumePrototype({
         emissionDetailWeightedX2 += emissionDetailWeight * nx * nx;
         emissionDetailWeightedZ2 += emissionDetailWeight * nz * nz;
         combustionFrontWeightSum += combustionFrontWeight;
-        const bin = plumeHeightBins[Math.max(0, Math.min(plumeHeightBinCount - 1, Math.floor((ny + 1) * 0.5 * plumeHeightBinCount)))];
+        const bin = plumeHeightBins[plumeHeightBinIndex(y)];
         bin.smokeWeight += smokeWeight;
         bin.smokeWeightedX += smokeWeight * nx;
         bin.smokeWeightedZ += smokeWeight * nz;
@@ -18441,7 +18529,7 @@ export function createKaminosVolumePrototype({
         smokeWeightedCurl += smokeWeight * curlMag;
         smokeWeightedCurlContact += smokeWeight * Math.max(0, Math.min(1, (curlMag - 0.0005) / 0.035));
         emissionDetailWeightedCurlContact += emissionDetailWeight * emissionCurlContact;
-        const bin = plumeHeightBins[Math.max(0, Math.min(plumeHeightBinCount - 1, Math.floor(((y / Math.max(1, gridSize - 1) * 2 - 1) + 1) * 0.5 * plumeHeightBinCount)))];
+        const bin = plumeHeightBins[plumeHeightBinIndex(y)];
         bin.smokeWeightedCurl += smokeWeight * curlMag;
       }
       curlSum += curlMag;
@@ -18460,7 +18548,7 @@ export function createKaminosVolumePrototype({
     const smokeVelocityY = smokeWeightSum > 0 ? smokeWeightedVelocityY / smokeWeightSum : 0;
     const fireVelocityY = fireWeightSum > 0 ? fireWeightedVelocityY / fireWeightSum : 0;
     const visualRiseDirectionY = isBonfireReadbackScene ? -1 : 1;
-    const sourceYNorm = sourceY / Math.max(1, gridSize - 1) * 2 - 1;
+    const sourceYNorm = worldYAtGridIndex(sourceY);
     const smokeCenterX = smokeWeightSum > 0 ? smokeWeightedX / smokeWeightSum : 0;
     const smokeCenterY = smokeWeightSum > 0 ? smokeWeightedY / smokeWeightSum : 0;
     const smokeCenterZ = smokeWeightSum > 0 ? smokeWeightedZ / smokeWeightSum : 0;
@@ -18689,6 +18777,8 @@ export function createKaminosVolumePrototype({
     const frontTopologyVisibleTransferLoss = Math.max(0, frontTopologyRisingBodyRatio - fireRisingBodyRatio) * (1 - Math.min(1, frontTopologyFlameDetailCoupling));
     return {
       grid: gridSize,
+      gridDimensions: [gridSize, gridHeight, gridSize],
+      cellCount: gridCellCount(gridSize),
       gridLabel: state.simGridLabel,
       frontFieldIdentity: state.frontFieldIdentity,
       frontFieldBytes: state.frontFieldBytes,
@@ -19862,6 +19952,7 @@ export function createKaminosVolumePrototype({
         frameCount: state.frameCount,
         simStepCount: state.simStepCount,
         simGrid: state.simGrid,
+        simGridDimensions: [...state.simGridDimensions],
         simGridLabel: state.simGridLabel,
         frontFieldIdentity: state.frontFieldIdentity,
         frontFieldBytes: state.frontFieldBytes,
@@ -20239,6 +20330,7 @@ export function createKaminosVolumePrototype({
       lookFreezeRenderFrame: state.lookFreezeRenderFrame,
       lookFreezeFrame: state.lookFreezeFrame,
       simGrid: state.simGrid,
+      simGridDimensions: [...state.simGridDimensions],
       simGridLabel: state.simGridLabel,
       frontFieldIdentity: state.frontFieldIdentity,
       frontFieldBytes: state.frontFieldBytes,
@@ -21784,8 +21876,10 @@ export function createKaminosVolumePrototype({
         rebuildFluidState(requestedGrid, 'canonical-source-control-change');
       } else {
         gridSize = requestedGrid;
+        gridHeight = gridHeightForSize(gridSize);
         state.simGrid = gridSize;
-        state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
+        state.simGridLabel = `${gridSize}x${gridHeight}x${gridSize} velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
+        state.simGridDimensions = [gridSize, gridHeight, gridSize];
         state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
         state.frontFieldBytes = frontFieldBufferBytes(gridSize);
         state.frontFieldReadIndex = currentFront;
@@ -22233,7 +22327,7 @@ export function createKaminosVolumePrototype({
       }
       oracleActivityCueSourceValues = values instanceof Float32Array ? new Float32Array(values) : new Float32Array(values);
       oracleActivityCueSourceGrid = sourceGrid;
-      const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
+      const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize, gridHeight);
       writeOracleActivityCueBuffer(resampledCue);
       oracleActivityCueUpload = {
         status: 'uploaded',

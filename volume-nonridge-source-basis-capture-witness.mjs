@@ -211,6 +211,7 @@ try {
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
       grid: state.simGrid,
+      simGridDimensions: [...state.simGridDimensions],
       controls: state.controls,
       camera,
       renderWidth: state.renderWidth,
@@ -226,16 +227,21 @@ try {
       captureTimeMs: performance.now(),
     };
   })()`);
-  assert.equal(frozenRuntime.grid, 128, 'first source-basis corpus requires the exact 128^3 source grid');
+  assert.equal(frozenRuntime.grid, 128, 'first source-basis corpus requires the exact 128-cell horizontal source grid');
+  assert.deepEqual(
+    frozenRuntime.simGridDimensions,
+    [frozenRuntime.grid, frozenRuntime.grid * 2, frozenRuntime.grid],
+    'first source-basis corpus requires the exact doubled-height rectangular source grid',
+  );
   assert.equal(frozenRuntime.controls.raySteps, 160, 'requested ray steps were substituted');
   assert.equal(frozenRuntime.controls.adaptiveRays, 0, 'adaptive rays were not disabled');
   assert.equal(frozenRuntime.smokeEffective, 'off', 'smoke presentation did not become off');
 
   failurePhase = 'frozen-state-export';
   const frozenStateArtifact = await captureFrozenState(socket, frozenRuntime);
-  const shape = [frozenRuntime.grid, frozenRuntime.grid, frozenRuntime.grid];
+  const shape = [...frozenRuntime.simGridDimensions];
   const origin = [-1, -1, -1];
-  const spacing = shape.map(size => 2 / size);
+  const spacing = [2 / frozenRuntime.grid, 2 / frozenRuntime.grid, 2 / frozenRuntime.grid];
   const worldPosition = writeWorldPositionArtifact(shape, origin, spacing);
   const generation = 0;
   const generationHash = sha256(Buffer.from(canonicalJson({ stateHash: frozenStateArtifact.sha256, generation })));

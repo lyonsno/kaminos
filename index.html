@@ -1913,16 +1913,16 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="slider-row">
       <span class="slider-label">Grid</span>
       <select id="volume-resolution" class="select-input">
-        <option value="32">32^3</option>
-        <option value="48">48^3</option>
-        <option value="64">64^3</option>
-        <option value="96" selected>96^3</option>
-        <option value="128">128^3</option>
-        <option value="136">136^3</option>
-        <option value="140">140^3</option>
-        <option value="160">160^3</option>
+        <option value="32">32×64×32</option>
+        <option value="48">48×96×48</option>
+        <option value="64">64×128×64</option>
+        <option value="96" selected>96×192×96</option>
+        <option value="128">128×256×128</option>
+        <option value="136">136×272×136</option>
+        <option value="140">140×280×140</option>
+        <option value="160">160×320×160</option>
       </select>
-      <span class="slider-val" id="volume-resolution-val">96^3</span>
+      <span class="slider-val" id="volume-resolution-val">96×192×96</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Grid Overlay</span>
@@ -2500,7 +2500,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="panel volume-readout">
       <div class="field"><span class="field-key">Frames</span><span class="field-val" id="volume-frames">0</span></div>
       <div class="field"><span class="field-key">Energy</span><span class="field-val" id="volume-energy">0.000</span></div>
-      <div class="field"><span class="field-key">Grid</span><span class="field-val" id="volume-grid">96^3</span></div>
+      <div class="field"><span class="field-key">Grid</span><span class="field-val" id="volume-grid">96×192×96</span></div>
       <div class="field"><span class="field-key">Route ID</span><span class="field-val" id="volume-route-id">native-3d-compute-fluid-raymarch-v0</span></div>
       <div class="field"><span class="field-key">Canvas</span><span class="field-val" id="volume-canvas-state">hidden</span></div>
       <div class="field"><span class="field-key">Volume timing</span><span class="field-val" id="volume-raf-fps">-- RAF</span></div>
@@ -18765,7 +18765,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-shell-exposure-val').textContent = c.shellExposure.toFixed(2);
   document.getElementById('volume-shell-soft-clip-val').textContent = c.shellSoftClip.toFixed(2);
   document.getElementById('volume-shell-smoke-val').textContent = c.shellSmoke.toFixed(2);
-  document.getElementById('volume-resolution-val').textContent = `${c.resolution}^3`;
+  document.getElementById('volume-resolution-val').textContent = `${c.resolution}×${c.resolution * 2}×${c.resolution}`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
   document.getElementById('volume-oracle-activity-cue-val').textContent = c.oracleActivityCue >= 0.5 ? 'on' : 'off';
@@ -19047,7 +19047,10 @@ function refreshVolumeReadout() {
   document.getElementById('volume-canonical-content-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.contentMode || 'smoke') : sceneContentLabel;
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);
-  document.getElementById('volume-grid').textContent = s.simGrid ? `${s.simGrid}^3` : 'unknown';
+  const simGridDimensions = Array.isArray(s.simGridDimensions) && s.simGridDimensions.length === 3
+    ? s.simGridDimensions.join('×')
+    : (s.simGrid ? `${s.simGrid} x/z resolution (dimensions unreported)` : 'unknown');
+  document.getElementById('volume-grid').textContent = simGridDimensions;
   document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
   document.getElementById('volume-canvas-state').textContent = s.active ? `${s.displayWidth || s.width}x${s.displayHeight || s.height} -> ${s.renderWidth || s.width}x${s.renderHeight || s.height}` : 'hidden';
   document.getElementById('volume-raf-fps').textContent = Number.isFinite(timing.rafFps) ? `${timing.rafFps.toFixed(0)} route RAF` : '-- route RAF';
