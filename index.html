@@ -2459,7 +2459,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </select>
       <span class="slider-val" id="volume-pressure-solver-val">legacy</span>
     </div>
-    <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR to a small divergence residual and applies Projection as a plain 0-1 gain; open top vents pressure through the upper face so buoyant gas can leave.</span>
+    <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies Projection as a plain 0-1 gain on the correction: at 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − Projection) of the divergence. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -3063,7 +3063,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=fire-actor-parity-0722';
+import { createKaminosVolumePrototype, resolvePressureSolverConfig } from './volume-core.js?v=fire-actor-parity-0722';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -18843,12 +18843,14 @@ function updateVolumeControlLabels() {
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
   {
+    const solverConfig = resolvePressureSolverConfig(c);
     const solver = String(c.pressureSolver || 'legacy');
     const sweeps = Math.round(Number(c.pressureSolverIterations) || 60);
-    document.getElementById('volume-pressure-solver-val').textContent = solver === 'legacy'
-      ? 'legacy'
-      : `${solver === 'converged-open-top' ? 'converged, open top' : 'converged'} · ${sweeps} sweeps`;
-    document.getElementById('volume-pressure-solver-iterations-val').textContent = solver === 'legacy' ? `${sweeps} (converged only)` : String(sweeps);
+    const gain = solverConfig.effective.projectionGain;
+    document.getElementById('volume-pressure-solver-val').textContent = solverConfig.effective.solver === 'legacy'
+      ? (solver === 'legacy' ? 'legacy' : `legacy (${solverConfig.effective.reason || 'unknown solver'})`)
+      : `${solverConfig.effective.openTop ? 'converged, open top' : 'converged'} · ${sweeps} sweeps · ${solverConfig.effective.projection === 'full' ? 'full projection' : `partial projection, gain ${gain.toFixed(2)}`}`;
+    document.getElementById('volume-pressure-solver-iterations-val').textContent = solverConfig.effective.solver === 'legacy' ? `${sweeps} (converged only)` : String(sweeps);
   }
   const pressureTierControls = normalizeVolumePressureTierControls(c);
   if (pressureTierControls.lowerMax !== c.pressureTierLowerMax) setVolumeControlValue('volume-pressure-tier-lower-max', pressureTierControls.lowerMax.toFixed(2));

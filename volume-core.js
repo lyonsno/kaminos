@@ -1361,6 +1361,7 @@ export const PRESSURE_SOLVER_SOR_OMEGA = 1.9;
 export const PRESSURE_SOLVER_DEFAULT_SWEEPS = 60;
 export const PRESSURE_SOLVER_MAX_SWEEPS = 1000;
 export const PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS = 16;
+export const PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES = 120;
 const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 8;
 const PRESSURE_SOLVER_VALUES = Object.freeze([PRESSURE_SOLVER_LEGACY, PRESSURE_SOLVER_CONVERGED, PRESSURE_SOLVER_CONVERGED_OPEN_TOP]);
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
@@ -1945,6 +1946,18 @@ export function resolvePressureSolverConfig(controls = {}) {
   const known = PRESSURE_SOLVER_VALUES.includes(requestedSolver);
   const converged = known && requestedSolver !== PRESSURE_SOLVER_LEGACY;
   const projection = Math.max(0, Math.min(1.5, Number.isFinite(Number(controls.projection)) ? Number(controls.projection) : 0.65));
+  // The Bonfire projection ablation scales the same dispatch gate the legacy
+  // path uses, so the converged gain honors it too instead of jumping from
+  // full correction to none at zero.
+  const bonfireAblation = normalizeVolumeScene(controls.volumeScene) === 'bonfire_plume'
+    ? normalizeBonfireAblationValue(controls.bonfireProjection)
+    : 1;
+  // Projection stays an operator gain in converged mode, clamped to full
+  // projection; legacy keeps its material-weighted scene gain in-shader. Below
+  // 1 the correction is a partial projection that leaves (1 - gain) of the
+  // divergence even when the Poisson solve is exact; the receipt says which
+  // regime is in force so a low solver residual is not read as incompressibility.
+  const projectionGain = converged ? Math.min(1, projection * bonfireAblation) : null;
   return {
     identity: PRESSURE_SOLVER_IDENTITY,
     requested: { solver: requestedSolver, iterations: requestedSweeps ?? null },
@@ -1953,12 +1966,31 @@ export function resolvePressureSolverConfig(controls = {}) {
       openTop: requestedSolver === PRESSURE_SOLVER_CONVERGED_OPEN_TOP,
       iterations: converged ? sweeps : null,
       omega: converged ? PRESSURE_SOLVER_SOR_OMEGA : null,
-      // Projection stays an operator gain in converged mode, clamped to full
-      // projection; legacy keeps its material-weighted scene gain in-shader.
-      projectionGain: converged ? Math.min(1, projection) : null,
+      projectionGain,
+      projection: converged ? (projectionGain >= 1 ? 'full' : 'partial') : null,
       reason: known ? null : 'unknown-solver',
     },
   };
+}
+
+// Freshness rule for the residual probe. A copy that never reached a resolve
+// and a map that never settled are both bounded by the same frame limit; a
+// fresh map outranks a stale copy flag because the map owns the buffer.
+export function pressureResidualProbeDisposition({
+  copyPending = false,
+  mapPending = false,
+  frameCount = 0,
+  copyFrame = 0,
+  mapStartedFrame = 0,
+  limitFrames = PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES,
+} = {}) {
+  if (mapPending) {
+    return frameCount - mapStartedFrame > limitFrames ? 'reset-map' : 'wait';
+  }
+  if (copyPending) {
+    return frameCount - copyFrame > limitFrames ? 'drop-copy' : 'wait';
+  }
+  return 'probe';
 }
 
 function tallPlumePressureIterationStrategy(scene, pressureIterations) {
@@ -8404,6 +8436,7 @@ export function createKaminosVolumePrototype({
       uniform: null,
       residualProbe: { intervalSteps: PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS, pending: false },
       residual: null,
+      staleResidual: null,
       residualHistory: [],
       residualError: null,
     },
@@ -8745,6 +8778,8 @@ export function createKaminosVolumePrototype({
   let pressureResidualCopyStep = 0;
   let pressureResidualCopyFrame = 0;
   let pressureResidualMapPending = false;
+  let pressureResidualMapStartedFrame = 0;
+  let pressureResidualMapGeneration = 0;
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
@@ -10434,6 +10469,8 @@ export function createKaminosVolumePrototype({
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     pressureResidualCopyPending = false;
+    pressureResidualMapPending = false;
+    pressureResidualMapGeneration += 1;
     ensureOracleActivityCueBuffer();
     if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
       const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
@@ -12750,6 +12787,7 @@ export function createKaminosVolumePrototype({
         pending: pressureResidualCopyPending || pressureResidualMapPending,
       },
       residual: state.pressureSolver?.residual ?? null,
+      staleResidual: state.pressureSolver?.staleResidual ?? null,
       residualHistory: state.pressureSolver?.residualHistory ?? [],
       residualError: state.pressureSolver?.residualError ?? null,
     };
@@ -13225,12 +13263,46 @@ export function createKaminosVolumePrototype({
       || !pressureResidualPartialsBuffer || !pressureResidualReadbackBuffer) {
       return false;
     }
-    if (pressureResidualCopyPending && !pressureResidualMapPending && state.frameCount - pressureResidualCopyFrame > 120) {
-      // A copy that never reached a resolve is dropped, not mapped later as fresh evidence.
-      pressureResidualCopyPending = false;
-      state.pressureSolver = { ...state.pressureSolver, residualError: 'stale-residual-copy-dropped' };
+    const disposition = pressureResidualProbeDisposition({
+      copyPending: pressureResidualCopyPending,
+      mapPending: pressureResidualMapPending,
+      frameCount: state.frameCount,
+      copyFrame: pressureResidualCopyFrame,
+      mapStartedFrame: pressureResidualMapStartedFrame,
+    });
+    switch (disposition) {
+      case 'drop-copy':
+        // A copy that never reached a resolve is dropped, not mapped later as fresh evidence.
+        pressureResidualCopyPending = false;
+        state.pressureSolver = { ...state.pressureSolver, residualError: 'stale-residual-copy-dropped' };
+        break;
+      case 'reset-map': {
+        // A map that never settled retires its buffer so the diagnostic stops
+        // claiming a current measurement and can probe again. Destroying the
+        // buffer rejects the stuck mapAsync; the generation guard keeps that
+        // late rejection from touching the new pending state.
+        pressureResidualMapGeneration += 1;
+        pressureResidualMapPending = false;
+        pressureResidualCopyPending = false;
+        pressureResidualReadbackBuffer.destroy();
+        pressureResidualReadbackBuffer = device.createBuffer({
+          label: `kaminos pressure residual readback ${gridSize}^3 (reset ${pressureResidualMapGeneration})`,
+          size: pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP * Float32Array.BYTES_PER_ELEMENT,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        state.pressureSolver = {
+          ...state.pressureSolver,
+          residual: null,
+          staleResidual: state.pressureSolver?.residual ?? state.pressureSolver?.staleResidual ?? null,
+          residualError: 'residual-map-unresolved-reset',
+        };
+        break;
+      }
+      case 'wait':
+        return false;
+      default:
+        break;
     }
-    if (pressureResidualCopyPending || pressureResidualMapPending) return false;
     if (state.simStepCount % PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS !== 0) return false;
     const workgroups = Math.ceil(gridSize / 4);
     const pass = encoder.beginComputePass({ label: 'kaminos pressure residual probe before projection' });
@@ -13263,6 +13335,8 @@ export function createKaminosVolumePrototype({
     if (!pressureResidualCopyPending || pressureResidualMapPending || !pressureResidualReadbackBuffer) return;
     pressureResidualCopyPending = false;
     pressureResidualMapPending = true;
+    pressureResidualMapStartedFrame = state.frameCount;
+    const generation = pressureResidualMapGeneration;
     const buffer = pressureResidualReadbackBuffer;
     const workgroupCount = pressureResidualWorkgroupCount;
     const step = pressureResidualCopyStep;
@@ -13270,6 +13344,11 @@ export function createKaminosVolumePrototype({
     const solver = pressureResidualCopySolver;
     try {
       await buffer.mapAsync(GPUMapMode.READ);
+      if (generation !== pressureResidualMapGeneration) {
+        // Retired by a freshness reset while mapping; the buffer is already destroyed or replaced.
+        try { buffer.unmap(); } catch { /* destroyed buffers cannot be unmapped */ }
+        return;
+      }
       const partials = new Float32Array(buffer.getMappedRange()).slice();
       buffer.unmap();
       const cells = gridCellCount(grid);
@@ -13306,11 +13385,12 @@ export function createKaminosVolumePrototype({
         measuredAtMs: Number(performance.now().toFixed(3)),
       };
       const residualHistory = [...(state.pressureSolver?.residualHistory ?? []).slice(-15), residual];
-      state.pressureSolver = { ...state.pressureSolver, residual, residualHistory, residualError: null };
+      state.pressureSolver = { ...state.pressureSolver, residual, residualHistory, staleResidual: null, residualError: null };
     } catch (error) {
+      if (generation !== pressureResidualMapGeneration) return;
       state.pressureSolver = { ...state.pressureSolver, residualError: `residual-readback-failed:${error?.message || String(error)}` };
     } finally {
-      pressureResidualMapPending = false;
+      if (generation === pressureResidualMapGeneration) pressureResidualMapPending = false;
     }
   }
 

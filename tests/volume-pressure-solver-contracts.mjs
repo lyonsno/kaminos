@@ -251,3 +251,75 @@ test('runtime receipt and cost ledger name the converged strategy', () => {
   assert.match(source, /pressureResidualPipelineLayout = device\.createPipelineLayout\(\{[^}]*bindGroupLayouts: \[bindGroupLayout, emptyBindGroupLayout, pressureResidualBindGroupLayout\]/, 'residual probe layout carries the fluid uniform');
   assert.doesNotMatch(source, /setPipeline\(pressureResidual(Before|After)Pipeline\);\s*pass\.setBindGroup\(0, fluidFrontReadBindGroups/, 'residual probes bind the full fluid bind group, not the uniform-less read group');
 });
+
+// --- Review repairs for eda557c5 (M1 gain/clamp identity, M2 map freshness, M3 Bonfire ablation) ---
+
+test('converged mode reports partial versus full projection and folds Bonfire ablation into its gain', () => {
+  const partial = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 0.65 });
+  assert.equal(partial.effective.projectionGain, 0.65);
+  assert.equal(partial.effective.projection, 'partial', 'gain below 1 is reported as partial projection');
+  const full = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1 });
+  assert.equal(full.effective.projection, 'full');
+  const bonfireHalf = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1, volumeScene: 'bonfire_plume', bonfireProjection: 0.5 });
+  assert.equal(bonfireHalf.effective.projectionGain, 0.5, 'Bonfire ablation scales the converged gain');
+  assert.equal(bonfireHalf.effective.projection, 'partial');
+  const bonfireZero = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1, volumeScene: 'bonfire_plume', bonfireProjection: 0 });
+  assert.equal(bonfireZero.effective.projectionGain, 0);
+  const tallIgnoresAblation = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1, volumeScene: 'tall_plume', bonfireProjection: 0.5 });
+  assert.equal(tallIgnoresAblation.effective.projectionGain, 1, 'ablation applies only to the Bonfire scene');
+  const legacy = core.resolvePressureSolverConfig({ projection: 0.65 });
+  assert.equal(legacy.effective.projection, null);
+  assert.match(index, /partial/, 'cockpit label vocabulary names partial projection');
+  assert.doesNotMatch(index, /Converged runs red-black SOR to a small divergence residual/, 'cockpit help must not claim a divergence-free result independent of gain');
+  assert.match(index, /leaves \(1 − Projection\) of the divergence/, 'cockpit help states the partial-projection consequence');
+});
+
+test('post-correction divergence follows the effective gain and the velocity bound, not the Poisson residual alone', () => {
+  // Same CPU model as the production kernel: correction = gain * forward
+  // gradient, then the retained per-component bound. Shader constants are
+  // pinned so this model cannot drift silently from csProjectPressureConverged.
+  const project = wgslFunction('csProjectPressureConverged');
+  assert.match(project, /clamp\(u\.pressure_solver_controls\.w, 0\.0, 1\.0\)/, 'gain is read from the solver uniform and clamped to [0, 1]');
+  assert.match(project, /clamp\(correctedVelocity, vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)\)/, 'legacy velocity bound is retained after correction');
+  const bound = v => Math.max(-0.34, Math.min(0.52, v));
+  // One closed 1-D column of two cells: the stored component of cell 0 is the
+  // flux through the shared face; both outer faces are walls.
+  const column = (flux, gain, clampVelocity) => {
+    const div0 = flux;
+    const div1 = -flux;
+    // Exact compact Poisson solution: p1 - p0 = flux zeroes both divergences.
+    const p0 = 0;
+    const p1 = flux;
+    let corrected = flux - gain * (p1 - p0);
+    if (clampVelocity) corrected = bound(corrected);
+    return { before: [div0, div1], after: [corrected, -corrected] };
+  };
+  const partial = column(1, 0.65, false);
+  assert.ok(Math.abs(partial.after[0] - 0.35) < 1e-12 && Math.abs(partial.after[1] + 0.35) < 1e-12, `gain 0.65 leaves (1 - 0.65) of the divergence: ${partial.after}`);
+  const full = column(1, 1, false);
+  assert.deepEqual(full.after, [0, -0], 'gain 1 with an exact solve is divergence-free before the bound');
+  const clamped = column(0.9, 1, true);
+  assert.equal(clamped.after[0], 0, 'an exact full correction of a saturating flux lands inside the bound');
+  const saturating = { ...column(-0.9, 1, false) };
+  const boundedFlux = bound(-0.9);
+  assert.notEqual(boundedFlux, -0.9, 'the bound clips the stored flux itself when the flow saturates');
+  // The receipt must say which regime the operator is in.
+  assert.equal(core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 0.65 }).effective.projection, 'partial');
+  assert.equal(core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1.5 }).effective.projection, 'full');
+});
+
+test('residual probe freshness bounds the pending map as well as the pending copy', () => {
+  const disposition = core.pressureResidualProbeDisposition;
+  assert.equal(typeof disposition, 'function', 'pressureResidualProbeDisposition must be exported');
+  const base = { copyPending: false, mapPending: false, frameCount: 500, copyFrame: 0, mapStartedFrame: 0, limitFrames: 120 };
+  assert.equal(disposition({ ...base }), 'probe');
+  assert.equal(disposition({ ...base, copyPending: true, copyFrame: 450 }), 'wait');
+  assert.equal(disposition({ ...base, copyPending: true, copyFrame: 300 }), 'drop-copy');
+  assert.equal(disposition({ ...base, mapPending: true, mapStartedFrame: 450 }), 'wait');
+  assert.equal(disposition({ ...base, mapPending: true, mapStartedFrame: 300 }), 'reset-map', 'an unresolved map past the freshness limit must be reset, not waited on forever');
+  assert.equal(disposition({ ...base, copyPending: true, mapPending: true, copyFrame: 300, mapStartedFrame: 490 }), 'wait', 'a fresh map outranks a stale copy flag');
+  assert.match(source, /case 'reset-map':[^]*?pressureResidualMapGeneration \+= 1;[^]*?pressureResidualReadbackBuffer\.destroy\(\);[^]*?pressureResidualReadbackBuffer = device\.createBuffer\(/, 'reset path retires the stuck readback buffer, bumps the map generation, and recreates the buffer');
+  assert.match(source, /residualError: 'residual-map-unresolved-reset'/, 'reset path publishes a visible error');
+  assert.match(source, /if \(generation !== pressureResidualMapGeneration\)/, 'a late resolve from a retired generation cannot publish or clear the current pending state');
+  assert.match(source, /pressureResidualMapStartedFrame = state\.frameCount;/, 'map start frame is recorded when the map begins');
+});
