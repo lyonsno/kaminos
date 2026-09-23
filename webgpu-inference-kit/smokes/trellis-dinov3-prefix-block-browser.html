@@ -263,7 +263,7 @@ try {
   }
   const actual = residentHandoffMode ? result.debugResidentHandoff : result.debugReadback;
   if (residentHandoffMode) {
-    if (actual?.operation !== 'dinov3-block1-layernorm1' || !(actual.outputValues instanceof Float32Array)) throw new Error('resident consumer did not return a downstream F32 diagnostic output');
+    if (actual?.operation !== 'dinov3-block1-attention-residual' || !(actual.outputValues instanceof Float32Array)) throw new Error('resident consumer did not return a downstream F32 attention-residual diagnostic output');
   } else if (actual?.dtype !== 'float32') throw new Error('WebGPU route did not return F32 diagnostic outputs');
   const comparisons = residentHandoffMode
     ? [['block1Attention','block1_after_attention_hidden_states']]
