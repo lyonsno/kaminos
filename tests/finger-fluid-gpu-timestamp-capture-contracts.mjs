@@ -24,19 +24,25 @@ assert.match(benchSource, /kaminosFingerFluidBenchBeginSolverTimestampCaptureFor
   'bench witness arms the real solver capture API');
 assert.match(coreSource, /KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES[\s\S]*?density_projection[\s\S]*?post_projection_grid_refresh/,
   'solver pass-stage timing has stable semantic stage names');
-assert.match(coreSource, /pass\.writeTimestamp\(stageCapture\.querySet/,
-  'solver stages are timestamped inside the real compute pass');
+assert.doesNotMatch(coreSource, /pass\.writeTimestamp\(/,
+  'solver-stage capture does not depend on Chromium-only in-pass timestamp writes');
 const stageArmStart = coreSource.indexOf('function armSolverStageGpuTimestampCaptureForWitness');
 const stageArmEnd = coreSource.indexOf('function finishSolverStageGpuTimestampCaptureForWitness', stageArmStart);
 assert.ok(stageArmStart >= 0 && stageArmEnd > stageArmStart,
   'solver stage timestamp capture arm has a bounded implementation');
 assert.match(coreSource.slice(stageArmStart, stageArmEnd),
-  /device\.features\?\.has\?\.\('chromium-experimental-timestamp-query-inside-passes'\)/,
-  'experimental in-pass timestamps are rejected at arm time unless their WebGPU feature is enabled');
-assert.match(coreSource, /encoder\.writeTimestamp\([\s\S]*?rendererTimestampCapture\.querySet/,
-  'direct renderer GPU work is timestamped on its real command encoder');
+  /device\.features\?\.has\?\.\('timestamp-query'\)/,
+  'solver stage capture requires the standard WebGPU timestamp-query feature');
+assert.doesNotMatch(coreSource, /encoder\.writeTimestamp\(/,
+  'renderer capture does not depend on Chromium-only command-encoder timestamp writes');
+assert.match(coreSource, /hdrWorldBackgroundPass = encoder\.beginRenderPass\([\s\S]{0,300}rendererTimestampCapture\.querySet/,
+  'renderer timing begins at the first direct render pass using standard pass-boundary timestamps');
+assert.match(coreSource, /finalPresentationPass = encoder\.beginRenderPass\([\s\S]{0,500}rendererTimestampCapture\.querySet/,
+  'renderer timing ends at the final direct render pass using standard pass-boundary timestamps');
 assert.match(coreSource, /lastRenderCpuMs: Number\(lastRenderCpuMs\.toFixed\(3\)\)/,
   'debug state exposes JavaScript renderer submission time separately');
+assert.match(coreSource, /stageCapture\.querySet,[\s\S]{0,140}stageQueryBase \+ \(stageIndex \* 2\)/,
+  'each solver stage uses standard pass-begin/pass-end timestamp writes');
 assert.match(benchSource, /frameTimeMsEstimate: fingerFluidBenchLastFrameMs/,
   'visible frame CPU estimate reports the complete synchronous bench-frame work');
 assert.match(benchSource, /kaminosFingerFluidBenchBeginSolverStageTimestampCaptureForWitness[\s\S]*?armSolverStageGpuTimestampCaptureForWitness/,
