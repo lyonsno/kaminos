@@ -8157,6 +8157,7 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (particle.velocity.w < 0.0) { return; }
   let position = particle.position.xyz;
   let surfaceFactor = particle.predicted.w;
+  if (surfaceFactor < ${INTERFACE_THRESHOLD}) { return; }
   let baseCell = gridCoord(position);
   var supportWeight = 0.0;
   var directionalSupport = vec3<f32>(0.0);
@@ -8194,7 +8195,6 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let supportAlignment = select(1.0, dot(interfaceNormal, contactSupportNormal), contact > 0.5);
   let interfaceAge = restStates[index].y;
-  if (surfaceFactor < ${INTERFACE_THRESHOLD}) { return; }
   let curvatureGeometry = estimate_interface_curvature(index, position, interfaceNormal);
   let interfaceCurvature = curvatureGeometry.x;
   let geometryConfidence = surfaceFactor * curvatureGeometry.y;
