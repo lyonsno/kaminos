@@ -99,6 +99,32 @@ export async function waitForSamFlameComposition(page, checked = promise => prom
   }
 }
 
+async function sampleVisibleViewportScreenshot(page, screenshotBytes, viewport, points) {
+  return page.evaluate(async ({ screenshotBase64, viewport, points }) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${screenshotBase64}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(image, 0, 0);
+    const scaleX = canvas.width / viewport.width;
+    const scaleY = canvas.height / viewport.height;
+    const sample = point => {
+      const x = Math.floor(point.pixel.pageX * scaleX);
+      const y = Math.floor(point.pixel.pageY * scaleY);
+      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) {
+        throw new Error('SAM flame screenshot pixel probe fell outside the captured viewport');
+      }
+      return { maskValue: point.maskValue, uv: point.uv, pixel: point.pixel,
+        screenshotPixel: { x, y }, rgba: [...context.getImageData(x, y, 1, 1).data] };
+    };
+    return { screenshotSize: { width: canvas.width, height: canvas.height },
+      scale: { x: scaleX, y: scaleY }, foreground: sample(points.foreground), background: sample(points.background) };
+  }, { screenshotBase64: Buffer.from(screenshotBytes).toString('base64'), viewport, points });
+}
+
 async function main() {
   const { values } = parseArgs({ options: {
     'out-dir': { type: 'string' }, 'expected-commit': { type: 'string' },
@@ -573,76 +599,67 @@ async function main() {
         throw error;
       }
       const presentedPixels = await page.evaluate(({ sceneObjectId, foreground, background }) =>
-        window.__kaminosSampleSamFlamePixels(sceneObjectId, [foreground, background]), {
+        window.__kaminosSamFlamePixelPoints(sceneObjectId, [foreground, background]), {
         sceneObjectId: observed.sceneObject.id, foreground: flamePixelScan.foreground, background: flamePixelScan.background,
       });
-      const compositionCanvasMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(presentedPixels.composedCanvasPng || '');
-      assert.ok(compositionCanvasMatch, 'main renderer did not preserve its sampled composition canvas');
-      const compositionCanvasBytes = Buffer.from(compositionCanvasMatch[1], 'base64');
-      assert.ok(compositionCanvasBytes.length >= 8 && compositionCanvasBytes.subarray(0, 8)
-        .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), 'main renderer canvas capture is not a PNG');
-      const rendererCanvasCapturePath = join(out, 'flame-composition-renderer-canvas.png');
-      writeFileSync(rendererCanvasCapturePath, compositionCanvasBytes, { flag: 'wx' });
-      const rendererCanvasCapture = { path: rendererCanvasCapturePath,
-        width: presentedPixels.backingSize.width, height: presentedPixels.backingSize.height,
-        bytes: compositionCanvasBytes.length,
-        sha256: `sha256:${createHash('sha256').update(compositionCanvasBytes).digest('hex')}`,
-        authority: presentedPixels.authority };
-      report.captures.push({ name: 'flame-composition-renderer-canvas', ...rendererCanvasCapture,
-        validation: 'diagnostic-only-main-render-pipeline-readback' });
-      const alphaMapCanvasMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
-        presentedPixels.alphaMapBypass.canvasPng || '');
-      assert.ok(alphaMapCanvasMatch, 'alpha-map bypass did not preserve its renderer canvas');
-      const alphaMapCanvasBytes = Buffer.from(alphaMapCanvasMatch[1], 'base64');
-      const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-bypass.png');
-      writeFileSync(alphaMapCanvasPath, alphaMapCanvasBytes, { flag: 'wx' });
-      const alphaMapBypassCapture = { name: 'flame-composition-alpha-map-bypass', path: alphaMapCanvasPath,
-        width: presentedPixels.backingSize.width, height: presentedPixels.backingSize.height,
-        bytes: alphaMapCanvasBytes.length,
-        sha256: `sha256:${createHash('sha256').update(alphaMapCanvasBytes).digest('hex')}`,
-        authority: presentedPixels.authority, validation: 'diagnostic-only-alpha-map-bypass' };
-      report.captures.push(alphaMapBypassCapture);
-      const sceneTraversalCanvasMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
-        presentedPixels.sceneTraversalControl.canvasPng || '');
-      assert.ok(sceneTraversalCanvasMatch, 'scene traversal control did not preserve its renderer canvas');
-      const sceneTraversalCanvasBytes = Buffer.from(sceneTraversalCanvasMatch[1], 'base64');
-      const sceneTraversalCanvasPath = join(out, 'flame-composition-scene-traversal-control.png');
-      writeFileSync(sceneTraversalCanvasPath, sceneTraversalCanvasBytes, { flag: 'wx' });
-      const sceneTraversalCapture = { name: 'flame-composition-scene-traversal-control', path: sceneTraversalCanvasPath,
-        width: presentedPixels.backingSize.width, height: presentedPixels.backingSize.height,
-        bytes: sceneTraversalCanvasBytes.length,
-        sha256: `sha256:${createHash('sha256').update(sceneTraversalCanvasBytes).digest('hex')}`,
-        authority: presentedPixels.authority, validation: 'diagnostic-only-flat-color-child-plane' };
-      report.captures.push(sceneTraversalCapture);
-      saveReport();
+      assert.equal(presentedPixels.authority, 'playwright-visible-viewport-screenshot-pixels',
+        'composition points do not name visible screenshot authority');
+      const captureVisibleFrame = async (name) => {
+        const path = join(out, name);
+        const bytes = await checked(page.screenshot({ fullPage: false, type: 'png' }));
+        const capture = { name: name.replace(/\.png$/, ''), path, bytes: bytes.length,
+          sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+          authority: presentedPixels.authority, validation: 'paired-visible-viewport-capture' };
+        writeFileSync(path, bytes, { flag: 'wx' });
+        report.captures.push(capture);
+        saveReport();
+        return { bytes, capture };
+      };
+      let sourceFrame, composedFrame;
+      const originalOverlayVisibility = observed.bridge.maskOverlay.visible === true;
+      try {
+        const priorVisibility = await checked(page.evaluate(({ sceneObjectId }) =>
+          window.__kaminosSetSamFlameDiagnosticVisibility(sceneObjectId, false), {
+          sceneObjectId: observed.sceneObject.id,
+        }));
+        assert.equal(priorVisibility, originalOverlayVisibility,
+          'composition visibility changed before its paired screenshot capture');
+        sourceFrame = await captureVisibleFrame('flame-composition-visible-source.png');
+        await checked(page.evaluate(({ sceneObjectId }) =>
+          window.__kaminosSetSamFlameDiagnosticVisibility(sceneObjectId, true), {
+          sceneObjectId: observed.sceneObject.id,
+        }));
+        composedFrame = await captureVisibleFrame('flame-composition-visible-frame.png');
+      } finally {
+        await page.evaluate(({ sceneObjectId, visible }) =>
+          window.__kaminosSetSamFlameDiagnosticVisibility(sceneObjectId, visible), {
+          sceneObjectId: observed.sceneObject.id, visible: originalOverlayVisibility,
+        });
+      }
+      const sourcePixels = await sampleVisibleViewportScreenshot(page, sourceFrame.bytes,
+        presentedPixels.viewport, { foreground: presentedPixels.points[0], background: presentedPixels.points[1] });
+      const composedPixels = await sampleVisibleViewportScreenshot(page, composedFrame.bytes,
+        presentedPixels.viewport, { foreground: presentedPixels.points[0], background: presentedPixels.points[1] });
+      sourceFrame.capture.width = sourcePixels.screenshotSize.width;
+      sourceFrame.capture.height = sourcePixels.screenshotSize.height;
+      composedFrame.capture.width = composedPixels.screenshotSize.width;
+      composedFrame.capture.height = composedPixels.screenshotSize.height;
       const compositionAttemptPath = join(out, 'flame-composition-attempt.png');
-      await checked(page.screenshot({ path: compositionAttemptPath, fullPage: true }));
+      const attemptBytes = await checked(page.screenshot({ path: compositionAttemptPath, fullPage: true }));
       report.captures.push({ name: 'flame-composition-attempt', path: compositionAttemptPath,
+        bytes: attemptBytes.length, sha256: `sha256:${createHash('sha256').update(attemptBytes).digest('hex')}`,
         validation: 'diagnostic-only-pre-assertion' });
-      const pixelEvidence = { authority: presentedPixels.authority,
-        canvasRect: presentedPixels.canvasRect, backingSize: presentedPixels.backingSize,
-        rendererCanvasCapture,
-        depthTestAblation: { depthTestWasEnabled: presentedPixels.depthTestAblation.depthTestWasEnabled,
-          depthTestDisabledForeground: { sourceRgba: presentedPixels.composed[0].rgba,
-            composedRgba: presentedPixels.depthTestAblation.foreground.rgba },
-          depthTestDisabledBackground: { sourceRgba: presentedPixels.composed[1].rgba,
-            composedRgba: presentedPixels.depthTestAblation.background.rgba } },
-        alphaMapBypass: { alphaMapWasPresent: presentedPixels.alphaMapBypass.alphaMapWasPresent,
-          alphaMapBypassForeground: { sourceRgba: presentedPixels.composed[0].rgba,
-            composedRgba: presentedPixels.alphaMapBypass.foreground.rgba },
-          alphaMapBypassBackground: { sourceRgba: presentedPixels.composed[1].rgba,
-            composedRgba: presentedPixels.alphaMapBypass.background.rgba },
-          capture: alphaMapBypassCapture },
-        sceneTraversalControl: { foreground: presentedPixels.sceneTraversalControl.foreground,
-          background: presentedPixels.sceneTraversalControl.background, capture: sceneTraversalCapture },
-        foreground: { maskValue: flamePixelScan.foreground.maskValue,
-          uv: [flamePixelScan.foreground.u, flamePixelScan.foreground.v],
-          pixel: presentedPixels.composed[0].pixel,
-          sourceRgba: presentedPixels.source[0].rgba, composedRgba: presentedPixels.composed[0].rgba },
-        background: { maskValue: flamePixelScan.background.maskValue,
-          uv: [flamePixelScan.background.u, flamePixelScan.background.v],
-          pixel: presentedPixels.composed[1].pixel,
-          sourceRgba: presentedPixels.source[1].rgba, composedRgba: presentedPixels.composed[1].rgba } };
+      const pixelEvidence = { authority: presentedPixels.authority, viewport: presentedPixels.viewport,
+        sourceFrameCapture: sourceFrame.capture, composedFrameCapture: composedFrame.capture,
+        sourceScreenshotSize: sourcePixels.screenshotSize, composedScreenshotSize: composedPixels.screenshotSize,
+        foreground: { maskValue: presentedPixels.points[0].maskValue, uv: presentedPixels.points[0].uv,
+          pixel: presentedPixels.points[0].pixel, sourceScreenshotPixel: sourcePixels.foreground.screenshotPixel,
+          composedScreenshotPixel: composedPixels.foreground.screenshotPixel,
+          sourceRgba: sourcePixels.foreground.rgba, composedRgba: composedPixels.foreground.rgba },
+        background: { maskValue: presentedPixels.points[1].maskValue, uv: presentedPixels.points[1].uv,
+          pixel: presentedPixels.points[1].pixel, sourceScreenshotPixel: sourcePixels.background.screenshotPixel,
+          composedScreenshotPixel: composedPixels.background.screenshotPixel,
+          sourceRgba: sourcePixels.background.rgba, composedRgba: composedPixels.background.rgba } };
       report.compositionDiagnostic.presentationPixelEvidence = pixelEvidence;
       saveReport();
       const composition = validateSamFlameComposition({ output, bridge: observed.bridge,

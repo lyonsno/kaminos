@@ -12,8 +12,12 @@ assert.match(hostSource, /options\.decodedImage\s*\?\s*new THREE\.Texture\(optio
 assert.match(hostSource, /#viewport\.sam-flame-composition-active #kaminos-volume-canvas\.active[^\n]*opacity:\s*0/, 'composition must keep volume compute active without covering the visible image plane');
 assert.match(hostSource, /#viewport\.sam-flame-composition-active \.kaminos-main-renderer-canvas[^\n]*z-index:\s*4/, 'the actual image-plane render canvas must be above the native volume canvas');
 assert.match(hostSource, /renderer\.domElement\.classList\.add\('kaminos-main-renderer-canvas'\)/, 'the presentation canvas needs an explicit composition-layer identity');
-assert.ok(/renderPipeline\.render\(\);[\s\S]*?await renderer\.backend\.device\.queue\.onSubmittedWorkDone\(\);[\s\S]*?context\.drawImage\(canvas,\s*0,\s*0\)/.test(hostSource),
-  'pixel evidence must read the normal render pipeline after submitted work completes');
+const pixelPointHook = hostSource.match(/window\.__kaminosSamFlamePixelPoints\s*=\s*function[\s\S]*?\n};/)?.[0] || '';
+assert.ok(/const pageX\s*=/.test(pixelPointHook) && /const pageY\s*=/.test(pixelPointHook)
+  && /pixel:\s*\{\s*pageX,\s*pageY/.test(pixelPointHook),
+  'pixel evidence must use projected source-image points in viewport coordinates');
+assert.match(hostSource, /window\.__kaminosSetSamFlameDiagnosticVisibility\s*=\s*async function[\s\S]*?overlay\.visible\s*=\s*visible[\s\S]*?renderPipeline\.render\(\)[\s\S]*?queue\.onSubmittedWorkDone\(\)/,
+  'the witness must capture source and composed states from the same scene plane');
 assert.match(bridgeSource, /if \(!active\) \{[\s\S]*?record\.mesh\.visible = false[\s\S]*?composition\.status = 'inactive'/, 'inactive or failed volume rendering must hide the stale matte and status');
 assert.match(bridgeSource, /setCompositionPresentation\(active\)/, 'composition presentation layering must have an owned lifecycle control');
 assert.match(hostSource, /entry\.object === samFlameImagePlane[\s\S]*?setCompositionPresentation\(false\)/, 'removing the composed source plane must restore normal canvas presentation');
@@ -30,35 +34,15 @@ assert.ok(presentedPixelEvidencePersistence >= 0 && presentedPixelEvidencePersis
 const compositionAttemptCapture = witnessSource.indexOf("const compositionAttemptPath = join(out, 'flame-composition-attempt.png')");
 assert.ok(compositionAttemptCapture >= 0 && compositionAttemptCapture < compositionValidation,
   'the live composition frame must be preserved before a failed assertion rolls back the scene');
-assert.match(hostSource, /const composedCanvasPng\s*=\s*buffer\.toDataURL\('image\/png'\)[\s\S]*?composedCanvasPng\s*\}/,
-  'pixel evidence must preserve the normal main-renderer canvas before the diagnostic ablation');
-assert.match(hostSource, /overlay\.material\.depthTest\s*=\s*false[\s\S]*?const depthTestDisabled\s*=\s*await sample\(\)[\s\S]*?overlay\.material\.depthTest\s*=\s*wasDepthTest/,
-  'the failing presentation probe must isolate depth occlusion and restore the live overlay material');
-assert.match(witnessSource, /depthTestAblation[\s\S]*?depthTestDisabledForeground/,
-  'a failed scene contribution must preserve the same-frame depth-test ablation result');
-assert.ok(/alphaMapBypassCanvas\.getContext\('2d'\)[\s\S]*?fillStyle = '#fff'[\s\S]*?alphaMapBypassTexture = new THREE\.CanvasTexture\(alphaMapBypassCanvas\)[\s\S]*?overlay\.material\.alphaMap = alphaMapBypassTexture/.test(hostSource),
-  'the alpha bypass must use a valid white texture rather than nulling a bound WebGPU texture node');
-assert.ok(/overlay\.material\.alphaMap = wasAlphaMap;[\s\S]*?alphaMapBypassTexture\?\.dispose\(\)/.test(hostSource),
-  'the alpha-map probe must restore the product texture and dispose its temporary replacement');
-assert.ok(witnessSource.includes('alphaMapBypassForeground'),
-  'a failed composition must preserve the alpha-map bypass pixel result');
-const alphaMapCapture = witnessSource.indexOf("const alphaMapCanvasPath = join(out, 'flame-composition-alpha-map-bypass.png')");
-assert.ok(alphaMapCapture >= 0 && alphaMapCapture < compositionValidation,
-  'the alpha-map bypass renderer frame must be preserved before scene rollback or validation failure');
-assert.ok(/renderPipeline\.render\(\);\s*await renderer\.backend\.device\.queue\.onSubmittedWorkDone\(\);[\s\S]*?requestAnimationFrame/.test(hostSource),
-  'main-renderer pixel evidence must wait for submitted WebGPU work and a presented frame');
-assert.ok(/const alphaMapBypassCapture\s*=\s*\{[\s\S]*?name: 'flame-composition-alpha-map-bypass'[\s\S]*?capture: alphaMapBypassCapture/.test(witnessSource),
-  'alpha-map bypass evidence must point at its own artifact, not a later capture');
-assert.ok(/sceneProbe = new THREE\.Mesh[\s\S]*?target\.add\(sceneProbe\)[\s\S]*?finally \{[\s\S]*?sceneProbe\.parent\?\.remove\(sceneProbe\)/.test(hostSource),
-  'the flat-color render-path control must be temporary and removed even when sampling fails');
-assert.ok(witnessSource.includes("flame-composition-scene-traversal-control.png")
-  && witnessSource.includes('sceneTraversalControl: { foreground:'),
-  'the flat-color control pixels and renderer image must survive a later failed assertion');
-const rendererCanvasCapture = witnessSource.indexOf("const rendererCanvasCapturePath = join(out, 'flame-composition-renderer-canvas.png')");
-assert.ok(rendererCanvasCapture >= 0 && rendererCanvasCapture < compositionValidation,
-  'the sampled main-renderer canvas must be durably captured before the composition assertion');
-assert.match(witnessSource, /const pixelEvidence\s*=\s*\{\s*authority:\s*presentedPixels\.authority,\s*canvasRect:\s*presentedPixels\.canvasRect,\s*backingSize:/,
-  'rendered pixel samples must retain their CSS and backing-canvas coordinates');
+assert.match(witnessSource, /window\.__kaminosSetSamFlameDiagnosticVisibility[\s\S]*?sourceFrame\s*=\s*await captureVisibleFrame\([\s\S]*?window\.__kaminosSetSamFlameDiagnosticVisibility[\s\S]*?composedFrame\s*=\s*await captureVisibleFrame\(/,
+  'pixel evidence must compare same-page source and composed viewport screenshots');
+assert.match(witnessSource, /new Image\(\)[\s\S]*?await image\.decode\(\)[\s\S]*?getImageData\(x, y, 1, 1\)/,
+  'visible screenshot pixels must be decoded by the browser before sampling');
+assert.ok(witnessSource.includes("flame-composition-visible-source.png")
+  && witnessSource.includes("flame-composition-visible-frame.png"),
+  'the exact source and composed frames must be preserved before validation');
+assert.match(witnessSource, /assert\.equal\(presentedPixels\.authority,\s*'playwright-visible-viewport-screenshot-pixels'[\s\S]*?sourceFrameCapture:\s*sourceFrame\.capture[\s\S]*?composedFrameCapture:\s*composedFrame\.capture/,
+  'pixel evidence must identify compositor screenshot authority and its exact paired artifacts');
 assert.match(witnessSource, /brightSamplesInMaskForeground/,
   'flame composition failure must report how many bright native pixels overlap selected foreground');
 assert.match(witnessSource, /nativeFlameCanvasPng/,

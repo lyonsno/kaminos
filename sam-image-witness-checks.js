@@ -90,11 +90,44 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
   check(layer?.enabled === true && layer.sceneCanvasVisible === true && layer.sceneCanvasOpacity > 0
     && layer.sceneCanvasZIndex > layer.volumeCanvasZIndex && layer.volumeCanvasVisible === false
     && layer.volumeCanvasOpacity === 0, 'live flame composition is not visibly layered in the scene renderer');
-  check(pixelEvidence?.authority === 'kaminos-main-render-pipeline-canvas-readback',
-    'final scene pixels were not read from the visible main render pipeline');
+  check(pixelEvidence?.authority === 'playwright-visible-viewport-screenshot-pixels',
+    'final scene pixels were not sampled from visible browser viewport screenshots');
+  const sourceCapture = pixelEvidence.sourceFrameCapture;
+  const composedCapture = pixelEvidence.composedFrameCapture;
+  const validCapture = capture => typeof capture?.path === 'string' && capture.path.length > 0
+    && Number.isInteger(capture.bytes) && capture.bytes > 0
+    && Number.isInteger(capture.width) && capture.width > 0
+    && Number.isInteger(capture.height) && capture.height > 0
+    && capture.authority === pixelEvidence.authority
+    && /^sha256:[0-9a-f]{64}$/.test(capture.sha256 || '');
+  check(validCapture(sourceCapture) && validCapture(composedCapture),
+    'paired visible screenshots are missing complete capture receipts');
+  check(sourceCapture.path !== composedCapture.path && sourceCapture.sha256 !== composedCapture.sha256,
+    'source and composed screenshots reuse the same capture');
+  check(pixelEvidence.sourceScreenshotSize?.width === sourceCapture.width
+    && pixelEvidence.sourceScreenshotSize?.height === sourceCapture.height
+    && pixelEvidence.composedScreenshotSize?.width === composedCapture.width
+    && pixelEvidence.composedScreenshotSize?.height === composedCapture.height
+    && sourceCapture.width === composedCapture.width && sourceCapture.height === composedCapture.height,
+  'source and composed screenshots do not share complete viewport dimensions');
+  check(Number.isFinite(pixelEvidence.viewport?.width) && pixelEvidence.viewport.width > 0
+    && Number.isFinite(pixelEvidence.viewport?.height) && pixelEvidence.viewport.height > 0
+    && Number.isFinite(pixelEvidence.viewport?.devicePixelRatio) && pixelEvidence.viewport.devicePixelRatio > 0,
+  'screenshot viewport dimensions are missing');
+  for (const key of ['foreground', 'background']) {
+    const sample = pixelEvidence[key];
+    check(Number.isInteger(sample?.sourceScreenshotPixel?.x) && Number.isInteger(sample.sourceScreenshotPixel.y)
+      && Number.isInteger(sample?.composedScreenshotPixel?.x) && Number.isInteger(sample.composedScreenshotPixel.y)
+      && sample.sourceScreenshotPixel.x === sample.composedScreenshotPixel.x
+      && sample.sourceScreenshotPixel.y === sample.composedScreenshotPixel.y
+      && sample.sourceScreenshotPixel.x >= 0 && sample.sourceScreenshotPixel.x < sourceCapture.width
+      && sample.sourceScreenshotPixel.y >= 0 && sample.sourceScreenshotPixel.y < sourceCapture.height,
+    `${key} source/composed screenshots sampled different coordinates`);
+  }
   const pixelDistance = (a, b) => {
-    check(Array.isArray(a) && a.length === 4 && a.every(Number.isFinite)
-      && Array.isArray(b) && b.length === 4 && b.every(Number.isFinite), 'pixel evidence is incomplete');
+    const rgba = value => Array.isArray(value) && value.length === 4
+      && value.every(channel => Number.isInteger(channel) && channel >= 0 && channel <= 255);
+    check(rgba(a) && rgba(b), 'pixel evidence is incomplete or outside 8-bit RGBA');
     return a.slice(0, 3).reduce((sum, value, index) => sum + Math.abs(value - b[index]), 0);
   };
   check(pixelEvidence.foreground?.maskValue === 1

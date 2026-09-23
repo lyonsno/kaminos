@@ -5730,7 +5730,7 @@ window.kaminosSceneObjectDebugState = function() {
   }));
 };
 
-window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoints) {
+window.__kaminosSamFlamePixelPoints = function(sceneObjectId, sourcePoints) {
   const record = sceneObjects.find(item => item.id === sceneObjectId);
   if (!record || record.type !== 'image') throw new Error('SAM flame source image plane is not registered');
   const target = record.object;
@@ -5743,89 +5743,38 @@ window.__kaminosSampleSamFlamePixels = async function(sceneObjectId, sourcePoint
     || presentationLayer.sceneCanvasOpacity <= 0 || presentationLayer.volumeCanvasOpacity !== 0) {
     throw new Error('SAM flame pixel witness is not reading the visible composition layer');
   }
-  const buffer = document.createElement('canvas');
-  buffer.width = canvas.width; buffer.height = canvas.height;
-  const context = buffer.getContext('2d', { willReadFrequently: true });
   const canvasRect = canvas.getBoundingClientRect();
-  const sample = async () => {
-    target.updateWorldMatrix(true, false);
-    camera.updateMatrixWorld(true);
-    renderPipeline.render();
-    await renderer.backend.device.queue.onSubmittedWorkDone();
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    context.drawImage(canvas, 0, 0);
-    return sourcePoints.map(point => {
-      const position = new THREE.Vector3((point.u - 0.5) * target.geometry.parameters.width,
-        (0.5 - point.v) * target.geometry.parameters.height, 0);
-      target.localToWorld(position).project(camera);
-      const x = Math.floor((position.x * 0.5 + 0.5) * canvas.width);
-      const y = Math.floor((0.5 - position.y * 0.5) * canvas.height);
-      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) throw new Error('SAM flame pixel probe fell outside the renderer canvas');
-      return { uv: [point.u, point.v], pixel: { x, y, pageX: canvasRect.left + (position.x * 0.5 + 0.5) * canvasRect.width,
-        pageY: canvasRect.top + (0.5 - position.y * 0.5) * canvasRect.height,
-        ndc: [position.x, position.y] }, rgba: [...context.getImageData(x, y, 1, 1).data] };
-    });
-  };
-  const wasVisible = overlay.visible;
-  const wasDepthTest = overlay.material.depthTest;
-  const wasAlphaMap = overlay.material.alphaMap;
-  let alphaMapBypassTexture = null;
-  let sceneProbe = null;
-  try {
-    overlay.visible = false;
-    const source = await sample();
-    overlay.visible = wasVisible;
-    const composed = await sample();
-    const composedCanvasPng = buffer.toDataURL('image/png');
-    overlay.material.depthTest = false;
-    overlay.material.needsUpdate = true;
-    const depthTestDisabled = await sample();
-    overlay.material.depthTest = wasDepthTest;
-    const alphaMapBypassCanvas = document.createElement('canvas');
-    alphaMapBypassCanvas.width = 1;
-    alphaMapBypassCanvas.height = 1;
-    const alphaMapBypassContext = alphaMapBypassCanvas.getContext('2d');
-    alphaMapBypassContext.fillStyle = '#fff';
-    alphaMapBypassContext.fillRect(0, 0, 1, 1);
-    alphaMapBypassTexture = new THREE.CanvasTexture(alphaMapBypassCanvas);
-    alphaMapBypassTexture.colorSpace = THREE.NoColorSpace;
-    alphaMapBypassTexture.generateMipmaps = false;
-    overlay.material.alphaMap = alphaMapBypassTexture;
-    overlay.material.needsUpdate = true;
-    const alphaMapBypass = await sample();
-    const alphaMapBypassCanvasPng = buffer.toDataURL('image/png');
-    const sceneProbeMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff, depthTest: false,
-      depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
-    sceneProbe = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), sceneProbeMaterial);
-    sceneProbe.name = 'sam-flame-scene-traversal-probe';
-    sceneProbe.position.z = 0.01;
-    sceneProbe.renderOrder = 10000;
-    sceneProbe.scale.set(target.geometry.parameters.width, target.geometry.parameters.height, 1);
-    target.add(sceneProbe);
-    const sceneTraversalControl = await sample();
-    const sceneTraversalControlCanvasPng = buffer.toDataURL('image/png');
-    return { authority: 'kaminos-main-render-pipeline-canvas-readback',
-      canvasRect: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
-      backingSize: { width: canvas.width, height: canvas.height }, source, composed,
-      depthTestAblation: { depthTestWasEnabled: wasDepthTest, foreground: depthTestDisabled[0],
-        background: depthTestDisabled[1] },
-      alphaMapBypass: { alphaMapWasPresent: !!wasAlphaMap, foreground: alphaMapBypass[0],
-        background: alphaMapBypass[1], canvasPng: alphaMapBypassCanvasPng },
-      sceneTraversalControl: { foreground: sceneTraversalControl[0], background: sceneTraversalControl[1],
-        canvasPng: sceneTraversalControlCanvasPng }, composedCanvasPng };
-  } finally {
-    if (sceneProbe) {
-      sceneProbe.parent?.remove(sceneProbe);
-      sceneProbe.geometry.dispose();
-      sceneProbe.material.dispose();
+  target.updateWorldMatrix(true, false);
+  camera.updateMatrixWorld(true);
+  const points = sourcePoints.map(point => {
+    const position = new THREE.Vector3((point.u - 0.5) * target.geometry.parameters.width,
+      (0.5 - point.v) * target.geometry.parameters.height, 0);
+    target.localToWorld(position).project(camera);
+    const pageX = canvasRect.left + (position.x * 0.5 + 0.5) * canvasRect.width;
+    const pageY = canvasRect.top + (0.5 - position.y * 0.5) * canvasRect.height;
+    if (pageX < 0 || pageX >= window.innerWidth || pageY < 0 || pageY >= window.innerHeight) {
+      throw new Error('SAM flame pixel probe fell outside the visible viewport');
     }
-    overlay.visible = wasVisible;
-    overlay.material.depthTest = wasDepthTest;
-    overlay.material.alphaMap = wasAlphaMap;
-    alphaMapBypassTexture?.dispose();
-    overlay.material.needsUpdate = true;
-    window._kaminosDirty?.();
-  }
+    return { uv: [point.u, point.v], maskValue: point.maskValue,
+      pixel: { pageX, pageY, ndc: [position.x, position.y] } };
+  });
+  return { authority: 'playwright-visible-viewport-screenshot-pixels',
+    viewport: { width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio }, points };
+};
+
+window.__kaminosSetSamFlameDiagnosticVisibility = async function(sceneObjectId, visible) {
+  if (typeof visible !== 'boolean') throw new Error('SAM flame diagnostic visibility must be boolean');
+  const record = sceneObjects.find(item => item.id === sceneObjectId);
+  if (!record || record.type !== 'image') throw new Error('SAM flame source image plane is not registered');
+  const overlay = record.object.children.find(child => child.name === 'sam-mask-live-flame-overlay');
+  if (!overlay) throw new Error('SAM flame overlay is missing from the source image plane');
+  const wasVisible = overlay.visible;
+  overlay.visible = visible;
+  window._kaminosDirty?.();
+  renderPipeline.render();
+  await renderer.backend.device.queue.onSubmittedWorkDone();
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  return wasVisible;
 };
 
 window.kaminosSplatPreviewDebugState = function(id = null) {

@@ -24,9 +24,18 @@ const selectedIndices = [14];
 const volume = { active: true, backend: 'WebGPU:Apple', frameCount: 8, simStepCount: 5 };
 const advanceEvidence = { before: { active: true, frameCount: 5, simStepCount: 3 },
   after: { active: true, frameCount: 8, simStepCount: 5 }, observedMs: 250 };
-const pixelEvidence = { authority: 'kaminos-main-render-pipeline-canvas-readback', foreground: {
-  maskValue: 1, sourceRgba: [240, 240, 240, 255], composedRgba: [255, 170, 70, 255], uv: [0.4, 0.4],
-}, background: { maskValue: 0, sourceRgba: [240, 240, 240, 255], composedRgba: [240, 240, 240, 255], uv: [0.5, 0.5] } };
+const sourceFrameCapture = { path: '/evidence/source.png', bytes: 4096, width: 1440, height: 960,
+  sha256: `sha256:${'1'.repeat(64)}`, authority: 'playwright-visible-viewport-screenshot-pixels' };
+const composedFrameCapture = { path: '/evidence/composed.png', bytes: 4096, width: 1440, height: 960,
+  sha256: `sha256:${'2'.repeat(64)}`, authority: 'playwright-visible-viewport-screenshot-pixels' };
+const pixelEvidence = { authority: 'playwright-visible-viewport-screenshot-pixels',
+  viewport: { width: 1440, height: 960, devicePixelRatio: 1 },
+  sourceScreenshotSize: { width: 1440, height: 960 }, composedScreenshotSize: { width: 1440, height: 960 },
+  sourceFrameCapture, composedFrameCapture,
+  foreground: { maskValue: 1, sourceRgba: [240, 240, 240, 255], composedRgba: [255, 170, 70, 255], uv: [0.4, 0.4],
+    sourceScreenshotPixel: { x: 576, y: 384 }, composedScreenshotPixel: { x: 576, y: 384 } },
+  background: { maskValue: 0, sourceRgba: [240, 240, 240, 255], composedRgba: [240, 240, 240, 255], uv: [0.5, 0.5],
+    sourceScreenshotPixel: { x: 720, y: 480 }, composedScreenshotPixel: { x: 720, y: 480 } } };
 const evidence = { selectedIndices, volume, advanceEvidence, pixelEvidence };
 
 assert.deepEqual(validateSamFlameAdvance(advanceEvidence.before, advanceEvidence.after, advanceEvidence.observedMs), {
@@ -80,6 +89,24 @@ assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, s
   expectedPrompt: 'windows', presentation, ...evidence,
   pixelEvidence: { ...pixelEvidence, background: { ...pixelEvidence.background, composedRgba: [255, 150, 40, 255] } } }), /masked background/,
 'the flame must remain clipped outside the selected mask');
+assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256,
+  expectedPrompt: 'windows', presentation, ...evidence,
+  pixelEvidence: { ...pixelEvidence, composedFrameCapture: sourceFrameCapture } }), /reuse the same capture/,
+'a cached source frame cannot stand in for the composed frame');
+assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256,
+  expectedPrompt: 'windows', presentation, ...evidence,
+  pixelEvidence: { ...pixelEvidence, sourceFrameCapture: { ...sourceFrameCapture, bytes: 0 } } }), /capture receipts/,
+'empty screenshot artifacts cannot close the visible composition witness');
+assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256,
+  expectedPrompt: 'windows', presentation, ...evidence,
+  pixelEvidence: { ...pixelEvidence, foreground: { ...pixelEvidence.foreground,
+    composedScreenshotPixel: { x: 577, y: 384 } } } }), /different coordinates/,
+'source and composed pixels must be sampled at the same projected source point');
+assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256,
+  expectedPrompt: 'windows', presentation, ...evidence,
+  pixelEvidence: { ...pixelEvidence, foreground: { ...pixelEvidence.foreground,
+    composedRgba: [510, 170, 70, 255] } } }), /8-bit RGBA/,
+'impossible screenshot channel values cannot prove visible contribution');
 assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256,
   expectedPrompt: 'windows', presentation, ...evidence,
   advanceEvidence: { ...advanceEvidence, after: { ...advanceEvidence.after,
