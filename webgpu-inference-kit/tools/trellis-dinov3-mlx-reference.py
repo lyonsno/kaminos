@@ -121,6 +121,7 @@ def execute(args) -> dict:
     # Import MLX only inside the guarded execution so a missing runtime still
     # leaves the caller a durable failure manifest.
     import mlx.core as mx
+    import mlx.nn as nn
 
     model_dir = Path(args.model_dir).resolve()
     files, config = require_model_snapshot(model_dir)
@@ -163,7 +164,7 @@ def execute(args) -> dict:
     block1_attention_output = block1.attention(block1_norm1_hidden_states, cos, sin, model.num_prefix_tokens)
     block1_after_attention_hidden_states = block0_hidden_states + block1_attention_output * block1.layer_scale1
     block1_norm2_hidden_states = block1.norm2(block1_after_attention_hidden_states)
-    block1_mlp_hidden_states = mx.gelu(block1.mlp.up_proj(block1_norm2_hidden_states))
+    block1_mlp_hidden_states = nn.gelu(block1.mlp.up_proj(block1_norm2_hidden_states))
     block1_mlp_output = block1.mlp.down_proj(block1_mlp_hidden_states)
     block1_after_mlp_hidden_states = block1_after_attention_hidden_states + block1_mlp_output * block1.layer_scale2
     mx.eval(

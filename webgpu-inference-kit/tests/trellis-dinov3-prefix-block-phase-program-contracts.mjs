@@ -184,8 +184,12 @@ assert.match(routeImplementation, /block0Readback:'skipped'/,
   'the explicit resident probe must report that block-0 was not read back to the host');
 assert.match(referenceExporter, /block1_norm1_hidden_states = block1\.norm1\(block0_hidden_states\)[\s\S]*block1_attention_output = block1\.attention\(block1_norm1_hidden_states, cos, sin, model\.num_prefix_tokens\)[\s\S]*block1_after_attention_hidden_states = block0_hidden_states \+ block1_attention_output \* block1\.layer_scale1/,
   'the MLX reference must reproduce native DINOv3 block-1 attention and its LayerScale residual as the resident-consumer oracle');
-assert.match(referenceExporter, /block1_norm2_hidden_states = block1\.norm2\(block1_after_attention_hidden_states\)[\s\S]*block1_mlp_hidden_states = mx\.gelu\(block1\.mlp\.up_proj\(block1_norm2_hidden_states\)\)[\s\S]*block1_mlp_output = block1\.mlp\.down_proj\(block1_mlp_hidden_states\)[\s\S]*block1_after_mlp_hidden_states = block1_after_attention_hidden_states \+ block1_mlp_output \* block1\.layer_scale2/,
+assert.match(referenceExporter, /import mlx\.nn as nn/,
+  'the MLX reference must use the native MLX neural-network namespace for GELU');
+assert.match(referenceExporter, /block1_norm2_hidden_states = block1\.norm2\(block1_after_attention_hidden_states\)[\s\S]*block1_mlp_hidden_states = nn\.gelu\(block1\.mlp\.up_proj\(block1_norm2_hidden_states\)\)[\s\S]*block1_mlp_output = block1\.mlp\.down_proj\(block1_mlp_hidden_states\)[\s\S]*block1_after_mlp_hidden_states = block1_after_attention_hidden_states \+ block1_mlp_output \* block1\.layer_scale2/,
   'the MLX reference must expose native block-1 norm2, GELU up/down projections, and the exact LayerScale residual');
+assert.doesNotMatch(referenceExporter, /mx\.gelu\(/,
+  'mlx.core has no gelu symbol in the pinned runtime; the reference must not use it');
 assert.match(implementation, /trellis2\.dinov3\.block0-to-block1-full-block\.resident-probe\.webgpu-local\.v0/,
   'the full block-1 probe must have a route identity distinct from the attention-only probe');
 assert.match(browserSmoke, /mode === 'resident-block1'/,
