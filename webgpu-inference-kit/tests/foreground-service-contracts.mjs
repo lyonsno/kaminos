@@ -131,10 +131,21 @@ if (process.env.KIT_FOREGROUND_BASELINE !== '1') {
     } });
     try {
       const run = await service.beginRun('quarantined');
-      service.request(frame('last-model-boundary'));
+      const modelRequest = service.request(frame('last-model-boundary'));
 
       await assert.rejects(run.finish(), /finish receipt clock failed/);
       assert.deepEqual(submissions, ['last-model-boundary']);
+      const modelOutcome = await Promise.race([
+        modelRequest.completion.then(receipt => ({ state: 'settled', receipt })),
+        turn().then(() => ({ state: 'pending' })),
+      ]);
+      assert.equal(modelOutcome.state, 'settled', 'every captured request must receive a terminal receipt');
+      assert.equal(modelOutcome.receipt.status, 'failed-after-submission');
+      assert.equal(modelOutcome.receipt.submissionCount, 1);
+      assert.equal(modelOutcome.receipt.settledAtMs, null, 'failed clock must not invent a settlement time');
+      assert.equal(modelOutcome.receipt.elapsedMs, null, 'elapsed time is unknown when settlement time is unavailable');
+      assert.equal(modelOutcome.receipt.failure.phase, 'foreground-receipt-timing');
+      assert.match(modelOutcome.receipt.failure.error.message, /finish receipt clock failed/);
 
       const renderer = service.request(frame('renderer-after-rejection'));
       await turn();

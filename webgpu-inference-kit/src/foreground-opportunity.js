@@ -92,7 +92,9 @@ function createInterlock(input, outsideRun = false) {
       settledAtMs: receiptInput.settledAtMs,
       elapsedMs: receiptInput.startedAtMs == null
         ? 0
-        : Math.max(0, receiptInput.settledAtMs - receiptInput.startedAtMs),
+        : (receiptInput.settledAtMs == null
+          ? null
+          : Math.max(0, receiptInput.settledAtMs - receiptInput.startedAtMs)),
       boundary: clone(receiptInput.boundary || null),
       metadata: clone(requestState.metadata),
       result: clone(receiptInput.result ?? null),
@@ -191,6 +193,7 @@ function createInterlock(input, outsideRun = false) {
     const serviceStartedAtMs = now();
     const receipts = [];
     const failures = [];
+    let receiptTimingError = null;
 
     for (const requestState of captured) {
       if (requestState.status !== 'pending') continue;
@@ -287,14 +290,26 @@ function createInterlock(input, outsideRun = false) {
           };
         }
       }
+      let settledAtMs = null;
+      let receiptTimingFailure = null;
+      try {
+        settledAtMs = now();
+      } catch (error) {
+        receiptTimingError ||= error;
+        receiptTimingFailure = {
+          phase: 'foreground-receipt-timing',
+          error: normalizeError(error),
+        };
+      }
+      const receiptFailure = failure || receiptTimingFailure;
       const receipt = finishRequest(requestState, {
         status: canceledDuringService
           ? 'canceled-during-service'
-          : (failure
+          : (receiptFailure
             ? (successfulSubmissionCount > 0 ? 'failed-after-submission' : 'failed-before-submission')
             : 'completed'),
         startedAtMs,
-        settledAtMs: now(),
+        settledAtMs,
         boundary,
         result: receiptResult,
         submissions,
@@ -305,13 +320,13 @@ function createInterlock(input, outsideRun = false) {
               callbackError: failure ? clone(failure.error) : null,
             }
           : null,
-        failure: canceledDuringService ? null : failure,
+        failure: canceledDuringService ? receiptTimingFailure : receiptFailure,
       });
       receipts.push(receipt);
-      if (failure && !canceledDuringService) failures.push({
+      if (receiptFailure && (!canceledDuringService || receiptTimingFailure)) failures.push({
         requestId: requestState.requestId,
         status: receipt.status,
-        failure: clone(failure),
+        failure: clone(receiptFailure),
       });
     }
 
@@ -331,6 +346,7 @@ function createInterlock(input, outsideRun = false) {
       authority: 'foreground-callbacks-settled-before-next-inference-encode-no-gpu-completion-or-presentation-claim',
     });
     state.services.push(clone(service));
+    if (receiptTimingError) throw receiptTimingError;
     return service;
   }
 
