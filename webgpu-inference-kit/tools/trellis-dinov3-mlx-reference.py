@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Export a pinned f32 DINOv3 patch/prefix/block-0 reference packet.
 
+The packet also includes block 1's first LayerNorm output as a reference for a
+resident WebGPU handoff probe; it does not execute block 1 attention.
+
 Run with the trellis2mlx environment and its source checkout on PYTHONPATH.
 The script intentionally stops before TRELLIS' final no-affine LayerNorm.
 """
@@ -154,7 +157,8 @@ def execute(args) -> dict:
     prefix_hidden_states = mx.concatenate([class_token, register_tokens, patch_embeddings], axis=1)
     cos, sin = model._compute_rope(grid_height, grid_width)
     block0_hidden_states = model.layers[0](prefix_hidden_states, cos, sin, model.num_prefix_tokens)
-    mx.eval(patch_embeddings, prefix_hidden_states, block0_hidden_states)
+    block1_norm1_hidden_states = model.layers[1].norm1(block0_hidden_states)
+    mx.eval(patch_embeddings, prefix_hidden_states, block0_hidden_states, block1_norm1_hidden_states)
 
     out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -164,6 +168,7 @@ def execute(args) -> dict:
         "patch_embeddings": (np_f32(mx, patch_embeddings), "mlmodel-patch-embedding-output"),
         "prefix_hidden_states": (np_f32(mx, prefix_hidden_states), "mlmodel-dinov3-prefix-output"),
         "block0_hidden_states": (np_f32(mx, block0_hidden_states), "mlmodel-dinov3-block0-output"),
+        "block1_norm1_hidden_states": (np_f32(mx, block1_norm1_hidden_states), "mlmodel-dinov3-block1-norm1-output"),
         "patch_projection": (np_f32(mx, model.patch_embed.weight), "checkpoint-patch-projection-out-kh-kw-in"),
         "patch_bias": (np_f32(mx, model.patch_embed.bias), "checkpoint-patch-projection-bias"),
         "class_token": (np_f32(mx, model.cls_token), "checkpoint-class-token"),
@@ -192,6 +197,9 @@ def execute(args) -> dict:
         ("layer0_layer_scale2", layer.layer_scale2, "checkpoint-layer0-mlp-layer-scale"),
     ]:
         arrays[name] = (np_f32(mx, value), role)
+    block1 = model.layers[1]
+    arrays["layer1_norm1_weight"] = (np_f32(mx, block1.norm1.weight), "checkpoint-layer1-norm1-weight")
+    arrays["layer1_norm1_bias"] = (np_f32(mx, block1.norm1.bias), "checkpoint-layer1-norm1-bias")
     for name, (value, role) in arrays.items():
         if np.asarray(value).dtype != np.float32:
             raise ValueError(f"export tensor {name} is not f32: {np.asarray(value).dtype}")
@@ -201,7 +209,7 @@ def execute(args) -> dict:
         "reference": {"implementation": "trellmlx.models.dinov3.DINOv3ViT", "sourceRoot": str(trellis_root), "sourceRevision": trellis_revision, "sourceFile": str(dinov3_source), "sourceFileSha256": file_sha256(dinov3_source), "device": str(mx.default_device()), "mlxVersion": getattr(mx, "__version__", "unreported"), "loadedTensorCount": loaded_count},
         "model": {"id": MODEL_ID, "revision": REVISION, "files": files, "config": config, "dtype": "float32", "checkpointTensorDtypes": ["F32"]},
         "preprocessing": preprocessing,
-        "computation": {"precision": "float32", "framework": "MLX", "prefixTokens": ["class", "register0", "register1", "register2", "register3"], "patchTokens": 1024, "patchGrid": [32, 32], "sequenceLength": 1029, "hiddenSize": 1024, "ropeTheta": config["rope_theta"], "layerNormEps": config["layer_norm_eps"], "attention": "global-scaled-dot-product", "ropeAppliedTo": "patch q/k tokens only", "layerScale": "learned layer0 layer_scale1/layer_scale2", "blockCount": 1, "finalNoAffineLayerNormApplied": False, "outputBoundary": "after complete layer.0, before final model LayerNorm"},
+        "computation": {"precision": "float32", "framework": "MLX", "prefixTokens": ["class", "register0", "register1", "register2", "register3"], "patchTokens": 1024, "patchGrid": [32, 32], "sequenceLength": 1029, "hiddenSize": 1024, "ropeTheta": config["rope_theta"], "layerNormEps": config["layer_norm_eps"], "attention": "global-scaled-dot-product", "ropeAppliedTo": "patch q/k tokens only", "layerScale": "learned layer0 layer_scale1/layer_scale2", "blockCount": 1, "residentProbe": "layer1.norm1(block0_hidden_states)", "finalNoAffineLayerNormApplied": False, "outputBoundary": "after complete layer.0 and layer1.norm1; before layer1 attention and final model LayerNorm"},
         "outputs": outputs,
     }
     report_path = out_dir / "reference-manifest.json"

@@ -9,6 +9,7 @@ const parityAssay = await readFile(new URL('../tools/trellis-dinov3-prefix-block
 const { validateRouteDefinition } = await import('../src/index.js');
 
 const kit = await import('../src/index.js');
+const residentRoute = await import('../src/trellis-dinov3-prefix-block-phase-program.js');
 
 assert.equal(
   kit.TRELLIS_DINOV3_PREFIX_BLOCK_PHASE_PROGRAM_ROUTE_ID,
@@ -78,6 +79,16 @@ assert.match(browserRunner, /expectedBytes=outputSizes\[name\.replace\(/,
   'missing or partial WebGPU tensors must not be persisted as successful evidence');
 assert.match(browserRunner, /request\.headers\['x-output-sha256'\]!==sha256/,
   'persisted browser outputs must be byte-hash verified by the runner');
+assert.match(browserRunner, /browserState\?\.mode!==mode/,
+  'the runner must reject a stale/default browser page that silently ignored the requested smoke mode');
+assert.match(browserRunner, /browserState\?\.requestedRouteId!==requestedRouteId/,
+  'the runner must reject a browser page that exercised another effective route');
+assert.match(browserRunner, /block1Norm1:1029\*1024\*4/,
+  'the resident mode must require the exact full-size downstream F32 tensor rather than accepting a partial result');
+assert.match(browserSmoke, /adapterClassification === 'software-fallback'/,
+  'software WebGPU fallback cannot satisfy the resident GPU evidence route');
+assert.match(browserSmoke, /finiteNonzeroCount === 0/,
+  'blank/all-zero output cannot masquerade as completed downstream evidence');
 assert.match(browserRunner, /failure_phase:phase/,
   'the browser smoke must retain the last failure phase when it cannot complete');
 assert.match(parityAssay, /receiver:args.get\('--receiver'\)/,
@@ -88,5 +99,52 @@ assert.match(parityAssay, /referenceManifest:resolve\(referenceDir,'reference-ma
   'the durable start receipt must identify both reference and terminal evidence paths');
 assert.match(parityAssay, /last trustworthy MLX reference remained valid/,
   'a WebGPU failure must preserve the MLX reference as last trustworthy evidence without implying parity');
+const routeImplementation = implementation.slice(implementation.indexOf('async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal'));
+assert.equal(typeof residentRoute.runTrellisDinoV3Block1LayerNormResident, 'function');
+assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'function');
+assert.equal(typeof kit.runTrellisDinoV3Block1LayerNormResident, 'undefined', 'the probe kernel remains model-specific rather than expanding the shared kit root API');
+assert.equal(typeof kit.runTrellisDinoV3PrefixBlockResidentHandoffProbe, 'undefined', 'the diagnostic probe is not promoted to the common kit API');
+assert.equal(residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_HANDOFF_PROBE_ROUTE_ID,
+  'trellis2.dinov3.block0-to-block1-norm1.resident-probe.webgpu-local.v0');
+const residentFilterIndex = routeImplementation.indexOf("program.phases.filter(phase => phase.name !== 'readback-trellis-dinov3-prefix-block0-outputs')");
+const residentConsumerIndex = routeImplementation.indexOf('runTrellisDinoV3Block1LayerNormResident({');
+const downstreamReadbackIndex = routeImplementation.indexOf("readback-dinov3-block1-layernorm1-resident-probe");
+assert.ok(residentFilterIndex >= 0 && residentConsumerIndex > residentFilterIndex,
+  'the resident probe must omit the block-0 output-readback phase and consume block-0 in the downstream operation');
+assert.ok(downstreamReadbackIndex > residentConsumerIndex,
+  'the resident probe may read the downstream diagnostic output only after the same-runtime block-1 operation');
+assert.match(routeImplementation.slice(residentConsumerIndex, residentConsumerIndex + 500), /runtime, inputTensor:tensors\.block0HiddenStates[\s\S]*schedulerInvocation:invocation/,
+  'block-1 LayerNorm must receive the live runtime, block-0 GPU tensor, and current scheduler invocation');
+assert.match(routeImplementation, /block0Readback:'skipped'/,
+  'the explicit resident probe must report that block-0 was not read back to the host');
+assert.match(referenceExporter, /block1_norm1_hidden_states = model\.layers\[1\]\.norm1\(block0_hidden_states\)/,
+  'the MLX reference must use native DINOv3 layer 1 LayerNorm as the resident-consumer oracle');
+assert.match(browserSmoke, /runTrellisDinoV3PrefixBlockResidentHandoffProbe/,
+  'the live browser witness must exercise the resident probe API');
+
+const { WEBGPU_BUFFER_USAGE } = await import('../src/runtime-primitives.js');
+const sourceTensor = { name:'block0.source', shape:[1,1029,1024], dtype:'f32', usage:WEBGPU_BUFFER_USAGE.storage, buffer:{} };
+let residentKernel = null;
+let residentDispatch = null;
+let residentReadbacks = 0;
+const residentRuntime = {
+  createTensor(input) { return { ...input, buffer:{} }; },
+  uploadTensor() {},
+  createUniformBuffer(input) { return { ...input, buffer:{} }; },
+  defineComputeKernel(input) { residentKernel=input; return input; },
+  async runKernel(kernel, options) { residentDispatch={ kernel, options }; },
+  async readTensor() { residentReadbacks+=1; return new ArrayBuffer(0); },
+};
+const residentLayerNorm = await residentRoute.runTrellisDinoV3Block1LayerNormResident({
+  runtime:residentRuntime, inputTensor:sourceTensor,
+  weight:new Float32Array(1024).fill(1), bias:new Float32Array(1024),
+  schedulerInvocation:{ invocationId:'resident-contract-invocation' },
+});
+assert.equal(residentLayerNorm.inputTensor, sourceTensor, 'the consumer keeps the exact live block-0 tensor object');
+assert.equal(residentKernel.bindings[0].resource, sourceTensor, 'the kernel binds block-0 GPU storage directly, without a host tensor copy');
+assert.equal(residentDispatch.kernel, residentKernel);
+assert.deepEqual(residentDispatch.options.dispatch, [1029]);
+assert.equal(residentReadbacks, 0, 'resident consumer setup/dispatch must not require a host readback');
+assert.deepEqual(residentLayerNorm.shape, [1,1029,1024]);
 
 console.log('TRELLIS DINOv3 prefix/block-0 phase-program contracts passed');

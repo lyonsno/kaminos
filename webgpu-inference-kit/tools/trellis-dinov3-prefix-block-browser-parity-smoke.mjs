@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 const args = new Map();
 for (let index=2; index<process.argv.length; index+=2) args.set(process.argv[index],process.argv[index+1]);
 if (process.argv.includes('--help')) {
-  console.log('Usage: node tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs --reference-dir PATH --source-image PATH --output-dir PATH --report PATH [--source-revision SHA] [--chrome PATH] [--debug-port N] [--server-port N] [--timeout-ms N] [--atol N] [--rtol N]');
+  console.log('Usage: node tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs --reference-dir PATH --source-image PATH --output-dir PATH --report PATH [--mode block0-parity|resident-handoff] [--source-revision SHA] [--chrome PATH] [--debug-port N] [--server-port N] [--timeout-ms N] [--atol N] [--rtol N]');
   process.exit(0);
 }
 const root=resolve(new URL('..',import.meta.url).pathname);
@@ -23,11 +23,16 @@ const serverPort=Number(args.get('--server-port')||18577);
 const timeoutMs=Number(args.get('--timeout-ms')||0);
 const atol=Number(args.get('--atol')||0.002);
 const rtol=Number(args.get('--rtol')||0.001);
+const mode=args.get('--mode')||'block0-parity';
 const chrome=process.env.KAMINOS_CHROME||args.get('--chrome')||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const invocationId=randomUUID();
-const requestedRouteId='trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
-const reportSchema='kaminos.trellis-dinov3-prefix-block0.browser-parity-smoke.v0';
-const outputSizes={ patchEmbeddings:1024*1024*4, prefixHiddenStates:1029*1024*4, block0HiddenStates:1029*1024*4 };
+const requestedRouteId=mode==='resident-handoff'
+  ? 'trellis2.dinov3.block0-to-block1-norm1.resident-probe.webgpu-local.v0'
+  : 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
+const reportSchema=mode==='resident-handoff'
+  ? 'kaminos.trellis-dinov3-resident-handoff-browser-smoke.v0'
+  : 'kaminos.trellis-dinov3-prefix-block0.browser-parity-smoke.v0';
+const outputSizes={ patchEmbeddings:1024*1024*4, prefixHiddenStates:1029*1024*4, block0HiddenStates:1029*1024*4, block1Norm1:1029*1024*4 };
 const allowedOutputNames=new Set(Object.keys(outputSizes).map(name=>`${name}.f32`));
 let userDataDir=null;
 let server=null;
@@ -39,18 +44,19 @@ let stderr='';
 let outputReceipts={};
 let sourceImageSha256=null;
 let referenceManifestSummary=null;
-const requestedUrl=`http://127.0.0.1:${serverPort}/smokes/trellis-dinov3-prefix-block-browser.html?smokeId=${invocationId}&sourceRevision=${encodeURIComponent(sourceRevision)}&atol=${atol}&rtol=${rtol}`;
+const requestedUrl=`http://127.0.0.1:${serverPort}/smokes/trellis-dinov3-prefix-block-browser.html?smokeId=${invocationId}&mode=${encodeURIComponent(mode)}&sourceRevision=${encodeURIComponent(sourceRevision)}&atol=${atol}&rtol=${rtol}`;
 const delay=ms=>new Promise(resolveDelay=>setTimeout(resolveDelay,ms));
 
 function inside(base,candidate) { return candidate===base||candidate.startsWith(`${base}${sep}`); }
 function writeReport(extra={}) {
   const actualRoute=browserState?.status==='passed'&&browserState?.receipt ? browserState.receipt.effectiveRouteId : browserState?.effectiveRouteId||null;
   const report={
-    schema:reportSchema, ok:false, failure_phase:phase, requestedUrl, invocationId, reportPath,
+    schema:reportSchema, ok:false, failure_phase:phase, mode, requestedUrl, invocationId, reportPath,
     requestedRouteId, effectiveRouteId:actualRoute, sourceRevision, chrome, chromeProcessPid:chromeProcess?.pid||null,
+    authority:browserState?.authority||'unverified',
     browserVersion:browserVersion?.Browser||null, browser:browserState?.browser||null,
     adapterInfo:browserState?.adapterInfo||null, adapterName:browserState?.adapterName||null,
-    adapterClassification:browserState?.adapterClassification||'unreported', effectiveBackend:browserState?.receipt?.backend||null,
+    adapterClassification:browserState?.adapterClassification||'unreported', effectiveBackend:browserState?.receipt?.backend||browserState?.backend||null,
     device:browserState?.device||null, requestedFeatures:browserState?.requestedFeatures||[], precision:browserState?.precision||{requested:'fp32',effective:'unverified',shaderF16Requested:false},
     model:browserState?.model||referenceManifestSummary?.model||null, kernel:browserState?.kernel||null,
     sourceImage:{path:sourceImagePath,sha256:sourceImageSha256}, referenceManifest:referenceManifestSummary,
@@ -182,6 +188,7 @@ let exitCode=1;
 try {
   phase='local_preflight';
   if(!args.has('--reference-dir')||!args.has('--source-image')||!args.has('--output-dir')||!args.has('--report')) throw new Error('--reference-dir, --source-image, --output-dir, and --report are required');
+  if(!['block0-parity','resident-handoff'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
   if(!Number.isInteger(debugPort)||debugPort<1||debugPort>65535||!Number.isInteger(serverPort)||serverPort<1||serverPort>65535) throw new Error('debug-port and server-port must be valid TCP ports');
   if(timeoutMs<0||!Number.isFinite(timeoutMs)) throw new Error('timeout-ms must be zero (no time limit) or a positive finite number');
   const manifest=JSON.parse(readFileSync(resolve(referenceDir,'reference-manifest.json'),'utf8'));
@@ -189,6 +196,7 @@ try {
   sourceImageSha256=createHash('sha256').update(readFileSync(sourceImagePath)).digest('hex');
   if(sourceImageSha256!=='abf395cc52d81c26dadae9f024072d6c7301679be4e8fc08d572723d7ae32a21') throw new Error(`source image digest mismatch: ${sourceImageSha256}`);
   if(manifest.ok!==true||manifest.model?.revision!=='ea8dc2863c51be0a264bab82070e3e8836b02d51'||manifest.model?.files?.['model.safetensors']?.sha256!=='dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179') throw new Error('local reference manifest is not the expected pinned F32 DINOv3 export');
+  if(mode==='resident-handoff'&&manifest.computation?.residentProbe!=='layer1.norm1(block0_hidden_states)') throw new Error('reference manifest does not identify the pinned resident block-1 LayerNorm operation');
   mkdirSync(outputDir,{recursive:true});
   phase='start_server';
   await startServer();
@@ -217,8 +225,10 @@ try {
   });
   await wsRequest(ws,'Runtime.enable');
   browserState=await waitForState(ws,invocationId);
+  if(browserState?.mode!==mode) throw new Error(`browser mode mismatch: requested ${mode}, observed ${browserState?.mode||'missing'}`);
+  if(browserState?.requestedRouteId!==requestedRouteId) throw new Error(`browser route mismatch: requested ${requestedRouteId}, observed ${browserState?.requestedRouteId||'missing'}`);
   const report=writeReport({ok:browserState.status==='passed',failure_phase:browserState.status==='passed'?null:browserState.failurePhase||phase,error:browserState.error||null});
-  console.log(JSON.stringify({ok:report.ok,reportPath,requestedRouteId:report.requestedRouteId,effectiveRouteId:report.effectiveRouteId,sourceRevision,browser:report.browserVersion,adapterName:report.adapterName,adapterClassification:report.adapterClassification,precision:report.precision,model:report.model,comparisons:report.comparisons,outputReceipts:report.persistedOutputReceipts,error:browserState.error||null},null,2));
+  console.log(JSON.stringify({ok:report.ok,reportPath,mode,requestedRouteId:report.requestedRouteId,effectiveRouteId:report.effectiveRouteId,sourceRevision,browser:report.browserVersion,adapterName:report.adapterName,adapterClassification:report.adapterClassification,precision:report.precision,model:report.model,comparisons:report.comparisons,outputReceipts:report.persistedOutputReceipts,error:browserState.error||null},null,2));
   if(!report.ok) throw new Error(browserState.error||'matched WebGPU-vs-MLX comparison failed');
   exitCode=0;
 } catch(error) {
