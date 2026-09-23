@@ -12,9 +12,16 @@ export function validateEmissiveField(field, files, expectedState, expected = { 
   assert.equal(field.simStepCount, expectedState.simStepCount, 'frame metadata mismatch: sim step');
   assert.equal(field.effectiveRoute, expectedState.effectiveRoute, 'frame metadata mismatch: route');
   assert.equal(field.backend, expectedState.backend, 'frame metadata mismatch: backend');
+  assert.equal(field.sourceIndex, expectedState.physicalColor?.incidentLight?.sourceIndex, 'source index mismatch');
+  assert.equal(field.renderPhaseTimeMs, expectedState.renderPhaseTimeMs, 'render phase mismatch: time');
+  assert.equal(field.renderPhaseFrame, expectedState.renderPhaseFrame, 'render phase mismatch: frame');
+  assert.equal(field.renderPhaseAuthority, expectedState.renderPhaseAuthority, 'render phase mismatch: authority');
   assert.equal(field.physicalColor?.effective, expectedState.physicalColor?.effective, 'frame metadata mismatch: mode');
   assert.equal(field.physicalColor?.temperature, expectedState.physicalColor?.temperature, 'frame metadata mismatch: temperature');
   assert.equal(field.physicalColor?.exposureEV, expectedState.physicalColor?.exposureEV, 'frame metadata mismatch: exposure');
+  for (const key of ['smokeExtinction', 'scatteringAlbedo', 'ambientRadiance']) {
+    assert.equal(field.physicalColor?.material?.[key], expectedState.physicalColor?.material?.[key], `material state mismatch: ${key}`);
+  }
 
   const cells = field.grid ** 3;
   const expectedBytes = {
@@ -56,16 +63,6 @@ export function validateEmissiveField(field, files, expectedState, expected = { 
   const maxRelativeResolveError = maxAbsoluteError / Math.max(maxMagnitude, 1e-12);
   assert.ok(maxRelativeResolveError <= 1e-5, `directional mean mismatch: ${maxRelativeResolveError}`);
   return { expectedBytes, maxAbsoluteResolveError: maxAbsoluteError, maxRelativeResolveError, emission, extinction, directionalEnergy, resolvedEnergy };
-}
-
-export function snapshotEmissiveFieldFrame(sourceIndex, state) {
-  return {
-    sourceIndex,
-    simStepCount: state.simStepCount,
-    effectiveRoute: state.effectiveRoute,
-    physicalColor: structuredClone(state.physicalColor),
-    backend: state.backend,
-  };
 }
 
 // Optional exact control-isolation relation, never an artistic completion test.

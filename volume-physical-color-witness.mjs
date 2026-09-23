@@ -126,6 +126,7 @@ try {
       const core = window.__kaminosVolumePrototype;
       const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
       if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
+      const captureState = core.debugState();
       const {width,height,rgba} = sample.image;
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
       const image = document.createElement('canvas'); image.width=width; image.height=height;
@@ -147,9 +148,11 @@ try {
         return [name,btoa(binary)];
       })) : null;
       const fieldReceipt = emissiveField ? Object.fromEntries(Object.entries(emissiveField).filter(([name]) => !['coefficients','directionalRadiance','incidentRadiance'].includes(name))) : null;
-      return {sample, profile, frameProfile, emissiveField:fieldReceipt, fieldFiles, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      return {sample, profile, frameProfile, emissiveField:fieldReceipt, fieldFiles, state:captureState, profileState:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
+    assert.equal(result.state.renderPhaseTimeMs, result.sample.renderPhaseTimeMs, 'camera state render phase changed before receipt');
+    assert.equal(result.state.renderPhaseFrame, result.sample.renderPhaseFrame, 'camera state render frame changed before receipt');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, Math.fround(arm.temperature));
@@ -174,9 +177,11 @@ try {
     earlierRgba.set(arm.id,rgba);
     const {image, ...sample} = result.sample;
     const field = result.emissiveField;
-    report.captures.push({arm, sample, profile:result.profile, frameProfile:result.frameProfile, state:result.state,
+    report.captures.push({arm, sample, profile:result.profile, frameProfile:result.frameProfile, state:result.state, profileState:result.profileState,
       field: field ? {
         authority:field.authority, grid:field.grid, directions:field.directions, simStepCount:field.simStepCount,
+        sourceIndex:field.sourceIndex, renderPhaseTimeMs:field.renderPhaseTimeMs, renderPhaseFrame:field.renderPhaseFrame,
+        renderPhaseAuthority:field.renderPhaseAuthority,
         effectiveRoute:field.effectiveRoute, physicalColor:field.physicalColor, backend:field.backend,
         validation:fieldValidation,
         coefficients:`${arm.id}.coefficients.f32`, directionalRadiance:`${arm.id}.directionalRadiance.f32`,

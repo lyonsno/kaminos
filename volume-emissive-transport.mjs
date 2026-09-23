@@ -65,6 +65,9 @@ export function snapshotEmissiveFieldFrame(sourceIndex, state) {
     sourceIndex,
     simStepCount: state.simStepCount,
     effectiveRoute: state.effectiveRoute,
+    renderPhaseTimeMs: state.renderPhaseTimeMs,
+    renderPhaseFrame: state.renderPhaseFrame,
+    renderPhaseAuthority: state.renderPhaseAuthority,
     physicalColor: structuredClone(state.physicalColor),
     backend: state.backend,
   };
