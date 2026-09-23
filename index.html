@@ -5750,6 +5750,54 @@ window.kaminosSceneObjectBoundsDebugState = function(id) {
   };
 };
 
+const skinnedBoneInitialQuaternions = new WeakMap();
+
+function sceneObjectSkinnedMeshes(id) {
+  const record = sceneObjects.find(item => item.id === id);
+  if (!record?.object) return [];
+  const meshes = [];
+  record.object.traverse(child => {
+    if (child.isSkinnedMesh && child.skeleton) meshes.push(child);
+  });
+  return meshes;
+}
+
+window.kaminosSkinnedRigDebugState = function(id) {
+  return {
+    objectId: id,
+    meshes: sceneObjectSkinnedMeshes(id).map(mesh => {
+      mesh.computeBoundingBox();
+      const box = new THREE.Box3().setFromObject(mesh);
+      return {
+        name: mesh.name,
+        bones: mesh.skeleton.bones.map(bone => bone.name),
+        boneQuaternions: Object.fromEntries(mesh.skeleton.bones.map(bone => [bone.name, bone.quaternion.toArray()])),
+        bounds: {
+          center: box.getCenter(new THREE.Vector3()).toArray(),
+          size: box.getSize(new THREE.Vector3()).toArray(),
+        },
+      };
+    }),
+  };
+};
+
+window.kaminosSetSkinnedBoneDelta = function(id, meshIndex, boneName, axis, degrees) {
+  const mesh = sceneObjectSkinnedMeshes(id)[meshIndex];
+  const bone = mesh?.skeleton.bones.find(item => item.name === boneName);
+  const axisVector = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) }[axis];
+  if (!bone || !axisVector || !Number.isFinite(degrees)) {
+    throw new Error(`Invalid skinned-bone pose target: ${id}/${meshIndex}/${boneName}/${axis}/${degrees}`);
+  }
+  if (!skinnedBoneInitialQuaternions.has(bone)) throw new Error(`No imported pose baseline for ${boneName}`);
+  bone.quaternion.copy(skinnedBoneInitialQuaternions.get(bone)).multiply(
+    new THREE.Quaternion().setFromAxisAngle(axisVector, THREE.MathUtils.degToRad(degrees))
+  );
+  bone.updateMatrixWorld(true);
+  mesh.skeleton.update();
+  window._kaminosDirty?.();
+  return window.kaminosSkinnedRigDebugState(id);
+};
+
 window.kaminosSplatPreviewDebugState = function(id = null) {
   const record = id
     ? sceneObjects.find(item => item.id === id)
@@ -9470,6 +9518,11 @@ async function showGLB(file, options = {}) {
         reject(new Error('stale async GLB load ignored'));
         return;
       }
+      model.traverse(child => {
+        if (child.isSkinnedMesh && child.skeleton) {
+          child.skeleton.bones.forEach(bone => skinnedBoneInitialQuaternions.set(bone, bone.quaternion.clone()));
+        }
+      });
       if (options.normalize !== false) {
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3()).length();
@@ -20159,6 +20212,7 @@ function kaminosMeshAssetRouteFromSearch(params = new URLSearchParams(window.loc
     effectiveUrl,
     fileName,
     label: kaminosMeshAssetRouteLabel(route.requestedPath, fileName),
+    expectedSha256: params.get('mesh_sha256'),
   };
 }
 
@@ -20241,6 +20295,8 @@ async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch
     effectiveUrl: route.effectiveUrl,
     fileName: route.fileName,
     label: route.label,
+    expectedSha256: route.expectedSha256,
+    loadedSha256: null,
     registeredObjectId: null,
     registeredAt: null,
     error: null,
@@ -20248,7 +20304,23 @@ async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch
   window._kaminosDirty?.();
   setInfo(`Loading mesh asset: ${route.label}`);
   try {
-    const model = await showGLB(route.effectiveUrl, {
+    let source = route.effectiveUrl;
+    let loadedSha256 = null;
+    if (route.expectedSha256 !== null) {
+      if (!/^[a-f0-9]{64}$/.test(route.expectedSha256) || !/\.glb$/i.test(route.fileName)) {
+        throw new Error('Hash-bound mesh asset link requires a SHA-256 digest and GLB file');
+      }
+      const response = await fetch(route.effectiveUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Mesh asset fetch failed: HTTP ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      loadedSha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+        .map(value => value.toString(16).padStart(2, '0')).join('');
+      if (loadedSha256 !== route.expectedSha256) {
+        throw new Error(`Mesh asset SHA-256 mismatch: expected ${route.expectedSha256}, got ${loadedSha256}`);
+      }
+      source = new File([bytes], route.fileName, { type: 'model/gltf-binary' });
+    }
+    const model = await showGLB(source, {
       clear: true,
       metadata: {
         ...greenroomMeshMetadata({ title: route.label }, route.fileName, route.effectiveUrl),
@@ -20259,6 +20331,7 @@ async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch
           requestedPath: route.requestedPath,
           effectiveUrl: route.effectiveUrl,
           sourceParam: route.sourceParam,
+          loadedSha256,
         },
       },
     });
@@ -20271,6 +20344,7 @@ async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch
       status: 'loaded',
       registeredObjectId: registered.id,
       registeredAt: new Date().toISOString(),
+      loadedSha256,
       error: null,
     };
     setInfo(`Mesh asset loaded: ${route.label}`);
