@@ -23,6 +23,7 @@ body.sam-image-active #viewport #info-bar { display: none; }
 .sam-image-modes button[aria-pressed="true"] { color: #dcf9eb; background: #274338; }
 .sam-image-stage { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; padding: 24px; overflow: hidden; }
 #sam-image-canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; touch-action: none; cursor: grab; }
+#sam-image-canvas[hidden] { display: none; }
 #sam-image-canvas:active { cursor: grabbing; }
 #sam-image-empty { position: absolute; color: #99aaa5; font-size: 15px; }
 #sam-image-empty[hidden] { display: none; }
