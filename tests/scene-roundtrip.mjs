@@ -6,10 +6,47 @@ import {
   getSceneGroupRecords,
   getSceneObjectRecords,
   isReloadableSceneObjectRecord,
+  normalizeCrucibleContext,
   planSceneRestore,
   sceneDocumentIsLoadable,
   sceneObjectToLegacyModel,
 } from '../scene-persistence-core.js';
+
+const standaloneCrucibleContext = {
+  schema: 'kaminos.crucible.context.v0',
+  crucibleId: 'kiln-workshop',
+  makingIntent: 'revise the refractory kiln cast for the authoring scene',
+  armatureId: 'kiln-cast-front',
+  firingId: 'sf3d-front-35deg',
+  receiptRef: 'assets/reconstructions/kiln/receipt.json',
+  result: { id: 'refractory-kiln-front', kind: 'cast', label: 'Refractory kiln' },
+};
+
+const standaloneDocument = buildSceneDocument({
+  objects: [{
+    id: 'refractory-kiln-front',
+    source: '/api/read?root=reconstructions&path=kiln/output.glb',
+    type: 'glb',
+    fileName: 'output.glb',
+    label: 'Refractory kiln',
+    makingContext: standaloneCrucibleContext,
+  }],
+  activeObjectId: 'refractory-kiln-front',
+  makingContext: standaloneCrucibleContext,
+});
+const standaloneRestore = planSceneRestore(standaloneDocument);
+assert.equal(standaloneRestore.makingContext?.crucibleId, 'kiln-workshop', 'scene save/reopen preserves standalone crucible intent');
+assert.equal(standaloneRestore.objects[0].makingContext?.result.kind, 'cast', 'scene save/reopen preserves cast identity');
+assert.equal(standaloneRestore.objects[0].makingContext?.firingId, 'sf3d-front-35deg', 'scene save/reopen preserves the firing reference');
+assert.equal('cartridgeId' in standaloneRestore.makingContext, false, 'a crucible scene does not require cartridge packaging');
+assert.throws(() => normalizeCrucibleContext({
+  ...standaloneCrucibleContext,
+  result: { id: 'bad-result', kind: 'preview' },
+}), /Unsupported crucible result kind/, 'unknown result classes fail loud');
+assert.throws(() => normalizeCrucibleContext({
+  ...standaloneCrucibleContext,
+  crucibleId: '   ',
+}), /requires crucibleId/, 'blank crucible identity fails loud');
 
 const volumePrimitives = {
   schema: 'kaminos.volume-primitives.v0',

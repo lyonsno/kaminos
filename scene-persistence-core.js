@@ -1,5 +1,6 @@
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
+export const CRUCIBLE_CONTEXT_SCHEMA = 'kaminos.crucible.context.v0';
 export const SCENE_VERSION = 4;
 
 function cloneJson(value) {
@@ -7,10 +8,45 @@ function cloneJson(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
 
+export function normalizeCrucibleContext(context) {
+  if (context == null) return null;
+  if (!context || typeof context !== 'object' || Array.isArray(context)) {
+    throw new Error('Crucible context must be an object');
+  }
+  if (context.schema !== CRUCIBLE_CONTEXT_SCHEMA) {
+    throw new Error(`Unsupported crucible context schema: ${context.schema || 'missing'}`);
+  }
+  const crucibleId = String(context.crucibleId || '').trim();
+  if (!crucibleId) throw new Error('Crucible context requires crucibleId');
+  const normalized = cloneJson(context);
+  normalized.schema = CRUCIBLE_CONTEXT_SCHEMA;
+  normalized.crucibleId = crucibleId;
+  for (const key of ['makingIntent', 'armatureId', 'firingId', 'receiptRef', 'cartridgeId']) {
+    if (normalized[key] == null || normalized[key] === '') delete normalized[key];
+    else normalized[key] = String(normalized[key]);
+  }
+  if (normalized.result != null) {
+    if (!normalized.result || typeof normalized.result !== 'object' || Array.isArray(normalized.result)) {
+      throw new Error('Crucible result must be an object');
+    }
+    if (!['armature', 'handle', 'shard', 'cast'].includes(normalized.result.kind)) {
+      throw new Error(`Unsupported crucible result kind: ${normalized.result.kind || 'missing'}`);
+    }
+    normalized.result = {
+      ...normalized.result,
+      id: String(normalized.result.id || '').trim(),
+      label: normalized.result.label == null ? undefined : String(normalized.result.label),
+    };
+    if (!normalized.result.id) throw new Error('Crucible result requires id');
+    if (normalized.result.label === undefined) delete normalized.result.label;
+  }
+  return normalized;
+}
+
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
   const id = String(record.id || record.fileName || record.source || 'object');
-  return {
+  const normalized = {
     id,
     source: record.source ?? null,
     type: record.type ?? 'glb',
@@ -30,6 +66,9 @@ function normalizeSceneObjectRecord(record) {
     renderCapabilities: cloneJson(record.renderCapabilities ?? null),
     renderHandoffSchema: record.renderHandoffSchema ?? null,
   };
+  const makingContext = normalizeCrucibleContext(record.makingContext);
+  if (makingContext) normalized.makingContext = makingContext;
+  return normalized;
 }
 
 function normalizeSceneGroupRecord(record) {
@@ -58,7 +97,7 @@ function normalizeVolumePrimitiveState(state) {
 }
 
 export function sceneObjectToLegacyModel(data) {
-  return {
+  const model = {
     id: 'legacy-model',
     source: data.model.source,
     type: data.model.type,
@@ -67,6 +106,9 @@ export function sceneObjectToLegacyModel(data) {
     transform: cloneJson(data.transform),
     materials: cloneJson(data.materials),
   };
+  const makingContext = normalizeCrucibleContext(data.makingContext);
+  if (makingContext) model.makingContext = makingContext;
+  return model;
 }
 
 export function getSceneObjectRecords(data) {
@@ -118,7 +160,7 @@ export function planSceneRestore(data) {
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
   const requestedActiveGroupId = data.activeGroupId && groups.some(group => group.id === data.activeGroupId) ? data.activeGroupId : null;
   const activeObjectId = requestedActiveId || objects.at(-1)?.id || null;
-  return {
+  const restore = {
     schema: data.schema || null,
     version: data.version,
     objects,
@@ -128,6 +170,9 @@ export function planSceneRestore(data) {
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
   };
+  const makingContext = normalizeCrucibleContext(data.makingContext);
+  if (makingContext) restore.makingContext = makingContext;
+  return restore;
 }
 
 export function buildSceneDocument({
@@ -143,6 +188,7 @@ export function buildSceneDocument({
   postprocessing = null,
   backdrop = false,
   backdropBrightness = undefined,
+  makingContext = null,
 } = {}) {
   const sceneObjects = objects.map(normalizeSceneObjectRecord);
   const sceneGroups = getSceneGroupRecords({ groups }, sceneObjects);
@@ -170,6 +216,8 @@ export function buildSceneDocument({
     postprocessing: cloneJson(postprocessing),
     backdrop: !!backdrop,
   };
+  const normalizedMakingContext = normalizeCrucibleContext(makingContext ?? activeObject?.makingContext);
+  if (normalizedMakingContext) document.makingContext = normalizedMakingContext;
   if (backdropBrightness !== undefined) document.backdropBrightness = backdropBrightness;
   return document;
 }

@@ -211,9 +211,87 @@ async function runMeshAssetLinkScenario(ws) {
       if (!row) {
         throw new Error('mesh asset link registered object missing from scene object list: ' + JSON.stringify({ state, rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => row.dataset.sceneObjectId) }));
       }
+      const crucibleId = requestedParams.get('crucible_id');
+      if (crucibleId && object.makingContext?.crucibleId !== crucibleId) {
+        throw new Error('mesh asset link lost its standalone crucible context: ' + JSON.stringify({ crucibleId, object }));
+      }
+      if (crucibleId && !row.textContent.includes('Crucible · ' + crucibleId)) {
+        throw new Error('mesh asset link row does not expose its crucible context: ' + row.textContent.trim());
+      }
+      let contextRoundtrip = null;
+      if (crucibleId) {
+        let savedFile = null;
+        try {
+          const listScenes = async () => {
+            const response = await fetch('/api/browse?root=scenes&path=');
+            const data = await response.json();
+            if (!response.ok || data.error) throw new Error('scene list failed: ' + (data.error || response.status));
+            return (data.entries || []).filter(entry => entry.name.endsWith('.json')).map(entry => entry.name);
+          };
+          const before = new Set(await listScenes());
+          const startX = object.transform.position[0];
+          const editedX = startX + 0.125;
+          window.kaminosSetSceneObjectTransform(object.id, {
+            ...object.transform,
+            position: [editedX, ...object.transform.position.slice(1)],
+          });
+          if (!await window.saveSceneAs()) throw new Error('crucible scene save-as did not report success');
+          for (let i = 0; i < 120; i++) {
+            const created = (await listScenes()).filter(name => !before.has(name));
+            if (created.length === 1) {
+              savedFile = created[0];
+              break;
+            }
+            if (created.length > 1) throw new Error('crucible scene save created multiple files: ' + JSON.stringify(created));
+            await wait(125);
+          }
+          if (!savedFile) throw new Error('crucible scene save did not create a scene file');
+          const readResponse = await fetch('/api/read?root=scenes&path=' + encodeURIComponent(savedFile));
+          const savedScene = await readResponse.json();
+          if (!readResponse.ok || savedScene.error) throw new Error('saved crucible scene could not be read: ' + (savedScene.error || readResponse.status));
+          const savedObject = (savedScene.objects || []).find(item => item.id === object.id);
+          if (savedScene.makingContext?.crucibleId !== crucibleId || savedObject?.makingContext?.crucibleId !== crucibleId) {
+            throw new Error('saved scene lost scene/object crucible context: ' + JSON.stringify({ makingContext: savedScene.makingContext, savedObject }));
+          }
+          if (Math.abs(savedObject.transform.position[0] - editedX) > 1e-6) {
+            throw new Error('saved scene lost the revised cast transform: ' + JSON.stringify(savedObject.transform));
+          }
+          const input = document.getElementById('scene-file-input');
+          const staleX = editedX + 0.375;
+          window.kaminosSetSceneObjectTransform(object.id, {
+            ...object.transform,
+            position: [staleX, ...object.transform.position.slice(1)],
+          });
+          const file = new File([JSON.stringify(savedScene)], savedFile, { type: 'application/json' });
+          const transfer = new DataTransfer();
+          transfer.items.add(file);
+          input.files = transfer.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          let restored = null;
+          let restoredInfo = '';
+          for (let i = 0; i < 160; i++) {
+            restored = (window.kaminosSceneObjectDebugState?.() || []).find(item => item.id === object.id) || null;
+            restoredInfo = document.getElementById('info-bar')?.textContent?.trim() || '';
+            if (restoredInfo === 'Scene loaded: 1 object' && restored?.makingContext?.crucibleId === crucibleId && Math.abs(restored.transform.position[0] - editedX) <= 1e-6) break;
+            await wait(125);
+          }
+          if (restoredInfo !== 'Scene loaded: 1 object' || !restored || restored.makingContext?.crucibleId !== crucibleId || Math.abs(restored.transform.position[0] - editedX) > 1e-6 || Math.abs(restored.transform.position[0] - staleX) <= 1e-6) {
+            throw new Error('reopened scene did not complete and replace the unsaved cast edit with its retained state: ' + JSON.stringify({ restoredInfo, staleX, restored }));
+          }
+          contextRoundtrip = { savedFile, crucibleId, editedX, makingContext: restored.makingContext };
+        } finally {
+          if (savedFile) {
+            const cleanupResponse = await fetch('/api/delete-scene?name=' + encodeURIComponent(savedFile));
+            const cleanup = await cleanupResponse.json();
+            if (!cleanupResponse.ok || cleanup.deleted !== savedFile) throw new Error('crucible witness scene cleanup failed: ' + JSON.stringify(cleanup));
+          }
+        }
+      }
       return {
         state,
         object,
+        crucibleId,
+        contextRoundtrip,
         requestedResource,
         rowText: row.textContent.trim(),
         info: document.getElementById('info-bar')?.textContent?.trim() || null,

@@ -371,11 +371,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .scene-object-row:hover { background: #262626; border-color: #3a3a3a; }
 .scene-object-row.active { background: #172235; border-color: #2f67c7; color: #fff; }
 .scene-object-row.grouped { margin-left: 14px; width: calc(100% - 14px); }
+.scene-object-row > span:first-child { display: block; min-width: 0; }
 .scene-group-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; background: #1c2426; border: 1px solid #2b3b3f; border-radius: 6px; color: #c8d8dc; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; }
 .scene-group-row:hover { background: #213034; border-color: #3a545a; }
 .scene-group-row.active { background: #142f34; border-color: #248a9d; color: #fff; }
 .scene-object-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
-.scene-object-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 9px 'SF Mono', monospace; color: #666; margin-top: 3px; }
+.scene-object-meta { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 9px 'SF Mono', monospace; color: #666; margin-top: 3px; }
+.scene-object-making-context { color: #8fc7d6; }
 .scene-name-input { width: 100%; min-width: 0; background: transparent; border: 1px solid transparent; color: inherit; font-size: 11px; font-weight: 600; padding: 2px 3px; border-radius: 4px; outline: none; }
 .scene-name-input:focus { background: #181818; border-color: #1976d2; color: #fff; }
 .scene-object-chip { font: 9px 'SF Mono', monospace; color: #8fc7d6; border: 1px solid #28414a; background: #102025; border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
@@ -2775,9 +2777,11 @@ import {
   sampleMotionTrack,
 } from './motion-core.js';
 import {
+  CRUCIBLE_CONTEXT_SCHEMA,
   SCENE_SCHEMA,
   buildSceneDocument,
   isReloadableSceneObjectRecord,
+  normalizeCrucibleContext,
   planSceneRestore,
 } from './scene-persistence-core.js';
 import {
@@ -5372,11 +5376,16 @@ function renderSceneObjectRow(record, options = {}) {
   const typeLabel = record.type || 'object';
   const reloadability = sceneObjectReloadabilityLabel(record);
   const source = record.source || 'no source';
+  const makingContext = record.makingContext;
+  const makingLabel = makingContext
+    ? `Crucible · ${makingContext.crucibleId}${makingContext.result ? ` · ${makingContext.result.kind}` : ''}`
+    : null;
   return `
     <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
         <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name">
         <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
+        ${makingLabel ? `<span class="scene-object-meta scene-object-making-context" title="${escapeHtml(makingContext.makingIntent || makingContext.result?.label || makingContext.result?.id || makingContext.crucibleId)}">${escapeHtml(makingLabel)}</span>` : ''}
       </span>
       <span class="scene-object-actions">
         <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
@@ -5665,6 +5674,7 @@ function registerSceneObject(object, metadata = {}) {
     renderRoute: metadata.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
+    makingContext: normalizeCrucibleContext(metadata.makingContext),
     sceneTransform,
   };
   object.userData.kaminosSceneObject = {
@@ -5680,6 +5690,7 @@ function registerSceneObject(object, metadata = {}) {
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
+    makingContext: record.makingContext,
     sceneTransform: record.sceneTransform,
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
@@ -5736,6 +5747,7 @@ window.kaminosSceneObjectDebugState = function() {
     renderRoute: record.renderRoute || null,
     renderCapabilities: record.renderCapabilities || null,
     renderHandoffSchema: record.renderHandoffSchema || null,
+    makingContext: record.makingContext || null,
   }));
 };
 
@@ -20104,6 +20116,29 @@ function kaminosMeshAssetRouteLabel(path, fileName) {
   return greenroomHumanizeName(source, fileName || 'Mesh asset');
 }
 
+function kaminosCrucibleContextFromSearch(params = new URLSearchParams(window.location.search)) {
+  const crucibleId = params.get('crucible_id');
+  if (!crucibleId) return null;
+  const context = {
+    schema: CRUCIBLE_CONTEXT_SCHEMA,
+    crucibleId,
+    makingIntent: params.get('making_intent') || undefined,
+    armatureId: params.get('armature_id') || undefined,
+    firingId: params.get('firing_id') || undefined,
+    receiptRef: params.get('receipt_ref') || undefined,
+    cartridgeId: params.get('cartridge_id') || undefined,
+  };
+  const resultId = params.get('result_id');
+  if (resultId) {
+    context.result = {
+      id: resultId,
+      kind: params.get('result_kind') || 'cast',
+      label: params.get('result_label') || undefined,
+    };
+  }
+  return normalizeCrucibleContext(context);
+}
+
 function kaminosSplatAssetRouteLabel(path, fileName) {
   const parts = String(path || '').split('/').filter(Boolean);
   const genericFile = /^(output|splat|pointcloud|point-cloud|asset)\.ply$/i.test(fileName || '');
@@ -20148,6 +20183,7 @@ function kaminosMeshAssetRouteFromSearch(params = new URLSearchParams(window.loc
     effectiveUrl,
     fileName,
     label: kaminosMeshAssetRouteLabel(route.requestedPath, fileName),
+    makingContext: kaminosCrucibleContextFromSearch(params),
   };
 }
 
@@ -20182,6 +20218,7 @@ function kaminosSplatAssetRouteFromSearch(params = new URLSearchParams(window.lo
     effectiveUrl,
     fileName,
     label: kaminosSplatAssetRouteLabel(route.requestedPath, fileName),
+    makingContext: kaminosCrucibleContextFromSearch(params),
   };
 }
 
@@ -20216,6 +20253,7 @@ function kaminosImageAssetRouteFromSearch(params = new URLSearchParams(window.lo
     effectiveUrl,
     fileName,
     label: kaminosImageAssetRouteLabel(route.requestedPath, fileName),
+    makingContext: kaminosCrucibleContextFromSearch(params),
   };
 }
 
@@ -20241,6 +20279,7 @@ async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch
       clear: true,
       metadata: {
         ...greenroomMeshMetadata({ title: route.label }, route.fileName, route.effectiveUrl),
+        makingContext: route.makingContext,
         assetSmokeLink: {
           schema: 'kaminos.asset-smoke-link.v0',
           assetType: 'mesh',
@@ -20303,6 +20342,7 @@ async function loadKaminosSplatAssetRoute(route = kaminosSplatAssetRouteFromSear
         source: route.effectiveUrl,
         fileName: route.fileName,
         label: route.label,
+        makingContext: route.makingContext,
         assetSmokeLink: {
           schema: 'kaminos.asset-smoke-link.v0',
           assetType: 'splat',
@@ -20378,6 +20418,7 @@ async function loadKaminosImageAssetRoute(route = kaminosImageAssetRouteFromSear
         type: 'image',
         fileName: route.fileName,
         label: route.label,
+        makingContext: route.makingContext,
         assetSmokeLink: {
           schema: 'kaminos.asset-smoke-link.v0',
           assetType: 'image',
@@ -21837,6 +21878,7 @@ function serializeSceneObject(entry) {
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
+    makingContext: metadata.makingContext ?? entry.makingContext ?? null,
   };
 }
 
@@ -21932,6 +21974,7 @@ function buildSceneData() {
     groups: serializeSceneGroups(),
     activeObjectId: activeSceneObjectId,
     activeGroupId: activeSceneGroupId,
+    makingContext: activeObject?.makingContext ?? null,
     provenance,
     camera: {
       position: camera.position.toArray(),
