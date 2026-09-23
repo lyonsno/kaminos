@@ -365,6 +365,8 @@ async function main() {
     await saveExport('cutout', 'windows-all-cutout', true);
     await page.locator('[data-tab="masks"]').click();
     await page.setViewportSize({ width: 390, height: 844 });
+    report.failurePhase = 'windows-mobile'; saveReport();
+    await page.locator('#sam-image-unload').scrollIntoViewIfNeeded();
     await capture('windows-mobile');
     await page.setViewportSize({ width: 1440, height: 960 });
     await run('negative', 'a purple submarine with zebra stripes', 'hit', true, baseline?.negativeControl.visualEvidence.output);
