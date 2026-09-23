@@ -85,6 +85,14 @@ assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, s
   advanceEvidence: { ...advanceEvidence, after: { ...advanceEvidence.after,
     frameCount: advanceEvidence.before.frameCount, simStepCount: advanceEvidence.before.simStepCount } } }), /frame counter did not advance/,
   'cumulative nonzero counters cannot certify current flame motion');
+assert.doesNotThrow(() => validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256,
+  expectedPrompt: 'windows', presentation, ...evidence,
+  volume: { ...volume, frameCount: 10, simStepCount: 7 } }),
+'the final rendered-state snapshot may advance beyond the earlier motion witness');
+assert.throws(() => validateSamFlameComposition({ output, bridge, sceneObject, sourceSha256,
+  expectedPrompt: 'windows', presentation, ...evidence,
+  volume: { ...volume, frameCount: 7, simStepCount: 4 } }), /predates the captured live volume state/,
+'the final rendered-state snapshot must not predate the motion witness');
 
 const observedDuringStall = { activeTab: 'masks', samBusy: false,
   volume: { active: false, error: null }, bridge: { maskOverlayCount: 1, maskOverlay: { visible: false } } };

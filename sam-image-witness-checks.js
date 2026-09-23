@@ -56,8 +56,8 @@ export function validateSamFlameComposition({ output, bridge, sceneObject, sourc
   check(volume?.active === true && typeof volume.backend === 'string' && volume.backend.startsWith('WebGPU:'),
     'live flame is not active on WebGPU');
   const advance = validateSamFlameAdvance(advanceEvidence?.before, advanceEvidence?.after, advanceEvidence?.observedMs);
-  check(advance.afterFrameCount === volume.frameCount && advance.afterSimStepCount === volume.simStepCount,
-    'flame advance witness does not end at the captured live volume state');
+  check(advance.afterFrameCount <= volume.frameCount && advance.afterSimStepCount <= volume.simStepCount,
+    'flame advance witness predates the captured live volume state');
   check(bridge?.presentation === 'source-image-mask-overlay' && bridge.maskOverlayCount === 1,
     'live renderer did not select the source-image mask presentation');
   const overlay = bridge.maskOverlay;
