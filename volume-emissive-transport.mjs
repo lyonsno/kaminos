@@ -268,7 +268,7 @@ fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
   if (any(c>=vec3<u32>(LIGHT_GRID))) { return; }
   var coefficients = vec4<f32>(0.0);
   for(var k=0u;k<8u;k++) {
-    let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
+    let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.25))*0.5;
     let p = (vec3<f32>(c)+offset)*(2.0/f32(LIGHT_GRID))-vec3<f32>(1.0);
     let r = sampleWorldFlowReconstructionRaw(p);
     let support = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));

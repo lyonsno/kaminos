@@ -43,6 +43,8 @@ assert.equal(energyAt({y:1},{x:0.2,y:0.3,z:0.4},{z:0.5},false),1*0.65+0.2+0.3*0.
 assert.match(EMISSIVE_TRANSPORT_WGSL,/let transported = u\.emissive_material\.w > 0\.5/);
 assert.match(EMISSIVE_TRANSPORT_WGSL,/let energy = emissiveHeatSource\(m, f, d, transported\)/);
 assert.match(EMISSIVE_TRANSPORT_WGSL,/let hotSoot = emissiveSootPopulation\(coverage, sootYield, u\.physical_fire\.w, smokeAmount, transported\)/);
+assert.match(EMISSIVE_TRANSPORT_WGSL,/vec3<f32>\(f32\(k&1u\),f32\(\(k>>1u\)&1u\),f32\(\(k>>2u\)&1u\)\)\+vec3<f32>\(0\.25\)\)\*0\.5/,
+  'diagnostic integration phase uses one-eighth/five-eighths within-cell samples');
 // Production-linked shader contract, not just the CPU reference: channel-wise
 // shoulder and selection must remain on the actual camera path. Existing native
 // captures establish compilation/output; this narrow guard protects the formula.
