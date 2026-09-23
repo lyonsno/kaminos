@@ -539,6 +539,16 @@ try {
     heldShearPreview.shearContactPreview?.sourceTopologyEpoch === shearPreviewBaseline.geometrySidecar?.topologyEpoch &&
     heldShearPreview.shearContactPreview?.sourceConnectivityEpoch === shearPreviewBaseline.geometrySidecar?.connectivityEpoch &&
     heldShearPreview.shearContactPreview?.structuralMutationAuthority === false;
+  report.checks.authoredBellPreviewCrownPlacement = !bellTowerRequested || (
+    heldShearPreview.authoredBellPreviewCrown?.status === 'active' &&
+    heldShearPreview.authoredBellPreviewCrown.operationMode === 'shear' &&
+    heldShearPreview.authoredBellPreviewCrown.assetAnchorId === 'asset-anchor:n279' &&
+    heldShearPreview.authoredBellPreviewCrown.crownError <= 0.000001
+  );
+  assertCheck(
+    report.checks.authoredBellPreviewCrownPlacement,
+    'held Shear preview did not preserve the authored bell crown relative to its shared graph anchor',
+  );
   if (sympatheticCitadelRequested) {
     const baselineProjection = shearPreviewBaseline.sympatheticCitadel;
     const heldProjection = heldShearPreview.sympatheticCitadel;
@@ -970,6 +980,12 @@ try {
     heldBindPreview.bindContactPreview?.maxOffset > 0.000001 &&
     heldBindPreview.bindContactPreview?.renderedMaxAcceptedDelta > 0.000001 &&
     heldBindPreview.bindContactPreview?.renderedMaxPreviewError <= 0.000001;
+  report.checks.authoredBellBindPreviewCrownPlacement = !bellTowerRequested || (
+    heldBindPreview.authoredBellPreviewCrown?.status === 'active' &&
+    heldBindPreview.authoredBellPreviewCrown.operationMode === 'bind' &&
+    heldBindPreview.authoredBellPreviewCrown.assetAnchorId === 'asset-anchor:n279' &&
+    heldBindPreview.authoredBellPreviewCrown.crownError <= 0.000001
+  );
   report.checks.bindPreviewAdvancedWhileGpuHeld =
     heldBindPreviewSamples.length === 3 &&
     heldBindPreviewSamples.every(sample =>
@@ -1007,6 +1023,10 @@ try {
   assertCheck(
     report.checks.bindPreviewPrecededGpuAcceptance,
     'held GPU Bind did not produce immediate rendered contact compliance',
+  );
+  assertCheck(
+    report.checks.authoredBellBindPreviewCrownPlacement,
+    'held Bind preview did not preserve the authored bell crown relative to its shared graph anchor',
   );
   assertCheck(
     report.checks.bindPreviewAdvancedWhileGpuHeld,

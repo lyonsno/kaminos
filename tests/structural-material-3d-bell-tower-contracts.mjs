@@ -18,6 +18,7 @@ import { buildEffigyTileGeometrySidecar } from '../structural-material-3d-geomet
 const root = new URL('..', import.meta.url).pathname;
 const pageSource = readFileSync(join(root, 'structural-material-3d.html'), 'utf8');
 const witnessSource = readFileSync(join(root, 'structural-material-3d-webgpu-hot-sidecar-witness.mjs'), 'utf8');
+const cameraWitnessSource = readFileSync(join(root, 'structural-material-3d-camera-witness.mjs'), 'utf8');
 const greenroomSource = readFileSync(
   join(root, 'structural-material-3d-bell-tower-greenroom-launch.mjs'),
   'utf8',
@@ -146,6 +147,26 @@ assert.equal(
 );
 assert.match(pageSource, /GLTFLoader/);
 assert.match(pageSource, /BellVisual/);
+assert.ok(
+  pageSource.includes('intersectObjects(world.children, true)'),
+  'ray picking must descend into authored bell meshes inside their crown-pivot group',
+);
+assert.ok(
+  pageSource.includes('isVisibleEffigyObject(intersection.object)'),
+  'hidden node glyphs must not claim hits in front of visible authored bell geometry',
+);
+assert.ok(
+  pageSource.includes('authoredBellPreviewCrownWitness'),
+  'contact preview must preserve and expose the authored bell crown pivot',
+);
+assert.ok(
+  witnessSource.includes('authoredBellPreviewCrownPlacement'),
+  'browser witness must check the visible bell crown during incremental contact preview',
+);
+assert.ok(
+  cameraWitnessSource.includes('bellAssetPickIdentity'),
+  'camera witness must prove n279 was hit through the authored bell mesh, not a coincident node glyph',
+);
 assert.equal(bellAsset.prototype.attachmentSocketId, 'bell-crown-v0');
 assert.equal(bellAsset.pivotAuthority, 'bell-crown-v0');
 assert.deepEqual(bellAsset.currentTranslation, initialBell.currentCrown);

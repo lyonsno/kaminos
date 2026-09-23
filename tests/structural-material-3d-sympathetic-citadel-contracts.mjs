@@ -89,8 +89,8 @@ assert.match(
 );
 assert.match(
   pageSource,
-  /intersectObjects\(world\.children, false\)/,
-  'picking must stay confined to the effigy rather than ambiguously selecting the represented citadel',
+  /intersectObjects\(world\.children, true\)/,
+  'picking must recurse within the effigy so registered authored-asset meshes remain selectable without raycasting the represented citadel',
 );
 assert.match(
   witnessSource,

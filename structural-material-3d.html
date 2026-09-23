@@ -555,6 +555,14 @@
       );
     }
 
+    function worldOffset(value = {}) {
+      return new THREE.Vector3(
+        (value.x || 0) * 2.35,
+        -(value.y || 0) * 1.25,
+        (value.z || 0) * 0.95,
+      );
+    }
+
     function worldPoint(node) {
       return worldCoordinate({
         x: node.x + node.displacement.x,
@@ -850,6 +858,7 @@
           renderedVisual = new THREE.Mesh(bellFallbackGeometry, bellMaterial);
           bellMesh.add(renderedVisual);
           renderedVisual.userData.structuralPick = { kind: 'node', id: bellAnchor.structuralNodeId };
+          renderedVisual.userData.structuralAssetAnchorId = bellAnchor.id;
           authoredBellVisualRoute.fallbackUsed = true;
         }
         const previewOffset = contactPreviewOffsetByNodeId.get(bellAnchor.structuralNodeId);
@@ -1016,6 +1025,35 @@
         });
       }
       return consumers;
+    }
+
+    function authoredBellPreviewCrownWitness() {
+      world.updateMatrixWorld(true);
+      const preview = bindContactPreview || shearContactPreview;
+      const bell = world.children.find(child =>
+        child.userData?.sympatheticProjection?.consumerId === 'operator-effigy' &&
+        ['authored-asset-visual', 'authored-asset-fallback'].includes(
+          child.userData.sympatheticProjection.kind,
+        ));
+      const anchor = bell?.userData.structuralAssetAnchor;
+      if (!preview || preview.status !== 'active' || !bell || !anchor?.acceptedCrownPoint) {
+        return { status: 'inactive', previewStatus: preview?.status || null };
+      }
+      const previewOffset = preview.nodeOffsets.find(entry =>
+        entry.nodeId === anchor.structuralNodeId)?.offset || null;
+      const expectedLocal = worldCoordinate(anchor.acceptedCrownPoint).add(worldOffset(previewOffset));
+      const expectedWorld = world.localToWorld(expectedLocal.clone());
+      const renderedWorld = bell.getWorldPosition(new THREE.Vector3());
+      return {
+        status: 'active',
+        operationMode: preview.operationMode,
+        assetAnchorId: anchor.id,
+        structuralNodeId: anchor.structuralNodeId,
+        previewOffset,
+        expectedWorldCrown: expectedWorld.toArray(),
+        renderedWorldCrown: renderedWorld.toArray(),
+        crownError: renderedWorld.distanceTo(expectedWorld),
+      };
     }
 
     function detachedDynamicsHasMovingBodies() {
@@ -1389,6 +1427,17 @@
         if (structuralPick?.kind === 'node' && changedNodeIds.has(structuralPick.id)) {
           const node = nodeById.get(structuralPick.id);
           const offset = nextOffsets.get(node.id);
+          const projection = child.userData.sympatheticProjection;
+          const assetAnchor = child.userData.structuralAssetAnchor;
+          if (
+            ['authored-asset-visual', 'authored-asset-fallback'].includes(projection?.kind) &&
+            assetAnchor?.acceptedCrownPoint
+          ) {
+            child.position.copy(
+              worldCoordinate(assetAnchor.acceptedCrownPoint).add(worldOffset(offset)),
+            );
+            continue;
+          }
           child.position.copy(worldCoordinate({
             x: node.x + node.displacement.x + (offset?.x || 0),
             y: node.y + node.displacement.y + (offset?.y || 0),
@@ -1588,6 +1637,14 @@
       };
     }
 
+    function isVisibleEffigyObject(object) {
+      for (let current = object; current && current !== world.parent; current = current.parent) {
+        if (!current.visible) return false;
+        if (current === world) return true;
+      }
+      return false;
+    }
+
     function pickStructuralContact(event) {
       const point = eventPoint(event);
       structuralPointerNdc.set(point.x * 2 - 1, 1 - point.y * 2);
@@ -1595,8 +1652,10 @@
       world.updateMatrixWorld(true);
       structuralRaycaster.setFromCamera(structuralPointerNdc, camera);
       const hit = structuralRaycaster
-        .intersectObjects(world.children, false)
-        .find(intersection => intersection.object.userData.effigySurfacePick || intersection.object.userData.structuralPick);
+        .intersectObjects(world.children, true)
+        .find(intersection =>
+          isVisibleEffigyObject(intersection.object) &&
+          (intersection.object.userData.effigySurfacePick || intersection.object.userData.structuralPick));
       if (!hit) return null;
       const effigySurfacePick = hit.object.userData.effigySurfacePick;
       if (effigySurfacePick) {
@@ -1652,6 +1711,7 @@
       return {
         ...contact,
         distance: hit.distance,
+        assetAnchorId: hit.object.userData.structuralAssetAnchorId || null,
       };
     }
 
@@ -1668,6 +1728,7 @@
           return {
             kind: child.userData.structuralPick.kind,
             id: child.userData.structuralPick.id,
+            assetAnchorId: child.userData.structuralAssetAnchor?.id || null,
             structuralRole: node.structuralRole || 'masonry',
             restPoint: { x: node.x, y: node.y, z: node.z },
             displayPoint: {
@@ -1694,7 +1755,8 @@
     function projectedStructuralPickTarget() {
       const candidates = projectedStructuralPickTargets();
       return bellTowerMode
-        ? candidates.find(candidate => candidate.structuralRole === 'bell-body') || null
+        ? candidates.find(candidate =>
+          candidate.structuralRole === 'bell-body' && candidate.assetAnchorId) || null
         : candidates[0] || null;
     }
 
@@ -2284,6 +2346,7 @@
       sympatheticCitadel: sympatheticCitadelWitness(),
       authoredBellVisual: structuredClone(authoredBellVisualRoute),
       authoredBellConsumers: authoredBellRenderWitness(),
+      authoredBellPreviewCrown: authoredBellPreviewCrownWitness(),
       detachedDynamics: bellTowerMode ? structuredClone(detachedDynamics) : null,
       detachedDynamicsRendered: bellTowerMode ? detachedDynamicsRenderWitness() : null,
       detachedDynamicsClock: bellTowerMode ? {

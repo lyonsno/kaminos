@@ -94,7 +94,12 @@ async function connectCdp(debugPort) {
       awaitPromise,
       returnByValue: true,
     });
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
+    if (result.exceptionDetails) {
+      throw new Error(
+        result.exceptionDetails.exception?.description ||
+        `${result.exceptionDetails.text} at ${result.exceptionDetails.url || 'unknown'}:${result.exceptionDetails.lineNumber ?? '?'}`,
+      );
+    }
     return result.result.value;
   };
   return { socket, send, evaluate, runtimeErrors };
@@ -234,7 +239,12 @@ try {
   const beforeMaterialDrag = await evaluate('window.__structuralMaterial3dCameraWitness()');
   const initialPickTarget = await evaluate('window.__structuralMaterial3dPickTarget()');
   assertCheck(initialPickTarget, 'page exposed no projected structural pick target');
+  report.lastTrustworthyEvidence = {
+    phase: 'material-drag-target',
+    initialPickTarget,
+  };
   const dragStart = { x: initialPickTarget.clientX, y: initialPickTarget.clientY };
+  const bellTowerRequested = new URL(config.url).searchParams.get('bellTower') === '1';
   const dragEnd = { x: dragStart.x + canvasRect.width * 0.2, y: dragStart.y + canvasRect.height * 0.08 };
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...dragStart, button: 'left', buttons: 1, clickCount: 1 });
   await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...dragEnd, button: 'left', buttons: 1 });
@@ -244,9 +254,17 @@ try {
   report.checks.materialDragPreservedCamera = sameState(beforeMaterialDrag, afterMaterialDrag);
   report.checks.materialDragProducedForce = structuralAfterDrag.forceEnvelope?.dragLength > 0;
   report.checks.materialDragWasPicked = structuralAfterDrag.interactionDiagnostics?.pick !== null;
+  report.checks.bellAssetPickIdentity = !bellTowerRequested || (
+    initialPickTarget.assetAnchorId === `asset-anchor:${initialPickTarget.id}` &&
+    structuralAfterDrag.interactionDiagnostics?.pick?.assetAnchorId === initialPickTarget.assetAnchorId
+  );
   assertCheck(report.checks.materialDragPreservedCamera, 'material drag changed camera state');
   assertCheck(report.checks.materialDragProducedForce, 'material drag produced no force envelope');
   assertCheck(report.checks.materialDragWasPicked, 'material drag lacked a structural pick receipt');
+  assertCheck(
+    report.checks.bellAssetPickIdentity,
+    'bell drag did not hit the visible authored mesh carrying the selected structural asset anchor',
+  );
 
   report.failurePhase = 'background-primary-orbit';
   const missCandidates = [point(0.06, 0.9), point(0.94, 0.9), point(0.06, 0.16), point(0.94, 0.16)];

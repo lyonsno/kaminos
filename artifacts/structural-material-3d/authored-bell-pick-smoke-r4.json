@@ -1,0 +1,54 @@
+{
+  "schema": "kaminos.structural-material.camera-browser-witness.v0",
+  "status": "failed",
+  "failurePhase": "material-drag",
+  "requestedRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "effectiveRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "requestedCameraAuthority": "operator-camera-controls-v0",
+  "effectiveCameraAuthority": "operator-camera-controls-v0",
+  "requestedConfig": {
+    "url": "http://127.0.0.1:8401/structural-material-3d.html?sympatheticCitadel=1&bellTower=1",
+    "debugPort": 9335,
+    "width": 1280,
+    "height": 820,
+    "deviceScaleFactor": 1,
+    "loadTimeoutMs": 30000,
+    "reportPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-pick-smoke-r4.json",
+    "screenshotPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-pick-smoke-r4.png"
+  },
+  "effectiveConfig": {
+    "url": "http://127.0.0.1:8401/structural-material-3d.html?sympatheticCitadel=1&bellTower=1",
+    "debugPort": 9335,
+    "loadTimeoutMs": 30000,
+    "initialViewport": {
+      "width": 1280,
+      "height": 820,
+      "deviceScaleFactor": 1
+    },
+    "reportPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-pick-smoke-r4.json",
+    "screenshotPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/authored-bell-pick-smoke-r4.png",
+    "browserTarget": "first-page-target"
+  },
+  "checks": {
+    "routeIdentity": true,
+    "cameraAuthority": true,
+    "idlePointerPreservedCamera": true,
+    "buttonIsolationPassed": true
+  },
+  "pixelProbe": null,
+  "runtimeErrors": [],
+  "lastTrustworthyEvidence": {
+    "phase": "page-load",
+    "canvasRect": {
+      "left": 0,
+      "top": 55,
+      "width": 1280,
+      "height": 765
+    }
+  },
+  "error": {
+    "name": "Error",
+    "message": "Uncaught",
+    "stack": "Error: Uncaught\n    at evaluate (file:///private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/structural-material-3d-camera-witness.mjs:97:40)\n    at async file:///private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/structural-material-3d-camera-witness.mjs:244:31"
+  }
+}
