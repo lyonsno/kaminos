@@ -4978,7 +4978,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
   let endT = select(min(hit.y, sceneDepthEndT), 2.0, fullGridCapture);
   let dtBase = (endT - startT) / steps;
-  let jitter = dtBase * 0.5;
+  let jitter = dtBase * 0.75;
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
