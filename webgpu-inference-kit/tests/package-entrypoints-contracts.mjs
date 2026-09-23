@@ -6,6 +6,8 @@ const packageRoot = new URL('../', import.meta.url);
 const packageJson = JSON.parse(await readFile(new URL('package.json', packageRoot), 'utf8'));
 assert.equal(packageJson.exports['./core'], './src/core.js', 'publish the model-neutral core entrypoint');
 assert.equal(packageJson.exports['./sam'], './src/sam.js', 'publish the SAM entrypoint');
+assert.equal('./examples/sequential-consumer-host' in packageJson.exports, false,
+  'do not publish a host adapter that accepts pre-admitted consumers without composing them');
 
 // Use the JavaScript module linker, not text matching, to inspect transitive imports.
 const modules = new Map();
