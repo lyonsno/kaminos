@@ -3,6 +3,18 @@ import { createHash } from 'node:crypto';
 import { closeSync, mkdirSync, openSync, renameSync, writeFileSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 
+export function persistSamCaptureObservation({ report, name, path, pixels, saveReport }) {
+  assert.ok(Array.isArray(report?.captures), 'capture report is required');
+  assert.ok(typeof name === 'string' && name.length, 'capture name is required');
+  assert.ok(typeof path === 'string' && path.length, 'capture path is required');
+  assert.ok(pixels && typeof pixels === 'object', 'capture diagnostics are required');
+  assert.equal(typeof saveReport, 'function', 'capture report writer is required');
+  const capture = { name, path, pixels, validation: 'pending', screenshotCaptured: false };
+  report.captures.push(capture);
+  saveReport();
+  return capture;
+}
+
 export async function persistSamEvidenceArtifact({ outDir, label, transferId, totalLength, readChunk, chunkSize = 262144 }) {
   assert.ok(typeof outDir === 'string' && outDir.length, 'evidence output directory is required');
   assert.match(label, /^[a-z0-9-]+$/, 'evidence label must be filesystem-safe');

@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { validateSamConsumerInteraction } from './sam-image-witness-checks.js';
-import { persistSamEvidenceArtifact, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
+import { persistSamCaptureObservation, persistSamEvidenceArtifact, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
 export { validateSamConsumerInteraction, validateSamConsumerExport } from './sam-image-witness-checks.js';
 
 export function validateSamConsumerOutput(output, { prompt, empty, previousId, cache }) {
@@ -138,15 +138,39 @@ async function main() {
           const r = button.getBoundingClientRect();
           return r.width && r.height && r.top >= 0 && r.bottom <= innerHeight && !button.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
         }).map(button => button.id || button.textContent);
+        const overflowingElements = [...document.querySelectorAll('*')].filter(element => {
+          const elementRect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return elementRect.width > 0 && elementRect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+            && (elementRect.left < -0.5 || elementRect.right > innerWidth + 0.5 || element.scrollWidth > element.clientWidth + 1);
+        }).map(element => {
+          const elementRect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return { tag: element.tagName.toLowerCase(), id: element.id || null,
+            className: typeof element.className === 'string' ? element.className : null,
+            text: (element.innerText || element.textContent || '').trim(),
+            rect: elementRect.toJSON(), clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+            overflowX: style.overflowX, minWidth: style.minWidth, whiteSpace: style.whiteSpace };
+        });
         return { width: copy.width, height: copy.height, visible, rect: rect.toJSON(), occlusions,
-          horizontalOverflow: document.documentElement.scrollWidth > innerWidth };
+          viewportWidth: innerWidth, viewportHeight: innerHeight, devicePixelRatio,
+          documentClientWidth: document.documentElement.clientWidth,
+          documentScrollWidth: document.documentElement.scrollWidth,
+          bodyClientWidth: document.body.clientWidth, bodyScrollWidth: document.body.scrollWidth,
+          horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+          overflowingElements };
       }));
-      assert.ok(pixels.visible > 0, 'blank image canvas');
-      assert.equal(pixels.horizontalOverflow, false, 'horizontal overflow');
-      assert.deepEqual(pixels.occlusions, [], 'occluded image controls');
       const path = join(out, `${name}.png`);
+      const captureRecord = persistSamCaptureObservation({ report, name, path, pixels, saveReport });
       await checked(page.screenshot({ path, fullPage: true }));
-      report.captures.push({ name, path, pixels }); saveReport();
+      captureRecord.screenshotCaptured = true;
+      saveReport();
+      assert.ok(pixels.visible > 0, 'blank image canvas');
+      assert.equal(pixels.horizontalOverflow, false,
+        `horizontal overflow: viewport=${pixels.viewportWidth}, document=${pixels.documentScrollWidth}, body=${pixels.bodyScrollWidth}, candidates=${JSON.stringify(pixels.overflowingElements)}`);
+      assert.deepEqual(pixels.occlusions, [], 'occluded image controls');
+      captureRecord.validation = 'passed';
+      saveReport();
     }
     async function snapshot(label) {
       const captured = await checked(page.evaluate(() => {

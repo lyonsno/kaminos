@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { persistSamCaptureObservation } from '../sam-image-witness-report.mjs';
 
 const witness = new URL('../sam-image-witness.mjs', import.meta.url);
 assert.ok(existsSync(witness), 'the actual Kaminos consumer needs a rerunnable image-to-export witness');
@@ -25,6 +26,23 @@ for (const override of [{ outputAuthority: 'cpu-oracle' }, { verificationState: 
 }
 assert.throws(() => validateSamConsumerOutput(output, { ...expected, previousId: 'new' }), /reused/);
 assert.throws(() => validateSamConsumerOutput(output, { ...expected, empty: true }), /empty/);
+const captureReport = { captures: [] };
+let durableCapture = null;
+const failedMobileCapture = persistSamCaptureObservation({ report: captureReport, name: 'windows-mobile',
+  path: '/evidence/windows-mobile.png', pixels: { viewportWidth: 390, documentScrollWidth: 412,
+    bodyScrollWidth: 412, overflowingElements: [{ id: 'sam-image-results', right: 412 }] },
+  saveReport: () => { durableCapture = JSON.parse(JSON.stringify(captureReport)); },
+});
+assert.equal(failedMobileCapture.validation, 'pending');
+assert.equal(durableCapture.captures[0].pixels.documentScrollWidth, 412,
+  'failed mobile assertions must retain the viewport and document width before validation');
+assert.throws(() => {
+  if (failedMobileCapture.pixels.documentScrollWidth > failedMobileCapture.pixels.viewportWidth) {
+    throw new Error('horizontal overflow');
+  }
+}, /horizontal overflow/);
+assert.equal(durableCapture.captures[0].validation, 'pending',
+  'a failed capture must remain visibly unvalidated in the durable report');
 const live = { sameDevice: true, sameRendererDevice: true, invocation: { invocationId: 'new', startedAtMs: 10, completedAtMs: 100 },
   foreground: { failure: null, inputs: [{ id: 1, receivedAtMs: 30, type: 'wheel', trusted: true, zoom: 2, panX: 0, panY: 0 }],
     frames: [{ submittedAtMs: 5, inputIds: [], zoom: 1, panX: 0, panY: 0 },
