@@ -17,6 +17,7 @@ assert.match(source, /embeddingFixtureSha256/, 'a replayed embedding is tied to 
 assert.match(source, /screenshot/, 'the witness captures a human-inspectable rendered frame');
 assert.match(source, /total-timeout-ms/, 'the witness has a bounded total product-run deadline');
 assert.match(source, /no-progress-timeout-ms/, 'the witness distinguishes a no-progress wedge from merely slow generation');
+assert.match(source, /\['full-pass', 'fence-light', 'single-layer'\]\.includes\(values\.schedule\)/, 'the native witness accepts only its two references and the opt-in single-layer arm');
 assert.match(source, /lastRun\.foregroundReceipts/, 'the witness adjudicates receipts from the current run rather than page-global history');
 assert.match(source, /validateSuccessfulRun/, 'the witness delegates same-run receipt and flame-progress adjudication to the executable contract');
 assert.match(injectSource, /scheduleMode:\s*scheduling\.mode/, 'the producer receives the selected schedule identity alongside its numeric knobs');

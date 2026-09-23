@@ -24,7 +24,7 @@ assert.match(source, /record\.pageP95Ms\s*=\s*percentile\(record\.frameIntervals
 assert.match(source, /record\.pageP99Ms\s*=\s*percentile\(record\.frameIntervals,\s*\.99\)/, 'each run computes p99 from its own frame interval window');
 assert.match(source, /record\.pageMaxMs\s*=\s*record\.frameIntervals\.length\s*\?\s*Math\.max\(\.\.\.record\.frameIntervals\)\s*:\s*null/, 'each run records the worst observed frame interval without inventing an empty-run value');
 assert.doesNotMatch(source, /frameIntervals\.length\s*>|samples\.length\s*>|\.splice\(|\.shift\(\)/, 'diagnostic history remains uncapped so a long run cannot erase its own contention evidence');
-assert.match(source, /value="full-pass".*value="fence-light"/s, 'the lab retains an explicit full-pass reference alongside the opt-in split');
+assert.match(source, /value="full-pass".*value="fence-light".*value="single-layer"/s, 'the lab retains full-pass and four-layer references alongside the opt-in single-layer schedule');
 assert.match(source, /foreground:\s*flame\.ordinaryForeground\s*\?\s*\{\s*\.\.\.flame\.ordinaryForeground\s*\}/, 'historical foreground counters are copied at sample time');
 
 let unsafeProducerDisposals = 0;

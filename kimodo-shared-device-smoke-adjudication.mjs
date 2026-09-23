@@ -17,8 +17,12 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
   if (terminal?.status !== 'succeeded') throw new Error(terminal?.lastError?.message || `Generation ended as ${terminal?.status || 'missing'}`);
   const run = terminal.runs?.at(-1);
   if (requestedSchedule !== null) {
-    const split = requestedSchedule === 'fence-light';
-    const layers = split ? 4 : 16, chunks = split ? 4 : 1, capacity = split ? 4 : 2;
+    const schedule = {
+      'full-pass': { layers: 16, chunks: 1, capacity: 2 },
+      'fence-light': { layers: 4, chunks: 4, capacity: 4 },
+      'single-layer': { layers: 1, chunks: 16, capacity: 4 },
+    }[requestedSchedule];
+    const { layers, chunks, capacity } = schedule ?? {};
     const passNames = ['cond-root', 'cond-body', 'uncond-root', 'uncond-body'];
     const generationId = run?.generationId;
     const steps = run?.steps;
@@ -32,7 +36,7 @@ export function validateSuccessfulRun(terminal, requestedSchedule = null) {
     ];
     const summariesAgree = (...summaries) => summaries.every(summary => summary != null)
       && countFields.every(field => summaries.every(summary => summary[field] === summaries[0][field]));
-    if (!['full-pass', 'fence-light'].includes(requestedSchedule)
+    if (!schedule
       || !Number.isSafeInteger(generationId) || generationId <= 0
       || !Number.isSafeInteger(steps) || steps <= 0
       || run?.scheduling?.mode !== requestedSchedule

@@ -57,9 +57,14 @@ assert.throws(
   'requested split cannot close on missing or full-pass effective scheduling',
 );
 
-function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGenerationId = generationId } = {}) {
+function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGenerationId = generationId, scheduleMode = 'fence-light' } = {}) {
   const runId = 'run-current';
-  const layersPerDuty = 4, chunksPerPass = 4, maxInFlightDuties = 4, steps = 1;
+  const schedule = {
+    'fence-light': { layersPerDuty: 4, chunksPerPass: 4, maxInFlightDuties: 4 },
+    'single-layer': { layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 4 },
+  }[scheduleMode];
+  const { layersPerDuty, chunksPerPass, maxInFlightDuties } = schedule;
+  const steps = 1;
   const passNames = ['cond-root', 'cond-body', 'uncond-root', 'uncond-body'];
   const passes = [], duties = [];
   for (let step = 1; step <= steps; step++) {
@@ -85,14 +90,14 @@ function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGen
     runId,
     generationId,
     steps,
-    scheduling: { mode: 'fence-light', layersPerDuty, chunksPerPass, maxInFlightDuties },
+    scheduling: { mode: scheduleMode, layersPerDuty, chunksPerPass, maxInFlightDuties },
     receipt: { generationId, metadata: { gpuSubmission: summary } },
     submission: summary,
     diagnostics: {
       generationId: diagnosticGenerationId,
       numSteps: steps,
-      scheduleMode: 'fence-light',
-      scheduling: { mode: 'fence-light', layersPerDuty, chunksPerPass, maxInFlightDuties },
+      scheduleMode,
+      scheduling: { mode: scheduleMode, layersPerDuty, chunksPerPass, maxInFlightDuties },
       passes,
       submissionReport: { status: 'drained', duties, ...summary },
     },
@@ -102,9 +107,9 @@ function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGen
       scheduler: {
         mode: 'cooperative-foreground-boundary',
         requestedMaxInFlightDuties: maxInFlightDuties,
-        boundariesPerStep: 16,
+        boundariesPerStep: 4 * chunksPerPass,
         expectedForegroundBoundaryCount: expected,
-        observedForegroundBoundaryCount: observedBoundaries,
+        observedForegroundBoundaryCount: observedBoundaries ?? expected,
         lastBoundary: { phase: 'ddim-sampling', ...passes.at(-1) },
       },
     },
@@ -112,6 +117,16 @@ function scheduledRun({ generationId = 9, observedBoundaries = 16, diagnosticGen
 }
 const scheduledTerminal = run => ({ status: 'succeeded', runs: [run] });
 assert.equal(validateSuccessfulRun(scheduledTerminal(scheduledRun()), 'fence-light').generationId, 9);
+assert.equal(
+  validateSuccessfulRun(scheduledTerminal(scheduledRun({ scheduleMode: 'single-layer', observedBoundaries: null })), 'single-layer').diagnostics.passes.length,
+  64,
+  'single-layer terminal acceptance requires all sixteen layer duties in each of four passes',
+);
+assert.throws(
+  () => validateSuccessfulRun(scheduledTerminal(scheduledRun({ scheduleMode: 'single-layer', observedBoundaries: 1 })), 'single-layer'),
+  /boundary|telemetry/,
+  'one foreground receipt cannot close a sixty-four-opportunity one-step single-layer schedule',
+);
 assert.throws(
   () => validateSuccessfulRun(scheduledTerminal(scheduledRun({ diagnosticGenerationId: 1 })), 'fence-light'),
   /generation/,

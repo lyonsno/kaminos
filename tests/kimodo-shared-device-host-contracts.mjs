@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 const {
   KIMODO_SHARED_DEVICE_ROUTE,
+  kimodoSubmissionSchedule,
   connectKimodoSharedDeviceForeground,
   snapshotKimodoSharedDevice,
 } = await import('../kimodo-shared-device-host.mjs');
@@ -41,6 +42,9 @@ const sharedGpu = {
 
 assert.equal(snapshotKimodoSharedDevice(sharedGpu).deviceTopology, 'same-device');
 assert.equal(KIMODO_SHARED_DEVICE_ROUTE, 'kimodo.text-to-motion.webgpu-local.v0');
+assert.deepEqual(kimodoSubmissionSchedule('single-layer'), {
+  mode: 'single-layer', layersPerDuty: 1, chunksPerPass: 16, maxInFlightDuties: 4,
+}, 'single-layer is explicit, isolated from the full-pass default, and keeps the four-duty capacity fixed');
 assert.throws(
   () => snapshotKimodoSharedDevice({ ...sharedGpu, queue: { submit() {} } }),
   /exact queue/,
