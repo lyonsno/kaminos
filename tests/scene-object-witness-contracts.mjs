@@ -278,6 +278,10 @@ assert.match(witness, /wrongAnchorRejected/, 'painted-pair browser witness inclu
 assert.match(witness, /stayed at its pre-pose location during live bone rotation/, 'painted-pair browser witness fails if a selected-cast cue goes stale after pose changes');
 assert.match(indexHtml, /anchorLocal/, 'painted-pair callout stores its attachment in the live mesh local frame');
 assert.match(indexHtml, /refreshSkinnedPoseCastMarkerAnchor/, 'painted-pair callout refreshes its anchor after selected bone rotation');
+const skinnedBoneDeltaAdapter = indexHtml.match(/window\.kaminosSetSkinnedBoneDelta = function\(id, meshIndex, boneName, axis, degrees\) \{([\s\S]*?)\n\};/);
+assert.ok(skinnedBoneDeltaAdapter, 'painted-pair direct pose adapter remains addressable');
+assert.match(skinnedBoneDeltaAdapter[1], /const rigState = window\.kaminosSkinnedRigDebugState\(id\);\s*refreshSkinnedPoseCastMarkerAnchor\(mesh\);\s*return rigState;/, 'every direct bone-pose mutation refreshes a matching selected-cast cue after live bounds recomputation');
+assert.match(witness, /direct pose adapter left the selected-cast cue stale/, 'painted-pair browser witness rejects stale cue after direct bone-pose mutation');
 assert.match(indexHtml, /viewportBoundsCenter:\s*skinnedPoseViewportBoundsCenter\(box\)/, 'painted-pair debug state exposes an independently projected current mesh bounds center');
 assert.match(witness, /resetStatusMatchesSelectedCard/, 'painted-pair browser witness preserves active cast/bone/axis context after reset');
 assert.ok(witness.includes('restored, resetErrors, restoredShot, status, resetStatusMatchesSelectedCard'), 'painted-pair browser report serializes the verified reset-status predicate');

@@ -5988,7 +5988,6 @@ function applySkinnedPosePanelInput(panel, axisOverride, degrees) {
   if (!mesh?.skeleton?.bones.some(bone => bone.name === boneName)) return;
   try {
     window.kaminosSetSkinnedBoneDelta(entry.id, meshIndex, boneName, axis, degrees);
-    refreshSkinnedPoseCastMarkerAnchor(mesh);
     const offsets = skinnedPosePreviewOffsets.get(mesh) || new Map();
     offsets.set(boneName, { axis, degrees });
     skinnedPosePreviewOffsets.set(mesh, offsets);
@@ -6139,7 +6138,9 @@ window.kaminosSetSkinnedBoneDelta = function(id, meshIndex, boneName, axis, degr
   bone.updateMatrixWorld(true);
   mesh.skeleton.update();
   window._kaminosDirty?.();
-  return window.kaminosSkinnedRigDebugState(id);
+  const rigState = window.kaminosSkinnedRigDebugState(id);
+  refreshSkinnedPoseCastMarkerAnchor(mesh);
+  return rigState;
 };
 
 window.kaminosSplatPreviewDebugState = function(id = null) {
