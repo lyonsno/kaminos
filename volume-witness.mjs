@@ -7,6 +7,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
 import { retiredRaymarchControlReceiptPayload } from './volume-core.js';
 import { assessControlledStepSequence } from './volume-controlled-step-sequence-contract.mjs';
+import { admitFrameOnlySource, verifyFrameOnlyReadback } from './volume-frame-only-contract.mjs';
 import { pressureTierDispatchEvidence } from './volume-pressure-tier-witness-contract.mjs';
 
 function parseCliArgs(argv) {
@@ -168,6 +169,7 @@ const renderScaleAuxiliaryCaptureModes = new Set(String(args.get('--render-scale
 const renderScaleFlowDebugCaptures = renderScaleAuxiliaryCaptureModes.has('flow-debug') || renderScaleAuxiliaryCaptureModes.has('flow_debug');
 const renderScaleBoundarySidecarSupportCaptures = renderScaleAuxiliaryCaptureModes.has('boundary-sidecar-support') || renderScaleAuxiliaryCaptureModes.has('boundary_sidecar_support');
 const controlledStepSequenceRequested = args.has('--controlled-step-sequence') && !['0', 'false', 'no'].includes(String(args.get('--controlled-step-sequence') || '1').toLowerCase());
+const frameOnlyRequested = args.has('--frame-only');
 const controlledStepFrames = Math.max(1, Math.floor(Number(args.get('--controlled-step-frames') || 1)));
 const controlledStepDeltaMs = Math.max(0, Number(args.get('--controlled-step-delta-ms') || 220));
 const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderScaleSetDir);
@@ -2172,6 +2174,100 @@ async function recoverIdentityFrameState(ws, state) {
   };
 }
 
+async function captureFrameOnly(ws, partialControlledStepFrames, source) {
+  const scales = renderScaleSet.length ? renderScaleSet : [1];
+  const frames = [];
+  let sameBrowserSessionId = null;
+  let sequenceStartNowMs = null;
+  for (let index = 0; index < controlledStepFrames; index += 1) {
+    const stepEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+        controlledStepFrameIndex: index,
+        advanceSim: index > 0,
+        sameBrowserSessionId,
+        startNow: sequenceStartNowMs,
+        stepDeltaMs: controlledStepDeltaMs,
+        renderScales: scales,
+        includeRgba: false,
+        compactSamples: true,
+        resumeRenderLoop: false,
+      })})`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    const step = stepEval.result.value;
+    if (step?.ok !== true || step.sequenceAuthority !== 'controlled-step-sequence-v0'
+      || step.scaleSet?.ok !== true || step.scaleSet.samples?.length !== scales.length) {
+      throw new Error(`frame-only controlled step failed: ${JSON.stringify({ index, ok: step?.ok, reason: step?.reason })}`);
+    }
+    sameBrowserSessionId = step.sameBrowserSessionId;
+    sequenceStartNowMs = step.sequenceStartNowMs;
+    const scaleSet = step.scaleSet;
+    const frameDir = resolve(controlledStepDir, `frame-${String(index + 1).padStart(3, '0')}`);
+    mkdirSync(frameDir, { recursive: true });
+    const partial = { controlledStepFrameIndex: index, frameDir, images: [] };
+    partialControlledStepFrames.push(partial);
+    const captures = [];
+    for (let scaleIndex = 0; scaleIndex < scales.length; scaleIndex += 1) {
+      const sample = scaleSet.samples[scaleIndex];
+      const scale = scales[scaleIndex];
+      const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+          renderScale: scale,
+          now: scaleSet.fixedNowMs,
+          sameStateCaptureId: scaleSet.sameStateCaptureId,
+          baseFrameCount: scaleSet.baseFrameCount,
+          baseSimStepCount: scaleSet.baseSimStepCount,
+          includeRgba: true,
+          resumeRenderLoop: false,
+        })})`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const canvas = canvasEval.result.value;
+      const rgba = verifyFrameOnlyReadback(canvas, sample, step.controlledStepCapture.afterSimStepCount);
+      const imagePath = resolve(frameDir, `${controlledStepPrefix}-frame-${String(index + 1).padStart(3, '0')}-${scaleSlug(scale)}.png`);
+      writeRgbaPng(imagePath, canvas.image.width, canvas.image.height, rgba);
+      partial.images.push(imagePath);
+      const hash = createHash('sha256').update(rgba).digest('hex');
+      captures.push({
+        role: sample.role,
+        requestedRenderScale: scale,
+        renderWidth: sample.renderWidth,
+        renderHeight: sample.renderHeight,
+        imageWidth: canvas.image.width,
+        imageHeight: canvas.image.height,
+        frameCount: canvas.frameCount,
+        simStepCount: canvas.simStepCount,
+        sameStateCaptureId: canvas.sameStateCaptureId,
+        image: { path: imagePath, authority: canvas.imageAuthority, sha256: hash,
+          sourceSimStepCount: canvas.simStepCount, sourceSameStateCaptureId: canvas.sameStateCaptureId },
+      });
+    }
+    frames.push({
+      controlledStepFrameIndex: index,
+      sameBrowserSessionId,
+      controlledStepCapture: step.controlledStepCapture,
+      controlledStepNowMs: step.controlledStepNowMs,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      captures,
+    });
+  }
+  const assessment = assessControlledStepSequence(frames, controlledStepFrames, scales);
+  if (!assessment.frameEvidenceComplete || (controlledStepFrames > 1 && !assessment.stepSequenceVerified)) {
+    throw new Error(`frame-only evidence incomplete: ${JSON.stringify(assessment)}`);
+  }
+  return { identity: 'kaminos-frame-only-inspection-v0', source, requestedRoute: url,
+    cameraPose: { requested: requestedCameraPose, applied: null },
+    requestedFrameCount: controlledStepFrames, renderScales: scales,
+    frameEvidenceComplete: assessment.frameEvidenceComplete,
+    stepSequenceVerified: assessment.stepSequenceVerified,
+    visualJudgment: assessment.visualJudgment,
+    simStepCounts: assessment.simStepCounts,
+    frameImageHashes: assessment.frameImageHashes,
+    frames };
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -2179,7 +2275,17 @@ async function main() {
   let replayedCaptureCamera = null;
   let appliedCameraPose = null;
 
-  const browserSession = await attachOrLaunchSharedBrowser();
+  let browserSession;
+  try {
+    browserSession = await attachOrLaunchSharedBrowser();
+  } catch (error) {
+    if (frameOnlyRequested) {
+      writeFileSync(reportPath, JSON.stringify({ identity: 'kaminos-frame-only-inspection-v0',
+        requestedRoute: url, phase: 'launch', error: error?.message || String(error),
+        partialControlledStepFrames: [] }, null, 2));
+    }
+    throw error;
+  }
 
   let phase = 'launch';
   let identityFrameRecovery = null;
@@ -2211,6 +2317,23 @@ async function main() {
       if (appliedCameraPose?.applied !== true) {
         throw new Error(`Requested camera pose did not apply: ${JSON.stringify(appliedCameraPose)}`);
       }
+    }
+    if (frameOnlyRequested) {
+      phase = 'frame-only-admission';
+      const sourceEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: '({ receipt: window.__kaminosVolumeSettingsPresetReceipt || null, state: window.__kaminosVolumePrototype?.debugState?.() || null })',
+        returnByValue: true,
+      });
+      const source = admitFrameOnlySource(url, sourceEval.result.value?.receipt, sourceEval.result.value?.state);
+      phase = 'frame-only-capture';
+      const report = await captureFrameOnly(ws, partialControlledStepFrames, source);
+      report.cameraPose.applied = appliedCameraPose;
+      report.browserSession = { identity: browserSession.identity, mode: browserSession.mode, port: browserSession.port };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      closeBrowserSession(browserSession);
+      console.log(JSON.stringify(report, null, 2));
+      return;
     }
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
       await wsRequest(ws, 'Runtime.evaluate', {
