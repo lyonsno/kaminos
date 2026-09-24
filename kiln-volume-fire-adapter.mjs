@@ -8,7 +8,6 @@ const BASE_TALL_PLUME_PARAMS = Object.freeze({
   volume_pressure_strategy: 'spatial_tiers',
   volume_pressure_tier_overlay: 0,
   volume_resolution: 128,
-  volume_majorant_grid: 48,
 });
 
 const PHASE_VOLUME_PROFILES = Object.freeze({
@@ -29,12 +28,6 @@ const PHASE_VOLUME_PROFILES = Object.freeze({
     volume_steps: 160,
     volume_adaptive_rays: 0.00,
     volume_occupancy_skip: 0.00,
-    volume_majorant_skip: 0.00,
-    volume_majorant_smooth: 0.10,
-    volume_majorant_guard: 0.30,
-    volume_temporal_accum: 0.00,
-    volume_temporal_jitter: 0.00,
-    volume_history_clamp: 1.00,
     volume_fire_scale: 0.42,
     volume_detail_scale: 1.00,
     volume_plume_height: 0.70,

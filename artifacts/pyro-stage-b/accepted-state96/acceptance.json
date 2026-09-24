@@ -1,0 +1,23 @@
+{
+  "schema": "kaminos.pyro-cockpit-manifest-acceptance.v0",
+  "status": "accepted",
+  "manifestSha256": "bc86516f468c9ce9b5306f8cc533819ab65453e5766f9e45ac696bca4d867732",
+  "manifestSourceCommit": "8509882187d87a8dd31d1fac9f8d9bde98f74444",
+  "acceptedBy": "pyro-radiance-transfer-bailiff",
+  "acceptanceHead": "10150e6ab96a9bdca8d78514a6e77b727f1c398a",
+  "acceptanceReportSha256": "c4e28bf87917493192f80c44b6323288b6056badf7fb1288c75a1b0d0e0ae1f8",
+  "directiveSha256": "e79238c6a8bc7a7d6fbd85a04f5246c71dc3502248dfb30e510e1fa871500be9",
+  "evidenceAuthority": "producer-evidence-accepted",
+  "visualQuality": "operator-unseen",
+  "operatorScope": "operator-exploration-pending",
+  "decisionBearing": false,
+  "presentationAuthority": "producer-capture-media-v0",
+  "producerCaptureArtifactId": "matched-optical",
+  "sameStateCaptureId": "filament-orbit-f96-s96",
+  "limitations": [
+    "one-occupied-projected-ndc-depth-bin",
+    "crest-too-dark-and-flat",
+    "no-self-transmittance-parity-claim",
+    "no-production-visual-authority"
+  ]
+}

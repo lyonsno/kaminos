@@ -5,6 +5,10 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
+import { retiredRaymarchControlReceiptPayload } from './volume-core.js';
+import { assessControlledStepSequence } from './volume-controlled-step-sequence-contract.mjs';
+import { admitFrameOnlySource, verifyFrameOnlyReadback } from './volume-frame-only-contract.mjs';
+import { pressureTierDispatchEvidence } from './volume-pressure-tier-witness-contract.mjs';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -20,6 +24,14 @@ function parseCliArgs(argv) {
 }
 
 const args = parseCliArgs(process.argv.slice(2));
+
+function writeFrameOnlyPreflightFailure(phase, error) {
+  const output = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
+  const destination = resolve(args.get('--report') || output.replace(/\.png$/i, '.json'));
+  mkdirSync(dirname(destination), { recursive: true });
+  writeFileSync(destination, JSON.stringify({ identity: 'kaminos-frame-only-inspection-v0',
+    phase, error, requestedRoute: args.get('--url') || null, partialControlledStepFrames: [] }, null, 2));
+}
 
 function readVolumeCaptureReplay(capturePath) {
   if (!capturePath) return null;
@@ -72,6 +84,7 @@ function assertCaptureReplayControls({
   state,
   expectedVolumeScene,
   expectedGrid,
+  expectedGridDimensions,
   expectedRaySteps,
   expectedRenderScale,
   expectedDensity,
@@ -94,7 +107,8 @@ function assertCaptureReplayControls({
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'captured volume scene did not reach debug controls');
   }
   if (has('resolution')) {
-    assert.equal(Number(state.simGrid), expectedGrid, `captured grid did not apply as ${expectedGrid}^3`);
+    assert.equal(Number(state.simGrid), expectedGrid, `captured horizontal grid resolution did not apply as ${expectedGrid}`);
+    assert.deepEqual(state.simGridDimensions, expectedGridDimensions, 'captured rectangular grid dimensions did not apply');
   }
   if (has('steps')) assertApprox(Number(state.controls?.raySteps), expectedRaySteps, 'captured ray steps did not apply');
   if (has('renderScale')) {
@@ -106,6 +120,10 @@ function assertCaptureReplayControls({
   if (has('smoke')) assertApprox(Number(state.controls?.smoke), numeric('smoke'), 'captured smoke did not apply');
 }
 
+if (args.has('--frame-only') && args.has('--capture')) {
+  writeFrameOnlyPreflightFailure('preflight-capture', 'frame-only capture requires a direct saved-preset route');
+  throw new Error('frame-only capture requires a direct saved-preset route');
+}
 const captureReplay = args.has('--capture') ? readVolumeCaptureReplay(args.get('--capture')) : null;
 const isCaptureReplay = Boolean(captureReplay);
 const url = captureReplay?.route || args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
@@ -116,6 +134,14 @@ function parseNumberList(value) {
     .map(entry => Number(entry.trim()))
     .filter(entry => Number.isFinite(entry));
 }
+
+const cameraPosition = args.has('--camera-position') ? parseNumberList(args.get('--camera-position')) : null;
+const cameraTarget = args.has('--camera-target') ? parseNumberList(args.get('--camera-target')) : null;
+if ((cameraPosition || cameraTarget) && (cameraPosition?.length !== 3 || cameraTarget?.length !== 3)) {
+  if (args.has('--frame-only')) writeFrameOnlyPreflightFailure('preflight-camera', 'invalid explicit camera pose');
+  throw new Error('--camera-position and --camera-target must each contain three finite comma-separated numbers');
+}
+const requestedCameraPose = cameraPosition ? { position: cameraPosition, target: cameraTarget } : null;
 
 function clampRenderScale(value) {
   const requested = Number(value);
@@ -156,6 +182,7 @@ const renderScaleAuxiliaryCaptureModes = new Set(String(args.get('--render-scale
 const renderScaleFlowDebugCaptures = renderScaleAuxiliaryCaptureModes.has('flow-debug') || renderScaleAuxiliaryCaptureModes.has('flow_debug');
 const renderScaleBoundarySidecarSupportCaptures = renderScaleAuxiliaryCaptureModes.has('boundary-sidecar-support') || renderScaleAuxiliaryCaptureModes.has('boundary_sidecar_support');
 const controlledStepSequenceRequested = args.has('--controlled-step-sequence') && !['0', 'false', 'no'].includes(String(args.get('--controlled-step-sequence') || '1').toLowerCase());
+const frameOnlyRequested = args.has('--frame-only');
 const controlledStepFrames = Math.max(1, Math.floor(Number(args.get('--controlled-step-frames') || 1)));
 const controlledStepDeltaMs = Math.max(0, Number(args.get('--controlled-step-delta-ms') || 220));
 const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderScaleSetDir);
@@ -165,6 +192,7 @@ const freezeIntegrityProbeOnly = freezeIntegrityProbeRequested && args.has('--fr
 const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
+  if (frameOnlyRequested) writeFrameOnlyPreflightFailure('preflight-evidence-mode', `unknown evidence mode: ${evidenceMode}`);
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
 }
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
@@ -172,6 +200,7 @@ const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
+const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
@@ -188,10 +217,6 @@ const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
-const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-force-active-v0';
-const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
-const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-force-active-v0';
-const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
@@ -299,23 +324,19 @@ function expectedBonfireProceduralBreakupEvaluationsPerCell(volumeScene) {
 }
 
 function expectedBonfireSymmetricForceStrategy(volumeScene) {
-  return volumeScene === 'bonfire_plume'
-    ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
-    : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
+  return 'retired-periodic-bonfire-macro-forces-v0';
 }
 
 function expectedBonfireSymmetricForceEvaluationsPerCell(volumeScene) {
-  return volumeScene === 'bonfire_plume' ? 4 : 0;
+  return 0;
 }
 
 function expectedBonfireNonWindForceStrategy(volumeScene) {
-  return volumeScene === 'bonfire_plume'
-    ? MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE
-    : MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
+  return 'retired-periodic-bonfire-macro-forces-v0';
 }
 
 function expectedBonfireNonWindForceEvaluationsPerCell(volumeScene) {
-  return volumeScene === 'bonfire_plume' ? 4 : 0;
+  return 0;
 }
 
 function expectedBonfireScalarNeighborhoodStrategy(volumeScene) {
@@ -563,12 +584,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.00,
     occupancySkip: 0.00,
-    majorantSkip: 0.00,
-    majorantSmooth: 0.10,
-    majorantGuard: 0.30,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.42,
     detailScale: 1.00,
     plumeHeight: 0.70,
@@ -594,12 +609,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.00,
     occupancySkip: 0.00,
-    majorantSkip: 1.00,
-    majorantSmooth: 0.85,
-    majorantGuard: 0.50,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 0.70,
     fireScale: 0.35,
     detailScale: 0.50,
     plumeHeight: 1.20,
@@ -610,7 +619,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.12,
     flowRate: 0.35,
     resolution: 128,
-    majorantGrid: 48,
     pressureMode: 'global-p3',
     pressureTierLowerMax: 0.64,
     pressureTierHeroMin: 0.18,
@@ -633,12 +641,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.00,
     occupancySkip: 0.00,
-    majorantSkip: 1.00,
-    majorantSmooth: 0.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 0.70,
     fireScale: 1.17,
     detailScale: 2.55,
     plumeHeight: 1.75,
@@ -649,7 +651,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.08,
     flowRate: 0.25,
     resolution: 160,
-    majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 1.50,
     pyroInterfaceFocus: 0.00,
@@ -694,12 +695,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.05,
     occupancySkip: 0.05,
-    majorantSkip: 0.95,
-    majorantSmooth: 0.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.65,
     detailScale: 0.45,
     plumeHeight: 1.30,
@@ -710,7 +705,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.13,
     flowRate: 0.30,
     resolution: 96,
-    majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 0.65,
     pyroInterfaceFocus: 0.00,
@@ -789,12 +783,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.00,
     occupancySkip: 0.20,
-    majorantSkip: 1.00,
-    majorantSmooth: 1.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.35,
     detailScale: 0.45,
     plumeHeight: 1.00,
@@ -805,7 +793,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.19,
     flowRate: 0.85,
     resolution: 160,
-    majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 0.20,
     pyroInterfaceFocus: 0.00,
@@ -931,15 +918,8 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.30,
     occupancySkip: 1.00,
-    majorantSkip: 0.95,
-    majorantSmooth: 1.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     renderScale: 0.50,
     resolution: 128,
-    majorantGrid: 48,
     fireRenderMode: 'shell',
     shellInspectMode: 'shell',
     shellAmount: 0.00,
@@ -1018,12 +998,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.05,
     occupancySkip: 0.05,
-    majorantSkip: 0.95,
-    majorantSmooth: 0.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.65,
     detailScale: 0.45,
     plumeHeight: 1.30,
@@ -1034,7 +1008,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.13,
     flowRate: 0.30,
     resolution: 96,
-    majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 1.50,
     pyroInterfaceFocus: 0.00,
@@ -1123,12 +1096,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 88,
     adaptiveRays: 1,
     occupancySkip: 1,
-    majorantSkip: 0,
-    majorantSmooth: 1,
-    majorantGuard: 1,
-    temporalAccum: 0,
-    temporalJitter: 0,
-    historyClamp: 0,
     fireScale: 0.95,
     detailScale: 0.45,
     plumeHeight: 0.9,
@@ -1186,7 +1153,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     shellSoftClip: 0.2,
     shellSmoke: 2,
     resolution: 128,
-    majorantGrid: 24,
     gridOverlay: 0,
     flowDebug: 0,
     oracleActivityCue: 1,
@@ -1301,7 +1267,7 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalRenderMode: 'default',
     canonicalRenderModeValue: 0,
     canonicalMotionMode: 'animated',
-    canonicalMotionModeValue: 0,
+    canonicalMotionRetirementIdentity: 'retired-analytic-canonical-motion-v0',
     canonicalContentMode: 'smoke',
     canonicalContentModeValue: 0,
     canonicalSourceY: -0.74,
@@ -1314,7 +1280,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     runtimeQualityRequested: 'live_high',
     gpuPressure: 0,
     runtimeQualityReason: 'route-default',
-    majorantCadence: 1,
     pressureIterations: 3,
     pressureStrategy: 'global',
     simProfile: false,
@@ -1350,12 +1315,6 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     raySteps: 148,
     adaptiveRays: 0.05,
     occupancySkip: 0.25,
-    majorantSkip: 0.15,
-    majorantSmooth: 0.10,
-    majorantGuard: 0.30,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.86,
     detailScale: 0.75,
     plumeHeight: 1.45,
@@ -1363,7 +1322,6 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     inputRadius: 0.08,
     flowRate: 1.90,
     resolution: 128,
-    majorantGrid: 48,
     canonicalSpread: 0.00,
     canonicalCenterline: 0.50,
     canonicalBodyBalance: 1.50,
@@ -1384,12 +1342,6 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     raySteps: 148,
     adaptiveRays: 0.05,
     occupancySkip: 0.25,
-    majorantSkip: 0.15,
-    majorantSmooth: 0.10,
-    majorantGuard: 0.30,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.86,
     detailScale: 0.75,
     plumeHeight: 1.45,
@@ -1397,7 +1349,6 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     inputRadius: 0.08,
     flowRate: 1.90,
     resolution: 128,
-    majorantGrid: 48,
     canonicalSpread: 0.00,
     canonicalCenterline: 0.50,
     canonicalBodyBalance: 1.50,
@@ -1417,7 +1368,7 @@ const CANONICAL_VOLUME_RENDER_MODE_VALUES = {
   default: 0,
   smoke_only: 1,
 };
-const CANONICAL_VOLUME_MOTION_MODE_VALUES = {
+const CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES = {
   animated: 0,
   frozen: 1,
 };
@@ -1432,8 +1383,8 @@ function normalizeCanonicalSourceMode(value) {
 function normalizeCanonicalRenderMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_RENDER_MODE_VALUES, value) ? value : 'default';
 }
-function normalizeCanonicalMotionMode(value) {
-  return Object.hasOwn(CANONICAL_VOLUME_MOTION_MODE_VALUES, value) ? value : 'animated';
+function normalizeCanonicalMotionRequest(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES, value) ? value : 'animated';
 }
 function normalizeCanonicalContentMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_CONTENT_MODE_VALUES, value) ? value : 'smoke';
@@ -1476,7 +1427,8 @@ const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESET
 const canonicalMacroPreset = CANONICAL_VOLUME_MACRO_PRESETS[expectedCanonicalMacroPreset] || {};
 const expectedCanonicalSourceMode = normalizeCanonicalSourceMode(routeParams.get('volume_canonical_source_mode') || canonicalMacroPreset.sourceMode || 'current');
 const expectedCanonicalRenderMode = normalizeCanonicalRenderMode(routeParams.get('volume_canonical_render_mode') || canonicalMacroPreset.renderMode || 'default');
-const expectedCanonicalMotionMode = normalizeCanonicalMotionMode(routeParams.get('volume_canonical_motion_mode') || canonicalMacroPreset.motionMode || 'animated');
+const expectedCanonicalMotionRequest = normalizeCanonicalMotionRequest(routeParams.get('volume_canonical_motion_mode') || canonicalMacroPreset.motionMode || 'animated');
+const expectedCanonicalMotionRetirementIdentity = 'retired-analytic-canonical-motion-v0';
 const expectedCanonicalContentMode = normalizeCanonicalContentMode(routeParams.get('volume_canonical_content') || canonicalMacroPreset.contentMode || 'smoke');
 const canonicalContentRequestsFire = expectedCanonicalContentMode === 'fire' || expectedCanonicalContentMode === 'fire_smoke';
 const canonicalSourceDefault = canonicalSourceDefaults(expectedCanonicalSourceMode);
@@ -1495,16 +1447,28 @@ const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') &
 const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
 const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid)
+const expectedGrid = [32, 48, 64, 96, 128, 136, 140, 160].includes(requestedGrid)
   ? requestedGrid
   : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
-const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
-const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid)
-  ? requestedMajorantGrid
-  : canonicalMacroPreset.majorantGrid ?? scenePreset.majorantGrid ?? 48;
-const requestedMajorantCadence = Number(routeParams.get('volume_majorant_cadence'));
-let expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Number.isFinite(requestedMajorantCadence)
-  ? Math.max(1, Math.min(8, Math.round(requestedMajorantCadence)))
+const expectedGridDimensions = [expectedGrid, expectedGrid * 2, expectedGrid];
+const expectedGridCellCount = expectedGridDimensions.reduce((product, dimension) => product * dimension, 1);
+const expectedGridLabel = expectedGridDimensions.join('x');
+function quantizeFlowKernelControl(value, min, max, step, decimals) {
+  const clamped = Math.max(min, Math.min(max, value));
+  const quantized = min + Math.round((clamped - min) / step) * step;
+  return Number(quantized.toFixed(decimals));
+}
+const requestedFlowKernelStrength = Number(routeParams.get('volume_flow_kernel_strength'));
+const expectedFlowKernelStrength = routeParams.has('volume_flow_kernel_strength') && Number.isFinite(requestedFlowKernelStrength)
+  ? quantizeFlowKernelControl(requestedFlowKernelStrength, 0, 1, 0.02, 2)
+  : 0;
+const requestedFlowKernelRadius = Number(routeParams.get('volume_flow_kernel_radius'));
+const expectedFlowKernelRadius = routeParams.has('volume_flow_kernel_radius') && Number.isFinite(requestedFlowKernelRadius)
+  ? quantizeFlowKernelControl(requestedFlowKernelRadius, 0.0025, 0.12, 0.0025, 4)
+  : 0.03;
+const requestedFlowKernelCoherence = Number(routeParams.get('volume_flow_kernel_coherence'));
+const expectedFlowKernelCoherence = routeParams.has('volume_flow_kernel_coherence') && Number.isFinite(requestedFlowKernelCoherence)
+  ? quantizeFlowKernelControl(requestedFlowKernelCoherence, 0, 2, 0.05, 2)
   : 1;
 const requestedPressureIterations = Number(routeParams.get('volume_pressure_iterations'));
 const requestedPressureMode = routeParams.get('volume_pressure_mode');
@@ -1565,36 +1529,12 @@ const requestedOccupancySkip = Number(routeParams.get('volume_occupancy_skip'));
 let expectedOccupancySkip = routeParams.has('volume_occupancy_skip') && Number.isFinite(requestedOccupancySkip)
   ? Math.max(0, Math.min(1, requestedOccupancySkip))
   : canonicalMacroPreset.occupancySkip ?? scenePreset.occupancySkip ?? 0.35;
-const requestedMajorantSkip = Number(routeParams.get('volume_majorant_skip'));
-let expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
-  ? Math.max(0, Math.min(1, requestedMajorantSkip))
-  : canonicalMacroPreset.majorantSkip ?? scenePreset.majorantSkip ?? 0.70;
-const requestedMajorantSmooth = Number(routeParams.get('volume_majorant_smooth'));
-const expectedMajorantSmooth = routeParams.has('volume_majorant_smooth') && Number.isFinite(requestedMajorantSmooth)
-  ? Math.max(0, Math.min(1, requestedMajorantSmooth))
-  : canonicalMacroPreset.majorantSmooth ?? scenePreset.majorantSmooth ?? 0.85;
-const requestedMajorantGuard = Number(routeParams.get('volume_majorant_guard'));
-const expectedMajorantGuard = routeParams.has('volume_majorant_guard') && Number.isFinite(requestedMajorantGuard)
-  ? Math.max(0, Math.min(1, requestedMajorantGuard))
-  : canonicalMacroPreset.majorantGuard ?? scenePreset.majorantGuard ?? 0.75;
 const requestedMaxSmokeStripeRatio = Number(routeParams.get('volume_max_smoke_stripe_ratio'));
 const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_ratio') && Number.isFinite(requestedMaxSmokeStripeRatio)
   ? Math.max(1.0, Math.min(4.0, requestedMaxSmokeStripeRatio))
   : expectedVolumeScene === 'bonfire_plume'
     ? 1.45
     : Infinity;
-const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
-let expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
-  ? Math.max(0, Math.min(0.85, requestedTemporalAccum))
-  : canonicalMacroPreset.temporalAccum ?? scenePreset.temporalAccum ?? 0.25;
-const requestedTemporalJitter = Number(routeParams.get('volume_temporal_jitter'));
-const expectedTemporalJitter = routeParams.has('volume_temporal_jitter') && Number.isFinite(requestedTemporalJitter)
-  ? Math.max(0, Math.min(1, requestedTemporalJitter))
-  : canonicalMacroPreset.temporalJitter ?? scenePreset.temporalJitter ?? 0.85;
-const requestedHistoryClamp = Number(routeParams.get('volume_history_clamp'));
-const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)
-  ? Math.max(0, Math.min(1, requestedHistoryClamp))
-  : canonicalMacroPreset.historyClamp ?? scenePreset.historyClamp ?? 0.70;
 const requestedDensity = Number(routeParams.get('volume_density'));
 const expectedDensity = routeParams.has('volume_density') && Number.isFinite(requestedDensity)
   ? Math.max(0.35, Math.min(6, requestedDensity))
@@ -1710,15 +1650,11 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedRenderScale = Math.min(expectedRenderScale, 0.75);
   expectedRaySteps = Math.min(expectedRaySteps, 96);
   expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.45);
-  expectedMajorantCadence = Math.max(expectedMajorantCadence, 2);
 } else if (expectedRuntimeQualityEffective === 'holdover') {
   expectedRenderScale = Math.min(expectedRenderScale, 0.70);
   expectedRaySteps = Math.min(expectedRaySteps, 72);
   expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.65);
   expectedOccupancySkip = Math.max(expectedOccupancySkip, 0.25);
-  expectedMajorantSkip = Math.max(expectedMajorantSkip, 0.35);
-  expectedMajorantCadence = Math.max(expectedMajorantCadence, 4);
-  expectedTemporalAccum = Math.max(expectedTemporalAccum, 0.42);
   expectedPressureStrategy = 'global';
   expectedPressureIterations = Math.min(1, expectedPressureIterations);
 } else if (expectedRuntimeQualityEffective === 'impostor') {
@@ -1726,9 +1662,6 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedRaySteps = Math.min(expectedRaySteps, 48);
   expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.85);
   expectedOccupancySkip = Math.max(expectedOccupancySkip, 0.45);
-  expectedMajorantSkip = Math.max(expectedMajorantSkip, 0.55);
-  expectedMajorantCadence = Math.max(expectedMajorantCadence, 8);
-  expectedTemporalAccum = Math.max(expectedTemporalAccum, 0.65);
   expectedPressureStrategy = 'global';
   expectedPressureIterations = 0;
 }
@@ -1742,9 +1675,6 @@ expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrate
 expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
   : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
-const expectedEffectiveTemporalAccum = expectedVolumeScene === 'bonfire_plume'
-  ? Math.max(0, Math.min(0.85, expectedTemporalAccum * expectedBonfireTemporal))
-  : expectedTemporalAccum;
 const expectedDetailScaleArtifactQuarantine = expectedVolumeScene === 'tall_plume' ? 1 : 0;
 const expectedVisibleDetailOverlayGain = expectedDetailScaleArtifactQuarantine ? 0.35 : 1;
 const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
@@ -2209,6 +2139,9 @@ async function replayCaptureCamera(ws, capture = {}) {
     })()`,
     returnByValue: true,
   });
+  if (cameraEval.exceptionDetails) {
+    throw new Error(`Camera pose application failed: ${cameraEval.exceptionDetails.text || 'runtime exception'}`);
+  }
   return cameraEval.result.value;
 }
 
@@ -2255,16 +2188,157 @@ async function recoverIdentityFrameState(ws, state) {
   };
 }
 
+async function captureFrameOnly(ws, partialControlledStepFrames, source) {
+  const scales = renderScaleSet.length ? renderScaleSet : [1];
+  const frames = [];
+  let sameBrowserSessionId = null;
+  let sequenceStartNowMs = null;
+  for (let index = 0; index < controlledStepFrames; index += 1) {
+    const stepEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+        controlledStepFrameIndex: index,
+        advanceSim: index > 0,
+        sameBrowserSessionId,
+        startNow: sequenceStartNowMs,
+        stepDeltaMs: controlledStepDeltaMs,
+        renderScales: scales,
+        includeRgba: false,
+        compactSamples: true,
+        resumeRenderLoop: false,
+      })})`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    const step = stepEval.result.value;
+    if (step?.ok !== true || step.sequenceAuthority !== 'controlled-step-sequence-v0'
+      || step.scaleSet?.ok !== true || step.scaleSet.samples?.length !== scales.length) {
+      throw new Error(`frame-only controlled step failed: ${JSON.stringify({ index, ok: step?.ok, reason: step?.reason })}`);
+    }
+    sameBrowserSessionId = step.sameBrowserSessionId;
+    sequenceStartNowMs = step.sequenceStartNowMs;
+    const scaleSet = step.scaleSet;
+    const frameDir = resolve(controlledStepDir, `frame-${String(index + 1).padStart(3, '0')}`);
+    mkdirSync(frameDir, { recursive: true });
+    const partial = { controlledStepFrameIndex: index, frameDir, images: [] };
+    partialControlledStepFrames.push(partial);
+    const captures = [];
+    for (let scaleIndex = 0; scaleIndex < scales.length; scaleIndex += 1) {
+      const sample = scaleSet.samples[scaleIndex];
+      const scale = scales[scaleIndex];
+      const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+          renderScale: scale,
+          now: scaleSet.fixedNowMs,
+          sameStateCaptureId: scaleSet.sameStateCaptureId,
+          baseFrameCount: scaleSet.baseFrameCount,
+          baseSimStepCount: scaleSet.baseSimStepCount,
+          includeRgba: true,
+          resumeRenderLoop: false,
+        })})`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const canvas = canvasEval.result.value;
+      assert.equal(canvas?.effectiveRoute, source.effectiveRoute, 'effective route changed during frame capture');
+      assert.equal(canvas?.backend, source.backend, 'effective backend changed during frame capture');
+      const readback = verifyFrameOnlyReadback(canvas, sample, step.controlledStepCapture.afterSimStepCount);
+      const rgba = readback.bytes;
+      const imagePath = resolve(frameDir, `${controlledStepPrefix}-frame-${String(index + 1).padStart(3, '0')}-${scaleSlug(scale)}.png`);
+      writeRgbaPng(imagePath, canvas.image.width, canvas.image.height, rgba);
+      partial.images.push(imagePath);
+      const hash = createHash('sha256').update(rgba).digest('hex');
+      captures.push({
+        role: sample.role,
+        requestedRenderScale: scale,
+        renderWidth: sample.renderWidth,
+        renderHeight: sample.renderHeight,
+        imageWidth: canvas.image.width,
+        imageHeight: canvas.image.height,
+        visibleColorPixelCount: readback.visibleColorPixelCount,
+        minimumVisiblePixels: readback.minimumVisiblePixels,
+        frameCount: canvas.frameCount,
+        simStepCount: canvas.simStepCount,
+        sameStateCaptureId: canvas.sameStateCaptureId,
+        image: { path: imagePath, authority: canvas.imageAuthority, sha256: hash,
+          sourceSimStepCount: canvas.simStepCount, sourceSameStateCaptureId: canvas.sameStateCaptureId },
+      });
+    }
+    frames.push({
+      controlledStepFrameIndex: index,
+      sameBrowserSessionId,
+      controlledStepCapture: step.controlledStepCapture,
+      controlledStepNowMs: step.controlledStepNowMs,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      captures,
+    });
+  }
+  const assessment = assessControlledStepSequence(frames, controlledStepFrames, scales);
+  if (!assessment.frameEvidenceComplete || (controlledStepFrames > 1 && !assessment.stepSequenceVerified)) {
+    throw new Error(`frame-only evidence incomplete: ${JSON.stringify(assessment)}`);
+  }
+  return { identity: 'kaminos-frame-only-inspection-v0', source, requestedRoute: url,
+    cameraPose: { requested: requestedCameraPose, applied: null },
+    requestedFrameCount: controlledStepFrames, renderScales: scales,
+    frameEvidenceComplete: assessment.frameEvidenceComplete,
+    stepSequenceVerified: assessment.stepSequenceVerified,
+    visualJudgment: assessment.visualJudgment,
+    simStepCounts: assessment.simStepCounts,
+    frameImageHashes: assessment.frameImageHashes,
+    frames };
+}
+
+async function frameOnlyServingSource() {
+  const response = await fetch(new URL('/api/runtime-config', url), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`runtime config lookup failed: ${response.status}`);
+  const config = await response.json();
+  assert.equal(config?.schema, 'kaminos.runtime-config.v0', 'runtime config schema mismatch');
+  return config.source;
+}
+
+function frameOnlyExpectedSource() {
+  assert.equal(execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim(), '',
+    'frame-only capture checkout is dirty');
+  return { repoRoot: process.cwd(),
+    commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() };
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   let replayedCaptureControls = null;
   let replayedCaptureCamera = null;
+  let appliedCameraPose = null;
+  let sourceBeforeLoad = null;
+  let expectedSource = null;
 
-  const browserSession = await attachOrLaunchSharedBrowser();
+  if (frameOnlyRequested) {
+    try {
+      expectedSource = frameOnlyExpectedSource();
+      sourceBeforeLoad = await frameOnlyServingSource();
+      assert.equal(sourceBeforeLoad?.repoRoot, expectedSource.repoRoot, 'preload serving checkout mismatch');
+      assert.equal(sourceBeforeLoad?.commit, expectedSource.commit, 'preload serving revision mismatch');
+      assert.equal(sourceBeforeLoad?.dirty, false, 'preload serving source is dirty');
+    } catch (error) {
+      writeFrameOnlyPreflightFailure('frame-only-preload-source', error?.message || String(error));
+      throw error;
+    }
+  }
+
+  let browserSession;
+  try {
+    browserSession = await attachOrLaunchSharedBrowser();
+  } catch (error) {
+    if (frameOnlyRequested) {
+      writeFileSync(reportPath, JSON.stringify({ identity: 'kaminos-frame-only-inspection-v0',
+        requestedRoute: url, phase: 'launch', error: error?.message || String(error),
+        partialControlledStepFrames: [] }, null, 2));
+    }
+    throw error;
+  }
 
   let phase = 'launch';
   let identityFrameRecovery = null;
+  const partialControlledStepFrames = [];
   try {
     await waitForCdp();
     phase = 'target';
@@ -2287,6 +2361,38 @@ async function main() {
       replayedCaptureCamera = await replayCaptureCamera(ws, captureReplay.capture);
     }
     await delay(settleMs);
+    if (requestedCameraPose) {
+      appliedCameraPose = await replayCaptureCamera(ws, { camera: requestedCameraPose });
+      if (appliedCameraPose?.applied !== true) {
+        throw new Error(`Requested camera pose did not apply: ${JSON.stringify(appliedCameraPose)}`);
+      }
+    }
+    if (frameOnlyRequested) {
+      phase = 'frame-only-admission';
+      const sourceAtAdmission = await frameOnlyServingSource();
+      assert.deepEqual(sourceAtAdmission, sourceBeforeLoad, 'serving source changed after page load');
+      const sourceEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: '({ receipt: window.__kaminosVolumeSettingsPresetReceipt || null, state: window.__kaminosVolumePrototype?.debugState?.() || null })',
+        returnByValue: true,
+      });
+      const source = admitFrameOnlySource(url, sourceEval.result.value?.receipt, sourceEval.result.value?.state,
+        sourceAtAdmission, expectedSource);
+      phase = 'frame-only-capture';
+      const report = await captureFrameOnly(ws, partialControlledStepFrames, source);
+      phase = 'frame-only-postcapture-source';
+      const sourceAfterCapture = await frameOnlyServingSource();
+      assert.deepEqual(sourceAfterCapture, sourceBeforeLoad, 'serving source changed during capture');
+      assert.deepEqual(frameOnlyExpectedSource(), expectedSource, 'capture checkout changed during capture');
+      report.source.servingSourceBeforeLoad = sourceBeforeLoad;
+      report.source.servingSourceAfterCapture = sourceAfterCapture;
+      report.cameraPose.applied = appliedCameraPose;
+      report.browserSession = { identity: browserSession.identity, mode: browserSession.mode, port: browserSession.port };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      closeBrowserSession(browserSession);
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
       await wsRequest(ws, 'Runtime.evaluate', {
         expression: `(() => {
@@ -2352,6 +2458,7 @@ async function main() {
         state,
         expectedVolumeScene,
         expectedGrid,
+        expectedGridDimensions,
         expectedRaySteps,
         expectedRenderScale,
         expectedDensity,
@@ -2504,10 +2611,11 @@ async function main() {
     }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
-    assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
-    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer+combustion-front-topology-sidecar-v0`, 'fluid sim label does not expose selected grid plus front sidecar identity');
+    assert.equal(state.simGrid, expectedGrid, `fluid sim is not running at the expected horizontal grid resolution ${expectedGrid}`);
+    assert.deepEqual(state.simGridDimensions, expectedGridDimensions, 'fluid sim dimensions do not match the expected rectangular grid');
+    assert.equal(state.simGridLabel, `${expectedGridLabel} velocity-material-fire-microdetail-storage-buffer+combustion-front-topology-sidecar-v0`, 'fluid sim label does not expose selected dimensions plus front sidecar identity');
     assert.equal(state.frontFieldIdentity, 'combustion-front-topology-sidecar-v0', 'front topology sidecar identity did not reach debug state');
-    assert.equal(state.frontFieldBytes, expectedGrid * expectedGrid * expectedGrid * 4, 'front topology sidecar byte cost does not match one scalar per cell');
+    assert.equal(state.frontFieldBytes, expectedGridCellCount * 4, 'front topology sidecar byte cost does not match one scalar per rectangular grid cell');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     let freezeIntegrityProbe = null;
     if (freezeIntegrityProbeRequested) {
@@ -2634,6 +2742,14 @@ async function main() {
         return;
       }
     }
+    assert.equal(state.flowKernelIdentity, FLOW_RECONSTRUCTION_KERNEL_IDENTITY, 'flow reconstruction kernel identity did not reach the live renderer');
+    assert.equal(state.flowKernelCandidateAdmissionAuthority, 'structural-splat-candidates-v0', 'flow kernel changed or obscured splat admission authority');
+    assert.ok(Math.abs((state.controls?.flowKernelStrength ?? 0) - expectedFlowKernelStrength) < 0.001, 'flow kernel strength route/control did not apply');
+    assert.ok(Math.abs((state.controls?.flowKernelRadius ?? 0) - expectedFlowKernelRadius) < 0.001, 'flow kernel radius route/control did not apply');
+    assert.ok(Math.abs((state.controls?.flowKernelCoherence ?? 0) - expectedFlowKernelCoherence) < 0.001, 'flow kernel coherence route/control did not apply');
+    assert.ok(Math.abs((state.flowKernelEffective?.strength ?? -1) - expectedFlowKernelStrength) < 0.001, 'effective flow kernel strength did not match the requested route');
+    assert.ok(Math.abs((state.flowKernelEffective?.radiusWorld ?? -1) - expectedFlowKernelRadius) < 0.001, 'effective world-space flow kernel radius did not match the requested route');
+    assert.ok(Math.abs((state.flowKernelEffective?.coherence ?? -1) - expectedFlowKernelCoherence) < 0.001, 'effective flow kernel coherence did not match the requested route');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     if (rayBudgetPreset && !routeParams.has('volume_steps') && !routeParams.has('volume_adaptive_rays')) {
@@ -2655,18 +2771,6 @@ async function main() {
     }
     assert.ok(Math.abs((state.controls?.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'occupancy skip route/control did not apply');
     assert.ok(Math.abs((state.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'effective occupancy skip state did not match route/control');
-    assert.ok(Math.abs((state.controls?.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'majorant skip route/control did not apply');
-    assert.ok(Math.abs((state.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'effective majorant skip state did not match route/control');
-    assert.ok(Math.abs((state.controls?.majorantSmooth ?? 0) - expectedMajorantSmooth) < 0.001, 'majorant smooth route/control did not apply');
-    assert.ok(Math.abs((state.majorantSmooth ?? 0) - expectedMajorantSmooth) < 0.001, 'effective majorant smooth state did not match route/control');
-    assert.ok(Math.abs((state.controls?.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'majorant guard route/control did not apply');
-    assert.ok(Math.abs((state.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'effective majorant guard state did not match route/control');
-    assert.ok(Math.abs((state.controls?.temporalAccum ?? 0) - expectedTemporalAccum) < 0.001, 'temporal accumulation route/control did not apply');
-    assert.ok(Math.abs((state.temporalAccum ?? 0) - expectedEffectiveTemporalAccum) < 0.001, 'effective temporal accumulation state did not match route/control');
-    assert.ok(Math.abs((state.controls?.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'temporal jitter route/control did not apply');
-    assert.ok(Math.abs((state.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'effective temporal jitter state did not match route/control');
-    assert.ok(Math.abs((state.controls?.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'temporal history clamp route/control did not apply');
-    assert.ok(Math.abs((state.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'effective temporal history clamp state did not match route/control');
     assert.ok(Math.abs((state.controls?.density ?? 0) - expectedDensity) < 0.001, 'density route/control did not apply');
     assert.ok(Math.abs((state.controls?.fire ?? 0) - expectedFire) < 0.001, 'fire route/control did not apply');
     assert.ok(Math.abs((state.controls?.smoke ?? 0) - expectedSmoke) < 0.001, 'smoke route/control did not apply');
@@ -2719,7 +2823,8 @@ async function main() {
     assert.ok(Math.abs((state.controls?.bonfireLateralDamping ?? 0) - expectedBonfireLateralDamping) < 0.001, 'bonfire lateral damping ablation route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.lateralDamping ?? 0) - expectedBonfireLateralDamping) < 0.001, 'effective bonfire lateral damping ablation did not match route/control');
     assert.ok(Math.abs((state.controls?.bonfireShear ?? 0) - expectedBonfireShear) < 0.001, 'bonfire shear ablation route/control did not apply');
-    assert.ok(Math.abs((state.bonfireAblation?.shear ?? 0) - expectedBonfireShear) < 0.001, 'effective bonfire shear ablation did not match route/control');
+    assert.equal(state.bonfireAblation?.requestedShear, expectedBonfireShear, 'bonfire shear request was not preserved in the retirement receipt');
+    assert.equal(state.bonfireAblation?.shear, 0, 'retired bonfire shear must have zero effective force');
     assert.ok(Math.abs((state.controls?.bonfireDetailForces ?? 0) - expectedBonfireDetailForces) < 0.001, 'bonfire detail-force ablation route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.detailForces ?? 0) - expectedBonfireDetailForces) < 0.001, 'effective bonfire detail-force ablation did not match route/control');
     assert.ok(Math.abs((state.controls?.bonfireDepinch ?? 0) - expectedBonfireDepinch) < 0.001, 'bonfire depinch ablation route/control did not apply');
@@ -2727,7 +2832,9 @@ async function main() {
     assert.ok(Math.abs((state.controls?.bonfireProjection ?? 0) - expectedBonfireProjection) < 0.001, 'bonfire projection ablation route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.projection ?? 0) - expectedBonfireProjection) < 0.001, 'effective bonfire projection ablation did not match route/control');
     assert.ok(Math.abs((state.controls?.bonfireTemporal ?? 0) - expectedBonfireTemporal) < 0.001, 'bonfire temporal ablation route/control did not apply');
-    assert.ok(Math.abs((state.bonfireAblation?.temporal ?? 0) - expectedBonfireTemporal) < 0.001, 'effective bonfire temporal ablation did not match route/control');
+    assert.equal(state.bonfireAblation?.requestedTemporal, expectedBonfireTemporal, 'bonfire temporal request was not preserved in the retirement receipt');
+    assert.equal(state.bonfireAblation?.temporal, 0, 'retired bonfire temporal forcing must have zero effect');
+    assert.equal(state.bonfireAblation?.periodicMacroForcePolicy, 'retired-periodic-bonfire-macro-forces-v0', 'bonfire periodic macro-force retirement policy did not reach the runtime');
     assert.ok(Math.abs((state.controls?.bonfireInstabilityProbe ?? 0) - expectedBonfireInstabilityProbe) < 0.001, 'bonfire instability probe route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.instabilityProbe ?? 0) - expectedBonfireInstabilityProbe) < 0.001, 'effective bonfire instability probe did not match route/control');
     assert.equal(state.bonfireReferenceConfinement?.identity, 'bonfire-reference-front-gradient-confinement-v0', 'bonfire reference-confinement identity did not reach debug state');
@@ -2746,8 +2853,11 @@ async function main() {
     assert.equal(state.canonicalPlumeControls?.sourceMode || 'current', expectedCanonicalSourceMode, 'effective canonical source mode did not reach debug state');
     assert.equal(state.controls?.canonicalRenderMode || 'default', expectedCanonicalRenderMode, 'canonical render diagnostic route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.renderMode || 'default', expectedCanonicalRenderMode, 'effective canonical render diagnostic mode did not reach debug state');
-    assert.equal(state.controls?.canonicalMotionMode || 'animated', expectedCanonicalMotionMode, 'canonical motion diagnostic route identity did not apply');
-    assert.equal(state.canonicalPlumeControls?.motionMode || 'animated', expectedCanonicalMotionMode, 'effective canonical motion diagnostic mode did not reach debug state');
+    assert.equal(state.controls?.canonicalMotionMode || 'animated', expectedCanonicalMotionRequest, 'legacy canonical motion request route identity did not apply');
+    assert.equal(state.canonicalPlumeControls?.requestedRetiredMotionMode || 'animated', expectedCanonicalMotionRequest, 'legacy canonical motion request did not reach compatibility debug state');
+    assert.equal(state.canonicalPlumeControls?.motionStrategy, 'retired', 'retired canonical analytic motion cannot claim an effective animated/frozen mode');
+    assert.equal(state.canonicalPlumeControls?.motionRetirementIdentity, expectedCanonicalMotionRetirementIdentity, 'canonical analytic motion retirement identity did not reach debug state');
+    assert.equal(state.canonicalPlumeControls?.reservedMotionUniformValue, 0, 'retired canonical analytic motion must reserve a zero GPU uniform slot');
     assert.equal(state.controls?.canonicalContentMode || 'smoke', expectedCanonicalContentMode, 'canonical content route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.contentMode || 'smoke', expectedCanonicalContentMode, 'effective canonical content mode did not reach debug state');
     assert.ok(Math.abs((state.controls?.canonicalSourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'canonical source height route/control did not apply');
@@ -2779,22 +2889,7 @@ async function main() {
       assert.ok((state.externalEmitterCount ?? 0) > 0, 'external emitter route did not seed any emitters');
       assert.ok(Number.isFinite(state.externalEmitterAgeMs), 'external emitter age did not reach debug state');
     }
-    if (expectedTemporalAccum > 0) {
-      assert.equal(state.temporalHistoryValid, true, 'temporal history did not become valid after settling');
-      assert.ok((state.temporalHistoryFrames ?? 0) > 4, 'temporal history did not accumulate enough frames after settling');
-      assert.ok((state.temporalHistoryResetCount ?? 0) >= 1, 'temporal history did not record reset/rejection state');
-      assert.ok(Number.isFinite(state.temporalReprojectionConfidence), 'temporal reprojection confidence did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalHistoryWeight), 'temporal history weight did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalRejectedHistory), 'temporal history rejection did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalSmokeHistoryTrust), 'material-aware smoke history trust did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalFireHistoryProtect), 'material-aware fire history protection did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalInterfaceHistoryProtect), 'material-aware interface history protection did not reach debug state');
-      assert.equal(state.temporalEvidenceSource, 'cpu-estimate-control-proxy', 'temporal evidence source label did not reach debug state');
-    }
-    assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
-    assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
-    assert.equal(state.controls?.majorantCadence, expectedMajorantCadence, 'majorant cadence route/control did not apply');
-    assert.equal(state.majorantCadence, expectedMajorantCadence, 'effective majorant cadence did not reach debug state');
+    assert.deepEqual(state.retiredRaymarchControls || [], [], 'fresh witness route unexpectedly carried retired raymarch controls');
     if (routeParams.has('volume_pressure_iterations') || expectedSpatialPressureTiers) {
       assert.equal(state.controls?.pressureIterations, expectedPressureIterations, 'pressure iteration route/control did not apply');
     }
@@ -2803,7 +2898,6 @@ async function main() {
     assert.equal(state.pressureIterationRequested, expectedPressureIterations, 'effective pressure iteration request did not reach debug state');
     assert.equal(Boolean(state.controls?.simProfile), expectedSimProfile, 'sim profile route/control did not apply');
     assert.equal(Boolean(state.simProfile), expectedSimProfile, 'effective sim profile flag did not reach debug state');
-    assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
     const expectedPressureSourceStrategy = state.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const effectiveFireLicks = state.controls?.fireLicks ?? expectedFireLicks;
     const expectedMainFluidStrategy = expectedMainFluidKernelStrategy(effectiveFireLicks);
@@ -2828,8 +2922,7 @@ async function main() {
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
     assert.equal(stateLedger.routeIdentity, 'native-3d-compute-fluid-raymarch-v0', 'sim cost ledger route identity is missing or stale');
     assert.equal(stateLedger.grid, expectedGrid, 'sim cost ledger grid identity did not match effective route');
-    assert.equal(stateLedger.majorantGrid, expectedMajorantGrid, 'sim cost ledger majorant grid did not match effective route');
-    assert.equal(stateLedger.majorantBuildCadence, expectedMajorantCadence, 'sim cost ledger majorant cadence did not match effective route');
+    assert.deepEqual(stateLedger.gridDimensions, expectedGridDimensions, 'sim cost ledger dimensions did not match effective route');
     assert.equal(stateLedger.pressureSourceStrategy, expectedPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match effective projection state');
     assert.equal(stateLedger.pressureStrategy || 'global', expectedPressureStrategy, 'sim cost ledger pressure strategy does not match effective route');
     assert.equal(stateLedger.tallPlumePressureIterationStrategy, expectedTallPlumePressureStrategy, 'sim cost ledger tall-plume pressure iteration strategy does not match effective route');
@@ -2839,7 +2932,7 @@ async function main() {
     if (expectedSpatialPressureTiers) {
       assert.equal(Number(stateLedger.pressureJacobiFullGridPasses), 1, 'spatial pressure tiers should keep only one full-grid Jacobi pass');
       assert.equal(Number(stateLedger.pressureJacobiPartialSlabPasses), 2, 'spatial pressure tiers should report two partial slab Jacobi passes');
-      assert.ok(Number(stateLedger.pressureJacobiFullGridEquivalentPasses) > 1 && Number(stateLedger.pressureJacobiFullGridEquivalentPasses) < 3, 'spatial pressure tiers did not report bounded equivalent full-grid work');
+      assert.ok(pressureTierDispatchEvidence(stateLedger, expectedGridDimensions).bounded, 'spatial pressure tiers did not report dispatch-matched equivalent full-grid work');
       assert.ok(Array.isArray(stateLedger.pressureTierDispatches) && stateLedger.pressureTierDispatches.length === 3, 'spatial pressure tiers did not report three tier dispatches');
       assert.equal(stateLedger.pressureTierBufferOwnership?.pressure3, 'B', 'spatial pressure tier buffer ownership did not preserve pressure3 in B');
       assert.equal(stateLedger.pressureTierBufferOwnership?.pressure2, 'A', 'spatial pressure tier buffer ownership did not preserve pressure2 in A');
@@ -2866,7 +2959,7 @@ async function main() {
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
     assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
     assert.equal(stateLedger.fullGridPassBreakdown?.total, stateLedger.fullGridPassesPerFrame, 'sim cost ledger pass breakdown total does not match full-grid pass count');
-    assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGrid ** 3, 'sim cost ledger did not report full-grid cell visits');
+    assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGridCellCount, 'sim cost ledger did not report full rectangular-grid cell visits');
     assert.ok(Number.isFinite(stateLedger.fluidBufferBytes) && stateLedger.fluidBufferBytes > 0, 'sim cost ledger did not report fluid buffer footprint');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
@@ -2912,7 +3005,6 @@ async function main() {
     const sampleLedger = sample.simCostLedger || stateLedger;
     if (
       sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
-      sampleLedger?.majorantBuildCadence !== expectedMajorantCadence ||
       sampleLedger?.pressureSourceStrategy !== samplePressureSourceStrategy ||
       sampleLedger?.mainFluidKernelStrategy !== sampleMainFluidStrategy ||
       sampleLedger?.mainFluidLocalProjectionStrategy !== expectedMainFluidLocalProjectionStrategy ||
@@ -2940,8 +3032,7 @@ async function main() {
       sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0) ||
       (expectedSpatialPressureTiers && !Number.isFinite(Number(sampleLedger?.pressureJacobiFullGridEquivalentPasses))) ||
       sampleLedger?.fullGridPassBreakdown?.total !== sampleLedger?.fullGridPassesPerFrame ||
-      !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame) ||
-      typeof sampleLedger?.majorantBuiltThisFrame !== 'boolean'
+      !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame)
     ) {
       throw new Error(`GPU readback returned stale or incomplete sim cost ledger: ${JSON.stringify(sampleLedger)}`);
     }
@@ -2973,12 +3064,14 @@ async function main() {
         writeRgbaPng(fieldSliceOut, canonicalFieldSlice.width, canonicalFieldSlice.height, canonicalFieldSlice.rgba);
       }
     }
-    if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
+    if (!sample.simReadback || sample.simReadback.grid !== expectedGrid || !Array.isArray(sample.simReadback.gridDimensions)) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
     }
+    assert.deepEqual(sample.simReadback.gridDimensions, expectedGridDimensions, 'GPU sim readback dimensions do not match the expected rectangular grid');
+    assert.equal(sample.simReadback.cellCount, expectedGridCellCount, 'GPU sim readback cell count does not match the expected rectangular grid');
     if (
       sample.simReadback.frontFieldIdentity !== 'combustion-front-topology-sidecar-v0' ||
-      sample.simReadback.frontFieldBytes !== expectedGrid * expectedGrid * expectedGrid * 4 ||
+      sample.simReadback.frontFieldBytes !== expectedGridCellCount * 4 ||
       !Number.isFinite(sample.simReadback.frontTopologyMean) ||
       !Number.isFinite(sample.simReadback.frontTopologySourcePlugRatio) ||
       !Number.isFinite(sample.simReadback.frontTopologyRisingBodyRatio) ||
@@ -2989,9 +3082,6 @@ async function main() {
       !Number.isFinite(sample.simReadback.frontTopologyVisibleTransferLoss)
     ) {
       throw new Error(`GPU sim readback does not expose live front topology sidecar evidence: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!sample.majorantReadback || sample.majorantReadback.grid !== expectedMajorantGrid || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
-      throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
     }
     const sampleTiming = sample.timing || stateTiming;
     if (!Number.isFinite(sampleTiming.rafFps) || sampleTiming.rafFps <= 0 || !Number.isFinite(sampleTiming.frameP95Ms) || sampleTiming.frameP95Ms <= 0) {
@@ -3716,7 +3806,7 @@ async function main() {
             hudSuppression,
           });
         }
-        const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+        const { image, preview, simReadback, ...sampleReport } = scaleSample;
         const captureReport = {
           ...sampleReport,
           image: {
@@ -3758,11 +3848,6 @@ async function main() {
             extinctionMean: simReadback.extinctionMean,
             liveVoxels: simReadback.liveVoxels,
             frontFieldIdentity: simReadback.frontFieldIdentity,
-          } : null,
-          majorantReadback: majorantReadback ? {
-            grid: majorantReadback.grid,
-            occupiedBricks: majorantReadback.occupiedBricks,
-            importanceMax: majorantReadback.importanceMax,
           } : null,
         };
         writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
@@ -3831,6 +3916,7 @@ async function main() {
     }
     let controlledStepSequenceReport = null;
     if (controlledStepSequenceRequested) {
+      phase = 'controlled-step-sequence';
       if (!renderScaleSet.length) {
         throw new Error('controlled-step-sequence requires --render-scale-set');
       }
@@ -3906,6 +3992,8 @@ async function main() {
         const frameSlug = `frame-${String(controlledFrameIndex + 1).padStart(3, '0')}`;
         const frameDir = resolve(controlledStepDir, frameSlug);
         mkdirSync(frameDir, { recursive: true });
+        const partialFrame = { controlledStepFrameIndex, frameDir, images: [] };
+        partialControlledStepFrames.push(partialFrame);
         const captures = [];
         for (let index = 0; index < scaleSet.samples.length; index += 1) {
           const scaleSample = scaleSet.samples[index];
@@ -3913,6 +4001,7 @@ async function main() {
           const shouldCaptureFeature = renderScaleFeatureCaptures && scaleSample.role !== 'high';
           const slug = `${controlledStepPrefix}-${frameSlug}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
           const imagePath = resolve(frameDir, `${slug}.png`);
+          const presentationPath = resolve(frameDir, `${slug}.presentation.png`);
           const featurePath = resolve(frameDir, `${slug}.feature.png`);
           const flowDebugPath = resolve(frameDir, `${slug}.flow-debug.png`);
           const boundarySidecarSupportPath = resolve(frameDir, `${slug}.boundary-sidecar-support.png`);
@@ -3924,6 +4013,7 @@ async function main() {
               sameStateCaptureId: scaleSet.sameStateCaptureId,
               baseFrameCount: scaleSet.baseFrameCount,
               baseSimStepCount: scaleSet.baseSimStepCount,
+              includeRgba: true,
               includeFeatureRgba: shouldCaptureFeature,
               restoreControls: false,
               resumeRenderLoop: false,
@@ -3958,14 +4048,43 @@ async function main() {
               imageAuthority: canvasCapture.imageAuthority,
             })}`);
           }
+          const canvasReadback = canvasCapture.image;
+          if (canvasCapture.imageAuthority !== 'gpu-presentation-texture-rgba8-readback-frozen-sim-state'
+            || canvasReadback?.authority !== canvasCapture.imageAuthority
+            || !Number.isInteger(canvasReadback.width)
+            || !Number.isInteger(canvasReadback.height)
+            || canvasReadback.width !== scaleSample.renderWidth
+            || canvasReadback.height !== scaleSample.renderHeight
+            || canvasReadback.width !== canvasCapture.renderWidth
+            || canvasReadback.height !== canvasCapture.renderHeight
+            || canvasCapture.simStepCount !== frame.controlledStepCapture.afterSimStepCount
+            || canvasCapture.sameStateCaptureId !== scaleSet.sameStateCaptureId) {
+            throw new Error(`Controlled-step GPU image identity mismatch: ${JSON.stringify({
+              controlledStepFrameIndex,
+              imageAuthority: canvasCapture.imageAuthority,
+              readbackAuthority: canvasReadback?.authority,
+              simStepCount: canvasCapture.simStepCount,
+              afterSimStepCount: frame.controlledStepCapture.afterSimStepCount,
+              sameStateCaptureId: canvasCapture.sameStateCaptureId,
+              expectedSameStateCaptureId: scaleSet.sameStateCaptureId,
+            })}`);
+          }
+          const rgba = Buffer.from(canvasReadback.rgbaBase64 || '', 'base64');
+          if (rgba.length !== canvasReadback.width * canvasReadback.height * 4
+            || rgba.length !== canvasReadback.byteLength) {
+            throw new Error(`Controlled-step GPU image was missing or partial: ${rgba.length}/${canvasReadback.width * canvasReadback.height * 4}`);
+          }
+          const imageSha256 = createHash('sha256').update(rgba).digest('hex');
+          writeRgbaPng(imagePath, canvasReadback.width, canvasReadback.height, rgba);
+          partialFrame.images.push(imagePath);
+          const imageMetrics = measureScreenshot(readFileSync(imagePath));
           const scaleShot = await wsRequest(ws, 'Page.captureScreenshot', {
             format: 'png',
             fromSurface: true,
             clip: screenshotClip,
           });
-          const imageBuffer = Buffer.from(scaleShot.data, 'base64');
-          writeFileSync(imagePath, imageBuffer);
-          const imageMetrics = measureScreenshot(imageBuffer);
+          writeFileSync(presentationPath, Buffer.from(scaleShot.data, 'base64'));
+          partialFrame.images.push(presentationPath);
           const featureCapture = canvasCapture.featureCapture || null;
           if (featureCapture?.rgba && Number.isFinite(featureCapture.width) && Number.isFinite(featureCapture.height)) {
             writeRgbaPng(featurePath, featureCapture.width, featureCapture.height, featureCapture.rgba);
@@ -3993,7 +4112,8 @@ async function main() {
               hudSuppression,
             });
           }
-          const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+          const { image, preview, simReadback, ...sampleReport } = scaleSample;
+          const { image: rawCanvasImage, ...canvasCaptureMetadata } = canvasCapture;
           const captureReport = {
             ...sampleReport,
             sequenceAuthority: frame.sequenceAuthority,
@@ -4007,13 +4127,17 @@ async function main() {
               width: imageMetrics.width,
               height: imageMetrics.height,
               authority: canvasCapture.imageAuthority,
+              sha256: imageSha256,
+              sourceSimStepCount: canvasCapture.simStepCount,
+              sourceSameStateCaptureId: canvasCapture.sameStateCaptureId,
+              presentationScreenshot: presentationPath,
               canvasCssRect,
               screenshotClip,
               devicePixelRatio: canvasCapture.devicePixelRatio,
               hudSuppression,
               metrics: imageMetrics,
             },
-            canvasCapture,
+            canvasCapture: canvasCaptureMetadata,
             featureCapture: featureCapture ? {
               path: featurePath,
               width: featureCapture.width,
@@ -4036,11 +4160,6 @@ async function main() {
               extinctionMean: simReadback.extinctionMean,
               liveVoxels: simReadback.liveVoxels,
               frontFieldIdentity: simReadback.frontFieldIdentity,
-            } : null,
-            majorantReadback: majorantReadback ? {
-              grid: majorantReadback.grid,
-              occupiedBricks: majorantReadback.occupiedBricks,
-              importanceMax: majorantReadback.importanceMax,
             } : null,
           };
           writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
@@ -4073,7 +4192,14 @@ async function main() {
             simStepCount: canvasCapture.simStepCount,
             imageWidth: imageMetrics.width,
             imageHeight: imageMetrics.height,
-            image: imagePath,
+            image: {
+              path: imagePath,
+              authority: canvasCapture.imageAuthority,
+              sha256: imageSha256,
+              sourceSimStepCount: canvasCapture.simStepCount,
+              sourceSameStateCaptureId: canvasCapture.sameStateCaptureId,
+              presentationScreenshot: presentationPath,
+            },
             feature: featureCapture ? featurePath : null,
             featureCapture: featureCapture ? {
               path: featurePath,
@@ -4121,10 +4247,10 @@ async function main() {
         }
         frames.push(controlledStepFrameReport);
       }
-      const sessionIds = new Set(frames.map(frame => frame.sameBrowserSessionId));
+      const sequenceAssessment = assessControlledStepSequence(frames, controlledStepFrames, renderScaleSet);
       controlledStepSequenceReport = {
         sequenceAuthority: 'controlled-step-sequence-v0',
-        sampleAuthority: 'controlled-step-sim-advance',
+        sampleAuthority: sequenceAssessment.sampleAuthority,
         sameBrowserSessionId,
         controlledStepDeltaMs,
         requestedFrameCount: controlledStepFrames,
@@ -4132,14 +4258,28 @@ async function main() {
         renderScales: renderScaleSet,
         hudSuppression,
         controlledStepCapture: frames.map(frame => frame.controlledStepCapture),
-        sameBrowserSequenceSuitable: sessionIds.size === 1 && frames.length === controlledStepFrames,
+        sameBrowserSequenceSuitable: sequenceAssessment.sameBrowserSequenceSuitable,
+        stepSequenceVerified: sequenceAssessment.stepSequenceVerified,
+        frameEvidenceComplete: sequenceAssessment.frameEvidenceComplete,
+        visualJudgment: sequenceAssessment.visualJudgment,
+        simStepCounts: sequenceAssessment.simStepCounts,
+        frameImageHashes: sequenceAssessment.frameImageHashes,
         frames,
       };
       if (!controlledStepSequenceReport.sameBrowserSequenceSuitable) {
         throw new Error(`Controlled-step sequence did not preserve one browser session: ${JSON.stringify({
-          sessionIds: Array.from(sessionIds),
+          sessionIds: Array.from(new Set(frames.map(frame => frame.sameBrowserSessionId))),
           frameCount: frames.length,
           requestedFrameCount: controlledStepFrames,
+        })}`);
+      }
+      if (!controlledStepSequenceReport.frameEvidenceComplete
+        || (controlledStepFrames > 1 && !controlledStepSequenceReport.stepSequenceVerified)) {
+        throw new Error(`Controlled-step sequence has incomplete frame or step evidence: ${JSON.stringify({
+          simStepCounts: controlledStepSequenceReport.simStepCounts,
+          controlledStepCapture: controlledStepSequenceReport.controlledStepCapture,
+          frameEvidenceComplete: controlledStepSequenceReport.frameEvidenceComplete,
+          stepSequenceVerified: controlledStepSequenceReport.stepSequenceVerified,
         })}`);
       }
     }
@@ -4157,6 +4297,7 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      cameraPose: { requested: requestedCameraPose, applied: appliedCameraPose },
       captureReplay: isCaptureReplay ? {
         path: captureReplay.path,
         documentIdentity: captureReplay.documentIdentity,
@@ -4186,6 +4327,7 @@ async function main() {
       frameCount: state.frameCount,
       simStepCount: sample.simStepCount,
       simGrid: sample.simGrid,
+      simGridDimensions: sample.simReadback?.gridDimensions || null,
       simGridLabel: sample.simGridLabel,
       frontFieldIdentity: sample.frontFieldIdentity,
       frontFieldBytes: sample.frontFieldBytes,
@@ -4196,7 +4338,6 @@ async function main() {
       fieldSliceBackend: 'cpu-fluid-buffer-readback',
       canonicalFieldSlice: simReadbackReport.canonicalSmokeFieldSlice || null,
       fieldSlice: fieldSliceOut || null,
-      majorantReadback: sample.majorantReadback,
       canonicalPlumeControls: state.canonicalPlumeControls || null,
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
@@ -4204,12 +4345,7 @@ async function main() {
       expectedVolumeScene,
       adaptiveRaymarch: sample.adaptiveRaymarch,
       occupancySkip: sample.occupancySkip,
-      majorantSkip: sample.majorantSkip,
-      majorantSmooth: sample.majorantSmooth,
-      majorantGuard: sample.majorantGuard,
-      temporalAccum: sample.temporalAccum,
-      temporalJitter: sample.temporalJitter,
-      historyClamp: sample.historyClamp,
+      ...retiredRaymarchControlReceiptPayload(sample),
       fireScale: sample.fireScale,
       detailScale: sample.detailScale,
       detailScaleArtifactQuarantine: sample.detailScaleArtifactQuarantine,
@@ -4270,7 +4406,6 @@ async function main() {
       expectedBonfireProjection,
       expectedBonfireTemporal,
       expectedBonfireInstabilityProbe,
-      expectedEffectiveTemporalAccum,
       bonfireAblation: sample.bonfireAblation,
       bonfireReferenceConfinement: sample.bonfireReferenceConfinement,
       expectedRenderScale,
@@ -4320,24 +4455,6 @@ async function main() {
       volumePrimitiveCount: sample.volumePrimitiveCount,
       volumePrimitiveIds: sample.volumePrimitiveIds,
       volumePrimitives: sample.volumePrimitives,
-      temporalAccumEffective: sample.temporalAccumEffective,
-      temporalReprojectionConfidence: sample.temporalReprojectionConfidence,
-      temporalHistoryWeight: sample.temporalHistoryWeight,
-      temporalRejectedHistory: sample.temporalRejectedHistory,
-      temporalSmokeHistoryTrust: sample.temporalSmokeHistoryTrust,
-      temporalFireHistoryProtect: sample.temporalFireHistoryProtect,
-      temporalInterfaceHistoryProtect: sample.temporalInterfaceHistoryProtect,
-      temporalEvidenceSource: sample.temporalEvidenceSource,
-      temporalHistoryFrames: sample.temporalHistoryFrames,
-      temporalHistoryResetCount: sample.temporalHistoryResetCount,
-      temporalHistoryResetReason: sample.temporalHistoryResetReason,
-      temporalHistoryValid: sample.temporalHistoryValid,
-      majorantGrid: sample.majorantGrid,
-      majorantBuilt: sample.majorantBuilt,
-      majorantCadence: sample.majorantCadence,
-      majorantBuiltThisFrame: sample.majorantBuiltThisFrame,
-      majorantLastBuiltFrame: sample.majorantLastBuiltFrame,
-      majorantSkippedFrameCount: sample.majorantSkippedFrameCount,
       pressureProjectionEnabled: sample.pressureProjectionEnabled,
       pressureEffectiveLabel: sample.pressureEffectiveLabel,
       pressureProjectionIterations: sample.pressureProjectionIterations,
@@ -4359,7 +4476,6 @@ async function main() {
       pressureTierBufferOwnership: sample.pressureTierBufferOwnership,
       simProfile: sample.simProfile,
       simCostLedger: sample.simCostLedger || state.simCostLedger || null,
-      expectedMajorantCadence,
       expectedPressureIterations,
       expectedTallPlumePressureIterationStrategy: expectedTallPlumePressureStrategy,
       expectedPressureStrategy,
@@ -4370,7 +4486,8 @@ async function main() {
       expectedCanonicalMacroPreset,
       expectedCanonicalSourceMode,
       expectedCanonicalRenderMode,
-      expectedCanonicalMotionMode,
+      expectedCanonicalMotionRequest,
+      expectedCanonicalMotionRetirementIdentity,
       expectedCanonicalContentMode,
       expectedCanonicalSourceY,
       expectedCanonicalInjection,
@@ -4438,6 +4555,7 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      cameraPose: { requested: requestedCameraPose, applied: appliedCameraPose },
       captureReplay: isCaptureReplay ? {
         path: captureReplay.path,
         documentIdentity: captureReplay.documentIdentity,
@@ -4455,6 +4573,8 @@ async function main() {
       phase,
       error: err?.message || String(err),
       state,
+      partialControlledStepFrames,
+      sourceBeforeLoad,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
       browserSession: {

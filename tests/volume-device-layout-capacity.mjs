@@ -16,11 +16,16 @@ const section = (startText, endText) => {
   return source.slice(start, end);
 };
 const requestStart = source.indexOf('const requiredLimits = {};', ensureGpuStart);
+const suppliedDeviceStart = source.indexOf('if (suppliedDevice) {', requestStart);
+const standaloneRequestStart = source.indexOf('const requiredFeatures = [];', suppliedDeviceStart);
 const requestCallStart = source.indexOf('device = await adapter.requestDevice(', requestStart);
 const requestCallEnd = source.indexOf(';\n', requestCallStart);
-assert.ok(requestStart >= ensureGpuStart && requestCallStart > requestStart && requestCallEnd > requestCallStart,
+assert.ok(requestStart >= ensureGpuStart && suppliedDeviceStart > requestStart
+  && standaloneRequestStart > suppliedDeviceStart && requestCallStart > standaloneRequestStart
+  && requestCallEnd > requestCallStart,
   'production request-device descriptor handoff exists');
-const requestPath = source.slice(requestStart, requestCallEnd + 1);
+const requestPath = source.slice(requestStart, suppliedDeviceStart)
+  + source.slice(standaloneRequestStart, requestCallEnd + 1);
 const layouts = section('bindGroupLayout = device.createBindGroupLayout({', "device.pushErrorScope('validation');");
 const stages = { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
 const pipelines = [];
@@ -51,7 +56,7 @@ assert.ok(minimumCapacity > 0, 'the production layouts contain storage bindings'
 const requestDeviceForCapacity = async capacity => {
   let receivedDescriptor;
   const adapter = {
-    limits: { maxStorageBuffersPerShaderStage: capacity, maxStorageBufferBindingSize: 268435456 },
+    limits: { maxStorageBuffersPerShaderStage: capacity, maxStorageBufferBindingSize: 268435456, maxBufferSize: 268435456 },
     features: { has: () => false },
     requestDevice: async descriptor => {
       receivedDescriptor = descriptor;
@@ -63,7 +68,8 @@ const requestDeviceForCapacity = async capacity => {
     let device;
     ${requestPath}
     return { deviceDescriptor, device };
-  })()`, { adapter, maxRequestedFluidBufferBytes: 134217728 });
+  })()`, { adapter, maxRequestedStorageBufferBytes: 134217728,
+    BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT: minimumCapacity });
   assert.equal(receivedDescriptor, result.deviceDescriptor,
     'the descriptor assembled from production limits is the one sent to adapter.requestDevice');
   const granted = result.device.limits.maxStorageBuffersPerShaderStage;
@@ -73,8 +79,8 @@ const requestDeviceForCapacity = async capacity => {
 
 for (const capacity of [minimumCapacity, 32]) {
   const { descriptor, granted } = await requestDeviceForCapacity(capacity);
-  assert.equal(descriptor.requiredLimits.maxStorageBuffersPerShaderStage, capacity,
-    `request the adapter-supported storage capacity ${capacity}`);
+  assert.equal(descriptor.requiredLimits.maxStorageBuffersPerShaderStage, minimumCapacity,
+    `request the production-required storage capacity from adapter ${capacity}`);
   for (const row of counts) {
     assert.ok(row.count <= granted,
       `${row.pipeline} ${row.stage} needs ${row.count} storage bindings, but device receives ${granted} (adapter ${capacity})`);
@@ -82,10 +88,7 @@ for (const capacity of [minimumCapacity, 32]) {
 }
 
 const insufficientCapacity = minimumCapacity - 1;
-const { granted: insufficientGrant } = await requestDeviceForCapacity(insufficientCapacity);
-const unsupportedLayouts = counts.filter(row => row.count > insufficientGrant);
-assert.ok(unsupportedLayouts.length > 0,
-  `an adapter with ${insufficientCapacity} slots cannot satisfy the production ${minimumCapacity}-binding layout`);
-assert.ok(unsupportedLayouts.some(row => row.count === minimumCapacity),
-  'the known under-capacity case fails specifically at the maximum production binding count');
-console.log(`PASS: ${pipelines.length} production layouts and requestDevice handoff at capacities ${minimumCapacity}/32; capacity ${insufficientCapacity} is correctly recognized as insufficient; maximum storage bindings ${minimumCapacity}`);
+await assert.rejects(requestDeviceForCapacity(insufficientCapacity),
+  /boundary-splat-compute-layout-storage-buffer-limit/,
+  `an adapter with ${insufficientCapacity} slots must reject the production ${minimumCapacity}-binding layout`);
+console.log(`PASS: ${pipelines.length} production layouts and requestDevice handoff at capacities ${minimumCapacity}/32; capacity ${insufficientCapacity} rejects before device request; maximum storage bindings ${minimumCapacity}`);
