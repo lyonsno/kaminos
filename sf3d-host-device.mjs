@@ -4,9 +4,9 @@ export const sharedGpuBufferRequirements = Object.freeze({
   maxBufferSize: 3 * 96 * 96 * 2 * 4096 * 4,
   maxStorageBufferBindingSize: 3 * 96 * 96 * 2 * 4096 * 4,
 });
-export const SF3D_PRODUCER_COMMIT = '740b6098b716f65840f955451a1366f0af53ed3a';
+export const SF3D_PRODUCER_COMMIT = 'e4ec909cbbd896e04b221bb9aed9c910fd03ec6d';
 
-export function judgeSf3dSmoke(result) {
+export function judgeSf3dSmoke(result, {expectedScene = null, expectedReopen = null} = {}) {
   const errors = [];
   if (!result) return ['missing result'];
   if (result.deviceTopology !== 'same-device') errors.push('not same-device');
@@ -24,6 +24,30 @@ export function judgeSf3dSmoke(result) {
   // actual submission rows; successfulSubmissionCount exists only outside runs.
   if (frames.some(row => row.status !== 'completed' || !row.submissions?.some(submission => submission.submissionStatus === 'queue-submit-returned' && submission.commandBufferCount > 0) || row.result?.renderer !== 'ordinary-volume' || row.result?.status !== 'submitted')) errors.push('failed or alternate foreground frame');
   if (live.length >= 2 && !['frameCount','simStepCount','sceneFrameCount'].every(key=>live.at(-1).result?.[key] > live[0].result?.[key])) errors.push('foreground scene/flame counters did not advance');
+  if (expectedScene) {
+    const scene = result.sceneEvidence;
+    if (scene?.routeSceneFile !== expectedScene.file) errors.push('wrong or absent scene route');
+    if (scene?.runtimePresetId !== expectedScene.presetId) errors.push('wrong or absent scene basin');
+    if (!scene?.runtimeModelSources?.includes(expectedScene.modelSource)) errors.push('authored kiln mesh was not loaded');
+    if (!scene?.runtimeStatus || /^Restore failed:/i.test(scene.runtimeStatus)) errors.push('scene restore did not complete');
+  }
+  if (expectedReopen) {
+    const reopen = result.reopenEvidence;
+    const kilnSource = expectedReopen.kilnSource || expectedScene?.modelSource;
+    const hasBoth = sources => Array.isArray(sources) && sources.includes(kilnSource) && sources.includes(expectedReopen.generatedSource);
+    const samePosition = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === 3 && b.length === 3 &&
+      a.every((value, index) => Number.isFinite(value) && Number.isFinite(b[index]) && Math.abs(value - b[index]) < 1e-5);
+    if (!reopen?.savedSceneFile || reopen.savedSceneFile === expectedScene?.file) errors.push('generated composition was not saved as a new scene');
+    if (!hasBoth(reopen?.savedSources)) errors.push('saved scene lacks kiln or generated mesh');
+    if (!hasBoth(reopen?.reopenedSources)) errors.push('reopened scene lacks kiln or generated mesh');
+    if (!reopen?.savedPresetId || reopen.reopenedPresetId !== reopen.savedPresetId ||
+        (expectedScene?.presetId && reopen.savedPresetId !== expectedScene.presetId)) errors.push('reopened scene has wrong flame basin');
+    if (!reopen?.reopenedStatus || /^Restore failed:/i.test(reopen.reopenedStatus)) errors.push('generated composition did not restore');
+    if (!(reopen?.flameAfter > reopen?.flameBefore)) errors.push('reopened flame did not advance');
+    if (reopen?.sourceUnchanged !== true) errors.push('Save As did not preserve the source scene');
+    if (!samePosition(reopen?.editedPosition, reopen?.reopenedPosition) ||
+        samePosition(reopen?.originalPosition, reopen?.editedPosition)) errors.push('generated object edit did not survive reopen');
+  }
   return errors;
 }
 
