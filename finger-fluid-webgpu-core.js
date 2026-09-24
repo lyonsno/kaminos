@@ -6801,7 +6801,11 @@ fn density_neighbor_cell_might_contribute(position: vec3<f32>, neighborCell: vec
   // Grid assignment and reconstructed cell bounds round differently in f32.
   // Expand the box so a boundary pair with positive kernel weight survives.
   let cellPadding = cellWidth * 0.001;
-  let nearest = clamp(position, cellMin - cellPadding, cellMax + cellPadding);
+  // gridCoord clamps positions outside the domain into edge cells. Those
+  // cells have unbounded outer sides, including during source recycling.
+  let lower = select(cellMin - cellPadding, min(cellMin - cellPadding, position), neighborCell == vec3<i32>(0));
+  let upper = select(cellMax + cellPadding, max(cellMax + cellPadding, position), neighborCell == vec3<i32>(params.gridDims.xyz) - vec3<i32>(1));
+  let nearest = clamp(position, lower, upper);
   let separation = position - nearest;
   let supportRadius = params.fluid.x * radiusScale;
   return dot(separation, separation) <= supportRadius * supportRadius;

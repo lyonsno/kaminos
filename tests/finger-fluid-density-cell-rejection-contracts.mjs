@@ -9,8 +9,10 @@ const delta = shaderSource.match(/fn solve_position_delta[\s\S]*?(?=@compute @wo
 
 assert.match(shaderSource, /fn density_neighbor_cell_might_contribute\(position: vec3<f32>, neighborCell: vec3<i32>, radiusScale: f32\) -> bool/, 'the candidate-cell predicate is in the actual compute shader');
 assert.match(shaderSource, /if \(params\.refinementControl\.y != 0u \|\| params\.refinementControl\.w == 0u\) \{ return true; \}/, 'adaptive refinement and the baseline comparison bypass the uniform-volume cull');
-assert.match(shaderSource, /let nearest = clamp\(position, cellMin - cellPadding, cellMax \+ cellPadding\);[\s\S]*return dot\(separation, separation\) <= supportRadius \* supportRadius;/, 'cell rejection uses a padded sphere/AABB distance test');
-assert.match(shaderSource, /let cellPadding = cellWidth \* 0\.001;[\s\S]*clamp\(position, cellMin - cellPadding, cellMax \+ cellPadding\)/, 'the cell box expands across f32 grid-coordinate rounding');
+assert.match(shaderSource, /let nearest = clamp\(position, lower, upper\);[\s\S]*return dot\(separation, separation\) <= supportRadius \* supportRadius;/, 'cell rejection uses a padded sphere/AABB distance test');
+assert.match(shaderSource, /let cellPadding = cellWidth \* 0\.001;[\s\S]*select\(cellMin - cellPadding/, 'the cell box expands across f32 grid-coordinate rounding');
+assert.match(shaderSource, /select\(cellMin - cellPadding, min\(cellMin - cellPadding, position\), neighborCell == vec3<i32>\(0\)\)/, 'minimum edge-cell sides include clamped out-of-domain particles');
+assert.match(shaderSource, /select\(cellMax \+ cellPadding, max\(cellMax \+ cellPadding, position\), neighborCell == vec3<i32>\(params\.gridDims\.xyz\) - vec3<i32>\(1\)\)/, 'maximum edge-cell sides include clamped out-of-domain particles');
 for (const [name, stage] of [['lambda', lambda], ['correction', delta]]) {
   assert.match(stage, /if \(!density_neighbor_cell_might_contribute\(position, neighborCell, selfRadiusScale\)\) \{ continue; \}[\s\S]*atomicLoad\(&cellHeads\[cellIndex\(neighborCell\)\]\)/, `${name} skips irrelevant cells before following the linked list`);
 }
@@ -46,6 +48,23 @@ const max = [3.4, 3.0, 3.4];
 const dims = [32, 20, 32];
 const width = min.map((value, axis) => (max[axis] - value) / dims[axis]);
 const radius = 0.185;
+// The admitted source recycler resets particles above boundsMax.y before
+// collideDomain. gridCoord clamps them into the top edge cell, which is
+// geometrically unbounded above for a conservative candidate test.
+const recycledQuery = [-0.942499995, 3.635862350, -2.582499981];
+const recycledNeighbor = [-0.887499988, 3.632549047, -2.582499981];
+const recycledCell = [11, 19, 3];
+const squared = values => values.reduce((sum, value) => sum + value * value, 0);
+assert.ok(squared(recycledQuery.map((value, axis) => value - recycledNeighbor[axis])) < radius ** 2, 'recycled pair contributes');
+const edgeDistanceSquared = squared(recycledCell.map((cell, axis) => {
+  const lower = min[axis] + cell * width[axis] - width[axis] * 0.001;
+  const upper = lower + width[axis] * 1.002;
+  const conservativeLower = cell === 0 ? Math.min(lower, recycledQuery[axis]) : lower;
+  const conservativeUpper = cell === dims[axis] - 1 ? Math.max(upper, recycledQuery[axis]) : upper;
+  return Math.max(conservativeLower - recycledQuery[axis], 0, recycledQuery[axis] - conservativeUpper);
+}));
+assert.ok(edgeDistanceSquared <= radius ** 2, 'the extended edge cell retains the contributing recycled pair');
+
 const cells = Array.from({ length: dims.reduce((value, dimension) => value * dimension, 1) }, () => []);
 const cellIndex = (x, y, z) => x + dims[0] * (y + dims[1] * z);
 const coordinates = [];
