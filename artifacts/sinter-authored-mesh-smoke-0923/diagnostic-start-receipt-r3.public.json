@@ -1,0 +1,46 @@
+{
+  "schema": "kaminos.saved-mesh-combustion-diagnostic-public-receipt.v1",
+  "status": "prepared",
+  "attempt": "R3",
+  "ownerAlias": "sinter-object-combustion",
+  "submissionAuthority": "Operator explicitly approved one corrected Greenroom capture on 2026-09-24 after two setup failures.",
+  "claimCeiling": "Inspect the GPU exposure and material debug presentation on the exact saved 864-triangle trestle. Do not claim Pyro-caused heating, fuel loss, or char from debug colors alone.",
+  "queue": "/Users/noahlyons/.local/state/gpu-greenroom",
+  "workerPid": 89531,
+  "workerCapabilities": ["structured-command.v1"],
+  "queueStateBeforeSubmission": {
+    "pending": 0,
+    "running": 0,
+    "paused": false
+  },
+  "repoRoot": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
+  "sourceBranch": "cc/sinter-authored-mesh-burn-0923",
+  "sourceCommit": "cc75ceb891236df111a54908d185b2b4315eb3f3",
+  "sourceDirtyState": "The capture driver has local diagnostic-only edits; pre-existing untracked assets/artifacts remain untouched. The Greenroom command inputs are pinned by the hashes below.",
+  "captureScript": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r3.mjs",
+  "captureScriptSha256": "0cd7c63df358226a2f31feba6ab8e34ca984d3a9c09c1131f753652e471cf8ce",
+  "scenePath": "scenes/sinter-forked-timber-combustion.kaminos.json",
+  "sceneSha256": "45e31211bfd35d6f6db5e67eae1b135f355c4c0c36352923130ba59d4bb91fbc",
+  "expectedAssetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+  "routeIdentity": "kaminos-saved-timber-trestle-exposure-material-r3",
+  "manifest": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r3.json",
+  "terminalEvidence": {
+    "report": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/report.json",
+    "exposureScreenshot": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/exposure.png",
+    "exposureCanvasScreenshot": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/exposure-canvas.png",
+    "materialScreenshot": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/material.png",
+    "materialCanvasScreenshot": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/material-canvas.png",
+    "greenroomReceiptDirectory": "/Users/noahlyons/.local/state/gpu-greenroom"
+  },
+  "priorAttempts": [
+    {
+      "jobId": "e37c445caacc",
+      "outcome": "failed before visual capture: called a module-local loader as a global"
+    },
+    {
+      "jobId": "5288bc11c616",
+      "outcome": "failed before visual capture: selected scene but timed out before matching the exact GPU assembly"
+    }
+  ],
+  "retryPolicy": "This is the one operator-approved corrected capture. Do not submit another GPU attempt if this run fails."
+}

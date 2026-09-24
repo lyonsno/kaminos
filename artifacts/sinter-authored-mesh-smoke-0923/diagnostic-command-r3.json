@@ -1,0 +1,24 @@
+{
+  "schema": "gpu-greenroom.command.v1",
+  "agent_id": "sinter-object-combustion",
+  "repo_root": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
+  "cwd": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
+  "env": {
+    "KAMINOS_CHROME": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  },
+  "output_dir": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3",
+  "route_identity": "kaminos-saved-timber-trestle-exposure-material-r3",
+  "argv": [
+    "/opt/homebrew/bin/node",
+    "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r3.mjs",
+    "--repo-root",
+    "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
+    "--scene",
+    "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/scenes/sinter-forked-timber-combustion.kaminos.json",
+    "--origin",
+    "http://127.0.0.1:8094",
+    "--out-dir",
+    "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3"
+  ],
+  "timeout": 900
+}
