@@ -6,11 +6,12 @@ import { dirname, extname, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
 import { assertCleanGitCheckout, createSourceByteReceipt } from './trellis-dinov3-source-attestation.mjs';
+import { forwardF32ConditioningTensor, TRELLIS_DINO_CONDITIONING_BYTE_LENGTH, validateLiveConditioningSinkUrl } from './trellis-dinov3-live-conditioning-transport.mjs';
 
 const args = new Map();
 for (let index=2; index<process.argv.length; index+=2) args.set(process.argv[index],process.argv[index+1]);
 if (process.argv.includes('--help')) {
-  console.log('Usage: node tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs --reference-dir PATH --source-image PATH --output-dir PATH --report PATH [--mode block0-parity|resident-handoff|resident-block1|resident-block2-norm1|resident-block2-attention|resident-block2-mlp|resident-full-conditioning] [--source-revision SHA] [--chrome PATH] [--debug-port N] [--server-port N] [--timeout-ms N] [--atol N] [--rtol N]');
+  console.log('Usage: node tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs --reference-dir PATH --source-image PATH --output-dir PATH --report PATH [--mode block0-parity|resident-handoff|resident-block1|resident-block2-norm1|resident-block2-attention|resident-block2-mlp|resident-full-conditioning] [--source-revision SHA] [--conditioning-sink-url http://127.0.0.1:PORT/PATH] [--chrome PATH] [--debug-port N] [--server-port N] [--timeout-ms N] [--atol N] [--rtol N]');
   process.exit(0);
 }
 const root=resolve(new URL('..',import.meta.url).pathname);
@@ -25,6 +26,8 @@ const timeoutMs=Number(args.get('--timeout-ms')||0);
 const atol=Number(args.get('--atol')||0.002);
 const rtol=Number(args.get('--rtol')||0.001);
 const mode=args.get('--mode')||'block0-parity';
+const conditioningSinkUrl=args.has('--conditioning-sink-url') ? validateLiveConditioningSinkUrl(args.get('--conditioning-sink-url')) : null;
+if(conditioningSinkUrl&&mode!=='resident-full-conditioning') throw new Error('--conditioning-sink-url is only valid with --mode resident-full-conditioning');
 const chrome=process.env.KAMINOS_CHROME||args.get('--chrome')||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const invocationId=randomUUID();
 const requestedRouteId=mode==='resident-block1'
@@ -74,12 +77,15 @@ let browserState=null;
 let phase='initializing';
 let stderr='';
 let outputReceipts={};
+let liveConditioningReceipt=null;
+let liveConditioningTransferError=null;
+let liveConditioningRequestSeen=false;
 let servedSourceReceipts={};
 let sourceAttestationErrors=[];
 let checkoutAtStart=null;
 let sourceImageSha256=null;
 let referenceManifestSummary=null;
-const requestedUrl=`http://127.0.0.1:${serverPort}/smokes/trellis-dinov3-prefix-block-browser.html?smokeId=${invocationId}&mode=${encodeURIComponent(mode)}&sourceRevision=${encodeURIComponent(sourceRevision)}&atol=${atol}&rtol=${rtol}`;
+const requestedUrl=`http://127.0.0.1:${serverPort}/smokes/trellis-dinov3-prefix-block-browser.html?smokeId=${invocationId}&mode=${encodeURIComponent(mode)}&sourceRevision=${encodeURIComponent(sourceRevision)}&liveConditioning=${conditioningSinkUrl?'1':'0'}&atol=${atol}&rtol=${rtol}`;
 const delay=ms=>new Promise(resolveDelay=>setTimeout(resolveDelay,ms));
 let gitRoot=null;
 let requiredSourcePaths=[];
@@ -104,6 +110,7 @@ function writeReport(extra={}) {
   const actualRoute=browserState?.status==='passed'&&browserState?.receipt ? browserState.receipt.effectiveRouteId : browserState?.effectiveRouteId||null;
   const report={
     schema:reportSchema, ok:false, failure_phase:phase, mode, requestedUrl, invocationId, reportPath,
+    requestedConditioningSinkUrl:conditioningSinkUrl,
     requestedRouteId, effectiveRouteId:actualRoute, sourceRevision, chrome, chromeProcessPid:chromeProcess?.pid||null,
     authority:browserState?.authority||'unverified',
     browserVersion:browserVersion?.Browser||null, browser:browserState?.browser||null,
@@ -115,6 +122,7 @@ function writeReport(extra={}) {
     inputHashes:browserState?.referenceHashes||null, lastTrustworthyEvidence:browserState?.lastTrustworthyEvidence||{description:'local command setup only',detail:{phase}},
     evidenceChain:browserState?.evidenceChain||[], lastCompletedPhase:browserState?.lastCompletedPhase||null,
     comparisons:browserState?.comparisons||{}, actualOutputs:browserState?.actualOutputs||{}, persistedOutputReceipts:outputReceipts,
+    liveConditioningTransfer:liveConditioningReceipt, liveConditioningTransferError,
     sourceAttestation:sourceAttestation(),
     receipt:browserState?.receipt||null, browserState:browserState||null, stderrTail:stderr.slice(-6000),
     ...extra,
@@ -146,6 +154,50 @@ function startServer() {
       if (url.pathname==='/__smoke_state') {
         response.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
         response.end(Buffer.from(JSON.stringify(browserState||null)));
+        return;
+      }
+      if (url.pathname==='/__live_conditioning'&&request.method==='POST') {
+        if (!conditioningSinkUrl) { response.writeHead(404); response.end('no live conditioning consumer sink was configured'); return; }
+        if (mode!=='resident-full-conditioning') { response.writeHead(409); response.end('live conditioning is only valid for the full conditioner route'); return; }
+        if (request.headers['x-request-id']!==invocationId) { response.writeHead(409); response.end('conditioning request identity differs from this smoke session'); return; }
+        if (liveConditioningRequestSeen) { response.writeHead(409); response.end('this browser session already attempted its one conditioning transfer'); return; }
+        liveConditioningRequestSeen=true;
+        phase='live-conditioning-transfer';
+        try {
+          if (request.headers['content-type']!=='application/octet-stream') throw new Error('conditioning transfer Content-Type must be application/octet-stream');
+          if (Number(request.headers['content-length'])!==TRELLIS_DINO_CONDITIONING_BYTE_LENGTH) throw new Error(`conditioning Content-Length must be exactly ${TRELLIS_DINO_CONDITIONING_BYTE_LENGTH}`);
+          const bytes=await readRequestBody(request,TRELLIS_DINO_CONDITIONING_BYTE_LENGTH);
+          if (bytes.byteLength!==TRELLIS_DINO_CONDITIONING_BYTE_LENGTH) throw new Error(`partial conditioning tensor ${bytes.byteLength}; expected ${TRELLIS_DINO_CONDITIONING_BYTE_LENGTH}`);
+          const sha256=createHash('sha256').update(bytes).digest('hex');
+          if (request.headers['x-output-sha256']!==sha256) throw new Error('conditioning transfer digest does not match the browser session header');
+          const model=referenceManifestSummary?.model;
+          const provenance={
+            requestId:invocationId,
+            producerProcess:'Chrome',producerPid:chromeProcess?.pid,
+            producerSessionId:`trellis-dinov3-full-conditioning-${invocationId}`,
+            producerSourceRevision:sourceRevision,producerRouteId:requestedRouteId,
+            sourceImageSha256,
+            modelId:model?.id,modelRevision:model?.revision,modelWeightsSha256:model?.files?.['model.safetensors']?.sha256,
+            preprocessedPixelsSha256:referenceManifestSummary?.preprocessing?.pixelValuesSha256,
+            consumerModelReferenceRevision:referenceManifestSummary?.reference?.sourceRevision,
+            consumerDinoSourceSha256:referenceManifestSummary?.reference?.sourceFileSha256,
+          };
+          const forwarded=await forwardF32ConditioningTensor({url:conditioningSinkUrl,bytes,provenance});
+          liveConditioningReceipt={
+            ok:true,status:'http-bytes-forwarded',requestId:invocationId,receivedAt:new Date().toISOString(),
+            producerSessionId:provenance.producerSessionId,producerPid:provenance.producerPid,
+            hostBridgeProcess:{name:'Kaminos Node browser-smoke process',pid:process.pid},
+            receiverUrl:forwarded.requestUrl,receiverHttpStatus:forwarded.status,
+            receiverResponseText:forwarded.responseText,tensor:forwarded.tensor,envelope:forwarded.envelope,
+            acceptanceClaim:'HTTP delivery only; the receiver response is preserved but producer transport alone does not establish MLX array construction or sampler consumption',
+          };
+          response.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
+          response.end(JSON.stringify(liveConditioningReceipt));
+        } catch(error) {
+          liveConditioningTransferError={phase:'live-conditioning-transfer',requestId:invocationId,error:String(error?.message||error)};
+          response.writeHead(502,{'content-type':'application/json','cache-control':'no-store'});
+          response.end(JSON.stringify(liveConditioningTransferError));
+        }
         return;
       }
       if (url.pathname==='/__source/source-image.png'&&request.method==='GET') {

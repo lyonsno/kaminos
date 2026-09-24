@@ -5,11 +5,12 @@ import { createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { assertCleanGitCheckout } from './trellis-dinov3-source-attestation.mjs';
+import { validateLiveConditioningSinkUrl } from './trellis-dinov3-live-conditioning-transport.mjs';
 
 const args=new Map();
 for(let index=2;index<process.argv.length;index+=2) args.set(process.argv[index],process.argv[index+1]);
 if(process.argv.includes('--help')) {
-  console.log('Usage: node tools/trellis-dinov3-prefix-block-parity-assay.mjs --model-dir PATH --source-image PATH --trellis-root PATH --evidence-dir PATH --report PATH --receiver ADDRESS [--mode block0-parity|resident-handoff|resident-block1|resident-block2-norm1|resident-block2-attention|resident-block2-mlp|resident-full-conditioning] [--python PATH] [--chrome PATH] [--source-revision SHA] [--debug-port N] [--server-port N]');
+  console.log('Usage: node tools/trellis-dinov3-prefix-block-parity-assay.mjs --model-dir PATH --source-image PATH --trellis-root PATH --evidence-dir PATH --report PATH --receiver ADDRESS [--mode block0-parity|resident-handoff|resident-block1|resident-block2-norm1|resident-block2-attention|resident-block2-mlp|resident-full-conditioning] [--conditioning-sink-url http://127.0.0.1:PORT/PATH] [--python PATH] [--chrome PATH] [--source-revision SHA] [--debug-port N] [--server-port N]');
   process.exit(0);
 }
 const root=resolve(new URL('..',import.meta.url).pathname);
@@ -23,6 +24,8 @@ const chrome=args.get('--chrome')||'/Applications/Google Chrome.app/Contents/Mac
 const debugPort=args.get('--debug-port')||'9577';
 const serverPort=args.get('--server-port')||'18577';
 const mode=args.get('--mode')||'block0-parity';
+const conditioningSinkUrl=args.has('--conditioning-sink-url') ? validateLiveConditioningSinkUrl(args.get('--conditioning-sink-url')) : null;
+if(conditioningSinkUrl&&mode!=='resident-full-conditioning') throw new Error('--conditioning-sink-url is only valid with --mode resident-full-conditioning');
 const referenceMode=mode==='resident-full-conditioning'?'full-conditioning':mode;
 const invocationId=`trellis-dinov3-${mode}-${new Date().toISOString().replaceAll(':','').replaceAll('-','')}`;
 const referenceDir=resolve(evidenceDir,'mlx-reference');
@@ -123,10 +126,12 @@ try {
   const sourceIdentity={mode,referenceMode,referenceBoundary,sourceImage:{path:sourceImage,sha256:sourceSha256},model:{id:'facebook/dinov3-vitl16-pretrain-lvd1689m',revision:modelRevision,files:observedFiles},mlxReference:{root:trellisRoot,revision:trellisRevision,sourceFile:trellisDinoSource,sourceFileSha256:trellisDinoSourceSha256},kaminos:{root,revision:kaminosRevision}};
   const pythonArgs=[resolve(root,'tools/trellis-dinov3-mlx-reference.py'),'--model-dir',modelDir,'--source-image',sourceImage,'--trellis-root',trellisRoot,'--out-dir',referenceDir,'--mode',referenceMode];
   const browserArgs=[resolve(root,'tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs'),'--reference-dir',referenceDir,'--source-image',sourceImage,'--output-dir',evidenceDir,'--report',browserReportPath,'--mode',mode,'--source-revision',kaminosRevision,'--chrome',chrome,'--debug-port',debugPort,'--server-port',serverPort,'--atol','0.002','--rtol','0.001'];
+  if(conditioningSinkUrl) browserArgs.push('--conditioning-sink-url',conditioningSinkUrl);
   effectiveCommands={
     sourceIdentity,
     mlxReference:{executable:python,args:pythonArgs,cwd:trellisRoot,route:'local MLX Metal F32 reference export',gpuQueueScope:'part of this matched composite job'},
     browserParity:{executable:process.execPath,args:browserArgs,cwd:root,route:'headless Chrome WebGPU F32 against the just-exported MLX tensors'},
+    ...(conditioningSinkUrl?{conditioningConsumer:{sinkUrl:conditioningSinkUrl,route:'caller-owned model-specific local consumer; this runner does not launch it or infer receiver-side MLX acceptance'}}:{}),
     queue:{timeout:null,serialization:'one serialized job executes MLX reference then WebGPU comparator; no other GPU job interleaves'},
   };
   const startReceipt={schema:mode==='resident-full-conditioning'?'kaminos.trellis-dinov3-full-conditioning-assay-start.v0':mode==='resident-block2-mlp'?'kaminos.trellis-dinov3-resident-block2-mlp-assay-start.v0':mode==='resident-block2-attention'?'kaminos.trellis-dinov3-resident-block2-attention-assay-start.v0':mode==='resident-block2-norm1'?'kaminos.trellis-dinov3-resident-block2-norm1-assay-start.v0':mode==='resident-block1'?'kaminos.trellis-dinov3-resident-block1-assay-start.v0':mode==='resident-handoff'?'kaminos.trellis-dinov3-resident-handoff-assay-start.v1':'kaminos.trellis-dinov3-prefix-block0-parity-assay-start.v0',invocationId,receiver:args.get('--receiver'),startedAt:new Date().toISOString(),sourceIdentity,effectiveCommands,terminalEvidence:{reportPath,referenceManifest:resolve(referenceDir,'reference-manifest.json'),browserReportPath,gpuOutputs:resolve(evidenceDir,'gpu'),stdoutPath,stderrPath}};
@@ -164,17 +169,18 @@ try {
     }
     const checkoutAtEnd=assertCleanGitCheckout(root,kaminosRevision);
     const sourceAttestationOk=browserReport?.sourceAttestation?.ok===true;
-    const parityOk=browserRun.code===0&&browserReport?.ok===true&&sourceAttestationOk&&Object.values(rawOutputCheck).every(entry=>entry.ok);
-    phase=parityOk?'complete':'webgpu-parity-or-output-custody';
-    lastTrustworthyEvidence={description:parityOk?'matched WebGPU F32 route and all raw same-observation outputs plus served source bytes were independently verified':'last trustworthy MLX reference remained valid; WebGPU or raw-output/source-attestation parity did not close',detail:{browserReportPath,browserStatus:browserReport?.ok||false,rawOutputCheck,comparisons:browserReport?.comparisons||{}}};
+    const consumerTransferOk=!conditioningSinkUrl||browserReport?.liveConditioningTransfer?.ok===true;
+    const runOk=browserRun.code===0&&browserReport?.ok===true&&sourceAttestationOk&&Object.values(rawOutputCheck).every(entry=>entry.ok)&&consumerTransferOk;
+    phase=runOk?'complete':conditioningSinkUrl&&!consumerTransferOk?'live-consumer-transfer-incomplete':'webgpu-parity-or-output-custody';
+    lastTrustworthyEvidence={description:runOk?'matched WebGPU F32 route, raw same-observation outputs, served source bytes, and configured HTTP tensor transfer were independently recorded':'last trustworthy MLX reference remained valid; WebGPU parity, raw-output/source-attestation custody, or configured consumer transfer did not close',detail:{browserReportPath,browserStatus:browserReport?.ok||false,rawOutputCheck,comparisons:browserReport?.comparisons||{},liveConditioningTransfer:browserReport?.liveConditioningTransfer||null,liveConditioningTransferError:browserReport?.liveConditioningTransferError||null}};
     report=persistReport({
-      ok:parityOk,sourceIdentity,referenceRun,browserRun,referenceManifest:manifestPath,browserReportPath,
+      ok:runOk,sourceIdentity,referenceRun,browserRun,referenceManifest:manifestPath,browserReportPath,
       browserReport,rawOutputCheck,sourceAttestation:{checkoutAtStart,checkoutAtEnd,servedSourceAttestation:browserReport?.sourceAttestation||null,ok:sourceAttestationOk},
-      claim:parityOk?browserReport.browserState?.claim:`no completed matched F32 ${mode} result; inspect browser failure phase and last trustworthy evidence`,
-      nextSlice:parityOk?(mode==='resident-full-conditioning'?'connect the verified final F32 DINO conditioning tensor to the native TRELLIS conditioning consumer; this diagnostic route is not yet a model consumer':mode==='resident-block2-mlp'?'exercise reusable resident encoder execution through the first native TRELLIS conditioning operation; do not count one diagnostic endpoint per layer as the outcome':mode==='resident-block2-attention'?'continue from the block-2 attention residual through native block-2 norm2 and MLP using the same image, checkpoint, preprocessing, precision, and reference':mode==='resident-block2-norm1'?'continue from block-2 norm1 through block-2 attention using the same image, checkpoint, preprocessing, precision, and reference':mode==='resident-block1'?'continue from the completed block-1 F32 output to block-2 norm1 using the same image, checkpoint, preprocessing, precision, and reference':mode==='resident-handoff'?'continue from the block-1 attention residual through block-1 norm2, GELU MLP, and residual with the same image, checkpoint, and precision':'connect the verified block-0 F32 output to the next native TRELLIS conditioning operation without changing image, checkpoint, precision, or route identity'):'repair the named failing route stage, preserving source/precision/reference identity',
+      claim:runOk?browserReport.browserState?.claim:`no completed matched F32 ${mode} result; inspect browser failure phase and last trustworthy evidence`,
+      nextSlice:runOk?(mode==='resident-full-conditioning'&&conditioningSinkUrl?'inspect the consumer-owned receipt to establish whether the forwarded bytes became an MLX-owned cond array and reached the named sampler stage; HTTP delivery alone is not consumer acceptance':mode==='resident-full-conditioning'?'connect the verified final F32 DINO conditioning tensor to the native TRELLIS conditioning consumer; this diagnostic route is not yet a model consumer':mode==='resident-block2-mlp'?'exercise reusable resident encoder execution through the first native TRELLIS conditioning operation; do not count one diagnostic endpoint per layer as the outcome':mode==='resident-block2-attention'?'continue from the block-2 attention residual through native block-2 norm2 and MLP using the same image, checkpoint, preprocessing, precision, and reference':mode==='resident-block2-norm1'?'continue from block-2 norm1 through block-2 attention using the same image, checkpoint, preprocessing, precision, and reference':mode==='resident-block1'?'continue from the completed block-1 F32 output to block-2 norm1 using the same image, checkpoint, preprocessing, precision, and reference':mode==='resident-handoff'?'continue from the block-1 attention residual through block-1 norm2, GELU MLP, and residual with the same image, checkpoint, and precision':'connect the verified block-0 F32 output to the next native TRELLIS conditioning operation without changing image, checkpoint, precision, or route identity'):'repair the named failing route stage, preserving source/precision/reference identity',
     });
-    console.log(JSON.stringify({ok:parityOk,reportPath,sourceIdentity,comparisons:browserReport?.comparisons||{},rawOutputCheck,claim:report.claim},null,2));
-    if(!parityOk) process.exitCode=1;
+    console.log(JSON.stringify({ok:runOk,reportPath,sourceIdentity,comparisons:browserReport?.comparisons||{},rawOutputCheck,liveConditioningTransfer:browserReport?.liveConditioningTransfer||null,claim:report.claim},null,2));
+    if(!runOk) process.exitCode=1;
   }
 } catch(error) {
   lastTrustworthyEvidence={...lastTrustworthyEvidence,detail:{...lastTrustworthyEvidence.detail,error:String(error?.message||error)}};
