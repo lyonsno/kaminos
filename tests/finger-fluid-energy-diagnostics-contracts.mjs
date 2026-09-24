@@ -9,7 +9,7 @@ import { createWebGPUFingerFluidSolver } from '../finger-fluid-webgpu-core.js';
 // CPU command-encoding witness only. This spy does not execute WGSL or claim
 // numerical/GPU parity. The real factory, step, and readback paths run unchanged.
 async function solverSpy(options = {}) {
-  const dispatches = [], copies = [], maps = [], writes = [];
+  const dispatches = [], copies = [], maps = [], writes = [], computePasses = [];
   const gpuFlags = new Proxy({}, { get: () => 1 });
   const previous = new Map(['GPUBufferUsage', 'GPUShaderStage', 'GPUTextureUsage',
     'GPUMapMode', 'navigator', 'fetch'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
@@ -27,6 +27,7 @@ async function solverSpy(options = {}) {
     }
   };
   const device = {
+    features: { has: feature => feature === 'timestamp-query' },
     limits: { maxStorageBuffersPerShaderStage: 10, maxBufferSize: 268435456, maxStorageBufferBindingSize: 134217728 },
     lost: new Promise(() => {}),
     createBuffer: ({ label, size }) => ({
@@ -42,12 +43,18 @@ async function solverSpy(options = {}) {
     createSampler: () => ({}),
     createTexture: () => ({ createView: () => ({}), destroy() {} }),
     createCommandEncoder: () => ({
-      beginComputePass: () => {
+      beginComputePass: descriptor => {
         let pipeline;
+        const computePass = { label: descriptor.label, timestampWrites: descriptor.timestampWrites, dispatches: [] };
+        computePasses.push(computePass);
         return {
           setPipeline(value) { pipeline = value; },
           setBindGroup() {},
-          dispatchWorkgroups(...groups) { dispatches.push({ entry: pipeline.compute.entryPoint, groups }); },
+          dispatchWorkgroups(...groups) {
+            const dispatch = { entry: pipeline.compute.entryPoint, groups };
+            dispatches.push(dispatch);
+            computePass.dispatches.push(dispatch);
+          },
           end() {},
         };
       },
@@ -71,11 +78,46 @@ async function solverSpy(options = {}) {
     });
     assert.equal(solver.available, true, JSON.stringify(solver));
     writes.length = 0;
-    return { solver, dispatches, copies, maps, writes, close() { solver.destroy(); restore(); } };
+    return { solver, dispatches, copies, maps, writes, computePasses, close() { solver.destroy(); restore(); } };
   } catch (error) { restore(); throw error; }
 }
 
 const isEnergy = entry => /^measure_(projection|viscosity|vorticity|cohesion)_energy$/.test(entry);
+
+test('opt-in stage timing isolates each density dispatch without changing normal step encoding', async () => {
+  for (const densityIterations of [1, 3]) {
+    const run = await solverSpy({ densityIterations, energyDiagnosticsMode: 'disabled' });
+    try {
+      const stageCount = 7 + (densityIterations * 5);
+      const querySet = { type: 'timestamp', count: stageCount * 2 };
+      const armed = run.solver.armSolverStageGpuTimestampCaptureForWitness(querySet, 0, 1);
+      assert.equal(armed.queriesPerStep, stageCount * 2);
+      assert.equal(armed.stages.length, stageCount);
+      run.solver.step();
+      const finished = run.solver.finishSolverStageGpuTimestampCaptureForWitness();
+      assert.equal(finished.status, 'complete');
+      assert.equal(finished.writtenPairs, 1);
+      assert.deepEqual(run.computePasses.map(pass => pass.label.split(':').at(-1)), finished.stages);
+      assert.deepEqual(run.computePasses.slice(1, 6).map(pass => pass.dispatches[0].entry), [
+        'clear_grid', 'build_linked_cell_grid', 'compute_density_lambda', 'solve_position_delta', 'apply_position_delta',
+      ]);
+      assert.deepEqual(run.computePasses.map(pass => pass.timestampWrites.beginningOfPassWriteIndex),
+        Array.from({ length: stageCount }, (_, index) => index * 2));
+      assert.ok(run.computePasses.slice(0, 3 + densityIterations * 5).every(pass => pass.dispatches.length === 1),
+        'predict, every density subpass, and each refresh operation receive individual intervals');
+      assert.equal(run.computePasses[3 + densityIterations * 5].label.split(':').at(-1), 'topology_surface_chemistry');
+      assert.equal(run.computePasses[4 + densityIterations * 5].label.split(':').at(-1), 'velocity_vorticity_support');
+      assert.equal(run.computePasses[5 + densityIterations * 5].label.split(':').at(-1), 'surface_cohesion');
+    } finally { run.close(); }
+  }
+
+  const ordinary = await solverSpy({ densityIterations: 3, energyDiagnosticsMode: 'disabled' });
+  try {
+    ordinary.solver.step();
+    assert.equal(ordinary.computePasses.length, 1, 'timing-off frames retain the original single compute pass');
+    assert.equal(ordinary.computePasses[0].timestampWrites, undefined);
+  } finally { ordinary.close(); }
+});
 
 function simulationWrites(run) {
   return run.writes.map(write => {

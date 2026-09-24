@@ -1,10 +1,27 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import {
-  createFingerFluidSolverTimestampWrites,
-} from '../finger-fluid-webgpu-core.js';
+import * as fingerFluidCore from '../finger-fluid-webgpu-core.js';
+
+const { createFingerFluidSolverGpuTimingStagePlan, createFingerFluidSolverTimestampWrites } = fingerFluidCore;
+assert.equal(typeof createFingerFluidSolverGpuTimingStagePlan, 'function',
+  'solver exposes a density-aware detailed timing plan');
 
 const querySet = { type: 'timestamp', count: 8 };
+const threePassPlan = createFingerFluidSolverGpuTimingStagePlan(3);
+assert.equal(threePassPlan.length, 22,
+  'three density iterations expose every density dispatch and both post-projection grid refresh dispatches');
+assert.deepEqual(threePassPlan.slice(1, 6), [
+  'density_iteration_0_clear_grid',
+  'density_iteration_0_build_grid',
+  'density_iteration_0_lambda',
+  'density_iteration_0_position_delta',
+  'density_iteration_0_apply_position_delta',
+]);
+assert.ok(threePassPlan.includes('density_iteration_2_position_delta'));
+assert.ok(threePassPlan.includes('post_projection_grid_refresh_clear'));
+assert.ok(threePassPlan.includes('post_projection_grid_refresh_build'));
+assert.throws(() => createFingerFluidSolverGpuTimingStagePlan(0), /positive integer/);
+assert.throws(() => createFingerFluidSolverGpuTimingStagePlan(1.5), /positive integer/);
 assert.deepEqual(createFingerFluidSolverTimestampWrites(querySet, 2), {
   querySet,
   beginningOfPassWriteIndex: 2,
@@ -23,7 +40,7 @@ assert.match(coreSource, /armSolverGpuTimestampCaptureForWitness,\s*finishSolver
 assert.match(benchSource, /kaminosFingerFluidBenchBeginSolverTimestampCaptureForWitness\s*=\s*\(querySet, firstQueryIndex, pairCount\)\s*=>[\s\S]*?armSolverGpuTimestampCaptureForWitness/,
   'bench witness arms the real solver capture API');
 assert.match(coreSource, /KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES[\s\S]*?density_projection[\s\S]*?post_projection_grid_refresh/,
-  'solver pass-stage timing has stable semantic stage names');
+  'coarse solver pass-stage timing retains stable semantic group names');
 assert.ok(coreSource.includes("'apply_velocity_interface_contact_compaction_particle_shift_adaptive'"),
   'optional particle-shift/adaptive dispatches share the always-active final solver timing group');
 assert.doesNotMatch(coreSource, /advanceStage\(7\)/,
@@ -46,7 +63,7 @@ assert.match(coreSource, /finalPresentationPass = encoder\.beginRenderPass\([\s\
 assert.match(coreSource, /lastRenderCpuMs: Number\(lastRenderCpuMs\.toFixed\(3\)\)/,
   'debug state exposes JavaScript renderer submission time separately');
 assert.match(coreSource, /stageCapture\.querySet,[\s\S]{0,140}stageQueryBase \+ \(stageIndex \* 2\)/,
-  'each solver stage uses standard pass-begin/pass-end timestamp writes');
+  'each dynamically planned solver dispatch group uses standard pass-begin/pass-end timestamp writes');
 assert.match(benchSource, /frameTimeMsEstimate: fingerFluidBenchLastFrameMs/,
   'visible frame CPU estimate reports the complete synchronous bench-frame work');
 assert.match(benchSource, /kaminosFingerFluidBenchBeginSolverStageTimestampCaptureForWitness[\s\S]*?armSolverStageGpuTimestampCaptureForWitness/,

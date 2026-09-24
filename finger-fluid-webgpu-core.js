@@ -14,6 +14,33 @@ export const KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES = Object.freeze([
   'surface_cohesion',
   'apply_velocity_interface_contact_compaction_particle_shift_adaptive',
 ]);
+export function createFingerFluidSolverGpuTimingStagePlan(densityIterations) {
+  if (!Number.isSafeInteger(densityIterations) || densityIterations < 1) {
+    throw new RangeError(`Finger Fluid detailed solver timing requires a positive integer density iteration count: ${densityIterations}`);
+  }
+  const stages = ['predict'];
+  const densityDispatches = [
+    'clear_grid',
+    'build_grid',
+    'lambda',
+    'position_delta',
+    'apply_position_delta',
+  ];
+  for (let iteration = 0; iteration < densityIterations; iteration += 1) {
+    for (const dispatch of densityDispatches) {
+      stages.push(`density_iteration_${iteration}_${dispatch}`);
+    }
+  }
+  stages.push(
+    'post_projection_grid_refresh_clear',
+    'post_projection_grid_refresh_build',
+    'topology_surface_chemistry',
+    'velocity_vorticity_support',
+    'surface_cohesion',
+    'apply_velocity_interface_contact_compaction_particle_shift_adaptive',
+  );
+  return Object.freeze(stages);
+}
 export function createFingerFluidSolverTimestampWrites(querySet, firstQueryIndex) {
   if (!querySet || querySet.type !== 'timestamp' || !Number.isSafeInteger(querySet.count)) {
     throw new TypeError('Finger Fluid solver timestamp capture requires a timestamp query set');
@@ -14412,7 +14439,8 @@ export async function createWebGPUFingerFluidSolver({
     if (solverGpuTimestampCapture?.writtenPairs < solverGpuTimestampCapture?.pairCount) {
       throw new Error('Finger Fluid solver timestamp capture is already active');
     }
-    const queriesPerStep = KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES.length * 2;
+    const stages = createFingerFluidSolverGpuTimingStagePlan(safeDensityIterations);
+    const queriesPerStep = stages.length * 2;
     const requiredQueries = pairCount * queriesPerStep;
     if (!querySet || querySet.type !== 'timestamp' || !Number.isSafeInteger(querySet.count)) {
       throw new TypeError('Finger Fluid stage timestamp capture requires a timestamp query set');
@@ -14423,10 +14451,12 @@ export async function createWebGPUFingerFluidSolver({
     if (firstQueryIndex + requiredQueries > querySet.count) {
       throw new RangeError(`Finger Fluid stage timestamp capture requires ${requiredQueries} queries at ${firstQueryIndex}, query set has ${querySet.count}`);
     }
-    solverStageGpuTimestampCapture = { querySet, firstQueryIndex, pairCount, writtenPairs: 0, queriesPerStep };
+    solverStageGpuTimestampCapture = {
+      querySet, firstQueryIndex, pairCount, writtenPairs: 0, queriesPerStep, stages: [...stages],
+    };
     return {
       status: 'armed', firstQueryIndex, pairCount, queriesPerStep,
-      stages: [...KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES],
+      stages: [...stages],
     };
   }
 
@@ -14440,7 +14470,7 @@ export async function createWebGPUFingerFluidSolver({
       requestedPairs: capture.pairCount,
       writtenPairs: capture.writtenPairs,
       queriesPerStep: capture.queriesPerStep,
-      stages: [...KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES],
+      stages: [...capture.stages],
       nextQueryIndex: capture.firstQueryIndex + (capture.writtenPairs * capture.queriesPerStep),
     };
   }
@@ -14494,7 +14524,7 @@ export async function createWebGPUFingerFluidSolver({
       let pass = null;
       const beginStagePass = (stageIndex) => {
         pass = encoder.beginComputePass({
-          label: `${KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE}:${KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES[stageIndex]}`,
+          label: `${KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE}:${stageCapture.stages[stageIndex]}`,
           timestampWrites: createFingerFluidSolverTimestampWrites(
             stageCapture.querySet,
             stageQueryBase + (stageIndex * 2),
@@ -14525,19 +14555,24 @@ export async function createWebGPUFingerFluidSolver({
       advanceStage(1);
       for (let iteration = 0; iteration < safeDensityIterations; iteration += 1) {
         dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
+        advanceStage(2 + (iteration * 5));
         dispatch(pass, pipelines.build, safeParticleCount);
+        advanceStage(3 + (iteration * 5));
         dispatch(pass, pipelines.lambda, safeParticleCount);
+        advanceStage(4 + (iteration * 5));
         dispatch(pass, pipelines.delta, safeParticleCount);
+        advanceStage(5 + (iteration * 5));
         dispatch(pass, pipelines.applyDelta, safeParticleCount);
+        advanceStage(6 + (iteration * 5));
         linkedCellGridBuildCount += 1;
         densityIterationCount += 1;
       }
-      advanceStage(2);
       dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
+      advanceStage(2 + (safeDensityIterations * 5));
       dispatch(pass, pipelines.build, safeParticleCount);
       linkedCellGridBuildCount += 1;
       postProjectionGridRefreshCount += 1;
-      advanceStage(3);
+      advanceStage(3 + (safeDensityIterations * 5));
       dispatch(pass, pipelines.measureTopology, safeParticleCount);
       topologyMeasurementPassCount += 1;
       if (safeChemistryDiffusion > 0) {
@@ -14548,7 +14583,7 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.classifySurface, safeParticleCount);
       freeSurfaceClassificationPassCount += 1;
       dispatchEnergy(pass, energyPipelines.projection);
-      advanceStage(4);
+      advanceStage(4 + (safeDensityIterations * 5));
       dispatch(pass, pipelines.velocity, safeParticleCount);
       dispatchEnergy(pass, energyPipelines.viscosity);
       if (frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
@@ -14565,11 +14600,11 @@ export async function createWebGPUFingerFluidSolver({
         dispatch(pass, pipelines.commitUnsupportedSheet, safeParticleCount);
         sheetSupportPassCount += 3;
       }
-      advanceStage(5);
+      advanceStage(5 + (safeDensityIterations * 5));
       dispatch(pass, pipelines.cohesion, safeParticleCount);
       surfaceCohesionPassCount += 1;
       dispatchEnergy(pass, energyPipelines.cohesion);
-      advanceStage(6);
+      advanceStage(6 + (safeDensityIterations * 5));
       dispatch(pass, pipelines.applyVelocity, safeParticleCount);
       dispatch(pass, pipelines.clearInterface, 1);
       dispatch(pass, pipelines.compactInterface, safeParticleCount);
