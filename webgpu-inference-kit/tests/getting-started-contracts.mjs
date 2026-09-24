@@ -17,7 +17,7 @@ const [guide, runner, packageJson, example] = await Promise.all([
   import(exampleUrl),
 ]);
 
-assert.equal(packageJson.version, '0.1.53');
+assert.equal(packageJson.version, '0.1.54');
 assert.ok(packageJson.files.includes('examples'));
 assert.equal(
   packageJson.exports['./examples/minimal-model-port'],
