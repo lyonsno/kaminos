@@ -189,6 +189,19 @@ assert.match(browserRunner, /manifest\.computation\?\.mode!=='full-conditioning'
   'the browser runner must fail preflight unless the reference is the exact full-conditioning F32 boundary');
 assert.match(browserSmoke, /actual\?\.operation !== 'dinov3-block1-attention-residual'/,
   'the browser consumer must accept the operation returned by the block-1 attention-residual producer');
+const fullConditioningSessionCall = browserSmoke.slice(
+  browserSmoke.indexOf('execute:invocation=>residentProbe.runTrellisDinoV3PrefixBlockResidentFullConditioningProbe({'),
+  browserSmoke.indexOf('\n      }),\n    });', browserSmoke.indexOf('execute:invocation=>residentProbe.runTrellisDinoV3PrefixBlockResidentFullConditioningProbe({')),
+);
+assert.ok(fullConditioningSessionCall.length > 0,
+  'the full-conditioning mode must have a registered-session probe call');
+for (const inputName of [
+  'block1Norm1Weight', 'block1Norm1Bias', 'block1AttentionWeights', 'block1MlpWeights',
+  'block2Norm1Weights', 'block2AttentionWeights', 'block2MlpWeights',
+]) {
+  assert.match(fullConditioningSessionCall, new RegExp(`\\b${inputName}\\b`),
+    `the registered full-conditioning probe must receive the already-loaded ${inputName}`);
+}
 assert.match(browserSmoke, /\.\.\.\(result\.debugResidentBlock1\?\.outputValues\s*\|\|\s*\{\}\)[\s\S]*\.\.\.\(result\.debugResidentBlock2Attention\?\.outputValues\s*\|\|\s*\{\}\)/,
   'block-2 attention parity must join the captured block-1 and block-2 diagnostic outputs instead of reading upstream tensors from the downstream-only record');
 assert.match(implementation, /if\s*\(residentBlock2AttentionProbe\)\s*\{\s*residentBlock2Attention\s*=\s*\{\s*\.\.\.residentBlock2Attention\s*,\s*outputValues\s*:\s*outputValues\.block2Attention\s*\}\s*;?\s*\}/,

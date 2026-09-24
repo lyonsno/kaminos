@@ -360,7 +360,9 @@ try {
       jobId:invocationId,
       metadata:{modelId:model.id,modelRevision:model.revision,mode:'resident-full-conditioning',referenceManifestSha256:manifestSha256},
       execute:invocation=>residentProbe.runTrellisDinoV3PrefixBlockResidentFullConditioningProbe({
-        ...routeInput,sessionRoute:inferenceRoute,schedulerInvocation:invocation,
+        ...routeInput,block1Norm1Weight,block1Norm1Bias,...block1AttentionWeights,...block1MlpWeights,
+        ...block2Norm1Weights,...block2AttentionWeights,...block2MlpWeights,
+        sessionRoute:inferenceRoute,schedulerInvocation:invocation,
       }),
     });
     const completion=await job.completion;
