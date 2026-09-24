@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 import { CDP_REQUEST_TIMEOUT_MS, cdpRequest } from '../artifacts/sinter-authored-mesh-smoke-0923/diagnostic-cdp.mjs';
 import { assertNonBlankCanvasScreenshot, inspectPng } from '../artifacts/sinter-authored-mesh-smoke-0923/diagnostic-png-inspector.mjs';
@@ -96,5 +99,30 @@ const response = new Event('message');
 Object.defineProperty(response, 'data', { value: JSON.stringify({ id: 1, result: { value: 'ok' } }) });
 respondingSocket.dispatchEvent(response);
 assert.deepEqual(await respondingRequest, { value: 'ok' }, 'matching DevTools replies must still resolve normally');
+
+const failureRoot = mkdtempSync(join(tmpdir(), 'kaminos-capture-launch-failure-'));
+try {
+  const launchFailure = spawnSync(process.execPath, [
+    capturePath,
+    '--repo-root', resolve(fileURLToPath(new URL('..', import.meta.url))),
+    '--scene', resolve(fileURLToPath(new URL('../scenes/sinter-forked-timber-combustion.kaminos.json', import.meta.url))),
+    '--origin', 'http://127.0.0.1:8094',
+    '--out-dir', join(failureRoot, 'output'),
+  ], {
+    encoding: 'utf8',
+    env: { ...process.env, KAMINOS_CHROME: join(failureRoot, 'missing-chrome') },
+  });
+  assert.equal(launchFailure.status, 1, 'an invalid Chrome executable must fail the capture command');
+  const failedReport = JSON.parse(readFileSync(join(failureRoot, 'output/report.json'), 'utf8'));
+  if (failedReport.browser?.profile) rmSync(failedReport.browser.profile, { recursive: true, force: true });
+  assert.equal(failedReport.status, 'failed', 'a Chrome spawn failure must not leave a running report');
+  assert.equal(failedReport.phase, 'browser-launch', 'the terminal report must identify the browser-launch failure phase');
+  assert.equal(failedReport.failureContext.phase, 'browser-launch');
+  assert.equal(failedReport.failureContext.lastRuntimeState, null, 'the failure report must preserve that no live runtime state was observed');
+  assert.equal(failedReport.failureContext.lastTrustedEvidence, null, 'the failure report must preserve the last trustworthy stage');
+  assert.match(failedReport.errors.join('\n'), /ENOENT|no such file|not found/i, 'the failed executable must remain diagnosable');
+} finally {
+  rmSync(failureRoot, { recursive: true, force: true });
+}
 
 console.log('saved mesh combustion capture contracts: ok');
