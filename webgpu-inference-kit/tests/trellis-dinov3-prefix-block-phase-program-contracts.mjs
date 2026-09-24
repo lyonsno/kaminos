@@ -80,6 +80,16 @@ assert.match(referenceExporter, /block2_norm1_hidden_states = block2\.norm1\(blo
   'the pinned MLX reference must apply layer-2 norm1 to the exact completed layer-1 output');
 assert.ok(/residentBlock2Norm1OutputBoundary": "after two complete transformer blocks and block 2 norm1; before block 2 attention and final model LayerNorm"/.test(referenceExporter),
   'the partial block-2 boundary must not be mislabeled as a complete transformer block');
+assert.match(referenceExporter, /block2_norm2_hidden_states = block2\.norm2\(block2_after_attention_hidden_states\)/,
+  'the pinned reference must continue block-2 attention residual through block-2 norm2');
+assert.match(referenceExporter, /block2_mlp_hidden_states = nn\.gelu\(block2\.mlp\.up_proj\(block2_norm2_hidden_states\)\)/,
+  'the pinned reference must include the block-2 GELU MLP input and activation');
+assert.match(referenceExporter, /if args\.mode == "resident-block2-mlp":\s+block2_norm2_hidden_states = block2\.norm2\(block2_after_attention_hidden_states\)/,
+  'only the full block-2 MLP comparison mode may pay for its additional MLX feed-forward block');
+assert.match(referenceExporter, /block2_after_mlp_hidden_states = block2_after_attention_hidden_states \+ block2_mlp_output \* block2\.layer_scale2/,
+  'the pinned reference must return the complete block-2 LayerScale residual');
+assert.match(referenceExporter, /"residentBlock2MlpOutputBoundary": "after three complete transformer blocks and block 2 MLP residual; before final model LayerNorm"/,
+  'the reference must distinguish completed block 2 from partial block-2 attention');
 assert.equal(/"blockCount"\s*:/.test(referenceExporter), false,
   'an unqualified block count must not obscure that the packet also includes only a partial second block');
 assert.equal(/"outputBoundary"\s*:/.test(referenceExporter), false,
@@ -110,12 +120,30 @@ assert.match(browserRunner, /block2Norm1:1029\*1024\*4/,
   'the resident block-2 norm1 mode must require the complete 1029×1024 F32 output');
 assert.match(browserRunner, /block2Attention:1029\*1024\*4/,
   'the resident block-2 attention mode must require the complete 1029×1024 F32 output');
+assert.match(browserRunner, /block2MlpHidden:1029\*4096\*4/,
+  'the resident block-2 MLP mode must require the complete 1029×4096 F32 GELU tensor');
+assert.match(browserRunner, /resident-block2-mlp/,
+  'the exact-source browser runner must expose the full block-2 MLP mode explicitly');
+assert.match(browserSmoke, /const residentBlock2MlpMode = mode === 'resident-block2-mlp'/,
+  'the browser must make full block-2 execution an explicit mode rather than silently widening attention mode');
+assert.match(browserSmoke, /runTrellisDinoV3PrefixBlockResidentBlock2MlpProbe/,
+  'the browser must invoke the model-local full-block probe for its named mode');
+assert.match(browserSmoke, /\['block2MlpProjection','block2_mlp_output'\]/,
+  'the full-block browser mode must compare the projected block-2 MLP output against its matching MLX boundary');
 assert.match(parityAssay, /\['block1Attention','block1Norm2','block1MlpHidden','block1MlpProjection','block1Output'\]/,
   'the full-block assay must reject missing raw GPU readbacks at every captured block-1 boundary');
 assert.match(parityAssay, /'block2Norm1'\]/,
   'block-2 norm1 mode must require its raw GPU output as well as all block-1 boundaries');
 assert.match(parityAssay, /'block2Norm1','block2Attention'\]/,
   'block-2 attention mode must preserve both norm1 input and attention-residual output readbacks');
+assert.match(parityAssay, /'block2Norm2','block2MlpHidden','block2MlpProjection','block2Output'\]/,
+  'block-2 full-block mode must require norm2, GELU, projection, and complete residual readbacks');
+assert.match(parityAssay, /residentBlock2MlpProbe/,
+  'the composite assay must reject a reference manifest that omits the exact full-block boundary');
+assert.match(parityAssay, /'--out-dir',referenceDir,'--mode',mode/,
+  'the exact-source assay must pass its requested mode into the MLX exporter');
+assert.match(parityAssay, /manifest\.computation\?\.mode===mode/,
+  'a reference manifest produced under a different mode must not be accepted');
 assert.match(browserSmoke, /adapterClassification === 'software-fallback'/,
   'software WebGPU fallback cannot satisfy the resident GPU evidence route');
 assert.match(browserSmoke, /finiteNonzeroCount === 0/,
@@ -138,8 +166,10 @@ assert.match(parityAssay, /last trustworthy MLX reference remained valid/,
   'a WebGPU failure must preserve the MLX reference as last trustworthy evidence without implying parity');
 const routeImplementation = implementation.slice(implementation.indexOf('async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal'));
 assert.equal(typeof residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata, 'function');
-assert.match(routeImplementation, /transfer:createTrellisDinoV3ResidentProbeTransferMetadata\(\{ residentBlock1Probe, residentBlock2Norm1Probe, residentBlock2AttentionProbe \}\)/,
+assert.match(routeImplementation, /transfer:createTrellisDinoV3ResidentProbeTransferMetadata\(\{ residentBlock1Probe, residentBlock2Norm1Probe, residentBlock2AttentionProbe, residentBlock2MlpProbe \}\)/,
   'the probe route must publish the same transfer metadata exercised by the mode-specific contract below');
+assert.match(routeImplementation, /operation:residentBlock2Mlp\?\.operation\|\|residentBlock2Attention\?\.operation/,
+  'full block-2 readback metadata must name the MLP endpoint, not the preceding attention endpoint');
 const attentionOnlyTransfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:false});
 assert.equal(Object.hasOwn(attentionOnlyTransfers,'norm2ToMlp'),false,
   'attention-only mode must not claim a norm2-to-MLP transfer it never executes');
@@ -155,6 +185,11 @@ assert.equal(block2Transfers.block1OutputToBlock2Norm1,'same-runtime-device-buff
 const block2AttentionTransfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:true,residentBlock2Norm1Probe:true,residentBlock2AttentionProbe:true});
 assert.equal(block2AttentionTransfers.block1OutputToBlock2AttentionResidual,'same-runtime-device-buffer');
 assert.equal(block2AttentionTransfers.block2Norm1ToAttention,'same-runtime-device-buffer');
+const block2MlpTransfers=residentRoute.createTrellisDinoV3ResidentProbeTransferMetadata({residentBlock1Probe:true,residentBlock2Norm1Probe:true,residentBlock2AttentionProbe:true,residentBlock2MlpProbe:true});
+assert.equal(block2MlpTransfers.block2AttentionToNorm2,'same-runtime-device-buffer',
+  'block-2 MLP metadata must preserve the same-device attention-residual to norm2 edge');
+assert.equal(block2MlpTransfers.block2Norm2ToMlp,'same-runtime-device-buffer',
+  'block-2 MLP metadata must preserve the same-device norm2-to-MLP edge');
 assert.equal(typeof residentRoute.runTrellisDinoV3Block1LayerNormResident, 'function');
 assert.equal(typeof residentRoute.runTrellisDinoV3LayerNormResident, 'function',
   'LayerNorm execution should be parameterized by model layer rather than copied into another block-specific kernel');
@@ -460,5 +495,47 @@ await assert.rejects(()=>residentRoute.runTrellisDinoV3Block1MlpResident({
   ...mlpWeights,mlpUpWeight:new Uint16Array(4096*1024),
 }),/block1MlpUpWeight must be a Float32Array/,
 'the resident MLP must reject reduced-precision checkpoint weights rather than silently converting them');
+
+assert.equal(typeof residentRoute.runTrellisDinoV3Block2MlpResident,'function',
+  'block-2 needs a model-local resident norm2/GELU-MLP/LayerScale executor, not a readback/restart between attention and MLP');
+const block2MlpStages=[];
+const block2MlpKernels=[];
+const block2MlpRuntime={
+  createTensor(input) { return { ...input,buffer:{} }; },
+  uploadTensor() {},
+  createUniformBuffer(input) { return { ...input,buffer:{} }; },
+  defineComputeKernel(input) { block2MlpKernels.push(input); return input; },
+  async runKernel(kernel,options) { block2MlpStages.push({kernel,options}); },
+};
+const residentBlock2Mlp=await residentRoute.runTrellisDinoV3Block2MlpResident({
+  runtime:block2MlpRuntime,device:{limits:{maxComputeWorkgroupsPerDimension:65535}},
+  inputTensor:residentBlock2Attention.tensor,residualTensor:residentBlock2Attention.tensor,
+  block2Norm2Weight:mlpWeights.norm2Weight,block2Norm2Bias:mlpWeights.norm2Bias,
+  block2MlpUpWeight:mlpWeights.mlpUpWeight,block2MlpUpBias:mlpWeights.mlpUpBias,
+  block2MlpDownWeight:mlpWeights.mlpDownWeight,block2MlpDownBias:mlpWeights.mlpDownBias,
+  block2LayerScale2:mlpWeights.layerScale2,
+  schedulerInvocation:{invocationId:'resident-contract-invocation'},
+});
+assert.equal(residentBlock2Mlp.inputTensor,residentBlock2Attention.tensor);
+assert.equal(residentBlock2Mlp.residualTensor,residentBlock2Attention.tensor);
+assert.deepEqual(block2MlpStages.map(({options})=>options.stage),[
+  'dinov3-block2-layernorm2-resident','dinov3-block2-mlp-up-resident',
+  'dinov3-block2-mlp-down-resident','dinov3-block2-mlp-residual-resident',
+]);
+assert.equal(block2MlpKernels.find(kernel=>kernel.name.endsWith('norm2')).bindings[0].resource,residentBlock2Attention.tensor);
+assert.equal(block2MlpKernels.find(kernel=>kernel.name.endsWith('mlp.layer-scale-residual')).bindings[0].resource,residentBlock2Attention.tensor);
+assert.equal(residentBlock2Mlp.operation,'dinov3-block2-mlp-residual');
+assert.deepEqual(residentBlock2Mlp.mlpHiddenTensor.shape,[1,1029,4096]);
+assert.equal(residentRoute.assertTrellisDinoV3ResidentBlock2MlpHandoffIdentity({
+  residentMlp:residentBlock2Mlp,attentionResidual:residentBlock2Attention.tensor,
+}),true);
+await assert.rejects(()=>residentRoute.runTrellisDinoV3Block2MlpResident({
+  runtime:block2MlpRuntime,inputTensor:residentBlock2Attention.tensor,residualTensor:residentBlock2Attention.tensor,
+  block2Norm2Weight:mlpWeights.norm2Weight,block2Norm2Bias:mlpWeights.norm2Bias,
+  block2MlpUpWeight:new Uint16Array(4096*1024),block2MlpUpBias:mlpWeights.mlpUpBias,
+  block2MlpDownWeight:mlpWeights.mlpDownWeight,block2MlpDownBias:mlpWeights.mlpDownBias,
+  block2LayerScale2:mlpWeights.layerScale2,
+}),/block2MlpUpWeight must be a Float32Array/,
+'the block-2 MLP must reject reduced precision instead of silently converting a checkpoint tensor');
 
 console.log('TRELLIS DINOv3 prefix/block-0 phase-program contracts passed');
