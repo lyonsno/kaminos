@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
-import { emptyObservationReport, mergeObservation } from '../kimodo-shared-device-observation.mjs';
+import { emptyObservationReport, isTerminalRunStatus, mergeObservation } from '../kimodo-shared-device-observation.mjs';
+
+assert.equal(isTerminalRunStatus('running'), false, 'running generation is not emitted as a completed record');
+assert.equal(isTerminalRunStatus('finishing'), false, 'successful generation waits for foreground duties to drain');
+assert.equal(isTerminalRunStatus('finalizing'), false, 'failed/canceled generation waits for its final telemetry snapshot');
+assert.equal(isTerminalRunStatus('failed'), true, 'failed generation becomes terminal after finalization');
 
 const report = emptyObservationReport({ requestedUrl: 'http://127.0.0.1:8096/kimodo-shared-device.html' });
 mergeObservation(report, {

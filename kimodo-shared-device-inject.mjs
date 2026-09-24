@@ -313,6 +313,7 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
     });
     let run = null;
     let generationError = null;
+    let terminalStatus = null;
     try {
       run = await foreground.beginRun(runId);
       activeGeneration = producer.generate({
@@ -352,15 +353,17 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
       record.motion = { numFrames: motion.numFrames, numJoints: motion.numJoints, fps: motion.fps };
       record.modelStatus = 'succeeded';
       record.status = 'finishing';
+      terminalStatus = 'succeeded';
       state.status = 'finishing';
     } catch (error) {
       generationError = error;
       telemetry.fail(error);
-      record.status = controller.signal.aborted ? 'canceled' : 'failed';
+      terminalStatus = controller.signal.aborted ? 'canceled' : 'failed';
+      record.status = 'finalizing';
       record.error = { phase: error?.phase || 'generation', message: error?.message || String(error) };
       record.diagnostics = error?.diagnostics ?? null;
       state.lastError = record.error;
-      state.status = record.status;
+      state.status = terminalStatus;
       $('error').textContent = record.error.message;
     } finally {
       if (run) {
@@ -369,17 +372,14 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
         } catch (finishError) {
           record.foregroundFinishError = finishError?.message || String(finishError);
           if (!generationError) {
-            record.status = 'failed';
+            terminalStatus = 'failed';
             state.status = 'failed';
             state.lastError = { phase: 'foreground-finish', message: record.foregroundFinishError };
             $('error').textContent = state.lastError.message;
           }
         }
       }
-      if (!generationError && !record.foregroundFinishError) {
-        record.status = 'succeeded';
-        state.status = 'succeeded';
-      }
+      if (!terminalStatus) terminalStatus = !generationError && !record.foregroundFinishError ? 'succeeded' : 'failed';
       record.endedAtMs = performance.now();
       record.wallMs = record.endedAtMs - record.startedAtMs;
       record.frameIntervals = state.frameIntervals.slice(record.frameIntervalStart);
@@ -395,6 +395,8 @@ export async function mountComposition({ prototype, sharedGpu, host } = {}) {
         .filter(receipt => receipt.runId === record.runId);
       record.flameAfter = snapshotFlameState(prototype.debugState());
       record.foregroundSnapshot = foreground.snapshot();
+      record.status = terminalStatus;
+      state.status = terminalStatus;
       $('result').textContent = `${record.status} · ${(record.wallMs / 1000).toFixed(1)} s · ${record.foregroundReceipts.length} ordinary frames`;
       $('stage').textContent = `${record.status} · ${record.telemetry.currentStage}`;
       activeGeneration = null;

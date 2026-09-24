@@ -137,7 +137,7 @@ try {
         modelStatus: record.modelStatus ?? null, error: clone(record.error ?? null),
       });
       const completedRuns = state.runs.filter(record =>
-        !completedRunIds.includes(record.runId) && !['running', 'finishing'].includes(record.status),
+        !completedRunIds.includes(record.runId) && !['running', 'finishing', 'finalizing'].includes(record.status),
       ).map(record => {
         const { samples, frameIntervals, foregroundReceipts, ...terminal } = record;
         return clone(terminal);

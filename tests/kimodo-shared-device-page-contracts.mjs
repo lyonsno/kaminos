@@ -17,6 +17,12 @@ assert.match(source, /foreground\.attachProducer\(producer\)/, 'the loaded produ
 assert.match(source, /generationLifecycle/, 'page teardown tracks the whole generation through foreground finish, not only the producer promise');
 assert.match(source, /__kimodoSharedDeviceTeardown/, 'the browser witness can await the same quiescent teardown chain used by pagehide');
 assert.match(source, /await\s+foreground\.beginRun\(runId\)[\s\S]*producer\.generate\([\s\S]*foregroundOpportunity:\s*async\s+boundary\s*=>\s*\{[\s\S]*telemetry\.foreground\(boundary\)[\s\S]*run\.foregroundOpportunity\(boundary\)[\s\S]*finally\s*\{[\s\S]*await\s+run\.finish\(\)/, 'every generation reserves, observes, services, and drains one persistent foreground run');
+assert.ok(/record\.status\s*=\s*'finalizing'[\s\S]*await\s+run\.finish\(\)/.test(source), 'failed/canceled records remain nonterminal while foreground duties drain');
+assert.ok(/!\['running',\s*'finishing',\s*'finalizing'\]\.includes\(record\.status\)/.test(readFileSync(new URL('../scripts/observe-kimodo-shared-device.mjs', import.meta.url), 'utf8')), 'observer waits for run finalization before emitting a one-time terminal record');
+assert.ok(
+  source.indexOf("record.status = terminalStatus") > source.indexOf('record.foregroundSnapshot = foreground.snapshot()'),
+  'a run is marked terminal only after timing, scheduler, flame, and foreground terminal evidence is populated',
+);
 assert.match(source, /deviceTopology:\s*'same-device'/, 'human-visible evidence names exact shared topology');
 assert.match(source, /foregroundReceipts/, 'composition retains actual foreground service receipts');
 assert.match(source, /frameIntervalStart:\s*state\.frameIntervals\.length/, 'each run records the start of its own uncapped frame interval window');

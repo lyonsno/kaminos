@@ -13,6 +13,10 @@ export function emptyObservationReport({ requestedUrl }) {
   };
 }
 
+export function isTerminalRunStatus(status) {
+  return !['running', 'finishing', 'finalizing'].includes(status);
+}
+
 export function mergeObservation(report, observation) {
   const telemetry = report.telemetry;
   const offsets = {
