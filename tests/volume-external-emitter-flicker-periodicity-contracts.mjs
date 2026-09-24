@@ -65,6 +65,11 @@ function assertExternalEmitterFlickerRetired(source) {
     'the returned external-emitter carrier must not escape through a mutable result alias',
   );
   assert.doesNotMatch(
+    influence.replace(/\/\*[\s\S]*?\*\//g, ''),
+    /(?<!&)&(?!&)/,
+    'the returned external-emitter carrier must not escape through an address',
+  );
+  assert.doesNotMatch(
     directCarrierTail,
     /\bresult\s*(?:=|\+=|-=|\*=|\/=)/,
     'the returned external-emitter carrier must not be replaced after direct accumulation',
@@ -253,6 +258,53 @@ const falseClosureMutations = [
   return result;`,
     ),
     /returned external-emitter carrier must not escape through a mutable result alias/,
+  ],
+  [
+    'pointer-mediated post-accumulation attenuation',
+    source => source
+      .replace(
+        'fn externalEmitterInfluence(',
+        'fn attenuateCarrierPtr(carrier: ptr<function, ExternalEmitterInfluence>) { (*carrier).material *= 0.82; }\n\nfn externalEmitterInfluence(',
+      )
+      .replace(
+        `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return result;`,
+        `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  attenuateCarrierPtr(&result);
+  return result;`,
+      ),
+    /returned external-emitter carrier must not escape through an address/,
+  ],
+  [
+    'comment-separated pointer-mediated attenuation',
+    source => source
+      .replace(
+        'fn externalEmitterInfluence(',
+        'fn attenuateCarrierPtr(carrier: ptr<function, ExternalEmitterInfluence>) { (*carrier).material *= 0.82; }\n\nfn externalEmitterInfluence(',
+      )
+      .replace(
+        `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return result;`,
+        `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  attenuateCarrierPtr(&/*comment*/result);
+  return result;`,
+      ),
+    /returned external-emitter carrier must not escape through an address/,
+  ],
+  [
+    'pointer captured before falloff and used after accumulation',
+    source => source
+      .replace(
+        'fn externalEmitterInfluence(',
+        'fn attenuateCarrierPtr(carrier: ptr<function, ExternalEmitterInfluence>) { (*carrier).material *= 0.82; }\n\nfn externalEmitterInfluence(',
+      )
+      .replace('  result.velocity = vec4<f32>(0.0);\n  let count =', '  result.velocity = vec4<f32>(0.0);\n  let resultPtr = &result;\n  let count =')
+      .replace('    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);\n  }\n  return result;', '    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);\n  }\n  attenuateCarrierPtr(resultPtr);\n  return result;'),
+    /returned external-emitter carrier must not escape through an address/,
   ],
   [
     'pre-falloff authored-strength attenuation',

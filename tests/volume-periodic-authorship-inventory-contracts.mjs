@@ -61,7 +61,7 @@ function assertPeriodicAuthorshipInventory(entries) {
     for (const [lineIndex, line] of source.split('\n').entries()) {
       assert.doesNotMatch(
         line,
-        /\b(?:Math|np|numpy|math)\s*\[|\bgetattr\s*\(\s*(?:np|numpy|math|Math)\s*,/,
+        /\b(?:Math|np|numpy|math)\s*\[|\bgetattr\s*\(\s*(?:np|numpy|math|Math)\s*,|\bvars\s*\(|\b[A-Za-z_]\w*\s*\.\s*__dict__\b/,
         `${file}:${lineIndex + 1} has unresolved computed math authority: ${line.trim()}`,
       );
       const calls = explicitTrigAuthorities(line);
@@ -166,6 +166,22 @@ for (const [name, injectedPython] of [
   [
     'Python computed callable acquisition',
     'periodic_gain = getattr(np, "sin")\nanimated_wind = periodic_gain(now * 0.001)',
+  ],
+  [
+    'Python module-dictionary callable acquisition',
+    'periodic_gain = np.__dict__["sin"]\nanimated_wind = periodic_gain(now * 0.001)',
+  ],
+  [
+    'Python module-dictionary get acquisition',
+    'periodic_gain = np.__dict__.get("sin")\nanimated_wind = periodic_gain(now * 0.001)',
+  ],
+  [
+    'Python imported module alias dictionary acquisition',
+    'import numpy as n\nperiodic_gain = n.__dict__["sin"]\nanimated_wind = periodic_gain(now * 0.001)',
+  ],
+  [
+    'Python vars module-dictionary callable acquisition',
+    'periodic_gain = vars(np)["sin"]\nanimated_wind = periodic_gain(now * 0.001)',
   ],
 ]) {
   const entries = sourceEntries.map(([file, source]) => [

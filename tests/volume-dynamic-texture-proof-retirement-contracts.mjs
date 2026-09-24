@@ -108,7 +108,7 @@ function assertDynamicTextureProofRetired({ exactHarnessExists, contractSource, 
     if (separatelyInventoriedExecutablePath(path)) continue;
     assert.doesNotMatch(
       executableSources.get(path),
-      /\b(?:Math|np|numpy|math)\s*(?:\.\s*(?:sin|cos|tan)\b|\[[^\]]+\])|(?<![\w.])(?:sin|cos|tan)\s*\(/,
+      /\b(?:Math|np|numpy|math)\s*(?:\.\s*(?:sin|cos|tan)\b|\[[^\]]+\])|\b[A-Za-z_]\w*\s*\.\s*__dict__\b|\bgetattr\s*\(\s*(?:np|numpy|math|Math)\s*,|\bvars\s*\(|(?<![\w.])(?:sin|cos|tan)\s*\(/,
       `live executable synthetic texture producer ${path} must not restore unclassified periodic authorship`,
     );
   }
@@ -175,5 +175,34 @@ assert.deepEqual(
   [],
   'the composed executable-source boundary must own TypeScript entries and local Python import reachability',
 );
+
+assert.throws(
+  () => assertDynamicTextureProofRetired({
+    exactHarnessExists: false,
+    contractSource: broadContracts,
+    packageSource: '{}',
+    executableSources: new Map([
+      ['volume-proof-wrapper.py', 'from tools.dynamic_texture_evidence import plume'],
+      ['tools/dynamic_texture_evidence.py', 'periodic_gain = np.__dict__["sin"]\nplume = periodic_gain(y * 8)'],
+    ]),
+  }),
+  /live executable synthetic texture producer/,
+  'the recursive live Python inventory rejects a module-dictionary acquired trig callable',
+);
+for (const acquisition of ['np.__dict__.get("sin")', 'n.__dict__["sin"]', 'vars(np)["sin"]']) {
+  assert.throws(
+    () => assertDynamicTextureProofRetired({
+      exactHarnessExists: false,
+      contractSource: broadContracts,
+      packageSource: '{}',
+      executableSources: new Map([
+        ['volume-proof-wrapper.py', 'from tools.dynamic_texture_evidence import plume'],
+        ['tools/dynamic_texture_evidence.py', `import numpy as n\nperiodic_gain = ${acquisition}\nplume = periodic_gain(y * 8)`],
+      ]),
+    }),
+    /live executable synthetic texture producer/,
+    `the recursive live Python inventory rejects ${acquisition}`,
+  );
+}
 
 console.log('volume dynamic texture proof retirement contracts passed');
