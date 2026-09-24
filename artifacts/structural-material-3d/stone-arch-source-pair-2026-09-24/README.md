@@ -22,3 +22,14 @@ Notched edit, with the baseline image as input:
 ## Reconstruction Check
 
 The first mesh pass should preserve the through-opening, actual front-to-back depth, continuous left and right supports, and the notched candidate's missing outer-shoulder volume. Inspect front and oblique views before using either mesh for a structural experiment. A notch present only in texture does not count. The source pair alone cannot establish material parameters, interior volume, collision, support conditions, or a fracture path.
+
+## TRELLIS First Pass
+
+Submitted 2026-09-24 to the default GPU Greenroom queue, FIFO behind an existing job. Completion was registered with two `greenroom_job_watch.py --json --notify` sessions; terminal authority is each queue job's `status.json`, not this submission note.
+
+| Source | Job ID | Output directory |
+| --- | --- | --- |
+| Baseline | `6239f4910433` | `trellis-intact/` |
+| Notched | `bf12b4619d49` | `trellis-outer-notch/` |
+
+Both requested `trellis2mlx` with a source worktree at revision `cddaf3cb8a9f28956114956ebe754d6661a3f695`. The effective first-job arguments recorded by Greenroom were `generate.py --image <source PNG> --output <output directory>/output.glb --seed 42 --resolution 512 --steps 12 --target-faces 200000 --texture-size 1024 --simplify-first`. The route's `--simplify-first` cleanup is a preview-continuity path, so a plausible first mesh is not yet a quality or geometry-correctness verdict. Confirm effective command and completion independently for the second job.
