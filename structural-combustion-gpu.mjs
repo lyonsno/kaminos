@@ -15,6 +15,7 @@ export const STRUCTURAL_EMISSION_ENABLED = 1 << 1;
 export const STRUCTURAL_CONTROL = 1 << 2;
 export const STRUCTURAL_MOTION_ENABLED = 1 << 3;
 export const STRUCTURAL_CARRIED_FIRE_MODE = 'carried-fire';
+export const STRUCTURAL_COMBUSTION_PRESENTATION_DEBUG_MODES = Object.freeze(['off', 'exposure', 'material']);
 
 const NODE_MATERIAL_BYTES = 64;
 const COMPONENT_MOTION_BYTES = 32;
@@ -25,6 +26,14 @@ const MESH_VERTEX_BYTES = 32;
 const MESH_BINDING_BYTES = 48;
 const SOURCE_FRAME_HASH = 0x53545243;
 const WORKGROUP_SIZE = 64;
+
+function structuralCombustionPresentationDebugCode(mode) {
+  const code = STRUCTURAL_COMBUSTION_PRESENTATION_DEBUG_MODES.indexOf(mode);
+  if (code < 0) {
+    throw new Error(`unsupported structural combustion presentation debug mode: ${mode}`);
+  }
+  return code;
+}
 
 function shaderSourceIdentity(source) {
   let hash = 0x811c9dc5;
@@ -1310,6 +1319,16 @@ fn meshMaterial(binding: MeshBinding) -> MeshMaterial {
   return MeshMaterial(material, ignition);
 }
 
+fn structuralExposureDiagnosticColor(exposure: f32, threshold: f32) -> vec3<f32> {
+  if (exposure <= threshold) { return vec3<f32>(0.015, 0.025, 0.08); }
+  let magnitude = clamp(exposure / max(threshold * 8.0, threshold + 0.0001), 0.0, 1.0);
+  return mix(vec3<f32>(0.0, 0.72, 1.0), vec3<f32>(1.0, 0.38, 0.02), magnitude);
+}
+
+fn structuralMaterialDiagnosticColor(thermal: vec4<f32>) -> vec3<f32> {
+  return vec3<f32>(clamp(thermal.x, 0.0, 1.0), clamp(thermal.y, 0.0, 1.0), clamp(thermal.z, 0.0, 1.0));
+}
+
 @vertex
 fn meshSurfaceVertex(@builtin(vertex_index) indexStreamOffset: u32) -> VertexOut {
   let meshVertexIndex = meshIndices[indexStreamOffset];
@@ -1426,6 +1445,13 @@ fn nodeVertex(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) 
 @fragment
 fn fragmentMain(in: VertexOut) -> @location(0) vec4<f32> {
   if (in.color.a <= 0.001) { discard; }
+  let presentationDebugMode = u32(presentation.style.w);
+  if (presentationDebugMode == 1u) {
+    return vec4<f32>(structuralExposureDiagnosticColor(in.reaction.x, presentation.world.w), 1.0);
+  }
+  if (presentationDebugMode == 2u) {
+    return vec4<f32>(structuralMaterialDiagnosticColor(in.thermal), 1.0);
+  }
   if (in.surface > 0.5) {
     let appearance = semanticBurnAppearance(in.thermal, in.reaction);
     let character = woodMaterialCharacter(in.materialPosition, in.faceFrame, in.thermal, in.reaction);
@@ -1452,12 +1478,14 @@ export async function createGpuStructuralCombustionAssembly({
   structures = [],
   load,
   mode = 'structural-combustion',
+  presentationDebugMode = 'off',
 } = {}) {
   if (!device?.queue) throw new Error('GPU structural combustion requires a caller-owned GPUDevice and GPUQueue');
   const grid = positiveInteger(gridSize, 0);
   if (grid < 4) throw new Error('GPU structural combustion grid must be at least 4');
   if (!format) throw new Error('GPU structural combustion requires a presentation format');
   if (!Array.isArray(structures) || structures.length < 1) throw new Error('GPU structural combustion requires structural sockets');
+  const presentationDebugCode = structuralCombustionPresentationDebugCode(presentationDebugMode);
 
   const sockets = structures.map(structure => {
     const descriptor = structure.sidecar?.residentDescriptor?.();
@@ -1500,6 +1528,7 @@ export async function createGpuStructuralCombustionAssembly({
       surfaceCellCount: (columns - 1) * (rows - 1) * (layers - 1),
       meshSkin,
       showStructuralOverlay: structure.showStructuralOverlay === true || !meshSkin,
+      contactThreshold: finite(structure.contactThreshold, 0.0001),
       descriptor,
       materialIndex: 0,
       bindGroups: [new Map(), new Map()],
@@ -2010,8 +2039,8 @@ export async function createGpuStructuralCombustionAssembly({
       const values = new Float32Array(bytes);
       const integers = new Uint32Array(bytes);
       values.set(viewProjection, 0);
-      values.set([...(socket.worldOffset || [0, 0, 0]), socket.control ? 1 : 0], 16);
-      values.set([...(socket.displayScale || [1.12, 0.68, 0.58]), socket.control ? 1 : 0], 20);
+      values.set([...(socket.worldOffset || [0, 0, 0]), socket.contactThreshold], 16);
+      values.set([...(socket.displayScale || [1.12, 0.68, 0.58]), presentationDebugCode], 20);
       integers.set([socket.columns, socket.rows, socket.layers, socket.surfaceCellCount], 24);
       device.queue.writeBuffer(socket.presentationBuffer, 0, bytes);
     });
@@ -2035,10 +2064,12 @@ export async function createGpuStructuralCombustionAssembly({
         pass.setPipeline(surfacePresentationPipeline);
         pass.draw(36, socket.surfaceCellCount);
       }
-      if (socket.showStructuralOverlay) {
+      if (socket.showStructuralOverlay || presentationDebugCode !== 0) {
         pass.setBindGroup(0, socket.presentationBindGroups[socket.materialIndex]);
-        pass.setPipeline(bondPresentationPipeline);
-        pass.draw(2, socket.descriptor.bondCount);
+        if (presentationDebugCode === 0) {
+          pass.setPipeline(bondPresentationPipeline);
+          pass.draw(2, socket.descriptor.bondCount);
+        }
         pass.setPipeline(nodePresentationPipeline);
         pass.draw(6, socket.descriptor.nodeCount);
       }
@@ -2283,6 +2314,7 @@ export async function createGpuStructuralCombustionAssembly({
     return {
       schema: STRUCTURAL_COMBUSTION_SCHEMA,
       authority: STRUCTURAL_COMBUSTION_AUTHORITY,
+      presentationDebugMode,
       mode,
       status: destroyed ? 'destroyed' : frozen ? 'frozen' : 'active',
       dispatchCount,
