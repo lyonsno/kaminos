@@ -1,12 +1,12 @@
 {
   "schema": "kaminos.saved-mesh-combustion-diagnostic-public-receipt.v1",
-  "status": "prepared",
+  "status": "failed-no-capture",
   "attempt": "R3",
   "ownerAlias": "sinter-object-combustion",
   "submissionAuthority": "Operator explicitly approved one corrected Greenroom capture on 2026-09-24 after two setup failures.",
   "claimCeiling": "Inspect the GPU exposure and material debug presentation on the exact saved 864-triangle trestle. A passed capture is route/runtime integrity only; manually inspect trestle pixels in both views before claiming visibility. Do not claim Pyro-caused heating, fuel loss, or char from debug colors alone.",
-  "queue": "/Users/noahlyons/.local/state/gpu-greenroom",
-  "workerPid": 89531,
+  "queue": "GPU Greenroom canonical local queue",
+  "workerIdentity": "structured-command.v1 worker; PID and host-local source root are recorded in the private Greenroom receipt",
   "workerCapabilities": ["structured-command.v1"],
   "queueStateBeforeSubmission": {
     "pending": 0,
@@ -16,7 +16,8 @@
   "repoRoot": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
   "sourceBranch": "cc/sinter-authored-mesh-burn-0923",
   "sourceCommit": "56f69fabe7196e86dc2550ab600cf3bc66a11753",
-  "sourceDirtyState": "The capture driver and its request helper are committed. Pre-existing untracked assets/artifacts remain untouched; the saved scene and capture driver are explicit inputs and pinned by the hashes below.",
+  "sourceHeadAtRun": "40719bafe19a57f6fcabbd8884cc97bc78e1416e",
+  "sourceDirtyState": "The capture driver, request helper, saved scene, and capture manifest are committed and hashed below. The run produced an untracked diagnostic-r3/report.json, which is preserved byte-for-byte in the private Sinter report surface; pre-existing untracked assets remain untouched.",
   "captureScript": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r3.mjs",
   "captureScriptSha256": "2578dbba7149afe820eac5771a195fad8702cca084a53de5fd2c2284bae86def",
   "requestHelper": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-cdp.mjs",
@@ -28,11 +29,19 @@
   "manifest": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r3.json",
   "terminalEvidence": {
     "report": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/report.json",
-    "exposureScreenshot": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/exposure.png",
-    "exposureCanvasScreenshot": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/exposure-canvas.png",
-    "materialScreenshot": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/material.png",
-    "materialCanvasScreenshot": "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3/material-canvas.png",
-    "greenroomReceiptDirectory": "/Users/noahlyons/.local/state/gpu-greenroom"
+    "reportSha256": "d7fd8cd3f4dabc8e3be9301949ff8aff89f0a7857bc0bb2fc9c9a724d7c591ef",
+    "privateDurableReportCopy": "linked from the private Sinter project report",
+    "privateDurableReportCopySha256": "d7fd8cd3f4dabc8e3be9301949ff8aff89f0a7857bc0bb2fc9c9a724d7c591ef",
+    "exposureScreenshot": null,
+    "exposureCanvasScreenshot": null,
+    "materialScreenshot": null,
+    "materialCanvasScreenshot": null,
+    "greenroomQueue": "GPU Greenroom canonical local queue",
+    "greenroomJobId": "ed9b6850a69a",
+    "greenroomRequestSha256": "5c4f37c9d1a4b0e7ca6135dabe0f7af6ddbae9fe75f1803cd07d6725ae329a9a",
+    "greenroomStatusSha256": "a6a7b1a8489e291d09066fd5bdb562f18c30fda466774bf391bd10733006bcdb",
+    "greenroomReceiptSha256": "169864944e8a0a37de4c5d68fd9936a5c288a0b78c7245695f616cbeafe64c73",
+    "greenroomStdoutSha256": "6a37a6a47d10b0816e07d62de146a9044c7a897d3555e618125bde9dfc517f1d"
   },
   "priorAttempts": [
     {
@@ -42,7 +51,45 @@
     {
       "jobId": "5288bc11c616",
       "outcome": "failed before visual capture: selected scene but timed out before matching the exact GPU assembly"
+    },
+    {
+      "jobId": "ed9b6850a69a",
+      "outcome": "failed during simulate-exposure; scene load reported a WebGPU bind-group visibility mismatch at group 0 binding 4; no images produced"
     }
   ],
-  "retryPolicy": "This is the one operator-approved corrected capture. Do not submit another GPU attempt if this run fails."
+  "greenroomTerminal": {
+    "submittedAt": "2026-09-24T14:31:21Z",
+    "startedAt": "2026-09-24T14:31:22Z",
+    "finishedAt": "2026-09-24T14:34:29Z",
+    "exitCode": 1,
+    "failurePhase": "execution",
+    "status": "failed",
+    "requestedRoute": "kaminos-saved-timber-trestle-exposure-material-r3",
+    "effectiveRoute": "exact argv, cwd, and environment are preserved in the private Greenroom receipt",
+    "outputWarning": "volatile_output",
+    "worker": {
+      "identity": "private canonical receipt records worker PID and source root",
+      "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+      "gitDirty": true,
+      "capabilities": ["structured-command.v1"]
+    },
+    "lastRuntimeState": {
+      "backend": "WebGPU:apple",
+      "simGrid": 96,
+      "frameCount": 6016,
+      "simStepCount": 5974,
+      "assembly": null,
+      "source": null
+    },
+    "driverFailurePhase": "simulate-exposure",
+    "driverError": "Timed out waiting for exposure dispatches from the exact saved trestle assembly; last=null",
+    "sceneLoadError": "Entry point stage Fragment is not in binding visibility for @group(0) @binding(4) of the structural combustion mesh presentation layout, which declares Vertex only.",
+    "capturedImages": []
+  },
+  "completionDelivery": {
+    "status": "terminal receipt recovered during active owner turn",
+    "automaticDirectiveOptIn": false,
+    "detail": "The exact structured request had empty params, so Greenroom's opt-in completion-ping contract was not engaged. Terminal state was recovered from the canonical failed-job status and receipt without rerunning the job."
+  },
+  "retryPolicy": "This was the one operator-approved corrected capture. Do not submit another GPU attempt under this approval."
 }
