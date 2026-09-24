@@ -6826,27 +6826,28 @@ fn boundary_kernel_antiderivative(x: f32) -> f32 {
   return x - (4.0 / 3.0) * x3 + (6.0 / 5.0) * x5 - (4.0 / 7.0) * x7 + x9 / 9.0;
 }
 
-fn boundary_missing_fraction(distance: f32) -> f32 {
-  let normalizedDistance = clamp(distance / params.fluid.x, 0.0, 1.0);
+fn boundary_missing_fraction(distance: f32, kernelRadius: f32) -> f32 {
+  let normalizedDistance = clamp(distance / kernelRadius, 0.0, 1.0);
   let fullHalfIntegral = boundary_kernel_antiderivative(1.0);
   return (fullHalfIntegral - boundary_kernel_antiderivative(normalizedDistance)) / (2.0 * fullHalfIntegral);
 }
 
-fn boundary_missing_fraction_derivative(distance: f32) -> f32 {
-  if (distance >= params.fluid.x) { return 0.0; }
-  let normalizedDistance = distance / params.fluid.x;
+fn boundary_missing_fraction_derivative(distance: f32, kernelRadius: f32) -> f32 {
+  if (distance >= kernelRadius) { return 0.0; }
+  let normalizedDistance = distance / kernelRadius;
   let radialRemainder = 1.0 - normalizedDistance * normalizedDistance;
-  return -pow(radialRemainder, 4.0) / (2.0 * boundary_kernel_antiderivative(1.0) * params.fluid.x);
+  return -pow(radialRemainder, 4.0) / (2.0 * boundary_kernel_antiderivative(1.0) * kernelRadius);
 }
 
-fn analytic_boundary_density_support(position: vec3<f32>) -> vec4<f32> {
-  let particleRadius = params.fluid.x * 0.22;
+fn analytic_boundary_density_support(position: vec3<f32>, radiusScale: f32) -> vec4<f32> {
+  let kernelRadius = params.fluid.x * radiusScale;
+  let particleRadius = kernelRadius * 0.22;
   let terrainFrame = supportSignedDistanceFrame(position, particleRadius);
   let terrainNormal = terrainFrame.xyz;
   let terrainSignedDistance = terrainFrame.w;
   let terrainDistance = max(0.0, terrainSignedDistance);
-  let terrainFraction = boundary_missing_fraction(terrainDistance);
-  let terrainFractionGradient = terrainNormal * boundary_missing_fraction_derivative(terrainDistance);
+  let terrainFraction = boundary_missing_fraction(terrainDistance, kernelRadius);
+  let terrainFractionGradient = terrainNormal * boundary_missing_fraction_derivative(terrainDistance, kernelRadius);
 
   var sphereFraction = 0.0;
   var sphereFractionGradient = vec3<f32>(0.0);
@@ -6856,8 +6857,8 @@ fn analytic_boundary_density_support(position: vec3<f32>) -> vec4<f32> {
     let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
     let sphereSignedDistance = length(fromSphere) - (${OBSTACLE_RADIUS} + particleRadius);
     let sphereDistance = max(0.0, sphereSignedDistance);
-    sphereFraction = boundary_missing_fraction(sphereDistance);
-    sphereFractionGradient = sphereNormal * boundary_missing_fraction_derivative(sphereDistance);
+    sphereFraction = boundary_missing_fraction(sphereDistance, kernelRadius);
+    sphereFractionGradient = sphereNormal * boundary_missing_fraction_derivative(sphereDistance, kernelRadius);
   }
 
   let missingFraction = terrainFraction + sphereFraction - terrainFraction * sphereFraction;
@@ -7279,7 +7280,7 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
   }
 
-  let boundarySupport = analytic_boundary_density_support(position);
+  let boundarySupport = analytic_boundary_density_support(position, selfRadiusScale);
   density = density + boundarySupport.w;
   gradientSelf = gradientSelf + boundarySupport.xyz;
 
@@ -7322,7 +7323,7 @@ fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
       }
     }
   }
-  let boundarySupport = analytic_boundary_density_support(position);
+  let boundarySupport = analytic_boundary_density_support(position, adaptive_radius_scale(index));
   correction = correction + lambda * boundarySupport.xyz;
   let scaled = correction * params.fluid.w;
   let correctionLength = length(scaled);
@@ -12233,7 +12234,7 @@ function playgroundZoneDiagnostics(values, restStateValues, topologyValues, part
   };
 }
 
-function createMultiRegimePlaygroundParticles(particleCount) {
+function createMultiRegimePlaygroundParticles(particleCount, referenceParticleCount = particleCount) {
   const data = new Float32Array(particleCount * PARTICLE_FLOATS);
   const spacing = 0.055;
   const zoneSeeds = [
@@ -12246,20 +12247,24 @@ function createMultiRegimePlaygroundParticles(particleCount) {
   ];
   const zoneSchedule = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5];
   const zoneLocalCounts = new Uint32Array(zoneSeeds.length);
-  for (let index = 0; index < particleCount; index += 1) {
-    const zoneIndex = zoneSchedule[index % zoneSchedule.length];
+  let outputIndex = 0;
+  for (let referenceIndex = 0; referenceIndex < referenceParticleCount; referenceIndex += 1) {
+    const zoneIndex = zoneSchedule[referenceIndex % zoneSchedule.length];
     const localIndex = zoneLocalCounts[zoneIndex];
     zoneLocalCounts[zoneIndex] += 1;
+    const selected = outputIndex < particleCount
+      && referenceIndex === Math.floor(outputIndex * referenceParticleCount / particleCount);
+    if (!selected) continue;
     const zone = zoneSeeds[zoneIndex];
     const columns = zone.columns;
     const xIndex = localIndex % columns;
     const zIndex = Math.floor(localIndex / columns) % columns;
     const yIndex = Math.floor(localIndex / (columns * columns));
-    const jitter = ((index * 1664525 + 1013904223) >>> 8) / 0x00ffffff - 0.5;
-    const offset = index * PARTICLE_FLOATS;
+    const jitter = ((referenceIndex * 1664525 + 1013904223) >>> 8) / 0x00ffffff - 0.5;
+    const offset = outputIndex * PARTICLE_FLOATS;
     const x = zone.center[0] + (xIndex - (columns - 1) * 0.5) * spacing + jitter * 0.004;
-    const z = zone.center[1] + (zIndex - (columns - 1) * 0.5) * spacing + Math.cos(index * 0.19) * 0.0025;
-    const y = sampleFingerFluidPlaygroundHeight(x, z) + 0.055 + yIndex * spacing + Math.sin(index * 0.37) * 0.0025;
+    const z = zone.center[1] + (zIndex - (columns - 1) * 0.5) * spacing + Math.cos(referenceIndex * 0.19) * 0.0025;
+    const y = sampleFingerFluidPlaygroundHeight(x, z) + 0.055 + yIndex * spacing + Math.sin(referenceIndex * 0.37) * 0.0025;
     data[offset + 0] = x;
     data[offset + 1] = y;
     data[offset + 2] = z;
@@ -12272,6 +12277,10 @@ function createMultiRegimePlaygroundParticles(particleCount) {
     data[offset + 9] = zone.velocity[1];
     data[offset + 10] = zone.velocity[2] + Math.sin(y * 3.1) * 0.018;
     data[offset + 11] = zone.phase;
+    outputIndex += 1;
+  }
+  if (outputIndex !== particleCount) {
+    throw new Error(`Fixed-volume playground sampling produced ${outputIndex} of ${particleCount} particles`);
   }
   return data;
 }
@@ -12395,29 +12404,59 @@ function createPackedTruthSceneParticles(particleCount, {
   return data;
 }
 
-export function createFingerFluidTruthSceneParticles(particleCount, scene = 'multi_regime_playground', {
+export function measureFingerFluidRepresentedVolume(particleCount, particleVolumeScale = 1) {
+  const count = resolveFingerFluidParticleCount(particleCount);
+  if (!Number.isFinite(particleVolumeScale) || particleVolumeScale <= 0) {
+    throw new RangeError(`Finger fluid particle volume scale must be positive: ${particleVolumeScale}`);
+  }
+  return count * particleVolumeScale;
+}
+
+export function createFingerFluidTruthScenePopulation(particleCount, scene = 'multi_regime_playground', {
   waterfallOraclePreset = 'baseline',
+  referenceParticleCount = particleCount,
 } = {}) {
   const safeParticleCount = Math.max(1, Math.floor(finite(particleCount, DEFAULT_PARTICLE_COUNT)));
   const effectiveScene = resolveFingerFluidTruthScene(scene);
-  if (effectiveScene === 'multi_regime_playground') return createMultiRegimePlaygroundParticles(safeParticleCount);
-  if (effectiveScene === 'laminar_inlets') return createLaminarInletParticles(safeParticleCount);
-  if (effectiveScene === 'live_hand_inlets') return createFingerFluidLiveInletParticles(safeParticleCount);
-  if (effectiveScene === 'waterfall_resolution_oracle') {
-    return createWaterfallOracleParticles(safeParticleCount, resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset));
+  const safeReferenceParticleCount = resolveFingerFluidParticleCount(referenceParticleCount);
+  if (safeReferenceParticleCount < safeParticleCount) {
+    throw new RangeError(`Reference population must be at least the particle count: ${safeReferenceParticleCount} < ${safeParticleCount}`);
   }
-  if (effectiveScene === 'deep_pool_rest') {
-    return createPackedTruthSceneParticles(safeParticleCount, {
+  if (effectiveScene !== 'multi_regime_playground' && safeReferenceParticleCount !== safeParticleCount) {
+    throw new RangeError(`Fixed-volume population comparison is supported only for multi_regime_playground, not ${effectiveScene}`);
+  }
+  const particleVolumeScale = safeReferenceParticleCount / safeParticleCount;
+  let particleData;
+  if (effectiveScene === 'multi_regime_playground') {
+    particleData = createMultiRegimePlaygroundParticles(safeParticleCount, safeReferenceParticleCount);
+  } else if (effectiveScene === 'laminar_inlets') particleData = createLaminarInletParticles(safeParticleCount);
+  else if (effectiveScene === 'live_hand_inlets') particleData = createFingerFluidLiveInletParticles(safeParticleCount);
+  if (effectiveScene === 'waterfall_resolution_oracle') {
+    particleData = createWaterfallOracleParticles(safeParticleCount, resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset));
+  }
+  if (!particleData && effectiveScene === 'deep_pool_rest') {
+    particleData = createPackedTruthSceneParticles(safeParticleCount, {
       center: [-1.25, 0.58],
       horizontalAspect: [1.1, 1.1],
       phase: 0.66,
     });
   }
-  return createPackedTruthSceneParticles(safeParticleCount, {
+  if (!particleData) particleData = createPackedTruthSceneParticles(safeParticleCount, {
     center: [-0.25, -1.72],
     horizontalAspect: [1, 0.78],
     phase: 0.45,
   });
+  return Object.freeze({
+    particleData,
+    particleCount: safeParticleCount,
+    referenceParticleCount: safeReferenceParticleCount,
+    particleVolumeScale,
+    representedVolume: measureFingerFluidRepresentedVolume(safeParticleCount, particleVolumeScale),
+  });
+}
+
+export function createFingerFluidTruthSceneParticles(particleCount, scene = 'multi_regime_playground', options = {}) {
+  return createFingerFluidTruthScenePopulation(particleCount, scene, options).particleData;
 }
 
 export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
@@ -12884,6 +12923,7 @@ export async function createWebGPUFingerFluidSolver({
   maxFluidSpeed = KAMINOS_FINGER_FLUID_DEFAULT_MAX_SPEED,
   inletCutoffStep = null,
   waterfallOraclePreset = 'baseline',
+  fixedVolumeReferenceParticleCount = null,
   transparentBackground = false,
   liveInletPacket = null,
   supportContactRoute = KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
@@ -13024,6 +13064,19 @@ export async function createWebGPUFingerFluidSolver({
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
   const safeWaterfallOraclePreset = resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset);
+  const safeFixedVolumeReferenceParticleCount = fixedVolumeReferenceParticleCount === null
+    ? safeBaseParticleCount
+    : resolveFingerFluidParticleCount(fixedVolumeReferenceParticleCount);
+  if (safeFixedVolumeReferenceParticleCount < safeBaseParticleCount) {
+    throw new RangeError(`Fixed-volume reference population ${safeFixedVolumeReferenceParticleCount} is below requested particle count ${safeBaseParticleCount}`);
+  }
+  if (safeTruthScene !== 'multi_regime_playground'
+    && safeFixedVolumeReferenceParticleCount !== safeBaseParticleCount) {
+    throw new RangeError(`Fixed-volume population comparison requires multi_regime_playground, not ${safeTruthScene}`);
+  }
+  if (safeAdaptiveDensity && safeFixedVolumeReferenceParticleCount !== safeBaseParticleCount) {
+    throw new RangeError('Fixed-volume population comparison does not support adaptive density refinement');
+  }
   const waterfallOracleConfig = safeTruthScene === 'waterfall_resolution_oracle'
     ? createFingerFluidWaterfallOracleConfig(safeWaterfallOraclePreset)
     : null;
@@ -13066,11 +13119,14 @@ export async function createWebGPUFingerFluidSolver({
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
-  const baseParticleData = safeTruthScene === 'live_hand_inlets'
-    ? createFingerFluidLiveInletParticles(safeBaseParticleCount, liveInletPacket)
-    : createFingerFluidTruthSceneParticles(safeBaseParticleCount, safeTruthScene, {
+  const population = safeTruthScene === 'live_hand_inlets'
+    ? null
+    : createFingerFluidTruthScenePopulation(safeBaseParticleCount, safeTruthScene, {
       waterfallOraclePreset: safeWaterfallOraclePreset,
+      referenceParticleCount: safeFixedVolumeReferenceParticleCount,
     });
+  const baseParticleData = population?.particleData
+    ?? createFingerFluidLiveInletParticles(safeBaseParticleCount, liveInletPacket);
   const particleData = new Float32Array(safeParticleCount * PARTICLE_FLOATS);
   particleData.set(baseParticleData);
   for (let index = safeBaseParticleCount; index < safeParticleCount; index += 1) {
@@ -13224,7 +13280,9 @@ export async function createWebGPUFingerFluidSolver({
       ? KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled
       : KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.dormant;
     const refinementOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 32;
-    initialTopologyFloats[refinementOffset] = index < safeBaseParticleCount ? 1 : 0;
+    initialTopologyFloats[refinementOffset] = index < safeBaseParticleCount
+      ? (population?.particleVolumeScale ?? 1)
+      : 0;
     initialTopologyFloats[refinementOffset + 1] = index < safeBaseParticleCount ? 0 : 2;
   }
   device.queue.writeBuffer(neighborTopologyBuffer, 0, initialTopology);
@@ -15940,6 +15998,9 @@ export async function createWebGPUFingerFluidSolver({
       particleCount: safeParticleCount,
       baseParticleCount: safeBaseParticleCount,
       simulationCapacity: safeParticleCount,
+      fixedVolumeReferenceParticleCount: safeFixedVolumeReferenceParticleCount,
+      particleVolumeScale: population?.particleVolumeScale ?? 1,
+      representedPopulationVolume: population?.representedVolume ?? safeBaseParticleCount,
       particleAllocationCapacity,
       particleAllocationPreflight,
       gridDimensions: [...GRID_DIMS],

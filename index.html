@@ -3081,6 +3081,26 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     ?? oracleCockpitRequested?.particleCount
     ?? waterfallOracleConfig?.defaultParticleCount
     ?? KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT);
+  const fixedVolumeReferenceParticleCountValue = params.get('finger_fluid_fixed_volume_reference_count');
+  const requestedFixedVolumeReferenceParticleCount = fixedVolumeReferenceParticleCountValue === null
+    ? null
+    : Number(fixedVolumeReferenceParticleCountValue);
+  if (requestedFixedVolumeReferenceParticleCount !== null
+    && (!Number.isSafeInteger(requestedFixedVolumeReferenceParticleCount)
+      || requestedFixedVolumeReferenceParticleCount < requestedParticleCount)) {
+    throw new RangeError(
+      `Fixed-volume reference count must be a safe integer at least as large as the requested population: ${fixedVolumeReferenceParticleCountValue}`,
+    );
+  }
+  if (requestedFixedVolumeReferenceParticleCount !== null
+    && effectiveTruthScene !== 'multi_regime_playground') {
+    throw new RangeError(
+      `Fixed-volume population comparison requires multi_regime_playground, not ${effectiveTruthScene}`,
+    );
+  }
+  if (requestedFixedVolumeReferenceParticleCount !== null && requestedAdaptiveDensity) {
+    throw new RangeError('Fixed-volume population comparison does not support adaptive density refinement');
+  }
   const requestedPressureIterations = Number(params.get('finger_fluid_density_iterations') ?? oracleCockpitRequested?.pressureIterations ?? 3);
   const requestedEnergyDiagnosticsMode = params.get('finger_fluid_energy_diagnostics') ?? 'every_step';
   const requestedWitnessTargetStepValue = params.get('finger_fluid_witness_target_step');
@@ -3169,6 +3189,9 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveAdaptiveDensity: requestedAdaptiveDensity,
     requestedParticleCount,
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
+    requestedFixedVolumeReferenceParticleCount,
+    effectiveFixedVolumeReferenceParticleCount: requestedFixedVolumeReferenceParticleCount
+      ?? resolveFingerFluidParticleCount(requestedParticleCount),
     requestedPressureIterations,
     effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
     requestedEnergyDiagnosticsMode,
@@ -11358,6 +11381,7 @@ async function startFingerFluidBench() {
     fingerFluidBenchSolverPromise = createWebGPUFingerFluidSolver({
       canvas,
       particleCount: fingerFluidBenchConfig.effectiveParticleCount,
+      fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
       energyDiagnosticsMode: fingerFluidBenchConfig.effectiveEnergyDiagnosticsMode,
       substeps: 1,
