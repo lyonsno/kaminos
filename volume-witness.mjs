@@ -25,6 +25,14 @@ function parseCliArgs(argv) {
 
 const args = parseCliArgs(process.argv.slice(2));
 
+function writeFrameOnlyPreflightFailure(phase, error) {
+  const output = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
+  const destination = resolve(args.get('--report') || output.replace(/\.png$/i, '.json'));
+  mkdirSync(dirname(destination), { recursive: true });
+  writeFileSync(destination, JSON.stringify({ identity: 'kaminos-frame-only-inspection-v0',
+    phase, error, requestedRoute: args.get('--url') || null, partialControlledStepFrames: [] }, null, 2));
+}
+
 function readVolumeCaptureReplay(capturePath) {
   if (!capturePath) return null;
   const resolved = resolve(capturePath);
@@ -112,6 +120,10 @@ function assertCaptureReplayControls({
   if (has('smoke')) assertApprox(Number(state.controls?.smoke), numeric('smoke'), 'captured smoke did not apply');
 }
 
+if (args.has('--frame-only') && args.has('--capture')) {
+  writeFrameOnlyPreflightFailure('preflight-capture', 'frame-only capture requires a direct saved-preset route');
+  throw new Error('frame-only capture requires a direct saved-preset route');
+}
 const captureReplay = args.has('--capture') ? readVolumeCaptureReplay(args.get('--capture')) : null;
 const isCaptureReplay = Boolean(captureReplay);
 const url = captureReplay?.route || args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
@@ -126,6 +138,7 @@ function parseNumberList(value) {
 const cameraPosition = args.has('--camera-position') ? parseNumberList(args.get('--camera-position')) : null;
 const cameraTarget = args.has('--camera-target') ? parseNumberList(args.get('--camera-target')) : null;
 if ((cameraPosition || cameraTarget) && (cameraPosition?.length !== 3 || cameraTarget?.length !== 3)) {
+  if (args.has('--frame-only')) writeFrameOnlyPreflightFailure('preflight-camera', 'invalid explicit camera pose');
   throw new Error('--camera-position and --camera-target must each contain three finite comma-separated numbers');
 }
 const requestedCameraPose = cameraPosition ? { position: cameraPosition, target: cameraTarget } : null;
@@ -179,6 +192,7 @@ const freezeIntegrityProbeOnly = freezeIntegrityProbeRequested && args.has('--fr
 const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
+  if (frameOnlyRequested) writeFrameOnlyPreflightFailure('preflight-evidence-mode', `unknown evidence mode: ${evidenceMode}`);
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
 }
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
@@ -2225,6 +2239,8 @@ async function captureFrameOnly(ws, partialControlledStepFrames, source) {
         returnByValue: true,
       });
       const canvas = canvasEval.result.value;
+      assert.equal(canvas?.effectiveRoute, source.effectiveRoute, 'effective route changed during frame capture');
+      assert.equal(canvas?.backend, source.backend, 'effective backend changed during frame capture');
       const rgba = verifyFrameOnlyReadback(canvas, sample, step.controlledStepCapture.afterSimStepCount);
       const imagePath = resolve(frameDir, `${controlledStepPrefix}-frame-${String(index + 1).padStart(3, '0')}-${scaleSlug(scale)}.png`);
       writeRgbaPng(imagePath, canvas.image.width, canvas.image.height, rgba);
@@ -2320,11 +2336,22 @@ async function main() {
     }
     if (frameOnlyRequested) {
       phase = 'frame-only-admission';
+      const runtimeResponse = await fetch(new URL('/api/runtime-config', url), { cache: 'no-store' });
+      if (!runtimeResponse.ok) throw new Error(`runtime config lookup failed: ${runtimeResponse.status}`);
+      const runtimeConfig = await runtimeResponse.json();
+      assert.equal(runtimeConfig?.schema, 'kaminos.runtime-config.v0', 'runtime config schema mismatch');
+      assert.equal(execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim(), '',
+        'frame-only capture checkout is dirty');
+      const expectedSource = {
+        repoRoot: process.cwd(),
+        commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      };
       const sourceEval = await wsRequest(ws, 'Runtime.evaluate', {
         expression: '({ receipt: window.__kaminosVolumeSettingsPresetReceipt || null, state: window.__kaminosVolumePrototype?.debugState?.() || null })',
         returnByValue: true,
       });
-      const source = admitFrameOnlySource(url, sourceEval.result.value?.receipt, sourceEval.result.value?.state);
+      const source = admitFrameOnlySource(url, sourceEval.result.value?.receipt, sourceEval.result.value?.state,
+        runtimeConfig.source, expectedSource);
       phase = 'frame-only-capture';
       const report = await captureFrameOnly(ws, partialControlledStepFrames, source);
       report.cameraPose.applied = appliedCameraPose;

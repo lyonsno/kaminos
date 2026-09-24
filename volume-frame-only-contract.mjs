@@ -4,7 +4,7 @@ const NATIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const PRESET_AUTHORITY = 'shared-volume-settings-preset-v2';
 const IMAGE_AUTHORITY = 'gpu-presentation-texture-rgba8-readback-frozen-sim-state';
 
-export function admitFrameOnlySource(route, receipt, state) {
+export function admitFrameOnlySource(route, receipt, state, servingSource, expectedSource) {
   const params = new URL(route).searchParams;
   const requested = params.get('settings_preset');
   assert.match(requested || '', /^vsp-[0-9a-f]{64}$/, 'frame-only capture requires an immutable saved preset');
@@ -16,9 +16,12 @@ export function admitFrameOnlySource(route, receipt, state) {
   assert.equal(state?.effectiveRoute, NATIVE_ROUTE, 'native GPU route not effective');
   assert.match(state?.backend || '', /^WebGPU:/, 'native WebGPU backend not effective');
   assert.ok(Number.isInteger(state?.simStepCount) && state.simStepCount > 0, 'simulation has not advanced');
+  assert.equal(servingSource?.repoRoot, expectedSource?.repoRoot, 'serving checkout mismatch');
+  assert.equal(servingSource?.commit, expectedSource?.commit, 'serving source revision mismatch');
+  assert.equal(servingSource?.dirty, false, 'serving source is dirty');
   return { requestedPresetId: requested, presetId: receipt.presetId, contentHash: receipt.contentHash,
     sourcePresetAuthority: receipt.sourcePresetAuthority, effectiveRoute: state.effectiveRoute,
-    backend: state.backend, initialSimStepCount: state.simStepCount };
+    backend: state.backend, initialSimStepCount: state.simStepCount, servingSource };
 }
 
 export function verifyFrameOnlyReadback(capture, sample, expectedSimStepCount) {
@@ -37,6 +40,6 @@ export function verifyFrameOnlyReadback(capture, sample, expectedSimStepCount) {
   const bytes = Buffer.from(image.rgbaBase64 || '', 'base64');
   assert.equal(bytes.length, image.width * image.height * 4, 'GPU image partial bytes');
   assert.equal(image.byteLength, bytes.length, 'GPU image declared byte length mismatch');
-  assert.ok(bytes.some(byte => byte !== 0), 'GPU image blank readback');
+  assert.ok(bytes.some((byte, index) => index % 4 !== 3 && byte !== 0), 'GPU image has no visible color signal');
   return bytes;
 }
