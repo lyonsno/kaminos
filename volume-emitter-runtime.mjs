@@ -150,6 +150,7 @@ export function applyVolumeEmitterFamilyRuntime({
   emitterPose,
   sourceEnabled = true,
 } = {}) {
+  if (typeof sourceEnabled !== 'boolean') throw new Error('sourceEnabled must be a boolean');
   requiredMethod(prototype, 'setControls');
   requiredMethod(prototype, 'setCoreEmitterSourceMode');
   requiredMethod(prototype, 'setAnalyticEmitterDescriptor');

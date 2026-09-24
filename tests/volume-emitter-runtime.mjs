@@ -248,6 +248,12 @@ assert.equal(sourceFree.receipt.compilerReceipt, null,
 const restored = apply('ring', sourceFreePrototype);
 assert.equal(restored.receipt.effective.sourceMode, 'analytic-fixed');
 assert.equal(restored.receipt.effective.sourceCount, 1);
+const invalidPresencePrototype = makePrototype();
+assert.throws(() => apply('ring', invalidPresencePrototype, {sourceEnabled: 'false'}),
+  /sourceEnabled must be a boolean/);
+assert.deepEqual(invalidPresencePrototype.calls,
+  {controls: [], coreSource: [], analytic: [], external: []},
+  'invalid serialized presence must fail before touching the live domain');
 for (const family of ['wick', 'nozzle']) {
   const horizontal = apply(family, makePrototype(), { emitterPose: {
     position: [0, -0.76, 0], rotation: [0, 0, Math.PI / 2], scale: [1, 1, 1],
