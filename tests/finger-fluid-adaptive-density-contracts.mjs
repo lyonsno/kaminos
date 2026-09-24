@@ -193,6 +193,19 @@ assert.match(coreSource, /let childIndex = index \+ params\.refinementControl\.x
 assert.match(coreSource, /fn adaptive_pair_kernel_weight/, 'mixed-resolution PBF uses a volume-normalized pair kernel');
 assert.match(coreSource, /neighborVolumeScale \* kernelNormalization/, 'neighbor quadrature carries represented volume without creating mass');
 assert.match(coreSource, /pipelineFor\('adaptive_refine_or_merge'\)/, 'adaptive transitions execute on the GPU');
+const sheetClassificationStart = coreSource.indexOf('fn classify_unsupported_sheet(');
+const sheetClassificationEnd = coreSource.indexOf('\n@compute', sheetClassificationStart + 1);
+const sheetClassificationSource = coreSource.slice(sheetClassificationStart, sheetClassificationEnd);
+assert.ok(
+  sheetClassificationSource.indexOf('particle.velocity.w < 0.0')
+    < sheetClassificationSource.indexOf('classificationStrength <= 0.0'),
+  'dormant adaptive capacity must be classified before the active feature-disable gate',
+);
+assert.match(
+  coreSource,
+  /initialTopologyFloats\[diagnosticOffset\]\s*=\s*index < safeBaseParticleCount\s*\?\s*KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES\.disabled\s*:\s*KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES\.dormant/,
+  'unused adaptive capacity must initialize with a dormant sheet diagnostic',
+);
 assert.match(
   coreSource,
   /neighborTopology\[childIndex\]\.sheetDiagnosticClassification\s*=\s*vec4<f32>\([^\n]*SHEET_RELEASE_REASON_CODES\.dormant/,

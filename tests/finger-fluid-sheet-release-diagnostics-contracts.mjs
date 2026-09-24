@@ -131,6 +131,18 @@ assert.equal(neighborLossRow.measurements.maximumLinkStretch, 1.78);
 assert.equal(neighborLossRow.measurements.maximumLinkKernelRatio, 1.69);
 assert.equal(summary.reasonRows.find(row => row.reason === 'disabled').positionBounds, null);
 
+const disabledReserveTopology = topology.slice();
+disabledReserveTopology[2 * core.KAMINOS_FINGER_FLUID_NEIGHBOR_TOPOLOGY_WORDS + 20]
+  = core.KAMINOS_FINGER_FLUID_SHEET_RELEASE_REASON_CODES.disabled;
+const disabledReserveSummary = core.summarizeFingerFluidSheetReleaseDiagnostics(
+  disabledReserveTopology,
+  particles,
+  particleCount,
+);
+assert.equal(disabledReserveSummary.dormantParticleCount, 1, 'a disabled adaptive reserve slot remains dormant');
+assert.equal(disabledReserveSummary.reasonCounts.disabled, 0, 'a disabled adaptive reserve slot cannot masquerade as an active release population');
+assert.equal(disabledReserveSummary.accountedParticleCount, particleCount);
+
 assert.throws(
   () => core.summarizeFingerFluidSheetReleaseDiagnostics(topology.subarray(0, -1), particles, particleCount),
   /partial topology diagnostics/i,

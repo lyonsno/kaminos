@@ -1,0 +1,119 @@
+{
+  "schema": "lerms.hill-of-hills.kaminos-moving-browser-receipt.v2",
+  "lermsRevision": "ef0da54205a904087640e66803c2b9a3465ea298",
+  "hillProducerRevision": "3a0667007efaf8e28727e507c53a6c1fbfdbd036",
+  "kaminosPackageVersion": "0.2.1",
+  "kaminosRuntimeRevision": "95920668287205517bc2e22f4f224b0d7584f53e",
+  "browser": {
+    "url": "http://127.0.0.1:5192/?watershedFluid=1&watershedRemapStep=80",
+    "viewport": {
+      "width": 1512,
+      "height": 1000,
+      "deviceScaleFactor": 1
+    },
+    "independentRunCount": 2,
+    "pageAndConsoleErrors": []
+  },
+  "canonicalReceiptCapture": {
+    "sourceSurface": "window.__lermsHillKaminosDebugState.remap.receipt",
+    "capturedAt": "2026-07-23T23:56:34.638Z",
+    "independentRunCount": 2,
+    "receiptsExactlyEqual": true,
+    "postRemapStepCounts": [
+      101,
+      101
+    ],
+    "consumerStatuses": [
+      "active-remapped",
+      "active-remapped"
+    ],
+    "pageAndConsoleErrors": []
+  },
+  "source": {
+    "route": "lerms/hill-of-hills/wet-border-phase-morph-recipe",
+    "sequenceId": "hill-topology-contention-phase-boundary-main-3a06670-v1",
+    "configId": "topology-contention-phase-boundary-v1",
+    "previousSampleChecksum": "e8ea1f0c",
+    "currentSampleChecksum": "1f7d3625",
+    "previousSupportChecksum": "1abdd1f8",
+    "currentSupportChecksum": "cef5f893",
+    "previousTerrainEpoch": 0,
+    "currentTerrainEpoch": 1,
+    "motionClass": "phase_morph"
+  },
+  "preRemap": {
+    "stepCount": 15,
+    "fluidEpoch": 16,
+    "reachedCellCount": 105,
+    "maximumRadiusCells": 11,
+    "maximumDepth": 0.12015354633331299,
+    "remapStatus": "pending",
+    "primaryOutputWritten": true
+  },
+  "committedRemap": {
+    "schema": "kaminos.fluid.terrain-remap-receipt.v1",
+    "receiptId": "terrain-remap:hill-of-hills:topology-contention-phase-boundary-v1:0->1",
+    "mode": "phase_morph",
+    "state": "committed",
+    "terrainId": "hill-of-hills:topology-contention-phase-boundary-v1",
+    "sourceId": "hill-topology-contention-phase-boundary-main-3a06670-v1",
+    "transformId": "hill-heightfield:topology-contention-phase-boundary-v1:72x96:-5.75:5.75:-8:8",
+    "previousTerrainEpoch": 0,
+    "terrainEpoch": 1,
+    "fluidEpoch": 81,
+    "predecessorReceiptIds": [
+      "hill-local-to-macro:0:e8ea1f0c"
+    ],
+    "lineageIds": [
+      "hill-local-pbf:hill-topology-contention-phase-boundary-main-3a06670-v1"
+    ],
+    "displacedVolume": 0.03892535170066613,
+    "supportWork": 2.422882890001363,
+    "maximumBedDisplacement": 0.021151423454284668,
+    "maximumSupportSpeed": 0.26246118545532227,
+    "deltaSeconds": 0.104,
+    "motionSubstepEnvelope": 0.104,
+    "residual": {
+      "volume": 0,
+      "momentum": [
+        0,
+        0,
+        0
+      ],
+      "materials": {
+        "fingerJuiceKg": 0
+      }
+    },
+    "tolerance": 1e-9
+  },
+  "postRemap": {
+    "stepCount": 101,
+    "fluidEpoch": 102,
+    "terrainEpoch": 1,
+    "reachedCellCount": 278,
+    "maximumRadiusCells": 21.93171219946131,
+    "maximumDepth": 0.046506721526384354,
+    "primaryOutputWritten": true,
+    "partial": false,
+    "blank": false,
+    "conservationReceiptIds": [
+      "hill-local-to-macro:0:e8ea1f0c",
+      "terrain-remap:hill-of-hills:topology-contention-phase-boundary-v1:0->1"
+    ]
+  },
+  "repeatability": {
+    "secondRunStepCount": 80,
+    "secondRunFluidEpoch": 81,
+    "secondRunDisplacedVolume": 0.03892535170066613,
+    "secondRunSupportWork": 2.422882890001363,
+    "receiptFieldsIdentical": true
+  },
+  "images": {
+    "preRemapSha256": "22c48d69e0979b7d70e1654d8045cf4a97fc3876eb9591a23c56b4eade898cbe",
+    "postRemapSha256": "39f9a0fc601e0f7a40cf6a45101097043b982bf96edf7ed5b7bfe67ea5dbdda1",
+    "width": 1512,
+    "height": 1004,
+    "ssim": 0.923665,
+    "averagePsnrDb": 20.057055
+  }
+}

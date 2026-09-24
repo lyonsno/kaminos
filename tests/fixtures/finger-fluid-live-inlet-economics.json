@@ -1,0 +1,40 @@
+{
+  "packet_id": "canonical-economics-gpu-witness-v1",
+  "route_identity": "kaminos/tests/live-inlet-economics-explicit-v1",
+  "simulation_authority": "live_simulation",
+  "authority": {
+    "simulation_safe": true,
+    "stale": false
+  },
+  "emitters": [
+    {
+      "id": "age-limited-index",
+      "origin_world": [-0.16, 0.62, -0.9],
+      "aim_world": [0.08, -0.3, 1],
+      "radius": 0.055,
+      "strength": 1.05,
+      "active": true,
+      "emission_state": "jet",
+      "source_flux_particles_per_second": 720,
+      "active_budget_particles": 720,
+      "lifetime_seconds": 0.75,
+      "optical_density_scale": 1.8,
+      "reconstruction_radius_scale": 1.35
+    },
+    {
+      "id": "distance-limited-middle",
+      "origin_world": [0.16, 0.62, -0.9],
+      "aim_world": [-0.08, -0.3, 1],
+      "radius": 0.055,
+      "strength": 1.05,
+      "active": true,
+      "emission_state": "jet",
+      "source_flux_particles_per_second": 720,
+      "active_budget_particles": 720,
+      "lifetime_seconds": 10,
+      "residence_distance_world": 0.55,
+      "optical_density_scale": 0.7,
+      "reconstruction_radius_scale": 0.85
+    }
+  ]
+}

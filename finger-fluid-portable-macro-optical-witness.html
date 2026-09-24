@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Portable Macro Optics</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #07110f;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #status {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      max-width: min(640px, calc(100vw - 32px));
+      padding: 10px 12px;
+      border: 1px solid rgba(113, 218, 229, 0.58);
+      background: rgba(3, 13, 16, 0.82);
+      color: #b7f4f3;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="portable-macro-optics"></canvas>
+  <div id="status">initializing portable macro optics</div>
+  <script type="module" src="./finger-fluid-portable-macro-optical-witness.js"></script>
+</body>
+</html>

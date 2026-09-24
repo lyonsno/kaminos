@@ -1,10 +1,16 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
+  KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA,
   evaluateFingerFluidTruthTrajectory,
+  planFingerFluidLiveInletEconomics,
+  validateFingerFluidLiveInletCohortLedger,
+  validateFingerFluidLiveInletCohortTrajectory as validateFingerFluidLiveInletCohortTrajectoryContract,
+  validateFingerFluidLiveInletRuntimeReceipt,
   validateFingerFluidTruthRendererState,
 } from './finger-fluid-webgpu-core.js';
 
@@ -33,6 +39,21 @@ const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1120);
 const deviceScaleFactor = Number(args.get('--device-scale-factor') || 1);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || 20000);
+const requestedLiveInletPacketPath = args.get('--live-inlet-packet')
+  ? resolve(args.get('--live-inlet-packet'))
+  : null;
+const requestedLiveInletReplacementPacketPath = args.get('--live-inlet-replacement-packet')
+  ? resolve(args.get('--live-inlet-replacement-packet'))
+  : null;
+const liveInletReplacementAfterCheckpoint = Number(
+  args.get('--live-inlet-replacement-after-checkpoint') ?? 0,
+);
+const requestedLiveInletSecondReplacementPacketPath = args.get('--live-inlet-second-replacement-packet')
+  ? resolve(args.get('--live-inlet-second-replacement-packet'))
+  : null;
+const liveInletSecondReplacementAfterCheckpoint = Number(
+  args.get('--live-inlet-second-replacement-after-checkpoint') ?? 1,
+);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-fluid-truth-profile-${debugPort}-${process.pid}`;
 
@@ -45,6 +66,18 @@ let initialRendererAuthority = null;
 let lastRendererAuthority = null;
 let lastDebugState = null;
 let browserVersion = null;
+let liveInletPacket = null;
+let initialLiveInletPacketSha256 = null;
+let currentLiveInletPacketSha256 = null;
+let liveInletExpectedEconomics = null;
+let liveInletPublicationReceipt = null;
+let liveInletReplacementPacket = null;
+let liveInletReplacementPacketSha256 = null;
+let liveInletSecondReplacementPacket = null;
+let liveInletSecondReplacementPacketSha256 = null;
+const liveInletPublicationHistory = [];
+let liveInletCohortAcceptance = null;
+let servedSourceIdentity = null;
 let stderr = '';
 const trajectory = [];
 const consoleEvents = [];
@@ -53,6 +86,42 @@ let trajectoryAcceptance = null;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+}
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+async function bindServedSourceIdentity() {
+  const sources = [
+    ['index.html', new URL('./index.html', requestedUrlObject), new URL('./index.html', import.meta.url)],
+    [
+      'finger-fluid-webgpu-core.js',
+      new URL('./finger-fluid-webgpu-core.js', requestedUrlObject),
+      new URL('./finger-fluid-webgpu-core.js', import.meta.url),
+    ],
+  ];
+  const identity = {};
+  for (const [name, servedUrl, localUrl] of sources) {
+    const localBytes = readFileSync(localUrl);
+    const response = await fetch(servedUrl);
+    if (!response.ok) throw new Error(`served source ${servedUrl} failed ${response.status}`);
+    const servedBytes = Buffer.from(await response.arrayBuffer());
+    const localSha256 = sha256(localBytes);
+    const servedSha256 = sha256(servedBytes);
+    identity[name] = {
+      requestedUrl: servedUrl.href,
+      effectiveUrl: response.url,
+      localSha256,
+      servedSha256,
+      bytes: servedBytes.byteLength,
+      exactLocalMatch: localSha256 === servedSha256,
+    };
+    if (localSha256 !== servedSha256) {
+      throw new Error(`served source differs from witness checkout: ${JSON.stringify(identity[name])}`);
+    }
+  }
+  return identity;
 }
 
 function writeReport(extra = {}) {
@@ -66,6 +135,20 @@ function writeReport(extra = {}) {
     requestedRendererMode,
     effectiveRendererMode,
     requestedSupportFriction,
+    requestedLiveInletPacketPath,
+    requestedLiveInletReplacementPacketPath,
+    requestedLiveInletSecondReplacementPacketPath,
+    liveInletReplacementAfterCheckpoint,
+    liveInletSecondReplacementAfterCheckpoint,
+    initialLiveInletPacketSha256,
+    currentLiveInletPacketSha256,
+    liveInletReplacementPacketSha256,
+    liveInletSecondReplacementPacketSha256,
+    liveInletExpectedEconomics,
+    liveInletPublicationReceipt,
+    liveInletPublicationHistory,
+    liveInletCohortAcceptance,
+    servedSourceIdentity,
     initialRendererAuthority,
     checkpointOffsetsMs,
     checkpointStepTargets,
@@ -301,17 +384,69 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs, targetStep)
   ]) {
     if (!Number.isFinite(fluidTruthSnapshot[field])) throw new Error(`fluid truth field is non-finite: ${field}=${fluidTruthSnapshot[field]}`);
   }
+  const sourceScene = ['laminar_inlets', 'waterfall_resolution_oracle', 'live_hand_inlets']
+    .includes(effectiveTruthScene);
+  const densityParticleCount = sourceScene
+    ? fluidTruthSnapshot.activeParticleCount
+    : fluidTruthSnapshot.finiteParticleCount;
   if (
-    fluidTruthSnapshot.boundaryParticleCount + fluidTruthSnapshot.bulkParticleCount !== fluidTruthSnapshot.finiteParticleCount
-    || fluidTruthSnapshot.boundaryParticleCount <= 0
+    fluidTruthSnapshot.boundaryParticleCount + fluidTruthSnapshot.bulkParticleCount !== densityParticleCount
+    || (
+      effectiveTruthScene !== 'live_hand_inlets'
+      && fluidTruthSnapshot.boundaryParticleCount <= 0
+    )
   ) {
     throw new Error(`fluid boundary population evidence is missing or partial: ${JSON.stringify(fluidTruthSnapshot)}`);
   }
   if (fluidTruthSnapshot.occupiedCellCount < 2 || fluidTruthSnapshot.occupiedVolumeProxy <= 0) {
     throw new Error(`fluid support-volume occupancy collapsed: ${JSON.stringify(fluidTruthSnapshot)}`);
   }
-  if (effectiveTruthScene !== 'multi_regime_playground' && fluidTruthSnapshot.sourceRecirculationCount !== 0) {
+  if (
+    !['multi_regime_playground', 'laminar_inlets', 'waterfall_resolution_oracle', 'live_hand_inlets']
+      .includes(effectiveTruthScene)
+    && fluidTruthSnapshot.sourceRecirculationCount !== 0
+  ) {
     throw new Error(`closed-population scene leaked into source recirculation: ${JSON.stringify(fluidTruthSnapshot)}`);
+  }
+  let liveInletEconomics = null;
+  if (effectiveTruthScene === 'live_hand_inlets') {
+    liveInletEconomics = state.runtime?.diagnostics?.liveInletEconomics;
+    if (
+      liveInletEconomics?.contract !== 'requested-effective-release-pool-residence-v1'
+      || liveInletEconomics.packetId !== liveInletPublicationReceipt?.packetId
+      || liveInletEconomics.sourceRoute !== liveInletPublicationReceipt?.sourceRoute
+      || liveInletEconomics.artifactSha256 !== currentLiveInletPacketSha256
+      || liveInletEconomics.generation !== liveInletPublicationReceipt?.generation
+      || liveInletEconomics.poolCapacity !== liveInletExpectedEconomics?.poolCapacity
+      || liveInletEconomics.effectiveReleasePoolBudget !== liveInletExpectedEconomics?.effectiveReleasePoolBudget
+    ) {
+      throw new Error(`live-inlet requested/effective identity is missing or substituted: ${JSON.stringify({
+        liveInletEconomics,
+        liveInletPublicationReceipt,
+        liveInletExpectedEconomics,
+      })}`);
+    }
+    if (
+      !Number.isSafeInteger(liveInletEconomics.liveInletAgeRecycleCount)
+      || !Number.isSafeInteger(liveInletEconomics.liveInletDistanceRecycleCount)
+      || !Number.isSafeInteger(liveInletEconomics.priorGenerationAgeRecycleCount)
+      || !Number.isSafeInteger(liveInletEconomics.priorGenerationDistanceRecycleCount)
+      || !Number.isSafeInteger(liveInletEconomics.predecessorBlockedReleaseCount)
+      || liveInletEconomics.predecessorBlockedReleaseCount < 0
+      || !Number.isSafeInteger(liveInletEconomics.observedParticleReleaseCount)
+      || liveInletEconomics.observedParticleReleaseCount < 1
+      || !Number.isFinite(liveInletEconomics.observedExpectedReleaseRatio)
+      || liveInletEconomics.observedExpectedReleaseRatio < 0.9
+      || liveInletEconomics.observedExpectedReleaseRatio > 1.05
+    ) {
+      throw new Error(`live-inlet GPU release/recycle telemetry is missing or partial: ${JSON.stringify(liveInletEconomics)}`);
+    }
+    validateFingerFluidLiveInletCohortLedger(
+      liveInletPublicationHistory.filter(
+        publication => publication.generation <= liveInletEconomics.generation,
+      ),
+      liveInletEconomics.cohortLedger,
+    );
   }
   const energyLedger = state.runtime?.energyLedger;
   const energyStages = ['projection', 'viscosity', 'vorticity', 'cohesion'];
@@ -374,6 +509,7 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs, targetStep)
     energyLedger,
     supportDiagnostics,
     fluidTruthSnapshot,
+    liveInletEconomics,
     visual,
     outputPath,
   };
@@ -406,7 +542,106 @@ async function waitForMinimumStep(socket, targetStep) {
   }
 }
 
+async function publishLiveInletPacket(socket, packet, packetSha256, role) {
+  const expectedEconomics = planFingerFluidLiveInletEconomics(
+    packet,
+    lastDebugState.runtime?.particleCount,
+  );
+  const receipt = await evaluate(socket, `(() => {
+    if (typeof window.kaminosFingerFluidBenchSetLiveInletPacket !== 'function') {
+      throw new Error('missing live-inlet publication hook');
+    }
+    return window.kaminosFingerFluidBenchSetLiveInletPacket(${JSON.stringify(packet)});
+  })()`);
+  validateFingerFluidLiveInletRuntimeReceipt(
+    expectedEconomics,
+    receipt,
+    { artifactSha256: packetSha256 },
+  );
+  liveInletPacket = packet;
+  currentLiveInletPacketSha256 = packetSha256;
+  liveInletExpectedEconomics = expectedEconomics;
+  liveInletPublicationReceipt = receipt;
+  liveInletPublicationHistory.push({
+    role,
+    packetId: receipt.packetId,
+    sourceRoute: receipt.sourceRoute,
+    artifactSha256: packetSha256,
+    generation: receipt.generation,
+    expectedEconomics,
+    receipt,
+  });
+  return receipt;
+}
+
+function validateLiveInletCohortTrajectory() {
+  const economics = trajectory.map(checkpoint => checkpoint.liveInletEconomics).filter(Boolean);
+  return validateFingerFluidLiveInletCohortTrajectoryContract({
+    publications: liveInletPublicationHistory,
+    economics,
+    replacementRequired: Boolean(
+      requestedLiveInletReplacementPacketPath || requestedLiveInletSecondReplacementPacketPath,
+    ),
+  });
+}
+
 async function main() {
+  if (requestedTruthScene === 'live_hand_inlets' && !requestedLiveInletPacketPath) {
+    throw new Error('missing live-inlet packet for live_hand_inlets truth witness');
+  }
+  if (requestedLiveInletPacketPath && requestedTruthScene !== 'live_hand_inlets') {
+    throw new Error(`live-inlet packet cannot be applied to truth scene ${requestedTruthScene}`);
+  }
+  if (requestedLiveInletReplacementPacketPath && requestedTruthScene !== 'live_hand_inlets') {
+    throw new Error(`live-inlet replacement packet cannot be applied to truth scene ${requestedTruthScene}`);
+  }
+  if (requestedLiveInletSecondReplacementPacketPath && requestedTruthScene !== 'live_hand_inlets') {
+    throw new Error(`live-inlet second replacement packet cannot be applied to truth scene ${requestedTruthScene}`);
+  }
+  if (requestedLiveInletSecondReplacementPacketPath && !requestedLiveInletReplacementPacketPath) {
+    throw new Error('live-inlet second replacement packet requires the first replacement packet');
+  }
+  if (
+    requestedLiveInletReplacementPacketPath
+    && (!Number.isSafeInteger(liveInletReplacementAfterCheckpoint)
+      || liveInletReplacementAfterCheckpoint < 0
+      || liveInletReplacementAfterCheckpoint >= checkpointOffsetsMs.length - 1)
+  ) {
+    throw new Error(`live-inlet replacement checkpoint must leave at least one successor checkpoint: ${liveInletReplacementAfterCheckpoint}`);
+  }
+  if (
+    requestedLiveInletSecondReplacementPacketPath
+    && (!Number.isSafeInteger(liveInletSecondReplacementAfterCheckpoint)
+      || liveInletSecondReplacementAfterCheckpoint <= liveInletReplacementAfterCheckpoint
+      || liveInletSecondReplacementAfterCheckpoint >= checkpointOffsetsMs.length - 1)
+  ) {
+    throw new Error(`live-inlet second replacement checkpoint must follow the first and leave a successor checkpoint: ${liveInletSecondReplacementAfterCheckpoint}`);
+  }
+  if (requestedLiveInletPacketPath) {
+    const packetBytes = readFileSync(requestedLiveInletPacketPath);
+    initialLiveInletPacketSha256 = sha256(packetBytes);
+    currentLiveInletPacketSha256 = initialLiveInletPacketSha256;
+    liveInletPacket = {
+      ...JSON.parse(packetBytes.toString('utf8')),
+      artifact_sha256: initialLiveInletPacketSha256,
+    };
+  }
+  if (requestedLiveInletReplacementPacketPath) {
+    const replacementPacketBytes = readFileSync(requestedLiveInletReplacementPacketPath);
+    liveInletReplacementPacketSha256 = sha256(replacementPacketBytes);
+    liveInletReplacementPacket = {
+      ...JSON.parse(replacementPacketBytes.toString('utf8')),
+      artifact_sha256: liveInletReplacementPacketSha256,
+    };
+  }
+  if (requestedLiveInletSecondReplacementPacketPath) {
+    const secondReplacementPacketBytes = readFileSync(requestedLiveInletSecondReplacementPacketPath);
+    liveInletSecondReplacementPacketSha256 = sha256(secondReplacementPacketBytes);
+    liveInletSecondReplacementPacket = {
+      ...JSON.parse(secondReplacementPacketBytes.toString('utf8')),
+      artifact_sha256: liveInletSecondReplacementPacketSha256,
+    };
+  }
   if (!checkpointOffsetsMs.length || checkpointOffsetsMs.some(value => !Number.isFinite(value) || value < 0)) {
     throw new Error(`Truth checkpoints must be finite non-negative milliseconds: ${JSON.stringify(checkpointOffsetsMs)}`);
   }
@@ -422,6 +657,8 @@ async function main() {
   if (checkpointStepTargets.some((value, index) => index > 0 && value <= checkpointStepTargets[index - 1])) {
     throw new Error(`Truth checkpoint step targets must be strictly increasing: ${JSON.stringify(checkpointStepTargets)}`);
   }
+  phase = 'bind_served_source';
+  servedSourceIdentity = await bindServedSourceIdentity();
   phase = 'launch_browser';
   const chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${debugPort}`,
@@ -474,6 +711,22 @@ async function main() {
     if (requestedTruthScene !== effectiveTruthScene) {
       throw new Error(`truth scene silently fell back: ${JSON.stringify({ requestedTruthScene, effectiveTruthScene })}`);
     }
+    if (effectiveTruthScene === 'live_hand_inlets') {
+      const liveInletCameraReceipt = await evaluate(socket, `(() => {
+        if (typeof window.kaminosFingerFluidBenchSetCameraForWitness !== 'function') {
+          throw new Error('missing live-inlet witness camera hook');
+        }
+        return window.kaminosFingerFluidBenchSetCameraForWitness(${JSON.stringify(KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA)});
+      })()`);
+      if (JSON.stringify(liveInletCameraReceipt) !== JSON.stringify({
+        schema: 'kaminos.finger-fluid-composition-camera.v0',
+        controls: 'composition-camera-orbit-wheel-zoom-v0',
+        ...KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA,
+      })) {
+        throw new Error(`live-inlet witness camera silently disagrees: ${JSON.stringify(liveInletCameraReceipt)}`);
+      }
+      await publishLiveInletPacket(socket, liveInletPacket, initialLiveInletPacketSha256, 'predecessor');
+    }
     const effectiveSupportFriction = lastDebugState.runtime?.effectiveSupportFriction;
     if (lastDebugState.runtime?.requestedSupportFriction !== effectiveSupportFriction || effectiveSupportFriction !== requestedSupportFriction) {
       throw new Error(`support friction request/effective disagreement: ${JSON.stringify({
@@ -509,6 +762,33 @@ async function main() {
         const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
         return typeof read === 'function' ? read() : null;
       })()`);
+      if (
+        liveInletReplacementPacket
+        && checkpointIndex === liveInletReplacementAfterCheckpoint
+      ) {
+        phase = `publish_live_inlet_replacement_after_checkpoint_${checkpointIndex + 1}`;
+        await publishLiveInletPacket(
+          socket,
+          liveInletReplacementPacket,
+          liveInletReplacementPacketSha256,
+          'successor',
+        );
+      }
+      if (
+        liveInletSecondReplacementPacket
+        && checkpointIndex === liveInletSecondReplacementAfterCheckpoint
+      ) {
+        phase = `publish_live_inlet_second_replacement_after_checkpoint_${checkpointIndex + 1}`;
+        await publishLiveInletPacket(
+          socket,
+          liveInletSecondReplacementPacket,
+          liveInletSecondReplacementPacketSha256,
+          'successor-2',
+        );
+      }
+    }
+    if (effectiveTruthScene === 'live_hand_inlets') {
+      liveInletCohortAcceptance = validateLiveInletCohortTrajectory();
     }
     phase = 'evaluate_trajectory';
     trajectoryAcceptance = evaluateFingerFluidTruthTrajectory(effectiveTruthScene, trajectory);

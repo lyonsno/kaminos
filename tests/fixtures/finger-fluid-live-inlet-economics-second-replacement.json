@@ -1,0 +1,40 @@
+{
+  "packet_id": "canonical-economics-gpu-witness-v3-second-replacement",
+  "route_identity": "kaminos/tests/live-inlet-economics-second-replacement-v1",
+  "simulation_authority": "live_simulation",
+  "authority": {
+    "simulation_safe": true,
+    "stale": false
+  },
+  "emitters": [
+    {
+      "id": "second-replacement-age-limited",
+      "origin_world": [-0.2, 0.76, -0.8],
+      "aim_world": [0.12, -0.4, 1],
+      "radius": 0.045,
+      "strength": 0.9,
+      "active": true,
+      "emission_state": "jet",
+      "source_flux_particles_per_second": 60,
+      "active_budget_particles": 50,
+      "lifetime_seconds": 0.3,
+      "optical_density_scale": 1.2,
+      "reconstruction_radius_scale": 1.1
+    },
+    {
+      "id": "second-replacement-distance-limited",
+      "origin_world": [0.2, 0.76, -0.8],
+      "aim_world": [-0.12, -0.4, 1],
+      "radius": 0.045,
+      "strength": 0.9,
+      "active": true,
+      "emission_state": "jet",
+      "source_flux_particles_per_second": 60,
+      "active_budget_particles": 50,
+      "lifetime_seconds": 8,
+      "residence_distance_world": 0.25,
+      "optical_density_scale": 0.8,
+      "reconstruction_radius_scale": 0.9
+    }
+  ]
+}

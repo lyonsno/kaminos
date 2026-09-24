@@ -224,7 +224,8 @@ assert.match(indexSource, /requestedWitnessTargetStep/);
 assert.match(indexSource, /effectiveWitnessTargetStep/);
 assert.match(indexSource, /finger_fluid_witness_target_step/);
 assert.match(indexSource, /finger_fluid_max_speed/);
-assert.match(indexSource, /submittedState\.stepCount >= fingerFluidBenchConfig\.effectiveWitnessTargetStep/);
+assert.match(indexSource, /const autoPauseStep =\s*[\s\S]*effectiveWitnessStartStep\s*\?\?\s*[\s\S]*effectiveWitnessTargetStep/);
+assert.match(indexSource, /submittedState\.stepCount >= autoPauseStep/);
 assert.match(indexSource, /witnessTargetAutoPaused/);
 
 console.log('finger fluid waterfall resolution oracle contracts passed');
