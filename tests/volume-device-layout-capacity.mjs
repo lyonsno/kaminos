@@ -15,7 +15,12 @@ const section = (startText, endText) => {
   assert.ok(start >= ensureGpuStart && end > start, `production section exists: ${startText}`);
   return source.slice(start, end);
 };
-const provisioning = section('const requiredLimits = {};', 'const requiredFeatures =');
+const requestStart = source.indexOf('const requiredLimits = {};', ensureGpuStart);
+const requestCallStart = source.indexOf('device = await adapter.requestDevice(', requestStart);
+const requestCallEnd = source.indexOf(';\n', requestCallStart);
+assert.ok(requestStart >= ensureGpuStart && requestCallStart > requestStart && requestCallEnd > requestCallStart,
+  'production request-device descriptor handoff exists');
+const requestPath = source.slice(requestStart, requestCallEnd + 1);
 const layouts = section('bindGroupLayout = device.createBindGroupLayout({', "device.pushErrorScope('validation');");
 const stages = { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
 const pipelines = [];
@@ -43,16 +48,44 @@ const counts = pipelines.flatMap(layout => Object.entries(stages).map(([stage, b
 const minimumCapacity = Math.max(...counts.map(row => row.count));
 assert.ok(minimumCapacity > 0, 'the production layouts contain storage bindings');
 
+const requestDeviceForCapacity = async capacity => {
+  let receivedDescriptor;
+  const adapter = {
+    limits: { maxStorageBuffersPerShaderStage: capacity, maxStorageBufferBindingSize: 268435456 },
+    features: { has: () => false },
+    requestDevice: async descriptor => {
+      receivedDescriptor = descriptor;
+      const storageLimit = descriptor?.requiredLimits?.maxStorageBuffersPerShaderStage ?? 8;
+      return { limits: { maxStorageBuffersPerShaderStage: storageLimit } };
+    },
+  };
+  const result = await runInNewContext(`(async () => {
+    let device;
+    ${requestPath}
+    return { deviceDescriptor, device };
+  })()`, { adapter, maxRequestedFluidBufferBytes: 134217728 });
+  assert.equal(receivedDescriptor, result.deviceDescriptor,
+    'the descriptor assembled from production limits is the one sent to adapter.requestDevice');
+  const granted = result.device.limits.maxStorageBuffersPerShaderStage;
+  assert.ok(granted <= capacity, 'never request capacity beyond the adapter');
+  return { descriptor: result.deviceDescriptor, granted };
+};
+
 for (const capacity of [minimumCapacity, 32]) {
-  const requiredLimits = runInNewContext(`${provisioning}\nrequiredLimits`, {
-    adapter: { limits: { maxStorageBuffersPerShaderStage: capacity, maxStorageBufferBindingSize: 268435456 } },
-    maxRequestedFluidBufferBytes: 134217728,
-  });
-  const granted = requiredLimits.maxStorageBuffersPerShaderStage ?? 8;
+  const { descriptor, granted } = await requestDeviceForCapacity(capacity);
+  assert.equal(descriptor.requiredLimits.maxStorageBuffersPerShaderStage, capacity,
+    `request the adapter-supported storage capacity ${capacity}`);
   for (const row of counts) {
     assert.ok(row.count <= granted,
-      `${row.pipeline} ${row.stage} needs ${row.count} storage bindings, but device requests ${granted} (adapter ${capacity})`);
+      `${row.pipeline} ${row.stage} needs ${row.count} storage bindings, but device receives ${granted} (adapter ${capacity})`);
   }
-  assert.ok(granted <= capacity, 'never request capacity beyond the adapter');
 }
-console.log(`PASS: ${pipelines.length} production pipeline layouts fit the requested device; maximum storage bindings ${minimumCapacity}`);
+
+const insufficientCapacity = minimumCapacity - 1;
+const { granted: insufficientGrant } = await requestDeviceForCapacity(insufficientCapacity);
+const unsupportedLayouts = counts.filter(row => row.count > insufficientGrant);
+assert.ok(unsupportedLayouts.length > 0,
+  `an adapter with ${insufficientCapacity} slots cannot satisfy the production ${minimumCapacity}-binding layout`);
+assert.ok(unsupportedLayouts.some(row => row.count === minimumCapacity),
+  'the known under-capacity case fails specifically at the maximum production binding count');
+console.log(`PASS: ${pipelines.length} production layouts and requestDevice handoff at capacities ${minimumCapacity}/32; capacity ${insufficientCapacity} is correctly recognized as insufficient; maximum storage bindings ${minimumCapacity}`);
