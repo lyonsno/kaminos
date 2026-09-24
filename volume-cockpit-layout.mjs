@@ -385,7 +385,7 @@ const ORGANIZED_GROUPS = [
   ['budget', 'Raymarch budget', /^volume-(steps|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
   ['force', 'Force contributions', /^volume-(procedural-detail-forces|force-(micro-carrier|interface-shred|fine-breakup))$/],
-  ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail)$/],
+  ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail|advection-scheme|common-gas-transport)$/],
   ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|boundary-splat-.+|flow-kernel-.+|residual-.+|grid-overlay|flow-debug|oracle-.+|pyro-compare|look-freeze)$/],
   ['shell', 'Shell renderer', /^volume-shell-.+/],
   ['capture', 'Capture extractor', /^volume-reaction-.+/],

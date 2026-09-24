@@ -2012,6 +2012,55 @@ export function pressureResidualProbeDisposition({
   return 'probe';
 }
 
+// Low-dissipation transport. `legacy` is the shipped first-order
+// semi-Lagrangian step with per-layer lifts, 0.982 per-step velocity damping
+// and the fixed [-0.34, 0.52] component clamp. `undamped` keeps the first-order
+// step but drops the damping and replaces the clamp with a backtrace bound.
+// `maccormack` adds a predictor pass and a two-sample error correction with a
+// neighbor-extrema limiter, carrying every slot on the velocity characteristic.
+export const TRANSPORT_SCHEME_LEGACY = 'legacy';
+export const TRANSPORT_SCHEME_UNDAMPED = 'undamped';
+export const TRANSPORT_SCHEME_MACCORMACK = 'maccormack';
+export const TRANSPORT_SCHEME_IDENTITY = 'low-dissipation-transport-v0';
+export const TRANSPORT_LEGACY_VELOCITY_DAMPING = 0.982;
+export const TRANSPORT_MAX_BACKTRACE_CELLS = 8;
+const TRANSPORT_SCHEME_VALUES = Object.freeze([TRANSPORT_SCHEME_LEGACY, TRANSPORT_SCHEME_UNDAMPED, TRANSPORT_SCHEME_MACCORMACK]);
+
+export function transportSchemeUniformValue(scheme) {
+  if (scheme === TRANSPORT_SCHEME_MACCORMACK) return 2;
+  if (scheme === TRANSPORT_SCHEME_UNDAMPED) return 1;
+  return 0;
+}
+
+export function resolveTransportConfig(controls = {}) {
+  const requestedScheme = controls.advectionScheme === undefined || controls.advectionScheme === null
+    ? TRANSPORT_SCHEME_LEGACY
+    : String(controls.advectionScheme).toLowerCase();
+  const known = TRANSPORT_SCHEME_VALUES.includes(requestedScheme);
+  const scheme = known ? requestedScheme : TRANSPORT_SCHEME_LEGACY;
+  const requestedCommonGas = controls.commonGasTransport === true;
+  const macCormack = scheme === TRANSPORT_SCHEME_MACCORMACK;
+  const legacy = scheme === TRANSPORT_SCHEME_LEGACY;
+  return {
+    identity: TRANSPORT_SCHEME_IDENTITY,
+    requested: { scheme: requestedScheme, commonGasTransport: requestedCommonGas },
+    effective: {
+      scheme,
+      // MacCormack corrects a round trip along one velocity field, so every
+      // slot rides the velocity characteristic; the per-layer lifts are legacy.
+      commonCharacteristic: macCormack || requestedCommonGas,
+      velocityDamping: legacy ? TRANSPORT_LEGACY_VELOCITY_DAMPING : 1,
+      velocityBound: legacy
+        ? { kind: 'fixed-component', min: -0.34, max: 0.52 }
+        : { kind: 'backtrace-cells', maxCells: TRANSPORT_MAX_BACKTRACE_CELLS },
+      predictorPass: macCormack,
+      limiter: macCormack ? 'neighbor-extrema' : null,
+      correctionWeight: macCormack ? 0.5 : null,
+      reason: known ? null : 'unknown-scheme',
+    },
+  };
+}
+
 function tallPlumePressureIterationStrategy(scene, pressureIterations) {
   return normalizeVolumeScene(scene) === 'tall_plume' && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
@@ -2283,7 +2332,7 @@ struct Uniforms {
   detail_force_isolation: vec4<f32>,
   reserved_source_extension_2: vec4<f32>,
   pressure_solver_controls: vec4<f32>,
-  reserved_source_extension_4: vec4<f32>,
+  transport_controls: vec4<f32>,
   artistic_motion_controls: vec4<f32>,
   physical_fire: vec4<f32>,
   physical_display: vec4<f32>,
@@ -2342,6 +2391,12 @@ struct NonRidgeOpticalCaptureRow {
 @group(0) @binding(14) var<storage, read_write> quenchDst: array<u32>;
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
+// MacCormack predictor: the forward semi-Lagrangian estimate of every slot,
+// written by csTransportPredict and re-advected backwards by the main kernel.
+// It lives in its own bind group (index 3) used only by the two transport
+// pipelines, so the shared fluid layout keeps every other compute pipeline
+// inside the per-stage storage-buffer limit.
+@group(3) @binding(1) var<storage, read_write> fluidPredict: array<vec4<f32>>;
 @group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
@@ -2441,6 +2496,93 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let y0 = mix(x00, x10, f.y);
   let y1 = mix(x01, x11, f.y);
   return mix(y0, y1, f.z);
+}
+
+fn readPredictSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  return fluidPredict[slotIndex(c, slot)];
+}
+
+fn samplePredictSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  let c000 = readPredictSlot(i0 + vec3<i32>(0, 0, 0), slot);
+  let c100 = readPredictSlot(i0 + vec3<i32>(1, 0, 0), slot);
+  let c010 = readPredictSlot(i0 + vec3<i32>(0, 1, 0), slot);
+  let c110 = readPredictSlot(i0 + vec3<i32>(1, 1, 0), slot);
+  let c001 = readPredictSlot(i0 + vec3<i32>(0, 0, 1), slot);
+  let c101 = readPredictSlot(i0 + vec3<i32>(1, 0, 1), slot);
+  let c011 = readPredictSlot(i0 + vec3<i32>(0, 1, 1), slot);
+  let c111 = readPredictSlot(i0 + vec3<i32>(1, 1, 1), slot);
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
+}
+
+struct SlotExtrema {
+  lo: vec4<f32>,
+  hi: vec4<f32>,
+};
+
+// Min and max of the source field over the eight cells the trilinear sample at
+// cellCenter reads: the monotone envelope the MacCormack correction may not leave.
+fn slotExtrema(cellCenter: vec3<f32>, slot: u32) -> SlotExtrema {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  var lo = readSlot(i0, slot);
+  var hi = lo;
+  for (var dz = 0; dz < 2; dz = dz + 1) {
+    for (var dy = 0; dy < 2; dy = dy + 1) {
+      for (var dx = 0; dx < 2; dx = dx + 1) {
+        let v = readSlot(i0 + vec3<i32>(dx, dy, dz), slot);
+        lo = min(lo, v);
+        hi = max(hi, v);
+      }
+    }
+  }
+  return SlotExtrema(lo, hi);
+}
+
+fn transportBacktraceScale(speed: f32) -> f32 {
+  return 2.55 + speed * 0.55;
+}
+
+fn transportVelocityDamping() -> f32 {
+  // Legacy multiplies the advected velocity by 0.982 every step; the
+  // low-dissipation schemes do not.
+  return select(1.0, 0.982, u.transport_controls.x < 0.5);
+}
+
+fn boundVelocity(v: vec3<f32>, speed: f32) -> vec3<f32> {
+  if (u.transport_controls.x < 0.5) {
+    return clamp(v, vec3<f32>(-0.34), vec3<f32>(0.52));
+  }
+  // Non-legacy schemes bound the per-step backtrace to a fixed number of
+  // cells, symmetric in every direction. Semi-Lagrangian transport is stable
+  // at any step; this keeps the trilinear footprint local and catches blow-ups.
+  let safe = clamp(v, vec3<f32>(-64.0), vec3<f32>(64.0));
+  let maxSpeed = max(0.05, u.transport_controls.z) / transportBacktraceScale(speed);
+  let magnitude = length(safe);
+  if (magnitude > maxSpeed) {
+    return safe * (maxSpeed / magnitude);
+  }
+  return safe;
+}
+
+// MacCormack: forward estimate (predictor pass), reverse-advect that estimate
+// along the same velocity, apply half the round-trip error, and limit to the
+// source extrema around the backtraced point.
+fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3<f32>, slot: u32) -> vec4<f32> {
+  let predicted = fluidPredict[idx * SLOTS_PER_CELL + slot];
+  let reversed = samplePredictSlot(forwardCell, slot);
+  let current = fluidSrc[idx * SLOTS_PER_CELL + slot];
+  let corrected = predicted + (current - reversed) * 0.5;
+  let extrema = slotExtrema(backCell, slot);
+  return clamp(corrected, extrema.lo, extrema.hi);
 }
 
 fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
@@ -3011,7 +3153,7 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
   let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
-  fluidDst[base] = vec4<f32>(clamp(correctedVelocity, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
+  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity, u.fire_smoke_curl_speed.w), density);
   fluidDst[base + 1u] = material;
   fluidDst[base + 2u] = fireLayer;
   fluidDst[base + 3u] = microLayer;
@@ -3044,7 +3186,7 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
   let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
-  fluidDst[base] = vec4<f32>(clamp(correctedVelocity, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
+  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity, u.fire_smoke_curl_speed.w), density);
   fluidDst[base + 1u] = material;
   fluidDst[base + 2u] = fireLayer;
   fluidDst[base + 3u] = microLayer;
@@ -3150,7 +3292,7 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   // The legacy per-component velocity bound is retained; the residual probe
   // measures divergence after it, so anything it reintroduces is visible.
-  fluidDst[base] = vec4<f32>(clamp(correctedVelocity, vec3<f32>(-0.34), vec3<f32>(0.52)), velocityDensity.w);
+  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity, u.fire_smoke_curl_speed.w), velocityDensity.w);
   fluidDst[base + 1u] = fluidSrc[base + 1u];
   fluidDst[base + 2u] = fluidSrc[base + 2u];
   fluidDst[base + 3u] = fluidSrc[base + 3u];
@@ -3813,6 +3955,30 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 
 @compute @workgroup_size(4, 4, 4)
+fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  let base = idx * SLOTS_PER_CELL;
+  let cell = vec3<f32>(gid) + vec3<f32>(0.5);
+  let prev = fluidSrc[base];
+  let speed = u.fire_smoke_curl_speed.w;
+  // Same characteristic the main kernel uses, including the Bonfire lateral damping.
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
+  let canonicalPlumeScene = step(2.5, sceneMode);
+  let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
+  let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
+  let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
+  let bonfireAdvectionLateralDamping = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
+  let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
+  let backCell = cell - advectVelocity * transportBacktraceScale(speed);
+  for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
+    fluidPredict[base + slot] = sampleFluidSlot(backCell, slot);
+  }
+}
+
+@compute @workgroup_size(4, 4, 4)
 fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) {
     return;
@@ -3897,12 +4063,36 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
-  let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
-  let advected = sampleFluidSlot(backCell, 0u);
-  let localMaterial = readSlot(cellI, 1u);
-  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
-  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayerRiseDirection);
-  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
+  let backtraceScale = transportBacktraceScale(speed);
+  let backCell = cell - advectVelocity * backtraceScale;
+  let macCormack = u.transport_controls.x > 1.5;
+  // Shared characteristic for gas-carried state (Sexy Fireman's common-gas
+  // switch, same uniform slot); MacCormack implies it. Forces, sources,
+  // reactions, decays, pressure and optics are unchanged by the scheme.
+  let commonGasTransport = macCormack || u.reserved_source_extension_2.y > 0.5;
+  var advected = vec4<f32>(0.0);
+  var material = vec4<f32>(0.0);
+  var fireLayer = vec4<f32>(0.0);
+  var microLayer = vec4<f32>(0.0);
+  if (macCormack) {
+    let forwardCell = cell + advectVelocity * backtraceScale;
+    advected = macCormackSlot(cellI, idx, backCell, forwardCell, 0u);
+    material = macCormackSlot(cellI, idx, backCell, forwardCell, 1u);
+    fireLayer = macCormackSlot(cellI, idx, backCell, forwardCell, 2u);
+    microLayer = macCormackSlot(cellI, idx, backCell, forwardCell, 3u);
+  } else {
+    advected = sampleFluidSlot(backCell, 0u);
+    if (commonGasTransport) {
+      material = sampleFluidSlot(backCell, 1u);
+      fireLayer = sampleFluidSlot(backCell, 2u);
+      microLayer = sampleFluidSlot(backCell, 3u);
+    } else {
+      let localMaterial = readSlot(cellI, 1u);
+      material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
+      fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayerRiseDirection);
+      microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
+    }
+  }
   var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
@@ -3955,7 +4145,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     microLayer = mix(microLayer, symmetricMicroLayer, bonfireScalarSymmetryBlend * 0.82);
     combustionFrontTopology = mix(combustionFrontTopology, symmetricFrontTopology, bonfireScalarSymmetryBlend * 0.38);
   }
-  var vel = advected.xyz * 0.982;
+  var vel = advected.xyz * transportVelocityDamping();
   var smoke = material.x * 0.990;
   var heat = material.y * 0.982;
   var fuel = material.z * 0.990;
@@ -5079,7 +5269,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
-  fluidDst[base] = vec4<f32>(clamp(vel, vec3<f32>(-0.34), vec3<f32>(0.52)), density);
+  fluidDst[base] = vec4<f32>(boundVelocity(vel, speed), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
   fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
@@ -8468,6 +8658,8 @@ export function createKaminosVolumePrototype({
       residualResetCount: 0,
     },
     pressureRedBlackHalfPasses: 0,
+    transport: { ...resolveTransportConfig(controlsSnapshot), uniform: null, predictorBufferBytes: 0 },
+    transportPredictorPasses: 0,
     tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
     tallPlumePressureIterationTarget: 0,
     pressureStrategy: normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene),
@@ -8738,6 +8930,10 @@ export function createKaminosVolumePrototype({
   let browserResidualModelUrl = '';
   let browserResidualLoadPromise = null;
   let computePipeline = null;
+  let transportPredictPipeline = null;
+  let transportPredictBindGroupLayout = null;
+  let transportPipelineLayout = null;
+  let transportPredictBindGroup = null;
   let analyticEmitterInjectionPipeline = null;
   let pressureDivergencePipeline = null;
   let pressureJacobiPipeline = null;
@@ -8907,6 +9103,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatControlGeneration = 0;
   let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
+  let fluidPredictBuffer = null;
   let frontBuffers = [];
   let quenchBuffers = [];
   let pressureBuffers = [];
@@ -9458,6 +9655,9 @@ export function createKaminosVolumePrototype({
     selectiveHeadLiveRuntime = null;
     selectiveHeadLiveBindGroups = null;
     for (const buffer of fluidBuffers) buffer.destroy();
+    fluidPredictBuffer?.destroy();
+    fluidPredictBuffer = null;
+    transportPredictBindGroup = null;
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of quenchBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
@@ -10450,6 +10650,19 @@ export function createKaminosVolumePrototype({
       device.queue.writeBuffer(buffer, 0, initialFluid);
       return buffer;
     });
+    fluidPredictBuffer = device.createBuffer({
+      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor ${gridSize}^3`,
+      size: nextBufferBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(initialFluid.length));
+    transportPredictBindGroup = device.createBindGroup({
+      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group ${gridSize}^3`,
+      layout: transportPredictBindGroupLayout,
+      entries: [
+        { binding: 1, resource: { buffer: fluidPredictBuffer } },
+      ],
+    });
     frontBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos ${FRONT_FIELD_IDENTITY} ${gridSize}^3 ${i}`,
@@ -10597,8 +10810,13 @@ export function createKaminosVolumePrototype({
     });
     computePipeline = device.createComputePipeline({
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
-      layout: pipelineLayout,
+      layout: transportPipelineLayout,
       compute: { module: shader, entryPoint: 'cs', constants: computePipelineConstants },
+    });
+    transportPredictPipeline = device.createComputePipeline({
+      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor compute pipeline ${gridSize}^3`,
+      layout: transportPipelineLayout,
+      compute: { module: shader, entryPoint: 'csTransportPredict', constants: computePipelineConstants },
     });
     analyticEmitterInjectionPipeline = device.createComputePipeline({
       label: `kaminos bounded analytic emitter injection ${gridSize}^3`,
@@ -11457,6 +11675,12 @@ export function createKaminosVolumePrototype({
       label: 'kaminos empty bind group layout',
       entries: [],
     });
+    transportPredictBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group layout`,
+      entries: [
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      ],
+    });
     browserResidualBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos browser direct residual bind group layout',
       entries: [
@@ -11485,6 +11709,10 @@ export function createKaminosVolumePrototype({
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
+    });
+    transportPipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} pipeline layout`,
+      bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, transportPredictBindGroupLayout],
     });
     analyticEmitterInjectionPipelineLayout = device.createPipelineLayout({
       label: 'kaminos bounded analytic emitter injection pipeline layout',
@@ -12680,6 +12908,12 @@ export function createKaminosVolumePrototype({
     uniforms[357] = pressureSolverConfig.effective.openTop ? 1 : 0;
     uniforms[358] = pressureSolverConfig.effective.omega ?? 0;
     uniforms[359] = pressureSolverConfig.effective.projectionGain ?? 0;
+    const transportConfig = resolveTransportConfig(controlsSnapshot);
+    uniforms[353] = transportConfig.effective.commonCharacteristic ? 1 : 0;
+    uniforms[360] = transportSchemeUniformValue(transportConfig.effective.scheme);
+    uniforms[361] = transportConfig.effective.velocityDamping;
+    uniforms[362] = transportConfig.effective.velocityBound.kind === 'backtrace-cells' ? transportConfig.effective.velocityBound.maxCells : 0;
+    uniforms[363] = transportConfig.effective.correctionWeight ?? 0;
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,
@@ -12822,6 +13056,11 @@ export function createKaminosVolumePrototype({
       residualHistory: state.pressureSolver?.residualHistory ?? [],
       residualError: state.pressureSolver?.residualError ?? null,
       residualResetCount: state.pressureSolver?.residualResetCount ?? 0,
+    };
+    state.transport = {
+      ...transportConfig,
+      uniform: { commonCharacteristic: uniforms[353], scheme: uniforms[360], velocityDamping: uniforms[361], maxBacktraceCells: uniforms[362], correctionWeight: uniforms[363] },
+      predictorBufferBytes: fluidPredictBuffer ? fluidBufferBytes(gridSize) : 0,
     };
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -13071,7 +13310,8 @@ export function createKaminosVolumePrototype({
     const pressureResidualProbePasses = pressureEnabled && pressureResidualPartialsBuffer
       ? 2 / PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS
       : 0;
-    const fullGridPassesPerFrame = simPassesPerFrame + pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses + pressureResidualProbePasses;
+    const transportPredictorPasses = resolveTransportConfig(controlsSnapshot).effective.predictorPass ? 1 : 0;
+    const fullGridPassesPerFrame = simPassesPerFrame + transportPredictorPasses + pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses + pressureResidualProbePasses;
     const fullGridPassBreakdown = {
       fluidSim: simPassesPerFrame,
       pressureDivergence: pressureDivergencePasses,
@@ -13083,6 +13323,7 @@ export function createKaminosVolumePrototype({
       pressureRedBlackHalfPasses,
       pressureProjection: pressureProjectionPasses,
       pressureResidualProbe: pressureResidualProbePasses,
+      transportPredictor: transportPredictorPasses,
       total: fullGridPassesPerFrame,
     };
     const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
@@ -13145,6 +13386,7 @@ export function createKaminosVolumePrototype({
     state.pressureDivergencePasses = pressureDivergencePasses;
     state.pressureJacobiInlineDivergencePasses = pressureJacobiInlineDivergencePasses;
     state.pressureRedBlackHalfPasses = pressureRedBlackHalfPasses;
+    state.transportPredictorPasses = transportPredictorPasses;
     state.fullGridPassBreakdown = fullGridPassBreakdown;
     state.analyticEmitterDispatchActive = analyticEmitterDispatch.active;
     state.analyticEmitterCellVisitsThisFrame = analyticEmitterCellVisitsThisFrame;
@@ -13264,12 +13506,26 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeSim(encoder, options = {}) {
+    const transportConfig = resolveTransportConfig(controlsSnapshot);
+    if (transportConfig.effective.predictorPass) {
+      if (!transportPredictPipeline || !transportPredictBindGroup) {
+        throw new Error('transport predictor pipeline unavailable');
+      }
+      const predictor = encoder.beginComputePass({ label: 'kaminos transport predictor pass' });
+      predictor.setPipeline(transportPredictPipeline);
+      predictor.setBindGroup(0, fluidBindGroup());
+      predictor.setBindGroup(3, transportPredictBindGroup);
+      const predictorWorkgroups = Math.ceil(gridSize / 4);
+      predictor.dispatchWorkgroups(predictorWorkgroups, predictorWorkgroups, predictorWorkgroups);
+      predictor.end();
+    }
     const pass = encoder.beginComputePass({
       label: 'kaminos fluid sim pass',
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
     });
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, fluidBindGroup());
+    pass.setBindGroup(3, transportPredictBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     pass.end();
@@ -20577,6 +20833,7 @@ export function createKaminosVolumePrototype({
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
         detailForceIsolation: state.detailForceIsolation,
         pressureSolver: state.pressureSolver,
+        transport: state.transport,
         tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
         reactionFuelScale: state.reactionFuelScale,
@@ -20954,6 +21211,7 @@ export function createKaminosVolumePrototype({
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
       detailForceIsolation: state.detailForceIsolation,
       pressureSolver: state.pressureSolver,
+      transport: state.transport,
       tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
       reactionFuelScale: state.reactionFuelScale,

@@ -2466,6 +2466,22 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-val" id="volume-pressure-solver-iterations-val">60</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Advection</span>
+      <select id="volume-advection-scheme" class="select-input" data-volume-settings-param="volume_advection_scheme">
+        <option value="legacy" selected>Legacy semi-Lagrangian (damped)</option>
+        <option value="undamped">Semi-Lagrangian, undamped</option>
+        <option value="maccormack">MacCormack, undamped</option>
+      </select>
+      <span class="slider-val" id="volume-advection-scheme-val">legacy</span>
+    </div>
+    <span class="slider-help">Legacy is first-order semi-Lagrangian with 0.982 velocity damping every step and a fixed velocity clamp. Undamped keeps the first-order step but drops the damping and bounds the step by backtrace distance instead. MacCormack adds a predictor pass and a limited round-trip error correction on one shared characteristic, so vortex roll-up and plume pulsing that the first-order step smears away can survive without synthetic stirring. Live switching keeps evolved state.</span>
+    <div class="slider-row">
+      <span class="slider-label">Common gas transport</span>
+      <input type="checkbox" id="volume-common-gas-transport" data-volume-settings-param="volume_common_gas_transport">
+      <span class="slider-val" id="volume-common-gas-transport-val">legacy split</span>
+    </div>
+    <span class="slider-help">Carry material, flame activity and microdetail with the gas velocity, without separate layer lift. Live switching keeps evolved state; forces and reactions are unchanged. MacCormack always uses the shared characteristic.</span>
+    <div class="slider-row">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pressure-tier-overlay-val">0.00</span>
@@ -3063,7 +3079,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, resolvePressureSolverConfig } from './volume-core.js?v=fire-actor-parity-0722';
+import { createKaminosVolumePrototype, resolvePressureSolverConfig, resolveTransportConfig } from './volume-core.js?v=fire-actor-parity-0722';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -13451,6 +13467,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureMode', 'volume_pressure_mode'],
   ['pressureSolver', 'volume_pressure_solver'],
   ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
+  ['advectionScheme', 'volume_advection_scheme'],
+  ['commonGasTransport', 'volume_common_gas_transport'],
   ['pressureTierOverlay', 'volume_pressure_tier_overlay'],
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
@@ -18656,6 +18674,8 @@ function readVolumeControls() {
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
     pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
+    advectionScheme: document.getElementById('volume-advection-scheme').value,
+    commonGasTransport: document.getElementById('volume-common-gas-transport').checked,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
     pressureTierLowerMax: parseFloat(document.getElementById('volume-pressure-tier-lower-max').value),
     pressureTierHeroMin: parseFloat(document.getElementById('volume-pressure-tier-hero-min').value),
@@ -18857,6 +18877,14 @@ function updateVolumeControlLabels() {
         ? `${convergedName} · off (${offReason})`
         : `${convergedName} · ${sweeps} sweeps · ${solverConfig.effective.projection === 'full' ? 'full projection' : `partial projection, gain ${gain.toFixed(2)}`}`);
     document.getElementById('volume-pressure-solver-iterations-val').textContent = solverConfig.effective.solver === 'legacy' ? `${sweeps} (converged only)` : String(sweeps);
+    const transportConfig = resolveTransportConfig(c);
+    const schemeName = { legacy: 'legacy', undamped: 'undamped', maccormack: 'MacCormack' }[transportConfig.effective.scheme] || transportConfig.effective.scheme;
+    document.getElementById('volume-advection-scheme-val').textContent = transportConfig.effective.reason
+      ? `legacy (${transportConfig.effective.reason})`
+      : `${schemeName}${transportConfig.effective.scheme === 'legacy' ? '' : ` · bound ${transportConfig.effective.velocityBound.maxCells} cells`}`;
+    document.getElementById('volume-common-gas-transport-val').textContent = transportConfig.effective.commonCharacteristic
+      ? (c.commonGasTransport ? 'common gas' : 'common gas (MacCormack)')
+      : 'legacy split';
   }
   const pressureTierControls = normalizeVolumePressureTierControls(c);
   if (pressureTierControls.lowerMax !== c.pressureTierLowerMax) setVolumeControlValue('volume-pressure-tier-lower-max', pressureTierControls.lowerMax.toFixed(2));
@@ -19845,6 +19873,8 @@ async function initKaminosVolumeRoute() {
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
     ['volume-pressure-solver', 'volume_pressure_solver'],
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
+    ['volume-advection-scheme', 'volume_advection_scheme'],
+    ['volume-common-gas-transport', 'volume_common_gas_transport'],
   ]) {
     if (params.has(param)) setVolumeControlValue(id, params.get(param));
   }
@@ -20108,6 +20138,8 @@ async function initKaminosVolumeRoute() {
     'volume-fixed-source-dephase',
     'volume-pressure-solver',
     'volume-pressure-solver-iterations',
+    'volume-advection-scheme',
+    'volume-common-gas-transport',
   ]) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);

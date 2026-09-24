@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 211,
+  "controlCount": 213,
   "controls": [
     { "key": "volume-physical-material-law", "param": "volume_physical_material_law", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
     { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
@@ -1235,6 +1235,23 @@
       "type": "range",
       "additiveDefault": 60,
       "additiveSinceControlCount": 211
+    },
+    {
+      "key": "volume-advection-scheme",
+      "param": "volume_advection_scheme",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "legacy",
+      "allowedValues": ["legacy", "undamped", "maccormack"],
+      "additiveSinceControlCount": 212
+    },
+    {
+      "key": "volume-common-gas-transport",
+      "param": "volume_common_gas_transport",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": false,
+      "additiveSinceControlCount": 213
     },
     {
       "key": "volume-pressure-tier-overlay",

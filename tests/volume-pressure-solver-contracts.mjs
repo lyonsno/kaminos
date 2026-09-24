@@ -282,7 +282,10 @@ test('post-correction divergence follows the effective gain and the velocity bou
   // pinned so this model cannot drift silently from csProjectPressureConverged.
   const project = wgslFunction('csProjectPressureConverged');
   assert.match(project, /clamp\(u\.pressure_solver_controls\.w, 0\.0, 1\.0\)/, 'gain is read from the solver uniform and clamped to [0, 1]');
-  assert.match(project, /clamp\(correctedVelocity, vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)\)/, 'legacy velocity bound is retained after correction');
+  // The bound is scheme-aware since the transport slice: legacy keeps the fixed
+  // clamp inside boundVelocity; non-legacy schemes bound by backtrace cells.
+  assert.match(project, /boundVelocity\(correctedVelocity, u\.fire_smoke_curl_speed\.w\)/, 'projection output goes through the shared scheme-aware velocity bound');
+  assert.match(source, /fn boundVelocity\([^]*?vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)/, 'legacy velocity bound is retained inside boundVelocity');
   const bound = v => Math.max(-0.34, Math.min(0.52, v));
   // One closed 1-D column of two cells: the stored component of cell 0 is the
   // flux through the shared face; both outer faces are walls.
