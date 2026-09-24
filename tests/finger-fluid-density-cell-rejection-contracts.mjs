@@ -9,15 +9,33 @@ const delta = shaderSource.match(/fn solve_position_delta[\s\S]*?(?=@compute @wo
 
 assert.match(shaderSource, /fn density_neighbor_cell_might_contribute\(position: vec3<f32>, neighborCell: vec3<i32>, radiusScale: f32\) -> bool/, 'the candidate-cell predicate is in the actual compute shader');
 assert.match(shaderSource, /if \(params\.refinementControl\.y != 0u \|\| params\.refinementControl\.w == 0u\) \{ return true; \}/, 'adaptive refinement and the baseline comparison bypass the uniform-volume cull');
-assert.match(shaderSource, /let nearest = clamp\(position, cellMin, cellMax\);[\s\S]*return dot\(separation, separation\) <= supportRadius \* supportRadius;/, 'cell rejection uses a conservative sphere/AABB distance test');
+assert.match(shaderSource, /let nearest = clamp\(position, cellMin - cellPadding, cellMax \+ cellPadding\);[\s\S]*return dot\(separation, separation\) <= supportRadius \* supportRadius;/, 'cell rejection uses a padded sphere/AABB distance test');
+assert.match(shaderSource, /let cellPadding = cellWidth \* 0\.001;[\s\S]*clamp\(position, cellMin - cellPadding, cellMax \+ cellPadding\)/, 'the cell box expands across f32 grid-coordinate rounding');
 for (const [name, stage] of [['lambda', lambda], ['correction', delta]]) {
   assert.match(stage, /if \(!density_neighbor_cell_might_contribute\(position, neighborCell, selfRadiusScale\)\) \{ continue; \}[\s\S]*atomicLoad\(&cellHeads\[cellIndex\(neighborCell\)\]\)/, `${name} skips irrelevant cells before following the linked list`);
 }
 assert.match(shaderSource, /view\.setUint32\(188, safeDensityCellRejection \? 1 : 0, true\)/, 'effective route selection reaches the shader uniform');
 assert.ok(browserSource.includes("params.get('finger_fluid_density_cell_rejection')"), 'the browser route exposes the comparison switch');
 assert.ok(browserSource.includes('densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection'), 'the browser forwards the effective switch to the solver');
+assert.ok(browserSource.includes('effectiveDensityCellRejection: requestedDensityCellRejection && !requestedAdaptiveDensity'), 'adaptive-density route explicitly downgrades the uniform-volume cull');
 assert.ok(browserSource.includes('gpuState.effectiveDensityCellRejection = gpuState.densityCellRejection'), 'debug evidence reports the effective route');
+assert.match(shaderSource, /const safeDensityCellRejection = densityCellRejection === true && !safeAdaptiveDensity;/, 'direct API marks the adaptive bypass ineffective');
 await assert.rejects(createWebGPUFingerFluidSolver({ densityCellRejection: 1 }), /density cell rejection must be a boolean/, 'the direct API rejects a silently downgraded switch');
+
+// f32 grid-coordinate arithmetic can assign a contributing particle just
+// outside the reconstructed unpadded AABB. This exact counterexample came
+// from the reviewed shader arithmetic, not a double-precision geometry proxy.
+const f32 = Math.fround;
+const cellWidthF32 = f32(f32(3.4 - -3.4) / 32);
+const cellMinF32 = f32(f32(-3.4) + f32(10 * cellWidthF32));
+const cellMaxF32 = f32(cellMinF32 + cellWidthF32);
+const queryX = f32(-1.4600001573562622);
+const neighborX = f32(-1.2750002145767212);
+const supportF32 = f32(0.185);
+assert.ok(f32(Math.abs(f32(queryX - neighborX))) < supportF32, 'the boundary pair contributes');
+assert.ok(f32(cellMinF32 - queryX) > supportF32, 'the unpadded AABB wrongly rejects it');
+const paddedMinF32 = f32(cellMinF32 - f32(cellWidthF32 * 0.001));
+assert.ok(f32(paddedMinF32 - queryX) < supportF32, 'the padded AABB retains the f32 boundary pair');
 
 // This independent CPU oracle checks the predicate's intended geometry against
 // all contributing pairs in the actual initial 49,152-particle scene.

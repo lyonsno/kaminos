@@ -6798,7 +6798,10 @@ fn density_neighbor_cell_might_contribute(position: vec3<f32>, neighborCell: vec
   let cellWidth = (params.boundsMax.xyz - params.boundsMin.xyz) / vec3<f32>(params.gridDims.xyz);
   let cellMin = params.boundsMin.xyz + vec3<f32>(neighborCell) * cellWidth;
   let cellMax = cellMin + cellWidth;
-  let nearest = clamp(position, cellMin, cellMax);
+  // Grid assignment and reconstructed cell bounds round differently in f32.
+  // Expand the box so a boundary pair with positive kernel weight survives.
+  let cellPadding = cellWidth * 0.001;
+  let nearest = clamp(position, cellMin - cellPadding, cellMax + cellPadding);
   let separation = position - nearest;
   let supportRadius = params.fluid.x * radiusScale;
   return dot(separation, separation) <= supportRadius * supportRadius;
@@ -13106,7 +13109,7 @@ export async function createWebGPUFingerFluidSolver({
     });
   }
   const safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
-  const safeDensityCellRejection = densityCellRejection === true;
+  const safeDensityCellRejection = densityCellRejection === true && !safeAdaptiveDensity;
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
   const safeWaterfallOraclePreset = resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset);
@@ -15902,7 +15905,11 @@ export async function createWebGPUFingerFluidSolver({
       unsupportedSheetStrength: safeUnsupportedSheetStrength,
       adaptiveDensityContract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,
       adaptiveDensity: safeAdaptiveDensity,
+      requestedDensityCellRejection: densityCellRejection,
       densityCellRejection: safeDensityCellRejection,
+      densityCellRejectionBypassReason: densityCellRejection && safeAdaptiveDensity
+        ? 'adaptive_density_neighbor_radius'
+        : null,
       adaptiveDensityPassCount,
       adaptiveDensityLedger: diagnostics?.adaptiveDensityLedger || {
         contract: KAMINOS_FINGER_FLUID_ADAPTIVE_DENSITY_CONTRACT,

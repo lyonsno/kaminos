@@ -3193,7 +3193,10 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedAdaptiveDensity,
     effectiveAdaptiveDensity: requestedAdaptiveDensity,
     requestedDensityCellRejection,
-    effectiveDensityCellRejection: requestedDensityCellRejection,
+    effectiveDensityCellRejection: requestedDensityCellRejection && !requestedAdaptiveDensity,
+    densityCellRejectionBypassReason: requestedDensityCellRejection && requestedAdaptiveDensity
+      ? 'adaptive_density_neighbor_radius'
+      : null,
     requestedParticleCount,
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
     requestedFixedVolumeReferenceParticleCount,
@@ -11166,6 +11169,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveAdaptiveDensity = gpuState.adaptiveDensity;
   gpuState.requestedDensityCellRejection = fingerFluidBenchConfig.requestedDensityCellRejection;
   gpuState.effectiveDensityCellRejection = gpuState.densityCellRejection;
+  gpuState.densityCellRejectionBypassReason = fingerFluidBenchConfig.densityCellRejectionBypassReason;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
   gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
   gpuState.requestedWitnessStartStep = fingerFluidBenchConfig.requestedWitnessStartStep;
