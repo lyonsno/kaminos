@@ -7,7 +7,7 @@ export function emptyObservationReport({ requestedUrl }) {
     finishedAt: null,
     requested: { url: requestedUrl },
     effective: null,
-    telemetry: { samples: [], frameIntervalsMs: [], foregroundReceipts: [], runs: [] },
+    telemetry: { samples: [], frameIntervalsMs: [], foregroundReceipts: [], runs: [], completedRuns: [] },
     observations: [],
     error: null,
   };
@@ -23,24 +23,31 @@ export function mergeObservation(report, observation) {
   for (const [key, offset] of Object.entries(offsets)) {
     if (offset !== telemetry[key].length) throw new Error(`${key} offset ${offset} does not match persisted count ${telemetry[key].length}`);
   }
+  if (report.latest?.pageRuntimeId != null && observation.pageRuntimeId !== report.latest.pageRuntimeId) {
+    throw new Error(`page runtime changed from ${report.latest.pageRuntimeId} to ${observation.pageRuntimeId ?? 'unknown'}`);
+  }
   telemetry.samples.push(...(observation.samples ?? []));
   telemetry.frameIntervalsMs.push(...(observation.frameIntervals ?? []));
   telemetry.foregroundReceipts.push(...(observation.foregroundReceipts ?? []));
   telemetry.runs = observation.runs ?? telemetry.runs;
+  telemetry.completedRuns.push(...(observation.completedRuns ?? []));
   report.latest = {
     at: observation.at,
     url: observation.url ?? null,
+    pageRuntimeId: observation.pageRuntimeId ?? null,
     pageStatePresent: observation.pageStatePresent === true,
     state: observation.state ?? null,
   };
   report.observations.push({
     at: observation.at,
     url: observation.url ?? null,
+    pageRuntimeId: observation.pageRuntimeId ?? null,
     pageStatePresent: observation.pageStatePresent === true,
     sampleCount: telemetry.samples.length,
     frameIntervalCount: telemetry.frameIntervalsMs.length,
     foregroundReceiptCount: telemetry.foregroundReceipts.length,
     runCount: telemetry.runs.length,
+    newlyCompletedRunCount: observation.completedRuns?.length ?? 0,
   });
   report.updatedAt = observation.at;
 }
