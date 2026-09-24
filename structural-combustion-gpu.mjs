@@ -1320,7 +1320,11 @@ fn meshMaterial(binding: MeshBinding) -> MeshMaterial {
 }
 
 fn structuralExposureDiagnosticColor(exposure: f32, threshold: f32) -> vec3<f32> {
-  if (exposure <= threshold) { return vec3<f32>(0.015, 0.025, 0.08); }
+  if (exposure <= 0.0) { return vec3<f32>(0.015, 0.025, 0.08); }
+  if (exposure <= threshold) {
+    let fraction = clamp(exposure / max(threshold, 0.0001), 0.0, 1.0);
+    return mix(vec3<f32>(0.0, 0.16, 0.42), vec3<f32>(0.0, 0.72, 1.0), fraction);
+  }
   let magnitude = clamp(exposure / max(threshold * 8.0, threshold + 0.0001), 0.0, 1.0);
   return mix(vec3<f32>(0.0, 0.72, 1.0), vec3<f32>(1.0, 0.38, 0.02), magnitude);
 }
