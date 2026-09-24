@@ -92,8 +92,12 @@ assert.match(referenceExporter, /"residentBlock2MlpOutputBoundary": "after three
   'the reference must distinguish completed block 2 from partial block-2 attention');
 assert.equal(/"blockCount"\s*:/.test(referenceExporter), false,
   'an unqualified block count must not obscure that the packet also includes only a partial second block');
-assert.equal(/"outputBoundary"\s*:/.test(referenceExporter), false,
-  'an unqualified output boundary must not collapse the attention-only and full block-1 outputs');
+const fullConditioningExporter = referenceExporter.split('if args.mode == "full-conditioning":').at(-1);
+assert.ok(fullConditioningExporter, 'the exporter must keep complete conditioning in an explicitly named mode');
+assert.equal(/"outputBoundary"\s*:/.test(referenceExporter.split('if args.mode == "full-conditioning":')[0]), false,
+  'partial diagnostic modes must not acquire an unqualified output boundary');
+assert.match(fullConditioningExporter, /"outputBoundary": "after all 24 transformer blocks and final no-affine LayerNorm"/,
+  'only the complete conditioning mode may claim the final model output boundary');
 assert.ok(/complete MLP residual/.test(referenceExporter),
   'the exporter documentation must describe the full block-1 tensor packet as well as the attention-only probe');
 assert.match(browserSmoke, /dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179/,

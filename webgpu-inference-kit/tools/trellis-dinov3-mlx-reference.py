@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Export a pinned F32 DINOv3 patch/prefix and mode-selected stage packet.
+"""Export pinned F32 DINOv3 conditioning or mode-selected stage packets.
 
-The shared packet includes block 1's complete MLP residual and block 2
-attention. The full block-2 MLP and residual are computed and exported only
-for resident-block2-mlp mode. Every mode stops before TRELLIS' final
-no-affine LayerNorm.
+Stage-local packets include the attention-only boundary and complete MLP residuals,
+and stop before TRELLIS' final no-affine LayerNorm.
+full-conditioning exports every transformer block's F32 weights and the
+actual final, normalized DINO feature tensor consumed by TRELLIS.
 
 Run with the trellis2mlx environment and its source checkout on PYTHONPATH.
-The script intentionally stops before TRELLIS' final no-affine LayerNorm.
+Stage-local modes stop before TRELLIS' final no-affine LayerNorm; full-conditioning
+includes it and emits the final `[1,1029,1024]` feature tensor.
 """
 
 from __future__ import annotations
@@ -41,6 +42,54 @@ EXPECTED_CONFIG = {
 }
 MEAN = np.asarray([0.485, 0.456, 0.406], dtype=np.float32)
 STD = np.asarray([0.229, 0.224, 0.225], dtype=np.float32)
+SUPPORTED_MODES = (
+    "block0-parity", "resident-handoff", "resident-block1",
+    "resident-block2-norm1", "resident-block2-attention", "resident-block2-mlp",
+    "full-conditioning",
+)
+
+
+def validate_full_conditioning_features(value: np.ndarray) -> np.ndarray:
+    """Validate the TRELLIS DINO ABI without silently recasting or truncating."""
+    array = np.asarray(value)
+    if array.dtype != np.float32:
+        raise ValueError(f"full conditioning features must be float32, got {array.dtype}")
+    if array.shape != (1, 1029, 1024):
+        raise ValueError(f"full conditioning features have unexpected shape {array.shape}; expected (1, 1029, 1024)")
+    if not np.isfinite(array).all():
+        raise ValueError("full conditioning features contain non-finite values")
+    return np.ascontiguousarray(array)
+
+
+def layer_weight_tensors(model) -> dict[str, object]:
+    """Return the complete, untruncated checkpoint tensor inventory by block."""
+    if len(model.layers) != EXPECTED_CONFIG["num_hidden_layers"]:
+        raise ValueError(
+            f"full conditioning requires all {EXPECTED_CONFIG['num_hidden_layers']} DINO layers, got {len(model.layers)}"
+        )
+    tensors = {}
+    for index, layer in enumerate(model.layers):
+        prefix = f"layer{index}_"
+        for name, value in (
+            ("norm1_weight", layer.norm1.weight), ("norm1_bias", layer.norm1.bias),
+            ("q_weight", layer.attention.q_proj.weight), ("q_bias", layer.attention.q_proj.bias),
+            ("k_weight", layer.attention.k_proj.weight),
+            ("v_weight", layer.attention.v_proj.weight), ("v_bias", layer.attention.v_proj.bias),
+            ("o_weight", layer.attention.o_proj.weight), ("o_bias", layer.attention.o_proj.bias),
+            ("layer_scale1", layer.layer_scale1),
+            ("norm2_weight", layer.norm2.weight), ("norm2_bias", layer.norm2.bias),
+            ("mlp_up_weight", layer.mlp.up_proj.weight), ("mlp_up_bias", layer.mlp.up_proj.bias),
+            ("mlp_down_weight", layer.mlp.down_proj.weight), ("mlp_down_bias", layer.mlp.down_proj.bias),
+            ("layer_scale2", layer.layer_scale2),
+        ):
+            tensors[prefix + name] = value
+    return tensors
+
+
+def require_mx_f32(mx, value, name: str) -> np.ndarray:
+    if getattr(value, "dtype", None) != mx.float32:
+        raise ValueError(f"full-conditioning tensor {name} is not MLX float32: {getattr(value, 'dtype', None)}")
+    return np_f32(mx, value)
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -186,6 +235,16 @@ def execute(args) -> dict:
         evaluated_states.extend([
             block2_norm2_hidden_states, block2_mlp_hidden_states, block2_mlp_output, block2_after_mlp_hidden_states,
         ])
+    full_conditioning_features = None
+    if args.mode == "full-conditioning":
+        # Use the model's actual complete call, including all 24 blocks and the
+        # final no-affine LayerNorm TRELLIS expects. This is the native consumer
+        # tensor, not a hand-selected intermediate block boundary.
+        full_conditioning_features = model(pixel_values)
+        if full_conditioning_features.dtype != mx.float32:
+            raise ValueError(f"full DINO output is not MLX float32: {full_conditioning_features.dtype}")
+        mx.eval(full_conditioning_features)
+        evaluated_states.append(full_conditioning_features)
     mx.eval(*evaluated_states)
 
     out_dir = Path(args.out_dir).resolve()
@@ -218,6 +277,14 @@ def execute(args) -> dict:
             "block2_mlp_output": (np_f32(mx, block2_mlp_output), "mlmodel-dinov3-block2-mlp-projection-output"),
             "block2_after_mlp_hidden_states": (np_f32(mx, block2_after_mlp_hidden_states), "mlmodel-dinov3-block2-output-before-final-no-affine-norm"),
         })
+    if args.mode == "full-conditioning":
+        arrays["conditioning_features"] = (
+            validate_full_conditioning_features(np.asarray(full_conditioning_features)),
+            "trellis-dinov3-final-no-affine-layernorm-conditioning-features",
+        )
+        for name, value in layer_weight_tensors(model).items():
+            role = "checkpoint-" + name.replace("_", "-")
+            arrays[name] = (require_mx_f32(mx, value, name), role)
     layer = model.layers[0]
     for name, value, role in [
         ("layer0_norm1_weight", layer.norm1.weight, "checkpoint-layer0-norm1-weight"),
@@ -302,6 +369,17 @@ def execute(args) -> dict:
             "residentBlock2MlpOutputBoundary": "after three complete transformer blocks and block 2 MLP residual; before final model LayerNorm",
             "residentBlock2CompleteTransformerBlockCount": 3,
         })
+    if args.mode == "full-conditioning":
+        output_manifest["computation"].update({
+            "completeTransformerBlockCount": len(model.layers),
+            "finalNoAffineLayerNormApplied": True,
+            "conditioningOutput": "conditioning_features",
+            "conditioningShape": [1, 1029, 1024],
+            "conditioningDtype": "float32",
+            "outputBoundary": "after all 24 transformer blocks and final no-affine LayerNorm",
+            "layerWeightTensorCount": len(layer_weight_tensors(model)),
+            "layerScale": "learned layer_scale1 and layer_scale2 for every checkpointed transformer block",
+        })
     report_path = out_dir / "reference-manifest.json"
     report_path.write_text(json.dumps(output_manifest, indent=2) + "\n")
     return output_manifest
@@ -313,7 +391,7 @@ def main() -> int:
     parser.add_argument("--source-image", required=True)
     parser.add_argument("--trellis-root", required=True)
     parser.add_argument("--out-dir", required=True)
-    parser.add_argument("--mode", choices=["block0-parity", "resident-handoff", "resident-block1", "resident-block2-norm1", "resident-block2-attention", "resident-block2-mlp"], default="block0-parity")
+    parser.add_argument("--mode", choices=SUPPORTED_MODES, default="block0-parity")
     args = parser.parse_args()
     report_path = Path(args.out_dir).resolve() / "reference-manifest.json"
     try:
