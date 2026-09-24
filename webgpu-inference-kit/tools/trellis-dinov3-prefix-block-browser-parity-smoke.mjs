@@ -378,11 +378,11 @@ try {
   const report=writeReport({ok:smokeOk,failure_phase:smokeOk?null:!liveTransferSatisfied?'live-conditioning-transfer-incomplete':browserState.failurePhase||phase,error:smokeError});
   console.log(JSON.stringify({ok:report.ok,reportPath,mode,requestedRouteId:report.requestedRouteId,effectiveRouteId:report.effectiveRouteId,sourceRevision,browser:report.browserVersion,adapterName:report.adapterName,adapterClassification:report.adapterClassification,precision:report.precision,model:report.model,comparisons:report.comparisons,outputReceipts:report.persistedOutputReceipts,error:smokeError},null,2));
   if(report.sourceAttestation?.ok!==true) throw new Error(`browser source attestation did not close: ${JSON.stringify(report.sourceAttestation)}`);
-  if(!report.ok) throw new Error(smokeError||'matched WebGPU-vs-MLX comparison failed');
+  if(!report.ok) throw Object.assign(new Error(smokeError||'matched WebGPU-vs-MLX comparison failed'),{failurePhase:report.failure_phase});
   exitCode=0;
 } catch(error) {
-  const report=writeReport({error:String(error?.stack||error)});
-  console.error(JSON.stringify({ok:false,failure_phase:phase,reportPath,lastTrustworthyEvidence:report.lastTrustworthyEvidence,error:String(error?.message||error)},null,2));
+  const report=writeReport({failure_phase:error?.failurePhase||phase,error:String(error?.stack||error)});
+  console.error(JSON.stringify({ok:false,failure_phase:report.failure_phase,reportPath,lastTrustworthyEvidence:report.lastTrustworthyEvidence,error:String(error?.message||error)},null,2));
 } finally {
   try { ws?.close(); } catch {}
   try { chromeProcess?.kill(); } catch {}

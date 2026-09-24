@@ -32,7 +32,6 @@ assert.equal(liveConditioningReceiptMatches({sinkUrl:'http://127.0.0.1:43999/con
   'a matching host receipt must satisfy only the producer-to-receiver transfer gate');
 assert.equal(liveConditioningReceiptMatches({sinkUrl:'http://127.0.0.1:43999/conditioning',...gateIdentity,receipt:{...gateReceipt,tensor:{sha256:'b'.repeat(64)}}}),false,
   'a receipt for other tensor bytes must not satisfy the configured transfer gate');
-
 const tensorShape = [1, 1029, 1024];
 const byteLength = tensorShape.reduce((count, axis) => count * axis, 1) * 4;
 const bytes = Buffer.alloc(byteLength);
@@ -57,6 +56,12 @@ const provenance = {
 const browserPage = readFileSync(new URL('../smokes/trellis-dinov3-prefix-block-browser.html', import.meta.url), 'utf8');
 const browserRunner = readFileSync(new URL('../tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const assayRunner = readFileSync(new URL('../tools/trellis-dinov3-prefix-block-parity-assay.mjs', import.meta.url), 'utf8');
+assert.match(browserRunner, /failurePhase:report\.failure_phase/,
+  'the direct browser CLI must preserve its specific transfer-gate failure phase through the catch report rewrite');
+assert.ok(browserRunner.includes('writeReport({failure_phase:error?.failurePhase||phase,error:'),
+  'the final caller-owned report must prefer an explicit failure phase carried by the error');
+assert.ok(browserRunner.includes('failure_phase:report.failure_phase,reportPath'),
+  'the CLI error summary must report the same final failure phase as its persisted report');
 const browserRunnerPath = new URL('../tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs', import.meta.url);
 const assayRunnerPath = new URL('../tools/trellis-dinov3-prefix-block-parity-assay.mjs', import.meta.url);
 const parityGateOffset = browserPage.indexOf('if (failedComparisons.length)');
