@@ -18974,8 +18974,32 @@ export function createKaminosVolumePrototype({
     };
   }
 
-  async function readCanvasTextureRgba8(texture, width, height) {
-    const readback = await readTextureRgba8(texture, width, height, 'kaminos canvas presentation texture rgba8 readback');
+  function enqueueCanvasReadback(encoder, texture, width, height) {
+    const bytesPerRow = Math.ceil(width * 4 / 256) * 256;
+    const buffer = device.createBuffer({
+      label: 'kaminos canvas presentation texture rgba8 readback',
+      size: bytesPerRow * height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    encoder.copyTextureToBuffer(
+      { texture },
+      { buffer, bytesPerRow, rowsPerImage: height },
+      { width, height, depthOrArrayLayers: 1 },
+    );
+    return { buffer, width, height, bytesPerRow };
+  }
+
+  async function finishCanvasReadback(pending) {
+    const { buffer, width, height, bytesPerRow } = pending;
+    await buffer.mapAsync(GPUMapMode.READ);
+    const padded = new Uint8Array(buffer.getMappedRange());
+    const pixels = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y += 1) {
+      pixels.set(padded.subarray(y * bytesPerRow, y * bytesPerRow + width * 4), y * width * 4);
+    }
+    buffer.unmap();
+    buffer.destroy();
+    const readback = { width, height, bytesPerRow, unpaddedBytesPerRow: width * 4, rgba: pixels };
     const sourceFormat = String(format || 'unknown');
     if (sourceFormat.startsWith('bgra')) {
       for (let offset = 0; offset < readback.rgba.length; offset += 4) {
@@ -18984,7 +19008,7 @@ export function createKaminosVolumePrototype({
         readback.rgba[offset + 2] = blue;
       }
     }
-    const rgbaBytes = Uint8Array.from(readback.rgba);
+    const rgbaBytes = readback.rgba;
     let binary = '';
     for (let offset = 0; offset < rgbaBytes.length; offset += 0x8000) {
       binary += String.fromCharCode(...rgbaBytes.subarray(offset, Math.min(rgbaBytes.length, offset + 0x8000)));
@@ -21175,6 +21199,7 @@ export function createKaminosVolumePrototype({
       encodeBoundarySplats(encoder);
       const currentTexture = context.getCurrentTexture();
       let finalPresentationTexture = currentTexture;
+      let pendingCanvasReadback = null;
       let residualApplied = false;
       let raymarchEncoded = false;
       let splatEncoded = false;
@@ -21274,6 +21299,9 @@ export function createKaminosVolumePrototype({
         encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
         featureCaptureSourcePassApplied = true;
       }
+      if (options.includeRgba === true) {
+        pendingCanvasReadback = enqueueCanvasReadback(encoder, finalPresentationTexture, state.width, state.height);
+      }
       device.queue.submit([encoder.finish()]);
       raymarchApplied = raymarchEncoded;
       splatApplied = splatEncoded;
@@ -21344,6 +21372,10 @@ export function createKaminosVolumePrototype({
           };
         }
         encodeBoundarySplatTelemetry(retryEncoder, true);
+        if (options.includeRgba === true) {
+          pendingCanvasReadback?.buffer.destroy();
+          pendingCanvasReadback = enqueueCanvasReadback(retryEncoder, retryTexture, state.width, state.height);
+        }
         device.queue.submit([retryEncoder.finish()]);
         boundarySplatCapacityRetryCount += 1;
         raymarchEncoded = raymarchEncoded || retryRaymarchEncoded;
@@ -21372,8 +21404,8 @@ export function createKaminosVolumePrototype({
           };
         }
       }
-      const canvasReadback = options.includeRgba === true
-        ? await readCanvasTextureRgba8(finalPresentationTexture, state.width, state.height)
+      const canvasReadback = pendingCanvasReadback
+        ? await finishCanvasReadback(pendingCanvasReadback)
         : null;
       const boundarySplatSample = compositionDefinition.splat
         ? await sampleBoundarySplatDrawState()
