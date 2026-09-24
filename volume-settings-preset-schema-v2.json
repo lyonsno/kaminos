@@ -1242,7 +1242,7 @@
       "tagName": "SELECT",
       "type": "select-one",
       "additiveDefault": "legacy",
-      "allowedValues": ["legacy", "undamped", "maccormack"],
+      "allowedValues": ["legacy", "undamped", "maccormack-velocity", "maccormack"],
       "additiveSinceControlCount": 212
     },
     {

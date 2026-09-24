@@ -2470,7 +2470,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <select id="volume-advection-scheme" class="select-input" data-volume-settings-param="volume_advection_scheme">
         <option value="legacy" selected>Legacy semi-Lagrangian (damped)</option>
         <option value="undamped">Semi-Lagrangian, undamped</option>
-        <option value="maccormack">MacCormack, undamped</option>
+        <option value="maccormack-velocity">MacCormack velocity, first-order scalars</option>
+        <option value="maccormack">MacCormack, all fields</option>
       </select>
       <span class="slider-val" id="volume-advection-scheme-val">legacy</span>
     </div>
@@ -18878,7 +18879,7 @@ function updateVolumeControlLabels() {
         : `${convergedName} · ${sweeps} sweeps · ${solverConfig.effective.projection === 'full' ? 'full projection' : `partial projection, gain ${gain.toFixed(2)}`}`);
     document.getElementById('volume-pressure-solver-iterations-val').textContent = solverConfig.effective.solver === 'legacy' ? `${sweeps} (converged only)` : String(sweeps);
     const transportConfig = resolveTransportConfig(c);
-    const schemeName = { legacy: 'legacy', undamped: 'undamped', maccormack: 'MacCormack' }[transportConfig.effective.scheme] || transportConfig.effective.scheme;
+    const schemeName = { legacy: 'legacy', undamped: 'undamped', 'maccormack-velocity': 'MacCormack velocity', maccormack: 'MacCormack' }[transportConfig.effective.scheme] || transportConfig.effective.scheme;
     document.getElementById('volume-advection-scheme-val').textContent = transportConfig.effective.reason
       ? `legacy (${transportConfig.effective.reason})`
       : `${schemeName}${transportConfig.effective.scheme === 'legacy' ? '' : ` · bound ${transportConfig.effective.velocityBound.maxCells} cells`}`;

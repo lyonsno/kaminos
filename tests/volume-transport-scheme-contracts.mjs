@@ -46,7 +46,16 @@ test('transport resolver reports scheme, characteristic, damping, and bound with
   assert.equal(maccormack.effective.commonCharacteristic, true, 'MacCormack always carries every slot on the velocity characteristic');
   assert.equal(maccormack.effective.velocityDamping, 1);
   assert.equal(maccormack.effective.predictorPass, true);
-  assert.equal(maccormack.effective.limiter, 'neighbor-extrema');
+  assert.equal(maccormack.effective.limiter, 'neighbor-extrema-revert');
+  assert.deepEqual(maccormack.effective.correctedSlots, ['velocity', 'material', 'fire', 'micro']);
+
+  const velocityOnly = core.resolveTransportConfig({ advectionScheme: 'maccormack-velocity' });
+  assert.equal(velocityOnly.effective.scheme, 'maccormack-velocity');
+  assert.equal(velocityOnly.effective.predictorPass, true);
+  assert.equal(velocityOnly.effective.commonCharacteristic, true, 'velocity-only MacCormack still carries scalars first-order on the shared characteristic');
+  assert.deepEqual(velocityOnly.effective.correctedSlots, ['velocity']);
+  assert.equal(core.transportSchemeUniformValue('maccormack-velocity'), 2);
+  assert.equal(core.transportSchemeUniformValue('maccormack'), 3);
 
   const unknown = core.resolveTransportConfig({ advectionScheme: 'spectral' });
   assert.equal(unknown.requested.scheme, 'spectral');
@@ -70,7 +79,8 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
   assert.ok(corrector, 'macCormackSlot must exist');
   assert.match(corrector, /samplePredictSlot\(forwardCell, slot\)/, 'corrector re-advects the prediction backwards along the same characteristic');
   assert.match(corrector, /\(current - reversed\) \* 0\.5/, 'MacCormack applies half the measured round-trip error');
-  assert.match(corrector, /clamp\(corrected, extrema\.lo, extrema\.hi\)/, 'result is limited to the neighbor extrema of the source field around the backtraced point');
+  assert.match(corrector, /let outOfRange = \(corrected < extrema\.lo\) \| \(corrected > extrema\.hi\);\s*return select\(corrected, predicted, outOfRange\);/, 'a component outside the neighbor extrema reverts to the first-order prediction instead of clamping to the extremum');
+  assert.doesNotMatch(corrector, /clamp\(corrected, extrema\.lo, extrema\.hi\)/, 'clamping to the extremum is rejected: it inflates fields toward their running maximum');
   const bound = wgslFunction('boundVelocity');
   assert.ok(bound, 'boundVelocity must exist');
   assert.match(bound, /vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)/, 'legacy scheme keeps the exact fixed component clamp');
@@ -85,16 +95,18 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
   const damping = wgslFunction('transportVelocityDamping');
   assert.match(damping, /0\.982/, 'legacy damping constant is preserved for the legacy scheme');
   const main = source.slice(source.indexOf('\nfn cs(@builtin(global_invocation_id)'), source.indexOf('struct RaymarchResult'));
-  assert.match(main, /if \(macCormack\) \{[^]*?macCormackSlot\(cellI, idx, backCell, forwardCell, 0u\)[^]*?macCormackSlot\(cellI, idx, backCell, forwardCell, 3u\)/, 'main kernel carries all four slots through the corrector under MacCormack');
+  assert.match(main, /if \(macCormack\) \{[^]*?macCormackSlot\(cellI, idx, backCell, forwardCell, 0u\)[^]*?if \(macCormackScalars\) \{[^]*?macCormackSlot\(cellI, idx, backCell, forwardCell, 3u\)/, 'main kernel corrects velocity under both MacCormack schemes and scalars only under the all-fields scheme');
+  assert.match(main, /let macCormackScalars = u\.transport_controls\.x > 2\.5;/, 'scalar correction is gated on the all-fields scheme value');
   assert.match(main, /let commonGasTransport = macCormack \|\| u\.reserved_source_extension_2\.y > 0\.5;/, 'common gas transport shares the uniform slot Sexy Fireman used, and MacCormack implies it');
   assert.match(main, /material = thermalAdvection\(cell, advectVelocity, speed, localMaterial\.y, thermalAdvectionRiseDirection\)/, 'legacy per-layer transport is retained for the legacy characteristic');
 });
 
 test('a MacCormack step with an extremum limiter retains more of a transported bump than first-order semi-Lagrangian and stays bounded', () => {
   // CPU model of the scheme as written in WGSL: forward SL prediction, reverse
-  // SL of the prediction along the same velocity, half-error correction,
-  // clamp to the neighbor extrema of the source around the backtraced point.
-  // Periodic 1-D column, uniform velocity, fractional CFL.
+  // SL of the prediction along the same velocity, half-error correction, and
+  // revert to the prediction where the correction leaves the neighbor extrema
+  // of the source around the backtraced point. Periodic 1-D column, uniform
+  // velocity, fractional CFL.
   const N = 96;
   const u = 0.37;
   const wrap = i => ((i % N) + N) % N;
@@ -117,7 +129,7 @@ test('a MacCormack step with an extremum limiter retains more of a transported b
       const reversed = sample(predicted, i + u);
       const corrected = predicted[i] + (phi[i] - reversed) * 0.5;
       const [lo, hi] = extrema(phi, i - u);
-      return Math.min(hi, Math.max(lo, corrected));
+      return corrected < lo || corrected > hi ? predicted[i] : corrected;
     });
   };
   let a = initial;
@@ -131,16 +143,17 @@ test('a MacCormack step with an extremum limiter retains more of a transported b
   assert.ok(peak(a) < 0.6, `first-order semi-Lagrangian has visibly diffused the bump: peak ${peak(a)}`);
   assert.ok(peak(b) > peak(a) * 1.5, `MacCormack retains substantially more peak: ${peak(b)} vs ${peak(a)}`);
   assert.ok(Math.max(...b) <= 1 + 1e-9 && Math.min(...b) >= -1e-9, 'the extremum limiter keeps the result inside the initial range (no overshoot)');
-  // The extremum limiter is not conservative (neither is the legacy scheme);
-  // measured drift for this bump is about +8%. Bound it so a broken limiter
-  // or a lost predictor cannot hide behind the peak assertion.
-  assert.ok(Math.abs(total(b) - total(initial)) / total(initial) < 0.12, `limited corrector mass drift stays bounded: ${total(b)} vs ${total(initial)}`);
+  // Reverting (rather than clamping) keeps the scheme close to conservative;
+  // the clamp variant drifted +8% on this bump and inflated the 3-D fields to
+  // their peak. Bound the drift tightly so a return to clamping fails here.
+  assert.ok(Math.abs(total(b) - total(initial)) / total(initial) < 0.02, `revert-limited corrector mass drift stays small: ${total(b)} vs ${total(initial)}`);
 });
 
 test('cockpit plumbing carries the scheme and common-gas switch through DOM, route, controls, labels, listeners, and layout', () => {
   assert.match(index, /id="volume-advection-scheme"[^>]*data-volume-settings-param="volume_advection_scheme"/, 'scheme select is a settings control');
   assert.match(index, /<option value="legacy" selected>Legacy semi-Lagrangian/, 'legacy remains the default');
-  assert.match(index, /<option value="maccormack">/, 'MacCormack is selectable');
+  assert.match(index, /<option value="maccormack-velocity">/, 'velocity-only MacCormack is selectable');
+  assert.match(index, /<option value="maccormack">/, 'all-fields MacCormack is selectable');
   assert.match(index, /id="volume-common-gas-transport"[^>]*data-volume-settings-param="volume_common_gas_transport"/, 'common gas transport checkbox is a settings control');
   assert.match(index, /\['advectionScheme', 'volume_advection_scheme'\]/, 'route field carries the scheme');
   assert.match(index, /\['commonGasTransport', 'volume_common_gas_transport'\]/, 'route field carries common gas transport');
@@ -159,7 +172,7 @@ test('preset schema declares both controls additively so historical basins proje
   assert.ok(scheme, 'schema must declare volume-advection-scheme');
   assert.ok(commonGas, 'schema must declare volume-common-gas-transport');
   assert.equal(scheme.additiveDefault, 'legacy');
-  assert.deepEqual(scheme.allowedValues, ['legacy', 'undamped', 'maccormack']);
+  assert.deepEqual(scheme.allowedValues, ['legacy', 'undamped', 'maccormack-velocity', 'maccormack']);
   assert.equal(commonGas.type, 'checkbox');
   assert.equal(commonGas.additiveDefault, false);
   assert.equal(schema.controlCount, schema.controls.length);

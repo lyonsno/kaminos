@@ -2020,14 +2020,18 @@ export function pressureResidualProbeDisposition({
 // neighbor-extrema limiter, carrying every slot on the velocity characteristic.
 export const TRANSPORT_SCHEME_LEGACY = 'legacy';
 export const TRANSPORT_SCHEME_UNDAMPED = 'undamped';
+export const TRANSPORT_SCHEME_MACCORMACK_VELOCITY = 'maccormack-velocity';
 export const TRANSPORT_SCHEME_MACCORMACK = 'maccormack';
 export const TRANSPORT_SCHEME_IDENTITY = 'low-dissipation-transport-v0';
 export const TRANSPORT_LEGACY_VELOCITY_DAMPING = 0.982;
 export const TRANSPORT_MAX_BACKTRACE_CELLS = 8;
-const TRANSPORT_SCHEME_VALUES = Object.freeze([TRANSPORT_SCHEME_LEGACY, TRANSPORT_SCHEME_UNDAMPED, TRANSPORT_SCHEME_MACCORMACK]);
+const TRANSPORT_SCHEME_VALUES = Object.freeze([TRANSPORT_SCHEME_LEGACY, TRANSPORT_SCHEME_UNDAMPED, TRANSPORT_SCHEME_MACCORMACK_VELOCITY, TRANSPORT_SCHEME_MACCORMACK]);
 
+// 0 legacy, 1 undamped, 2 MacCormack on velocity only (scalars first-order on
+// the shared characteristic), 3 MacCormack on every slot.
 export function transportSchemeUniformValue(scheme) {
-  if (scheme === TRANSPORT_SCHEME_MACCORMACK) return 2;
+  if (scheme === TRANSPORT_SCHEME_MACCORMACK) return 3;
+  if (scheme === TRANSPORT_SCHEME_MACCORMACK_VELOCITY) return 2;
   if (scheme === TRANSPORT_SCHEME_UNDAMPED) return 1;
   return 0;
 }
@@ -2039,7 +2043,9 @@ export function resolveTransportConfig(controls = {}) {
   const known = TRANSPORT_SCHEME_VALUES.includes(requestedScheme);
   const scheme = known ? requestedScheme : TRANSPORT_SCHEME_LEGACY;
   const requestedCommonGas = controls.commonGasTransport === true;
-  const macCormack = scheme === TRANSPORT_SCHEME_MACCORMACK;
+  const macCormackVelocity = scheme === TRANSPORT_SCHEME_MACCORMACK_VELOCITY;
+  const macCormackAll = scheme === TRANSPORT_SCHEME_MACCORMACK;
+  const macCormack = macCormackVelocity || macCormackAll;
   const legacy = scheme === TRANSPORT_SCHEME_LEGACY;
   return {
     identity: TRANSPORT_SCHEME_IDENTITY,
@@ -2054,7 +2060,8 @@ export function resolveTransportConfig(controls = {}) {
         ? { kind: 'fixed-component', min: -0.34, max: 0.52 }
         : { kind: 'backtrace-cells', maxCells: TRANSPORT_MAX_BACKTRACE_CELLS },
       predictorPass: macCormack,
-      limiter: macCormack ? 'neighbor-extrema' : null,
+      correctedSlots: macCormackAll ? ['velocity', 'material', 'fire', 'micro'] : (macCormackVelocity ? ['velocity'] : []),
+      limiter: macCormack ? 'neighbor-extrema-revert' : null,
       correctionWeight: macCormack ? 0.5 : null,
       reason: known ? null : 'unknown-scheme',
     },
@@ -2574,15 +2581,19 @@ fn boundVelocity(v: vec3<f32>, speed: f32) -> vec3<f32> {
 }
 
 // MacCormack: forward estimate (predictor pass), reverse-advect that estimate
-// along the same velocity, apply half the round-trip error, and limit to the
-// source extrema around the backtraced point.
+// along the same velocity, apply half the round-trip error, and limit against
+// the source extrema around the backtraced point. A component that leaves the
+// neighbor range reverts to the first-order prediction rather than clamping to
+// the extremum: clamping acts as a running max-filter and, over thousands of
+// steps, inflated every field to its peak (observed as a saturated domain).
 fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3<f32>, slot: u32) -> vec4<f32> {
   let predicted = fluidPredict[idx * SLOTS_PER_CELL + slot];
   let reversed = samplePredictSlot(forwardCell, slot);
   let current = fluidSrc[idx * SLOTS_PER_CELL + slot];
   let corrected = predicted + (current - reversed) * 0.5;
   let extrema = slotExtrema(backCell, slot);
-  return clamp(corrected, extrema.lo, extrema.hi);
+  let outOfRange = (corrected < extrema.lo) | (corrected > extrema.hi);
+  return select(corrected, predicted, outOfRange);
 }
 
 fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
@@ -4066,6 +4077,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let backtraceScale = transportBacktraceScale(speed);
   let backCell = cell - advectVelocity * backtraceScale;
   let macCormack = u.transport_controls.x > 1.5;
+  let macCormackScalars = u.transport_controls.x > 2.5;
   // Shared characteristic for gas-carried state (Sexy Fireman's common-gas
   // switch, same uniform slot); MacCormack implies it. Forces, sources,
   // reactions, decays, pressure and optics are unchanged by the scheme.
@@ -4077,9 +4089,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (macCormack) {
     let forwardCell = cell + advectVelocity * backtraceScale;
     advected = macCormackSlot(cellI, idx, backCell, forwardCell, 0u);
-    material = macCormackSlot(cellI, idx, backCell, forwardCell, 1u);
-    fireLayer = macCormackSlot(cellI, idx, backCell, forwardCell, 2u);
-    microLayer = macCormackSlot(cellI, idx, backCell, forwardCell, 3u);
+    if (macCormackScalars) {
+      material = macCormackSlot(cellI, idx, backCell, forwardCell, 1u);
+      fireLayer = macCormackSlot(cellI, idx, backCell, forwardCell, 2u);
+      microLayer = macCormackSlot(cellI, idx, backCell, forwardCell, 3u);
+    } else {
+      material = sampleFluidSlot(backCell, 1u);
+      fireLayer = sampleFluidSlot(backCell, 2u);
+      microLayer = sampleFluidSlot(backCell, 3u);
+    }
   } else {
     advected = sampleFluidSlot(backCell, 0u);
     if (commonGasTransport) {
