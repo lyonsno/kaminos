@@ -6,7 +6,7 @@ import { dirname, extname, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
 import { assertCleanGitCheckout, createSourceByteReceipt } from './trellis-dinov3-source-attestation.mjs';
-import { forwardF32ConditioningTensor, TRELLIS_DINO_CONDITIONING_BYTE_LENGTH, validateLiveConditioningSinkUrl } from './trellis-dinov3-live-conditioning-transport.mjs';
+import { forwardF32ConditioningTensor, liveConditioningReceiptMatches, TRELLIS_DINO_CONDITIONING_BYTE_LENGTH, validateLiveConditioningSinkUrl } from './trellis-dinov3-live-conditioning-transport.mjs';
 
 const args = new Map();
 for (let index=2; index<process.argv.length; index+=2) args.set(process.argv[index],process.argv[index+1]);
@@ -85,7 +85,7 @@ let sourceAttestationErrors=[];
 let checkoutAtStart=null;
 let sourceImageSha256=null;
 let referenceManifestSummary=null;
-const requestedUrl=`http://127.0.0.1:${serverPort}/smokes/trellis-dinov3-prefix-block-browser.html?smokeId=${invocationId}&mode=${encodeURIComponent(mode)}&sourceRevision=${encodeURIComponent(sourceRevision)}&liveConditioning=${conditioningSinkUrl?'1':'0'}&atol=${atol}&rtol=${rtol}`;
+let requestedUrl=null;
 const delay=ms=>new Promise(resolveDelay=>setTimeout(resolveDelay,ms));
 let gitRoot=null;
 let requiredSourcePaths=[];
@@ -313,6 +313,7 @@ try {
     conditioningSinkUrl=validateLiveConditioningSinkUrl(requestedConditioningSinkUrl);
     if(mode!=='resident-full-conditioning') throw new Error('--conditioning-sink-url is only valid with --mode resident-full-conditioning');
   }
+  requestedUrl=`http://127.0.0.1:${serverPort}/smokes/trellis-dinov3-prefix-block-browser.html?smokeId=${invocationId}&mode=${encodeURIComponent(mode)}&sourceRevision=${encodeURIComponent(sourceRevision)}&liveConditioning=${conditioningSinkUrl?'1':'0'}&atol=${atol}&rtol=${rtol}`;
   if(!args.has('--reference-dir')||!args.has('--source-image')||!args.has('--output-dir')||!args.has('--report')) throw new Error('--reference-dir, --source-image, --output-dir, and --report are required');
   if(!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1','resident-block2-attention','resident-block2-mlp','resident-full-conditioning'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
   gitRoot=execFileSync('git',['-C',root,'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
@@ -365,10 +366,19 @@ try {
   browserState=await waitForState(ws,invocationId);
   if(browserState?.mode!==mode) throw new Error(`browser mode mismatch: requested ${mode}, observed ${browserState?.mode||'missing'}`);
   if(browserState?.requestedRouteId!==requestedRouteId) throw new Error(`browser route mismatch: requested ${requestedRouteId}, observed ${browserState?.requestedRouteId||'missing'}`);
-  const report=writeReport({ok:browserState.status==='passed',failure_phase:browserState.status==='passed'?null:browserState.failurePhase||phase,error:browserState.error||null});
-  console.log(JSON.stringify({ok:report.ok,reportPath,mode,requestedRouteId:report.requestedRouteId,effectiveRouteId:report.effectiveRouteId,sourceRevision,browser:report.browserVersion,adapterName:report.adapterName,adapterClassification:report.adapterClassification,precision:report.precision,model:report.model,comparisons:report.comparisons,outputReceipts:report.persistedOutputReceipts,error:browserState.error||null},null,2));
+  const liveTransferSatisfied=liveConditioningReceiptMatches({
+    sinkUrl:conditioningSinkUrl,requestId:invocationId,
+    tensorSha256:browserState?.actualOutputs?.conditioningFeatures?.sha256,
+    receipt:liveConditioningReceipt,
+  });
+  const smokeOk=browserState.status==='passed'&&liveTransferSatisfied;
+  const smokeError=!liveTransferSatisfied
+    ? 'configured live-conditioning sink has no matching same-session tensor transfer receipt'
+    : browserState.error||null;
+  const report=writeReport({ok:smokeOk,failure_phase:smokeOk?null:!liveTransferSatisfied?'live-conditioning-transfer-incomplete':browserState.failurePhase||phase,error:smokeError});
+  console.log(JSON.stringify({ok:report.ok,reportPath,mode,requestedRouteId:report.requestedRouteId,effectiveRouteId:report.effectiveRouteId,sourceRevision,browser:report.browserVersion,adapterName:report.adapterName,adapterClassification:report.adapterClassification,precision:report.precision,model:report.model,comparisons:report.comparisons,outputReceipts:report.persistedOutputReceipts,error:smokeError},null,2));
   if(report.sourceAttestation?.ok!==true) throw new Error(`browser source attestation did not close: ${JSON.stringify(report.sourceAttestation)}`);
-  if(!report.ok) throw new Error(browserState.error||'matched WebGPU-vs-MLX comparison failed');
+  if(!report.ok) throw new Error(smokeError||'matched WebGPU-vs-MLX comparison failed');
   exitCode=0;
 } catch(error) {
   const report=writeReport({error:String(error?.stack||error)});

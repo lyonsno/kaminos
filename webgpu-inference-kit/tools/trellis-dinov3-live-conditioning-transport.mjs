@@ -27,6 +27,21 @@ export function validateLiveConditioningSinkUrl(value) {
   return loopbackUrl(value).href;
 }
 
+export function liveConditioningReceiptMatches({ sinkUrl, requestId, tensorSha256, receipt }) {
+  if (sinkUrl === null) return true;
+  const producerSessionId = `trellis-dinov3-full-conditioning-${requestId}`;
+  return typeof requestId === 'string' && requestId.length > 0
+    && typeof tensorSha256 === 'string' && /^[a-f0-9]{64}$/i.test(tensorSha256)
+    && receipt?.ok === true
+    && receipt.requestId === requestId
+    && receipt.producerSessionId === producerSessionId
+    && receipt.receiverUrl === sinkUrl
+    && Number.isInteger(receipt.receiverHttpStatus) && receipt.receiverHttpStatus >= 200 && receipt.receiverHttpStatus < 300
+    && receipt.tensor?.sha256 === tensorSha256
+    && receipt.envelope?.requestId === requestId
+    && receipt.envelope?.tensor?.sha256 === tensorSha256;
+}
+
 function tensorBytes(value) {
   if (!(value instanceof Uint8Array)) throw new TypeError('conditioning tensor bytes must be a Uint8Array or Buffer');
   if (value.byteLength !== TRELLIS_DINO_CONDITIONING_BYTE_LENGTH) {

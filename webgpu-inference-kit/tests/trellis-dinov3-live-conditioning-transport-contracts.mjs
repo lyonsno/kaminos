@@ -6,14 +6,32 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 let forwardF32ConditioningTensor;
+let liveConditioningReceiptMatches;
 try {
-  ({ forwardF32ConditioningTensor } = await import('../tools/trellis-dinov3-live-conditioning-transport.mjs'));
+  ({ forwardF32ConditioningTensor, liveConditioningReceiptMatches } = await import('../tools/trellis-dinov3-live-conditioning-transport.mjs'));
 } catch (error) {
   if (error?.code === 'ERR_MODULE_NOT_FOUND') {
     assert.fail('the WebGPU conditioner has no model-specific raw-F32 live consumer transport');
   }
   throw error;
 }
+assert.equal(typeof liveConditioningReceiptMatches, 'function',
+  'the browser CLI needs a testable gate that prevents configured live-transfer requests from succeeding without a matching receipt');
+const gateIdentity={requestId:'configured-transfer-request',tensorSha256:'a'.repeat(64)};
+const gateReceipt={
+  ok:true,requestId:gateIdentity.requestId,producerSessionId:`trellis-dinov3-full-conditioning-${gateIdentity.requestId}`,
+  receiverUrl:'http://127.0.0.1:43999/conditioning',receiverHttpStatus:202,
+  tensor:{sha256:gateIdentity.tensorSha256},
+  envelope:{requestId:gateIdentity.requestId,tensor:{sha256:gateIdentity.tensorSha256}},
+};
+assert.equal(liveConditioningReceiptMatches({sinkUrl:null,...gateIdentity,receipt:null}),true,
+  'parity-only runs without a requested sink must not require a consumer transfer');
+assert.equal(liveConditioningReceiptMatches({sinkUrl:'http://127.0.0.1:43999/conditioning',...gateIdentity,receipt:null}),false,
+  'a configured consumer sink must not be reported complete without a transfer receipt');
+assert.equal(liveConditioningReceiptMatches({sinkUrl:'http://127.0.0.1:43999/conditioning',...gateIdentity,receipt:gateReceipt}),true,
+  'a matching host receipt must satisfy only the producer-to-receiver transfer gate');
+assert.equal(liveConditioningReceiptMatches({sinkUrl:'http://127.0.0.1:43999/conditioning',...gateIdentity,receipt:{...gateReceipt,tensor:{sha256:'b'.repeat(64)}}}),false,
+  'a receipt for other tensor bytes must not satisfy the configured transfer gate');
 
 const tensorShape = [1, 1029, 1024];
 const byteLength = tensorShape.reduce((count, axis) => count * axis, 1) * 4;
@@ -106,6 +124,24 @@ try {
   assert.equal(browserFailureReport.lastTrustworthyEvidence?.detail?.phase, 'local_preflight');
   assert.equal(browserFailureReport.chromeProcessPid, null, 'invalid sink must fail before Chrome launches');
   assert.equal(existsSync(browserOutputDir), false, 'invalid sink must fail before creating the browser output route');
+
+  const validSink = 'http://127.0.0.1:43999/conditioning';
+  const validSinkReportPath = join(failureReportRoot, 'valid-sink-preflight-report.json');
+  const validSinkRun = spawnSync(process.execPath, [browserRunnerPath.pathname,
+    '--reference-dir', join(failureReportRoot, 'missing-reference'),
+    '--source-image', join(failureReportRoot, 'missing-image.png'),
+    '--output-dir', join(failureReportRoot, 'valid-sink-output'),
+    '--report', validSinkReportPath,
+    '--mode', 'resident-full-conditioning',
+    '--conditioning-sink-url', validSink,
+  ], { encoding: 'utf8' });
+  assert.equal(validSinkRun.status, 1, 'incomplete source preflight must stop before launching the browser');
+  assert.ok(existsSync(validSinkReportPath), 'valid-sink preflight must still leave a caller-requested report');
+  const validSinkReport = JSON.parse(readFileSync(validSinkReportPath, 'utf8'));
+  assert.equal(validSinkReport.effectiveConditioningSinkUrl, validSink);
+  assert.equal(new URL(validSinkReport.requestedUrl).searchParams.get('liveConditioning'), '1',
+    'a validated requested sink must enable the browser transfer route before launch');
+  assert.equal(validSinkReport.chromeProcessPid, null, 'the valid-sink route check must not launch Chrome');
 } finally {
   rmSync(failureReportRoot, { recursive: true, force: true });
 }
