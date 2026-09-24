@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createFingerFluidTruthScenePopulation } from '../finger-fluid-webgpu-core.js';
+import { solverSpy } from './finger-fluid-solver-spy.mjs';
 
 const source = readFileSync(new URL('../finger-fluid-webgpu-core.js', import.meta.url), 'utf8');
 const f32 = Math.fround;
@@ -88,6 +89,11 @@ for (const name of scaledSupportConsumers) {
   const body = extractFunction(name);
   assert.match(body, /neighbor_search_cell_radius\(\)/,
     `${name} searches the complete per-axis cell range for scaled kernel support`);
+  for (const axis of ['x', 'y', 'z']) {
+    assert.match(body,
+      new RegExp(`for \\(var ${axis} = -searchRadius\\.${axis}; ${axis} <= searchRadius\\.${axis}; ${axis} = ${axis} \\+ 1\\)`),
+      `${name} traverses the full production search range on ${axis}`);
+  }
   assert.match(body,
     /neighbor_cell_might_contribute_with_scale\(position, neighborCell, params\.neighborSearchRadiusScale\)/,
     `${name} culls only extra cells that cannot contain a contributing pair`);
@@ -195,5 +201,34 @@ for (const [offset, axis] of [[224, 0], [228, 1], [232, 2]]) {
 assert.match(source,
   /const safeNeighborSearchRadiusScale = Math\.max\(1, safeUniformParticleRadiusScale\)/,
   'fixed-volume support is covered even when the density-kernel specialization is disabled');
+
+// Read the values uploaded by the real solver factory and one encoded step;
+// source-pattern checks above cannot stand in for production configuration.
+for (const { particleCount, expectedRange } of [
+  { particleCount: 24_576, expectedRange: [1, 2, 1] },
+  { particleCount: 36_864, expectedRange: [1, 1, 1] },
+]) {
+  const run = await solverSpy({
+    particleCount,
+    fixedVolumeReferenceParticleCount: 36_864,
+    densityIterations: 3,
+    densityCellRejection: true,
+    uniformVolumeDensityKernel: true,
+    energyDiagnosticsMode: 'disabled',
+  });
+  try {
+    run.solver.step();
+    const paramsWrite = run.writes.find(write => write.buffer === 'kaminos-finger-fluid-params');
+    assert.ok(paramsWrite, `${particleCount}-particle step uploads the production simulation uniform`);
+    const uploaded = new DataView(Uint8Array.from(paramsWrite.bytes).buffer);
+    assert.equal(uploaded.byteLength, 240);
+    const radiusScale = uploaded.getFloat32(28, true);
+    const uploadedRange = [224, 228, 232].map(offset => uploaded.getUint32(offset, true));
+    assert.deepEqual(uploadedRange, requiredSearchRange(radiusScale),
+      `${particleCount}-particle upload matches the independent geometric range oracle`);
+    assert.deepEqual(uploadedRange, expectedRange,
+      `${particleCount}-particle upload reaches the expected complete neighborhood`);
+  } finally { run.close(); }
+}
 
 console.log('Finger Fluid fixed-volume neighborhood completeness contracts passed');
