@@ -128,6 +128,8 @@ assert.match(browserSmoke, /const residentBlock2MlpMode = mode === 'resident-blo
   'the browser must make full block-2 execution an explicit mode rather than silently widening attention mode');
 assert.match(browserSmoke, /runTrellisDinoV3PrefixBlockResidentBlock2MlpProbe/,
   'the browser must invoke the model-local full-block probe for its named mode');
+assert.match(browserSmoke, /name === 'block2MlpHidden'\) return \[1, 1029, 4096\]/,
+  'the browser must persist the block-2 GELU tensor with its full 1029×4096 shape');
 assert.match(browserSmoke, /\['block2MlpProjection','block2_mlp_output'\]/,
   'the full-block browser mode must compare the projected block-2 MLP output against its matching MLX boundary');
 assert.match(parityAssay, /\['block1Attention','block1Norm2','block1MlpHidden','block1MlpProjection','block1Output'\]/,

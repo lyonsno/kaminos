@@ -51,6 +51,7 @@ async function readTensor(manifest, name) {
 function expectedShape(name) {
   if (name === 'patchEmbeddings') return [1, 1024, 1024];
   if (name === 'block1MlpHidden') return [1, 1029, 4096];
+  if (name === 'block2MlpHidden') return [1, 1029, 4096];
   return [1, 1029, 1024];
 }
 async function persistGpuTensor(name, values, reference) {
