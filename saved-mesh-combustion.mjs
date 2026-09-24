@@ -116,7 +116,7 @@ export function buildSavedMeshStructuralSurface({ THREE, object, assetIdentity }
   };
 }
 
-export async function createSavedMeshCombustionAssembly({ THREE, entry, gpuContext } = {}) {
+export async function createSavedMeshCombustionAssembly({ THREE, entry, gpuContext, presentationDebugMode = 'off' } = {}) {
   const binding = entry?.combustionBinding;
   if (!binding || binding.schema !== 'kaminos.object-combustion-binding.v0' || binding.objectId !== entry.id) {
     throw new Error('saved mesh combustion binding identity does not match the scene object');
@@ -141,6 +141,7 @@ export async function createSavedMeshCombustionAssembly({ THREE, entry, gpuConte
       device: gpuContext.device,
       gridSize: gpuContext.gridSize,
       format: gpuContext.format,
+      presentationDebugMode,
       structures: [{
         id: entry.id,
         objectId: objectIdNumber(entry.id),

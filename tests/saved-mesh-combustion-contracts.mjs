@@ -7,7 +7,12 @@ import { createStructuralMeshSkinBinding } from '../structural-combustion-gpu.mj
 
 const sceneHost = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 assert.match(sceneHost, /async function syncSavedSceneCombustionBinding\(\)[\s\S]*?currently supports one bound object/);
-assert.match(sceneHost, /createSavedMeshCombustionAssembly\(\{ THREE, entry, gpuContext \}\)/);
+assert.match(sceneHost, /get\('volume_structural_combustion_view'\)[\s\S]*?createSavedMeshCombustionAssembly\(\{ THREE, entry, gpuContext, presentationDebugMode \}\)/);
+assert.match(
+  readFileSync(new URL('../saved-mesh-combustion.mjs', import.meta.url), 'utf8'),
+  /presentationDebugMode,\s*structures:/,
+  'the saved trestle route must carry its requested GPU diagnostic view into the assembly',
+);
 assert.match(sceneHost, /hasVolumePrimitiveScene \|\| hasSavedMeshCombustion/);
 
 const promotedAsset = readFileSync(new URL('../artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb', import.meta.url));

@@ -62,6 +62,16 @@ assert.match(
   /gpuStructuralCombustionAssembly\.encodePresentation/,
   'the same GPU state drives dimensional presentation without host material feedback',
 );
+assert.match(
+  source,
+  /structuralExposureDiagnosticColor\(in\.reaction\.x, presentation\.world\.w\)/,
+  'exposure diagnostic must visualize the node exposure sampled by the GPU combustion pass',
+);
+assert.match(
+  source,
+  /structuralMaterialDiagnosticColor\(in\.thermal\)/,
+  'material diagnostic must visualize the GPU node temperature, fuel, and char state',
+);
 assert.doesNotMatch(volumeSource, /setGpuCombustibleObjectLoop/, 'the current volume core has no legacy object-loop socket to compete with structural combustion');
 
 const terminalFixture = {
@@ -136,7 +146,18 @@ const textures = [];
 let presentationCompilationMessages = [];
 let rejectedComputeEntryPoint = null;
 let rejectedRenderEntryPoint = null;
-const queue = { writeBuffer() {}, async onSubmittedWorkDone() {} };
+const presentationUniformWrites = [];
+const queue = {
+  writeBuffer(buffer, offset, data) {
+    if (buffer?.descriptor?.label?.includes('presentation')) {
+      const bytes = data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      presentationUniformWrites.push({ label: buffer.descriptor.label, offset, bytes: bytes.slice() });
+    }
+  },
+  async onSubmittedWorkDone() {},
+};
 const device = {
   queue,
   createBuffer(descriptor) {
@@ -222,6 +243,17 @@ try {
     { id: 'target', objectId: 21, state: targetState, sidecar: targetSidecar, control: false },
     { id: 'control', objectId: 22, state: controlState, sidecar: controlSidecar, control: true },
   ];
+  await assert.rejects(
+    () => createGpuStructuralCombustionAssembly({
+      device,
+      gridSize: 32,
+      format: 'rgba8unorm',
+      presentationDebugMode: 'bogus',
+      structures: diagnosticStructures,
+    }),
+    /unsupported structural combustion presentation debug mode: bogus/,
+    'unsupported diagnostic routes must fail instead of silently rendering normal materials',
+  );
   await assert.rejects(
     () => createGpuStructuralCombustionAssembly({
       device,
@@ -317,6 +349,7 @@ try {
     device,
     gridSize: 32,
     format: 'rgba8unorm',
+    presentationDebugMode: 'exposure',
     structures: [
       {
         id: 'target',
@@ -376,6 +409,7 @@ try {
   assert.ok(passes.length >= 5, 'source clear, node heat, conduction, weakening, and finalize passes are encoded');
   assert.equal(assembly.debugState().schema, STRUCTURAL_COMBUSTION_SCHEMA);
   assert.equal(assembly.debugState().authority, STRUCTURAL_COMBUSTION_AUTHORITY);
+  assert.equal(assembly.debugState().presentationDebugMode, 'exposure');
   assert.equal(assembly.debugState().runtimeReadbackCount, 0);
 
   const rendered = [];
@@ -398,9 +432,13 @@ try {
     ),
     true,
   );
-  assert.equal(rendered.length, 6, 'target and control each draw a solid surface before bonds and node overlays');
+  assert.equal(rendered.length, 4, 'diagnostic mode draws target and control surfaces plus GPU node samples, without bond clutter');
   assert.deepEqual(rendered[0], [36, 24], 'target presents its 4 x 3 x 2 resident structural cells');
-  assert.deepEqual(rendered[3], [36, 24], 'control presents the same matched solid topology');
+  assert.deepEqual(rendered[2], [36, 24], 'control presents the same matched solid topology');
+  const targetPresentation = presentationUniformWrites.find(write => write.label === 'structural combustion target presentation');
+  assert.ok(targetPresentation, 'diagnostic mode must be carried to the presentation shader');
+  assert.equal(new DataView(targetPresentation.bytes.buffer).getFloat32(92, true), 1);
+  assert.equal(assembly.debugState().runtimeReadbackCount, 0, 'GPU presentation diagnostics must not add host material readback');
 
   assembly.freeze();
   assert.throws(() => assembly.encode(encoder, {}), /frozen/i);

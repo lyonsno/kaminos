@@ -21939,7 +21939,9 @@ async function syncSavedSceneCombustionBinding() {
   }
   if (!entry) return false;
   const gpuContext = await volumePrototype.borrowStructuralCombustionGpuContext();
-  const runtime = await createSavedMeshCombustionAssembly({ THREE, entry, gpuContext });
+  const presentationDebugMode = new URLSearchParams(window.location.search)
+    .get('volume_structural_combustion_view') || 'off';
+  const runtime = await createSavedMeshCombustionAssembly({ THREE, entry, gpuContext, presentationDebugMode });
   try {
     await volumePrototype.setGpuStructuralCombustionAssembly(runtime.assembly);
     savedMeshCombustionRuntime = { entry, runtime };
