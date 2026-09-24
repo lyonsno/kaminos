@@ -26,6 +26,10 @@ try {
     temporaryRoot,
   ));
   assert.equal(packOutput[0].version, '0.1.54');
+  assert.ok(
+    packOutput[0].files.every(row => !/(?:^|\/)(__pycache__\/|[^/]+\.pyc$)/.test(row.path)),
+    'generated Python bytecode must stay out of the published package',
+  );
   assert.ok(packOutput[0].files.some(row => row.path === 'docs/getting-started.md'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port-runner.mjs'));
