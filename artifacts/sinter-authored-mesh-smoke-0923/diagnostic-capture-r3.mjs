@@ -134,23 +134,30 @@ async function main() {
   saveReport();
 
   const debugPort = 43000 + Math.floor(Math.random() * 18000);
-  const profile = mkdtempSync('/tmp/kaminos-sinter-diagnostic-profile-');
-  const chrome = spawn(chromePath, [
-    `--remote-debugging-port=${debugPort}`,
-    `--user-data-dir=${profile}`,
-    '--no-first-run',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--window-size=1600,1100',
-    `${origin}/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_pressure_strategy=spatial_tiers&volume_pressure_iterations=3&volume_resolution=96&volume_majorant_grid=48&volume_structural_combustion_view=exposure`,
-  ], { stdio: 'ignore' });
-  report.browser = { chromePath, profile, debugPort, pid: chrome.pid };
+  let chrome;
   let ws;
   const pageErrors = [];
   const assetResponses = [];
   let lastRuntimeState = null;
   let lastSceneStatus = null;
   try {
+    const profile = mkdtempSync('/tmp/kaminos-sinter-diagnostic-profile-');
+    report.browser = { chromePath, profile, debugPort, pid: null, launchStatus: 'starting' };
+    chrome = spawn(chromePath, [
+      `--remote-debugging-port=${debugPort}`,
+      `--user-data-dir=${profile}`,
+      '--no-first-run',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--window-size=1600,1100',
+      `${origin}/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_pressure_strategy=spatial_tiers&volume_pressure_iterations=3&volume_resolution=96&volume_majorant_grid=48&volume_structural_combustion_view=exposure`,
+    ], { stdio: 'ignore' });
+    report.browser.pid = chrome.pid || null;
+    await new Promise((resolveSpawn, rejectSpawn) => {
+      chrome.once('spawn', resolveSpawn);
+      chrome.once('error', rejectSpawn);
+    });
+    report.browser.launchStatus = 'spawned';
     await waitFor(async () => {
       try { return await fetch(`http://127.0.0.1:${debugPort}/json/version`); } catch { return null; }
     }, 'Chrome DevTools endpoint');
@@ -346,8 +353,13 @@ async function main() {
   } catch (error) {
     report.status = 'failed';
     report.errors.push(String(error?.stack || error));
+    if (report.browser && report.phase === 'browser-launch') {
+      report.browser.launchStatus = 'failed';
+      report.browser.launchError = { code: error.code || null, message: error.message };
+    }
     report.failureContext = {
       phase: report.phase,
+      lastTrustedEvidence: report.lastTrustedEvidence,
       lastRuntimeState,
       sceneStatus: lastSceneStatus,
       pageErrors: [...pageErrors],
@@ -356,7 +368,7 @@ async function main() {
   } finally {
     report.finishedAt = new Date().toISOString();
     try { ws?.close(); } catch {}
-    try { chrome.kill('SIGTERM'); } catch {}
+    try { chrome?.kill('SIGTERM'); } catch {}
     saveReport();
   }
   process.stdout.write(`${JSON.stringify({ status: report.status, phase: report.phase, reportPath, captures: report.captures.map(({ mode, screenshot }) => ({ mode, ...screenshot })) })}\n`);
