@@ -6230,7 +6230,8 @@ struct Params {
   particleCount: u32,
   frameIndex: u32,
   gridCellCount: u32,
-  gridDims: vec4<u32>,
+  gridDims: vec3<u32>,
+  neighborSearchRadiusScale: f32,
   boundsMin: vec4<f32>,
   boundsMax: vec4<f32>,
   fluid: vec4<f32>,
@@ -6243,6 +6244,7 @@ struct Params {
   refinementControl: vec4<u32>,
   liveInletControl: vec4<u32>,
   densityControl: vec4<f32>,
+  neighborSearchCellRadius: vec4<u32>,
 }
 
 const solverMaximumSpeed: f32 = ${KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN};
@@ -6794,8 +6796,7 @@ fn gridCoord(position: vec3<f32>) -> vec3<i32> {
   return vec3<i32>(normalized * vec3<f32>(params.gridDims.xyz));
 }
 
-fn density_neighbor_cell_might_contribute(position: vec3<f32>, neighborCell: vec3<i32>, radiusScale: f32) -> bool {
-  if (params.refinementControl.y != 0u || params.refinementControl.w == 0u) { return true; }
+fn neighbor_cell_might_contribute_with_scale(position: vec3<f32>, neighborCell: vec3<i32>, radiusScale: f32) -> bool {
   let cellWidth = (params.boundsMax.xyz - params.boundsMin.xyz) / vec3<f32>(params.gridDims.xyz);
   let cellMin = params.boundsMin.xyz + vec3<f32>(neighborCell) * cellWidth;
   let cellMax = cellMin + cellWidth;
@@ -6810,6 +6811,15 @@ fn density_neighbor_cell_might_contribute(position: vec3<f32>, neighborCell: vec
   let separation = position - nearest;
   let supportRadius = params.fluid.x * radiusScale;
   return dot(separation, separation) <= supportRadius * supportRadius;
+}
+
+fn density_neighbor_cell_might_contribute(position: vec3<f32>, neighborCell: vec3<i32>, radiusScale: f32) -> bool {
+  if (params.refinementControl.y != 0u || params.refinementControl.w == 0u) { return true; }
+  return neighbor_cell_might_contribute_with_scale(position, neighborCell, radiusScale);
+}
+
+fn neighbor_search_cell_radius() -> vec3<i32> {
+  return vec3<i32>(params.neighborSearchCellRadius.xyz);
 }
 
 fn cellIndex(coord: vec3<i32>) -> u32 {
@@ -7279,11 +7289,15 @@ fn compute_material_tracer_diffusion(@builtin(global_invocation_id) gid: vec3<u3
   let concentration = materialTracers[index].concentrationDeltaRecipeSource.x;
   var concentrationDelta = 0.0;
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
@@ -7336,11 +7350,15 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
   var gradientSelf = vec3<f32>(0.0);
   var gradientSquared = 0.0;
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         if (!density_neighbor_cell_might_contribute(position, neighborCell, selfRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
@@ -7385,11 +7403,15 @@ fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   var correction = vec3<f32>(0.0);
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         if (!density_neighbor_cell_might_contribute(position, neighborCell, selfRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
@@ -7439,11 +7461,15 @@ fn classify_free_surface(@builtin(global_invocation_id) gid: vec3<u32>) {
   var supportWeight = 0.0;
   var directionalSupport = vec3<f32>(0.0);
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
@@ -7493,11 +7519,15 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
   var neighborVelocity = vec3<f32>(0.0);
   var neighborWeight = 0.0;
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
@@ -7577,11 +7607,15 @@ fn compute_vorticity(@builtin(global_invocation_id) gid: vec3<u32>) {
   let baseCell = gridCoord(position);
   var omega = vec3<f32>(0.0);
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
@@ -7614,11 +7648,15 @@ fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
   let baseCell = gridCoord(position);
   var magnitudeGradient = vec3<f32>(0.0);
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
@@ -8153,11 +8191,15 @@ fn compute_support_particle_shift(@builtin(global_invocation_id) gid: vec3<u32>)
   let baseCell = gridCoord(position);
   var crowdingDirection = vec3<f32>(0.0);
   var crowdingWeight = 0.0;
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
@@ -8208,11 +8250,15 @@ fn estimate_interface_curvature(index: u32, position: vec3<f32>, interfaceNormal
   var interfaceWeight = 0.0;
   var interfaceNeighborCount = 0u;
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
@@ -8271,11 +8317,15 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
   var supportWeight = 0.0;
   var directionalSupport = vec3<f32>(0.0);
 
-  for (var z = -1; z <= 1; z = z + 1) {
-    for (var y = -1; y <= 1; y = y + 1) {
-      for (var x = -1; x <= 1; x = x + 1) {
-        let neighborCell = baseCell + vec3<i32>(x, y, z);
+  let searchRadius = neighbor_search_cell_radius();
+  for (var z = -searchRadius.z; z <= searchRadius.z; z = z + 1) {
+    for (var y = -searchRadius.y; y <= searchRadius.y; y = y + 1) {
+      for (var x = -searchRadius.x; x <= searchRadius.x; x = x + 1) {
+        let searchOffset = vec3<i32>(x, y, z);
+        let neighborCell = baseCell + searchOffset;
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (any(abs(searchOffset) > vec3<i32>(1))
+          && !neighbor_cell_might_contribute_with_scale(position, neighborCell, params.neighborSearchRadiusScale)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
@@ -13221,6 +13271,13 @@ export async function createWebGPUFingerFluidSolver({
   const safeUniformParticleRadiusScale = Math.fround(
     Math.pow(Math.max(safeUniformParticleVolumeScale, 0.000001), 1 / 3),
   );
+  const safeNeighborSearchRadiusScale = Math.max(1, safeUniformParticleRadiusScale);
+  const safeNeighborSearchCellRadius = GRID_DIMS.map((dimension, axis) => {
+    const cellWidth = Math.fround(Math.fround(BOUNDS_MAX[axis] - BOUNDS_MIN[axis]) / dimension);
+    const supportRadius = Math.fround(Math.fround(safeKernelRadius) * safeNeighborSearchRadiusScale);
+    const conservativeSupportRadius = Math.fround(supportRadius + Math.fround(cellWidth * Math.fround(0.001)));
+    return Math.max(1, Math.ceil(Math.fround(conservativeSupportRadius / cellWidth)));
+  });
   const safeUniformVolumeKernelNormalization = Math.fround(
     1 / Math.max(
       Math.fround(Math.fround(safeUniformParticleRadiusScale * safeUniformParticleRadiusScale) * safeUniformParticleRadiusScale),
@@ -13264,7 +13321,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
-    size: 224,
+    size: 240,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const liveInletBuffer = device.createBuffer({
@@ -14355,7 +14412,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function writeSimulationParams(dt) {
-    const buffer = new ArrayBuffer(224);
+    const buffer = new ArrayBuffer(240);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
     view.setUint32(4, safeParticleCount, true);
@@ -14364,7 +14421,7 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(16, GRID_DIMS[0], true);
     view.setUint32(20, GRID_DIMS[1], true);
     view.setUint32(24, GRID_DIMS[2], true);
-    view.setUint32(28, GRID_CELL_COUNT, true);
+    view.setFloat32(28, safeNeighborSearchRadiusScale, true);
     BOUNDS_MIN.forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
     BOUNDS_MAX.forEach((value, index) => view.setFloat32(48 + index * 4, value, true));
     view.setFloat32(64, safeKernelRadius, true);
@@ -14411,6 +14468,10 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(212, safeUniformParticleRadiusScale, true);
     view.setFloat32(216, safeUniformVolumeKernelNormalization, true);
     view.setFloat32(220, safeUniformVolumeDensityKernel ? 1 : 0, true);
+    view.setUint32(224, safeNeighborSearchCellRadius[0], true);
+    view.setUint32(228, safeNeighborSearchCellRadius[1], true);
+    view.setUint32(232, safeNeighborSearchCellRadius[2], true);
+    view.setUint32(236, 0, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 

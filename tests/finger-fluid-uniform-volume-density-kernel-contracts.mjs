@@ -30,7 +30,8 @@ assert.match(shaderSource, /uniformVolumeDensityKernel = false/, 'direct API kee
 assert.match(shaderSource, /uniformVolumeDensityKernel !== 'boolean'/, 'direct API rejects truthy nonboolean requests');
 assert.match(shaderSource, /const safeUniformVolumeDensityKernel = uniformVolumeDensityKernel === true && !safeAdaptiveDensity;/, 'adaptive particles bypass a uniform-volume specialization');
 assert.match(shaderSource, /densityControl: vec4<f32>/, 'uniform density constants have an explicit GPU parameter block');
-assert.match(shaderSource, /const buffer = new ArrayBuffer\(224\)/, 'CPU upload matches the extended WGSL parameter layout');
+assert.match(shaderSource, /size: 240/, 'GPU allocation covers the extended WGSL parameter layout');
+assert.match(shaderSource, /const buffer = new ArrayBuffer\(240\)/, 'CPU upload matches the extended WGSL parameter layout');
 assert.match(shaderSource, /view\.setFloat32\(208, safeUniformParticleVolumeScale, true\)/, 'the active uniform volume scale reaches the shader');
 assert.match(shaderSource, /view\.setFloat32\(212, safeUniformParticleRadiusScale, true\)/, 'the shared support radius scale reaches the shader');
 assert.match(shaderSource, /view\.setFloat32\(216, safeUniformVolumeKernelNormalization, true\)/, 'the shared kernel normalization reaches the shader');
