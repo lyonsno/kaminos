@@ -125,6 +125,8 @@ The runtime schedules those model duties so the browser can regain useful foregr
 
 Ports can begin with direct execution and introduce cooperative boundaries where measurement shows that a phase is hostile to foreground responsiveness. The [advanced integration reference](./docs/integration-reference.md) covers scheduling policy, adaptive duty sizing, completion behavior, foreground opportunity donation, resources, multi-route admission, and runtime telemetry.
 
+Using a Kaminos fire basin as the foreground workload? Follow [Load an exported basin for a cooperative inference smoke](../docs/basin-presets-for-inference-smokes.md) for preset installation, exact-look verification, and the separate shared-device/frame-scheduling connection. Loading a preset alone does not configure cooperative inference.
+
 ## Inference Alongside Rendering
 
 In one measured run on an M4 Max in Chrome, **SHARP generated 1,179,648 Gaussian splats in 185.3 seconds** while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across 21,818 foreground frame intervals, p95 and p99 were 9.3ms and 10.0ms; 40 intervals exceeded 33.3ms.

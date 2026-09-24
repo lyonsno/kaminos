@@ -161,12 +161,15 @@ export function consumeLiquidFireContactTickReference(state = {}, source = {}) {
   };
 }
 
-export function createLiquidFireContactConsumerShaderWGSL(gridSize) {
+export function createLiquidFireContactConsumerShaderWGSL(gridSize, gridHeight = gridSize) {
   const grid = nonnegativeInteger(gridSize, 'Pyro near-field grid');
+  const height = nonnegativeInteger(gridHeight, 'Pyro near-field grid height');
   if (grid < 4) throw new Error('Pyro near-field grid must be at least 4');
+  if (height < 4) throw new Error('Pyro near-field grid height must be at least 4');
   return /* wgsl */`
 const GRID: u32 = ${grid}u;
-const GRID_CELL_COUNT: u32 = ${grid * grid * grid}u;
+const GRID_HEIGHT: u32 = ${height}u;
+const GRID_CELL_COUNT: u32 = ${grid * height * grid}u;
 const SOURCE_WETNESS_INDEX: u32 = GRID_CELL_COUNT;
 const SOURCE_TEMPERATURE_INDEX: u32 = GRID_CELL_COUNT + 1u;
 const SOURCE_COMBUSTION_INDEX: u32 = GRID_CELL_COUNT + 2u;
@@ -340,8 +343,10 @@ fn scatter_liquid_fire_contacts(@builtin(global_invocation_id) gid: vec3<u32>) {
     atomicMax(&quenchField[SOURCE_LAST_CONTACT_TICK_INDEX], writeTick);
     atomicMax(&consumerStats.sourceContactWetness, sourceContactWetness);
   }
-  let cell = min(vec3<u32>(receiverUnit * f32(GRID)), vec3<u32>(GRID - 1u));
-  let cellIndex = cell.x + cell.y * GRID + cell.z * GRID * GRID;
+  let cellX = min(u32(receiverUnit.x * f32(GRID)), GRID - 1u);
+  let cellY = min(u32(receiverUnit.y * f32(GRID_HEIGHT)), GRID_HEIGHT - 1u);
+  let cellZ = min(u32(receiverUnit.z * f32(GRID)), GRID - 1u);
+  let cellIndex = cellX + cellY * GRID + cellZ * GRID * GRID_HEIGHT;
   let volume = clamp(record.wetnessMaterialTracerVolume.w, 0.0, 2.0);
   let heatRemoval = wetness * consumerParams.transfer.x;
   let flameRemoval = wetness * consumerParams.transfer.z;

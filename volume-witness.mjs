@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
+import { retiredRaymarchControlReceiptPayload } from './volume-core.js';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -72,6 +73,7 @@ function assertCaptureReplayControls({
   state,
   expectedVolumeScene,
   expectedGrid,
+  expectedGridDimensions,
   expectedRaySteps,
   expectedRenderScale,
   expectedDensity,
@@ -94,7 +96,8 @@ function assertCaptureReplayControls({
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'captured volume scene did not reach debug controls');
   }
   if (has('resolution')) {
-    assert.equal(Number(state.simGrid), expectedGrid, `captured grid did not apply as ${expectedGrid}^3`);
+    assert.equal(Number(state.simGrid), expectedGrid, `captured horizontal grid resolution did not apply as ${expectedGrid}`);
+    assert.deepEqual(state.simGridDimensions, expectedGridDimensions, 'captured rectangular grid dimensions did not apply');
   }
   if (has('steps')) assertApprox(Number(state.controls?.raySteps), expectedRaySteps, 'captured ray steps did not apply');
   if (has('renderScale')) {
@@ -172,6 +175,7 @@ const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
+const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
@@ -563,12 +567,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.00,
     occupancySkip: 0.00,
-    majorantSkip: 0.00,
-    majorantSmooth: 0.10,
-    majorantGuard: 0.30,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.42,
     detailScale: 1.00,
     plumeHeight: 0.70,
@@ -594,12 +592,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.00,
     occupancySkip: 0.00,
-    majorantSkip: 1.00,
-    majorantSmooth: 0.85,
-    majorantGuard: 0.50,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 0.70,
     fireScale: 0.35,
     detailScale: 0.50,
     plumeHeight: 1.20,
@@ -610,7 +602,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.12,
     flowRate: 0.35,
     resolution: 128,
-    majorantGrid: 48,
     pressureMode: 'global-p3',
     pressureTierLowerMax: 0.64,
     pressureTierHeroMin: 0.18,
@@ -633,12 +624,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.00,
     occupancySkip: 0.00,
-    majorantSkip: 1.00,
-    majorantSmooth: 0.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 0.70,
     fireScale: 1.17,
     detailScale: 2.55,
     plumeHeight: 1.75,
@@ -649,7 +634,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.08,
     flowRate: 0.25,
     resolution: 160,
-    majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 1.50,
     pyroInterfaceFocus: 0.00,
@@ -694,12 +678,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.05,
     occupancySkip: 0.05,
-    majorantSkip: 0.95,
-    majorantSmooth: 0.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.65,
     detailScale: 0.45,
     plumeHeight: 1.30,
@@ -710,7 +688,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.13,
     flowRate: 0.30,
     resolution: 96,
-    majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 0.65,
     pyroInterfaceFocus: 0.00,
@@ -789,12 +766,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.00,
     occupancySkip: 0.20,
-    majorantSkip: 1.00,
-    majorantSmooth: 1.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.35,
     detailScale: 0.45,
     plumeHeight: 1.00,
@@ -805,7 +776,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.19,
     flowRate: 0.85,
     resolution: 160,
-    majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 0.20,
     pyroInterfaceFocus: 0.00,
@@ -931,15 +901,8 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.30,
     occupancySkip: 1.00,
-    majorantSkip: 0.95,
-    majorantSmooth: 1.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     renderScale: 0.50,
     resolution: 128,
-    majorantGrid: 48,
     fireRenderMode: 'shell',
     shellInspectMode: 'shell',
     shellAmount: 0.00,
@@ -1018,12 +981,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 160,
     adaptiveRays: 0.05,
     occupancySkip: 0.05,
-    majorantSkip: 0.95,
-    majorantSmooth: 0.00,
-    majorantGuard: 1.00,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.65,
     detailScale: 0.45,
     plumeHeight: 1.30,
@@ -1034,7 +991,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     inputRadius: 0.13,
     flowRate: 0.30,
     resolution: 96,
-    majorantGrid: 48,
     pyroDynamicDetail: 1,
     pyroMaterialGain: 1.50,
     pyroInterfaceFocus: 0.00,
@@ -1123,12 +1079,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     raySteps: 88,
     adaptiveRays: 1,
     occupancySkip: 1,
-    majorantSkip: 0,
-    majorantSmooth: 1,
-    majorantGuard: 1,
-    temporalAccum: 0,
-    temporalJitter: 0,
-    historyClamp: 0,
     fireScale: 0.95,
     detailScale: 0.45,
     plumeHeight: 0.9,
@@ -1186,7 +1136,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     shellSoftClip: 0.2,
     shellSmoke: 2,
     resolution: 128,
-    majorantGrid: 24,
     gridOverlay: 0,
     flowDebug: 0,
     oracleActivityCue: 1,
@@ -1301,7 +1250,7 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalRenderMode: 'default',
     canonicalRenderModeValue: 0,
     canonicalMotionMode: 'animated',
-    canonicalMotionModeValue: 0,
+    canonicalMotionRetirementIdentity: 'retired-analytic-canonical-motion-v0',
     canonicalContentMode: 'smoke',
     canonicalContentModeValue: 0,
     canonicalSourceY: -0.74,
@@ -1314,7 +1263,6 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     runtimeQualityRequested: 'live_high',
     gpuPressure: 0,
     runtimeQualityReason: 'route-default',
-    majorantCadence: 1,
     pressureIterations: 3,
     pressureStrategy: 'global',
     simProfile: false,
@@ -1350,12 +1298,6 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     raySteps: 148,
     adaptiveRays: 0.05,
     occupancySkip: 0.25,
-    majorantSkip: 0.15,
-    majorantSmooth: 0.10,
-    majorantGuard: 0.30,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.86,
     detailScale: 0.75,
     plumeHeight: 1.45,
@@ -1363,7 +1305,6 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     inputRadius: 0.08,
     flowRate: 1.90,
     resolution: 128,
-    majorantGrid: 48,
     canonicalSpread: 0.00,
     canonicalCenterline: 0.50,
     canonicalBodyBalance: 1.50,
@@ -1384,12 +1325,6 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     raySteps: 148,
     adaptiveRays: 0.05,
     occupancySkip: 0.25,
-    majorantSkip: 0.15,
-    majorantSmooth: 0.10,
-    majorantGuard: 0.30,
-    temporalAccum: 0.00,
-    temporalJitter: 0.00,
-    historyClamp: 1.00,
     fireScale: 0.86,
     detailScale: 0.75,
     plumeHeight: 1.45,
@@ -1397,7 +1332,6 @@ const CANONICAL_VOLUME_MACRO_PRESETS = {
     inputRadius: 0.08,
     flowRate: 1.90,
     resolution: 128,
-    majorantGrid: 48,
     canonicalSpread: 0.00,
     canonicalCenterline: 0.50,
     canonicalBodyBalance: 1.50,
@@ -1417,7 +1351,7 @@ const CANONICAL_VOLUME_RENDER_MODE_VALUES = {
   default: 0,
   smoke_only: 1,
 };
-const CANONICAL_VOLUME_MOTION_MODE_VALUES = {
+const CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES = {
   animated: 0,
   frozen: 1,
 };
@@ -1432,8 +1366,8 @@ function normalizeCanonicalSourceMode(value) {
 function normalizeCanonicalRenderMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_RENDER_MODE_VALUES, value) ? value : 'default';
 }
-function normalizeCanonicalMotionMode(value) {
-  return Object.hasOwn(CANONICAL_VOLUME_MOTION_MODE_VALUES, value) ? value : 'animated';
+function normalizeCanonicalMotionRequest(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES, value) ? value : 'animated';
 }
 function normalizeCanonicalContentMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_CONTENT_MODE_VALUES, value) ? value : 'smoke';
@@ -1476,7 +1410,8 @@ const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESET
 const canonicalMacroPreset = CANONICAL_VOLUME_MACRO_PRESETS[expectedCanonicalMacroPreset] || {};
 const expectedCanonicalSourceMode = normalizeCanonicalSourceMode(routeParams.get('volume_canonical_source_mode') || canonicalMacroPreset.sourceMode || 'current');
 const expectedCanonicalRenderMode = normalizeCanonicalRenderMode(routeParams.get('volume_canonical_render_mode') || canonicalMacroPreset.renderMode || 'default');
-const expectedCanonicalMotionMode = normalizeCanonicalMotionMode(routeParams.get('volume_canonical_motion_mode') || canonicalMacroPreset.motionMode || 'animated');
+const expectedCanonicalMotionRequest = normalizeCanonicalMotionRequest(routeParams.get('volume_canonical_motion_mode') || canonicalMacroPreset.motionMode || 'animated');
+const expectedCanonicalMotionRetirementIdentity = 'retired-analytic-canonical-motion-v0';
 const expectedCanonicalContentMode = normalizeCanonicalContentMode(routeParams.get('volume_canonical_content') || canonicalMacroPreset.contentMode || 'smoke');
 const canonicalContentRequestsFire = expectedCanonicalContentMode === 'fire' || expectedCanonicalContentMode === 'fire_smoke';
 const canonicalSourceDefault = canonicalSourceDefaults(expectedCanonicalSourceMode);
@@ -1495,16 +1430,28 @@ const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') &
 const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
 const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 160].includes(requestedGrid)
+const expectedGrid = [32, 48, 64, 96, 128, 136, 140, 160].includes(requestedGrid)
   ? requestedGrid
   : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
-const requestedMajorantGrid = Number(routeParams.get('volume_majorant_grid'));
-const expectedMajorantGrid = [24, 32, 48].includes(requestedMajorantGrid)
-  ? requestedMajorantGrid
-  : canonicalMacroPreset.majorantGrid ?? scenePreset.majorantGrid ?? 48;
-const requestedMajorantCadence = Number(routeParams.get('volume_majorant_cadence'));
-let expectedMajorantCadence = routeParams.has('volume_majorant_cadence') && Number.isFinite(requestedMajorantCadence)
-  ? Math.max(1, Math.min(8, Math.round(requestedMajorantCadence)))
+const expectedGridDimensions = [expectedGrid, expectedGrid * 2, expectedGrid];
+const expectedGridCellCount = expectedGridDimensions.reduce((product, dimension) => product * dimension, 1);
+const expectedGridLabel = expectedGridDimensions.join('x');
+function quantizeFlowKernelControl(value, min, max, step, decimals) {
+  const clamped = Math.max(min, Math.min(max, value));
+  const quantized = min + Math.round((clamped - min) / step) * step;
+  return Number(quantized.toFixed(decimals));
+}
+const requestedFlowKernelStrength = Number(routeParams.get('volume_flow_kernel_strength'));
+const expectedFlowKernelStrength = routeParams.has('volume_flow_kernel_strength') && Number.isFinite(requestedFlowKernelStrength)
+  ? quantizeFlowKernelControl(requestedFlowKernelStrength, 0, 1, 0.02, 2)
+  : 0;
+const requestedFlowKernelRadius = Number(routeParams.get('volume_flow_kernel_radius'));
+const expectedFlowKernelRadius = routeParams.has('volume_flow_kernel_radius') && Number.isFinite(requestedFlowKernelRadius)
+  ? quantizeFlowKernelControl(requestedFlowKernelRadius, 0.0025, 0.12, 0.0025, 4)
+  : 0.03;
+const requestedFlowKernelCoherence = Number(routeParams.get('volume_flow_kernel_coherence'));
+const expectedFlowKernelCoherence = routeParams.has('volume_flow_kernel_coherence') && Number.isFinite(requestedFlowKernelCoherence)
+  ? quantizeFlowKernelControl(requestedFlowKernelCoherence, 0, 2, 0.05, 2)
   : 1;
 const requestedPressureIterations = Number(routeParams.get('volume_pressure_iterations'));
 const requestedPressureMode = routeParams.get('volume_pressure_mode');
@@ -1565,36 +1512,12 @@ const requestedOccupancySkip = Number(routeParams.get('volume_occupancy_skip'));
 let expectedOccupancySkip = routeParams.has('volume_occupancy_skip') && Number.isFinite(requestedOccupancySkip)
   ? Math.max(0, Math.min(1, requestedOccupancySkip))
   : canonicalMacroPreset.occupancySkip ?? scenePreset.occupancySkip ?? 0.35;
-const requestedMajorantSkip = Number(routeParams.get('volume_majorant_skip'));
-let expectedMajorantSkip = routeParams.has('volume_majorant_skip') && Number.isFinite(requestedMajorantSkip)
-  ? Math.max(0, Math.min(1, requestedMajorantSkip))
-  : canonicalMacroPreset.majorantSkip ?? scenePreset.majorantSkip ?? 0.70;
-const requestedMajorantSmooth = Number(routeParams.get('volume_majorant_smooth'));
-const expectedMajorantSmooth = routeParams.has('volume_majorant_smooth') && Number.isFinite(requestedMajorantSmooth)
-  ? Math.max(0, Math.min(1, requestedMajorantSmooth))
-  : canonicalMacroPreset.majorantSmooth ?? scenePreset.majorantSmooth ?? 0.85;
-const requestedMajorantGuard = Number(routeParams.get('volume_majorant_guard'));
-const expectedMajorantGuard = routeParams.has('volume_majorant_guard') && Number.isFinite(requestedMajorantGuard)
-  ? Math.max(0, Math.min(1, requestedMajorantGuard))
-  : canonicalMacroPreset.majorantGuard ?? scenePreset.majorantGuard ?? 0.75;
 const requestedMaxSmokeStripeRatio = Number(routeParams.get('volume_max_smoke_stripe_ratio'));
 const expectedMaxSmokeStripeRatio = routeParams.has('volume_max_smoke_stripe_ratio') && Number.isFinite(requestedMaxSmokeStripeRatio)
   ? Math.max(1.0, Math.min(4.0, requestedMaxSmokeStripeRatio))
   : expectedVolumeScene === 'bonfire_plume'
     ? 1.45
     : Infinity;
-const requestedTemporalAccum = Number(routeParams.get('volume_temporal_accum'));
-let expectedTemporalAccum = routeParams.has('volume_temporal_accum') && Number.isFinite(requestedTemporalAccum)
-  ? Math.max(0, Math.min(0.85, requestedTemporalAccum))
-  : canonicalMacroPreset.temporalAccum ?? scenePreset.temporalAccum ?? 0.25;
-const requestedTemporalJitter = Number(routeParams.get('volume_temporal_jitter'));
-const expectedTemporalJitter = routeParams.has('volume_temporal_jitter') && Number.isFinite(requestedTemporalJitter)
-  ? Math.max(0, Math.min(1, requestedTemporalJitter))
-  : canonicalMacroPreset.temporalJitter ?? scenePreset.temporalJitter ?? 0.85;
-const requestedHistoryClamp = Number(routeParams.get('volume_history_clamp'));
-const expectedHistoryClamp = routeParams.has('volume_history_clamp') && Number.isFinite(requestedHistoryClamp)
-  ? Math.max(0, Math.min(1, requestedHistoryClamp))
-  : canonicalMacroPreset.historyClamp ?? scenePreset.historyClamp ?? 0.70;
 const requestedDensity = Number(routeParams.get('volume_density'));
 const expectedDensity = routeParams.has('volume_density') && Number.isFinite(requestedDensity)
   ? Math.max(0.35, Math.min(6, requestedDensity))
@@ -1710,15 +1633,11 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedRenderScale = Math.min(expectedRenderScale, 0.75);
   expectedRaySteps = Math.min(expectedRaySteps, 96);
   expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.45);
-  expectedMajorantCadence = Math.max(expectedMajorantCadence, 2);
 } else if (expectedRuntimeQualityEffective === 'holdover') {
   expectedRenderScale = Math.min(expectedRenderScale, 0.70);
   expectedRaySteps = Math.min(expectedRaySteps, 72);
   expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.65);
   expectedOccupancySkip = Math.max(expectedOccupancySkip, 0.25);
-  expectedMajorantSkip = Math.max(expectedMajorantSkip, 0.35);
-  expectedMajorantCadence = Math.max(expectedMajorantCadence, 4);
-  expectedTemporalAccum = Math.max(expectedTemporalAccum, 0.42);
   expectedPressureStrategy = 'global';
   expectedPressureIterations = Math.min(1, expectedPressureIterations);
 } else if (expectedRuntimeQualityEffective === 'impostor') {
@@ -1726,9 +1645,6 @@ if (expectedRuntimeQualityEffective === 'live_low') {
   expectedRaySteps = Math.min(expectedRaySteps, 48);
   expectedAdaptiveRays = Math.max(expectedAdaptiveRays, 0.85);
   expectedOccupancySkip = Math.max(expectedOccupancySkip, 0.45);
-  expectedMajorantSkip = Math.max(expectedMajorantSkip, 0.55);
-  expectedMajorantCadence = Math.max(expectedMajorantCadence, 8);
-  expectedTemporalAccum = Math.max(expectedTemporalAccum, 0.65);
   expectedPressureStrategy = 'global';
   expectedPressureIterations = 0;
 }
@@ -1742,9 +1658,6 @@ expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrate
 expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
   : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
-const expectedEffectiveTemporalAccum = expectedVolumeScene === 'bonfire_plume'
-  ? Math.max(0, Math.min(0.85, expectedTemporalAccum * expectedBonfireTemporal))
-  : expectedTemporalAccum;
 const expectedDetailScaleArtifactQuarantine = expectedVolumeScene === 'tall_plume' ? 1 : 0;
 const expectedVisibleDetailOverlayGain = expectedDetailScaleArtifactQuarantine ? 0.35 : 1;
 const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
@@ -2352,6 +2265,7 @@ async function main() {
         state,
         expectedVolumeScene,
         expectedGrid,
+        expectedGridDimensions,
         expectedRaySteps,
         expectedRenderScale,
         expectedDensity,
@@ -2504,10 +2418,11 @@ async function main() {
     }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
-    assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
-    assert.equal(state.simGridLabel, `${expectedGrid}^3 velocity-material-fire-microdetail-storage-buffer+combustion-front-topology-sidecar-v0`, 'fluid sim label does not expose selected grid plus front sidecar identity');
+    assert.equal(state.simGrid, expectedGrid, `fluid sim is not running at the expected horizontal grid resolution ${expectedGrid}`);
+    assert.deepEqual(state.simGridDimensions, expectedGridDimensions, 'fluid sim dimensions do not match the expected rectangular grid');
+    assert.equal(state.simGridLabel, `${expectedGridLabel} velocity-material-fire-microdetail-storage-buffer+combustion-front-topology-sidecar-v0`, 'fluid sim label does not expose selected dimensions plus front sidecar identity');
     assert.equal(state.frontFieldIdentity, 'combustion-front-topology-sidecar-v0', 'front topology sidecar identity did not reach debug state');
-    assert.equal(state.frontFieldBytes, expectedGrid * expectedGrid * expectedGrid * 4, 'front topology sidecar byte cost does not match one scalar per cell');
+    assert.equal(state.frontFieldBytes, expectedGridCellCount * 4, 'front topology sidecar byte cost does not match one scalar per rectangular grid cell');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
     let freezeIntegrityProbe = null;
     if (freezeIntegrityProbeRequested) {
@@ -2634,6 +2549,14 @@ async function main() {
         return;
       }
     }
+    assert.equal(state.flowKernelIdentity, FLOW_RECONSTRUCTION_KERNEL_IDENTITY, 'flow reconstruction kernel identity did not reach the live renderer');
+    assert.equal(state.flowKernelCandidateAdmissionAuthority, 'structural-splat-candidates-v0', 'flow kernel changed or obscured splat admission authority');
+    assert.ok(Math.abs((state.controls?.flowKernelStrength ?? 0) - expectedFlowKernelStrength) < 0.001, 'flow kernel strength route/control did not apply');
+    assert.ok(Math.abs((state.controls?.flowKernelRadius ?? 0) - expectedFlowKernelRadius) < 0.001, 'flow kernel radius route/control did not apply');
+    assert.ok(Math.abs((state.controls?.flowKernelCoherence ?? 0) - expectedFlowKernelCoherence) < 0.001, 'flow kernel coherence route/control did not apply');
+    assert.ok(Math.abs((state.flowKernelEffective?.strength ?? -1) - expectedFlowKernelStrength) < 0.001, 'effective flow kernel strength did not match the requested route');
+    assert.ok(Math.abs((state.flowKernelEffective?.radiusWorld ?? -1) - expectedFlowKernelRadius) < 0.001, 'effective world-space flow kernel radius did not match the requested route');
+    assert.ok(Math.abs((state.flowKernelEffective?.coherence ?? -1) - expectedFlowKernelCoherence) < 0.001, 'effective flow kernel coherence did not match the requested route');
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     if (rayBudgetPreset && !routeParams.has('volume_steps') && !routeParams.has('volume_adaptive_rays')) {
@@ -2655,18 +2578,6 @@ async function main() {
     }
     assert.ok(Math.abs((state.controls?.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'occupancy skip route/control did not apply');
     assert.ok(Math.abs((state.occupancySkip ?? 0) - expectedOccupancySkip) < 0.001, 'effective occupancy skip state did not match route/control');
-    assert.ok(Math.abs((state.controls?.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'majorant skip route/control did not apply');
-    assert.ok(Math.abs((state.majorantSkip ?? 0) - expectedMajorantSkip) < 0.001, 'effective majorant skip state did not match route/control');
-    assert.ok(Math.abs((state.controls?.majorantSmooth ?? 0) - expectedMajorantSmooth) < 0.001, 'majorant smooth route/control did not apply');
-    assert.ok(Math.abs((state.majorantSmooth ?? 0) - expectedMajorantSmooth) < 0.001, 'effective majorant smooth state did not match route/control');
-    assert.ok(Math.abs((state.controls?.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'majorant guard route/control did not apply');
-    assert.ok(Math.abs((state.majorantGuard ?? 0) - expectedMajorantGuard) < 0.001, 'effective majorant guard state did not match route/control');
-    assert.ok(Math.abs((state.controls?.temporalAccum ?? 0) - expectedTemporalAccum) < 0.001, 'temporal accumulation route/control did not apply');
-    assert.ok(Math.abs((state.temporalAccum ?? 0) - expectedEffectiveTemporalAccum) < 0.001, 'effective temporal accumulation state did not match route/control');
-    assert.ok(Math.abs((state.controls?.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'temporal jitter route/control did not apply');
-    assert.ok(Math.abs((state.temporalJitter ?? 0) - expectedTemporalJitter) < 0.001, 'effective temporal jitter state did not match route/control');
-    assert.ok(Math.abs((state.controls?.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'temporal history clamp route/control did not apply');
-    assert.ok(Math.abs((state.historyClamp ?? 0) - expectedHistoryClamp) < 0.001, 'effective temporal history clamp state did not match route/control');
     assert.ok(Math.abs((state.controls?.density ?? 0) - expectedDensity) < 0.001, 'density route/control did not apply');
     assert.ok(Math.abs((state.controls?.fire ?? 0) - expectedFire) < 0.001, 'fire route/control did not apply');
     assert.ok(Math.abs((state.controls?.smoke ?? 0) - expectedSmoke) < 0.001, 'smoke route/control did not apply');
@@ -2746,8 +2657,11 @@ async function main() {
     assert.equal(state.canonicalPlumeControls?.sourceMode || 'current', expectedCanonicalSourceMode, 'effective canonical source mode did not reach debug state');
     assert.equal(state.controls?.canonicalRenderMode || 'default', expectedCanonicalRenderMode, 'canonical render diagnostic route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.renderMode || 'default', expectedCanonicalRenderMode, 'effective canonical render diagnostic mode did not reach debug state');
-    assert.equal(state.controls?.canonicalMotionMode || 'animated', expectedCanonicalMotionMode, 'canonical motion diagnostic route identity did not apply');
-    assert.equal(state.canonicalPlumeControls?.motionMode || 'animated', expectedCanonicalMotionMode, 'effective canonical motion diagnostic mode did not reach debug state');
+    assert.equal(state.controls?.canonicalMotionMode || 'animated', expectedCanonicalMotionRequest, 'legacy canonical motion request route identity did not apply');
+    assert.equal(state.canonicalPlumeControls?.requestedRetiredMotionMode || 'animated', expectedCanonicalMotionRequest, 'legacy canonical motion request did not reach compatibility debug state');
+    assert.equal(state.canonicalPlumeControls?.motionStrategy, 'retired', 'retired canonical analytic motion cannot claim an effective animated/frozen mode');
+    assert.equal(state.canonicalPlumeControls?.motionRetirementIdentity, expectedCanonicalMotionRetirementIdentity, 'canonical analytic motion retirement identity did not reach debug state');
+    assert.equal(state.canonicalPlumeControls?.reservedMotionUniformValue, 0, 'retired canonical analytic motion must reserve a zero GPU uniform slot');
     assert.equal(state.controls?.canonicalContentMode || 'smoke', expectedCanonicalContentMode, 'canonical content route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.contentMode || 'smoke', expectedCanonicalContentMode, 'effective canonical content mode did not reach debug state');
     assert.ok(Math.abs((state.controls?.canonicalSourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'canonical source height route/control did not apply');
@@ -2779,22 +2693,7 @@ async function main() {
       assert.ok((state.externalEmitterCount ?? 0) > 0, 'external emitter route did not seed any emitters');
       assert.ok(Number.isFinite(state.externalEmitterAgeMs), 'external emitter age did not reach debug state');
     }
-    if (expectedTemporalAccum > 0) {
-      assert.equal(state.temporalHistoryValid, true, 'temporal history did not become valid after settling');
-      assert.ok((state.temporalHistoryFrames ?? 0) > 4, 'temporal history did not accumulate enough frames after settling');
-      assert.ok((state.temporalHistoryResetCount ?? 0) >= 1, 'temporal history did not record reset/rejection state');
-      assert.ok(Number.isFinite(state.temporalReprojectionConfidence), 'temporal reprojection confidence did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalHistoryWeight), 'temporal history weight did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalRejectedHistory), 'temporal history rejection did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalSmokeHistoryTrust), 'material-aware smoke history trust did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalFireHistoryProtect), 'material-aware fire history protection did not reach debug state');
-      assert.ok(Number.isFinite(state.temporalInterfaceHistoryProtect), 'material-aware interface history protection did not reach debug state');
-      assert.equal(state.temporalEvidenceSource, 'cpu-estimate-control-proxy', 'temporal evidence source label did not reach debug state');
-    }
-    assert.equal(state.controls?.majorantGrid, expectedMajorantGrid, 'majorant grid route/control did not apply');
-    assert.equal(state.majorantGrid, expectedMajorantGrid, 'coarse majorant grid identity did not apply');
-    assert.equal(state.controls?.majorantCadence, expectedMajorantCadence, 'majorant cadence route/control did not apply');
-    assert.equal(state.majorantCadence, expectedMajorantCadence, 'effective majorant cadence did not reach debug state');
+    assert.deepEqual(state.retiredRaymarchControls || [], [], 'fresh witness route unexpectedly carried retired raymarch controls');
     if (routeParams.has('volume_pressure_iterations') || expectedSpatialPressureTiers) {
       assert.equal(state.controls?.pressureIterations, expectedPressureIterations, 'pressure iteration route/control did not apply');
     }
@@ -2803,7 +2702,6 @@ async function main() {
     assert.equal(state.pressureIterationRequested, expectedPressureIterations, 'effective pressure iteration request did not reach debug state');
     assert.equal(Boolean(state.controls?.simProfile), expectedSimProfile, 'sim profile route/control did not apply');
     assert.equal(Boolean(state.simProfile), expectedSimProfile, 'effective sim profile flag did not reach debug state');
-    assert.equal(state.majorantBuilt, true, 'coarse majorant field was not built before witness');
     const expectedPressureSourceStrategy = state.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const effectiveFireLicks = state.controls?.fireLicks ?? expectedFireLicks;
     const expectedMainFluidStrategy = expectedMainFluidKernelStrategy(effectiveFireLicks);
@@ -2828,8 +2726,7 @@ async function main() {
     assert.equal(stateLedger.evidenceSource, 'cpu-structural-pass-ledger-plus-raf-queue-proxy', 'sim cost ledger evidence source did not reach debug state');
     assert.equal(stateLedger.routeIdentity, 'native-3d-compute-fluid-raymarch-v0', 'sim cost ledger route identity is missing or stale');
     assert.equal(stateLedger.grid, expectedGrid, 'sim cost ledger grid identity did not match effective route');
-    assert.equal(stateLedger.majorantGrid, expectedMajorantGrid, 'sim cost ledger majorant grid did not match effective route');
-    assert.equal(stateLedger.majorantBuildCadence, expectedMajorantCadence, 'sim cost ledger majorant cadence did not match effective route');
+    assert.deepEqual(stateLedger.gridDimensions, expectedGridDimensions, 'sim cost ledger dimensions did not match effective route');
     assert.equal(stateLedger.pressureSourceStrategy, expectedPressureSourceStrategy, 'sim cost ledger pressure source strategy does not match effective projection state');
     assert.equal(stateLedger.pressureStrategy || 'global', expectedPressureStrategy, 'sim cost ledger pressure strategy does not match effective route');
     assert.equal(stateLedger.tallPlumePressureIterationStrategy, expectedTallPlumePressureStrategy, 'sim cost ledger tall-plume pressure iteration strategy does not match effective route');
@@ -2866,7 +2763,7 @@ async function main() {
     assert.equal(stateLedger.pressureJacobiPasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger pressure pass count does not match effective projection state');
     assert.equal(stateLedger.pressureJacobiInlineDivergencePasses, state.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0, 'sim cost ledger inline-divergence Jacobi pass count does not match effective projection state');
     assert.equal(stateLedger.fullGridPassBreakdown?.total, stateLedger.fullGridPassesPerFrame, 'sim cost ledger pass breakdown total does not match full-grid pass count');
-    assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGrid ** 3, 'sim cost ledger did not report full-grid cell visits');
+    assert.ok(Number.isFinite(stateLedger.fullGridCellVisitsPerFrame) && stateLedger.fullGridCellVisitsPerFrame >= expectedGridCellCount, 'sim cost ledger did not report full rectangular-grid cell visits');
     assert.ok(Number.isFinite(stateLedger.fluidBufferBytes) && stateLedger.fluidBufferBytes > 0, 'sim cost ledger did not report fluid buffer footprint');
     assert.ok(state.simStepCount > 5, 'fluid sim did not advance enough compute steps');
     const stateTiming = state.timing || {};
@@ -2912,7 +2809,6 @@ async function main() {
     const sampleLedger = sample.simCostLedger || stateLedger;
     if (
       sampleLedger?.identity !== 'tall-plume-sim-cost-ledger-v0' ||
-      sampleLedger?.majorantBuildCadence !== expectedMajorantCadence ||
       sampleLedger?.pressureSourceStrategy !== samplePressureSourceStrategy ||
       sampleLedger?.mainFluidKernelStrategy !== sampleMainFluidStrategy ||
       sampleLedger?.mainFluidLocalProjectionStrategy !== expectedMainFluidLocalProjectionStrategy ||
@@ -2940,8 +2836,7 @@ async function main() {
       sampleLedger?.pressureJacobiInlineDivergencePasses !== (sample.pressureProjectionEnabled ? expectedPressureProjectionIterations : 0) ||
       (expectedSpatialPressureTiers && !Number.isFinite(Number(sampleLedger?.pressureJacobiFullGridEquivalentPasses))) ||
       sampleLedger?.fullGridPassBreakdown?.total !== sampleLedger?.fullGridPassesPerFrame ||
-      !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame) ||
-      typeof sampleLedger?.majorantBuiltThisFrame !== 'boolean'
+      !Number.isFinite(sampleLedger?.fullGridCellVisitsPerFrame)
     ) {
       throw new Error(`GPU readback returned stale or incomplete sim cost ledger: ${JSON.stringify(sampleLedger)}`);
     }
@@ -2973,12 +2868,14 @@ async function main() {
         writeRgbaPng(fieldSliceOut, canonicalFieldSlice.width, canonicalFieldSlice.height, canonicalFieldSlice.rgba);
       }
     }
-    if (!sample.simReadback || sample.simReadback.grid !== expectedGrid) {
+    if (!sample.simReadback || sample.simReadback.grid !== expectedGrid || !Array.isArray(sample.simReadback.gridDimensions)) {
       throw new Error(`GPU sim readback missing expected grid identity: ${JSON.stringify(sample.simReadback)}`);
     }
+    assert.deepEqual(sample.simReadback.gridDimensions, expectedGridDimensions, 'GPU sim readback dimensions do not match the expected rectangular grid');
+    assert.equal(sample.simReadback.cellCount, expectedGridCellCount, 'GPU sim readback cell count does not match the expected rectangular grid');
     if (
       sample.simReadback.frontFieldIdentity !== 'combustion-front-topology-sidecar-v0' ||
-      sample.simReadback.frontFieldBytes !== expectedGrid * expectedGrid * expectedGrid * 4 ||
+      sample.simReadback.frontFieldBytes !== expectedGridCellCount * 4 ||
       !Number.isFinite(sample.simReadback.frontTopologyMean) ||
       !Number.isFinite(sample.simReadback.frontTopologySourcePlugRatio) ||
       !Number.isFinite(sample.simReadback.frontTopologyRisingBodyRatio) ||
@@ -2989,9 +2886,6 @@ async function main() {
       !Number.isFinite(sample.simReadback.frontTopologyVisibleTransferLoss)
     ) {
       throw new Error(`GPU sim readback does not expose live front topology sidecar evidence: ${JSON.stringify(sample.simReadback)}`);
-    }
-    if (!sample.majorantReadback || sample.majorantReadback.grid !== expectedMajorantGrid || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
-      throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
     }
     const sampleTiming = sample.timing || stateTiming;
     if (!Number.isFinite(sampleTiming.rafFps) || sampleTiming.rafFps <= 0 || !Number.isFinite(sampleTiming.frameP95Ms) || sampleTiming.frameP95Ms <= 0) {
@@ -3716,7 +3610,7 @@ async function main() {
             hudSuppression,
           });
         }
-        const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+        const { image, preview, simReadback, ...sampleReport } = scaleSample;
         const captureReport = {
           ...sampleReport,
           image: {
@@ -3758,11 +3652,6 @@ async function main() {
             extinctionMean: simReadback.extinctionMean,
             liveVoxels: simReadback.liveVoxels,
             frontFieldIdentity: simReadback.frontFieldIdentity,
-          } : null,
-          majorantReadback: majorantReadback ? {
-            grid: majorantReadback.grid,
-            occupiedBricks: majorantReadback.occupiedBricks,
-            importanceMax: majorantReadback.importanceMax,
           } : null,
         };
         writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
@@ -3993,7 +3882,7 @@ async function main() {
               hudSuppression,
             });
           }
-          const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+          const { image, preview, simReadback, ...sampleReport } = scaleSample;
           const captureReport = {
             ...sampleReport,
             sequenceAuthority: frame.sequenceAuthority,
@@ -4036,11 +3925,6 @@ async function main() {
               extinctionMean: simReadback.extinctionMean,
               liveVoxels: simReadback.liveVoxels,
               frontFieldIdentity: simReadback.frontFieldIdentity,
-            } : null,
-            majorantReadback: majorantReadback ? {
-              grid: majorantReadback.grid,
-              occupiedBricks: majorantReadback.occupiedBricks,
-              importanceMax: majorantReadback.importanceMax,
             } : null,
           };
           writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
@@ -4186,6 +4070,7 @@ async function main() {
       frameCount: state.frameCount,
       simStepCount: sample.simStepCount,
       simGrid: sample.simGrid,
+      simGridDimensions: sample.simReadback?.gridDimensions || null,
       simGridLabel: sample.simGridLabel,
       frontFieldIdentity: sample.frontFieldIdentity,
       frontFieldBytes: sample.frontFieldBytes,
@@ -4196,7 +4081,6 @@ async function main() {
       fieldSliceBackend: 'cpu-fluid-buffer-readback',
       canonicalFieldSlice: simReadbackReport.canonicalSmokeFieldSlice || null,
       fieldSlice: fieldSliceOut || null,
-      majorantReadback: sample.majorantReadback,
       canonicalPlumeControls: state.canonicalPlumeControls || null,
       gridOverlay: sample.gridOverlay,
       raySteps: state.controls?.raySteps,
@@ -4204,12 +4088,7 @@ async function main() {
       expectedVolumeScene,
       adaptiveRaymarch: sample.adaptiveRaymarch,
       occupancySkip: sample.occupancySkip,
-      majorantSkip: sample.majorantSkip,
-      majorantSmooth: sample.majorantSmooth,
-      majorantGuard: sample.majorantGuard,
-      temporalAccum: sample.temporalAccum,
-      temporalJitter: sample.temporalJitter,
-      historyClamp: sample.historyClamp,
+      ...retiredRaymarchControlReceiptPayload(sample),
       fireScale: sample.fireScale,
       detailScale: sample.detailScale,
       detailScaleArtifactQuarantine: sample.detailScaleArtifactQuarantine,
@@ -4270,7 +4149,6 @@ async function main() {
       expectedBonfireProjection,
       expectedBonfireTemporal,
       expectedBonfireInstabilityProbe,
-      expectedEffectiveTemporalAccum,
       bonfireAblation: sample.bonfireAblation,
       bonfireReferenceConfinement: sample.bonfireReferenceConfinement,
       expectedRenderScale,
@@ -4320,24 +4198,6 @@ async function main() {
       volumePrimitiveCount: sample.volumePrimitiveCount,
       volumePrimitiveIds: sample.volumePrimitiveIds,
       volumePrimitives: sample.volumePrimitives,
-      temporalAccumEffective: sample.temporalAccumEffective,
-      temporalReprojectionConfidence: sample.temporalReprojectionConfidence,
-      temporalHistoryWeight: sample.temporalHistoryWeight,
-      temporalRejectedHistory: sample.temporalRejectedHistory,
-      temporalSmokeHistoryTrust: sample.temporalSmokeHistoryTrust,
-      temporalFireHistoryProtect: sample.temporalFireHistoryProtect,
-      temporalInterfaceHistoryProtect: sample.temporalInterfaceHistoryProtect,
-      temporalEvidenceSource: sample.temporalEvidenceSource,
-      temporalHistoryFrames: sample.temporalHistoryFrames,
-      temporalHistoryResetCount: sample.temporalHistoryResetCount,
-      temporalHistoryResetReason: sample.temporalHistoryResetReason,
-      temporalHistoryValid: sample.temporalHistoryValid,
-      majorantGrid: sample.majorantGrid,
-      majorantBuilt: sample.majorantBuilt,
-      majorantCadence: sample.majorantCadence,
-      majorantBuiltThisFrame: sample.majorantBuiltThisFrame,
-      majorantLastBuiltFrame: sample.majorantLastBuiltFrame,
-      majorantSkippedFrameCount: sample.majorantSkippedFrameCount,
       pressureProjectionEnabled: sample.pressureProjectionEnabled,
       pressureEffectiveLabel: sample.pressureEffectiveLabel,
       pressureProjectionIterations: sample.pressureProjectionIterations,
@@ -4359,7 +4219,6 @@ async function main() {
       pressureTierBufferOwnership: sample.pressureTierBufferOwnership,
       simProfile: sample.simProfile,
       simCostLedger: sample.simCostLedger || state.simCostLedger || null,
-      expectedMajorantCadence,
       expectedPressureIterations,
       expectedTallPlumePressureIterationStrategy: expectedTallPlumePressureStrategy,
       expectedPressureStrategy,
@@ -4370,7 +4229,8 @@ async function main() {
       expectedCanonicalMacroPreset,
       expectedCanonicalSourceMode,
       expectedCanonicalRenderMode,
-      expectedCanonicalMotionMode,
+      expectedCanonicalMotionRequest,
+      expectedCanonicalMotionRetirementIdentity,
       expectedCanonicalContentMode,
       expectedCanonicalSourceY,
       expectedCanonicalInjection,

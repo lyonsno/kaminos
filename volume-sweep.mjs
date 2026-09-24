@@ -64,81 +64,46 @@ const COMPACT_MATRIX_SCENARIOS = [
     id: 'draft-fast',
     label: 'Draft Fast',
     simGrid: 96,
-    majorantGrid: 48,
     raySteps: 64,
     renderScale: 0.75,
     adaptiveRays: 0.80,
     occupancySkip: 0.60,
-    majorantSkip: 0.68,
-    majorantSmooth: 0.70,
-    majorantGuard: 0.70,
-    temporalAccum: 0.30,
-    temporalJitter: 0.45,
-    historyClamp: 0.70,
   },
   {
     id: 'live-balanced',
     label: 'Live Balanced',
     simGrid: 96,
-    majorantGrid: 48,
     raySteps: 96,
     renderScale: 0.85,
     adaptiveRays: 0.65,
     occupancySkip: 0.45,
-    majorantSkip: 0.60,
-    majorantSmooth: 0.80,
-    majorantGuard: 0.75,
-    temporalAccum: 0.35,
-    temporalJitter: 0.40,
-    historyClamp: 0.70,
   },
   {
     id: 'rich-fullscreen',
     label: 'Rich Fullscreen',
     simGrid: 128,
-    majorantGrid: 48,
     raySteps: 120,
     renderScale: 0.85,
     adaptiveRays: 0.50,
     occupancySkip: 0.30,
-    majorantSkip: 0.45,
-    majorantSmooth: 0.80,
-    majorantGuard: 0.80,
-    temporalAccum: 0.30,
-    temporalJitter: 0.30,
-    historyClamp: 0.80,
   },
   {
     id: 'hero-reference',
     label: 'Hero Reference',
     simGrid: 128,
-    majorantGrid: 48,
     raySteps: 160,
     renderScale: 1.0,
     adaptiveRays: 0.30,
     occupancySkip: 0.20,
-    majorantSkip: 0.30,
-    majorantSmooth: 0.85,
-    majorantGuard: 0.85,
-    temporalAccum: 0.10,
-    temporalJitter: 0.20,
-    historyClamp: 0.90,
   },
   {
     id: 'hand-trail-live',
     label: 'Hand Trail Live',
     simGrid: 96,
-    majorantGrid: 48,
     raySteps: 72,
     renderScale: 0.80,
     adaptiveRays: 0.70,
     occupancySkip: 0.50,
-    majorantSkip: 0.60,
-    majorantSmooth: 0.75,
-    majorantGuard: 0.75,
-    temporalAccum: 0.25,
-    temporalJitter: 0.40,
-    historyClamp: 0.75,
     externalEmitterMode: 'synthetic_hand_trails',
     flowRate: 0,
     fireScale: 0.45,
@@ -152,34 +117,20 @@ const COMPACT_MATRIX_SCENARIOS = [
     label: 'Tall Plume Scale',
     volumeScene: 'tall_plume',
     simGrid: 128,
-    majorantGrid: 48,
     raySteps: 96,
     renderScale: 0.85,
     adaptiveRays: 0.65,
     occupancySkip: 0.50,
-    majorantSkip: 0.60,
-    majorantSmooth: 0.78,
-    majorantGuard: 0.78,
-    temporalAccum: 0.35,
-    temporalJitter: 0.40,
-    historyClamp: 0.75,
   },
   {
     id: 'bonfire-plume-scale',
     label: 'Bonfire Plume Scale',
     volumeScene: 'bonfire_plume',
     simGrid: 128,
-    majorantGrid: 48,
     raySteps: 96,
     renderScale: 0.85,
     adaptiveRays: 0.65,
     occupancySkip: 0.45,
-    majorantSkip: 0.55,
-    majorantSmooth: 0.80,
-    majorantGuard: 0.80,
-    temporalAccum: 0.30,
-    temporalJitter: 0.40,
-    historyClamp: 0.78,
   },
 ];
 
@@ -208,21 +159,13 @@ const TALL_PLUME_PERFORMANCE_BASE = {
   windHeight: -0.8,
   inputRadius: 0.11,
   flowRate: 0.35,
-  temporalAccum: 0,
-  temporalJitter: 0,
-  historyClamp: 1,
   occupancySkip: 0.1,
-  majorantSkip: 0,
-  majorantSmooth: 0.1,
-  majorantGuard: 0.3,
-  majorantCadence: 1,
   pressureIterations: 2,
   pressureStrategy: 'global',
   simProfile: true,
   renderScale: 0.75,
   adaptiveRays: 0.75,
   raySteps: 148,
-  majorantGrid: 48,
 };
 
 const PERFORMANCE_MATRIX_SCENARIOS = [
@@ -245,13 +188,11 @@ const PERFORMANCE_MATRIX_SCENARIOS = [
     id: 'perf-128-cadence2',
     label: 'Perf 128 Majorant Cadence 2',
     simGrid: 128,
-    majorantCadence: 2,
   },
   {
     id: 'perf-128-cadence3',
     label: 'Perf 128 Majorant Cadence 3',
     simGrid: 128,
-    majorantCadence: 3,
   },
   {
     id: 'perf-128-pressure4',
@@ -320,29 +261,19 @@ function parseScenarioList(value, scenarios = COMPACT_MATRIX_SCENARIOS, label = 
 
 function gridRuns() {
   const simGrids = numberList(args.get('--sim-grids'), '96,128');
-  const majorantGrids = numberList(args.get('--majorant-grids'), '24,32');
   const raySteps = numberList(args.get('--ray-steps'), '72,120');
   const runs = [];
   for (const simGrid of simGrids) {
-    for (const majorantGrid of majorantGrids) {
-      for (const steps of raySteps) {
-        runs.push({
-          id: `grid-sim${simGrid}-maj${majorantGrid}-steps${steps}`,
-          label: `Grid ${simGrid}/${majorantGrid}/${steps}`,
-          simGrid,
-          majorantGrid,
-          raySteps: steps,
-          adaptiveRays: finiteOr(args.get('--adaptive-rays'), 0.40),
-          majorantSkip: finiteOr(args.get('--majorant-skip'), 0.45),
-          occupancySkip: finiteOr(args.get('--occupancy-skip'), 0.35),
-          majorantSmooth: finiteOr(args.get('--majorant-smooth'), 0.75),
-          majorantGuard: finiteOr(args.get('--majorant-guard'), 0.75),
-          temporalAccum: finiteOr(args.get('--temporal-accum'), 0.25),
-          temporalJitter: finiteOr(args.get('--temporal-jitter'), 0.35),
-          historyClamp: finiteOr(args.get('--history-clamp'), 0.75),
-          renderScale: finiteOr(args.get('--render-scale'), 0.85),
-        });
-      }
+    for (const steps of raySteps) {
+      runs.push({
+        id: `grid-sim${simGrid}-steps${steps}`,
+        label: `Grid ${simGrid}/${steps}`,
+        simGrid,
+        raySteps: steps,
+        adaptiveRays: finiteOr(args.get('--adaptive-rays'), 0.40),
+        occupancySkip: finiteOr(args.get('--occupancy-skip'), 0.35),
+        renderScale: finiteOr(args.get('--render-scale'), 0.85),
+      });
     }
   }
   return runs;
@@ -375,17 +306,10 @@ function routeFor(run) {
   applyStringParam(url, 'volume_scene', run.volumeScene);
   applyStringParam(url, 'volume_tall_preset', run.tallPreset);
   applyNumberParam(url, 'volume_resolution', run.simGrid);
-  applyNumberParam(url, 'volume_majorant_grid', run.majorantGrid);
   applyNumberParam(url, 'volume_steps', run.raySteps);
   applyNumberParam(url, 'volume_render_scale', run.renderScale);
   applyNumberParam(url, 'volume_adaptive_rays', run.adaptiveRays);
   applyNumberParam(url, 'volume_occupancy_skip', run.occupancySkip);
-  applyNumberParam(url, 'volume_majorant_skip', run.majorantSkip);
-  applyNumberParam(url, 'volume_majorant_smooth', run.majorantSmooth);
-  applyNumberParam(url, 'volume_majorant_guard', run.majorantGuard);
-  applyNumberParam(url, 'volume_temporal_accum', run.temporalAccum);
-  applyNumberParam(url, 'volume_temporal_jitter', run.temporalJitter);
-  applyNumberParam(url, 'volume_history_clamp', run.historyClamp);
   applyNumberParam(url, 'volume_density', run.density);
   applyNumberParam(url, 'volume_fire', run.fire);
   applyNumberParam(url, 'volume_smoke', run.smoke);
@@ -407,7 +331,6 @@ function routeFor(run) {
   applyNumberParam(url, 'volume_wind_angle', run.windAngle);
   applyNumberParam(url, 'volume_wind_height', run.windHeight);
   applyNumberParam(url, 'volume_input_radius', run.inputRadius);
-  applyNumberParam(url, 'volume_majorant_cadence', run.majorantCadence);
   applyNumberParam(url, 'volume_pressure_iterations', run.pressureIterations);
   applyStringParam(url, 'volume_pressure_strategy', run.pressureStrategy);
   applyBooleanParam(url, 'volume_sim_profile', run.simProfile);
@@ -427,17 +350,10 @@ function requestedConfig(run) {
     volumeScene: run.volumeScene || 'compact_plume',
     tallPreset: run.tallPreset,
     simGrid: run.simGrid,
-    majorantGrid: run.majorantGrid,
     raySteps: run.raySteps,
     renderScale: run.renderScale,
     adaptiveRays: run.adaptiveRays,
     occupancySkip: run.occupancySkip,
-    majorantSkip: run.majorantSkip,
-    majorantSmooth: run.majorantSmooth,
-    majorantGuard: run.majorantGuard,
-    temporalAccum: run.temporalAccum,
-    temporalJitter: run.temporalJitter,
-    historyClamp: run.historyClamp,
     density: run.density,
     fire: run.fire,
     radiance: run.radiance,
@@ -459,7 +375,6 @@ function requestedConfig(run) {
     windHeight: run.windHeight,
     inputRadius: run.inputRadius,
     flowRate: run.flowRate,
-    majorantCadence: run.majorantCadence,
     pressureIterations: run.pressureIterations,
     pressureStrategy: run.pressureStrategy,
     simProfile: run.simProfile,
@@ -485,7 +400,6 @@ function effectiveConfig(witness) {
     tallPreset: effectiveTallPreset,
     tallPresetEvidence: effectiveTallPreset ? 'reported' : 'expanded-controls',
     simGrid: witness.simGrid,
-    majorantGrid: witness.majorantGrid,
     raySteps: witness.raySteps ?? controls.raySteps,
     renderScale: witness.renderScale ?? controls.renderScale,
     renderPixelRatio: witness.renderPixelRatio,
@@ -496,12 +410,6 @@ function effectiveConfig(witness) {
     volumeReconstructionStyle: witness.volumeReconstructionStyle,
     adaptiveRaymarch: witness.adaptiveRaymarch ?? controls.adaptiveRaymarch ?? controls.adaptiveRays,
     occupancySkip: witness.occupancySkip ?? controls.occupancySkip,
-    majorantSkip: witness.majorantSkip ?? controls.majorantSkip,
-    majorantSmooth: witness.majorantSmooth ?? controls.majorantSmooth,
-    majorantGuard: witness.majorantGuard ?? controls.majorantGuard,
-    temporalAccum: witness.temporalAccum ?? controls.temporalAccum,
-    temporalJitter: witness.temporalJitter ?? controls.temporalJitter,
-    historyClamp: witness.historyClamp ?? controls.historyClamp,
     density: witness.density ?? controls.density,
     fire: witness.fire ?? controls.fire,
     radiance: witness.radiance ?? controls.radiance,
@@ -523,11 +431,6 @@ function effectiveConfig(witness) {
     windHeight: witness.windHeight ?? controls.windHeight,
     inputRadius: witness.inputRadius ?? controls.inputRadius,
     flowRate: witness.flowRate ?? controls.flowRate,
-    majorantCadence: witness.majorantCadence ?? controls.majorantCadence,
-    majorantBuildCadence: witness.majorantBuildCadence || witness.simCostLedger?.majorantBuildCadence,
-    majorantBuiltThisFrame: witness.majorantBuiltThisFrame || witness.simCostLedger?.majorantBuiltThisFrame,
-    majorantLastBuiltFrame: witness.majorantLastBuiltFrame || witness.simCostLedger?.majorantLastBuiltFrame,
-    majorantSkippedFrameCount: witness.majorantSkippedFrameCount || witness.simCostLedger?.majorantSkippedFrameCount,
     pressureProjectionEnabled: witness.pressureProjectionEnabled ?? controls.pressureProjectionEnabled,
     pressureEffectiveLabel: witness.pressureEffectiveLabel ?? controls.pressureEffectiveLabel,
     pressureProjectionIterations: witness.pressureProjectionIterations ?? controls.pressureProjectionIterations ?? controls.pressureIterations,
@@ -545,7 +448,6 @@ function effectiveConfig(witness) {
     pressureTierOverlayOpacity: witness.pressureTierOverlayOpacity ?? witness.simCostLedger?.pressureTierOverlayOpacity,
     simProfile: witness.simProfile ?? Boolean(witness.simCostLedger),
     simCostLedger: witness.simCostLedger,
-    temporalEvidenceSource: witness.temporalEvidenceSource,
     timingEvidenceSource: witness.timingEvidenceSource,
     timingDisclaimer: witness.timingDisclaimer,
     externalEmitterMode: witness.externalEmitterMode,
@@ -648,17 +550,10 @@ function validateWitness(run, witness, effective) {
     }
   }
   checkNumber(checks, run, effective, 'simGrid', 'simGrid', 0.5);
-  checkNumber(checks, run, effective, 'majorantGrid', 'majorantGrid', 0.5);
   checkNumber(checks, run, effective, 'raySteps', 'raySteps', 0.5);
   checkNumber(checks, run, effective, 'renderScale');
   checkNumber(checks, run, effective, 'adaptiveRays', 'adaptiveRaymarch');
   checkNumber(checks, run, effective, 'occupancySkip');
-  checkNumber(checks, run, effective, 'majorantSkip');
-  checkNumber(checks, run, effective, 'majorantSmooth');
-  checkNumber(checks, run, effective, 'majorantGuard');
-  checkNumber(checks, run, effective, 'temporalAccum');
-  checkNumber(checks, run, effective, 'temporalJitter');
-  checkNumber(checks, run, effective, 'historyClamp');
   checkNumber(checks, run, effective, 'density');
   checkNumber(checks, run, effective, 'fire');
   checkNumber(checks, run, effective, 'smoke');
@@ -680,7 +575,6 @@ function validateWitness(run, witness, effective) {
   checkNumber(checks, run, effective, 'windHeight');
   checkNumber(checks, run, effective, 'inputRadius');
   checkNumber(checks, run, effective, 'flowRate');
-  checkNumber(checks, run, effective, 'majorantCadence', 'majorantBuildCadence', 0.5);
   if (run.pressureStrategy !== 'spatial_tiers') {
     checkNumber(checks, run, effective, 'pressureIterations', 'pressureProjectionIterations', 0.5);
   }
@@ -726,7 +620,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  for (const field of ['grid', 'majorantBuildCadence', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'pressureJacobiFullGridEquivalentPasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'bonfireProceduralBreakupEvaluationsPerCell', 'bonfireSymmetricForceEvaluationsPerCell', 'bonfireNonWindForceEvaluationsPerCell', 'bonfireScalarNeighborhoodReadsPerCell', 'tallPlumeDetailCoherenceExtraReadsPerCell', 'tallPlumeTransitionBandExtraReadsPerCell', 'tallPlumePressureIterationTarget', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
+  for (const field of ['grid', 'pressureDivergencePasses', 'pressureJacobiPasses', 'pressureJacobiInlineDivergencePasses', 'pressureJacobiFullGridEquivalentPasses', 'mainFluidLocalProjectionDivergenceEvaluationsPerCell', 'fireLickBreakupEvaluationsPerCell', 'fireLickOperatorGain', 'bonfireCombustionFieldEvaluationsPerCell', 'bonfireProceduralBreakupEvaluationsPerCell', 'bonfireSymmetricForceEvaluationsPerCell', 'bonfireNonWindForceEvaluationsPerCell', 'bonfireScalarNeighborhoodReadsPerCell', 'tallPlumeDetailCoherenceExtraReadsPerCell', 'tallPlumeTransitionBandExtraReadsPerCell', 'tallPlumePressureIterationTarget', 'fullGridPassesPerFrame', 'fullGridCellVisitsPerFrame', 'fluidBufferBytes']) {
     if (!Number.isFinite(Number(ledger[field]))) {
       throwSweepFailure('missing-primary-report', 'validation', `simulation cost ledger missing numeric ${field}`, {
         scenarioId: run.id,
@@ -1181,20 +1075,13 @@ for (let i = 0; i < runs.length; i += 1) {
       pressureTierEffectiveBounds: simCostLedger?.pressureTierEffectiveBounds,
       pressureTierOverlayOpacity: simCostLedger?.pressureTierOverlayOpacity,
       fullGridPassBreakdown: simCostLedger?.fullGridPassBreakdown,
-      majorantBuildCadence: simCostLedger?.majorantBuildCadence,
       backend: witness.backend,
       effectiveRoute: witness.effectiveRoute,
       prototypeIdentity: witness.prototypeIdentity,
       raySteps: witness.raySteps,
       adaptiveRaymarch: witness.adaptiveRaymarch,
       occupancySkip: witness.occupancySkip,
-      majorantSkip: witness.majorantSkip,
-      majorantSmooth: witness.majorantSmooth,
-      majorantGuard: witness.majorantGuard,
       simGrid: witness.simGrid,
-      majorantGrid: witness.majorantGrid,
-      majorantBuilt: witness.majorantBuilt,
-      occupiedBricks: witness.majorantReadback?.occupiedBricks,
       renderScale: witness.renderScale,
       renderPixelRatio: witness.renderPixelRatio,
       displayWidth: witness.displayWidth,
@@ -1203,7 +1090,6 @@ for (let i = 0; i < runs.length; i += 1) {
       renderHeight: witness.renderHeight,
       externalEmitterMode: witness.externalEmitterMode,
       externalEmitterCount: witness.externalEmitterCount,
-      temporalEvidenceSource: witness.temporalEvidenceSource,
       timingEvidenceSource: witness.timingEvidenceSource,
       timingDisclaimer: witness.timingDisclaimer,
       frameP95Ms: witness.timing?.frameP95Ms,
@@ -1211,7 +1097,6 @@ for (let i = 0; i < runs.length; i += 1) {
       queueDoneP95Ms: witness.timing?.queueDoneP95Ms,
       metrics: witness.metrics,
       simReadback: witness.simReadback,
-      majorantReadback: witness.majorantReadback,
     });
   } catch (error) {
     const failure = {
