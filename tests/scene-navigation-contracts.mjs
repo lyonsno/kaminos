@@ -85,19 +85,6 @@ test('framing an offset mesh includes its authored pivot so F restores pivot vis
  assert.ok(Math.abs(pivot.x)<1 && Math.abs(pivot.y)<1,'selected authored origin must remain inside the framed view even when geometry is offset');
 });
 
-test('F frames a corrected splat authored pivot separately from its centroid-shifted rendered root',()=>{
- const root=new THREE.Group();root.position.x=-100;
- const points=new THREE.Points(new THREE.BufferGeometry(),new THREE.PointsMaterial());
- points.geometry.setAttribute('position',new THREE.Float32BufferAttribute([10,0,0,11,1,0],3));
- root.add(points);
- const c=cameraAt(),target=new THREE.Vector3(),controls={target,update(){c.lookAt(target);c.updateMatrixWorld(true);}};
- const record={id:'corrected-splat',type:'splat',object:root,sceneTransform:{position:[0,0,0]}};
- assert.ok(frameSceneObjectRecord(record,c,controls));
- const authoredPivot=new THREE.Vector3(...record.sceneTransform.position).project(c);
- assert.ok(Math.abs(authoredPivot.x)<1 && Math.abs(authoredPivot.y)<1,'F must include the persisted splat scene position, not only the centroid-shifted render root');
- for(const x of [10,11]){const point=new THREE.Vector3(x,0,0).add(root.position).project(c);assert.ok(Math.abs(point.x)<1 && Math.abs(point.y)<1,'rendered splat points must remain inside the framed view');}
-});
-
 test('dolly expands the far plane with camera distance and keeps framed scene geometry visible',()=>{
  const c=cameraAt(),target=new THREE.Vector3(),controls={target,update(){c.lookAt(target);c.updateMatrixWorld(true);}};
  const object=new THREE.Mesh(new THREE.BoxGeometry(2,2,2),new THREE.MeshBasicMaterial());

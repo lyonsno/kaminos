@@ -15,13 +15,13 @@ test('viewport modal edits read and write the same scene-object pose that save s
   assert.match(editTools, /event\.metaKey\) && key === 'z'[\s\S]*edits\.redo\(\) : edits\.undo\(\)/);
 });
 
-test('F frames the selected splat record including its authored scene position', () => {
+test('F frames the selected authored object through generic geometry bounds', () => {
   assert.match(html, /import \{[^}]*frameSceneObjectRecord[^}]*\} from '\.\/scene-frame-selected\.mjs'/);
   assert.match(html, /frameSelected: \(\) => \{ if \(frameSceneObjectRecord\(sceneObjects\.find\(entry => entry\.id === activeSceneObjectId\), camera, controls\)\)/);
   assert.match(html, /const entry = sceneObjects\.find\(item => item\.id === activeSceneObjectId\);\s*const changed = frameSceneObjectRecord\(entry, camera, controls\)/);
   const framing = readFileSync(new URL('../scene-frame-selected.mjs', import.meta.url), 'utf8');
-  assert.match(framing, /record\?\.type==='splat'\?record\.sceneTransform\?\.position:null/);
-  assert.match(framing, /frameObjects\(record\?\.object\?\[record\.object\]:\[\],camera,controls,authoredPoint\?\[authoredPoint\]:\[\]\)/);
+  assert.match(framing, /return frameObjects\(record\?\.object\?\[record\.object\]:\[\],camera,controls\)/);
+  assert.doesNotMatch(framing, /record\?\.type\s*===?\s*['"]splat['"]/);
 });
 
 test('clearing or removing authored scene objects cancels previews and invalidates only their history', () => {
