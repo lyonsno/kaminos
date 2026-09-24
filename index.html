@@ -3077,6 +3077,11 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     throw new RangeError(`Finger Fluid adaptive density must be 0 or 1: ${requestedAdaptiveDensityValue}`);
   }
   const requestedAdaptiveDensity = requestedAdaptiveDensityValue === '1';
+  const requestedDensityCellRejectionValue = params.get('finger_fluid_density_cell_rejection');
+  if (requestedDensityCellRejectionValue !== null && !['0', '1'].includes(requestedDensityCellRejectionValue)) {
+    throw new RangeError(`Finger Fluid density cell rejection must be 0 or 1: ${requestedDensityCellRejectionValue}`);
+  }
+  const requestedDensityCellRejection = requestedDensityCellRejectionValue === '1';
   const requestedParticleCount = Number(params.get('finger_fluid_particle_count')
     ?? oracleCockpitRequested?.particleCount
     ?? waterfallOracleConfig?.defaultParticleCount
@@ -3187,6 +3192,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveMaxFluidSpeed: resolveFingerFluidMaxSpeed(requestedMaxFluidSpeed),
     requestedAdaptiveDensity,
     effectiveAdaptiveDensity: requestedAdaptiveDensity,
+    requestedDensityCellRejection,
+    effectiveDensityCellRejection: requestedDensityCellRejection,
     requestedParticleCount,
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
     requestedFixedVolumeReferenceParticleCount,
@@ -11157,6 +11164,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveMaxFluidSpeed = gpuState.maxFluidSpeed;
   gpuState.requestedAdaptiveDensity = fingerFluidBenchConfig.requestedAdaptiveDensity;
   gpuState.effectiveAdaptiveDensity = gpuState.adaptiveDensity;
+  gpuState.requestedDensityCellRejection = fingerFluidBenchConfig.requestedDensityCellRejection;
+  gpuState.effectiveDensityCellRejection = gpuState.densityCellRejection;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
   gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
   gpuState.requestedWitnessStartStep = fingerFluidBenchConfig.requestedWitnessStartStep;
@@ -11383,6 +11392,7 @@ async function startFingerFluidBench() {
       particleCount: fingerFluidBenchConfig.effectiveParticleCount,
       fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
+      densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection,
       energyDiagnosticsMode: fingerFluidBenchConfig.effectiveEnergyDiagnosticsMode,
       substeps: 1,
       truthScene: fingerFluidBenchConfig.effectiveTruthScene,
