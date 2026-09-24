@@ -1,0 +1,1306 @@
+{
+  "schema": "kaminos.structural-material.arch-browser-smoke.v0",
+  "status": "passed",
+  "phase": "complete",
+  "requestedUrl": "http://127.0.0.1:8423/structural-material-arch.html",
+  "effectiveRoute": "http://127.0.0.1:8423/structural-material-arch.html",
+  "requestedSolver": "CPU spring proxy",
+  "effectiveSolver": "local browser JavaScript / TRELLIS silhouette · CPU spring proxy · 3 layers",
+  "fallback": false,
+  "lastTrustworthyEvidence": "mobile-onset screenshot and DOM snapshot captured from http://127.0.0.1:8423/structural-material-arch.html?force=0.5",
+  "source": {
+    "revision": "f90b116b2c430244715d77bc1a7e501c3bc502d4",
+    "dirtyPaths": [
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/README.md",
+      "artifacts/structural-material-3d/authored-bell-initial.json",
+      "artifacts/structural-material-3d/authored-bell-initial.png",
+      "artifacts/structural-material-3d/authored-bell-local-smoke.json",
+      "artifacts/structural-material-3d/authored-bell-local-smoke.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/",
+      "structural-material-arch-browser-smoke.mjs",
+      "structural-material-arch-core.js",
+      "structural-material-arch-profile.mjs",
+      "structural-material-arch-witness.mjs",
+      "structural-material-arch.html",
+      "tests/structural-material-arch-contracts.mjs",
+      "tests/structural-material-arch-profile-contracts.mjs"
+    ],
+    "sha256": {
+      "structural-material-arch.html": "288310ab36c30ad00b9dfb65abce09f71c20a627f0ba3fc444ffb23f44d3638f",
+      "structural-material-arch-core.js": "1d674aa0c6607666f6fc54ee878f234b0913521b5794bb7db7386d4130f23cc8",
+      "structural-material-arch-profile.mjs": "13a4662aa0cbce23c739627f8b7099f7dd2999ea767a042830e1a657464d3109",
+      "structural-material-arch-witness.mjs": "74c0ff18b3fe23dccbb0d0496f1b926fe5cbfaf53d1ddd0e1737672e4b59f797",
+      "structural-material-arch-browser-smoke.mjs": "7a00a63d83aaccbdb980ca0b136455c1fa721b7dd20790f8674d3b54223842c8",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json": "ed2fd8a8191bf81366028259078f2f8d90aa230f9ce98277544332b2ed0eef37",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json": "3ed2e83bd82b433d2df6e07185d71eaac636bb8544ea9b178b03cd9d02de3028"
+    }
+  },
+  "browser": {
+    "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "version": "Google Chrome 153.0.8010.53",
+    "exit": {
+      "code": 0,
+      "signal": null
+    }
+  },
+  "profileResponses": [
+    {
+      "url": "http://127.0.0.1:8423/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:8423/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:8423/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:8423/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+      "status": 200
+    }
+  ],
+  "runtimeExceptions": [],
+  "consoleErrors": [],
+  "checks": [
+    {
+      "name": "onset: both profiles use the same selected contact state",
+      "passed": true,
+      "observed": "Matched load 0.75 · crack threshold 0.04"
+    },
+    {
+      "name": "onset: intact and notched counts match the witnessed fracture",
+      "passed": true,
+      "observed": {
+        "intact": {
+          "travel": "0.0131",
+          "strain": "0.0568",
+          "broken": "9",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0155",
+          "strain": "0.0624",
+          "broken": "21",
+          "components": "1"
+        }
+      }
+    },
+    {
+      "name": "route: visible page identity names the actual CPU proxy consumer",
+      "passed": true,
+      "observed": "TRELLIS silhouette · CPU spring proxy · 3 layers"
+    },
+    {
+      "name": "onset-desktop: requested load remains effective",
+      "passed": true,
+      "observed": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.75",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Matched load 0.75 · crack threshold 0.04",
+        "force": "0.75",
+        "forceOutput": "0.75",
+        "intact": {
+          "travel": "0.0131",
+          "strain": "0.0568",
+          "broken": "9",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0155",
+          "strain": "0.0624",
+          "broken": "21",
+          "components": "1"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        },
+        "controls": {
+          ".force-control": {
+            "x": 18,
+            "y": 76.5,
+            "width": 558.140625,
+            "height": 20,
+            "right": 576.140625,
+            "bottom": 96.5
+          },
+          "#solve": {
+            "x": 588.140625,
+            "y": 70.5,
+            "width": 61.296875,
+            "height": 32,
+            "right": 649.4375,
+            "bottom": 102.5
+          },
+          "#bind": {
+            "x": 661.4375,
+            "y": 70.5,
+            "width": 54.828125,
+            "height": 32,
+            "right": 716.265625,
+            "bottom": 102.5
+          },
+          "#reset": {
+            "x": 728.265625,
+            "y": 70.5,
+            "width": 62.609375,
+            "height": 32,
+            "right": 790.875,
+            "bottom": 102.5
+          },
+          "#state": {
+            "x": 1190.203125,
+            "y": 78.09375,
+            "width": 231.796875,
+            "height": 16.796875,
+            "right": 1422,
+            "bottom": 94.890625
+          }
+        },
+        "scene": {
+          "x": 18,
+          "y": 182.59375,
+          "width": 688,
+          "height": 484.5,
+          "right": 706,
+          "bottom": 667.09375
+        },
+        "receipt": "Equal crown load 0.75 · support cells fixed at both feet · 3 depth layers · material event energy 0.0031"
+      }
+    },
+    {
+      "name": "onset-desktop: rendered proxy is populated",
+      "passed": true,
+      "observed": 3320
+    },
+    {
+      "name": "onset-desktop: viewport has no horizontal overflow",
+      "passed": true,
+      "observed": {
+        "width": 1440,
+        "height": 1100,
+        "documentWidth": 1440
+      }
+    },
+    {
+      "name": "onset-desktop: scene stays inside viewport",
+      "passed": true,
+      "observed": {
+        "x": 18,
+        "y": 182.59375,
+        "width": 688,
+        "height": 484.5,
+        "right": 706,
+        "bottom": 667.09375
+      }
+    },
+    {
+      "name": "onset-desktop: screenshot is nonempty and matches the requested viewport",
+      "passed": true,
+      "observed": {
+        "bytes": 274354,
+        "width": 1440,
+        "height": 1100,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "separation: only notched proxy splits",
+      "passed": true,
+      "observed": {
+        "intact": {
+          "travel": "0.0348",
+          "strain": "0.1515",
+          "broken": "87",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0412",
+          "strain": "0.1663",
+          "broken": "198",
+          "components": "2"
+        }
+      }
+    },
+    {
+      "name": "separation: crack counts match the witnessed graph state",
+      "passed": true,
+      "observed": {
+        "intact": "87",
+        "notched": "198"
+      }
+    },
+    {
+      "name": "separation-desktop: requested load remains effective",
+      "passed": true,
+      "observed": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.75",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Matched load 2.00 · crack threshold 0.04",
+        "force": "2",
+        "forceOutput": "2.00",
+        "intact": {
+          "travel": "0.0348",
+          "strain": "0.1515",
+          "broken": "87",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0412",
+          "strain": "0.1663",
+          "broken": "198",
+          "components": "2"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        },
+        "controls": {
+          ".force-control": {
+            "x": 18,
+            "y": 76.5,
+            "width": 558.140625,
+            "height": 20,
+            "right": 576.140625,
+            "bottom": 96.5
+          },
+          "#solve": {
+            "x": 588.140625,
+            "y": 70.5,
+            "width": 61.296875,
+            "height": 32,
+            "right": 649.4375,
+            "bottom": 102.5
+          },
+          "#bind": {
+            "x": 661.4375,
+            "y": 70.5,
+            "width": 54.828125,
+            "height": 32,
+            "right": 716.265625,
+            "bottom": 102.5
+          },
+          "#reset": {
+            "x": 728.265625,
+            "y": 70.5,
+            "width": 62.609375,
+            "height": 32,
+            "right": 790.875,
+            "bottom": 102.5
+          },
+          "#state": {
+            "x": 1189.296875,
+            "y": 78.09375,
+            "width": 232.703125,
+            "height": 16.796875,
+            "right": 1422,
+            "bottom": 94.890625
+          }
+        },
+        "scene": {
+          "x": 18,
+          "y": 182.59375,
+          "width": 688,
+          "height": 484.5,
+          "right": 706,
+          "bottom": 667.09375
+        },
+        "receipt": "Equal crown load 2.00 · support cells fixed at both feet · 3 depth layers · material event energy 0.0929"
+      }
+    },
+    {
+      "name": "separation-desktop: rendered proxy is populated",
+      "passed": true,
+      "observed": 3320
+    },
+    {
+      "name": "separation-desktop: viewport has no horizontal overflow",
+      "passed": true,
+      "observed": {
+        "width": 1440,
+        "height": 1100,
+        "documentWidth": 1440
+      }
+    },
+    {
+      "name": "separation-desktop: scene stays inside viewport",
+      "passed": true,
+      "observed": {
+        "x": 18,
+        "y": 182.59375,
+        "width": 688,
+        "height": 484.5,
+        "right": 706,
+        "bottom": 667.09375
+      }
+    },
+    {
+      "name": "separation-desktop: screenshot is nonempty and matches the requested viewport",
+      "passed": true,
+      "observed": {
+        "bytes": 301287,
+        "width": 1440,
+        "height": 1100,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "bind: button restores both graphs without resetting force",
+      "passed": true,
+      "observed": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.75",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Broken connections rebound",
+        "force": "2",
+        "forceOutput": "2.00",
+        "intact": {
+          "travel": "0.0348",
+          "strain": "0.1515",
+          "broken": "0",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0412",
+          "strain": "0.1663",
+          "broken": "0",
+          "components": "1"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        },
+        "controls": {
+          ".force-control": {
+            "x": 18,
+            "y": 76.5,
+            "width": 558.140625,
+            "height": 20,
+            "right": 576.140625,
+            "bottom": 96.5
+          },
+          "#solve": {
+            "x": 588.140625,
+            "y": 70.5,
+            "width": 61.296875,
+            "height": 32,
+            "right": 649.4375,
+            "bottom": 102.5
+          },
+          "#bind": {
+            "x": 661.4375,
+            "y": 70.5,
+            "width": 54.828125,
+            "height": 32,
+            "right": 716.265625,
+            "bottom": 102.5
+          },
+          "#reset": {
+            "x": 728.265625,
+            "y": 70.5,
+            "width": 62.609375,
+            "height": 32,
+            "right": 790.875,
+            "bottom": 102.5
+          },
+          "#state": {
+            "x": 1202,
+            "y": 78.09375,
+            "width": 220,
+            "height": 16.796875,
+            "right": 1422,
+            "bottom": 94.890625
+          }
+        },
+        "scene": {
+          "x": 18,
+          "y": 182.59375,
+          "width": 688,
+          "height": 484.5,
+          "right": 706,
+          "bottom": 667.09375
+        },
+        "receipt": "Bind restored broken graph connections and recomputed component membership."
+      }
+    },
+    {
+      "name": "bind-desktop: requested load remains effective",
+      "passed": true,
+      "observed": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.75",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Broken connections rebound",
+        "force": "2",
+        "forceOutput": "2.00",
+        "intact": {
+          "travel": "0.0348",
+          "strain": "0.1515",
+          "broken": "0",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0412",
+          "strain": "0.1663",
+          "broken": "0",
+          "components": "1"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        },
+        "controls": {
+          ".force-control": {
+            "x": 18,
+            "y": 76.5,
+            "width": 558.140625,
+            "height": 20,
+            "right": 576.140625,
+            "bottom": 96.5
+          },
+          "#solve": {
+            "x": 588.140625,
+            "y": 70.5,
+            "width": 61.296875,
+            "height": 32,
+            "right": 649.4375,
+            "bottom": 102.5
+          },
+          "#bind": {
+            "x": 661.4375,
+            "y": 70.5,
+            "width": 54.828125,
+            "height": 32,
+            "right": 716.265625,
+            "bottom": 102.5
+          },
+          "#reset": {
+            "x": 728.265625,
+            "y": 70.5,
+            "width": 62.609375,
+            "height": 32,
+            "right": 790.875,
+            "bottom": 102.5
+          },
+          "#state": {
+            "x": 1202,
+            "y": 78.09375,
+            "width": 220,
+            "height": 16.796875,
+            "right": 1422,
+            "bottom": 94.890625
+          }
+        },
+        "scene": {
+          "x": 18,
+          "y": 182.59375,
+          "width": 688,
+          "height": 484.5,
+          "right": 706,
+          "bottom": 667.09375
+        },
+        "receipt": "Bind restored broken graph connections and recomputed component membership."
+      }
+    },
+    {
+      "name": "bind-desktop: rendered proxy is populated",
+      "passed": true,
+      "observed": 3320
+    },
+    {
+      "name": "bind-desktop: viewport has no horizontal overflow",
+      "passed": true,
+      "observed": {
+        "width": 1440,
+        "height": 1100,
+        "documentWidth": 1440
+      }
+    },
+    {
+      "name": "bind-desktop: scene stays inside viewport",
+      "passed": true,
+      "observed": {
+        "x": 18,
+        "y": 182.59375,
+        "width": 688,
+        "height": 484.5,
+        "right": 706,
+        "bottom": 667.09375
+      }
+    },
+    {
+      "name": "bind-desktop: screenshot is nonempty and matches the requested viewport",
+      "passed": true,
+      "observed": {
+        "bytes": 294157,
+        "width": 1440,
+        "height": 1100,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "mobile: load slider selects the requested threshold case",
+      "passed": true,
+      "observed": {
+        "force": "0.5",
+        "intact": {
+          "travel": "0.0087",
+          "strain": "0.0379",
+          "broken": "0",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0103",
+          "strain": "0.0416",
+          "broken": "3",
+          "components": "1"
+        }
+      }
+    },
+    {
+      "name": "mobile: .force-control does not overlap #solve",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 62,
+          "width": 366,
+          "height": 33.59375,
+          "right": 378,
+          "bottom": 95.59375
+        },
+        "b": {
+          "x": 12,
+          "y": 107.59375,
+          "width": 61.296875,
+          "height": 32,
+          "right": 73.296875,
+          "bottom": 139.59375
+        }
+      }
+    },
+    {
+      "name": "mobile: .force-control does not overlap #bind",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 62,
+          "width": 366,
+          "height": 33.59375,
+          "right": 378,
+          "bottom": 95.59375
+        },
+        "b": {
+          "x": 85.296875,
+          "y": 107.59375,
+          "width": 54.828125,
+          "height": 32,
+          "right": 140.125,
+          "bottom": 139.59375
+        }
+      }
+    },
+    {
+      "name": "mobile: .force-control does not overlap #reset",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 62,
+          "width": 366,
+          "height": 33.59375,
+          "right": 378,
+          "bottom": 95.59375
+        },
+        "b": {
+          "x": 152.125,
+          "y": 107.59375,
+          "width": 62.609375,
+          "height": 32,
+          "right": 214.734375,
+          "bottom": 139.59375
+        }
+      }
+    },
+    {
+      "name": "mobile: .force-control does not overlap #state",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 62,
+          "width": 366,
+          "height": 33.59375,
+          "right": 378,
+          "bottom": 95.59375
+        },
+        "b": {
+          "x": 12,
+          "y": 151.59375,
+          "width": 366,
+          "height": 16.796875,
+          "right": 378,
+          "bottom": 168.390625
+        }
+      }
+    },
+    {
+      "name": "mobile: #solve does not overlap #bind",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 107.59375,
+          "width": 61.296875,
+          "height": 32,
+          "right": 73.296875,
+          "bottom": 139.59375
+        },
+        "b": {
+          "x": 85.296875,
+          "y": 107.59375,
+          "width": 54.828125,
+          "height": 32,
+          "right": 140.125,
+          "bottom": 139.59375
+        }
+      }
+    },
+    {
+      "name": "mobile: #solve does not overlap #reset",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 107.59375,
+          "width": 61.296875,
+          "height": 32,
+          "right": 73.296875,
+          "bottom": 139.59375
+        },
+        "b": {
+          "x": 152.125,
+          "y": 107.59375,
+          "width": 62.609375,
+          "height": 32,
+          "right": 214.734375,
+          "bottom": 139.59375
+        }
+      }
+    },
+    {
+      "name": "mobile: #solve does not overlap #state",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 107.59375,
+          "width": 61.296875,
+          "height": 32,
+          "right": 73.296875,
+          "bottom": 139.59375
+        },
+        "b": {
+          "x": 12,
+          "y": 151.59375,
+          "width": 366,
+          "height": 16.796875,
+          "right": 378,
+          "bottom": 168.390625
+        }
+      }
+    },
+    {
+      "name": "mobile: #bind does not overlap #reset",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 85.296875,
+          "y": 107.59375,
+          "width": 54.828125,
+          "height": 32,
+          "right": 140.125,
+          "bottom": 139.59375
+        },
+        "b": {
+          "x": 152.125,
+          "y": 107.59375,
+          "width": 62.609375,
+          "height": 32,
+          "right": 214.734375,
+          "bottom": 139.59375
+        }
+      }
+    },
+    {
+      "name": "mobile: #bind does not overlap #state",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 85.296875,
+          "y": 107.59375,
+          "width": 54.828125,
+          "height": 32,
+          "right": 140.125,
+          "bottom": 139.59375
+        },
+        "b": {
+          "x": 12,
+          "y": 151.59375,
+          "width": 366,
+          "height": 16.796875,
+          "right": 378,
+          "bottom": 168.390625
+        }
+      }
+    },
+    {
+      "name": "mobile: #reset does not overlap #state",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 152.125,
+          "y": 107.59375,
+          "width": 62.609375,
+          "height": 32,
+          "right": 214.734375,
+          "bottom": 139.59375
+        },
+        "b": {
+          "x": 12,
+          "y": 151.59375,
+          "width": 366,
+          "height": 16.796875,
+          "right": 378,
+          "bottom": 168.390625
+        }
+      }
+    },
+    {
+      "name": "mobile-onset: requested load remains effective",
+      "passed": true,
+      "observed": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.5",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Matched load 0.50 · crack threshold 0.04",
+        "force": "0.5",
+        "forceOutput": "0.50",
+        "intact": {
+          "travel": "0.0087",
+          "strain": "0.0379",
+          "broken": "0",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0103",
+          "strain": "0.0416",
+          "broken": "3",
+          "components": "1"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390
+        },
+        "controls": {
+          ".force-control": {
+            "x": 12,
+            "y": 62,
+            "width": 366,
+            "height": 33.59375,
+            "right": 378,
+            "bottom": 95.59375
+          },
+          "#solve": {
+            "x": 12,
+            "y": 107.59375,
+            "width": 61.296875,
+            "height": 32,
+            "right": 73.296875,
+            "bottom": 139.59375
+          },
+          "#bind": {
+            "x": 85.296875,
+            "y": 107.59375,
+            "width": 54.828125,
+            "height": 32,
+            "right": 140.125,
+            "bottom": 139.59375
+          },
+          "#reset": {
+            "x": 152.125,
+            "y": 107.59375,
+            "width": 62.609375,
+            "height": 32,
+            "right": 214.734375,
+            "bottom": 139.59375
+          },
+          "#state": {
+            "x": 12,
+            "y": 151.59375,
+            "width": 366,
+            "height": 16.796875,
+            "right": 378,
+            "bottom": 168.390625
+          }
+        },
+        "scene": {
+          "x": 12,
+          "y": 241.984375,
+          "width": 366,
+          "height": 300,
+          "right": 378,
+          "bottom": 541.984375
+        },
+        "receipt": "Equal crown load 0.50 · support cells fixed at both feet · 3 depth layers · material event energy 0.0001"
+      }
+    },
+    {
+      "name": "mobile-onset: rendered proxy is populated",
+      "passed": true,
+      "observed": 3320
+    },
+    {
+      "name": "mobile-onset: viewport has no horizontal overflow",
+      "passed": true,
+      "observed": {
+        "width": 390,
+        "height": 844,
+        "documentWidth": 390
+      }
+    },
+    {
+      "name": "mobile-onset: scene stays inside viewport",
+      "passed": true,
+      "observed": {
+        "x": 12,
+        "y": 241.984375,
+        "width": 366,
+        "height": 300,
+        "right": 378,
+        "bottom": 541.984375
+      }
+    },
+    {
+      "name": "mobile-onset: screenshot is nonempty and matches the requested viewport",
+      "passed": true,
+      "observed": {
+        "bytes": 90435,
+        "width": 390,
+        "height": 844,
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390
+        }
+      }
+    },
+    {
+      "name": "profiles: exact intact and notch JSON assets returned HTTP 200",
+      "passed": true,
+      "observed": [
+        {
+          "url": "http://127.0.0.1:8423/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:8423/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:8423/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:8423/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "name": "page: no uncaught runtime or console errors",
+      "passed": true,
+      "observed": {
+        "runtimeExceptions": [],
+        "consoleErrors": []
+      }
+    }
+  ],
+  "captures": {
+    "onset-desktop": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/onset-desktop-chrome.png",
+      "sha256": "a7a8f74604e2b6150f121747a49091918fd203d777f1da8dc85c3b5daf4a6b40",
+      "bytes": 274354,
+      "dimensions": {
+        "width": 1440,
+        "height": 1100
+      },
+      "page": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.75",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Matched load 0.75 · crack threshold 0.04",
+        "force": "0.75",
+        "forceOutput": "0.75",
+        "intact": {
+          "travel": "0.0131",
+          "strain": "0.0568",
+          "broken": "9",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0155",
+          "strain": "0.0624",
+          "broken": "21",
+          "components": "1"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        },
+        "controls": {
+          ".force-control": {
+            "x": 18,
+            "y": 76.5,
+            "width": 558.140625,
+            "height": 20,
+            "right": 576.140625,
+            "bottom": 96.5
+          },
+          "#solve": {
+            "x": 588.140625,
+            "y": 70.5,
+            "width": 61.296875,
+            "height": 32,
+            "right": 649.4375,
+            "bottom": 102.5
+          },
+          "#bind": {
+            "x": 661.4375,
+            "y": 70.5,
+            "width": 54.828125,
+            "height": 32,
+            "right": 716.265625,
+            "bottom": 102.5
+          },
+          "#reset": {
+            "x": 728.265625,
+            "y": 70.5,
+            "width": 62.609375,
+            "height": 32,
+            "right": 790.875,
+            "bottom": 102.5
+          },
+          "#state": {
+            "x": 1190.203125,
+            "y": 78.09375,
+            "width": 231.796875,
+            "height": 16.796875,
+            "right": 1422,
+            "bottom": 94.890625
+          }
+        },
+        "scene": {
+          "x": 18,
+          "y": 182.59375,
+          "width": 688,
+          "height": 484.5,
+          "right": 706,
+          "bottom": 667.09375
+        },
+        "receipt": "Equal crown load 0.75 · support cells fixed at both feet · 3 depth layers · material event energy 0.0031"
+      }
+    },
+    "separation-desktop": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/separation-desktop-chrome.png",
+      "sha256": "809db5882cf802f0fba6162f518c3da7ba94bb8ea52b849913b900e00342fa32",
+      "bytes": 301287,
+      "dimensions": {
+        "width": 1440,
+        "height": 1100
+      },
+      "page": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.75",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Matched load 2.00 · crack threshold 0.04",
+        "force": "2",
+        "forceOutput": "2.00",
+        "intact": {
+          "travel": "0.0348",
+          "strain": "0.1515",
+          "broken": "87",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0412",
+          "strain": "0.1663",
+          "broken": "198",
+          "components": "2"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        },
+        "controls": {
+          ".force-control": {
+            "x": 18,
+            "y": 76.5,
+            "width": 558.140625,
+            "height": 20,
+            "right": 576.140625,
+            "bottom": 96.5
+          },
+          "#solve": {
+            "x": 588.140625,
+            "y": 70.5,
+            "width": 61.296875,
+            "height": 32,
+            "right": 649.4375,
+            "bottom": 102.5
+          },
+          "#bind": {
+            "x": 661.4375,
+            "y": 70.5,
+            "width": 54.828125,
+            "height": 32,
+            "right": 716.265625,
+            "bottom": 102.5
+          },
+          "#reset": {
+            "x": 728.265625,
+            "y": 70.5,
+            "width": 62.609375,
+            "height": 32,
+            "right": 790.875,
+            "bottom": 102.5
+          },
+          "#state": {
+            "x": 1189.296875,
+            "y": 78.09375,
+            "width": 232.703125,
+            "height": 16.796875,
+            "right": 1422,
+            "bottom": 94.890625
+          }
+        },
+        "scene": {
+          "x": 18,
+          "y": 182.59375,
+          "width": 688,
+          "height": 484.5,
+          "right": 706,
+          "bottom": 667.09375
+        },
+        "receipt": "Equal crown load 2.00 · support cells fixed at both feet · 3 depth layers · material event energy 0.0929"
+      }
+    },
+    "bind-desktop": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/bind-desktop-chrome.png",
+      "sha256": "667f0a8d83139e6fd168eb820802a94e9b509a93a83a091c21e8cdd5a6a03b88",
+      "bytes": 294157,
+      "dimensions": {
+        "width": 1440,
+        "height": 1100
+      },
+      "page": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.75",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Broken connections rebound",
+        "force": "2",
+        "forceOutput": "2.00",
+        "intact": {
+          "travel": "0.0348",
+          "strain": "0.1515",
+          "broken": "0",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0412",
+          "strain": "0.1663",
+          "broken": "0",
+          "components": "1"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        },
+        "controls": {
+          ".force-control": {
+            "x": 18,
+            "y": 76.5,
+            "width": 558.140625,
+            "height": 20,
+            "right": 576.140625,
+            "bottom": 96.5
+          },
+          "#solve": {
+            "x": 588.140625,
+            "y": 70.5,
+            "width": 61.296875,
+            "height": 32,
+            "right": 649.4375,
+            "bottom": 102.5
+          },
+          "#bind": {
+            "x": 661.4375,
+            "y": 70.5,
+            "width": 54.828125,
+            "height": 32,
+            "right": 716.265625,
+            "bottom": 102.5
+          },
+          "#reset": {
+            "x": 728.265625,
+            "y": 70.5,
+            "width": 62.609375,
+            "height": 32,
+            "right": 790.875,
+            "bottom": 102.5
+          },
+          "#state": {
+            "x": 1202,
+            "y": 78.09375,
+            "width": 220,
+            "height": 16.796875,
+            "right": 1422,
+            "bottom": 94.890625
+          }
+        },
+        "scene": {
+          "x": 18,
+          "y": 182.59375,
+          "width": 688,
+          "height": 484.5,
+          "right": 706,
+          "bottom": 667.09375
+        },
+        "receipt": "Bind restored broken graph connections and recomputed component membership."
+      }
+    },
+    "mobile-onset": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/mobile-emulated-chrome.png",
+      "sha256": "9d07b41a86490163facefbeeb34845d378ad26023c8e61a5a1acedce7f9f5ea4",
+      "bytes": 90435,
+      "dimensions": {
+        "width": 390,
+        "height": 844
+      },
+      "page": {
+        "url": "http://127.0.0.1:8423/structural-material-arch.html?force=0.5",
+        "title": "Stone Arch Structural Study",
+        "routeLabel": "TRELLIS silhouette · CPU spring proxy · 3 layers",
+        "state": "Matched load 0.50 · crack threshold 0.04",
+        "force": "0.5",
+        "forceOutput": "0.50",
+        "intact": {
+          "travel": "0.0087",
+          "strain": "0.0379",
+          "broken": "0",
+          "components": "1"
+        },
+        "notched": {
+          "travel": "0.0103",
+          "strain": "0.0416",
+          "broken": "3",
+          "components": "1"
+        },
+        "svgElementCount": 3320,
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390
+        },
+        "controls": {
+          ".force-control": {
+            "x": 12,
+            "y": 62,
+            "width": 366,
+            "height": 33.59375,
+            "right": 378,
+            "bottom": 95.59375
+          },
+          "#solve": {
+            "x": 12,
+            "y": 107.59375,
+            "width": 61.296875,
+            "height": 32,
+            "right": 73.296875,
+            "bottom": 139.59375
+          },
+          "#bind": {
+            "x": 85.296875,
+            "y": 107.59375,
+            "width": 54.828125,
+            "height": 32,
+            "right": 140.125,
+            "bottom": 139.59375
+          },
+          "#reset": {
+            "x": 152.125,
+            "y": 107.59375,
+            "width": 62.609375,
+            "height": 32,
+            "right": 214.734375,
+            "bottom": 139.59375
+          },
+          "#state": {
+            "x": 12,
+            "y": 151.59375,
+            "width": 366,
+            "height": 16.796875,
+            "right": 378,
+            "bottom": 168.390625
+          }
+        },
+        "scene": {
+          "x": 12,
+          "y": 241.984375,
+          "width": 366,
+          "height": 300,
+          "right": 378,
+          "bottom": 541.984375
+        },
+        "receipt": "Equal crown load 0.50 · support cells fixed at both feet · 3 depth layers · material event energy 0.0001"
+      }
+    }
+  },
+  "processOutput": {
+    "stdout": "",
+    "stderr": "\nDevTools listening on ws://127.0.0.1:54068/devtools/browser/1db85675-8fac-414f-b01e-543ed5c7ab01\nTrying to load the allocator multiple times. This is *not* supported.\n[45396:39020321:0924/095144.398333:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670\n[45396:39020321:0924/095144.398774:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670\n[45396:39020321:0924/095144.398897:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670\n[45396:39020321:0924/095144.398951:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670\n[45396:39020321:0924/095144.399013:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670\n[45396:39020321:0924/095144.399094:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670\n"
+  }
+}

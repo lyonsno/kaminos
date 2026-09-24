@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stone Arch Structural Study</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font: 14px/1.4 system-ui, sans-serif;
+      background: #101418;
+      color: #e6e8e8;
+      --line: #313a3e;
+      --muted: #9aa5a8;
+      --cyan: #69c9c4;
+      --amber: #edb75c;
+      --red: #fa6956;
+      --green: #97c87d;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header {
+      height: 52px; display: flex; align-items: center; gap: 16px;
+      padding: 0 18px; border-bottom: 1px solid var(--line); background: #171d20;
+    }
+    h1 { margin: 0; font-size: 15px; font-weight: 620; }
+    .provenance { color: var(--muted); font-size: 12px; }
+    main { max-width: 1440px; margin: 0 auto; padding: 14px 18px 24px; }
+    .controls {
+      min-height: 54px; display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--line); padding-bottom: 12px; flex-wrap: wrap;
+    }
+    .force-control { display: flex; align-items: center; gap: 10px; min-width: 300px; }
+    label, .metric-label { color: var(--muted); font-size: 12px; }
+    input[type="range"] { width: min(32vw, 360px); accent-color: var(--amber); }
+    output { min-width: 38px; font-variant-numeric: tabular-nums; }
+    button {
+      height: 32px; padding: 0 12px; border: 1px solid #485257; border-radius: 5px;
+      background: #20282c; color: #e9ecec; font: inherit; cursor: pointer;
+    }
+    button:hover { background: #2b363a; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+    button:disabled { opacity: .42; cursor: default; }
+    #bind { border-color: #63834f; color: #c9e8b7; }
+    .state { margin-left: auto; min-width: 220px; text-align: right; color: var(--muted); font-size: 12px; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; }
+    section { min-width: 0; padding: 14px 14px 0 0; }
+    section + section { border-left: 1px solid var(--line); padding: 14px 0 0 14px; }
+    h2 { display: flex; align-items: center; gap: 9px; margin: 0 0 3px; font-size: 14px; font-weight: 610; }
+    .swatch { width: 9px; height: 9px; border-radius: 50%; background: var(--cyan); }
+    .notched .swatch { background: var(--amber); }
+    .subhead { min-height: 18px; margin-bottom: 8px; color: var(--muted); font-size: 11px; }
+    .scene { width: 100%; aspect-ratio: 1.42; display: block; background: #090d10; border: 1px solid #252d31; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border-bottom: 1px solid var(--line); }
+    .metric { padding: 10px 6px 10px 0; }
+    .metric-value { display: block; margin-top: 2px; font-variant-numeric: tabular-nums; font-size: 15px; }
+    .footer { padding-top: 10px; color: var(--muted); font-size: 11px; }
+    @media (max-width: 760px) {
+      header { padding: 0 12px; }
+      main { padding: 10px 12px 18px; }
+      .pair { grid-template-columns: 1fr; }
+      section, section + section { padding: 12px 0; border-left: 0; }
+      section + section { border-top: 1px solid var(--line); }
+      .force-control { width: 100%; min-width: 0; }
+      .force-control label { flex: 0 0 82px; }
+      input[type="range"] { flex: 1 1 auto; min-width: 0; width: auto; }
+      .force-control output { flex: 0 0 38px; }
+      .state { width: 100%; min-width: 0; margin-left: 0; text-align: left; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .scene { aspect-ratio: 1.22; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Stone arch</h1>
+    <span class="provenance">TRELLIS silhouette · CPU spring proxy · 3 layers</span>
+  </header>
+  <main>
+    <div class="controls">
+      <div class="force-control">
+        <label for="force">Crown load · proxy units</label>
+        <input id="force" type="range" min="0.1" max="3" step="0.05" value="0.75">
+        <output id="force-value" for="force">0.75</output>
+      </div>
+      <button id="solve">Solve</button>
+      <button id="bind" disabled>Bind</button>
+      <button id="reset">Reset</button>
+      <div class="state" id="state">Loading arch profiles</div>
+    </div>
+    <div class="pair">
+      <section>
+        <h2><span class="swatch"></span>Intact</h2>
+        <div class="subhead">Same support, contact, force and bond law</div>
+        <svg id="scene-intact" class="scene" viewBox="0 0 720 500" role="img" aria-label="Intact arch structural graph"></svg>
+        <div class="metrics">
+          <div class="metric"><span class="metric-label">Travel</span><strong class="metric-value" id="intact-travel">—</strong></div>
+          <div class="metric"><span class="metric-label">Peak strain</span><strong class="metric-value" id="intact-strain">—</strong></div>
+          <div class="metric"><span class="metric-label">Broken bonds</span><strong class="metric-value" id="intact-broken">0</strong></div>
+          <div class="metric"><span class="metric-label">Components</span><strong class="metric-value" id="intact-components">1</strong></div>
+        </div>
+      </section>
+      <section class="notched">
+        <h2><span class="swatch"></span>Outer notch</h2>
+        <div class="subhead">Shape change carried through the same proxy rules</div>
+        <svg id="scene-notched" class="scene" viewBox="0 0 720 500" role="img" aria-label="Notched arch structural graph"></svg>
+        <div class="metrics">
+          <div class="metric"><span class="metric-label">Travel</span><strong class="metric-value" id="notched-travel">—</strong></div>
+          <div class="metric"><span class="metric-label">Peak strain</span><strong class="metric-value" id="notched-strain">—</strong></div>
+          <div class="metric"><span class="metric-label">Broken bonds</span><strong class="metric-value" id="notched-broken">0</strong></div>
+          <div class="metric"><span class="metric-label">Components</span><strong class="metric-value" id="notched-components">1</strong></div>
+        </div>
+      </section>
+    </div>
+    <div class="footer" id="receipt">No load applied</div>
+  </main>
+  <script type="module">
+    import { buildArchStructuralProxy, solveArchStructuralForce, fractureArchStructuralProxy,
+      bindArchStructuralProxy } from './structural-material-arch-core.js';
+
+    const profileRoot = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness';
+    const settings = { x: -0.05, y: 0.29, threshold: 0.04, iterations: 600 };
+    const forceInput = document.getElementById('force');
+    const forceOutput = document.getElementById('force-value');
+    const cases = {};
+    let applied = false;
+
+    async function loadProfile(name) {
+      const response = await fetch(`${profileRoot}/${name}-profile.json`);
+      if (!response.ok) throw new Error(`${name} profile request failed with ${response.status}`);
+      const profile = await response.json();
+      if (profile.source?.kind !== 'trellis-glb' || profile.occupancy.length !== profile.columns * profile.rows) {
+        throw new Error(`${name} profile failed provenance or shape validation`);
+      }
+      return buildArchStructuralProxy(profile, { layers: 3 });
+    }
+
+    function draw(name) {
+      const state = cases[name].state;
+      const profile = cases[name].profile;
+      const svg = document.getElementById(name === 'outer-notch' ? 'scene-notched' : 'scene-intact');
+      const { columns, rows, occupancy } = profile;
+      const margin = 54;
+      const scale = Math.min((720 - margin * 2) / columns, (500 - margin * 2) / rows);
+      const width = columns * scale;
+      const height = rows * scale;
+      const offsetX = (720 - width) / 2;
+      const offsetY = (500 - height) / 2;
+      const pxPerX = scale * columns / (profile.bounds.max[0] - profile.bounds.min[0]);
+      const pxPerY = scale * rows / (profile.bounds.max[1] - profile.bounds.min[1]);
+      const displacementAt = new Map();
+      for (const node of state.nodes) {
+        const key = `${node.column}:${node.row}`;
+        const value = displacementAt.get(key) || { x: 0, y: 0, count: 0 };
+        value.x += node.displacement.x;
+        value.y += node.displacement.y;
+        value.count += 1;
+        displacementAt.set(key, value);
+      }
+      const screenPoint = node => {
+        const movement = displacementAt.get(`${node.column}:${node.row}`) || { x: 0, y: 0, count: 1 };
+        return {
+          x: offsetX + (node.column + 0.5) * scale + movement.x / movement.count * pxPerX,
+          y: offsetY + (rows - node.row - 0.5) * scale - movement.y / movement.count * pxPerY,
+        };
+      };
+      const centerLayer = Math.floor(state.layers / 2);
+      const strainAt = new Map();
+      for (const bond of state.bonds) {
+        if (state.bonds.length && state.nodes[bond.a].layer !== centerLayer && state.nodes[bond.b].layer !== centerLayer) continue;
+        const a = state.nodes[bond.a];
+        const b = state.nodes[bond.b];
+        for (const node of [a, b]) {
+          const key = `${node.column}:${node.row}`;
+          const record = strainAt.get(key) || { total: 0, count: 0 };
+          record.total += bond.lastStrain || 0;
+          record.count += 1;
+          strainAt.set(key, record);
+        }
+      }
+      const cells = [];
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          if (!occupancy[row * columns + column]) continue;
+          const average = strainAt.get(`${column}:${row}`);
+          const strain = average ? average.total / average.count : 0;
+          const red = Math.min(245, Math.round(85 + strain * 2300));
+          const green = Math.max(48, Math.round(112 - strain * 800));
+          const blue = Math.max(43, Math.round(111 - strain * 750));
+          const movement = displacementAt.get(`${column}:${row}`) || { x: 0, y: 0, count: 1 };
+          cells.push(`<rect x="${offsetX + column * scale + movement.x / movement.count * pxPerX}" y="${offsetY + (rows - row - 1) * scale - movement.y / movement.count * pxPerY}" width="${scale + 0.3}" height="${scale + 0.3}" fill="rgb(${red},${green},${blue})"/>`);
+        }
+      }
+      const bonds = [];
+      for (const bond of state.bonds) {
+        const a = state.nodes[bond.a];
+        const b = state.nodes[bond.b];
+        if (a.layer !== centerLayer || b.layer !== centerLayer) continue;
+        const p1 = screenPoint(a);
+        const p2 = screenPoint(b);
+        const { x: x1, y: y1 } = p1;
+        const { x: x2, y: y2 } = p2;
+        const broken = !bond.alive;
+        const color = broken ? '#fa6956' : bond.lastStrain > settings.threshold * 0.55 ? '#f1bf62' : '#6bcac4';
+        bonds.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${broken ? 2.6 : 0.7}" opacity="${broken ? 0.98 : 0.57}"/>`);
+      }
+      const supports = state.nodes.filter(node => node.pinned && node.layer === centerLayer);
+      const supportMarks = supports.map(node => {
+        const point = screenPoint(node);
+        const { x } = point;
+        const y = point.y + scale / 2 + 7;
+        return `<path d="M ${x - 5} ${y} l 5 -6 l 5 6 z" fill="#c5d07a"/>`;
+      }).join('');
+      const contact = state.load?.contact;
+      const contactMark = contact ? (() => {
+        const node = state.nodes.find(candidate => candidate.column === contact.column && candidate.row === contact.row && candidate.layer === centerLayer);
+        const point = screenPoint(node);
+        const { x, y } = point;
+        return `<path d="M ${x} ${y - 29} v 19 M ${x - 5} ${y - 15} l 5 6 l 5 -6" stroke="#f1bf62" stroke-width="2" fill="none"/><circle cx="${x}" cy="${y}" r="4" fill="#f1bf62"/>`;
+      })() : '';
+      svg.innerHTML = `<rect width="720" height="500" fill="#090d10"/>${cells.join('')}${bonds.join('')}${supportMarks}${contactMark}`;
+    }
+
+    function updateMetrics(name) {
+      const item = cases[name];
+      const state = item.state;
+      const prefix = name === 'outer-notch' ? 'notched' : 'intact';
+      document.getElementById(`${prefix}-travel`).textContent = state.load ? state.load.travel.toFixed(4) : '—';
+      document.getElementById(`${prefix}-strain`).textContent = state.load ? state.maxStrain.toFixed(4) : '—';
+      document.getElementById(`${prefix}-broken`).textContent = String(state.bonds.filter(bond => !bond.alive).length);
+      document.getElementById(`${prefix}-components`).textContent = String(state.components.length);
+      draw(name);
+    }
+
+    function solve() {
+      const force = Number(forceInput.value);
+      for (const name of ['intact', 'outer-notch']) {
+        const solved = solveArchStructuralForce(cases[name].base, { ...settings, force });
+        cases[name].state = fractureArchStructuralProxy(solved, { threshold: settings.threshold });
+        updateMetrics(name);
+      }
+      applied = true;
+      document.getElementById('bind').disabled = false;
+      document.getElementById('state').textContent = `Matched load ${force.toFixed(2)} · crack threshold ${settings.threshold.toFixed(2)}`;
+      document.getElementById('receipt').textContent = `Equal crown load ${force.toFixed(2)} · support cells fixed at both feet · 3 depth layers · material event energy ${cases['outer-notch'].state.events.reduce((sum, event) => sum + event.energy, 0).toFixed(4)}`;
+    }
+
+    function reset() {
+      for (const name of ['intact', 'outer-notch']) {
+        cases[name].state = cases[name].base;
+        updateMetrics(name);
+      }
+      applied = false;
+      document.getElementById('bind').disabled = true;
+      document.getElementById('state').textContent = 'No load applied';
+      document.getElementById('receipt').textContent = 'No load applied';
+    }
+
+    forceInput.addEventListener('input', () => {
+      forceOutput.value = Number(forceInput.value).toFixed(2);
+      if (applied) {
+        applied = false;
+        document.getElementById('bind').disabled = true;
+        document.getElementById('state').textContent = 'Load changed · solve to update';
+      }
+    });
+    document.getElementById('solve').addEventListener('click', solve);
+    document.getElementById('reset').addEventListener('click', reset);
+    function bind() {
+      if (!applied) return;
+      for (const name of ['intact', 'outer-notch']) {
+        const brokenIds = cases[name].state.bonds.filter(bond => !bond.alive).map(bond => bond.id);
+        cases[name].state = bindArchStructuralProxy(cases[name].state, { bondIds: brokenIds });
+        updateMetrics(name);
+      }
+      document.getElementById('bind').disabled = true;
+      document.getElementById('state').textContent = 'Broken connections rebound';
+      document.getElementById('receipt').textContent = 'Bind restored broken graph connections and recomputed component membership.';
+    }
+    document.getElementById('bind').addEventListener('click', bind);
+
+    try {
+      for (const name of ['intact', 'outer-notch']) {
+        const profile = await (await fetch(`${profileRoot}/${name}-profile.json`)).json();
+        if (profile.source?.kind !== 'trellis-glb' || profile.occupancy.length !== profile.columns * profile.rows) {
+          throw new Error(`${name} profile provenance or shape mismatch`);
+        }
+        const base = buildArchStructuralProxy(profile, { layers: 3 });
+        cases[name] = { profile, base, state: base };
+        updateMetrics(name);
+      }
+      document.getElementById('state').textContent = 'Profiles loaded · matched load bench';
+      const params = new URLSearchParams(location.search);
+      if (params.has('force')) {
+        forceInput.value = String(Math.min(3, Math.max(0.1, Number(params.get('force')) || 0.75)));
+        forceOutput.value = Number(forceInput.value).toFixed(2);
+      }
+      if (params.get('load') === '1') solve();
+      if (params.get('bind') === '1') bind();
+    } catch (error) {
+      document.getElementById('state').textContent = `Profile load failed: ${error.message}`;
+      throw error;
+    }
+  </script>
+</body>
+</html>

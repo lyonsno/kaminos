@@ -1,0 +1,463 @@
+{
+  "schema": "kaminos.structural-material.arch-paired-witness.v0",
+  "status": "passed",
+  "phase": "complete",
+  "lastTrustworthyEvidence": "paired onset, shoulder localization, split, and Bind predicates all passed",
+  "claim": "the notched projected-geometry proxy cracks at a lower matched crown force, then localizes damage at the outer shoulder and splits under high force while the intact proxy remains connected",
+  "claimCeiling": [
+    "CPU expressive spring proxy, not GPU execution or engineering-exact stone prediction",
+    "separate TRELLIS reconstructions share raster bounds and proxy rules but are not an exact mesh ablation",
+    "the 3-layer extruded silhouette is not the imported mesh interior or a watertight volume",
+    "crack events are thresholded from the intact linear solve; no post-fracture re-equilibration is performed",
+    "event energy is material-derived causal data; no acoustic playback is claimed"
+  ],
+  "route": {
+    "requested": "local Node.js CPU witness",
+    "effective": "local Node.js CPU / shear-regularized linear spring PCG",
+    "fallback": false,
+    "node": "v25.9.0",
+    "sourceRevision": "f90b116b2c430244715d77bc1a7e501c3bc502d4",
+    "sourceDirtyPaths": [
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/README.md",
+      "artifacts/structural-material-3d/authored-bell-initial.json",
+      "artifacts/structural-material-3d/authored-bell-initial.png",
+      "artifacts/structural-material-3d/authored-bell-local-smoke.json",
+      "artifacts/structural-material-3d/authored-bell-local-smoke.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/",
+      "structural-material-arch-browser-smoke.mjs",
+      "structural-material-arch-core.js",
+      "structural-material-arch-profile.mjs",
+      "structural-material-arch-witness.mjs",
+      "structural-material-arch.html",
+      "tests/structural-material-arch-contracts.mjs",
+      "tests/structural-material-arch-profile-contracts.mjs"
+    ]
+  },
+  "implementationSha256": {
+    "structural-material-arch-core.js": "1d674aa0c6607666f6fc54ee878f234b0913521b5794bb7db7386d4130f23cc8",
+    "structural-material-arch-profile.mjs": "13a4662aa0cbce23c739627f8b7099f7dd2999ea767a042830e1a657464d3109",
+    "structural-material-arch-witness.mjs": "74c0ff18b3fe23dccbb0d0496f1b926fe5cbfaf53d1ddd0e1737672e4b59f797"
+  },
+  "sources": {
+    "intact": {
+      "glb": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb",
+      "glbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+      "profile": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+      "profileSha256": "ed2fd8a8191bf81366028259078f2f8d90aa230f9ce98277544332b2ed0eef37",
+      "occupiedCells": 716,
+      "extraction": "triangle-xy-projection-cell-centers-v0"
+    },
+    "outer-notch": {
+      "glb": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-outer-notch/output.glb",
+      "glbSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+      "profile": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+      "profileSha256": "3ed2e83bd82b433d2df6e07185d71eaac636bb8544ea9b178b03cd9d02de3028",
+      "occupiedCells": 684,
+      "extraction": "triangle-xy-projection-cell-centers-v0"
+    }
+  },
+  "configuration": {
+    "contact": {
+      "x": -0.05,
+      "y": 0.29
+    },
+    "forceCases": [
+      0.25,
+      0.5,
+      0.75,
+      2
+    ],
+    "fractureThreshold": 0.04,
+    "iterations": 600,
+    "layers": 3,
+    "depth": 0.36,
+    "sharedBounds": {
+      "min": [
+        -0.5,
+        -0.39
+      ],
+      "max": [
+        0.5,
+        0.39
+      ]
+    },
+    "shoulderWindow": {
+      "minX": -0.19,
+      "maxX": -0.07,
+      "minY": 0.16,
+      "minDistanceFromContact": 0.05
+    }
+  },
+  "units": "normalized proxy units; no SI calibration",
+  "proxy": {
+    "intact": {
+      "schema": "kaminos.structural-material.arch-silhouette-proxy.v0",
+      "geometryAuthority": "glb-projected-silhouette-extrusion-v0",
+      "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+      "nodes": 2148,
+      "bonds": 9187,
+      "componentsAtRest": 1,
+      "pinnedNodes": 48
+    },
+    "outer-notch": {
+      "schema": "kaminos.structural-material.arch-silhouette-proxy.v0",
+      "geometryAuthority": "glb-projected-silhouette-extrusion-v0",
+      "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+      "nodes": 2052,
+      "bonds": 8715,
+      "componentsAtRest": 1,
+      "pinnedNodes": 48
+    }
+  },
+  "runs": {
+    "intact": [
+      {
+        "force": 0.25,
+        "contact": {
+          "column": 21,
+          "row": 31
+        },
+        "requestedForce": 0.25,
+        "effectiveForce": 0.2499999929390519,
+        "travel": 0.004351629664209108,
+        "peakStrain": 0.01893365891473491,
+        "solver": {
+          "elapsedMs": 53.15325,
+          "iterations": 239,
+          "iterationBudget": 600,
+          "relativeResidual": 8.804632490734671e-8,
+          "shearWeight": 0.18
+        },
+        "support": {
+          "pinnedNodes": 48,
+          "maxDisplacement": 0
+        },
+        "fracture": {
+          "threshold": 0.04,
+          "brokenBonds": 0,
+          "shoulderEvents": 0,
+          "componentSizes": [
+            2148
+          ],
+          "connectivityEpoch": 0,
+          "eventEnergy": 0,
+          "displacementIsSolvedBeforeBreakRemoval": true,
+          "postFractureReequilibration": false
+        },
+        "bind": {
+          "repairedBonds": 0,
+          "remainingBrokenBonds": 0,
+          "componentSizes": [
+            2148
+          ],
+          "displacementPreserved": true,
+          "eventEnergy": 0
+        }
+      },
+      {
+        "force": 0.5,
+        "contact": {
+          "column": 21,
+          "row": 31
+        },
+        "requestedForce": 0.5,
+        "effectiveForce": 0.4999999858781038,
+        "travel": 0.008703259328418216,
+        "peakStrain": 0.03786731782946982,
+        "solver": {
+          "elapsedMs": 45.265874999999994,
+          "iterations": 239,
+          "iterationBudget": 600,
+          "relativeResidual": 8.804632490734671e-8,
+          "shearWeight": 0.18
+        },
+        "support": {
+          "pinnedNodes": 48,
+          "maxDisplacement": 0
+        },
+        "fracture": {
+          "threshold": 0.04,
+          "brokenBonds": 0,
+          "shoulderEvents": 0,
+          "componentSizes": [
+            2148
+          ],
+          "connectivityEpoch": 0,
+          "eventEnergy": 0,
+          "displacementIsSolvedBeforeBreakRemoval": true,
+          "postFractureReequilibration": false
+        },
+        "bind": {
+          "repairedBonds": 0,
+          "remainingBrokenBonds": 0,
+          "componentSizes": [
+            2148
+          ],
+          "displacementPreserved": true,
+          "eventEnergy": 0
+        }
+      },
+      {
+        "force": 0.75,
+        "contact": {
+          "column": 21,
+          "row": 31
+        },
+        "requestedForce": 0.75,
+        "effectiveForce": 0.7499999788241027,
+        "travel": 0.01305488899262657,
+        "peakStrain": 0.05680097674489549,
+        "solver": {
+          "elapsedMs": 33.97762500000002,
+          "iterations": 239,
+          "iterationBudget": 600,
+          "relativeResidual": 8.80880038405425e-8,
+          "shearWeight": 0.18
+        },
+        "support": {
+          "pinnedNodes": 48,
+          "maxDisplacement": 0
+        },
+        "fracture": {
+          "threshold": 0.04,
+          "brokenBonds": 9,
+          "shoulderEvents": 0,
+          "componentSizes": [
+            2148
+          ],
+          "connectivityEpoch": 1,
+          "eventEnergy": 0.002264364296267899,
+          "displacementIsSolvedBeforeBreakRemoval": true,
+          "postFractureReequilibration": false
+        },
+        "bind": {
+          "repairedBonds": 9,
+          "remainingBrokenBonds": 0,
+          "componentSizes": [
+            2148
+          ],
+          "displacementPreserved": true,
+          "eventEnergy": 0.011071302055642203
+        }
+      },
+      {
+        "force": 2,
+        "contact": {
+          "column": 21,
+          "row": 31
+        },
+        "requestedForce": 2,
+        "effectiveForce": 1.9999999435124152,
+        "travel": 0.034813037313672864,
+        "peakStrain": 0.15146927131787927,
+        "solver": {
+          "elapsedMs": 60.289083000000005,
+          "iterations": 239,
+          "iterationBudget": 600,
+          "relativeResidual": 8.804632490734671e-8,
+          "shearWeight": 0.18
+        },
+        "support": {
+          "pinnedNodes": 48,
+          "maxDisplacement": 0
+        },
+        "fracture": {
+          "threshold": 0.04,
+          "brokenBonds": 87,
+          "shoulderEvents": 0,
+          "componentSizes": [
+            2148
+          ],
+          "connectivityEpoch": 1,
+          "eventEnergy": 0.04480614883453014,
+          "displacementIsSolvedBeforeBreakRemoval": true,
+          "postFractureReequilibration": false
+        },
+        "bind": {
+          "repairedBonds": 87,
+          "remainingBrokenBonds": 0,
+          "componentSizes": [
+            2148
+          ],
+          "displacementPreserved": true,
+          "eventEnergy": 0.1340032774657702
+        }
+      }
+    ],
+    "outer-notch": [
+      {
+        "force": 0.25,
+        "contact": {
+          "column": 21,
+          "row": 31
+        },
+        "requestedForce": 0.25,
+        "effectiveForce": 0.25000000124909433,
+        "travel": 0.005154513568507623,
+        "peakStrain": 0.020786394928902833,
+        "solver": {
+          "elapsedMs": 44.59533400000004,
+          "iterations": 251,
+          "iterationBudget": 600,
+          "relativeResidual": 9.643895807004984e-8,
+          "shearWeight": 0.18
+        },
+        "support": {
+          "pinnedNodes": 48,
+          "maxDisplacement": 0
+        },
+        "fracture": {
+          "threshold": 0.04,
+          "brokenBonds": 0,
+          "shoulderEvents": 0,
+          "componentSizes": [
+            2052
+          ],
+          "connectivityEpoch": 0,
+          "eventEnergy": 0,
+          "displacementIsSolvedBeforeBreakRemoval": true,
+          "postFractureReequilibration": false
+        },
+        "bind": {
+          "repairedBonds": 0,
+          "remainingBrokenBonds": 0,
+          "componentSizes": [
+            2052
+          ],
+          "displacementPreserved": true,
+          "eventEnergy": 0
+        }
+      },
+      {
+        "force": 0.5,
+        "contact": {
+          "column": 21,
+          "row": 31
+        },
+        "requestedForce": 0.5,
+        "effectiveForce": 0.5000000024981887,
+        "travel": 0.010309027137015246,
+        "peakStrain": 0.041572789857805666,
+        "solver": {
+          "elapsedMs": 32.98362500000002,
+          "iterations": 251,
+          "iterationBudget": 600,
+          "relativeResidual": 9.643895807004984e-8,
+          "shearWeight": 0.18
+        },
+        "support": {
+          "pinnedNodes": 48,
+          "maxDisplacement": 0
+        },
+        "fracture": {
+          "threshold": 0.04,
+          "brokenBonds": 3,
+          "shoulderEvents": 0,
+          "componentSizes": [
+            2052
+          ],
+          "connectivityEpoch": 1,
+          "eventEnergy": 0.00010223133801954792,
+          "displacementIsSolvedBeforeBreakRemoval": true,
+          "postFractureReequilibration": false
+        },
+        "bind": {
+          "repairedBonds": 3,
+          "remainingBrokenBonds": 0,
+          "componentSizes": [
+            2052
+          ],
+          "displacementPreserved": true,
+          "eventEnergy": 0.002702231338019555
+        }
+      },
+      {
+        "force": 0.75,
+        "contact": {
+          "column": 21,
+          "row": 31
+        },
+        "requestedForce": 0.75,
+        "effectiveForce": 0.7500000037799868,
+        "travel": 0.015463540705522479,
+        "peakStrain": 0.062359184786439224,
+        "solver": {
+          "elapsedMs": 31.62441700000005,
+          "iterations": 251,
+          "iterationBudget": 600,
+          "relativeResidual": 9.6452225863864e-8,
+          "shearWeight": 0.18
+        },
+        "support": {
+          "pinnedNodes": 48,
+          "maxDisplacement": 0
+        },
+        "fracture": {
+          "threshold": 0.04,
+          "brokenBonds": 21,
+          "shoulderEvents": 6,
+          "componentSizes": [
+            2052
+          ],
+          "connectivityEpoch": 1,
+          "eventEnergy": 0.0030879622250649416,
+          "displacementIsSolvedBeforeBreakRemoval": true,
+          "postFractureReequilibration": false
+        },
+        "bind": {
+          "repairedBonds": 21,
+          "remainingBrokenBonds": 0,
+          "componentSizes": [
+            2052
+          ],
+          "displacementPreserved": true,
+          "eventEnergy": 0.026322651021936407
+        }
+      },
+      {
+        "force": 2,
+        "contact": {
+          "column": 21,
+          "row": 31
+        },
+        "requestedForce": 2,
+        "effectiveForce": 2.0000000099927546,
+        "travel": 0.041236108548060986,
+        "peakStrain": 0.16629115943122266,
+        "solver": {
+          "elapsedMs": 34.350708999999995,
+          "iterations": 251,
+          "iterationBudget": 600,
+          "relativeResidual": 9.643895807004984e-8,
+          "shearWeight": 0.18
+        },
+        "support": {
+          "pinnedNodes": 48,
+          "maxDisplacement": 0
+        },
+        "fracture": {
+          "threshold": 0.04,
+          "brokenBonds": 198,
+          "shoulderEvents": 75,
+          "componentSizes": [
+            1389,
+            663
+          ],
+          "connectivityEpoch": 1,
+          "eventEnergy": 0.09287954039673967,
+          "displacementIsSolvedBeforeBreakRemoval": true,
+          "postFractureReequilibration": false
+        },
+        "bind": {
+          "repairedBonds": 198,
+          "remainingBrokenBonds": 0,
+          "componentSizes": [
+            2052
+          ],
+          "displacementPreserved": true,
+          "eventEnergy": 0.31301949060607975
+        }
+      }
+    ]
+  }
+}
