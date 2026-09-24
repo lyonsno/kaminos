@@ -148,6 +148,7 @@ export function applyVolumeEmitterFamilyRuntime({
   frameId = 'emitter-runtime-frame',
   externalRequest: requestedExternalRequest = null,
   emitterPose,
+  sourceEnabled = true,
 } = {}) {
   requiredMethod(prototype, 'setControls');
   requiredMethod(prototype, 'setCoreEmitterSourceMode');
@@ -185,6 +186,7 @@ export function applyVolumeEmitterFamilyRuntime({
   let carrierReceipt = null;
   let coreSourceMode;
   if (requestedFamily === 'cluster') {
+    if (!sourceEnabled) throw new Error('sourceEnabled applies only to an analytic emitter family');
     if (emitterPose !== undefined) throw new Error('Flame placement requires an analytic emitter family');
     requiredMethod(prototype, 'setExternalEmitters');
     coreSourceMode = 'cluster';
@@ -204,7 +206,7 @@ export function applyVolumeEmitterFamilyRuntime({
     if (requestedExternalRequest !== null) {
       throw new Error(`externalRequest cannot compose with emitter family ${requestedFamily}`);
     }
-    compilerReceipt = compileVolumeEmitterFamily({
+    if (sourceEnabled) compilerReceipt = compileVolumeEmitterFamily({
       family: requestedFamily,
       origin: placement.origin,
       direction: placement.direction,
@@ -230,8 +232,11 @@ export function applyVolumeEmitterFamilyRuntime({
     // Validate geometry before touching the live simulator. An invalid gesture
     // must leave its previous source and the evolving field intact.
     prototype.setControls(controls);
-    sourceReceipt = prototype.setAnalyticEmitterDescriptor(compilerReceipt.descriptor);
-    verifyAnalyticReceipt(compilerReceipt.descriptor, sourceReceipt);
+    sourceReceipt = prototype.setAnalyticEmitterDescriptor(compilerReceipt?.descriptor ?? null);
+    if (sourceEnabled) verifyAnalyticReceipt(compilerReceipt.descriptor, sourceReceipt);
+    else if (sourceReceipt?.mode !== 'off' || sourceReceipt?.count !== 0 || sourceReceipt?.coordinateSpace !== 'none') {
+      throw new Error('disabled analytic emitter must report off, zero sources and no coordinate space');
+    }
   }
 
   const coreSourceReceipt = prototype.setCoreEmitterSourceMode(coreSourceMode);
@@ -253,6 +258,7 @@ export function applyVolumeEmitterFamilyRuntime({
       inputRadius,
       sourceLaw,
       sourceDepth,
+      sourceEnabled,
       inletProfile,
       momentumLinked,
       inletVelocity,
@@ -278,7 +284,7 @@ export function applyVolumeEmitterFamilyRuntime({
       edgeEntrainment: compilerReceipt?.effective.edgeEntrainment ?? null,
       coordinateSpace: sourceReceipt.coordinateSpace,
       emitterPose: fixedAnalytic ? placement.pose : null,
-      externalStrength: fixedAnalytic ? compilerReceipt.effective.strength : 0,
+      externalStrength: compilerReceipt?.effective.strength ?? 0,
       externalEmitterCount: sourceReceipt.count,
       externalEmitterMode: sourceReceipt.mode,
     },

@@ -233,6 +233,21 @@ assert.ok(Math.abs(movedEmitter.receipt.compilerReceipt.descriptor.axis[0] + 1) 
   'rotation changes injection direction');
 assert.ok(Math.abs(movedEmitter.receipt.compilerReceipt.descriptor.extent - 0.18) < 1e-12,
   'uniform scale changes the source aperture');
+
+const sourceFreePrototype = makePrototype();
+apply('ring', sourceFreePrototype);
+const sourceFree = apply('ring', sourceFreePrototype, { sourceEnabled: false });
+assert.equal(sourceFreePrototype.calls.analytic.at(-1), null,
+  'source removal clears injection without rebuilding the evolving domain');
+assert.deepEqual(sourceFreePrototype.calls.coreSource, ['analytic-only', 'analytic-only'],
+  'removing the source preserves the domain source mode and its transported field');
+assert.equal(sourceFree.receipt.effective.sourceMode, 'off');
+assert.equal(sourceFree.receipt.effective.sourceCount, 0);
+assert.equal(sourceFree.receipt.compilerReceipt, null,
+  'a source-free domain must not claim it compiled a live source');
+const restored = apply('ring', sourceFreePrototype);
+assert.equal(restored.receipt.effective.sourceMode, 'analytic-fixed');
+assert.equal(restored.receipt.effective.sourceCount, 1);
 for (const family of ['wick', 'nozzle']) {
   const horizontal = apply(family, makePrototype(), { emitterPose: {
     position: [0, -0.76, 0], rotation: [0, 0, Math.PI / 2], scale: [1, 1, 1],
