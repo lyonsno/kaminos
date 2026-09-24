@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const witness = readFileSync(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
 
 function sourceBetween(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -122,6 +123,47 @@ function assertBonfireMacroForceBoundary(source) {
 }
 
 assertBonfireMacroForceBoundary(core);
+
+function assertWitnessRetirementIdentity(source) {
+  const shearChecks = sourceBetween(
+    source,
+    "assert.ok(Math.abs((state.controls?.bonfireShear",
+    "assert.ok(Math.abs((state.controls?.bonfireDetailForces",
+  );
+  assert.match(shearChecks, /state\.bonfireAblation\?\.requestedShear, expectedBonfireShear/, 'witness must preserve the saved shear request');
+  assert.match(shearChecks, /state\.bonfireAblation\?\.shear, 0/, 'witness must expect retired shear to have zero effect');
+  assert.doesNotMatch(shearChecks, /state\.bonfireAblation\?\.shear \?\? 0\) - expectedBonfireShear/, 'witness must not confuse requested shear with effective shear');
+
+  const temporalChecks = sourceBetween(
+    source,
+    "assert.ok(Math.abs((state.controls?.bonfireTemporal",
+    "assert.ok(Math.abs((state.controls?.bonfireInstabilityProbe",
+  );
+  assert.match(temporalChecks, /state\.bonfireAblation\?\.requestedTemporal, expectedBonfireTemporal/, 'witness must preserve the saved temporal request');
+  assert.match(temporalChecks, /state\.bonfireAblation\?\.temporal, 0/, 'witness must expect retired temporal forcing to have zero effect');
+  assert.doesNotMatch(temporalChecks, /state\.bonfireAblation\?\.temporal \?\? 0\) - expectedBonfireTemporal/, 'witness must not confuse requested temporal forcing with effective forcing');
+  assert.match(source, /state\.bonfireAblation\?\.periodicMacroForcePolicy, 'retired-periodic-bonfire-macro-forces-v0'/, 'witness must verify the named retirement policy');
+}
+
+assertWitnessRetirementIdentity(witness);
+assert.match(witness, /function expectedBonfireSymmetricForceStrategy\([^)]*\) \{\s*return 'retired-periodic-bonfire-macro-forces-v0';\s*\}/,
+  'witness cost ledger must expect the retired symmetric-force strategy for every scene');
+assert.match(witness, /function expectedBonfireSymmetricForceEvaluationsPerCell\([^)]*\) \{\s*return 0;\s*\}/,
+  'witness cost ledger must expect zero retired symmetric-force evaluations');
+assert.match(witness, /function expectedBonfireNonWindForceStrategy\([^)]*\) \{\s*return 'retired-periodic-bonfire-macro-forces-v0';\s*\}/,
+  'witness cost ledger must expect the retired non-wind-force strategy for every scene');
+assert.match(witness, /function expectedBonfireNonWindForceEvaluationsPerCell\([^)]*\) \{\s*return 0;\s*\}/,
+  'witness cost ledger must expect zero retired non-wind-force evaluations');
+
+for (const [name, oldText, restoredText] of [
+  ['effective shear restored from request', 'state.bonfireAblation?.shear, 0', 'state.bonfireAblation?.shear, expectedBonfireShear'],
+  ['effective temporal forcing restored from request', 'state.bonfireAblation?.temporal, 0', 'state.bonfireAblation?.temporal, expectedBonfireTemporal'],
+  ['retirement policy removed', "state.bonfireAblation?.periodicMacroForcePolicy, 'retired-periodic-bonfire-macro-forces-v0'", "state.bonfireAblation?.periodicMacroForcePolicy, 'unknown'"],
+]) {
+  const mutated = witness.replace(oldText, restoredText);
+  assert.notEqual(mutated, witness, `${name} mutation must alter the witness`);
+  assert.throws(() => assertWitnessRetirementIdentity(mutated), undefined, `${name} must fail the witness contract`);
+}
 
 const falseClosureMutations = [
   [

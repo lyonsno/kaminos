@@ -6,6 +6,8 @@ import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
 import { retiredRaymarchControlReceiptPayload } from './volume-core.js';
+import { assessControlledStepSequence } from './volume-controlled-step-sequence-contract.mjs';
+import { pressureTierDispatchEvidence } from './volume-pressure-tier-witness-contract.mjs';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -120,6 +122,13 @@ function parseNumberList(value) {
     .filter(entry => Number.isFinite(entry));
 }
 
+const cameraPosition = args.has('--camera-position') ? parseNumberList(args.get('--camera-position')) : null;
+const cameraTarget = args.has('--camera-target') ? parseNumberList(args.get('--camera-target')) : null;
+if ((cameraPosition || cameraTarget) && (cameraPosition?.length !== 3 || cameraTarget?.length !== 3)) {
+  throw new Error('--camera-position and --camera-target must each contain three finite comma-separated numbers');
+}
+const requestedCameraPose = cameraPosition ? { position: cameraPosition, target: cameraTarget } : null;
+
 function clampRenderScale(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return 0.25;
@@ -192,10 +201,6 @@ const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
-const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-force-active-v0';
-const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
-const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-force-active-v0';
-const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
@@ -303,23 +308,19 @@ function expectedBonfireProceduralBreakupEvaluationsPerCell(volumeScene) {
 }
 
 function expectedBonfireSymmetricForceStrategy(volumeScene) {
-  return volumeScene === 'bonfire_plume'
-    ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
-    : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
+  return 'retired-periodic-bonfire-macro-forces-v0';
 }
 
 function expectedBonfireSymmetricForceEvaluationsPerCell(volumeScene) {
-  return volumeScene === 'bonfire_plume' ? 4 : 0;
+  return 0;
 }
 
 function expectedBonfireNonWindForceStrategy(volumeScene) {
-  return volumeScene === 'bonfire_plume'
-    ? MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE
-    : MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
+  return 'retired-periodic-bonfire-macro-forces-v0';
 }
 
 function expectedBonfireNonWindForceEvaluationsPerCell(volumeScene) {
-  return volumeScene === 'bonfire_plume' ? 4 : 0;
+  return 0;
 }
 
 function expectedBonfireScalarNeighborhoodStrategy(volumeScene) {
@@ -2122,6 +2123,9 @@ async function replayCaptureCamera(ws, capture = {}) {
     })()`,
     returnByValue: true,
   });
+  if (cameraEval.exceptionDetails) {
+    throw new Error(`Camera pose application failed: ${cameraEval.exceptionDetails.text || 'runtime exception'}`);
+  }
   return cameraEval.result.value;
 }
 
@@ -2173,11 +2177,13 @@ async function main() {
   mkdirSync(dirname(reportPath), { recursive: true });
   let replayedCaptureControls = null;
   let replayedCaptureCamera = null;
+  let appliedCameraPose = null;
 
   const browserSession = await attachOrLaunchSharedBrowser();
 
   let phase = 'launch';
   let identityFrameRecovery = null;
+  const partialControlledStepFrames = [];
   try {
     await waitForCdp();
     phase = 'target';
@@ -2198,6 +2204,12 @@ async function main() {
       await delay(500);
       replayedCaptureControls = await replayCaptureControls(ws, captureReplay.capture);
       replayedCaptureCamera = await replayCaptureCamera(ws, captureReplay.capture);
+    }
+    if (requestedCameraPose) {
+      appliedCameraPose = await replayCaptureCamera(ws, { camera: requestedCameraPose });
+      if (appliedCameraPose?.applied !== true) {
+        throw new Error(`Requested camera pose did not apply: ${JSON.stringify(appliedCameraPose)}`);
+      }
     }
     await delay(settleMs);
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
@@ -2630,7 +2642,8 @@ async function main() {
     assert.ok(Math.abs((state.controls?.bonfireLateralDamping ?? 0) - expectedBonfireLateralDamping) < 0.001, 'bonfire lateral damping ablation route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.lateralDamping ?? 0) - expectedBonfireLateralDamping) < 0.001, 'effective bonfire lateral damping ablation did not match route/control');
     assert.ok(Math.abs((state.controls?.bonfireShear ?? 0) - expectedBonfireShear) < 0.001, 'bonfire shear ablation route/control did not apply');
-    assert.ok(Math.abs((state.bonfireAblation?.shear ?? 0) - expectedBonfireShear) < 0.001, 'effective bonfire shear ablation did not match route/control');
+    assert.equal(state.bonfireAblation?.requestedShear, expectedBonfireShear, 'bonfire shear request was not preserved in the retirement receipt');
+    assert.equal(state.bonfireAblation?.shear, 0, 'retired bonfire shear must have zero effective force');
     assert.ok(Math.abs((state.controls?.bonfireDetailForces ?? 0) - expectedBonfireDetailForces) < 0.001, 'bonfire detail-force ablation route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.detailForces ?? 0) - expectedBonfireDetailForces) < 0.001, 'effective bonfire detail-force ablation did not match route/control');
     assert.ok(Math.abs((state.controls?.bonfireDepinch ?? 0) - expectedBonfireDepinch) < 0.001, 'bonfire depinch ablation route/control did not apply');
@@ -2638,7 +2651,9 @@ async function main() {
     assert.ok(Math.abs((state.controls?.bonfireProjection ?? 0) - expectedBonfireProjection) < 0.001, 'bonfire projection ablation route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.projection ?? 0) - expectedBonfireProjection) < 0.001, 'effective bonfire projection ablation did not match route/control');
     assert.ok(Math.abs((state.controls?.bonfireTemporal ?? 0) - expectedBonfireTemporal) < 0.001, 'bonfire temporal ablation route/control did not apply');
-    assert.ok(Math.abs((state.bonfireAblation?.temporal ?? 0) - expectedBonfireTemporal) < 0.001, 'effective bonfire temporal ablation did not match route/control');
+    assert.equal(state.bonfireAblation?.requestedTemporal, expectedBonfireTemporal, 'bonfire temporal request was not preserved in the retirement receipt');
+    assert.equal(state.bonfireAblation?.temporal, 0, 'retired bonfire temporal forcing must have zero effect');
+    assert.equal(state.bonfireAblation?.periodicMacroForcePolicy, 'retired-periodic-bonfire-macro-forces-v0', 'bonfire periodic macro-force retirement policy did not reach the runtime');
     assert.ok(Math.abs((state.controls?.bonfireInstabilityProbe ?? 0) - expectedBonfireInstabilityProbe) < 0.001, 'bonfire instability probe route/control did not apply');
     assert.ok(Math.abs((state.bonfireAblation?.instabilityProbe ?? 0) - expectedBonfireInstabilityProbe) < 0.001, 'effective bonfire instability probe did not match route/control');
     assert.equal(state.bonfireReferenceConfinement?.identity, 'bonfire-reference-front-gradient-confinement-v0', 'bonfire reference-confinement identity did not reach debug state');
@@ -2736,7 +2751,7 @@ async function main() {
     if (expectedSpatialPressureTiers) {
       assert.equal(Number(stateLedger.pressureJacobiFullGridPasses), 1, 'spatial pressure tiers should keep only one full-grid Jacobi pass');
       assert.equal(Number(stateLedger.pressureJacobiPartialSlabPasses), 2, 'spatial pressure tiers should report two partial slab Jacobi passes');
-      assert.ok(Number(stateLedger.pressureJacobiFullGridEquivalentPasses) > 1 && Number(stateLedger.pressureJacobiFullGridEquivalentPasses) < 3, 'spatial pressure tiers did not report bounded equivalent full-grid work');
+      assert.ok(pressureTierDispatchEvidence(stateLedger, expectedGridDimensions).bounded, 'spatial pressure tiers did not report dispatch-matched equivalent full-grid work');
       assert.ok(Array.isArray(stateLedger.pressureTierDispatches) && stateLedger.pressureTierDispatches.length === 3, 'spatial pressure tiers did not report three tier dispatches');
       assert.equal(stateLedger.pressureTierBufferOwnership?.pressure3, 'B', 'spatial pressure tier buffer ownership did not preserve pressure3 in B');
       assert.equal(stateLedger.pressureTierBufferOwnership?.pressure2, 'A', 'spatial pressure tier buffer ownership did not preserve pressure2 in A');
@@ -3720,6 +3735,7 @@ async function main() {
     }
     let controlledStepSequenceReport = null;
     if (controlledStepSequenceRequested) {
+      phase = 'controlled-step-sequence';
       if (!renderScaleSet.length) {
         throw new Error('controlled-step-sequence requires --render-scale-set');
       }
@@ -3795,6 +3811,8 @@ async function main() {
         const frameSlug = `frame-${String(controlledFrameIndex + 1).padStart(3, '0')}`;
         const frameDir = resolve(controlledStepDir, frameSlug);
         mkdirSync(frameDir, { recursive: true });
+        const partialFrame = { controlledStepFrameIndex, frameDir, images: [] };
+        partialControlledStepFrames.push(partialFrame);
         const captures = [];
         for (let index = 0; index < scaleSet.samples.length; index += 1) {
           const scaleSample = scaleSet.samples[index];
@@ -3802,6 +3820,7 @@ async function main() {
           const shouldCaptureFeature = renderScaleFeatureCaptures && scaleSample.role !== 'high';
           const slug = `${controlledStepPrefix}-${frameSlug}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
           const imagePath = resolve(frameDir, `${slug}.png`);
+          const presentationPath = resolve(frameDir, `${slug}.presentation.png`);
           const featurePath = resolve(frameDir, `${slug}.feature.png`);
           const flowDebugPath = resolve(frameDir, `${slug}.flow-debug.png`);
           const boundarySidecarSupportPath = resolve(frameDir, `${slug}.boundary-sidecar-support.png`);
@@ -3813,6 +3832,7 @@ async function main() {
               sameStateCaptureId: scaleSet.sameStateCaptureId,
               baseFrameCount: scaleSet.baseFrameCount,
               baseSimStepCount: scaleSet.baseSimStepCount,
+              includeRgba: true,
               includeFeatureRgba: shouldCaptureFeature,
               restoreControls: false,
               resumeRenderLoop: false,
@@ -3847,14 +3867,43 @@ async function main() {
               imageAuthority: canvasCapture.imageAuthority,
             })}`);
           }
+          const canvasReadback = canvasCapture.image;
+          if (canvasCapture.imageAuthority !== 'gpu-presentation-texture-rgba8-readback-frozen-sim-state'
+            || canvasReadback?.authority !== canvasCapture.imageAuthority
+            || !Number.isInteger(canvasReadback.width)
+            || !Number.isInteger(canvasReadback.height)
+            || canvasReadback.width !== scaleSample.renderWidth
+            || canvasReadback.height !== scaleSample.renderHeight
+            || canvasReadback.width !== canvasCapture.renderWidth
+            || canvasReadback.height !== canvasCapture.renderHeight
+            || canvasCapture.simStepCount !== frame.controlledStepCapture.afterSimStepCount
+            || canvasCapture.sameStateCaptureId !== scaleSet.sameStateCaptureId) {
+            throw new Error(`Controlled-step GPU image identity mismatch: ${JSON.stringify({
+              controlledStepFrameIndex,
+              imageAuthority: canvasCapture.imageAuthority,
+              readbackAuthority: canvasReadback?.authority,
+              simStepCount: canvasCapture.simStepCount,
+              afterSimStepCount: frame.controlledStepCapture.afterSimStepCount,
+              sameStateCaptureId: canvasCapture.sameStateCaptureId,
+              expectedSameStateCaptureId: scaleSet.sameStateCaptureId,
+            })}`);
+          }
+          const rgba = Buffer.from(canvasReadback.rgbaBase64 || '', 'base64');
+          if (rgba.length !== canvasReadback.width * canvasReadback.height * 4
+            || rgba.length !== canvasReadback.byteLength) {
+            throw new Error(`Controlled-step GPU image was missing or partial: ${rgba.length}/${canvasReadback.width * canvasReadback.height * 4}`);
+          }
+          const imageSha256 = createHash('sha256').update(rgba).digest('hex');
+          writeRgbaPng(imagePath, canvasReadback.width, canvasReadback.height, rgba);
+          partialFrame.images.push(imagePath);
+          const imageMetrics = measureScreenshot(readFileSync(imagePath));
           const scaleShot = await wsRequest(ws, 'Page.captureScreenshot', {
             format: 'png',
             fromSurface: true,
             clip: screenshotClip,
           });
-          const imageBuffer = Buffer.from(scaleShot.data, 'base64');
-          writeFileSync(imagePath, imageBuffer);
-          const imageMetrics = measureScreenshot(imageBuffer);
+          writeFileSync(presentationPath, Buffer.from(scaleShot.data, 'base64'));
+          partialFrame.images.push(presentationPath);
           const featureCapture = canvasCapture.featureCapture || null;
           if (featureCapture?.rgba && Number.isFinite(featureCapture.width) && Number.isFinite(featureCapture.height)) {
             writeRgbaPng(featurePath, featureCapture.width, featureCapture.height, featureCapture.rgba);
@@ -3883,6 +3932,7 @@ async function main() {
             });
           }
           const { image, preview, simReadback, ...sampleReport } = scaleSample;
+          const { image: rawCanvasImage, ...canvasCaptureMetadata } = canvasCapture;
           const captureReport = {
             ...sampleReport,
             sequenceAuthority: frame.sequenceAuthority,
@@ -3896,13 +3946,17 @@ async function main() {
               width: imageMetrics.width,
               height: imageMetrics.height,
               authority: canvasCapture.imageAuthority,
+              sha256: imageSha256,
+              sourceSimStepCount: canvasCapture.simStepCount,
+              sourceSameStateCaptureId: canvasCapture.sameStateCaptureId,
+              presentationScreenshot: presentationPath,
               canvasCssRect,
               screenshotClip,
               devicePixelRatio: canvasCapture.devicePixelRatio,
               hudSuppression,
               metrics: imageMetrics,
             },
-            canvasCapture,
+            canvasCapture: canvasCaptureMetadata,
             featureCapture: featureCapture ? {
               path: featurePath,
               width: featureCapture.width,
@@ -3957,7 +4011,14 @@ async function main() {
             simStepCount: canvasCapture.simStepCount,
             imageWidth: imageMetrics.width,
             imageHeight: imageMetrics.height,
-            image: imagePath,
+            image: {
+              path: imagePath,
+              authority: canvasCapture.imageAuthority,
+              sha256: imageSha256,
+              sourceSimStepCount: canvasCapture.simStepCount,
+              sourceSameStateCaptureId: canvasCapture.sameStateCaptureId,
+              presentationScreenshot: presentationPath,
+            },
             feature: featureCapture ? featurePath : null,
             featureCapture: featureCapture ? {
               path: featurePath,
@@ -4005,10 +4066,10 @@ async function main() {
         }
         frames.push(controlledStepFrameReport);
       }
-      const sessionIds = new Set(frames.map(frame => frame.sameBrowserSessionId));
+      const sequenceAssessment = assessControlledStepSequence(frames, controlledStepFrames, renderScaleSet);
       controlledStepSequenceReport = {
         sequenceAuthority: 'controlled-step-sequence-v0',
-        sampleAuthority: 'controlled-step-sim-advance',
+        sampleAuthority: sequenceAssessment.sampleAuthority,
         sameBrowserSessionId,
         controlledStepDeltaMs,
         requestedFrameCount: controlledStepFrames,
@@ -4016,14 +4077,28 @@ async function main() {
         renderScales: renderScaleSet,
         hudSuppression,
         controlledStepCapture: frames.map(frame => frame.controlledStepCapture),
-        sameBrowserSequenceSuitable: sessionIds.size === 1 && frames.length === controlledStepFrames,
+        sameBrowserSequenceSuitable: sequenceAssessment.sameBrowserSequenceSuitable,
+        stepSequenceVerified: sequenceAssessment.stepSequenceVerified,
+        frameEvidenceComplete: sequenceAssessment.frameEvidenceComplete,
+        visualJudgment: sequenceAssessment.visualJudgment,
+        simStepCounts: sequenceAssessment.simStepCounts,
+        frameImageHashes: sequenceAssessment.frameImageHashes,
         frames,
       };
       if (!controlledStepSequenceReport.sameBrowserSequenceSuitable) {
         throw new Error(`Controlled-step sequence did not preserve one browser session: ${JSON.stringify({
-          sessionIds: Array.from(sessionIds),
+          sessionIds: Array.from(new Set(frames.map(frame => frame.sameBrowserSessionId))),
           frameCount: frames.length,
           requestedFrameCount: controlledStepFrames,
+        })}`);
+      }
+      if (!controlledStepSequenceReport.frameEvidenceComplete
+        || (controlledStepFrames > 1 && !controlledStepSequenceReport.stepSequenceVerified)) {
+        throw new Error(`Controlled-step sequence has incomplete frame or step evidence: ${JSON.stringify({
+          simStepCounts: controlledStepSequenceReport.simStepCounts,
+          controlledStepCapture: controlledStepSequenceReport.controlledStepCapture,
+          frameEvidenceComplete: controlledStepSequenceReport.frameEvidenceComplete,
+          stepSequenceVerified: controlledStepSequenceReport.stepSequenceVerified,
         })}`);
       }
     }
@@ -4041,6 +4116,7 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      cameraPose: { requested: requestedCameraPose, applied: appliedCameraPose },
       captureReplay: isCaptureReplay ? {
         path: captureReplay.path,
         documentIdentity: captureReplay.documentIdentity,
@@ -4298,6 +4374,7 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      cameraPose: { requested: requestedCameraPose, applied: appliedCameraPose },
       captureReplay: isCaptureReplay ? {
         path: captureReplay.path,
         documentIdentity: captureReplay.documentIdentity,
@@ -4315,6 +4392,7 @@ async function main() {
       phase,
       error: err?.message || String(err),
       state,
+      partialControlledStepFrames,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
       browserSession: {
