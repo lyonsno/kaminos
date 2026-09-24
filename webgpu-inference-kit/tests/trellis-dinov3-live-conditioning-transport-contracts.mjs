@@ -79,6 +79,8 @@ try {
   assert.equal(compositeReport.requestedConditioningSinkUrl, invalidSink);
   assert.equal(compositeReport.effectiveConditioningSinkUrl, null);
   assert.match(compositeReport.error, /loopback/);
+  assert.equal(compositeReport.lastTrustworthyEvidence?.description, 'command inputs not yet verified');
+  assert.equal(compositeReport.lastTrustworthyEvidence?.detail?.phase, 'local-preflight');
   assert.deepEqual(compositeReport.commandIdentity, {}, 'invalid sink must fail before MLX or browser commands are prepared');
   assert.equal(existsSync(join(compositeEvidenceDir, 'start-receipt.json')), false,
     'invalid sink must fail before any MLX or browser process start receipt');
@@ -100,6 +102,8 @@ try {
   assert.equal(browserFailureReport.requestedConditioningSinkUrl, invalidSink);
   assert.equal(browserFailureReport.effectiveConditioningSinkUrl, null);
   assert.match(browserFailureReport.error, /loopback/);
+  assert.equal(browserFailureReport.lastTrustworthyEvidence?.description, 'local command setup only');
+  assert.equal(browserFailureReport.lastTrustworthyEvidence?.detail?.phase, 'local_preflight');
   assert.equal(browserFailureReport.chromeProcessPid, null, 'invalid sink must fail before Chrome launches');
   assert.equal(existsSync(browserOutputDir), false, 'invalid sink must fail before creating the browser output route');
 } finally {
