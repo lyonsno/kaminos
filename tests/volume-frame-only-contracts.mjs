@@ -28,12 +28,13 @@ for (const [name, server] of [
 const image = { authority: 'gpu-presentation-texture-rgba8-readback-frozen-sim-state', width: 4, height: 3, byteLength: 48, rgbaBase64: Buffer.alloc(48, 10).toString('base64') };
 const capture = { ok: true, imageAuthority: image.authority, image, renderWidth: 4, renderHeight: 3, simStepCount: 13, sameStateCaptureId: 'frame-1' };
 const sample = { renderWidth: 4, renderHeight: 3, sameStateCaptureId: 'frame-1' };
-assert.equal(verifyFrameOnlyReadback(capture, sample, 13).length, 48);
+assert.equal(verifyFrameOnlyReadback(capture, sample, 13).bytes.length, 48);
 for (const [name, candidate] of [
   ['missing image', { ...capture, image: null }],
   ['partial bytes', { ...capture, image: { ...image, rgbaBase64: Buffer.alloc(16).toString('base64') } }],
   ['blank bytes', { ...capture, image: { ...image, rgbaBase64: Buffer.alloc(48).toString('base64') } }],
   ['opaque black', { ...capture, image: { ...image, rgbaBase64: Buffer.from(Array.from({ length: 12 }, () => [0, 0, 0, 255]).flat()).toString('base64') } }],
+  ['one red byte', { ...capture, image: { ...image, rgbaBase64: Buffer.from([1, 0, 0, 255, ...Array.from({ length: 11 }, () => [0, 0, 0, 255]).flat()]).toString('base64') } }],
   ['stale step', { ...capture, simStepCount: 12 }],
   ['wrong state', { ...capture, sameStateCaptureId: 'old' }],
   ['fallback authority', { ...capture, imageAuthority: 'canvas-screenshot' }],
@@ -50,5 +51,8 @@ assert.ok(witness.indexOf('if (frameOnlyRequested)') < witness.indexOf("phase = 
 assert.match(witness, /phase = 'frame-only-capture'/);
 assert.match(witness, /writeFrameOnlyPreflightFailure\(/);
 assert.match(witness, /\/api\/runtime-config/);
+assert.ok(witness.indexOf('sourceBeforeLoad = await frameOnlyServingSource()') < witness.indexOf('browserSession = await attachOrLaunchSharedBrowser()'),
+  'source identity must be checked before loading page code');
+assert.match(witness, /phase = 'frame-only-postcapture-source'/);
 assert.match(witness, /partialControlledStepFrames/);
 console.log('volume frame-only contracts passed');

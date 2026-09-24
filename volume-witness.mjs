@@ -2241,7 +2241,8 @@ async function captureFrameOnly(ws, partialControlledStepFrames, source) {
       const canvas = canvasEval.result.value;
       assert.equal(canvas?.effectiveRoute, source.effectiveRoute, 'effective route changed during frame capture');
       assert.equal(canvas?.backend, source.backend, 'effective backend changed during frame capture');
-      const rgba = verifyFrameOnlyReadback(canvas, sample, step.controlledStepCapture.afterSimStepCount);
+      const readback = verifyFrameOnlyReadback(canvas, sample, step.controlledStepCapture.afterSimStepCount);
+      const rgba = readback.bytes;
       const imagePath = resolve(frameDir, `${controlledStepPrefix}-frame-${String(index + 1).padStart(3, '0')}-${scaleSlug(scale)}.png`);
       writeRgbaPng(imagePath, canvas.image.width, canvas.image.height, rgba);
       partial.images.push(imagePath);
@@ -2253,6 +2254,8 @@ async function captureFrameOnly(ws, partialControlledStepFrames, source) {
         renderHeight: sample.renderHeight,
         imageWidth: canvas.image.width,
         imageHeight: canvas.image.height,
+        visibleColorPixelCount: readback.visibleColorPixelCount,
+        minimumVisiblePixels: readback.minimumVisiblePixels,
         frameCount: canvas.frameCount,
         simStepCount: canvas.simStepCount,
         sameStateCaptureId: canvas.sameStateCaptureId,
@@ -2284,12 +2287,42 @@ async function captureFrameOnly(ws, partialControlledStepFrames, source) {
     frames };
 }
 
+async function frameOnlyServingSource() {
+  const response = await fetch(new URL('/api/runtime-config', url), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`runtime config lookup failed: ${response.status}`);
+  const config = await response.json();
+  assert.equal(config?.schema, 'kaminos.runtime-config.v0', 'runtime config schema mismatch');
+  return config.source;
+}
+
+function frameOnlyExpectedSource() {
+  assert.equal(execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim(), '',
+    'frame-only capture checkout is dirty');
+  return { repoRoot: process.cwd(),
+    commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() };
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   let replayedCaptureControls = null;
   let replayedCaptureCamera = null;
   let appliedCameraPose = null;
+  let sourceBeforeLoad = null;
+  let expectedSource = null;
+
+  if (frameOnlyRequested) {
+    try {
+      expectedSource = frameOnlyExpectedSource();
+      sourceBeforeLoad = await frameOnlyServingSource();
+      assert.equal(sourceBeforeLoad?.repoRoot, expectedSource.repoRoot, 'preload serving checkout mismatch');
+      assert.equal(sourceBeforeLoad?.commit, expectedSource.commit, 'preload serving revision mismatch');
+      assert.equal(sourceBeforeLoad?.dirty, false, 'preload serving source is dirty');
+    } catch (error) {
+      writeFrameOnlyPreflightFailure('frame-only-preload-source', error?.message || String(error));
+      throw error;
+    }
+  }
 
   let browserSession;
   try {
@@ -2336,24 +2369,22 @@ async function main() {
     }
     if (frameOnlyRequested) {
       phase = 'frame-only-admission';
-      const runtimeResponse = await fetch(new URL('/api/runtime-config', url), { cache: 'no-store' });
-      if (!runtimeResponse.ok) throw new Error(`runtime config lookup failed: ${runtimeResponse.status}`);
-      const runtimeConfig = await runtimeResponse.json();
-      assert.equal(runtimeConfig?.schema, 'kaminos.runtime-config.v0', 'runtime config schema mismatch');
-      assert.equal(execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim(), '',
-        'frame-only capture checkout is dirty');
-      const expectedSource = {
-        repoRoot: process.cwd(),
-        commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-      };
+      const sourceAtAdmission = await frameOnlyServingSource();
+      assert.deepEqual(sourceAtAdmission, sourceBeforeLoad, 'serving source changed after page load');
       const sourceEval = await wsRequest(ws, 'Runtime.evaluate', {
         expression: '({ receipt: window.__kaminosVolumeSettingsPresetReceipt || null, state: window.__kaminosVolumePrototype?.debugState?.() || null })',
         returnByValue: true,
       });
       const source = admitFrameOnlySource(url, sourceEval.result.value?.receipt, sourceEval.result.value?.state,
-        runtimeConfig.source, expectedSource);
+        sourceAtAdmission, expectedSource);
       phase = 'frame-only-capture';
       const report = await captureFrameOnly(ws, partialControlledStepFrames, source);
+      phase = 'frame-only-postcapture-source';
+      const sourceAfterCapture = await frameOnlyServingSource();
+      assert.deepEqual(sourceAfterCapture, sourceBeforeLoad, 'serving source changed during capture');
+      assert.deepEqual(frameOnlyExpectedSource(), expectedSource, 'capture checkout changed during capture');
+      report.source.servingSourceBeforeLoad = sourceBeforeLoad;
+      report.source.servingSourceAfterCapture = sourceAfterCapture;
       report.cameraPose.applied = appliedCameraPose;
       report.browserSession = { identity: browserSession.identity, mode: browserSession.mode, port: browserSession.port };
       writeFileSync(reportPath, JSON.stringify(report, null, 2));
@@ -4543,6 +4574,7 @@ async function main() {
       error: err?.message || String(err),
       state,
       partialControlledStepFrames,
+      sourceBeforeLoad,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
       browserSession: {

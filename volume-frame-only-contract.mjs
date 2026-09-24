@@ -40,6 +40,12 @@ export function verifyFrameOnlyReadback(capture, sample, expectedSimStepCount) {
   const bytes = Buffer.from(image.rgbaBase64 || '', 'base64');
   assert.equal(bytes.length, image.width * image.height * 4, 'GPU image partial bytes');
   assert.equal(image.byteLength, bytes.length, 'GPU image declared byte length mismatch');
-  assert.ok(bytes.some((byte, index) => index % 4 !== 3 && byte !== 0), 'GPU image has no visible color signal');
-  return bytes;
+  let visibleColorPixelCount = 0;
+  for (let offset = 0; offset < bytes.length; offset += 4) {
+    if (Math.max(bytes[offset], bytes[offset + 1], bytes[offset + 2]) >= 8) visibleColorPixelCount += 1;
+  }
+  const minimumVisiblePixels = Math.max(2, Math.ceil(image.width * image.height * 0.001));
+  assert.ok(visibleColorPixelCount >= minimumVisiblePixels,
+    `GPU image has insufficient visible color support: ${visibleColorPixelCount}/${minimumVisiblePixels}`);
+  return { bytes, visibleColorPixelCount, minimumVisiblePixels };
 }
