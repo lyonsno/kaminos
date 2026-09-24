@@ -63,6 +63,7 @@ const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
+const KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY = 'kaminos-three-volume-shared-webgpu-device-v0';
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
 const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
   off: 'off',
@@ -562,6 +563,99 @@ function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize) {
 
 function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+}
+
+export async function requestKaminosSharedWebGpuDevice({ bufferRequirements = {}, requiredFeatures = [], requiredLimits: additionalLimits = {}, adapter: suppliedAdapter = null } = {}) {
+  const gpu = globalThis.navigator?.gpu;
+  if (!suppliedAdapter && !gpu) throw new Error('WebGPU unavailable');
+  const adapter = suppliedAdapter || await gpu.requestAdapter({ powerPreference: 'high-performance' });
+  if (!adapter) throw new Error('WebGPU adapter unavailable');
+
+  const requiredLimits = {};
+  const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+  if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
+    requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+  }
+  if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
+    requiredLimits.maxStorageBuffersPerShaderStage = adapter.limits.maxStorageBuffersPerShaderStage;
+  }
+  for (const [name, required] of Object.entries({
+    maxStorageBuffersInFragmentStage: 5,
+    maxStorageBuffersInVertexStage: 4,
+  })) {
+    const available = Number(adapter.limits?.[name] || 0);
+    if (available < required) {
+      throw new Error(`WebGPU adapter ${name} ${available} is below Kaminos shared-device requirement ${required}`);
+    }
+    requiredLimits[name] = required;
+  }
+
+  if (!bufferRequirements || typeof bufferRequirements !== 'object' || Array.isArray(bufferRequirements)) {
+    throw new Error('invalid composition buffer requirements');
+  }
+  for (const [name, required] of Object.entries(bufferRequirements)) {
+    if (!['maxBufferSize', 'maxStorageBufferBindingSize'].includes(name)
+      || !Number.isSafeInteger(required) || required <= 0) {
+      throw new Error(`invalid composition buffer requirement ${name}`);
+    }
+    const available = Number(adapter.limits?.[name] || 0);
+    if (available < required) {
+      throw new Error(`WebGPU adapter ${name} ${available} is below composition buffer requirement ${required}`);
+    }
+    requiredLimits[name] = Math.max(requiredLimits[name] || 0, required);
+  }
+
+  if (!additionalLimits || typeof additionalLimits !== 'object' || Array.isArray(additionalLimits)) {
+    throw new Error('invalid shared-device limit requirements');
+  }
+  for (const [name, required] of Object.entries(additionalLimits)) {
+    if (!Number.isSafeInteger(required) || required <= 0) {
+      throw new Error(`invalid shared-device limit requirement ${name}`);
+    }
+    const available = Number(adapter.limits?.[name] || 0);
+    if (available < required) {
+      throw new Error(`WebGPU adapter ${name} ${available} is below shared-device requirement ${required}`);
+    }
+    requiredLimits[name] = Math.max(requiredLimits[name] || 0, required);
+  }
+
+  if (!Array.isArray(requiredFeatures) || requiredFeatures.some(feature => typeof feature !== 'string' || !feature)) {
+    throw new Error('invalid shared-device feature requirements');
+  }
+  const features = new Set(requiredFeatures);
+  if (adapter.features?.has?.('timestamp-query')) features.add('timestamp-query');
+  for (const feature of features) {
+    if (!adapter.features?.has?.(feature)) throw new Error(`WebGPU adapter feature ${feature} is unavailable`);
+  }
+  const enabledFeatures = [...features].sort();
+  const device = await adapter.requestDevice({
+    ...(Object.keys(requiredLimits).length ? { requiredLimits } : {}),
+    ...(enabledFeatures.length ? { requiredFeatures: enabledFeatures } : {}),
+  });
+  for (const [name, required] of Object.entries(requiredLimits)) {
+    const effective = Number(device.limits?.[name]);
+    const satisfied = Number.isFinite(effective)
+      && (name.startsWith('min') ? effective <= required : effective >= required);
+    if (!satisfied) {
+      device.destroy?.();
+      throw new Error(`WebGPU effective device ${name} does not satisfy shared-device requirement ${required}`);
+    }
+  }
+  for (const feature of enabledFeatures) {
+    if (!device.features?.has?.(feature)) {
+      device.destroy?.();
+      throw new Error(`WebGPU effective device feature ${feature} is unavailable`);
+    }
+  }
+  return {
+    identity: KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY,
+    authority: 'single-explicit-device-three-and-volume-v0',
+    adapter,
+    device,
+    queue: device.queue,
+    requiredLimits,
+    requiredFeatures: enabledFeatures,
+  };
 }
 
 function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {

@@ -2745,7 +2745,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=shared-device-composition-0924';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -8869,6 +8869,14 @@ let samHostContext = null;
 let samHostConfig = null;
 let samImageTools = null;
 let samImageToolsPromise = null;
+let sharedGpu = null;
+let sharedGpuFailureReason = null;
+let compositionModule = null;
+let compositionSetupError = null;
+
+async function importCompositionModule(url) {
+  return import(new URL(url, window.location.href).href);
+}
 
 async function ensureSamImageTools() {
   if (samImageToolsPromise) return samImageToolsPromise;
@@ -8923,17 +8931,76 @@ async function initScene() {
     const response = await fetch('/api/runtime-config', { cache: 'no-store' });
     if (response.ok) samHostConfig = (await response.json()).sam3 || null;
   } catch (error) { console.warn('SAM runtime configuration unavailable', error); }
-  if (samHostConfig?.mounted) {
-    const { createWebGpuDeviceRequest, createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/core.js');
-    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) throw new Error('SAM host WebGPU adapter unavailable');
-    const request = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
-    const device = await adapter.requestDevice({ requiredFeatures: request.requiredFeatures, requiredLimits: request.requiredLimits });
-    const inferenceSession = await createWebGpuInferenceSession({ sessionId: `kaminos-images:${crypto.randomUUID()}`, adapter, device,
-      adapterName: adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter', deviceOwnership: 'borrowed' });
-    samHostContext = { adapter, device, inferenceSession };
+  const compositionModuleUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('composition_module_url');
+  compositionSetupError = null;
+  window.__kaminosCompositionSetup = {
+    moduleUrl: compositionModuleUrl,
+    status: compositionModuleUrl ? 'pending' : 'absent',
+    phase: 'module-load',
+  };
+  try {
+    if (compositionModuleUrl) {
+      compositionModule = await importCompositionModule(compositionModuleUrl);
+      if (typeof compositionModule.mountComposition !== 'function') {
+        throw new Error('composition module did not export mountComposition');
+      }
+    }
+  } catch (error) {
+    compositionSetupError = error;
+    Object.assign(window.__kaminosCompositionSetup, { status: 'failed', error: String(error?.message || error) });
+    throw error;
   }
-  renderer = new THREE.WebGPURenderer({ antialias: true, ...(samHostContext ? { device: samHostContext.device } : {}) });
+
+  const strictSharedDevice = compositionModule?.sharedGpuBufferRequirements !== undefined;
+  const gpu = navigator.gpu;
+  let adapter = null;
+  if (compositionModule || samHostConfig?.mounted) {
+    try {
+      if (!gpu) throw new Error('WebGPU unavailable');
+      adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (!adapter) throw new Error('WebGPU adapter unavailable');
+      let requiredFeatures = [];
+      let requiredLimits = {};
+      if (samHostConfig?.mounted) {
+        const { createWebGpuDeviceRequest } = await import('./webgpu-inference-kit/src/core.js');
+        const samRequest = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
+        requiredFeatures = samRequest.requiredFeatures;
+        requiredLimits = samRequest.requiredLimits;
+      }
+      window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
+      sharedGpu = await requestKaminosSharedWebGpuDevice({
+        adapter,
+        bufferRequirements: strictSharedDevice ? compositionModule.sharedGpuBufferRequirements : {},
+        requiredFeatures,
+        requiredLimits,
+      });
+      sharedGpuFailureReason = null;
+    } catch (error) {
+      sharedGpu = null;
+      sharedGpuFailureReason = String(error?.message || error);
+      if (strictSharedDevice) {
+        compositionSetupError = error;
+        Object.assign(window.__kaminosCompositionSetup, { status: 'failed', error: sharedGpuFailureReason });
+        throw error;
+      }
+      console.warn('Kaminos shared WebGPU device unavailable; using existing renderer fallback:', sharedGpuFailureReason);
+      if (samHostConfig?.mounted && adapter) {
+        const { createWebGpuDeviceRequest, createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/core.js');
+        const request = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
+        const device = await adapter.requestDevice({ requiredFeatures: request.requiredFeatures, requiredLimits: request.requiredLimits });
+        const inferenceSession = await createWebGpuInferenceSession({ sessionId: `kaminos-images:${crypto.randomUUID()}`, adapter, device,
+          adapterName: adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter', deviceOwnership: 'borrowed' });
+        samHostContext = { adapter, device, inferenceSession };
+      }
+    }
+  }
+  if (sharedGpu && samHostConfig?.mounted) {
+    const { createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/core.js');
+    const inferenceSession = await createWebGpuInferenceSession({ sessionId: `kaminos-images:${crypto.randomUUID()}`, adapter: sharedGpu.adapter, device: sharedGpu.device,
+      adapterName: sharedGpu.adapter?.info?.description || sharedGpu.adapter?.info?.device || sharedGpu.adapter?.info?.vendor || 'unknown-webgpu-adapter', deviceOwnership: 'borrowed' });
+    samHostContext = { adapter: sharedGpu.adapter, device: sharedGpu.device, inferenceSession };
+  }
+  renderer = new THREE.WebGPURenderer({ antialias: true, ...(sharedGpu?.device ? { device: sharedGpu.device } : samHostContext ? { device: samHostContext.device } : {}) });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -18303,6 +18370,7 @@ function createVolumeMainRendererBridge() {
 }
 
 async function initKaminosVolumeRoute() {
+  if (compositionSetupError) throw compositionSetupError;
   const params = new URLSearchParams(window.location.search);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
@@ -18905,8 +18973,23 @@ async function initKaminosVolumeRoute() {
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
     transparentCanvas: fingerFluidPyroCompositionRequested(),
+    sharedGpuContext: sharedGpu,
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  if (compositionModule) {
+    window.__kaminosCompositionSetup.phase = 'mount';
+    Promise.resolve().then(() => compositionModule.mountComposition({
+      prototype: volumePrototype,
+      params: new URLSearchParams(window.location.search),
+      sharedGpu,
+    })).then(() => {
+      window.__kaminosCompositionSetup.status = 'mounted';
+    }).catch(error => {
+      Object.assign(window.__kaminosCompositionSetup, { status: 'failed', error: String(error?.message || error) });
+      console.error('composition module failed:', error);
+      setInfo(`Composition module: ${error.message || error}`);
+    });
+  }
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;
