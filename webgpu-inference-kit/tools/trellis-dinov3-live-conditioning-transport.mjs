@@ -71,14 +71,13 @@ function buildEnvelope(provenance, bytes, sha256) {
       sourceRevision: producerSourceRevision,
       routeId: provenance.producerRouteId,
     },
-    consumer: {
-      process: 'TRELLIS2MLX generate.py',
+    consumerReference: {
       repository: 'trellis2mlx',
       modelReference: {
         revision: consumerModelReferenceRevision,
         dinov3SourceSha256: consumerDinoSourceSha256,
       },
-      negativeConditioning: 'receiver constructs zeros_like(cond), matching the pinned native single-image route',
+      expectedNegativeConditioning: 'mx.zeros_like(cond) in the pinned native single-image route; not observed by this producer transfer',
     },
     input: {
       imageSha256: sourceImageSha256,
@@ -97,7 +96,7 @@ function buildEnvelope(provenance, bytes, sha256) {
     transfer: {
       from: 'WebGPU-owned DINOv3 conditioning tensor',
       via: 'Chrome host F32 readback -> Kaminos Node smoke process -> loopback HTTP body',
-      semantics: 'host readback and loopback HTTP copy; the MLX consumer constructs a distinct MLX-owned array; not same-device or zero-copy',
+      semantics: 'host readback and loopback HTTP copy; receiving process, MLX array allocation, and sampler consumption are unobserved; not same-device or zero-copy',
     },
   };
 }

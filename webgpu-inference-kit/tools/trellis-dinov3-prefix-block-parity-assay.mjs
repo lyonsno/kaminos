@@ -24,8 +24,8 @@ const chrome=args.get('--chrome')||'/Applications/Google Chrome.app/Contents/Mac
 const debugPort=args.get('--debug-port')||'9577';
 const serverPort=args.get('--server-port')||'18577';
 const mode=args.get('--mode')||'block0-parity';
-const conditioningSinkUrl=args.has('--conditioning-sink-url') ? validateLiveConditioningSinkUrl(args.get('--conditioning-sink-url')) : null;
-if(conditioningSinkUrl&&mode!=='resident-full-conditioning') throw new Error('--conditioning-sink-url is only valid with --mode resident-full-conditioning');
+const requestedConditioningSinkUrl=args.has('--conditioning-sink-url') ? args.get('--conditioning-sink-url') : null;
+let conditioningSinkUrl=null;
 const referenceMode=mode==='resident-full-conditioning'?'full-conditioning':mode;
 const invocationId=`trellis-dinov3-${mode}-${new Date().toISOString().replaceAll(':','').replaceAll('-','')}`;
 const referenceDir=resolve(evidenceDir,'mlx-reference');
@@ -64,6 +64,7 @@ function persistReport(extra={}) {
   if(!reportPath) return null;
   const report={
     schema:mode==='resident-full-conditioning'?'kaminos.trellis-dinov3-full-conditioning-assay.v0':mode==='resident-block2-mlp'?'kaminos.trellis-dinov3-resident-block2-mlp-assay.v0':mode==='resident-block2-attention'?'kaminos.trellis-dinov3-resident-block2-attention-assay.v0':mode==='resident-block2-norm1'?'kaminos.trellis-dinov3-resident-block2-norm1-assay.v0':mode==='resident-block1'?'kaminos.trellis-dinov3-resident-block1-assay.v0':mode==='resident-handoff'?'kaminos.trellis-dinov3-resident-handoff-assay.v1':'kaminos.trellis-dinov3-prefix-block0-parity-assay.v0',ok:false,mode,invocationId,
+    requestedConditioningSinkUrl,effectiveConditioningSinkUrl:conditioningSinkUrl,
     failure_phase:phase,reportPath,startReceiptPath,referenceDir,browserReportPath,stdoutPath,stderrPath,
     evidenceDir,modelDir,sourceImage,trellisRoot,python,chrome,
     lastTrustworthyEvidence,commandIdentity:effectiveCommands,
@@ -85,6 +86,10 @@ function runChild(command,commandArgs,{cwd,env}={}) {
 
 let report=null;
 try {
+  if(requestedConditioningSinkUrl!==null) {
+    conditioningSinkUrl=validateLiveConditioningSinkUrl(requestedConditioningSinkUrl);
+    if(mode!=='resident-full-conditioning') throw new Error('--conditioning-sink-url is only valid with --mode resident-full-conditioning');
+  }
   if(!['--model-dir','--source-image','--trellis-root','--evidence-dir','--report','--receiver'].every(key=>args.has(key))) throw new Error('required arguments: --model-dir, --source-image, --trellis-root, --evidence-dir, --report, --receiver');
   if(!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1','resident-block2-attention','resident-block2-mlp','resident-full-conditioning'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
   const kaminosRevision=gitRevision(root);

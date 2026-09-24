@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 let forwardF32ConditioningTensor;
 try {
   ({ forwardF32ConditioningTensor } = await import('../tools/trellis-dinov3-live-conditioning-transport.mjs'));
@@ -36,6 +39,8 @@ const provenance = {
 const browserPage = readFileSync(new URL('../smokes/trellis-dinov3-prefix-block-browser.html', import.meta.url), 'utf8');
 const browserRunner = readFileSync(new URL('../tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const assayRunner = readFileSync(new URL('../tools/trellis-dinov3-prefix-block-parity-assay.mjs', import.meta.url), 'utf8');
+const browserRunnerPath = new URL('../tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs', import.meta.url);
+const assayRunnerPath = new URL('../tools/trellis-dinov3-prefix-block-parity-assay.mjs', import.meta.url);
 const parityGateOffset = browserPage.indexOf('if (failedComparisons.length)');
 const liveTransferOffset = browserPage.indexOf('if (liveConditioningMode) {', parityGateOffset);
 const sessionCloseOffset = browserPage.indexOf('if (residentFullConditioningMode) await closeInferenceSession()', liveTransferOffset);
@@ -51,6 +56,55 @@ assert.match(browserRunner, /forwardF32ConditioningTensor\(\{url:conditioningSin
   'the host bridge must forward the current request bytes rather than reload an artifact');
 assert.match(assayRunner, /conditioningSinkUrl/,
   'the composite assay must record and route an explicitly requested live consumer endpoint');
+
+const failureReportRoot = mkdtempSync(join(tmpdir(), 'trellis-dinov3-invalid-sink-report-'));
+const invalidSink = 'http://example.com/conditioning';
+try {
+  const compositeReportPath = join(failureReportRoot, 'composite-report.json');
+  const compositeEvidenceDir = join(failureReportRoot, 'composite-evidence');
+  const compositeRun = spawnSync(process.execPath, [assayRunnerPath.pathname,
+    '--model-dir', join(failureReportRoot, 'missing-model'),
+    '--source-image', join(failureReportRoot, 'missing-image.png'),
+    '--trellis-root', join(failureReportRoot, 'missing-trellis'),
+    '--evidence-dir', compositeEvidenceDir,
+    '--report', compositeReportPath,
+    '--receiver', 'invalid-sink-contract-test',
+    '--mode', 'resident-full-conditioning',
+    '--conditioning-sink-url', invalidSink,
+  ], { encoding: 'utf8' });
+  assert.equal(compositeRun.status, 1, 'the composite assay must reject an off-host sink');
+  assert.ok(existsSync(compositeReportPath), 'invalid sink preflight must leave the caller-requested composite failure report');
+  const compositeReport = JSON.parse(readFileSync(compositeReportPath, 'utf8'));
+  assert.equal(compositeReport.failure_phase, 'local-preflight');
+  assert.equal(compositeReport.requestedConditioningSinkUrl, invalidSink);
+  assert.equal(compositeReport.effectiveConditioningSinkUrl, null);
+  assert.match(compositeReport.error, /loopback/);
+  assert.deepEqual(compositeReport.commandIdentity, {}, 'invalid sink must fail before MLX or browser commands are prepared');
+  assert.equal(existsSync(join(compositeEvidenceDir, 'start-receipt.json')), false,
+    'invalid sink must fail before any MLX or browser process start receipt');
+
+  const browserReportPath = join(failureReportRoot, 'browser-report.json');
+  const browserOutputDir = join(failureReportRoot, 'browser-output');
+  const browserRun = spawnSync(process.execPath, [browserRunnerPath.pathname,
+    '--reference-dir', join(failureReportRoot, 'missing-reference'),
+    '--source-image', join(failureReportRoot, 'missing-image.png'),
+    '--output-dir', browserOutputDir,
+    '--report', browserReportPath,
+    '--mode', 'resident-full-conditioning',
+    '--conditioning-sink-url', invalidSink,
+  ], { encoding: 'utf8' });
+  assert.equal(browserRun.status, 1, 'the direct browser smoke must reject an off-host sink');
+  assert.ok(existsSync(browserReportPath), 'invalid sink preflight must leave the caller-requested browser failure report');
+  const browserFailureReport = JSON.parse(readFileSync(browserReportPath, 'utf8'));
+  assert.equal(browserFailureReport.failure_phase, 'local_preflight');
+  assert.equal(browserFailureReport.requestedConditioningSinkUrl, invalidSink);
+  assert.equal(browserFailureReport.effectiveConditioningSinkUrl, null);
+  assert.match(browserFailureReport.error, /loopback/);
+  assert.equal(browserFailureReport.chromeProcessPid, null, 'invalid sink must fail before Chrome launches');
+  assert.equal(existsSync(browserOutputDir), false, 'invalid sink must fail before creating the browser output route');
+} finally {
+  rmSync(failureReportRoot, { recursive: true, force: true });
+}
 
 let received = null;
 let receivedCount = 0;
@@ -91,15 +145,20 @@ try {
   assert.equal(envelope.schema, 'kaminos.trellis-dinov3-live-conditioning.v1');
   assert.equal(envelope.requestId, provenance.requestId);
   assert.equal(envelope.producer.sessionId, provenance.producerSessionId);
-  assert.equal(envelope.consumer.modelReference.revision, provenance.consumerModelReferenceRevision);
-  assert.equal(envelope.consumer.modelReference.dinov3SourceSha256, provenance.consumerDinoSourceSha256);
-  assert.match(envelope.consumer.negativeConditioning, /zeros_like\(cond\)/);
+  assert.equal(envelope.consumer, undefined,
+    'the producer must not report an effective consumer process when the configured receiver is unowned');
+  assert.equal(envelope.consumerReference.repository, 'trellis2mlx');
+  assert.equal(envelope.consumerReference.modelReference.revision, provenance.consumerModelReferenceRevision);
+  assert.equal(envelope.consumerReference.modelReference.dinov3SourceSha256, provenance.consumerDinoSourceSha256);
+  assert.match(envelope.consumerReference.expectedNegativeConditioning, /zeros_like\(cond\)/);
+  assert.match(envelope.consumerReference.expectedNegativeConditioning, /not observed/i);
   assert.deepEqual(envelope.tensor.shape, tensorShape);
   assert.equal(envelope.tensor.byteLength, byteLength);
   assert.equal(envelope.tensor.sha256, result.tensor.sha256);
   assert.equal(envelope.tensor.layout, 'BSH');
   assert.match(envelope.transfer.semantics, /host readback/);
-  assert.match(envelope.transfer.semantics, /distinct MLX-owned array/);
+  assert.match(envelope.transfer.semantics, /receiving process.*unobserved/i);
+  assert.doesNotMatch(envelope.transfer.semantics, /MLX consumer constructs a distinct MLX-owned array/);
 
   await assert.rejects(
     forwardF32ConditioningTensor({ url, bytes: bytes.subarray(0, -4), provenance }),

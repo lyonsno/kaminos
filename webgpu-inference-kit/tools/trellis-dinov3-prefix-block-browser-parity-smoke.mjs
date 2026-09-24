@@ -26,8 +26,8 @@ const timeoutMs=Number(args.get('--timeout-ms')||0);
 const atol=Number(args.get('--atol')||0.002);
 const rtol=Number(args.get('--rtol')||0.001);
 const mode=args.get('--mode')||'block0-parity';
-const conditioningSinkUrl=args.has('--conditioning-sink-url') ? validateLiveConditioningSinkUrl(args.get('--conditioning-sink-url')) : null;
-if(conditioningSinkUrl&&mode!=='resident-full-conditioning') throw new Error('--conditioning-sink-url is only valid with --mode resident-full-conditioning');
+const requestedConditioningSinkUrl=args.has('--conditioning-sink-url') ? args.get('--conditioning-sink-url') : null;
+let conditioningSinkUrl=null;
 const chrome=process.env.KAMINOS_CHROME||args.get('--chrome')||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const invocationId=randomUUID();
 const requestedRouteId=mode==='resident-block1'
@@ -110,7 +110,8 @@ function writeReport(extra={}) {
   const actualRoute=browserState?.status==='passed'&&browserState?.receipt ? browserState.receipt.effectiveRouteId : browserState?.effectiveRouteId||null;
   const report={
     schema:reportSchema, ok:false, failure_phase:phase, mode, requestedUrl, invocationId, reportPath,
-    requestedConditioningSinkUrl:conditioningSinkUrl,
+    requestedConditioningSinkUrl,
+    effectiveConditioningSinkUrl:conditioningSinkUrl,
     requestedRouteId, effectiveRouteId:actualRoute, sourceRevision, chrome, chromeProcessPid:chromeProcess?.pid||null,
     authority:browserState?.authority||'unverified',
     browserVersion:browserVersion?.Browser||null, browser:browserState?.browser||null,
@@ -308,6 +309,10 @@ let ws;
 let exitCode=1;
 try {
   phase='local_preflight';
+  if(requestedConditioningSinkUrl!==null) {
+    conditioningSinkUrl=validateLiveConditioningSinkUrl(requestedConditioningSinkUrl);
+    if(mode!=='resident-full-conditioning') throw new Error('--conditioning-sink-url is only valid with --mode resident-full-conditioning');
+  }
   if(!args.has('--reference-dir')||!args.has('--source-image')||!args.has('--output-dir')||!args.has('--report')) throw new Error('--reference-dir, --source-image, --output-dir, and --report are required');
   if(!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1','resident-block2-attention','resident-block2-mlp','resident-full-conditioning'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
   gitRoot=execFileSync('git',['-C',root,'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
@@ -371,6 +376,6 @@ try {
 } finally {
   try { ws?.close(); } catch {}
   try { chromeProcess?.kill(); } catch {}
-  try { await new Promise(resolveClose=>server?.close(resolveClose)); } catch {}
+  try { if(server) await new Promise(resolveClose=>server.close(resolveClose)); } catch {}
 }
 process.exitCode=exitCode;
