@@ -3131,6 +3131,14 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     throw new RangeError(`Finger Fluid density cell rejection must be 0 or 1: ${requestedDensityCellRejectionValue}`);
   }
   const requestedDensityCellRejection = requestedDensityCellRejectionValue === '1';
+  const requestedUniformVolumeDensityKernelValue = params.get('finger_fluid_uniform_volume_density_kernel');
+  if (requestedUniformVolumeDensityKernelValue !== null
+    && !['0', '1'].includes(requestedUniformVolumeDensityKernelValue)) {
+    throw new RangeError(
+      `Finger Fluid uniform volume density kernel must be 0 or 1: ${requestedUniformVolumeDensityKernelValue}`,
+    );
+  }
+  const requestedUniformVolumeDensityKernel = requestedUniformVolumeDensityKernelValue === '1';
   const requestedParticleCount = Number(params.get('finger_fluid_particle_count')
     ?? oracleCockpitRequested?.particleCount
     ?? waterfallOracleConfig?.defaultParticleCount
@@ -3245,6 +3253,11 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveDensityCellRejection: requestedDensityCellRejection && !requestedAdaptiveDensity,
     densityCellRejectionBypassReason: requestedDensityCellRejection && requestedAdaptiveDensity
       ? 'adaptive_density_neighbor_radius'
+      : null,
+    requestedUniformVolumeDensityKernel,
+    effectiveUniformVolumeDensityKernel: requestedUniformVolumeDensityKernel && !requestedAdaptiveDensity,
+    uniformVolumeDensityKernelBypassReason: requestedUniformVolumeDensityKernel && requestedAdaptiveDensity
+      ? 'adaptive_density_has_variable_particle_volumes'
       : null,
     requestedParticleCount,
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
@@ -11318,6 +11331,9 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.requestedDensityCellRejection = fingerFluidBenchConfig.requestedDensityCellRejection;
   gpuState.effectiveDensityCellRejection = gpuState.densityCellRejection;
   gpuState.densityCellRejectionBypassReason = fingerFluidBenchConfig.densityCellRejectionBypassReason;
+  gpuState.requestedUniformVolumeDensityKernel = fingerFluidBenchConfig.requestedUniformVolumeDensityKernel;
+  gpuState.effectiveUniformVolumeDensityKernel = gpuState.uniformVolumeDensityKernel;
+  gpuState.uniformVolumeDensityKernelBypassReason = fingerFluidBenchConfig.uniformVolumeDensityKernelBypassReason;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
   gpuState.effectiveWitnessTargetStep = fingerFluidBenchConfig.effectiveWitnessTargetStep;
   gpuState.requestedWitnessStartStep = fingerFluidBenchConfig.requestedWitnessStartStep;
@@ -11545,6 +11561,7 @@ async function startFingerFluidBench() {
       fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
       densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection,
+      uniformVolumeDensityKernel: fingerFluidBenchConfig.effectiveUniformVolumeDensityKernel,
       energyDiagnosticsMode: fingerFluidBenchConfig.effectiveEnergyDiagnosticsMode,
       substeps: 1,
       truthScene: fingerFluidBenchConfig.effectiveTruthScene,
