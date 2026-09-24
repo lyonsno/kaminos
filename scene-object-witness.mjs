@@ -350,30 +350,63 @@ async function runSceneBoneGizmoScenario(ws) {
     throw new Error('scene-bone-gizmo loaded a pair without both independently named skinned rigs: ' + JSON.stringify(before));
   }
   const pickTargets = await evaluate(ws, `window.kaminosSceneRigPickTargetsDebugState?.(${JSON.stringify(objectId)}) ?? []`);
+  const requiredBoneNames = ['hindlimb-left-hip', 'hindlimb-left-stifle', 'hindlimb-left-hock'];
   const selectionAttempts = [];
   let hitTarget = null;
   let selected = null;
-  for (const candidate of pickTargets.filter(target => Number.isFinite(target.x) && Number.isFinite(target.y))) {
+  let transformInspectorBoneName = '';
+  for (const requiredBoneName of requiredBoneNames) {
+    const candidate = pickTargets.find(target => target.boneName === requiredBoneName
+      && target.meshName === before.meshes[0].name
+      && Number.isFinite(target.x)
+      && Number.isFinite(target.y));
+    if (!candidate) {
+      selectionAttempts.push({ requiredBoneName, candidate: null, observed: null, transformInspectorBoneName: '', matched: false });
+      continue;
+    }
     await dispatchMouseClick(ws, candidate);
     await delay(100);
     const observed = await evaluate(ws, `window.kaminosSelectedSceneBoneDebugState?.() ?? null`);
+    const transformInspector = await evaluate(ws, `(() => {
+      const inspector = document.querySelector('#transform-inspector');
+      const fields = document.querySelector('#transform-inspector-fields');
+      const prompt = document.querySelector('#transform-inspector-empty');
+      return {
+        selectedObjectId: inspector?.dataset.selectedObjectId || '',
+        selectedBoneName: inspector?.dataset.selectedBoneName || '',
+        fieldsHidden: !!fields?.hidden,
+        prompt: prompt?.textContent?.trim() || '',
+      };
+    })()`);
     const matched = observed?.objectId === objectId
-      && observed?.boneName === candidate.boneName
+      && observed?.boneName === requiredBoneName
+      && candidate.boneName === requiredBoneName
       && observed?.meshName === candidate.meshName
       && observed?.isBone === true
       && observed?.helperSegmentMatchesBone === true
       && observed?.owningMeshMatchesBone === true
-      && observed?.transformControlsAttachedToBone === true;
-    selectionAttempts.push({ candidate, observed, matched });
-    if (matched) {
+      && observed?.transformControlsAttachedToBone === true
+      && transformInspector?.selectedObjectId === objectId
+      && transformInspector?.selectedBoneName === requiredBoneName
+      && transformInspector?.fieldsHidden === true
+      && transformInspector?.prompt.includes(`Selected scene bone: ${requiredBoneName}`);
+    selectionAttempts.push({ requiredBoneName, candidate, observed, transformInspectorBoneName: transformInspector?.selectedBoneName || '', transformInspector, matched });
+    if (requiredBoneName === 'hindlimb-left-hock') {
       hitTarget = candidate;
       selected = observed;
-      break;
+      transformInspectorBoneName = transformInspector?.selectedBoneName || '';
     }
   }
-  const selectedBoneTargetMatchesHit = !!hitTarget && !!selected;
+  const requiredBoneSelectionsMatch = selectionAttempts.length === requiredBoneNames.length
+    && selectionAttempts.every(attempt => attempt.matched === true);
+  const selectedBoneTargetMatchesHit = requiredBoneSelectionsMatch && !!hitTarget && !!selected;
+  lastEvidence.sceneBoneGizmo = {
+    objectId, expectedAssetSha256, loadedSha256, requestedSha256, effectiveUrl,
+    requiredBoneNames, selectionAttempts, requiredBoneSelectionsMatch,
+    hitTarget, selected, selectedBoneTargetMatchesHit, transformInspectorBoneName,
+  };
   if (!selectedBoneTargetMatchesHit) {
-    throw new Error('viewport bone clicks did not attach the normal transform gizmo to any exact rig-segment hit: ' + JSON.stringify({ pickTargets, selectionAttempts, selectedBoneTargetMatchesHit }));
+    throw new Error('one or more exact rig-segment clicks selected the wrong bone or left the Transform inspector object-scoped: ' + JSON.stringify(lastEvidence.sceneBoneGizmo));
   }
   const meshIndex = before.meshes.findIndex(mesh => mesh.name === selected.meshName);
   if (meshIndex < 0) throw new Error('selected viewport bone has no owning skinned cast in the imported pair: ' + JSON.stringify({ selected, before }));
@@ -384,6 +417,7 @@ async function runSceneBoneGizmoScenario(ws) {
   const rotateButtonActive = await evaluate(ws, `document.querySelector('#tb-gizmo-rotate')?.classList.contains('active') ?? false`);
   const rotateTarget = await evaluate(ws, `window.kaminosSelectedSceneBoneDebugState?.() ?? null`);
   const rotateInfo = await evaluate(ws, `document.querySelector('#info-bar')?.textContent?.trim() || ''`);
+  const rotateInspectorBoneName = await evaluate(ws, `document.querySelector('#transform-inspector')?.dataset.selectedBoneName || ''`);
   const gizmoPointerTargets = await evaluate(ws, `window.kaminosTransformGizmoPointerTargetsDebugState?.() ?? []`);
   const gizmoTargets = gizmoPointerTargets.map(target => ({
     name: target.name,
@@ -391,8 +425,8 @@ async function runSceneBoneGizmoScenario(ws) {
     isLine: target.isLine,
     projectedPointCount: target.points?.length || 0,
   }));
-  if (!rotateButtonActive || !gizmoPointerTargets.length || !rotateTarget?.transformControlsAttachedToBone || !rotateInfo.includes('Rotate gizmo: scene bone')) {
-    throw new Error('the existing Rotate toolbar did not remain attached to and identify the selected scene Bone: ' + JSON.stringify({ rotateButtonActive, rotateTarget, rotateInfo, gizmoTargets }));
+  if (!rotateButtonActive || !gizmoPointerTargets.length || !rotateTarget?.transformControlsAttachedToBone || !rotateInfo.includes('Rotate gizmo: scene bone') || rotateInspectorBoneName !== selected.boneName) {
+    throw new Error('the existing Rotate toolbar or Transform inspector did not retain the selected scene Bone: ' + JSON.stringify({ rotateButtonActive, rotateTarget, rotateInfo, rotateInspectorBoneName, gizmoTargets }));
   }
   const pivot = await evaluate(ws, `(() => {
     const state = window.kaminosSelectedSceneBoneDebugState?.();
@@ -450,8 +484,8 @@ async function runSceneBoneGizmoScenario(ws) {
     : Infinity;
   const posedShot = await capturePngScreenshot(ws, siblingPngPath('-posed-with-scene-bone-gizmo'));
   const posedPixels = viewportPixelDelta(beforeShot.path, posedShot.path);
-  if (!gizmoDrag || gizmoDrag.quaternionDelta < 0.005 || gizmoPoseBoundsDelta < 0.005 || otherCastPoseError > 0.000001) {
-    throw new Error('standard Rotate gizmo did not deform only the clicked cast: ' + JSON.stringify({ selected, gizmoDrag, gizmoPoseBoundsDelta, otherCastPoseError, poseBefore, poseAfter, handles, posedPixels }));
+  if (!gizmoDrag || gizmoDrag.quaternionDelta < 0.005 || gizmoPoseBoundsDelta < 0.005 || posedPixels.changedPixels < 1 || otherCastPoseError > 0.000001) {
+    throw new Error('standard Rotate gizmo did not visibly deform only the clicked cast: ' + JSON.stringify({ selected, gizmoDrag, gizmoPoseBoundsDelta, otherCastPoseError, poseBefore, poseAfter, handles, posedPixels }));
   }
 
   await wsRequest(ws, 'Page.reload', { ignoreCache: true });
@@ -470,8 +504,8 @@ async function runSceneBoneGizmoScenario(ws) {
     : Infinity;
   lastEvidence.sceneBoneGizmo = {
     objectId, restoredObjectId, expectedAssetSha256, loadedSha256, requestedSha256, effectiveUrl,
-    hitTarget, selected, selectedBoneTargetMatchesHit, selectionAttempts, meshIndex, otherMeshIndex,
-    rotateButtonActive, rotateTarget, rotateInfo, gizmoTargets,
+    requiredBoneNames, requiredBoneSelectionsMatch, hitTarget, selected, selectedBoneTargetMatchesHit, selectionAttempts, meshIndex, otherMeshIndex,
+    transformInspectorBoneName, rotateButtonActive, rotateTarget, rotateInfo, rotateInspectorBoneName, gizmoTargets,
     handleCandidateCounts: handles.map(handle => ({ name: handle.name, projectedCandidates: handle.points.length })),
     gizmoDrag, poseBefore, poseAfter,
     gizmoPoseBoundsDelta, otherCastPoseError, beforeShot, posedShot, posedPixels,
@@ -480,8 +514,33 @@ async function runSceneBoneGizmoScenario(ws) {
   if (restoredLink?.status !== 'loaded' || restoredLink.loadedSha256 !== expectedAssetSha256 || restoredError > 0.000001) {
     throw new Error('page reload did not restore the exact imported pair pose after gizmo manipulation: ' + JSON.stringify({ restoredLink, restoredError, restored }));
   }
+  const restoredPickTargets = await evaluate(ws, `window.kaminosSceneRigPickTargetsDebugState?.(${JSON.stringify(restoredObjectId)}) ?? []`);
+  const restoredHit = restoredPickTargets.find(target => target.boneName === selected.boneName && target.meshName === selected.meshName);
+  if (!restoredHit) {
+    throw new Error('reloaded rig did not expose the same bone segment for pixel-parity capture: ' + JSON.stringify({ selected, restoredPickTargets }));
+  }
+  await dispatchMouseClick(ws, restoredHit);
+  await delay(100);
+  const restoredSelected = await evaluate(ws, `window.kaminosSelectedSceneBoneDebugState?.() ?? null`);
+  if (restoredSelected?.objectId !== restoredObjectId
+      || restoredSelected?.boneName !== selected.boneName
+      || restoredSelected?.meshName !== selected.meshName
+      || restoredSelected?.transformControlsAttachedToBone !== true) {
+    throw new Error('reloaded viewport could not restore the original bone selection before pixel-parity capture: ' + JSON.stringify({ selected, restoredSelected, restoredObjectId }));
+  }
+  await evaluate(ws, `document.querySelector('#tb-gizmo-rotate')?.click()`);
+  await delay(250);
   const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-restored-scene-bone-gizmo'));
+  const restoredPixels = viewportPixelDelta(beforeShot.path, restoredShot.path);
+  const restoredPixelTolerance = Math.max(3, Math.ceil(posedPixels.changedPixels * 0.05));
   lastEvidence.sceneBoneGizmo.restoredShot = restoredShot;
+  lastEvidence.sceneBoneGizmo.restoredPixels = restoredPixels;
+  lastEvidence.sceneBoneGizmo.restoredPixelTolerance = restoredPixelTolerance;
+  lastEvidence.sceneBoneGizmo.restoredPickTargets = restoredPickTargets;
+  lastEvidence.sceneBoneGizmo.restoredSelection = restoredSelected;
+  if (restoredPixels.changedPixels > restoredPixelTolerance) {
+    throw new Error('reloaded scene pixels materially differ from the pre-drag pose: ' + JSON.stringify({ restoredLink, restoredError, restoredPixels, restoredPixelTolerance, restoredShot }));
+  }
 }
 
 const DIRECT_ASSET_LINK_SCENARIOS = {
