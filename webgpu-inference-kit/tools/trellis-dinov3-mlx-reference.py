@@ -29,6 +29,8 @@ from safetensors import safe_open
 SCHEMA = "kaminos.trellis-dinov3-mlx-prefix-block-reference.v1"
 MODEL_ID = "facebook/dinov3-vitl16-pretrain-lvd1689m"
 REVISION = "ea8dc2863c51be0a264bab82070e3e8836b02d51"
+EXPECTED_TRELLIS_REFERENCE_REVISION = "cddaf3cb8a9f28956114956ebe754d6661a3f695"
+EXPECTED_TRELLIS_DINOV3_SOURCE_SHA256 = "5e56c76b947bbd59e9353c06470101ac28b6462649161cc8dd3740b2cf66403c"
 EXPECTED_SOURCE_SHA256 = "abf395cc52d81c26dadae9f024072d6c7301679be4e8fc08d572723d7ae32a21"
 MODEL_FILES = {
     "model.safetensors": "dcb2e45127cccbf1601e5f42fef165eea275c8e5213197e8dcf3f48822718179",
@@ -102,6 +104,20 @@ def file_sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def require_pinned_full_conditioning_source(revision: str, source_sha256: str) -> None:
+    """Admit only the reviewed native TRELLIS implementation for full export."""
+    if revision != EXPECTED_TRELLIS_REFERENCE_REVISION:
+        raise ValueError(
+            "full-conditioning TRELLIS source revision mismatch: "
+            f"{revision} != {EXPECTED_TRELLIS_REFERENCE_REVISION}"
+        )
+    if source_sha256 != EXPECTED_TRELLIS_DINOV3_SOURCE_SHA256:
+        raise ValueError(
+            "full-conditioning DINOv3 source digest mismatch: "
+            f"{source_sha256} != {EXPECTED_TRELLIS_DINOV3_SOURCE_SHA256}"
+        )
 
 
 def record_array(out_dir: Path, name: str, value: np.ndarray, role: str) -> dict:
@@ -185,6 +201,9 @@ def execute(args) -> dict:
     trellis_root = Path(args.trellis_root).resolve()
     dinov3_source = trellis_root / "trellmlx/models/dinov3.py"
     trellis_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=trellis_root, text=True).strip()
+    dinov3_source_sha256 = file_sha256(dinov3_source)
+    if args.mode == "full-conditioning":
+        require_pinned_full_conditioning_source(trellis_revision, dinov3_source_sha256)
 
     model = DINOv3ViT(
         hidden_size=config["hidden_size"], num_heads=config["num_attention_heads"],
@@ -356,7 +375,7 @@ def execute(args) -> dict:
         outputs[name] = record_array(out_dir, name, value, role)
     output_manifest = {
         "schema": SCHEMA, "ok": True,
-        "reference": {"implementation": "trellmlx.models.dinov3.DINOv3ViT", "sourceRoot": str(trellis_root), "sourceRevision": trellis_revision, "sourceFile": str(dinov3_source), "sourceFileSha256": file_sha256(dinov3_source), "device": str(mx.default_device()), "mlxVersion": getattr(mx, "__version__", "unreported"), "loadedTensorCount": loaded_count},
+        "reference": {"implementation": "trellmlx.models.dinov3.DINOv3ViT", "sourceRoot": str(trellis_root), "sourceRevision": trellis_revision, "sourceFile": str(dinov3_source), "sourceFileSha256": dinov3_source_sha256, "device": str(mx.default_device()), "mlxVersion": getattr(mx, "__version__", "unreported"), "loadedTensorCount": loaded_count},
         "model": {"id": MODEL_ID, "revision": REVISION, "files": files, "config": config, "dtype": "float32", "checkpointTensorDtypes": ["F32"]},
         "preprocessing": preprocessing,
         "computation": {"mode": args.mode, "precision": "float32", "framework": "MLX", "prefixTokens": ["class", "register0", "register1", "register2", "register3"], "patchTokens": 1024, "patchGrid": [32, 32], "sequenceLength": 1029, "hiddenSize": 1024, "ropeTheta": config["rope_theta"], "layerNormEps": config["layer_norm_eps"], "attention": "global-scaled-dot-product", "ropeAppliedTo": "patch q/k tokens only", "layerScale": "learned layer0/block1/block2 layer_scale1 and layer0/block1 layer_scale2", "residentProbeCompleteTransformerBlockCount": 1, "residentProbe": "layer1.attention(block1_norm1_hidden_states); block0_hidden_states + attention_output * layer1.layer_scale1", "residentProbeOutputBoundary": "after complete layer.0 and block1 attention residual; before block1 norm2 and final model LayerNorm", "residentBlock1CompleteTransformerBlockCount": 2, "residentBlock1Probe": "layer1.norm2(block1_after_attention_hidden_states); layer1.mlp(block1_norm2_hidden_states); block1_after_attention_hidden_states + mlp_output * layer1.layer_scale2", "residentBlock2Norm1Probe": "layer2.norm1(block1_after_mlp_hidden_states)", "residentBlock2Norm1OutputBoundary": "after two complete transformer blocks and block 2 norm1; before block 2 attention and final model LayerNorm", "residentBlock2AttentionProbe": "layer2.attention(block2_norm1_hidden_states); block1_after_mlp_hidden_states + attention_output * layer2.layer_scale1", "residentBlock2AttentionOutputBoundary": "after two complete transformer blocks and block 2 attention residual; before block 2 norm2 and final model LayerNorm", "finalNoAffineLayerNormApplied": False, "residentBlock1OutputBoundary": "after complete layer.0 and complete layer.1; before final model LayerNorm"},

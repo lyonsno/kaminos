@@ -25,6 +25,20 @@ class ReferenceArrayTests(unittest.TestCase):
 
 
 class FullConditioningContractTests(unittest.TestCase):
+    def test_full_conditioning_rejects_native_source_revision_or_file_drift(self):
+        self.assertTrue(
+            hasattr(REFERENCE, "require_pinned_full_conditioning_source"),
+            "full-conditioning must reject source identity outside the reviewed TRELLIS reference",
+        )
+        revision = "cddaf3cb8a9f28956114956ebe754d6661a3f695"
+        source_sha256 = "5e56c76b947bbd59e9353c06470101ac28b6462649161cc8dd3740b2cf66403c"
+        REFERENCE.require_pinned_full_conditioning_source(revision, source_sha256)
+
+        with self.assertRaisesRegex(ValueError, "revision"):
+            REFERENCE.require_pinned_full_conditioning_source("changed-revision", source_sha256)
+        with self.assertRaisesRegex(ValueError, "source digest"):
+            REFERENCE.require_pinned_full_conditioning_source(revision, "changed-source-digest")
+
     def test_full_layer_inventory_includes_every_checkpointed_block_without_truncation(self):
         self.assertTrue(
             hasattr(REFERENCE, "layer_weight_tensors"),
