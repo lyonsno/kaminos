@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -22,6 +23,8 @@ const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
 const splatAssetName = args.get('--splat-asset-name') || null;
 const expectedAssetSha256 = args.get('--expected-asset-sha256') || null;
+const motionClipPath = args.get('--motion-clip') ? resolve(args.get('--motion-clip')) : null;
+const expectedMotionClipSha256 = args.get('--expected-motion-clip-sha256') || null;
 const poseMeshIndex = Number(args.get('--pose-mesh-index') || 0);
 
 let phase = 'initializing';
@@ -328,6 +331,174 @@ async function runMeshSkinnedPoseScenario(ws) {
     throw new Error('live pose pixels did not change and restore in the creature viewport: ' + JSON.stringify({ identicalControl, posedPixels, restoredPixels }));
   }
   lastEvidence.meshSkinnedPose = { objectId, expectedAssetSha256, loadedSha256, poseMeshIndex, bone: boneName, axis: 'z', degrees: 12, before, beforeShot, action, after, moved, otherBoneError, posedShot, restored, restoredShot, returnError, quaternionReturnError, identicalControl, posedPixels, restoredPixels };
+}
+
+async function runCatMotionRetargetScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-cat-motion-retarget';
+  if (!motionClipPath || !/^[a-f0-9]{64}$/.test(expectedMotionClipSha256 || '')) {
+    throw new Error('cat-motion-retarget requires --motion-clip and its exact --expected-motion-clip-sha256');
+  }
+  const clipBytes = readFileSync(motionClipPath);
+  const loadedMotionClipSha256 = createHash('sha256').update(clipBytes).digest('hex');
+  if (loadedMotionClipSha256 !== expectedMotionClipSha256) {
+    throw new Error(`retained Kimodo clip hash mismatch: expected ${expectedMotionClipSha256}, got ${loadedMotionClipSha256}`);
+  }
+  const result = JSON.parse(clipBytes.toString('utf8'));
+  if (!Array.isArray(result.joints) || result.joints.length < 2 || result.numJoints !== 30
+      || !Array.isArray(result.parents) || result.parents.length !== 30
+      || result.joints.some(frame => !Array.isArray(frame) || frame.length !== 30)) {
+    throw new Error('retained motion input is not a complete SOMA30 frame sequence');
+  }
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const requestedAssetSha256 = new URL(url).searchParams.get('mesh_sha256');
+  const loadedAssetSha256 = lastEvidence.meshAssetLink.state.loadedSha256;
+  if (requestedAssetSha256 !== expectedAssetSha256 || loadedAssetSha256 !== expectedAssetSha256) {
+    throw new Error('cat carrier bytes are not bound to the expected asset SHA-256: ' + JSON.stringify({ requestedAssetSha256, loadedAssetSha256, expectedAssetSha256 }));
+  }
+  await evaluate(ws, 'window.kaminosFrameSelected?.()');
+  await delay(900);
+  if (![0, 1].includes(poseMeshIndex)) throw new Error('cat motion witness needs painted mesh index 0 or 1');
+  const baseline = await evaluate(ws, `window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}) ?? null`);
+  if (!baseline || baseline.meshes.length !== 2) throw new Error('exact painted pair did not expose two skinned meshes');
+  const canonicalHip = poseMeshIndex === 0 ? 'hindlimb-left-hip' : 'hindlimb-left-hip_1';
+  await evaluate(ws, 'window.__originalCatMotionFetch = window.fetch');
+  await evaluate(ws, `(() => { const row = [...document.querySelectorAll('[data-scene-object-id]')].find(item => item.dataset.sceneObjectId === ${JSON.stringify(objectId)}); if (!row) throw new Error('cat scene row is missing'); row.click(); })()`);
+  const preflight = await evaluate(ws, `(() => { let requests = 0; const originalFetch = window.fetch; window.fetch = async () => { requests += 1; return { ok: true, status: 200, json: async () => window.__catMotionRetainedClip }; }; document.getElementById('motion-panel-generate-wriggle')?.click(); return new Promise(resolve => setTimeout(() => { window.fetch = originalFetch; resolve({ requests, status: document.getElementById('motion-panel-temporal-status')?.textContent || '' }); }, 40)); })()`);
+  if (preflight.requests !== 0 || !/click one of its hind-leg rig helpers/i.test(preflight.status)) {
+    throw new Error('Generate + Wriggle did not require a real selected skinned rig before calling the motion server: ' + JSON.stringify(preflight));
+  }
+  const pickTargets = await evaluate(ws, `window.kaminosSceneRigPickTargetsDebugState?.(${JSON.stringify(objectId)}) ?? []`);
+  const hipHit = pickTargets.find(target => target.boneName === (poseMeshIndex === 0 ? 'hindlimb-left-hip' : 'hindlimb-left-hip_1')
+    && target.meshName === baseline.meshes[poseMeshIndex].name
+    && Number.isFinite(target.x) && Number.isFinite(target.y));
+  if (!hipHit) throw new Error('visible viewport rig has no pick target for the chosen cat hind hip');
+  await dispatchMouseClick(ws, hipHit);
+  const selected = await evaluate(ws, 'window.kaminosSelectedSceneBoneDebugState?.() ?? null');
+  if (!selected?.isBone || selected.meshName !== baseline.meshes[poseMeshIndex].name) {
+    throw new Error('witness could not select the chosen cast’s real skinned hip: ' + JSON.stringify(selected));
+  }
+  const selectionRace = await evaluate(ws, `(() => { const wait = ms => new Promise(resolve => setTimeout(resolve, ms)); window.__catMotionRetainedClip = ${JSON.stringify(result)}; window.fetch = () => new Promise(resolve => { window.__resolveCatMotionRequest = resolve; }); document.getElementById('motion-panel-generate-wriggle')?.click(); return (async () => { await wait(40); const requested = typeof window.__resolveCatMotionRequest === 'function'; window.kaminosSelectSkinnedBoneForRigPreview(${JSON.stringify(objectId)}, ${1 - poseMeshIndex}, 'hindlimb-left-hip'); window.__resolveCatMotionRequest?.({ ok: true, status: 200, json: async () => window.__catMotionRetainedClip }); await wait(80); return { requested, state: window.kaminosMotionRigPreviewDebugState?.(), selection: window.kaminosSelectedSceneBoneDebugState?.() }; })(); })()`);
+  if (!selectionRace.requested || selectionRace.state?.active || selectionRace.selection?.meshName !== baseline.meshes[1 - poseMeshIndex].name) {
+    throw new Error('a late generation reply animated a newly selected cat instead of being discarded: ' + JSON.stringify(selectionRace));
+  }
+  await evaluate(ws, `window.kaminosSelectSkinnedBoneForRigPreview(${JSON.stringify(objectId)}, ${poseMeshIndex}, 'hindlimb-left-hip')`);
+  const stopRace = await evaluate(ws, `(() => { const wait = ms => new Promise(resolve => setTimeout(resolve, ms)); window.fetch = (input, init = {}) => new Promise((resolve, reject) => { window.__catMotionSignal = init.signal; init.signal?.addEventListener('abort', () => reject(new DOMException('aborted by Stop', 'AbortError')), { once: true }); }); document.getElementById('motion-panel-generate-wriggle')?.click(); return (async () => { await wait(40); const requested = window.__catMotionSignal instanceof AbortSignal; document.getElementById('motion-panel-stop-wriggle')?.click(); await wait(80); const signalAborted = window.__catMotionSignal?.aborted === true; const wriggleButtonEnabledAfterStop = document.getElementById('motion-panel-generate-wriggle')?.disabled === false; const panelGenerateButtonEnabledAfterStop = document.getElementById('motion-panel-generate-preview')?.disabled === false; window.fetch = window.__originalCatMotionFetch; return { requested, signalAborted, wriggleButtonEnabledAfterStop, panelGenerateButtonEnabledAfterStop, state: window.kaminosMotionRigPreviewDebugState?.() }; })(); })()`);
+  const stopAbortRace = {
+    ...stopRace,
+    signalAborted: stopRace.signalAborted,
+    wriggleButtonEnabledAfterStop: stopRace.wriggleButtonEnabledAfterStop,
+  };
+  if (!stopRace.requested || stopRace.state?.active) {
+    throw new Error('Stop did not invalidate an outstanding generation request: ' + JSON.stringify(stopRace));
+  }
+  if (!stopAbortRace.signalAborted || !stopAbortRace.wriggleButtonEnabledAfterStop || !stopAbortRace.panelGenerateButtonEnabledAfterStop) {
+    throw new Error('Stop did not abort the stalled generation and promptly restore its panel controls: ' + JSON.stringify(stopAbortRace));
+  }
+  const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-cat-before'));
+  const started = await evaluate(ws, `(() => { const wait = ms => new Promise(resolve => setTimeout(resolve, ms)); window.fetch = async (input, init) => ({ ok: true, status: 200, json: async () => window.__catMotionRetainedClip }); document.getElementById('motion-panel-generate-wriggle')?.click(); return wait(100).then(() => { const state = window.kaminosMotionRigPreviewDebugState?.(); window.fetch = window.__originalCatMotionFetch; return { state, requestRoute: 'mocked motion server /generate' }; }); })()`);
+  if (!started.state?.active) throw new Error('the visible Generate + Wriggle button did not start the bound retained clip: ' + JSON.stringify(started));
+  await delay(1550);
+  const during = await evaluate(ws, `({ state: window.kaminosMotionRigPreviewDebugState?.(), rigs: window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}) })`);
+  const live = during?.state;
+  if (!live?.active || live.targetObjectId !== objectId || live.frameCount !== result.joints.length
+      || live.actualBoneNames?.length !== 7 || live.notMutatedBones?.length < 1
+      || live.pelvisRotationApplied !== true || Math.abs(live.currentPelvisPitchRadians) < 0.03) {
+    throw new Error('rig retarget did not report visible pelvis pitch plus six hind-leg joints on the exact target: ' + JSON.stringify(live));
+  }
+  const mutatedBoneSet = new Set(live.actualBoneNames);
+  const selectedRig = during.rigs.meshes[poseMeshIndex];
+  const otherCast = during.rigs.meshes[1 - poseMeshIndex];
+  const mappedQuaternionDeltas = live.actualBoneNames.map(name => Math.hypot(
+    ...baseline.meshes[poseMeshIndex].boneQuaternions[name].map((value, axis) => value - selectedRig.boneQuaternions[name][axis]),
+  ));
+  const untouchedBoneError = Math.max(0, ...Object.entries(baseline.meshes[poseMeshIndex].boneQuaternions)
+    .filter(([name]) => !mutatedBoneSet.has(name))
+    .map(([name, quaternion]) => Math.hypot(...quaternion.map((value, axis) => value - selectedRig.boneQuaternions[name][axis]))));
+  const otherCastError = Math.max(0, ...Object.entries(baseline.meshes[1 - poseMeshIndex].boneQuaternions)
+    .map(([name, quaternion]) => Math.hypot(...quaternion.map((value, axis) => value - otherCast.boneQuaternions[name][axis]))));
+  if (mappedQuaternionDeltas[0] < 0.01 || Math.max(...mappedQuaternionDeltas.slice(1)) < 0.01
+      || untouchedBoneError > 1e-7 || otherCastError > 1e-7) {
+    throw new Error('motion did not move only the mapped hindquarters on only the selected cast: ' + JSON.stringify({ mappedQuaternionDeltas, untouchedBoneError, otherCastError, live }));
+  }
+  const motionShot = await capturePngScreenshot(ws, siblingPngPath('-cat-motion'));
+  const earlyDrift = Math.hypot(...live.currentPelvisWorldDisplacement) / lastEvidence.meshAssetLink.diameter;
+  const fullCycleSamples = [{ frame: live.frame, sourceRootOffset: live.currentSourceRootOffset, pelvisWorldDriftDiameterRatio: earlyDrift, screenshot: motionShot }];
+  await delay(3600);
+  const peakCycle = await evaluate(ws, `(() => { const state = window.kaminosMotionRigPreviewDebugState?.(); const rigs = window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}); return { state, rigs }; })()`);
+  const peakLive = peakCycle?.state;
+  const peakWorldDrift = Math.hypot(...(peakLive?.currentPelvisWorldDisplacement || [Infinity, Infinity, Infinity]));
+  const peakDriftRatio = peakWorldDrift / lastEvidence.meshAssetLink.diameter;
+  if (!peakLive?.active || peakLive.frame < 110 || peakLive.pelvisRootMotionApplied !== false || peakDriftRatio > 1e-6) {
+    throw new Error('partial-body playback drifted or failed to reach the clip’s later excursion: ' + JSON.stringify({ peakLive, peakDriftRatio }));
+  }
+  const peakCycleShot = await capturePngScreenshot(ws, siblingPngPath('-cat-cycle-peak'));
+  const peakQuaternionDeltas = peakLive.actualBoneNames.map(name => Math.hypot(
+    ...baseline.meshes[poseMeshIndex].boneQuaternions[name].map((value, axis) => value - peakCycle.rigs.meshes[poseMeshIndex].boneQuaternions[name][axis]),
+  ));
+  if (peakQuaternionDeltas[0] < 0.01 || Math.max(...peakQuaternionDeltas.slice(1)) < 0.01
+      || peakLive.pelvisRotationApplied !== true) {
+    throw new Error('late-cycle cat capture lacks both pelvis and hind-leg motion: ' + JSON.stringify({ peakQuaternionDeltas, peakLive }));
+  }
+  fullCycleSamples.push({ frame: peakLive.frame, sourceRootOffset: peakLive.currentSourceRootOffset, pelvisWorldDriftDiameterRatio: peakDriftRatio, quaternionDeltas: peakQuaternionDeltas, screenshot: peakCycleShot });
+  await evaluate(ws, "document.getElementById('motion-panel-stop-wriggle')?.click()");
+  await delay(250);
+  const restored = await evaluate(ws, `({ state: window.__kaminosMotionRigPreview, rigs: window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}) })`);
+  const restoredQuaternionError = Math.max(0, ...Object.entries(baseline.meshes[poseMeshIndex].boneQuaternions)
+    .map(([name, quaternion]) => Math.hypot(...quaternion.map((value, axis) => value - restored.rigs.meshes[poseMeshIndex].boneQuaternions[name][axis]))));
+  const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-cat-restored'));
+  const motionPixels = viewportPixelDelta(beforeShot.path, motionShot.path);
+  const restoredPixels = viewportPixelDelta(beforeShot.path, restoredShot.path);
+  if (restored.state?.active !== false || restoredQuaternionError > 1e-7 || motionPixels.changedPixels < 1 || restoredPixels.changedPixels !== 0) {
+    throw new Error('cat motion failed visible motion or exact stop/restore: ' + JSON.stringify({ restored, restoredQuaternionError, motionPixels, restoredPixels }));
+  }
+  const naturalStart = await evaluate(ws, `(() => { const wait = ms => new Promise(resolve => setTimeout(resolve, ms)); window.fetch = async () => ({ ok: true, status: 200, json: async () => window.__catMotionRetainedClip }); document.getElementById('motion-panel-generate-wriggle')?.click(); return wait(100).then(() => { const state = window.kaminosMotionRigPreviewDebugState?.(); window.fetch = window.__originalCatMotionFetch; return state; }); })()`);
+  if (!naturalStart?.active) throw new Error('panel button could not start a second retained clip for its end-of-clip witness');
+  await delay(5650);
+  const endLive = await evaluate(ws, 'window.kaminosMotionRigPreviewDebugState?.() ?? null');
+  if (!endLive?.active || endLive.frame < 165 || endLive.pelvisRootMotionApplied !== false) {
+    throw new Error('full-cycle end sample was not visibly active near the retained clip end: ' + JSON.stringify(endLive));
+  }
+  const endCycleShot = await capturePngScreenshot(ws, siblingPngPath('-cat-cycle-end'));
+  fullCycleSamples.push({ frame: endLive.frame, sourceRootOffset: endLive.currentSourceRootOffset, pelvisWorldDriftDiameterRatio: Math.hypot(...endLive.currentPelvisWorldDisplacement) / lastEvidence.meshAssetLink.diameter, screenshot: endCycleShot });
+  const clipCompletion = await evaluate(ws, `(() => { const wait = ms => new Promise(resolve => setTimeout(resolve, ms)); return (async () => { for (let i = 0; i < 75; i += 1) { const state = window.kaminosMotionRigPreviewDebugState?.(); if (!state?.active) break; await wait(100); } return window.__kaminosMotionRigPreview || null; })(); })()`);
+  const clipCompletionQuaternionError = await evaluate(ws, `(() => { const state = window.kaminosSkinnedRigDebugState?.(${JSON.stringify(objectId)}); const base = ${JSON.stringify(baseline.meshes[poseMeshIndex].boneQuaternions)}; const current = state?.meshes?.[${poseMeshIndex}]?.boneQuaternions || {}; return Math.max(0, ...Object.entries(base).map(([name, quaternion]) => Math.hypot(...quaternion.map((value, axis) => value - current[name][axis])))); })()`);
+  if (clipCompletion?.stopReason !== 'clip-complete' || clipCompletionQuaternionError > 1e-7) {
+    throw new Error('bounded cat playback did not restore its rig at clip completion: ' + JSON.stringify({ clipCompletion, clipCompletionQuaternionError }));
+  }
+  lastEvidence.catMotionRetarget = {
+    objectId,
+    expectedAssetSha256,
+    loadedAssetSha256,
+    meshIndex: poseMeshIndex,
+    selectedBone: canonicalHip,
+    motionClipPath,
+    expectedMotionClipSha256,
+    loadedMotionClipSha256,
+    panelFetchBackend: 'deterministic test stub serving the exact hash-verified retained clip; no motion-server conformance claim',
+    panelPreflight: preflight,
+    selectionRace,
+    stopRace,
+    stopAbortRace,
+    motionSourceRoute: `retained:${motionClipPath}`,
+    frameCount: result.joints.length,
+    fps: result.fps,
+    started,
+    live,
+    mappedQuaternionDeltas,
+    untouchedBoneError,
+    otherCastError,
+    beforeShot,
+    motionShot,
+    motionPixels,
+    restored,
+    restoredQuaternionError,
+    restoredShot,
+    restoredPixels,
+    clipCompletion,
+    clipCompletionQuaternionError,
+    fullCycleSamples,
+  };
 }
 
 async function runSceneBoneGizmoScenario(ws) {
@@ -5246,6 +5417,8 @@ try {
     await runMeshAssetLinkScenario(ws);
   } else if (scenario === 'mesh-skinned-pose') {
     await runMeshSkinnedPoseScenario(ws);
+  } else if (scenario === 'cat-motion-retarget') {
+    await runCatMotionRetargetScenario(ws);
   } else if (scenario === 'mesh-skinned-pose-controls') {
     await runSceneBoneGizmoScenario(ws);
   } else if (scenario === 'scene-bone-gizmo') {

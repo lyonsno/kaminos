@@ -928,8 +928,11 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-actions">
         <button class="btn" id="motion-gen-btn">Generate Motion</button>
         <button class="btn" id="motion-panel-generate-preview">Generate + Preview</button>
+        <button class="btn" id="motion-panel-generate-wriggle">Generate + Wriggle Selected Rig</button>
+        <button class="btn" id="motion-panel-stop-wriggle">Stop / Restore Rig</button>
         <button class="btn" id="motion-panel-fixture-preview">Preview Fixture</button>
       </div>
+      <div style="font-size:10px;color:#999;margin-top:5px;line-height:1.4">Select the intended cat, then click a hind-leg rig helper in the viewport to choose its skinned mesh. Generate + Wriggle pitches the weighted pelvis and drives six hind-leg joints; unweighted forequarters and other bones stay visibly still. Stop cancels pending generation or restores the captured rig.</div>
       <div class="slider-row">
         <span class="slider-label">Export</span>
         <select id="motion-panel-export-resolution" class="select-input">
@@ -2894,6 +2897,11 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObject, frameObjects, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import {
+  buildKimodoHindquartersTrack,
+  createMotionRigRequestGate,
+  sampleKimodoHindquartersTrackAtElapsed,
+} from './motion-rig-retarget-core.mjs';
 
 // --- Helpers ---
 function escapeHtml(s) {
@@ -2930,6 +2938,9 @@ let motionPhraseControlState = null;
 let motionTrackState = null;
 let motionOutputMapState = null;
 let motionTemporalState = null;
+let motionRigPreviewState = null;
+const motionRigPreviewRequestGate = createMotionRigRequestGate();
+let pendingMotionRigPreviewRequest = null;
 let forgeHostState = null;
 let generatedPoseTemporalRegistryPromise = null;
 let worldChambersRegistry = createDefaultWorldChambersRegistry();
@@ -4429,6 +4440,12 @@ function captureAuthoredSceneStateForPreview() {
 }
 
 function detachAuthoredSceneForPreview(authored) {
+  if (pendingMotionRigPreviewRequest && authored.sceneObjects.some(entry => entry.id === pendingMotionRigPreviewRequest.target.objectId)) {
+    invalidatePendingMotionRigPreview('scene-detached-for-preview');
+  }
+  if (motionRigPreviewState && authored.sceneObjects.some(entry => entry.id === motionRigPreviewState.objectId)) {
+    restoreMotionRigPreview('scene-detached-for-preview');
+  }
   sceneMutationToken++;
   for (const entry of authored.sceneObjects) scene.remove(entry.object);
   sceneObjects = [];
@@ -5673,6 +5690,7 @@ function clearActiveSceneObjectSelection() {
   activeSceneGroupId = null;
   currentMesh = null;
   selectedSceneBoneTarget = null;
+  motionRigSelectionChanged('scene-object-selection-cleared');
   updateSceneRigHelperVisibility();
   updateSceneRigHelperSelection();
   renderSceneObjectList();
@@ -5697,6 +5715,7 @@ function setActiveSceneObject(id) {
   activeSceneGroupId = null;
   currentMesh = entry.object;
   selectedSceneBoneTarget = null;
+  motionRigSelectionChanged('scene-object-selected');
   updateSceneRigHelperVisibility();
   updateSceneRigHelperSelection();
   renderSceneObjectList();
@@ -5723,6 +5742,7 @@ function setActiveSceneGroup(id) {
   activeSceneObjectId = null;
   currentMesh = null;
   selectedSceneBoneTarget = null;
+  motionRigSelectionChanged('scene-group-selected');
   updateSceneRigHelperVisibility();
   updateSceneRigHelperSelection();
   renderSceneObjectList();
@@ -5803,6 +5823,7 @@ function setActiveSceneBone(target) {
   activeSceneGroupId = null;
   currentMesh = entry.object;
   selectedSceneBoneTarget = target;
+  motionRigSelectionChanged('skinned-bone-selected');
   updateSceneRigHelperSelection();
   renderSceneObjectList();
   updateTransformInspector();
@@ -6089,6 +6110,16 @@ window.kaminosSelectedSceneBoneDebugState = function() {
     transformControlsAttachedToBone: transformControls?.object === target.bone,
     helperVisible: !!target.helperState?.helper?.visible,
   } : null;
+};
+
+window.kaminosSelectSkinnedBoneForRigPreview = function(objectId, meshIndex, boneName) {
+  const record = sceneObjects.find(entry => entry.id === objectId);
+  const mesh = sceneObjectSkinnedMeshes(objectId)[meshIndex];
+  const bone = mesh?.skeleton?.bones.find(item => item.name === boneName || item.name === `${boneName}_1`);
+  if (!record || !mesh || !bone) throw new Error(`Invalid rig-preview selection: ${objectId}/${meshIndex}/${boneName}`);
+  const helperState = sceneRigHelpers.get(objectId) || ensureSceneRigHelper(record);
+  if (!setActiveSceneBone({ objectId, record, helperState, mesh, bone })) throw new Error('Unable to select skinned rig bone');
+  return window.kaminosSelectedSceneBoneDebugState();
 };
 
 window.kaminosSceneRigPickTargetsDebugState = function(id) {
@@ -8531,6 +8562,235 @@ function motionPreviewNumberFromInputs(panelId, legacyId, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+const MOTION_RIG_PREVIEW_BONES = Object.freeze({
+  pelvis: 'pelvis',
+  leftHip: 'hindlimb-left-hip',
+  leftStifle: 'hindlimb-left-stifle',
+  leftHock: 'hindlimb-left-hock',
+  rightHip: 'hindlimb-right-hip',
+  rightStifle: 'hindlimb-right-stifle',
+  rightHock: 'hindlimb-right-hock',
+});
+
+function motionRigPreviewStatus() {
+  const state = motionRigPreviewState;
+  return state ? {
+    active: state.active,
+    route: state.sourceRoute,
+    prompt: state.prompt,
+    targetObjectId: state.objectId,
+    meshName: state.mesh.name || null,
+    mappedBones: Object.values(MOTION_RIG_PREVIEW_BONES),
+    actualBoneNames: [...state.bones.values()].map(({ bone }) => bone.name),
+    notMutatedBones: state.notMutatedBones,
+    frame: state.currentFrame,
+    frameCount: state.track.frameCount,
+    fps: state.track.fps,
+    currentSourceRootOffset: state.currentSourceRootOffset || [0, 0, 0],
+    currentPelvisDisplacementParentSpace: state.currentPelvisDisplacementParentSpace || [0, 0, 0],
+    currentPelvisWorldDisplacement: state.currentPelvisWorldDisplacement || [0, 0, 0],
+    pelvisRootMotionApplied: false,
+    pelvisRotationApplied: state.pelvisRotationApplied === true,
+    currentPelvisPitchRadians: state.currentPelvisPitchRadians || 0,
+    stopReason: state.stopReason || null,
+  } : { active: false };
+}
+
+function restoreMotionRigPreview(reason = 'operator-stop') {
+  const state = motionRigPreviewState;
+  if (!state) return false;
+  state.active = false;
+  state.stopReason = reason;
+  for (const { bone, quaternion } of state.bones.values()) bone.quaternion.copy(quaternion);
+  state.pelvis.position.copy(state.pelvisPosition);
+  state.mesh.skeleton.update();
+  motionRigPreviewState = null;
+  window.__kaminosMotionRigPreview = {
+    active: false,
+    route: state.sourceRoute,
+    prompt: state.prompt,
+    targetObjectId: state.objectId,
+    meshName: state.mesh.name || null,
+    mappedBones: Object.values(MOTION_RIG_PREVIEW_BONES),
+    actualBoneNames: [...state.bones.values()].map(({ bone }) => bone.name),
+    notMutatedBones: state.notMutatedBones,
+    stopReason: reason,
+  };
+  setMotionPanelTemporalStatus(`Rig motion stopped; selected rig restored (${reason})`, '#90a4ae');
+  window._kaminosDirty?.();
+  return true;
+}
+
+function invalidatePendingMotionRigPreview(reason = 'request-invalidated') {
+  const pending = pendingMotionRigPreviewRequest;
+  if (!pending) return false;
+  motionRigPreviewRequestGate.invalidate();
+  pendingMotionRigPreviewRequest = null;
+  pending.abortController?.abort(reason);
+  for (const button of pending.buttons || []) button.disabled = false;
+  setMotionPanelTemporalStatus(`Pending Kimodo rig preview cancelled (${reason})`, '#90a4ae');
+  return true;
+}
+
+function motionRigSelectionChanged(reason = 'selection-changed') {
+  invalidatePendingMotionRigPreview(reason);
+  const state = motionRigPreviewState;
+  if (state && (selectedSceneBoneTarget?.objectId !== state.objectId || selectedSceneBoneTarget?.mesh !== state.mesh)) {
+    restoreMotionRigPreview(`selected-rig-changed:${reason}`);
+  }
+}
+
+function stopMotionRigPreview(reason = 'operator-stop') {
+  const cancelledPending = invalidatePendingMotionRigPreview(reason);
+  const restored = restoreMotionRigPreview(reason);
+  if (cancelledPending && !restored) setMotionPanelTemporalStatus('Pending Kimodo rig preview cancelled; no rig changes were applied', '#90a4ae');
+  return restored || cancelledPending;
+}
+
+function motionRigTargetKey(target) {
+  return `${target.objectId}/${target.mesh.uuid || target.mesh.id || target.mesh.name || 'skinned-mesh'}`;
+}
+
+function motionRigAxisInParentSpace(parent, joint, child) {
+  const parentPosition = parent.getWorldPosition(new THREE.Vector3());
+  const jointPosition = joint.getWorldPosition(new THREE.Vector3());
+  const childPosition = child.getWorldPosition(new THREE.Vector3());
+  const incoming = parentPosition.sub(jointPosition);
+  const outgoing = childPosition.sub(jointPosition);
+  const worldAxis = incoming.cross(outgoing);
+  if (worldAxis.lengthSq() < 1e-10) throw new Error(`Target rig has a degenerate bend plane at ${joint.name}`);
+  worldAxis.normalize();
+  const parentWorldRotation = parent.getWorldQuaternion(new THREE.Quaternion());
+  return worldAxis.applyQuaternion(parentWorldRotation.invert()).normalize();
+}
+
+function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.motion-result', target = selectedSceneBoneTarget, requestToken = null } = {}) {
+  if (requestToken && !motionRigPreviewRequestGate.isCurrent(requestToken, motionRigTargetKey(target))) return null;
+  const record = target && sceneObjects.find(entry => entry.id === target.objectId);
+  if (!record || target.mesh?.isSkinnedMesh !== true || !target.mesh.skeleton
+      || selectedSceneBoneTarget?.objectId !== target.objectId || selectedSceneBoneTarget?.mesh !== target.mesh) {
+    throw new Error('Select a bone on the cat skinned mesh before starting rig motion');
+  }
+  restoreMotionRigPreview('replaced-by-new-preview');
+  const track = buildKimodoHindquartersTrack({ ...result, route: sourceRoute });
+  const boneByName = new Map(target.mesh.skeleton.bones.map(bone => [bone.name, bone]));
+  const mappedBones = new Map(Object.entries(MOTION_RIG_PREVIEW_BONES).map(([key, name]) => {
+    const bone = boneByName.get(name) || boneByName.get(`${name}_1`);
+    if (!bone) throw new Error(`Selected rig is missing required hindquarters bone “${name}”`);
+    return [key, { bone, quaternion: bone.quaternion.clone() }];
+  }));
+  const { pelvis, leftHip, leftStifle, leftHock, rightHip, rightStifle, rightHock } = Object.fromEntries(
+    [...mappedBones].map(([key, value]) => [key, value.bone]),
+  );
+  if (leftHip.parent !== pelvis || leftStifle.parent !== leftHip || leftHock.parent !== leftStifle
+    || rightHip.parent !== pelvis || rightStifle.parent !== rightHip || rightHock.parent !== rightStifle) {
+    throw new Error('Selected cat rig hierarchy does not match pelvis → hip → stifle → hock on both hind limbs');
+  }
+  scene.updateMatrixWorld(true);
+  const axes = {
+    leftHip: motionRigAxisInParentSpace(pelvis, leftHip, leftStifle),
+    leftStifle: motionRigAxisInParentSpace(leftHip, leftStifle, leftHock),
+    rightHip: motionRigAxisInParentSpace(pelvis, rightHip, rightStifle),
+    rightStifle: motionRigAxisInParentSpace(rightHip, rightStifle, rightHock),
+  };
+  axes.leftHock = axes.leftStifle.clone();
+  axes.rightHock = axes.rightStifle.clone();
+  if (!pelvis.parent) throw new Error('Selected cat pelvis must have a parent coordinate space');
+  const pelvisWorldAxis = leftHip.getWorldPosition(new THREE.Vector3())
+    .sub(rightHip.getWorldPosition(new THREE.Vector3()));
+  if (pelvisWorldAxis.lengthSq() < 1e-10) throw new Error('Selected cat pelvis has degenerate bilateral hip landmarks');
+  pelvisWorldAxis.normalize();
+  const pelvisParentWorldRotation = pelvis.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const pelvisAxis = pelvisWorldAxis.applyQuaternion(pelvisParentWorldRotation).normalize();
+  scene.updateMatrixWorld(true);
+  const pelvisWorldPosition = pelvis.getWorldPosition(new THREE.Vector3());
+  const actualMappedBoneNames = new Set([...mappedBones.values()].map(({ bone }) => bone.name));
+  const notMutatedBones = target.mesh.skeleton.bones
+    .map(bone => bone.name)
+    .filter(name => !actualMappedBoneNames.has(name));
+  motionRigPreviewState = {
+    active: true,
+    startedAtSeconds: performance.now() / 1000,
+    objectId: record.id,
+    mesh: target.mesh,
+    pelvis,
+    pelvisPosition: pelvis.position.clone(),
+    bones: mappedBones,
+    axes,
+    pelvisAxis,
+    track,
+    pelvisWorldPosition,
+    prompt: String(prompt),
+    sourceRoute,
+    currentFrame: 0,
+    completedFramePresented: false,
+    currentSourceRootOffset: [0, 0, 0],
+    currentPelvisDisplacementParentSpace: [0, 0, 0],
+    currentPelvisWorldDisplacement: [0, 0, 0],
+    pelvisRootMotionApplied: false,
+    pelvisRotationApplied: false,
+    currentPelvisPitchRadians: 0,
+    notMutatedBones,
+    stopReason: null,
+  };
+  window.__kaminosMotionRigPreview = motionRigPreviewStatus();
+  setMotionPanelTemporalStatus(`Playing ${track.frameCount} Kimodo frames on selected cat pelvis and hindquarters; unweighted forequarters stay still`, '#66bb6a');
+  window._kaminosDirty?.();
+  return window.__kaminosMotionRigPreview;
+}
+
+function updateMotionRigPreviewFrame(nowSeconds) {
+  const state = motionRigPreviewState;
+  if (!state?.active) return false;
+  if (!sceneObjects.some(entry => entry.id === state.objectId && entry.object)) {
+    restoreMotionRigPreview('target-removed');
+    return false;
+  }
+  if (selectedSceneBoneTarget?.mesh !== state.mesh) {
+    restoreMotionRigPreview('selected-skinned-mesh-changed');
+    return false;
+  }
+  if (state.completedFramePresented) {
+    restoreMotionRigPreview('clip-complete');
+    return false;
+  }
+  const playback = sampleKimodoHindquartersTrackAtElapsed(state.track, nowSeconds - state.startedAtSeconds);
+  const sample = playback.sample;
+  state.currentFrame = sample.frame;
+  const angles = {
+    leftHip: sample.left.hipRadians,
+    leftStifle: sample.left.stifleRadians,
+    leftHock: sample.left.hockRadians,
+    rightHip: sample.right.hipRadians,
+    rightStifle: sample.right.stifleRadians,
+    rightHock: sample.right.hockRadians,
+  };
+  for (const [key, radians] of Object.entries(angles)) {
+    const { bone, quaternion } = state.bones.get(key);
+    const delta = new THREE.Quaternion().setFromAxisAngle(state.axes[key], radians);
+    bone.quaternion.copy(delta.multiply(quaternion));
+  }
+  const { bone: pelvis, quaternion: pelvisQuaternion } = state.bones.get('pelvis');
+  const pelvisDelta = new THREE.Quaternion().setFromAxisAngle(state.pelvisAxis, sample.pelvisPitchRadians);
+  pelvis.quaternion.copy(pelvisDelta.multiply(pelvisQuaternion));
+  state.pelvisRotationApplied = Math.abs(sample.pelvisPitchRadians) > 1e-8;
+  state.currentPelvisPitchRadians = sample.pelvisPitchRadians;
+  state.currentSourceRootOffset = [...sample.rootOffset];
+  state.currentPelvisDisplacementParentSpace = [0, 0, 0];
+  state.pelvis.position.copy(state.pelvisPosition); // Ignore source travel; rotate only the weighted partial-body preview in place.
+  state.mesh.skeleton.update();
+  scene.updateMatrixWorld(true);
+  state.currentPelvisWorldDisplacement = state.pelvis.getWorldPosition(new THREE.Vector3())
+    .sub(state.pelvisWorldPosition).toArray();
+  if (playback.done) state.completedFramePresented = true;
+  window.__kaminosMotionRigPreview = motionRigPreviewStatus();
+  return true;
+}
+
+window.kaminosMotionRigPreviewDebugState = motionRigPreviewStatus;
+window.kaminosStopMotionRigPreview = () => stopMotionRigPreview('operator-stop');
+window.kaminosPreviewMotionServerResultOnSelectedRig = (result, options = {}) => startMotionRigPreview(result, options);
+
 window.kaminosPreviewMotionServerResult = async function(result, options = {}) {
   const clip = adaptMotionServerResultToGeneratedPoseTemporalClip(result, {
     id: options.id,
@@ -8601,6 +8861,64 @@ async function generateMotionPanelTemporalPreview() {
   }
 }
 window.generateMotion = generateMotionPanelTemporalPreview;
+
+async function generateMotionPanelCatHindquartersPreview() {
+  const serverUrl = String(document.getElementById('motion-panel-server-url')?.value || 'http://localhost:8098').replace(/\/+$/, '');
+  const prompt = motionPromptValueForPreview();
+  if (!prompt) {
+    setMotionPanelTemporalStatus('Prompt required', '#ef5350');
+    return null;
+  }
+  const selectedTarget = selectedSceneBoneTarget;
+  const targetRecord = selectedTarget && sceneObjects.find(entry => entry.id === selectedTarget.objectId);
+  if (!targetRecord || selectedTarget.mesh?.isSkinnedMesh !== true || !selectedTarget.mesh.skeleton) {
+    setMotionPanelTemporalStatus('Select the intended cat, then click one of its hind-leg rig helpers before generating', '#ef5350');
+    return null;
+  }
+  const target = { objectId: selectedTarget.objectId, mesh: selectedTarget.mesh, bone: selectedTarget.bone };
+  const targetKey = motionRigTargetKey(target);
+  const requestToken = motionRigPreviewRequestGate.begin(targetKey);
+  const abortController = new AbortController();
+  const duration = motionPreviewNumberFromInputs('motion-panel-duration', 'motion-duration', 6);
+  const steps = motionPreviewNumberFromInputs('motion-panel-steps', 'motion-steps', 100);
+  const buttons = [
+    document.getElementById('motion-panel-generate-wriggle'),
+    document.getElementById('motion-panel-generate-preview'),
+    document.getElementById('motion-gen-btn'),
+  ].filter(Boolean);
+  pendingMotionRigPreviewRequest = { token: requestToken, target, abortController, buttons };
+  for (const button of buttons) button.disabled = true;
+  setMotionPanelTemporalStatus('Generating Kimodo motion for captured cat rig target...', '#42a5f5');
+  try {
+    const response = await fetch(`${serverUrl}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, duration, steps }),
+      signal: abortController.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) throw new Error(data.error || `motion server returned ${response.status}`);
+    const route = `motion-server:${serverUrl}/generate`;
+    if (!motionRigPreviewRequestGate.isCurrent(requestToken, targetKey)) return null;
+    const result = window.kaminosPreviewMotionServerResultOnSelectedRig(data, { prompt, sourceRoute: route, target, requestToken });
+    if (!result) return null;
+    pendingMotionRigPreviewRequest = null;
+    motionRigPreviewRequestGate.invalidate();
+    setInfo(`Kimodo clip playing on selected rig hindquarters: ${prompt.slice(0, 48)}`);
+    return result;
+  } catch (error) {
+    if (!motionRigPreviewRequestGate.isCurrent(requestToken, targetKey)) return null;
+    pendingMotionRigPreviewRequest = null;
+    motionRigPreviewRequestGate.invalidate();
+    setMotionPanelTemporalStatus(`Cat rig preview failed: ${error.message}`, '#ef5350');
+    throw error;
+  } finally {
+    if (!pendingMotionRigPreviewRequest || pendingMotionRigPreviewRequest.token === requestToken) {
+      for (const button of buttons) button.disabled = false;
+    }
+  }
+}
+window.generateMotionPanelCatHindquartersPreview = generateMotionPanelCatHindquartersPreview;
 
 function motionPanelExportSettingsFromInputs() {
   const tileWidth = Math.max(160, Math.min(1440, Number(document.getElementById('motion-panel-export-resolution')?.value) || 560));
@@ -8803,6 +9121,8 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-temporal-enable')?.addEventListener('click', () => void createGeneratedPoseTemporalScene({ force: true }));
   document.getElementById('motion-gen-btn')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-generate-preview')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
+  document.getElementById('motion-panel-generate-wriggle')?.addEventListener('click', () => void generateMotionPanelCatHindquartersPreview());
+  document.getElementById('motion-panel-stop-wriggle')?.addEventListener('click', () => stopMotionRigPreview('operator-stop'));
   document.getElementById('motion-panel-fixture-preview')?.addEventListener('click', () => void previewMotionPanelTemporalFixture());
   document.getElementById('motion-panel-export-view')?.addEventListener('click', () => void exportMotionPanelCurrentViewFilmstrip());
   document.querySelectorAll('[data-motion-temporal-clip]').forEach(button => {
@@ -9149,6 +9469,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
 window.removeSceneObject = function(id) {
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
+  if (pendingMotionRigPreviewRequest?.target.objectId === id) invalidatePendingMotionRigPreview('target-removed');
+  if (motionRigPreviewState?.objectId === id) restoreMotionRigPreview('target-removed');
   const [entry] = sceneObjects.splice(index, 1);
   if (hybridSplatOverlayState.objectId === entry.id) {
     stopHybridSplatOverlay({ silent: true });
@@ -9157,7 +9479,10 @@ window.removeSceneObject = function(id) {
     exitSplatCorrectionMode({ revert: false, silent: true });
   }
   disposeSceneRigHelper(entry.id);
-  if (selectedSceneBoneTarget?.objectId === entry.id) selectedSceneBoneTarget = null;
+  if (selectedSceneBoneTarget?.objectId === entry.id) {
+    selectedSceneBoneTarget = null;
+    motionRigSelectionChanged('target-removed');
+  }
   const previousActiveGroupId = activeSceneGroupId;
   for (const group of sceneGroups) group.objectIds = group.objectIds.filter(objectId => objectId !== id);
   pruneSceneGroups();
@@ -9602,11 +9927,12 @@ async function initScene() {
     const motionTrackActive = updateMotionTrackFrame(performance.now() / 1000);
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
+    const motionRigPreviewActive = updateMotionRigPreviewFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
     const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || motionRigPreviewActive || forgeHostActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
+    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || motionRigPreviewActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -9621,7 +9947,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !motionRigPreviewActive && !forgeHostActive && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }
@@ -9723,6 +10049,7 @@ function applyEnvMap(envMap, intensity) {
 
 // --- File Loading ---
 function clearScene() {
+  stopMotionRigPreview('scene-cleared');
   sceneMutationToken++;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {

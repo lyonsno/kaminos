@@ -292,6 +292,44 @@ assert.match(transformInspectorSource, /if \(selectedSceneBoneTarget\?\.objectId
 assert.doesNotMatch(indexHtml, /id="skinned-pose-panel"|id="skinned-pose-cast-marker"/, 'bone manipulation does not add a custom pose panel or selection callout');
 assert.doesNotMatch(indexHtml, /skinnedPosePanel|skinned-pose-panel|skinned-pose-cast-marker/, 'the rejected panel implementation is removed, not merely disconnected');
 assert.match(witness, /scene-bone-gizmo/, 'painted-pair witness exercises direct viewport bone selection and transform gizmos');
+assert.match(witness, /cat-motion-retarget/, 'witness supports real retained Kimodo playback on the exact painted cat carrier');
+assert.match(witness, /expected-motion-clip-sha256/, 'cat motion witness binds playback to the exact retained clip bytes');
+const catMotionScenarioSource = witness.slice(
+  witness.indexOf('async function runCatMotionRetargetScenario('),
+  witness.indexOf('async function runSceneBoneGizmoScenario('),
+);
+const catMotionPanelSource = indexHtml.slice(
+  indexHtml.indexOf('async function generateMotionPanelCatHindquartersPreview()'),
+  indexHtml.indexOf('window.generateMotionPanelCatHindquartersPreview'),
+);
+assert.match(witness, /motion-panel-generate-wriggle/, 'cat motion witness activates the consumer through the visible panel button');
+assert.match(catMotionScenarioSource, /dispatchMouseClick\(ws, hipHit\)/, 'cat rig targeting uses the visible viewport bone helper rather than the debug selector');
+assert.match(witness, /selectionRace/, 'cat motion witness proves a late response cannot follow a changed rig selection');
+assert.match(witness, /stopRace/, 'cat motion witness proves Stop invalidates a pending generation response');
+assert.match(catMotionScenarioSource, /stopAbortRace/, 'cat motion witness proves Stop aborts a stalled generation and releases its panel controls');
+assert.match(catMotionScenarioSource, /signalAborted/, 'cat motion witness checks the in-flight request signal is aborted by Stop');
+assert.match(catMotionScenarioSource, /wriggleButtonEnabledAfterStop/, 'cat motion witness proves Generate + Wriggle is usable immediately after Stop');
+assert.match(witness, /clipCompletionQuaternionError/, 'cat motion witness proves natural clip completion restores the imported rig');
+assert.match(witness, /deterministic test stub serving the exact hash-verified retained clip/, 'witness report discloses its mocked motion-server boundary');
+assert.doesNotMatch(catMotionScenarioSource, /kaminosPreviewMotionServerResultOnSelectedRig\(/, 'cat motion witness does not bypass the visible panel consumer');
+assert.match(indexHtml, /click a hind-leg rig helper in the viewport/, 'motion panel names the actual rig-target prerequisite');
+assert.match(catMotionPanelSource, /selectedTarget\s*=\s*selectedSceneBoneTarget[\s\S]*fetch\(`\$\{serverUrl\}\/generate`/, 'rig target is validated before the panel can request motion generation');
+assert.match(catMotionPanelSource, /motionRigPreviewRequestGate\.isCurrent\(requestToken, targetKey\)/, 'panel discards late generation replies after request invalidation');
+assert.match(indexHtml, /sampleKimodoHindquartersTrackAtElapsed/, 'rig playback uses bounded elapsed-time sampling instead of modulo wrapping');
+assert.match(indexHtml, /completedFramePresented[\s\S]*clip-complete/, 'rig runtime restores after presenting the bounded clip end');
+assert.match(indexHtml, /pelvisRootMotionApplied:\s*false/, 'partial-body preview preserves the pelvis anchor without applying source root translation');
+assert.match(indexHtml, /pelvisRotationApplied:\s*state\.pelvisRotationApplied === true/, 'partial-body preview records whether source pelvis rotation is visibly being applied');
+assert.match(catMotionScenarioSource, /mappedQuaternionDeltas\[0\] < 0\.01/, 'the real browser witness rejects a pelvis track that does not visibly rotate the mapped pelvis');
+assert.match(catMotionScenarioSource, /currentPelvisPitchRadians/, 'the real browser witness requires measured source-grounded pelvis pitch');
+assert.match(catMotionScenarioSource, /fullCycleSamples/, 'cat motion witness captures multiple temporal samples across the retained clip');
+assert.match(catMotionScenarioSource, /pelvisWorldDriftDiameterRatio/, 'cat motion witness measures pelvis excursion in world space against the normalized carrier size');
+assert.match(catMotionScenarioSource, /siblingPngPath\('-cat-cycle-peak'\)/, 'cat motion witness preserves an inspectable image near the retained clip’s largest source-root excursion');
+assert.match(catMotionPanelSource, /new AbortController/, 'panel generation owns an abort signal so Stop can release stalled motion requests');
+assert.match(indexHtml, /pending\.abortController\?\.abort\(/, 'pending request invalidation aborts the actual fetch');
+assert.match(witness, /untouchedBoneError/, 'cat motion witness proves non-target bones remain unchanged');
+assert.match(witness, /otherCastError/, 'cat motion witness proves the unselected cast remains unchanged');
+assert.match(witness, /restoredQuaternionError/, 'cat motion witness proves stop restores the imported pose');
+assert.match(witness, /motionPixels\.changedPixels < 1/, 'cat motion witness rejects blank or invisible animation output');
 assert.match(witness, /Input\.dispatchMouseEvent/, 'bone-gizmo witness uses real browser pointer input');
 assert.match(witness, /selectedBoneTargetMatchesHit/, 'bone-gizmo witness confirms the viewport hit selects the same live bone object');
 assert.match(witness, /const requiredBoneNames = \['hindlimb-left-hip', 'hindlimb-left-stifle', 'hindlimb-left-hock'\]/, 'bone-gizmo witness declares exact required scene-bone targets before clicking');
