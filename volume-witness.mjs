@@ -2205,13 +2205,13 @@ async function main() {
       replayedCaptureControls = await replayCaptureControls(ws, captureReplay.capture);
       replayedCaptureCamera = await replayCaptureCamera(ws, captureReplay.capture);
     }
+    await delay(settleMs);
     if (requestedCameraPose) {
       appliedCameraPose = await replayCaptureCamera(ws, { camera: requestedCameraPose });
       if (appliedCameraPose?.applied !== true) {
         throw new Error(`Requested camera pose did not apply: ${JSON.stringify(appliedCameraPose)}`);
       }
     }
-    await delay(settleMs);
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
       await wsRequest(ws, 'Runtime.evaluate', {
         expression: `(() => {

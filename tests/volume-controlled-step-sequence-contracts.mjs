@@ -84,5 +84,7 @@ assert.match(witness, /phase = 'controlled-step-sequence'/);
 assert.match(witness, /const requestedCameraPose =/);
 assert.match(witness, /replayCaptureCamera\(ws, \{ camera: requestedCameraPose \}\)/);
 assert.match(witness, /cameraPose: \{ requested: requestedCameraPose, applied: appliedCameraPose \}/);
+assert.ok(witness.indexOf('await delay(settleMs);') < witness.indexOf('appliedCameraPose = await replayCaptureCamera(ws, { camera: requestedCameraPose });'),
+  'explicit camera pose must wait until cockpit initialization completes');
 
 console.log('volume controlled-step sequence contracts passed');
