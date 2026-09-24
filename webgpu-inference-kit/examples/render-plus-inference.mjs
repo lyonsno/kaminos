@@ -4,7 +4,7 @@ import {
   requestBrowserWebGpuDevice,
   createWebGpuForegroundService,
   createWebGpuInferenceSession,
-} from '@kaminos/webgpu-inference-kit';
+} from '@kaminos/webgpu-inference-kit/core';
 
 export const BRIGHTNESS_ROUTE_ID = 'example.brightness-rgba8.webgpu-local.v0';
 

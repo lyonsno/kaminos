@@ -15,7 +15,7 @@ For a visual first run, [brighten a photo while a renderer stays active](./docs/
 A Kaminos application creates a session, registers a model route, and queues model-owned work through that route:
 
 ```js
-import { createWebGpuInferenceSession } from "@kaminos/webgpu-inference-kit";
+import { createWebGpuInferenceSession } from "@kaminos/webgpu-inference-kit/core";
 
 const session = await createWebGpuInferenceSession({
   sessionId: crypto.randomUUID(),

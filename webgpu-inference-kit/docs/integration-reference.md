@@ -53,13 +53,15 @@ That route is the runtime's central product target: long local inference that re
 
 ## Start Here When Porting A Long Model
 
+Import model-neutral runtime APIs from `@kaminos/webgpu-inference-kit/core`. When a renderer shares the device, keep a [foreground service](#put-real-foreground-work-between-inference-duties) alive across model runs so frames can be submitted at the port's real work boundaries. The [photo walkthrough](./getting-started.md#try-the-photo-walkthrough) runs this arrangement end to end.
+
 Describe the route's real pre-submission boundaries once, then let the cooperative execution facade own safe-boundary servicing, exact range coverage, queue-prefix completion, adaptation, browser yields, progress, cancellation, and terminal settlement:
 
 ```js
 import {
   createWebGpuCooperativeExecution,
   defineWebGpuCooperativeBoundaryManifest,
-} from "@kaminos/webgpu-inference-kit";
+} from "@kaminos/webgpu-inference-kit/core";
 
 const boundaries = defineWebGpuCooperativeBoundaryManifest({
   manifestId: "sf3d.cooperative-boundaries.v0",
@@ -1237,44 +1239,39 @@ if (decision.schedulerChanged) runtime.applySchedulerDecision(decision);
 
 ### Put Real Foreground Work Between Inference Duties
 
-`yieldMs: 0` gives the browser event loop a turn, but it does not guarantee that a live renderer submits before inference occupies the queue again. Configure `foregroundOpportunities` when the foreground application can identify actual frame demand and encode against the same device:
+`yieldMs: 0` gives the browser event loop a turn, but it does not guarantee that a live renderer submits before inference occupies the queue again. Create one foreground service with the shared device, request real frames through it, and attach each model run to that service. The [working photo example](../examples/render-plus-inference.mjs) shows device acquisition, route registration, rendering, repeated runs, and cleanup together:
 
 ```js
-const runtime = await createWebGpuInferenceRuntime({
-  routeId,
-  device,
-  adapterName,
-  kernel,
-  schedulerApplication,
-  foregroundOpportunities: {
-    runId: crypto.randomUUID(),
-  },
-});
+import { createWebGpuForegroundService } from "@kaminos/webgpu-inference-kit/core";
 
-function requestKilnFrame(frameId) {
-  return runtime.requestForegroundOpportunity({
-    requestId: `kiln-frame:${frameId}`,
-    metadata: { frameId },
-    run({ device, submit, signal }) {
-      if (signal.aborted) return;
-      const commandBuffer = encodeKilnFrame(device, frameId);
-      submit([commandBuffer], {
-        submissionId: `kiln-frame:${frameId}:submit`,
-        metadata: { frameId },
-      });
-    },
+const foreground = createWebGpuForegroundService({ routeId, device });
+const frame = foreground.request({
+  requestId: `frame:${frameId}`,
+  run({ submit }) { submit([encodeFrame(device, frameId)]); },
+});
+frame.completion.then(receipt => updateFrameDiagnostics(receipt));
+
+const active = await foreground.beginRun(runId);
+let route;
+try {
+  route = await session.registerRoute({
+    routeId,
+    runtimeOptions: { foregroundOpportunities: active.foregroundOpportunities },
   });
+  await runModelThroughRoute(route);
+} finally {
+  if (route) {
+    await route.drain();
+    session.unregisterRoute(route.routeId);
+  }
+  await active.finish();
 }
-
-requestAnimationFrame(frameId => {
-  const frame = requestKilnFrame(frameId);
-  frame.completion.then(receipt => updateFrameDiagnostics(receipt));
-});
+// At application teardown: await foreground.dispose().
 ```
 
-At the next runtime-owned compute or staged-readback boundary, every request already pending is serviced before the scheduler refreshes and before inference constructs its next command duty. A scheduler decision produced by that foreground work can therefore govern the immediately following inference encode. Requests arriving while an opportunity is open are retained for the next boundary, preventing an endless producer from silently extending one interleave window forever. Service turns are serialized across concurrent invocations: a later inference boundary cannot encode through a foreground callback that is still active, and demand arriving during that callback is serviced by the queued boundary turn. The runtime takes the direct preparation path only when no request or service turn is pending, active, or queued.
+`foreground` persists across invocations; `active` belongs to one run. At the next runtime-owned compute or staged-readback boundary, pending frame requests are serviced before inference constructs its next command duty. Requests arriving during an opportunity wait for the next boundary. Service turns are serialized across concurrent invocations. The runtime takes the direct preparation path when no foreground work is pending.
 
-The submission lease records each `queue.submit()` call and preserves callback, serialization, cancellation, and submission failures. `cancel(reason)` removes a pending request or aborts an active callback through its signal. Raw adapters using the synchronous `runtime.prepareCommandDuty()` path fail loudly while foreground pressure exists; await `runtime.prepareCommandDutyAtBoundary()` at the pre-encode boundary so the opportunity is serviced before inference resumes. Receipts prove callback execution and queue submission return only; they do not prove GPU completion, compositor presentation, or frame cadence. An already submitted inference duty remains non-preemptible, so responsive products still need adapter chunk bounds small enough to reach these opportunities within their frame budget.
+The lower-level `runtime.requestForegroundOpportunity()` API serves adapters that own a run-local runtime directly. Its submission lease records each `queue.submit()` call and preserves callback, serialization, cancellation, and submission failures. Raw adapters using synchronous `runtime.prepareCommandDuty()` fail loudly while foreground pressure exists; await `runtime.prepareCommandDutyAtBoundary()` at the pre-encode boundary. Receipts prove callback execution and queue submission return only, not GPU completion, presentation, or frame cadence. Already submitted inference duties remain non-preemptible, so the port must still expose work boundaries frequent enough for its foreground budget.
 
 ## Background Inference Queue
 

@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
   normalizeBrightnessMultiplier,
   packRgbaPixels,
   unpackRgbaPixels,
 } from '../examples/render-plus-inference.mjs';
+
+const html = await readFile(new URL('../examples/render-plus-inference.html', import.meta.url), 'utf8');
+const importMap = JSON.parse(html.match(/<script type="importmap">([^<]+)<\/script>/)?.[1] ?? '{}');
+assert.equal(importMap.imports?.['@kaminos/webgpu-inference-kit/core'], '../src/core.js');
 
 assert.equal(normalizeBrightnessMultiplier(1.5), 1.5);
 assert.equal(normalizeBrightnessMultiplier('0.5'), 0.5);

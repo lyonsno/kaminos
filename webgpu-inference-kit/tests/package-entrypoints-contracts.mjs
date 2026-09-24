@@ -21,6 +21,19 @@ async function load(url) {
 const coreModule = await load(new URL('src/core.js', packageRoot).href);
 await coreModule.link((specifier, parent) => load(new URL(specifier, parent.identifier).href));
 
+for (const example of ['minimal-model-port.mjs', 'render-plus-inference.mjs']) {
+  const source = await readFile(new URL(`examples/${example}`, packageRoot), 'utf8');
+  const module = new SourceTextModule(source);
+  assert.ok(
+    module.dependencySpecifiers.includes('@kaminos/webgpu-inference-kit/core'),
+    `${example} must teach the model-neutral package entrypoint`,
+  );
+  assert.ok(
+    !module.dependencySpecifiers.includes('@kaminos/webgpu-inference-kit'),
+    `${example} must not pull the model-specific root barrel into a core example`,
+  );
+}
+
 const root = await import('@kaminos/webgpu-inference-kit');
 const core = await import('@kaminos/webgpu-inference-kit/core');
 const sam = await import('@kaminos/webgpu-inference-kit/sam');

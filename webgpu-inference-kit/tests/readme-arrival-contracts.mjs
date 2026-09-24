@@ -100,6 +100,11 @@ const assertSamPublicClaims = ({ rootReadme: root, packageReadme, samDemoGuide: 
 };
 
 assert.equal(typeof kit.createWebGpuInferenceSession, 'function');
+assert.match(
+  section(readme, '## Quick Look'),
+  /from ["']@kaminos\/webgpu-inference-kit\/core["']/,
+  'the first model-neutral example must use the core entrypoint',
+);
 assert.match(readme, /createWebGpuInferenceSession/);
 assert.match(readme, /registerRoute/);
 assert.match(readme, /route\.enqueue/);

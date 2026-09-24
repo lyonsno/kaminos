@@ -1,7 +1,7 @@
 import {
   WEBGPU_BUFFER_USAGE,
   createWebGpuInferenceSession,
-} from '@kaminos/webgpu-inference-kit';
+} from '@kaminos/webgpu-inference-kit/core';
 
 export const MINIMAL_MODEL_ROUTE_ID = 'example.affine-f32.webgpu-local.v0';
 export const GETTING_STARTED_REPORT_SCHEMA = 'kaminos.webgpu-inference-kit.getting-started.v0';
