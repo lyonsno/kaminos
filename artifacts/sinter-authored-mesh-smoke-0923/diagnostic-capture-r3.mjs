@@ -5,6 +5,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { cdpRequest } from './diagnostic-cdp.mjs';
 import { assertNonBlankCanvasScreenshot, inspectPng } from './diagnostic-png-inspector.mjs';
 
 const args = new Map();
@@ -26,9 +27,12 @@ const report = {
   origin,
   scenePath,
   sceneSha256: '',
+  injectedScenePayloadSha256: '',
   expectedObjectId: 'sinter-forked-timber-trestle',
   expectedAssetIdentity: 'sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84',
   requestedModes: modes,
+  statusScope: 'capture-and-runtime-only',
+  visualStatus: 'inspection-required',
   captures: [],
   lastTrustedEvidence: null,
   errors: [],
@@ -41,21 +45,6 @@ function saveReport() {
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
-}
-
-function cdpRequest(ws, method, params = {}) {
-  const id = ws.nextId = (ws.nextId || 0) + 1;
-  return new Promise((resolveRequest, rejectRequest) => {
-    const onMessage = event => {
-      const message = JSON.parse(String(event.data));
-      if (message.id !== id) return;
-      ws.removeEventListener('message', onMessage);
-      if (message.error) rejectRequest(new Error(`${method}: ${message.error.message}`));
-      else resolveRequest(message.result);
-    };
-    ws.addEventListener('message', onMessage);
-    ws.send(JSON.stringify({ id, method, params }));
-  });
 }
 
 async function cdpValue(ws, expression) {
@@ -137,6 +126,8 @@ async function main() {
   report.gitHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim();
   report.gitStatus = execFileSync('git', ['status', '--short'], { cwd: repoRoot, encoding: 'utf8' }).trim();
   report.sceneSha256 = sha256(sceneBytes);
+  const sceneLiteral = JSON.stringify(scene);
+  report.injectedScenePayloadSha256 = sha256(Buffer.from(sceneLiteral, 'utf8'));
   report.assetPath = resolve(repoRoot, record.source);
   report.assetSha256 = sha256(readFileSync(report.assetPath));
   report.phase = 'browser-launch';
@@ -187,7 +178,6 @@ async function main() {
       }
     });
 
-    const sceneLiteral = JSON.stringify(scene);
     for (const mode of modes) {
       report.phase = `load-scene-${mode}`;
       const route = new URL(`${origin}/`);
@@ -250,7 +240,8 @@ async function main() {
         mode,
         effectivePageRoute: loaded.route,
         selectedSceneFile: loaded.fileName,
-        selectedSceneSha256: report.sceneSha256,
+        sourceSceneFileSha256: report.sceneSha256,
+        injectedScenePayloadSha256: report.injectedScenePayloadSha256,
         expectedObjectId: report.expectedObjectId,
         expectedAssetIdentity: report.expectedAssetIdentity,
       };
@@ -276,7 +267,7 @@ async function main() {
           && currentAssembly?.presentationDebugMode === mode
           ? lastRuntimeState
           : null;
-      }, `${mode} dispatches from the exact saved trestle assembly`);
+      }, `${mode} dispatches from the exact saved trestle assembly`, 180000);
       const assembly = state.assembly;
       const assetUrl = new URL(record.source, `${origin}/`).toString();
       const assetResponse = assetResponses.find(response => response.url === assetUrl);
@@ -334,6 +325,7 @@ async function main() {
         pageErrors: [...pageErrors],
       };
       report.captures.push(capture);
+      report.visualStatus = 'inspection-required';
       saveReport();
 
       assert.equal(state.backend, 'WebGPU:apple', 'capture used an unexpected renderer backend');

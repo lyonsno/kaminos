@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { deflateSync } from 'node:zlib';
+import { CDP_REQUEST_TIMEOUT_MS, cdpRequest } from '../artifacts/sinter-authored-mesh-smoke-0923/diagnostic-cdp.mjs';
 import { assertNonBlankCanvasScreenshot, inspectPng } from '../artifacts/sinter-authored-mesh-smoke-0923/diagnostic-png-inspector.mjs';
 
 const capturePath = resolve(process.argv[2] || new URL('../artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r3.mjs', import.meta.url).pathname);
@@ -70,5 +71,30 @@ requirePattern(/assertNonBlankCanvasScreenshot\(inspectPng\(canvasImageBytes\)\)
 requirePattern(/dispatches from the exact saved trestle assembly`, 180000\)/, 'the corrected startup path must leave time for asynchronous scene assembly');
 requirePattern(/failureContext = \{[\s\S]*?lastRuntimeState,[\s\S]*?pageErrors:/, 'a failed capture must preserve runtime state and page errors');
 requirePattern(/if \(report\.status !== 'passed'\) process\.exitCode = 1/, 'capture failure must produce a failing process exit');
+requirePattern(/cdpRequest \} from '\.\/diagnostic-cdp\.mjs'/, 'the capture must use bounded DevTools requests');
+requirePattern(/visualStatus: 'inspection-required'/, 'capture success must not claim visible trestle diagnostics before image inspection');
+requirePattern(/statusScope: 'capture-and-runtime-only'/, 'capture pass status must be limited to route and runtime integrity');
+requirePattern(/report\.visualStatus = 'inspection-required'/, 'each successful capture must preserve the manual trestle-pixel inspection gate');
+requirePattern(/finally \{[\s\S]*?saveReport\(\)/, 'every handled failure must persist a terminal report');
+
+class FakeSocket extends EventTarget {
+  send(payload) {
+    this.request = JSON.parse(payload);
+  }
+}
+
+assert.equal(CDP_REQUEST_TIMEOUT_MS, 180_000, 'production DevTools calls must have a deadline that allows the asynchronous capture path');
+const timedOutSocket = new FakeSocket();
+await assert.rejects(cdpRequest(timedOutSocket, 'Runtime.evaluate', {}, 5), /reply timed out after 5ms/, 'a missing DevTools reply must reject and release the capture failure path');
+const closingSocket = new FakeSocket();
+const closingRequest = cdpRequest(closingSocket, 'Page.captureScreenshot', {}, 5000);
+closingSocket.dispatchEvent(new Event('close'));
+await assert.rejects(closingRequest, /socket closed before a reply/, 'DevTools socket closure must reject an in-flight capture request');
+const respondingSocket = new FakeSocket();
+const respondingRequest = cdpRequest(respondingSocket, 'Runtime.evaluate', {}, 5000);
+const response = new Event('message');
+Object.defineProperty(response, 'data', { value: JSON.stringify({ id: 1, result: { value: 'ok' } }) });
+respondingSocket.dispatchEvent(response);
+assert.deepEqual(await respondingRequest, { value: 'ok' }, 'matching DevTools replies must still resolve normally');
 
 console.log('saved mesh combustion capture contracts: ok');
