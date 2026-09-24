@@ -1,0 +1,21 @@
+{
+  "job_id": "bf12b4619d49",
+  "status": "done",
+  "job_type": "trellis2mlx",
+  "input_path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/stone-arch-outer-notch.png",
+  "output_dir": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-outer-notch",
+  "params": {
+    "cwd": "/private/tmp/trellis2mlx-dinov3-webgpu-reference-0923"
+  },
+  "submitted_at": 1790250799.751938,
+  "started_at": 1790251379.869356,
+  "finished_at": 1790251904.358222,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/stone-arch-outer-notch.png --output /private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-outer-notch/output.glb --seed 42 --resolution 512 --steps 12 --target-faces 200000 --texture-size 1024 --simplify-first",
+  "pid": 89531,
+  "warnings": [
+    "volatile_output"
+  ]
+}

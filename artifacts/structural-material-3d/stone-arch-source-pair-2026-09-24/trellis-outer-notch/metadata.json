@@ -1,0 +1,15 @@
+{
+  "name": "stone-arch-outer-notch",
+  "job_type": "trellis2mlx",
+  "job_id": "bf12b4619d49",
+  "input_path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/stone-arch-outer-notch.png",
+  "input_name": "stone-arch-outer-notch.png",
+  "params": {
+    "cwd": "/private/tmp/trellis2mlx-dinov3-webgpu-reference-0923"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1790251904.358222,
+  "duration_s": 524.5
+}

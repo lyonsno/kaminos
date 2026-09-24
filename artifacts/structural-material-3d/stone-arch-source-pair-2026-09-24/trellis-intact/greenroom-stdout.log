@@ -1,0 +1,64 @@
+  Preprocessing /private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/stone-arch-intact.png...
+  Background removed (rembg/u2net)
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 32.0s
+  1971 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 14.4s (1971 tokens)
+
+=== Stage 2b: Upsample → HR coordinates ===
+  Level 0 → 1: 8126 voxels
+  Level 1 → 2: 32717 voxels
+  Level 2 → 3: 133178 voxels
+  Level 3 → 4: 545232 voxels
+  Upsampled: 16.8s (545,232 voxels)
+  HR coords: 1,901 tokens at res 512, coord range [0, 31]
+
+=== Stage 2c: HR Shape Latent ===
+  Sampled: 13.7s (1,901 tokens)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 7725 voxels
+  Level 1 → 2: 31432 voxels
+  Level 2 → 3: 128704 voxels
+  Level 3 → 4: 524085 voxels
+  Decoded: 10.2s (524,085 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  524,085 voxels, coord range [4, 505], grid_size=512
+  Extracted: 2.0s
+  524,085 vertices, 1,061,916 faces
+  Pre-simplify: 92,686V 199,999F (0.4s)
+  Removed 3073 duplicate faces
+  Split 51412 vertices across 22028 non-manifold edges
+  Removed 9223 small components (13,626 faces, 6.9%)
+  Filled 5032 holes (1062 too large, max_perimeter=0.03)
+  Cleanup: 92,686V 199,999F → 117,173V 209,484F
+  Cleanup: 32.6s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 10.9s (1,901 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 7725 voxels
+  Level 1 → 2: 31432 voxels
+  Level 2 → 3: 128704 voxels
+  Level 3 → 4: 524085 voxels
+  Decoded: 3.9s (524,085 voxels, 6 channels)
+  PBR attrs: RGB [0.04, 0.83] metallic [-0.00, 0.00] roughness [0.80, 0.80]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 197,871V 209,484F (14.8s)
+    Rasterizing UV space (209,484 tris, 1024x1024, MLX)...
+    620,787 pixels covered (0.9s)
+    Interpolated 620,787 positions (0.1s)
+    Sampled voxel attrs (0.9s)
+    Inpainted seams (8.6s)
+
+  Saved: /private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb (10.8MB)
+
+Total: 575.8s

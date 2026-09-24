@@ -1,0 +1,21 @@
+{
+  "job_id": "6239f4910433",
+  "status": "done",
+  "job_type": "trellis2mlx",
+  "input_path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/stone-arch-intact.png",
+  "output_dir": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact",
+  "params": {
+    "cwd": "/private/tmp/trellis2mlx-dinov3-webgpu-reference-0923"
+  },
+  "submitted_at": 1790250793.998647,
+  "started_at": 1790250795.765514,
+  "finished_at": 1790251379.7072861,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/stone-arch-intact.png --output /private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb --seed 42 --resolution 512 --steps 12 --target-faces 200000 --texture-size 1024 --simplify-first",
+  "pid": 89531,
+  "warnings": [
+    "volatile_output"
+  ]
+}
