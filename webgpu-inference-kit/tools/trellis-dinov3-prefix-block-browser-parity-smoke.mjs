@@ -10,7 +10,7 @@ import { assertCleanGitCheckout, createSourceByteReceipt } from './trellis-dinov
 const args = new Map();
 for (let index=2; index<process.argv.length; index+=2) args.set(process.argv[index],process.argv[index+1]);
 if (process.argv.includes('--help')) {
-  console.log('Usage: node tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs --reference-dir PATH --source-image PATH --output-dir PATH --report PATH [--mode block0-parity|resident-handoff|resident-block1|resident-block2-norm1|resident-block2-attention|resident-block2-mlp] [--source-revision SHA] [--chrome PATH] [--debug-port N] [--server-port N] [--timeout-ms N] [--atol N] [--rtol N]');
+  console.log('Usage: node tools/trellis-dinov3-prefix-block-browser-parity-smoke.mjs --reference-dir PATH --source-image PATH --output-dir PATH --report PATH [--mode block0-parity|resident-handoff|resident-block1|resident-block2-norm1|resident-block2-attention|resident-block2-mlp|resident-full-conditioning] [--source-revision SHA] [--chrome PATH] [--debug-port N] [--server-port N] [--timeout-ms N] [--atol N] [--rtol N]');
   process.exit(0);
 }
 const root=resolve(new URL('..',import.meta.url).pathname);
@@ -29,6 +29,8 @@ const chrome=process.env.KAMINOS_CHROME||args.get('--chrome')||'/Applications/Go
 const invocationId=randomUUID();
 const requestedRouteId=mode==='resident-block1'
   ? 'trellis2.dinov3.block0-to-block1-full-block.resident-probe.webgpu-local.v0'
+  : mode==='resident-full-conditioning'
+    ? 'trellis2.dinov3.block0-through-full-conditioning.resident-session-probe.webgpu-local.v0'
   : mode==='resident-block2-mlp'
     ? 'trellis2.dinov3.block0-to-block2-full-block.resident-probe.webgpu-local.v0'
   : mode==='resident-block2-attention'
@@ -40,6 +42,8 @@ const requestedRouteId=mode==='resident-block1'
     : 'trellis2.dinov3.prefix-block0.phase-program.webgpu-local.v0';
 const reportSchema=mode==='resident-block1'
   ? 'kaminos.trellis-dinov3-resident-block1-browser-smoke.v0'
+  : mode==='resident-full-conditioning'
+    ? 'kaminos.trellis-dinov3-full-conditioning-browser-smoke.v0'
   : mode==='resident-block2-mlp'
     ? 'kaminos.trellis-dinov3-resident-block2-mlp-browser-smoke.v0'
   : mode==='resident-block2-attention'
@@ -59,6 +63,7 @@ const outputSizes={
   block2MlpHidden:1029*4096*4,
   block2MlpProjection:1029*1024*4,
   block2Output:1029*1024*4,
+  conditioningFeatures:1029*1024*4,
 };
 const allowedOutputNames=new Set(Object.keys(outputSizes).map(name=>`${name}.f32`));
 let userDataDir=null;
@@ -252,7 +257,7 @@ let exitCode=1;
 try {
   phase='local_preflight';
   if(!args.has('--reference-dir')||!args.has('--source-image')||!args.has('--output-dir')||!args.has('--report')) throw new Error('--reference-dir, --source-image, --output-dir, and --report are required');
-  if(!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1','resident-block2-attention','resident-block2-mlp'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
+  if(!['block0-parity','resident-handoff','resident-block1','resident-block2-norm1','resident-block2-attention','resident-block2-mlp','resident-full-conditioning'].includes(mode)) throw new Error(`unsupported mode ${mode}`);
   gitRoot=execFileSync('git',['-C',root,'rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
   requiredSourcePaths=[
     resolve(root,'smokes/trellis-dinov3-prefix-block-browser.html'),
@@ -272,6 +277,7 @@ try {
   if(mode==='resident-block2-norm1'&&manifest.computation?.residentBlock2Norm1Probe!=='layer2.norm1(block1_after_mlp_hidden_states)') throw new Error('reference manifest does not identify the pinned resident block-2 norm1 operation');
   if(mode==='resident-block2-attention'&&manifest.computation?.residentBlock2AttentionProbe!=='layer2.attention(block2_norm1_hidden_states); block1_after_mlp_hidden_states + attention_output * layer2.layer_scale1') throw new Error('reference manifest does not identify the pinned resident block-2 attention operation and residual');
   if(mode==='resident-block2-mlp'&&manifest.computation?.residentBlock2MlpProbe!=='layer2.norm2(block2_after_attention_hidden_states); layer2.mlp(block2_norm2_hidden_states); block2_after_attention_hidden_states + mlp_output * layer2.layer_scale2') throw new Error('reference manifest does not identify the pinned resident full block-2 MLP operation and residual');
+  if(mode==='resident-full-conditioning'&&(manifest.computation?.mode!=='full-conditioning'||manifest.computation?.completeTransformerBlockCount!==24||manifest.computation?.finalNoAffineLayerNormApplied!==true||manifest.computation?.outputBoundary!=='after all 24 transformer blocks and final no-affine LayerNorm'||manifest.outputs?.conditioning_features?.sha256!=='02638a3bb5b5ccd9587408db0e601430a2da60ee57aa48799fef4814c91a6f46'||JSON.stringify(manifest.outputs?.conditioning_features?.shape)!=='[1,1029,1024]'||manifest.outputs?.conditioning_features?.dtype!=='float32')) throw new Error('reference manifest does not prove the exact pinned full-conditioning output');
   mkdirSync(outputDir,{recursive:true});
   phase='start_server';
   await startServer();

@@ -19,6 +19,21 @@ assert.equal(
 );
 
 assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockPhaseProgramRoute, 'function');
+assert.equal(typeof residentRoute.runTrellisDinoV3PrefixBlockResidentFullConditioningProbe, 'function',
+  'the all-24-block conditioner must be callable from an already-admitted Kaminos session route');
+assert.equal(residentRoute.TRELLIS_DINOV3_PREFIX_BLOCK_RESIDENT_FULL_CONDITIONING_PROBE_ROUTE_ID,
+  'trellis2.dinov3.block0-through-full-conditioning.resident-session-probe.webgpu-local.v0');
+const fullConditioningSource = implementation.slice(implementation.indexOf('async function runTrellisDinoV3PrefixBlockPhaseProgramRouteInternal'));
+assert.match(fullConditioningSource, /const sessionRoute\s*=\s*input\.sessionRoute/,
+  'full conditioning must borrow the session route runtime supplied by its admitted job');
+assert.match(fullConditioningSource, /schedulerInvocation\s*:\s*input\.schedulerInvocation/,
+  'kernel yields must remain attached to the already-admitted outer session invocation');
+assert.match(fullConditioningSource, /for\s*\(let blockIndex\s*=\s*3;\s*blockIndex\s*<=\s*23;/,
+  'full conditioning must continue sequentially through every remaining transformer block');
+assert.match(fullConditioningSource, /runTrellisDinoV3FinalNoAffineLayerNormResident/,
+  'the conditioner endpoint must apply the checkpoint’s final no-affine LayerNorm');
+assert.match(fullConditioningSource, /if\s*\(!borrowedRuntime\)\s*await runtime\.dispose\(\)/,
+  'a session-owned runtime must survive completion of one image invocation');
 const route = residentRoute.createTrellisDinoV3PrefixBlockPhaseProgramRouteDefinition({
   kernel: { profile: 'trellis2-dinov3-prefix-block0-phase-program-v0', commit: 'contract-test' },
 });
@@ -146,14 +161,32 @@ assert.match(parityAssay, /'block2Norm2','block2MlpHidden','block2MlpProjection'
   'block-2 full-block mode must require norm2, GELU, projection, and complete residual readbacks');
 assert.match(parityAssay, /residentBlock2MlpProbe/,
   'the composite assay must reject a reference manifest that omits the exact full-block boundary');
-assert.match(parityAssay, /'--out-dir',referenceDir,'--mode',mode/,
-  'the exact-source assay must pass its requested mode into the MLX exporter');
-assert.match(parityAssay, /manifest\.computation\?\.mode===mode/,
-  'a reference manifest produced under a different mode must not be accepted');
+assert.match(parityAssay, /'--out-dir',referenceDir,'--mode',referenceMode/,
+  'the exact-source assay must pass the matching native computation mode into the MLX exporter');
+assert.match(parityAssay, /const referenceMode=mode==='resident-full-conditioning'\?'full-conditioning':mode/,
+  'the composite probe name must map to the native exporter’s admitted full-conditioning mode without losing the requested probe identity');
+assert.match(parityAssay, /manifest\.computation\?\.mode===referenceMode/,
+  'a reference manifest produced under a different native computation mode must not be accepted');
 assert.match(browserSmoke, /adapterClassification === 'software-fallback'/,
   'software WebGPU fallback cannot satisfy the resident GPU evidence route');
 assert.match(browserSmoke, /finiteNonzeroCount === 0/,
   'blank/all-zero output cannot masquerade as completed downstream evidence');
+assert.match(browserSmoke, /residentFullConditioningMode\s*\?\s*result\.debugResidentFullConditioning/,
+  'the full-conditioning mode must consume its own final LayerNorm output rather than block-2 diagnostic tensors');
+assert.match(browserSmoke, /document\.title\s*=\s*residentFullConditioningMode[\s\S]*full-conditioning parity/,
+  'the human-visible browser title must identify full-conditioning mode instead of claiming block-0 parity');
+assert.match(browserSmoke, /\['conditioningFeatures','conditioning_features'\]/,
+  'the full-conditioning parity mode must compare the final DINO conditioning tensor with the same-job MLX output');
+assert.match(browserSmoke, /completeTransformerBlockCount\s*!==\s*24[\s\S]*finalNoAffineLayerNormApplied\s*!==\s*true/,
+  'full-conditioning output must prove all 24 complete transformer blocks and the final no-affine LayerNorm');
+assert.match(browserSmoke, /inferenceSession\.unregisterRoute\(inferenceRoute\.routeId\)[\s\S]*inferenceSession\.close\(\)/,
+  'the registered session route and borrowed-device session must be drained and closed after the observation');
+assert.match(parityAssay, /mode==='resident-full-conditioning'\?\['conditioningFeatures'\]/,
+  'the full-conditioning composite assay must require the final output bytes, not infer completion from an earlier layer');
+assert.match(parityAssay, /manifest\.outputs\?\.conditioning_features\?\.sha256==='02638a3bb5b5ccd9587408db0e601430a2da60ee57aa48799fef4814c91a6f46'/,
+  'the full-conditioning composite assay must pin the exact native MLX output tensor digest');
+assert.match(browserRunner, /manifest\.computation\?\.mode!=='full-conditioning'[\s\S]*conditioning_features\?\.sha256!=='02638a3bb5b5ccd9587408db0e601430a2da60ee57aa48799fef4814c91a6f46'/,
+  'the browser runner must fail preflight unless the reference is the exact full-conditioning F32 boundary');
 assert.match(browserSmoke, /actual\?\.operation !== 'dinov3-block1-attention-residual'/,
   'the browser consumer must accept the operation returned by the block-1 attention-residual producer');
 assert.match(browserSmoke, /\.\.\.\(result\.debugResidentBlock1\?\.outputValues\s*\|\|\s*\{\}\)[\s\S]*\.\.\.\(result\.debugResidentBlock2Attention\?\.outputValues\s*\|\|\s*\{\}\)/,
