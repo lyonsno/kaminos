@@ -13,7 +13,7 @@ const requireFromKimodo = createRequire(join(resolve(kimodoCheckout), 'package.j
 const puppeteer = requireFromKimodo('puppeteer-core');
 const html = `<!doctype html><script>
 window.__kimodoSharedDevice={schema:'fixture',status:'generating',progressSequence:0,samples:[],frameIntervals:[],foregroundReceipts:[],runs:[],source:{status:'built'}};
-setInterval(()=>{const s=window.__kimodoSharedDevice;s.progressSequence++;s.samples.push({atMs:performance.now(),frameCount:s.progressSequence});s.frameIntervals.push(16.7);if(s.progressSequence%3===0)s.foregroundReceipts.push({requestId:'r'+s.progressSequence});s.runs=[{runId:'run-1',status:'succeeded',pageP95Ms:s.progressSequence>8?16.7:null,samples:s.samples,frameIntervals:s.frameIntervals,foregroundReceipts:s.foregroundReceipts,telemetry:{observedDuties:16}}];},25);
+setInterval(()=>{const s=window.__kimodoSharedDevice;s.progressSequence++;s.samples.push({atMs:performance.now(),frameCount:s.progressSequence});s.frameIntervals.push(16.7);if(s.progressSequence%3===0)s.foregroundReceipts.push({requestId:'r'+s.progressSequence});s.runs=[{runId:'run-1',status:'succeeded',pageP95Ms:s.progressSequence>8?16.7:null,samples:s.samples,frameIntervals:s.frameIntervals,foregroundReceipts:s.foregroundReceipts,foregroundRunReport:{receipts:Array.from({length:s.progressSequence},(_,i)=>({requestId:'r'+i}))},telemetry:{observedDuties:16}}];},25);
 </script>`;
 const server = createServer((_request, response) => {
   response.writeHead(200, { 'content-type': 'text/html' });
@@ -54,6 +54,7 @@ try {
   }
   const connectedReport = JSON.parse(readFileSync(reportPath, 'utf8'));
   assert.equal(connectedReport.status, 'capturing', `observer connects to the exact open browser page: ${JSON.stringify(connectedReport)} ${observerOutput}`);
+  assert.equal(connectedReport.partialFrameIntervalMs.p95Ms, undefined, 'live summary avoids sorting the full interval history on each poll');
   await new Promise(resolveDelay => setTimeout(resolveDelay, 900));
   const observerExit = once(observer, 'exit');
   observer.kill('SIGINT');
@@ -66,9 +67,12 @@ try {
   assert.ok(report.telemetryCounts.foregroundReceipts > 1, 'foreground service receipts are captured');
   assert.equal(report.runs[0].pageP95Ms, 16.7, 'latest per-run metrics are refreshed after completion');
   assert.equal(report.telemetryCounts.completedRuns, 1, 'completed run payload is captured once without replaying its growing arrays');
+  assert.ok(report.partialFrameIntervalMs.p95Ms === 16.7, 'terminal report computes exact full-window interval percentiles once');
   const chunks = readFileSync(join(captureDir, 'operator-telemetry.ndjson'), 'utf8').trim().split('\n').map(JSON.parse);
   assert.ok(chunks.length > 2, 'durable telemetry is flushed in multiple incremental chunks');
   assert.ok(chunks.every(chunk => chunk.schema === 'kaminos.kimodo-shared-device-telemetry-chunk.v1'));
+  assert.ok(chunks.slice(0, -1).every(chunk => chunk.runs.every(run => !Object.hasOwn(run, 'foregroundRunReport'))), 'poll summaries omit accumulated foreground histories');
+  assert.ok(chunks.some(chunk => chunk.completedRuns[0]?.foregroundRunReport?.receipts?.length > 1), 'one-time terminal payload retains the complete foreground report');
   const chunkBytes = readFileSync(join(captureDir, 'operator-telemetry.ndjson'));
   const duplicate = spawn(process.execPath, [observerPath, '--browser-url', browserUrl, '--url', url, '--output-dir', captureDir], {
     env: { ...process.env, KIMODO_WEBGPU_CHECKOUT: kimodoCheckout }, stdio: 'ignore',

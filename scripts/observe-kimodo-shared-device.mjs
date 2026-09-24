@@ -40,16 +40,22 @@ function writeReport() {
     completedRuns: telemetry.completedRuns.length,
   };
   summary.runs = telemetry.runs;
-  summary.partialFrameIntervalMs = intervalSummary(telemetry.frameIntervalsMs);
+  summary.partialFrameIntervalMs = ['stopped', 'failed'].includes(report.status)
+    ? intervalSummary(telemetry.frameIntervalsMs, true)
+    : intervalSummary(telemetry.frameIntervalsMs, false);
   writeFileSync(reportTempPath, `${JSON.stringify(summary, null, 2)}\n`);
   renameSync(reportTempPath, reportPath);
 }
 
-function intervalSummary(intervals) {
+function intervalSummary(intervals, includeQuantiles) {
   if (!intervals.length) return null;
+  let maxMs = -Infinity;
+  for (const interval of intervals) maxMs = Math.max(maxMs, interval);
+  const result = { count: intervals.length, maxMs };
+  if (!includeQuantiles) return result;
   const sorted = [...intervals].sort((a, b) => a - b);
   const percentile = fraction => sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)];
-  return { count: sorted.length, p50Ms: percentile(.5), p95Ms: percentile(.95), p99Ms: percentile(.99), maxMs: sorted.at(-1) };
+  return { ...result, p50Ms: percentile(.5), p95Ms: percentile(.95), p99Ms: percentile(.99) };
 }
 
 writeReport();
@@ -133,7 +139,6 @@ try {
         frameIntervalsOver100Ms: record.frameIntervalsOver100Ms ?? null,
         sampleCount: record.samples?.length ?? null, foregroundReceiptCount: record.foregroundReceipts?.length ?? null,
         flameBefore: clone(record.flameBefore), flameAfter: clone(record.flameAfter ?? null),
-        foregroundRunReport: clone(record.foregroundRunReport ?? null),
         modelStatus: record.modelStatus ?? null, error: clone(record.error ?? null),
       });
       const completedRuns = state.runs.filter(record =>
