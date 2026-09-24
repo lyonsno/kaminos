@@ -11,6 +11,19 @@ const volumeSource = await readFile(coreUrl, 'utf8');
 const indexSource = await readFile(indexUrl, 'utf8');
 const witnessSource = await readFile(witnessUrl, 'utf8');
 const consumer = await import(consumerUrl);
+const extractWgslFunctionBody = (source, name) => {
+  const declaration = source.indexOf(`fn ${name}(`);
+  assert.notEqual(declaration, -1, `WGSL declares ${name}`);
+  const opening = source.indexOf('{', declaration);
+  assert.notEqual(opening, -1, `${name} has a body`);
+  let depth = 0;
+  for (let index = opening; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') depth -= 1;
+    if (depth === 0) return source.slice(opening + 1, index);
+  }
+  assert.fail(`${name} has an unterminated body`);
+};
 
 assert.equal(consumer.LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA, 'kaminos.pyro-liquid-contact-consumer.v0');
 assert.equal(consumer.LIQUID_FIRE_CONTACT_SOURCE_SCHEMA, 'kaminos.liquid-fire-contact-descriptor.v1');
@@ -225,7 +238,7 @@ assert.match(volumeSource, /1\.0\s*-\s*trans/, 'raymarch exports extinction-deri
 assert.match(volumeSource, /mix\(1\.0,\s*0\.0,\s*TRANSPARENT_CANVAS\)/, 'ray misses become transparent instead of clipping the lower liquid canvas');
 assert.match(volumeSource, /alphaMode:\s*transparentCanvas\s*\?\s*'premultiplied'\s*:\s*'opaque'/, 'only composition routes opt into browser alpha blending');
 assert.match(volumeSource, /setLiquidFireContactDescriptor\(descriptor/, 'Pyro exposes the sparse contact binding API');
-assert.match(volumeSource, /encodeSim\(encoder\);[\s\S]*encodeLiquidFireContactTransfer\(encoder\);[\s\S]*encodeSelectiveHeadLiveFields\(encoder\);[\s\S]*encodeMajorant\(encoder,/, 'liquid transfer is ordered after simulation and before selective-field majorant/render composition');
+assert.match(volumeSource, /encodeSim\(encoder\);[\s\S]*encodeLiquidFireContactTransfer\(encoder\);[\s\S]*encodeSelectiveHeadLiveFields\(encoder\);/, 'liquid transfer is ordered after simulation and before selective-field render composition');
 assert.match(volumeSource, /setPipeline\(liquidFireContactApplyPipeline\)[\s\S]*dispatchWorkgroups\(Math\.ceil\(gridCellCount\(gridSize\) \/ 64\)\)[\s\S]*setPipeline\(liquidFireContactFinalizePipeline\)[\s\S]*dispatchWorkgroups\(1\)/, 'a separate one-thread finalize dispatch runs after every apply workgroup');
 assert.match(volumeSource, /device\s*!==\s*descriptor\.device[\s\S]*same GPUDevice/, 'Pyro rejects a descriptor from another device');
 assert.match(indexSource, /finger_fluid_pyro_composition/, 'the composition route is explicit and inspectable');
@@ -259,19 +272,35 @@ const livePrimitiveTransformSource = volumeSource.match(/updateVolumePrimitiveTr
 assert.match(livePrimitiveTransformSource, /publishVolumePrimitiveState\(\)/, 'live source motion publishes its effective primitive transform');
 assert.match(livePrimitiveTransformSource, /writeLiquidFireContactParams\(\)/, 'live source motion keeps the physical contact neighborhood synchronized');
 assert.doesNotMatch(livePrimitiveTransformSource, /rebuildFluidState/, 'moving the burner cannot reset the established Pyro field');
-assert.match(volumeSource, /@group\(0\) @binding\(11\) var<storage, read> quenchSrc:\s*array<u32>/, 'Pyro simulation reads persistent fixed-point quench state');
-assert.match(volumeSource, /@group\(0\) @binding\(12\) var<storage, read_write> quenchDst:\s*array<u32>/, 'Pyro simulation transports persistent fixed-point quench state');
+assert.match(volumeSource, /@group\(0\) @binding\(13\) var<storage, read> quenchSrc:\s*array<u32>/, 'Pyro simulation reads persistent fixed-point quench state');
+assert.match(volumeSource, /@group\(0\) @binding\(14\) var<storage, read_write> quenchDst:\s*array<u32>/, 'Pyro simulation transports persistent fixed-point quench state');
 assert.match(volumeSource, /quenchBuffers\s*=\s*\[0,\s*1\]\.map/, 'Pyro allocates ping-ponged quench fields with the simulation state');
 assert.match(volumeSource, /let currentQuench\s*=\s*0/, 'quench ping-pong ownership is independent from projected fluid ownership');
 assert.match(volumeSource, /function fluidBindGroup\(fluidIndex\s*=\s*currentFluid,\s*quenchIndex\s*=\s*currentQuench\)/, 'fluid passes resolve all fluid/quench ownership combinations explicitly');
 assert.match(volumeSource, /currentQuench\s*=\s*1\s*-\s*currentQuench/, 'the main simulation advances quench ownership exactly once per step');
 assert.match(volumeSource, /liquidFireContactBindGroups\[currentFluid\s*\*\s*2\s*\+\s*currentQuench\]/, 'liquid transfer writes the independently current fluid and quench destinations');
 assert.match(volumeSource, /liquidFireContactBindGroups\.length\s*!==\s*4/, 'liquid transfer requires every fluid/quench ownership combination');
-const pressureProjectionSource = volumeSource.match(/function encodePressureProjection\(encoder\)[\s\S]*?\n\s*function encodeMajorant/)?.[0] || '';
+const pressureProjectionSource = volumeSource.match(/function encodePressureProjection\(encoder, options = \{\}\)[\s\S]*?\n  }\n/)?.[0] || '';
+assert.ok(pressureProjectionSource, 'pressure projection body is inspected');
 assert.doesNotMatch(pressureProjectionSource, /currentQuench\s*=/, 'pressure projection cannot advance or rewind quench ownership');
 assert.match(volumeSource, /gridCellCount\(gridSize\)\s*\+\s*LIQUID_FIRE_SOURCE_STATE_WORDS/, 'quench allocation reserves continuous source state without adding a storage buffer');
 assert.match(volumeSource, /let localQuenchSuppression\s*=\s*smoothstep/, 'simulator derives a continuous combustion suppression strength from persistent wetness');
-assert.match(volumeSource, /sourceWetnessIndex\s*=\s*GRID\s*\*\s*GRID\s*\*\s*GRID[\s\S]*sourceTemperatureIndex[\s\S]*sourceCombustionIndex[\s\S]*sourceIgnitedIndex/, 'simulator reads continuous source state from resolution-correct reserved words');
+const quenchSourceBinding = '@group(0) @binding(13) var<storage, read> quenchSrc: array<u32>;';
+const quenchSourceOffset = volumeSource.indexOf(quenchSourceBinding);
+assert.notEqual(quenchSourceOffset, -1, 'simulation shader binds the current quench source');
+const quenchSimulationShader = volumeSource.slice(quenchSourceOffset);
+const quenchSimulationBody = extractWgslFunctionBody(quenchSimulationShader, 'cs');
+const sourceStateIndexBlock = quenchSimulationBody.match(/let sourceWetnessIndex\s*=[\s\S]*?let sourceLastContactTickIndex\s*=[^;]+;/)?.[0] || '';
+const usesRectangularSourceStateIndices = block =>
+  /let sourceWetnessIndex\s*=\s*GRID\s*\*\s*GRID_Y\s*\*\s*GRID;/.test(block)
+  && /let sourceTemperatureIndex\s*=\s*sourceWetnessIndex\s*\+\s*1u;/.test(block)
+  && /let sourceCombustionIndex\s*=\s*sourceWetnessIndex\s*\+\s*2u;/.test(block)
+  && /let sourceIgnitedIndex\s*=\s*sourceWetnessIndex\s*\+\s*3u;/.test(block)
+  && /let sourceLastContactTickIndex\s*=\s*sourceWetnessIndex\s*\+\s*4u;/.test(block);
+assert.equal(usesRectangularSourceStateIndices(sourceStateIndexBlock), true, 'simulator reads continuous source state after the full rectangular fluid-cell allocation');
+const cubicSourceStateMutation = sourceStateIndexBlock.replace('GRID_Y', 'GRID');
+assert.notEqual(cubicSourceStateMutation, sourceStateIndexBlock, 'the cubic-height mutation changes the inspected source-state index block');
+assert.equal(usesRectangularSourceStateIndices(cubicSourceStateMutation), false, 'the source-state contract rejects a cubic offset after the taller-grid allocation');
 assert.match(volumeSource, /let sourceFlowEnvelope\s*=\s*sqrt\(sourceCombustion\)/, 'source flow uses a monotone perceptual response that preserves a diminishing plume through intermediate combustion');
 assert.match(volumeSource, /let inputFlow\s*=\s*rawInputFlow\s*\*\s*sourceFlowEnvelope/, 'continuous source combustion modulates new source injection rather than deleting the existing plume');
 assert.doesNotMatch(volumeSource, /max\(localQuenchSuppression,\s*sourceQuenchSuppression\)/, 'source state cannot globally erase every transported flame cell');

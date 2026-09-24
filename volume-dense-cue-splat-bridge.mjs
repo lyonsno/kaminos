@@ -417,8 +417,6 @@ async function runCapture(input, validated) {
           boundarySplatRadius: receiverControls.radius,
           boundarySplatSharpness: receiverControls.sharpness,
           lookFreeze: 0,
-          temporalAccum: 0,
-          temporalJitter: 0,
         })})`, `controls-${roleName}-${renderer}`);
         const finalTimeMs = input.frozenState.replay.startTimeMs
           + Math.max(0, input.frozenState.replay.steps - 1) * input.frozenState.replay.timeStepMs;
@@ -429,8 +427,6 @@ async function runCapture(input, validated) {
             boundarySplatRadius: receiverControls.radius,
             boundarySplatSharpness: receiverControls.sharpness,
             lookFreeze: 1,
-            temporalAccum: 0,
-            temporalJitter: 0,
           },
           now: finalTimeMs,
           sameStateCaptureId: `${input.frozenState.identity}:${roleName}:${renderer}`,

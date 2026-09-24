@@ -13,6 +13,14 @@ checkpoint. Recheck before adding another dependent slice. This catches a
 branch that is becoming a second product line while its dependency remains
 unintegrated.
 
+## Fire Basins In Cooperative Inference Smokes
+
+When using an exported fire basin with the WebGPU inference kit, read
+`docs/basin-presets-for-inference-smokes.md`. It owns the import/mount recipe,
+effective-look checks, and distinction between preset loading, shared-device
+binding, and cooperative frame scheduling. Preserve the supplied basin instead
+of substituting the generic fire route or a different renderer.
+
 ## Long-Running Smokes
 
 - Treat agent wakeups as compute, not as a free process monitor. Do not put the
