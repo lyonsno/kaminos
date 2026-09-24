@@ -67,6 +67,27 @@ assert.match(
   /structuralExposureDiagnosticColor\(in\.reaction\.x, presentation\.world\.w\)/,
   'exposure diagnostic must visualize the node exposure sampled by the GPU combustion pass',
 );
+const exposureDiagnostic = source.match(/fn structuralExposureDiagnosticColor\(exposure: f32, threshold: f32\) -> vec3<f32> \{[\s\S]*?\n\}/)?.[0] || '';
+const zeroExposureBranch = exposureDiagnostic.match(/if \(exposure <= 0\.0\) \{ return vec3<f32>\(([^)]+)\); \}/);
+const subthresholdRamp = exposureDiagnostic.match(/return mix\(vec3<f32>\(([^)]+)\), vec3<f32>\(([^)]+)\), fraction\);/);
+assert.match(
+  exposureDiagnostic,
+  /if \(exposure <= 0\.0\) \{ return vec3<f32>\(0\.015, 0\.025, 0\.08\); \}[\s\S]*?if \(exposure <= threshold\) \{/,
+  'zero exposure must have its own color before positive subthreshold exposure is mapped',
+);
+assert.match(exposureDiagnostic, /fraction = clamp\(exposure \/ max\(threshold, 0\.0001\), 0\.0, 1\.0\)/);
+const parseColor = text => text.split(',').map(value => Number(value.trim()));
+const zeroColor = parseColor(zeroExposureBranch?.[1] || '');
+const subthresholdMidpointColor = (subthresholdRamp?.[1] && subthresholdRamp?.[2])
+  ? parseColor(subthresholdRamp[1]).map((value, index) => (value + parseColor(subthresholdRamp[2])[index]) / 2)
+  : [];
+assert.equal(zeroColor.length, 3, 'zero exposure color must remain a three-channel RGB value');
+assert.equal(subthresholdMidpointColor.length, 3, 'positive subthreshold ramp must remain a three-channel RGB value');
+assert.notDeepEqual(
+  zeroColor,
+  subthresholdMidpointColor,
+  'a deterministic shader-color check must distinguish zero from threshold/2 exposure',
+);
 assert.match(
   source,
   /structuralMaterialDiagnosticColor\(in\.thermal\)/,
