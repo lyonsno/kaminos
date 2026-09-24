@@ -11,6 +11,14 @@ assert.ok(existsSync(indexPath), 'index.html must provide the browser debug surf
 
 const witness = readFileSync(witnessPath, 'utf8');
 const indexHtml = readFileSync(indexPath, 'utf8');
+const sceneBonePickSource = indexHtml.slice(
+  indexHtml.indexOf('function pickSceneBoneFromViewportPointer('),
+  indexHtml.indexOf('function setActiveSceneBone('),
+);
+const transformInspectorSource = indexHtml.slice(
+  indexHtml.indexOf('function updateTransformInspector()'),
+  indexHtml.indexOf('function applySplatCorrectionInspectorField('),
+);
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
@@ -269,15 +277,34 @@ assert.ok(/new THREE\.SkeletonHelper\(/.test(indexHtml), 'scene viewport renders
 assert.ok(/function pickSceneBoneFromViewportPointer\(/.test(indexHtml), 'viewport hit testing resolves rig geometry to an actual bone');
 assert.ok(/0\.035 \/ Math\.max\(meanScale, Number\.EPSILON\)/.test(indexHtml), 'rig-line hit tolerance remains a world-space size under imported scene scaling');
 assert.match(indexHtml, /intersectObject\(state\.helper, false\)/, 'per-rig raycasting preserves hit tolerance for differently scaled rigs');
+assert.match(sceneBonePickSource, /screenDistancePx: Math\.hypot\(event\.clientX - screenX, event\.clientY - screenY\)/, 'overlapping rig lines are disambiguated by cursor-to-segment screen distance');
+assert.match(sceneBonePickSource, /hits\.sort\(\(a, b\) => a\.screenDistancePx - b\.screenDistancePx \|\| a\.distance - b\.distance\)/, 'screen-nearest rig segment wins, with depth only as a tie-breaker');
+assert.match(sceneBonePickSource, /const maxPickDistancePx = 9/, 'rig selection has a viewport-pixel hit radius instead of treating every nearby projected segment as selectable');
 assert.ok(/transformControls\.attach\(target\.bone\)/.test(indexHtml), 'the existing transform gizmo attaches to the selected rig bone');
 assert.match(indexHtml, /splatCorrectionTransformTarget\(\) \|\| selectedSceneBoneTarget\?\.bone \|\| currentMesh/, 'mode changes preserve the actual bone target instead of reattaching the scene object');
 assert.match(indexHtml, /selectedSceneBoneTarget\.mesh\.skeleton\.update\(\)/, 'bone gizmo changes refresh the owning skinned mesh');
 assert.match(indexHtml, /selectedSceneBoneTarget \? 'scene bone' : 'scene object'/, 'the viewport status identifies when the existing gizmo targets a bone');
+assert.match(transformInspectorSource, /const selectedBone = selectedSceneBoneTarget && selectedSceneBoneTarget\.objectId === entry\?\.id/, 'generic transform inspector distinguishes a selected rig bone from its owning mesh');
+assert.match(transformInspectorSource, /const selectedBone = selectedSceneBoneTarget && selectedSceneBoneTarget\.objectId === entry\?\.id\s*\?\s*selectedSceneBoneTarget\.bone\s*:\s*null/, 'empty-selection startup cannot treat two absent ids as a selected bone and dereference null');
+assert.match(transformInspectorSource, /fields\.hidden = !entry \|\| !!selectedBone/, 'owner-object numeric fields cannot impersonate transforms for a selected rig bone');
+assert.match(transformInspectorSource, /Selected scene bone: \$\{selectedBone\.name/, 'transform inspector directs a selected bone back to the scene gizmo instead of showing owner transforms');
+assert.match(transformInspectorSource, /if \(selectedSceneBoneTarget\?\.objectId === entry\.id\) \{\s*updateTransformInspector\(\);\s*return;/, 'a stale generic field event cannot transform the owner object and detach the bone gizmo');
 assert.doesNotMatch(indexHtml, /id="skinned-pose-panel"|id="skinned-pose-cast-marker"/, 'bone manipulation does not add a custom pose panel or selection callout');
 assert.doesNotMatch(indexHtml, /skinnedPosePanel|skinned-pose-panel|skinned-pose-cast-marker/, 'the rejected panel implementation is removed, not merely disconnected');
 assert.match(witness, /scene-bone-gizmo/, 'painted-pair witness exercises direct viewport bone selection and transform gizmos');
 assert.match(witness, /Input\.dispatchMouseEvent/, 'bone-gizmo witness uses real browser pointer input');
 assert.match(witness, /selectedBoneTargetMatchesHit/, 'bone-gizmo witness confirms the viewport hit selects the same live bone object');
+assert.match(witness, /const requiredBoneNames = \['hindlimb-left-hip', 'hindlimb-left-stifle', 'hindlimb-left-hock'\]/, 'bone-gizmo witness declares exact required scene-bone targets before clicking');
+assert.match(witness, /for \(const requiredBoneName of requiredBoneNames\)/, 'bone-gizmo witness tests each declared segment instead of searching for any successful hit');
+assert.match(witness, /requiredBoneSelectionsMatch = selectionAttempts\.length === requiredBoneNames\.length[\s\S]*selectionAttempts\.every\(attempt => attempt\.matched === true\)/, 'bone-gizmo witness fails if any declared target selects a different bone');
+assert.match(witness, /transformInspectorBoneName/, 'bone-gizmo witness checks the user-facing transform target remains the selected bone');
 assert.match(witness, /gizmoPoseBoundsDelta/, 'bone-gizmo witness proves gizmo manipulation deforms the selected cast');
 assert.match(witness, /otherCastPoseError/, 'bone-gizmo witness rejects accidental movement of the paired cast');
+assert.match(witness, /posedPixels\.changedPixels\s*<\s*1/, 'bone-gizmo witness cannot pass when the posed viewport shows no visible pixel change');
+assert.match(witness, /const restoredPickTargets\s*=\s*await evaluate\(ws,[\s\S]*?kaminosSceneRigPickTargetsDebugState/, 'bone-gizmo witness rebuilds screen-space bone targets after reloading the imported pose');
+assert.match(witness, /await dispatchMouseClick\(ws,\s*restoredHit\)/, 'restoration screenshot reselects the same bone through viewport pointer input');
+assert.match(witness, /restoredSelected\?\.boneName !== selected\.boneName/, 'restoration screenshot fails unless the original scene-bone target was selected again');
+assert.match(witness, /const restoredPixels\s*=\s*viewportPixelDelta\(beforeShot\.path,\s*restoredShot\.path\)/, 'bone-gizmo witness compares the restored viewport against its pre-drag image');
+assert.match(witness, /const restoredPixelTolerance\s*=\s*Math\.max\(3,\s*Math\.ceil\(posedPixels\.changedPixels\s*\*\s*0\.05\)\)/, 'restoration pixel tolerance is tied to the measured pose signal and allows only small capture noise');
+assert.match(witness, /restoredPixels\.changedPixels\s*>\s*restoredPixelTolerance/, 'bone-gizmo witness rejects a material visible mismatch after pose restoration');
 assert.doesNotMatch(witness, /runMeshSkinnedPosePanelLegacyScenario|#skinned-pose-panel/, 'browser witness no longer carries the rejected custom-panel flow');

@@ -5391,18 +5391,24 @@ function updateTransformInspector() {
   const fields = document.getElementById('transform-inspector-fields');
   if (!inspector || !empty || !fields) return;
   const entry = selectedSceneObjectEntry();
+  const selectedBone = selectedSceneBoneTarget && selectedSceneBoneTarget.objectId === entry?.id
+    ? selectedSceneBoneTarget.bone
+    : null;
   inspector.dataset.selectedObjectId = entry?.id || '';
+  inspector.dataset.selectedBoneName = selectedBone?.name || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
-  empty.hidden = !!entry;
-  fields.hidden = !entry;
-  setTransformInspectorFieldsDisabled(!entry);
+  empty.hidden = !!entry && !selectedBone;
+  fields.hidden = !entry || !!selectedBone;
+  setTransformInspectorFieldsDisabled(!entry || !!selectedBone);
   updateSplatCorrectionPanel(entry);
-  if (!entry && activeSceneGroupId) {
+  if (selectedBone) {
+    empty.textContent = `Selected scene bone: ${selectedBone.name || 'unnamed'} · use the viewport transform gizmo`;
+  } else if (!entry && activeSceneGroupId) {
     empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
   } else if (!entry) {
     empty.textContent = 'No object selected';
   }
-  if (!entry) return;
+  if (!entry || selectedBone) return;
 
   document.getElementById('transform-inspector-name').textContent = entry.label || entry.fileName || entry.id;
   document.getElementById('transform-inspector-id').textContent = entry.id;
@@ -5429,6 +5435,10 @@ function updateTransformInspector() {
 function applyTransformInspectorField(input) {
   const entry = selectedSceneObjectEntry();
   if (!entry || !input?.dataset?.transformField) {
+    updateTransformInspector();
+    return;
+  }
+  if (selectedSceneBoneTarget?.objectId === entry.id) {
     updateTransformInspector();
     return;
   }
@@ -5753,6 +5763,7 @@ function setSceneRayFromViewportPointer(event) {
 function pickSceneBoneFromViewportPointer(event) {
   if (!setSceneRayFromViewportPointer(event) || !sceneRigHelpers.size) return null;
   scene.updateMatrixWorld(true);
+  const rect = renderer.domElement.getBoundingClientRect();
   const states = [...sceneRigHelpers.values()].filter(state => state.helper.visible);
   const hits = [];
   for (const state of states) {
@@ -5760,10 +5771,20 @@ function pickSceneBoneFromViewportPointer(event) {
     const meanScale = (Math.abs(worldScale.x) + Math.abs(worldScale.y) + Math.abs(worldScale.z)) / 3;
     sceneRaycaster.params.Line.threshold = 0.035 / Math.max(meanScale, Number.EPSILON);
     state.helper.geometry.boundingSphere = null;
-    hits.push(...sceneRaycaster.intersectObject(state.helper, false));
+    for (const hit of sceneRaycaster.intersectObject(state.helper, false)) {
+      const screenPoint = hit.point.clone().project(camera);
+      const screenX = rect.left + (screenPoint.x + 1) * 0.5 * rect.width;
+      const screenY = rect.top + (1 - screenPoint.y) * 0.5 * rect.height;
+      hits.push({
+        ...hit,
+        screenDistancePx: Math.hypot(event.clientX - screenX, event.clientY - screenY),
+      });
+    }
   }
-  hits.sort((a, b) => a.distance - b.distance);
+  hits.sort((a, b) => a.screenDistancePx - b.screenDistancePx || a.distance - b.distance);
+  const maxPickDistancePx = 9;
   for (const hit of hits) {
+    if (hit.screenDistancePx > maxPickDistancePx) break;
     const state = sceneRigHelpers.get(hit.object.userData.kaminosRigObjectId);
     const bone = state?.segmentBones[Math.floor((hit.index ?? -1) / 2)];
     const mesh = bone && state.boneToMesh.get(bone);
