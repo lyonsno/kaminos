@@ -7,23 +7,18 @@
     "effective": "local Node.js CPU / shear-regularized linear-spring PCG",
     "fallback": false,
     "node": "v25.9.0",
-    "sourceRevision": "9248525e54dcb1fbe35ec96e041041fe75df567a",
+    "sourceRevision": "07fb832c651764f35fd66c1bea05b2a18da0a9be",
     "sourceDirtyPaths": [
-      "structural-material-arch-core.js",
-      "structural-material-arch-depth-assay.mjs",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/contact-interior-sensitivity-2026-09-25.json",
       "artifacts/structural-material-3d/authored-bell-initial.json",
       "artifacts/structural-material-3d/authored-bell-initial.png",
       "artifacts/structural-material-3d/authored-bell-local-smoke.json",
-      "artifacts/structural-material-3d/authored-bell-local-smoke.png",
-      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/contact-interior-sensitivity-2026-09-25.json",
-      "structural-material-arch-contact-interior-assay.mjs",
-      "tests/structural-material-arch-contact-interior-assay-contracts.mjs",
-      "tests/structural-material-arch-contact-interior-contracts.mjs"
+      "artifacts/structural-material-3d/authored-bell-local-smoke.png"
     ],
     "implementationSha256": {
       "structural-material-arch-core.js": "47402047f3f9cc2ba78b747a1313417b684c137e3b772f54ff3dc3767db4b7c0",
       "structural-material-arch-profile.mjs": "fdd82b40bcccd5ef3ae439ce7fbe23aa9450553125da5ef72a897043662bf201",
-      "structural-material-arch-depth-assay.mjs": "6ec800cfeb5033f110ce7f23690dc3114678f7f1e5fa15cbdc2b5c5e3cadd1a9",
+      "structural-material-arch-depth-assay.mjs": "ae1ce9c0d104b69aec466bae4ced1ca33b0db4683c597b2b8a4965f2d12455b2",
       "structural-material-arch-contact-interior-assay.mjs": "f43835ce06ea24cbb68198e12231ebdb4fcc983d224d00e691c7799397a027f8"
     }
   },
@@ -703,7 +698,7 @@
             "travel": 0.033615079863219245,
             "peakStrain": 0.05889058960596331,
             "solve": {
-              "elapsedMs": 67.95529199999999,
+              "elapsedMs": 75.15495799999997,
               "iterations": 415,
               "iterationBudget": 1200,
               "relativeResidual": 9.851194188213373e-8
@@ -1682,7 +1677,7 @@
             "travel": 0.03667320664746878,
             "peakStrain": 0.07468475200664948,
             "solve": {
-              "elapsedMs": 64.69595800000002,
+              "elapsedMs": 68.81729099999995,
               "iterations": 419,
               "iterationBudget": 1200,
               "relativeResidual": 9.389518597633654e-8
@@ -3471,7 +3466,7 @@
             "travel": 0.04813768025451216,
             "peakStrain": 0.1314985060848035,
             "solve": {
-              "elapsedMs": 84.30420800000002,
+              "elapsedMs": 85.16558300000003,
               "iterations": 441,
               "iterationBudget": 1200,
               "relativeResidual": 9.453380739943221e-8
@@ -6620,7 +6615,7 @@
             "travel": 0.14854547958104225,
             "peakStrain": 0.3555772341675451,
             "solve": {
-              "elapsedMs": 110.85366699999997,
+              "elapsedMs": 114.35187499999995,
               "iterations": 549,
               "iterationBudget": 1200,
               "relativeResidual": 9.732448819425385e-8
@@ -14075,7 +14070,7 @@
             "travel": 0.03921314416436997,
             "peakStrain": 0.10086239592372385,
             "solve": {
-              "elapsedMs": 83.50416599999994,
+              "elapsedMs": 71.80366700000002,
               "iterations": 430,
               "iterationBudget": 1200,
               "relativeResidual": 9.428993863364409e-8
@@ -20004,7 +19999,7 @@
             "travel": 0.1818914597854682,
             "peakStrain": 0.7217164887556942,
             "solve": {
-              "elapsedMs": 84.330334,
+              "elapsedMs": 108.14241700000002,
               "iterations": 614,
               "iterationBudget": 1200,
               "relativeResidual": 8.709905652816832e-8
@@ -30988,13 +30983,6 @@
           ],
           "loadedContactComponents": [
             {
-              "componentId": 0,
-              "componentSize": 2135,
-              "pinnedNodeCount": 48,
-              "loadedNodeCount": 18,
-              "hasPinnedSupport": true
-            },
-            {
               "componentId": 1,
               "componentSize": 3,
               "pinnedNodeCount": 0,
@@ -31049,7 +31037,7 @@
               "componentId": 0,
               "componentSize": 2135,
               "pinnedNodeCount": 48,
-              "loadedNodeCount": 18,
+              "loadedNodeCount": 0,
               "hasPinnedSupport": true
             },
             {
@@ -31194,7 +31182,7 @@
             "travel": 0.04596374899921198,
             "peakStrain": 0.1206297265260796,
             "solve": {
-              "elapsedMs": 54.72316699999999,
+              "elapsedMs": 60.59737499999994,
               "iterations": 425,
               "iterationBudget": 1200,
               "relativeResidual": 8.77792772193756e-8
@@ -34137,7 +34125,7 @@
                   "componentId": 0,
                   "componentSize": 2148,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 27,
+                  "loadedNodeCount": 9,
                   "hasPinnedSupport": true
                 }
               ],
@@ -34146,7 +34134,7 @@
                   "componentId": 0,
                   "componentSize": 2148,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 27,
+                  "loadedNodeCount": 9,
                   "hasPinnedSupport": true
                 }
               ],
@@ -34211,7 +34199,7 @@
             "travel": 0.13851444074906225,
             "peakStrain": 0.4399524033731183,
             "solve": {
-              "elapsedMs": 52.76475000000005,
+              "elapsedMs": 74.07725000000005,
               "iterations": 441,
               "iterationBudget": 1200,
               "relativeResidual": 9.440480478275148e-8
@@ -37314,7 +37302,7 @@
                   "componentId": 0,
                   "componentSize": 2135,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 18,
+                  "loadedNodeCount": 0,
                   "hasPinnedSupport": true
                 },
                 {
@@ -37389,13 +37377,6 @@
                 }
               ],
               "loadedContactComponents": [
-                {
-                  "componentId": 0,
-                  "componentSize": 2135,
-                  "pinnedNodeCount": 48,
-                  "loadedNodeCount": 18,
-                  "hasPinnedSupport": true
-                },
                 {
                   "componentId": 1,
                   "componentSize": 3,
@@ -37573,13 +37554,6 @@
           ],
           "loadedContactComponents": [
             {
-              "componentId": 9,
-              "componentSize": 282,
-              "pinnedNodeCount": 0,
-              "loadedNodeCount": 18,
-              "hasPinnedSupport": false
-            },
-            {
               "componentId": 12,
               "componentSize": 1,
               "pinnedNodeCount": 0,
@@ -37711,7 +37685,7 @@
               "componentId": 9,
               "componentSize": 282,
               "pinnedNodeCount": 0,
-              "loadedNodeCount": 18,
+              "loadedNodeCount": 0,
               "hasPinnedSupport": false
             },
             {
@@ -37889,7 +37863,7 @@
             "travel": 0.052354809510910455,
             "peakStrain": 0.16426686923129635,
             "solve": {
-              "elapsedMs": 52.526042000000075,
+              "elapsedMs": 74.75,
               "iterations": 432,
               "iterationBudget": 1200,
               "relativeResidual": 9.857823769216774e-8
@@ -45302,7 +45276,7 @@
                   "componentId": 0,
                   "componentSize": 2148,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 27,
+                  "loadedNodeCount": 9,
                   "hasPinnedSupport": true
                 }
               ],
@@ -45311,7 +45285,7 @@
                   "componentId": 0,
                   "componentSize": 2148,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 27,
+                  "loadedNodeCount": 9,
                   "hasPinnedSupport": true
                 }
               ],
@@ -45376,7 +45350,7 @@
             "travel": 0.32059765710233784,
             "peakStrain": 0.6920985596874754,
             "solve": {
-              "elapsedMs": 73.57970799999998,
+              "elapsedMs": 102.17762499999992,
               "iterations": 627,
               "iterationBudget": 1200,
               "relativeResidual": 9.816749310131502e-8
@@ -54694,7 +54668,7 @@
                   "componentId": 9,
                   "componentSize": 282,
                   "pinnedNodeCount": 0,
-                  "loadedNodeCount": 18,
+                  "loadedNodeCount": 0,
                   "hasPinnedSupport": false
                 },
                 {
@@ -54790,13 +54764,6 @@
                 }
               ],
               "loadedContactComponents": [
-                {
-                  "componentId": 9,
-                  "componentSize": 282,
-                  "pinnedNodeCount": 0,
-                  "loadedNodeCount": 18,
-                  "hasPinnedSupport": false
-                },
                 {
                   "componentId": 12,
                   "componentSize": 1,
@@ -55235,7 +55202,7 @@
             "travel": 0.033952873932204135,
             "peakStrain": 0.05840972184093012,
             "solve": {
-              "elapsedMs": 50.72708399999988,
+              "elapsedMs": 56.28845799999999,
               "iterations": 411,
               "iterationBudget": 1200,
               "relativeResidual": 9.424129896561534e-8
@@ -56244,7 +56211,7 @@
             "travel": 0.03718176267621081,
             "peakStrain": 0.07454685082815853,
             "solve": {
-              "elapsedMs": 53.118541999999934,
+              "elapsedMs": 56.412583999999924,
               "iterations": 415,
               "iterationBudget": 1200,
               "relativeResidual": 9.395477910000548e-8
@@ -58073,7 +58040,7 @@
             "travel": 0.04929390548034086,
             "peakStrain": 0.13493987560075082,
             "solve": {
-              "elapsedMs": 87.80066699999998,
+              "elapsedMs": 55.79774999999995,
               "iterations": 436,
               "iterationBudget": 1200,
               "relativeResidual": 9.530011530260772e-8
@@ -61462,7 +61429,7 @@
             "travel": 0.1490730509083688,
             "peakStrain": 0.32264416631816545,
             "solve": {
-              "elapsedMs": 106.75191700000005,
+              "elapsedMs": 110.59845799999994,
               "iterations": 537,
               "iterationBudget": 1200,
               "relativeResidual": 9.731045615372096e-8
@@ -68405,7 +68372,7 @@
             "travel": 0.03968347367954891,
             "peakStrain": 0.10272649213954896,
             "solve": {
-              "elapsedMs": 51.590999999999894,
+              "elapsedMs": 89.50654200000008,
               "iterations": 425,
               "iterationBudget": 1200,
               "relativeResidual": 9.770874305856545e-8
@@ -74084,7 +74051,7 @@
             "travel": 0.19336887970281555,
             "peakStrain": 0.6822049261382593,
             "solve": {
-              "elapsedMs": 71.77862499999992,
+              "elapsedMs": 73.14899999999989,
               "iterations": 612,
               "iterationBudget": 1200,
               "relativeResidual": 9.28840895469127e-8
@@ -84528,13 +84495,6 @@
           ],
           "loadedContactComponents": [
             {
-              "componentId": 0,
-              "componentSize": 2117,
-              "pinnedNodeCount": 48,
-              "loadedNodeCount": 18,
-              "hasPinnedSupport": true
-            },
-            {
               "componentId": 2,
               "componentSize": 1,
               "pinnedNodeCount": 0,
@@ -84596,7 +84556,7 @@
               "componentId": 0,
               "componentSize": 2117,
               "pinnedNodeCount": 48,
-              "loadedNodeCount": 18,
+              "loadedNodeCount": 0,
               "hasPinnedSupport": true
             },
             {
@@ -84757,7 +84717,7 @@
             "travel": 0.04629339955501369,
             "peakStrain": 0.12092707387926178,
             "solve": {
-              "elapsedMs": 52.070625000000064,
+              "elapsedMs": 55.44066699999985,
               "iterations": 420,
               "iterationBudget": 1200,
               "relativeResidual": 8.715465409529138e-8
@@ -87720,7 +87680,7 @@
                   "componentId": 0,
                   "componentSize": 2130,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 27,
+                  "loadedNodeCount": 9,
                   "hasPinnedSupport": true
                 }
               ],
@@ -87729,7 +87689,7 @@
                   "componentId": 0,
                   "componentSize": 2130,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 27,
+                  "loadedNodeCount": 9,
                   "hasPinnedSupport": true
                 }
               ],
@@ -87794,7 +87754,7 @@
             "travel": 0.13300048474006368,
             "peakStrain": 0.3780430692917927,
             "solve": {
-              "elapsedMs": 50.38550000000009,
+              "elapsedMs": 52.03429199999982,
               "iterations": 432,
               "iterationBudget": 1200,
               "relativeResidual": 9.541509333552574e-8
@@ -91079,7 +91039,7 @@
                   "componentId": 0,
                   "componentSize": 2117,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 18,
+                  "loadedNodeCount": 0,
                   "hasPinnedSupport": true
                 },
                 {
@@ -91168,13 +91128,6 @@
                 }
               ],
               "loadedContactComponents": [
-                {
-                  "componentId": 0,
-                  "componentSize": 2117,
-                  "pinnedNodeCount": 48,
-                  "loadedNodeCount": 18,
-                  "hasPinnedSupport": true
-                },
                 {
                   "componentId": 2,
                   "componentSize": 1,
@@ -91360,13 +91313,6 @@
           ],
           "loadedContactComponents": [
             {
-              "componentId": 8,
-              "componentSize": 282,
-              "pinnedNodeCount": 0,
-              "loadedNodeCount": 18,
-              "hasPinnedSupport": false
-            },
-            {
               "componentId": 11,
               "componentSize": 1,
               "pinnedNodeCount": 0,
@@ -91491,7 +91437,7 @@
               "componentId": 8,
               "componentSize": 282,
               "pinnedNodeCount": 0,
-              "loadedNodeCount": 18,
+              "loadedNodeCount": 0,
               "hasPinnedSupport": false
             },
             {
@@ -91668,7 +91614,7 @@
             "travel": 0.05280921788958033,
             "peakStrain": 0.165468375039944,
             "solve": {
-              "elapsedMs": 52.62049999999999,
+              "elapsedMs": 53.80379200000016,
               "iterations": 429,
               "iterationBudget": 1200,
               "relativeResidual": 9.670120762115374e-8
@@ -98891,7 +98837,7 @@
                   "componentId": 0,
                   "componentSize": 2130,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 27,
+                  "loadedNodeCount": 9,
                   "hasPinnedSupport": true
                 }
               ],
@@ -98900,7 +98846,7 @@
                   "componentId": 0,
                   "componentSize": 2130,
                   "pinnedNodeCount": 48,
-                  "loadedNodeCount": 27,
+                  "loadedNodeCount": 9,
                   "hasPinnedSupport": true
                 }
               ],
@@ -98965,7 +98911,7 @@
             "travel": 0.4572445441240012,
             "peakStrain": 1.362231956680504,
             "solve": {
-              "elapsedMs": 122.68475000000012,
+              "elapsedMs": 75.94575000000009,
               "iterations": 642,
               "iterationBudget": 1200,
               "relativeResidual": 9.032338834528922e-8
@@ -106275,7 +106221,7 @@
                   "componentId": 8,
                   "componentSize": 282,
                   "pinnedNodeCount": 0,
-                  "loadedNodeCount": 18,
+                  "loadedNodeCount": 0,
                   "hasPinnedSupport": false
                 },
                 {
@@ -106371,13 +106317,6 @@
                 }
               ],
               "loadedContactComponents": [
-                {
-                  "componentId": 8,
-                  "componentSize": 282,
-                  "pinnedNodeCount": 0,
-                  "loadedNodeCount": 18,
-                  "hasPinnedSupport": false
-                },
                 {
                   "componentId": 11,
                   "componentSize": 1,
@@ -106479,5 +106418,5 @@
       }
     }
   ],
-  "elapsedMs": 1726.7455830000001
+  "elapsedMs": 1829.1606669999999
 }

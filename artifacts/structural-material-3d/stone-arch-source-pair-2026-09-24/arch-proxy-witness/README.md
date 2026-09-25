@@ -10,7 +10,10 @@ all three inferred depth layers, or applied only to the camera-facing layer)
 with two interior assumptions (continuous lattice, or nine authored radial
 voussoir sectors joined by weaker bonds). Intact and notched runs use matched
 settings within every pair. The patch distributes the same total force across
-27 nodes or 9 nodes, respectively.
+27 nodes or 9 nodes, respectively. Connectivity summaries and the terminal
+support check use that same force-loaded layer set, so detached unloaded rear
+layers cannot invalidate a supported camera-facing contact or mask an
+unsupported one.
 
 The local notch-crack contrast **changes sign under the radial-joint
 assumption in both contact modes**:
@@ -25,7 +28,10 @@ therefore sensitive to both contact and interior assumptions, but this
 endpoint does not discriminate between them. The radial-joint construction is
 an explicit geometric counterfactual, not a claim that the asset depicts
 voussoirs. The notched and intact cases are controlled ablations of one
-projected source profile, not separately reconstructed meshes.
+projected source profile, not separately reconstructed meshes. These are raw
+local crack-event counts: the notch and radial joints change the number of
+live bonds available to fail, so the deltas are not a normalized damage rate
+or a material ranking.
 
 The assay retains every failed bond's rest-space midpoint, strain and event
 energy, plus component sizes, pinned and loaded counts, support status, and
@@ -50,9 +56,9 @@ The earlier load-distribution evidence remains in the [point-load baseline](poin
 and [0.032-radius crown patch report](contact-patch-r032_2026-09-25.json).
 The assay ran on Node `v25.9.0`, local CPU route
 `shear-regularized-linear-spring-pcg-v0`, with no fallback; the eight-case run
-reported `1726.746 ms` elapsed. This is one assay-run duration, not an isolated
+reported `1829.161 ms` elapsed. This is one assay-run duration, not an isolated
 solver benchmark or performance claim. The report binds the route to source
-revision `9248525e54dcb1fbe35ec96e041041fe75df567a` and records SHA-256 hashes
+revision `07fb832c651764f35fd66c1bea05b2a18da0a9be` and records SHA-256 hashes
 for the implementation files.
 
 Replay from this Kaminos worktree:
