@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const [baseInput, reportInput, chromePath] = process.argv.slice(2);
-if (!reportInput) throw new Error('usage: node structural-material-arch-browser-smoke.mjs <local-page-url> <report.json> <chrome-executable>');
+const [baseInput, reportInput, chromePath, startupTimeoutInput] = process.argv.slice(2);
+if (!reportInput) throw new Error('usage: node structural-material-arch-browser-smoke.mjs <local-page-url> <report.json> <chrome-executable> [startup-timeout-ms]');
 
 const root = dirname(fileURLToPath(import.meta.url));
 const reportPath = resolve(process.cwd(), reportInput);
@@ -23,7 +23,7 @@ const report = {
   fallback: null,
   lastTrustworthyEvidence: 'request arguments and output destination recorded; no route or browser has been contacted',
   source: {},
-  browser: {},
+  browser: { startupTimeoutMs: startupTimeoutInput === undefined ? 180000 : Number(startupTimeoutInput) },
   profileResponses: [],
   runtimeExceptions: [],
   consoleErrors: [],
@@ -125,7 +125,7 @@ async function snapshot() {
 async function capture(name) {
   const state = await snapshot();
   const expected = state.force;
-  const loadStateMatches = state.state.includes(`Matched load ${Number(expected).toFixed(2)}`) ||
+  const loadStateMatches = (state.state.includes('Fresh intact-reference trial') && state.state.includes(`Matched load ${Number(expected).toFixed(2)}`)) ||
     (name === 'bind-desktop' && state.state === 'Broken connections rebound');
   recordCheck(`${name}: requested load remains effective`, state.forceOutput === Number(expected).toFixed(2) && loadStateMatches, state);
   recordCheck(`${name}: rendered proxy is populated`, state.svgElementCount > 100, state.svgElementCount);
@@ -214,6 +214,9 @@ async function closeBrowser() {
 
 try {
   if (!baseInput || !chromePath) throw new Error('page URL and Chrome executable are required');
+  if (!Number.isSafeInteger(report.browser.startupTimeoutMs) || report.browser.startupTimeoutMs < 1) {
+    throw new Error('browser startup timeout must be a positive safe integer in milliseconds');
+  }
   const requestedUrl = new URL(baseInput);
   if (!['127.0.0.1', 'localhost'].includes(requestedUrl.hostname) ||
       requestedUrl.pathname !== '/structural-material-arch.html') {
@@ -243,10 +246,19 @@ try {
     child.once('spawn', resolvePromise);
     child.once('error', rejectPromise);
   });
+  const browserStartedAt = Date.now();
+  report.lastTrustworthyEvidence = `Chrome child spawned (pid ${child.pid}); waiting for DevToolsActivePort`;
   while (!existsSync(join(profileDirectory, 'DevToolsActivePort'))) {
     if (child.exitCode !== null) throw new Error(`Chrome exited before DevTools opened: ${childExit?.code}`);
-    await new Promise(resolvePromise => setTimeout(resolvePromise, 50));
+    const elapsedMs = Date.now() - browserStartedAt;
+    if (elapsedMs >= report.browser.startupTimeoutMs) {
+      report.browser.startupDurationMs = elapsedMs;
+      throw new Error(`DevToolsActivePort did not appear within ${report.browser.startupTimeoutMs} ms`);
+    }
+    await new Promise(resolvePromise => setTimeout(resolvePromise, Math.min(50, report.browser.startupTimeoutMs - elapsedMs)));
   }
+  report.browser.startupDurationMs = Date.now() - browserStartedAt;
+  report.lastTrustworthyEvidence = `DevToolsActivePort opened after ${report.browser.startupDurationMs} ms`;
   const [port] = readFileSync(join(profileDirectory, 'DevToolsActivePort'), 'utf8').trim().split('\n');
   const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
   const page = targets.find(target => target.type === 'page');
@@ -261,6 +273,7 @@ try {
   report.phase = 'desktop-onset';
   await navigate(new URL('?force=0.75', requestedUrl).href);
   const onset = await setForceAndSolve(0.75);
+  recordCheck('onset: Solve names a fresh intact-reference trial', onset.state.includes('Fresh intact-reference trial'), onset.state);
   recordCheck('onset: both profiles use the same selected contact state', onset.state.includes('Matched load 0.75'), onset.state);
   recordCheck('onset: intact and notched counts match the witnessed fracture', onset.intact.broken === '9' && onset.notched.broken === '21', { intact: onset.intact, notched: onset.notched });
   recordCheck('route: visible page identity names the actual CPU proxy consumer',

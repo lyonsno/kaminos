@@ -38,6 +38,10 @@ displacements. The threshold is `0.04`. Crack and Bind event energy is
 `strain * restLength * stiffness` for Bind. This is a material-derived event
 scalar in proxy units, not joules and not audible playback.
 
+The browser bench evaluates every selected force as a **fresh intact-reference
+trial** for both profiles. Changing the slider and choosing Fresh solve is not
+a sequential loading history; Reset only clears the displayed trial.
+
 ## Solver And Provenance
 
 - Requested/effective route: local Node.js CPU / shear-regularized linear-spring
@@ -61,7 +65,7 @@ scalar in proxy units, not joules and not audible playback.
   frame; `separation-desktop-chrome.png` is force `2`; `bind-desktop-chrome.png`
   is force `2` followed by a button-triggered Bind; `mobile-emulated-chrome.png`
   is a 390 x 844 device-emulated capture at force `0.50`. The browser version,
-  effective route, profile HTTP 200s, 39 checks, and empty page exception/console
+  effective route, profile HTTP 200s, 40 checks, and empty page exception/console
   error lists are recorded in `browser-smoke.json`.
 
 Replay from this Kaminos worktree:
@@ -72,10 +76,15 @@ node structural-material-arch-witness.mjs artifacts/structural-material-3d/stone
 node structural-material-arch-browser-smoke.mjs http://127.0.0.1:8423/structural-material-arch.html artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/browser-smoke.json '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 ```
 
+The browser smoke defaults to a 180000 ms Chrome startup deadline and records
+the effective value and observed startup duration. Supply an optional fourth
+argument in milliseconds to change only that startup deadline.
+
 The successful desktop frames were visually inspected at 1440 x 1100; paired
 arches, markers, supports, metrics, crack colors, and Bind state are legible
-without overlap. Device emulation keeps the complete first arch, slider,
-readouts, and stacked notched arch within the viewport. The negative-route
+without overlap. At 390 x 844 device emulation, the slider, controls, readouts,
+and complete intact arch are visible; the notched arch begins below the fold and
+requires scrolling. The negative-route
 exercise is preserved as `browser-smoke-wrong-route.json`: a request to
 `http://127.0.0.1:8423/not-the-arch.html` exits 1 at `preflight`, records why,
 and never falls back to another route. Chrome's process stderr still contains platform

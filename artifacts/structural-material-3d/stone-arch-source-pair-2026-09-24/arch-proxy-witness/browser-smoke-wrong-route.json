@@ -10,6 +10,7 @@
   "lastTrustworthyEvidence": "request arguments and output destination recorded; no route or browser has been contacted",
   "source": {},
   "browser": {
+    "startupTimeoutMs": 180000,
     "exit": null
   },
   "profileResponses": [],
@@ -24,6 +25,6 @@
   "error": {
     "phase": "preflight",
     "message": "browser smoke requires the local structural-material-arch.html route",
-    "stack": "Error: browser smoke requires the local structural-material-arch.html route\n    at file:///private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/structural-material-arch-browser-smoke.mjs:220:11\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)"
+    "stack": "Error: browser smoke requires the local structural-material-arch.html route\n    at file:///private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/structural-material-arch-browser-smoke.mjs:223:11\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)"
   }
 }
