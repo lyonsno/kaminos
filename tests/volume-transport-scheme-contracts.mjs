@@ -160,10 +160,12 @@ test('cockpit plumbing carries the scheme and common-gas switch through DOM, rou
   assert.match(index, /advectionScheme: document\.getElementById\('volume-advection-scheme'\)\.value/, 'controls read the scheme');
   assert.match(index, /commonGasTransport: document\.getElementById\('volume-common-gas-transport'\)\.checked/, 'controls read common gas transport');
   assert.match(index, /volume-advection-scheme-val'\)\.textContent/, 'scheme label renders the effective scheme');
-  assert.match(index, /'volume-advection-scheme',\s*\n\s*'volume-common-gas-transport',/, 'both controls register live listeners');
+  assert.match(index, /^\s*'volume-advection-scheme',$/m, 'the scheme registers a live listener');
+  assert.match(index, /^\s*'volume-common-gas-transport',$/m, 'the common-gas switch registers a live listener');
   assert.match(index, /\['volume-advection-scheme', 'volume_advection_scheme'\]/, 'route params apply the scheme');
   assert.match(index, /resolveTransportConfig/, 'cockpit label uses the shared resolver');
-  assert.match(layout, /advection-scheme\|common-gas-transport/, 'both controls belong to the Simulation dynamics layout group');
+  assert.match(layout, /\|advection-scheme\|/, 'the scheme belongs to the Simulation dynamics layout group');
+  assert.match(layout, /\|common-gas-transport\)\$/, 'the common-gas switch belongs to the Simulation dynamics layout group');
 });
 
 test('preset schema declares both controls additively so historical basins project to legacy transport', () => {

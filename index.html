@@ -2630,6 +2630,16 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <span class="slider-help">Legacy is first-order semi-Lagrangian with 0.982 velocity damping every step and a fixed velocity clamp. Undamped keeps the first-order step but drops the damping and bounds the step by backtrace distance instead. MacCormack adds a predictor pass and a limited round-trip error correction on one shared characteristic, so vortex roll-up and plume pulsing that the first-order step smears away can survive without synthetic stirring. Live switching keeps evolved state.</span>
     <div class="slider-row">
+      <span class="slider-label">Confinement</span>
+      <select id="volume-confinement" class="select-input" data-volume-settings-param="volume_confinement">
+        <option value="curl-slider" selected>Curl slider (legacy law)</option>
+        <option value="calibrated">Calibrated per scheme</option>
+        <option value="off">Off</option>
+      </select>
+      <span class="slider-val" id="volume-confinement-val">Curl slider</span>
+    </div>
+    <span class="slider-help">Curl slider is the law every saved basin was authored under: Curl sets the vorticity-confinement amount (0.034 + Curl × 0.044, concentrated in smoke and heat) and the thermal-expansion gain (0.048 + Curl × 0.019). Calibrated replaces both with one confinement epsilon per Advection scheme, applied uniformly, so confinement only compensates the scheme's numerical loss and injects no authored curl energy; thermal expansion holds at its Curl-0 baseline. Off removes confinement. Under Calibrated or Off the Curl slider no longer drives confinement or expansion (it still feeds the procedural detail forces and Bonfire terms while those are on).</span>
+    <div class="slider-row">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pressure-tier-overlay-val">0.00</span>
@@ -3252,7 +3262,7 @@ import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, 
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig } from './volume-core.js?v=flame-doctor-landing-0925';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig } from './volume-core.js?v=flame-doctor-confinement-0925';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -15291,6 +15301,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureSolver', 'volume_pressure_solver'],
   ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
   ['advectionScheme', 'volume_advection_scheme'],
+  ['confinement', 'volume_confinement'],
   ['pressureTierOverlay', 'volume_pressure_tier_overlay'],
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
@@ -20526,6 +20537,7 @@ function readVolumeControls() {
     pressureSolver: document.getElementById('volume-pressure-solver').value,
     pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
     advectionScheme: document.getElementById('volume-advection-scheme').value,
+    confinement: document.getElementById('volume-confinement').value,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
     pressureTierLowerMax: parseFloat(document.getElementById('volume-pressure-tier-lower-max').value),
     pressureTierHeroMin: parseFloat(document.getElementById('volume-pressure-tier-hero-min').value),
@@ -20739,6 +20751,17 @@ function updateVolumeControlLabels() {
     document.getElementById('volume-advection-scheme-val').textContent = transportConfig.effective.reason
       ? `legacy (${transportConfig.effective.reason})`
       : `${schemeName}${transportConfig.effective.scheme === 'legacy' ? '' : ` · bound ${transportConfig.effective.velocityBound.maxCells} cells`}`;
+    const confinementConfig = resolveConfinementConfig(c);
+    const confinementEffective = confinementConfig.effective;
+    const confinementModeName = { 'curl-slider': 'Curl slider', calibrated: 'calibrated', off: 'off' }[confinementEffective.mode] || confinementEffective.mode;
+    document.getElementById('volume-confinement-val').textContent = confinementEffective.mode === 'curl-slider'
+      ? `Curl slider · ε ${confinementEffective.confinementAmount.toFixed(3)} · smoke/heat weighted${confinementEffective.reason ? ` (${confinementEffective.reason})` : ''}`
+      : confinementEffective.mode === 'calibrated'
+        ? `calibrated · ε ${confinementEffective.confinementAmount.toFixed(3)} for ${confinementEffective.calibration.scheme}${confinementEffective.calibration.source === 'override' ? ' (override)' : ''} · ${confinementEffective.calibration.status} · expansion ${confinementEffective.thermalExpansionAmount.toFixed(3)}`
+        : `off · expansion ${confinementEffective.thermalExpansionAmount.toFixed(3)}`;
+    document.getElementById('volume-curl-val').textContent = confinementConfig.effective.curlDrives
+      ? c.curl.toFixed(2)
+      : `${c.curl.toFixed(2)} · not driving confinement/expansion (${confinementModeName})`;
   }
   const pressureTierControls = normalizeVolumePressureTierControls(c);
   if (pressureTierControls.lowerMax !== c.pressureTierLowerMax) setVolumeControlValue('volume-pressure-tier-lower-max', pressureTierControls.lowerMax.toFixed(2));
@@ -21733,6 +21756,7 @@ async function initKaminosVolumeRoute() {
     ['volume-pressure-solver', 'volume_pressure_solver'],
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
+    ['volume-confinement', 'volume_confinement'],
     ['volume-fine-breakup-localization', 'volume_fine_breakup_localization'],
     ['volume-common-gas-transport', 'volume_common_gas_transport'],
   ]) {
@@ -22028,6 +22052,7 @@ async function initKaminosVolumeRoute() {
     'volume-pressure-solver',
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
+    'volume-confinement',
     'volume-common-gas-transport',
   ]) {
     document.getElementById(id).addEventListener('input', syncControls);

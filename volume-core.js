@@ -1542,7 +1542,8 @@ export const PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES = 120;
 // resolve are bounded too.
 export const PRESSURE_RESIDUAL_MAP_TIMEOUT_MS = 5000;
 const PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR = 'pressure-residual-map-timeout';
-const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 8;
+// Three vec4 partials per workgroup: compact divergence, wide divergence, vorticity (enstrophy sum, max |omega|).
+export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 12;
 const PRESSURE_SOLVER_VALUES = Object.freeze([PRESSURE_SOLVER_LEGACY, PRESSURE_SOLVER_CONVERGED, PRESSURE_SOLVER_CONVERGED_OPEN_TOP]);
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
@@ -2248,6 +2249,97 @@ export function resolveTransportConfig(controls = {}) {
   };
 }
 
+// Confinement mode (flame-doctor slice 3). `curl-slider` is the law every saved
+// basin was authored under: confinement amount 0.034 + Curl·0.044 with material
+// weighting and thermal expansion 0.048 + Curl·0.019, both computed in the
+// shader exactly as before. `calibrated` replaces both with one epsilon per
+// transport scheme (uniform weighting, expansion held at the Curl-0 baseline) so
+// confinement compensates the scheme's numerical loss instead of injecting
+// authored curl energy; `off` removes confinement. The table is provisional
+// until the enstrophy assay sets it; the receipt says so.
+export const CONFINEMENT_IDENTITY = 'confinement-mode-v0';
+export const CONFINEMENT_MODE_VALUES = Object.freeze(['curl-slider', 'calibrated', 'off']);
+const CONFINEMENT_MODE_CURL_SLIDER = 'curl-slider';
+const CONFINEMENT_MODE_CALIBRATED = 'calibrated';
+const CONFINEMENT_MODE_OFF = 'off';
+const CONFINEMENT_CURL_FLOOR = 0.034;
+const CONFINEMENT_CURL_GAIN = 0.044;
+export const THERMAL_EXPANSION_BASELINE = 0.048;
+const THERMAL_EXPANSION_CURL_GAIN = 0.019;
+export const CONFINEMENT_CALIBRATED_EPSILON = Object.freeze({
+  [TRANSPORT_SCHEME_LEGACY]: 0.034,
+  [TRANSPORT_SCHEME_UNDAMPED]: 0.034,
+  [TRANSPORT_SCHEME_MACCORMACK_VELOCITY]: 0.010,
+  [TRANSPORT_SCHEME_MACCORMACK]: 0.010,
+});
+export const CONFINEMENT_CALIBRATION_STATUS = 'provisional-pending-enstrophy-assay';
+
+export function confinementModeUniformValue(mode) {
+  if (mode === CONFINEMENT_MODE_CALIBRATED) return 1;
+  if (mode === CONFINEMENT_MODE_OFF) return 2;
+  return 0;
+}
+
+export function resolveConfinementConfig(controls = {}, options = {}) {
+  const requestedMode = controls.confinement == null ? CONFINEMENT_MODE_CURL_SLIDER : String(controls.confinement);
+  const curl = Number.isFinite(Number(controls.curl)) ? Math.max(0, Number(controls.curl)) : 0;
+  const scheme = resolveTransportConfig(controls).effective.scheme;
+  const mode = CONFINEMENT_MODE_VALUES.includes(requestedMode) ? requestedMode : CONFINEMENT_MODE_CURL_SLIDER;
+  const reason = mode === requestedMode ? null : `unknown confinement mode ${requestedMode}; using curl-slider`;
+  const rawOverride = options.epsilonOverride;
+  const epsilonOverride = rawOverride !== null && rawOverride !== undefined && Number.isFinite(Number(rawOverride)) && Number(rawOverride) >= 0
+    ? Number(rawOverride)
+    : null;
+  const requested = { identity: CONFINEMENT_IDENTITY, confinement: requestedMode, curl, advectionScheme: scheme, epsilonOverride: rawOverride ?? null };
+  if (mode === CONFINEMENT_MODE_CURL_SLIDER) {
+    return {
+      requested,
+      effective: {
+        mode,
+        curlDrives: true,
+        confinementAmount: CONFINEMENT_CURL_FLOOR + curl * CONFINEMENT_CURL_GAIN,
+        confinementWeighting: 'material',
+        thermalExpansionAmount: THERMAL_EXPANSION_BASELINE + curl * THERMAL_EXPANSION_CURL_GAIN,
+        calibration: null,
+        reason,
+      },
+    };
+  }
+  if (mode === CONFINEMENT_MODE_OFF) {
+    return {
+      requested,
+      effective: {
+        mode,
+        curlDrives: false,
+        confinementAmount: 0,
+        confinementWeighting: 'uniform',
+        thermalExpansionAmount: THERMAL_EXPANSION_BASELINE,
+        calibration: null,
+        reason,
+      },
+    };
+  }
+  const tableEpsilon = CONFINEMENT_CALIBRATED_EPSILON[scheme] ?? CONFINEMENT_CALIBRATED_EPSILON[TRANSPORT_SCHEME_LEGACY];
+  return {
+    requested,
+    effective: {
+      mode,
+      curlDrives: false,
+      confinementAmount: epsilonOverride ?? tableEpsilon,
+      confinementWeighting: 'uniform',
+      thermalExpansionAmount: THERMAL_EXPANSION_BASELINE,
+      calibration: {
+        scheme,
+        epsilon: tableEpsilon,
+        epsilonOverride,
+        source: epsilonOverride === null ? 'table' : 'override',
+        status: CONFINEMENT_CALIBRATION_STATUS,
+      },
+      reason,
+    },
+  };
+}
+
 function tallPlumePressureIterationStrategy(scene, pressureIterations) {
   return normalizeVolumeScene(scene) === 'tall_plume' && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
@@ -2519,6 +2611,7 @@ struct Uniforms {
   volume_presentation_controls: vec4<f32>,
   boundary_fire_palette_clean: vec4<f32>,
   boundary_fire_palette_soot: vec4<f32>,
+  // .x fixed-source dephase; .y confinement mode (0 curl-slider, 1 calibrated, 2 off); .z calibrated confinement epsilon; .w thermal expansion amount.
   reserved_source_extension_0: vec4<f32>,
   detail_force_isolation: vec4<f32>,
   reserved_source_extension_2: vec4<f32>,
@@ -2598,6 +2691,8 @@ var<workgroup> pressureResidualSum: array<f32, 64>;
 var<workgroup> pressureResidualMax: array<f32, 64>;
 var<workgroup> pressureResidualWideSum: array<f32, 64>;
 var<workgroup> pressureResidualWideMax: array<f32, 64>;
+var<workgroup> pressureResidualEnstrophySum: array<f32, 64>;
+var<workgroup> pressureResidualVorticityMax: array<f32, 64>;
 @group(1) @binding(1) var<storage, read_write> irradianceDst: array<vec4<f32>>;
 @group(1) @binding(2) var<storage, read> irradianceSrc: array<vec4<f32>>;
 @group(1) @binding(3) var irradianceAtlasOut: texture_storage_2d<rgba16float, write>;
@@ -3521,14 +3616,25 @@ fn pressureResidualReduce(
 ) {
   var compact = 0.0;
   var wide = 0.0;
+  var enstrophy = 0.0;
+  var vorticity = 0.0;
   if (all(gid < vec3<u32>(GRID, GRID_Y, GRID))) {
     compact = abs(divergenceCompactAtCell(vec3<i32>(gid)));
     wide = abs(divergenceAtCell(vec3<i32>(gid)));
+    if (!afterProjection) {
+      // Enstrophy of the carried field before projection: the quantity a
+      // confinement level is calibrated against.
+      let omega = curlAtCell(vec3<i32>(gid));
+      enstrophy = dot(omega, omega);
+      vorticity = sqrt(enstrophy);
+    }
   }
   pressureResidualSum[localIndex] = compact;
   pressureResidualMax[localIndex] = compact;
   pressureResidualWideSum[localIndex] = wide;
   pressureResidualWideMax[localIndex] = wide;
+  pressureResidualEnstrophySum[localIndex] = enstrophy;
+  pressureResidualVorticityMax[localIndex] = vorticity;
   workgroupBarrier();
   if (localIndex != 0u) {
     return;
@@ -3537,13 +3643,17 @@ fn pressureResidualReduce(
   var peak = 0.0;
   var wideSum = 0.0;
   var widePeak = 0.0;
+  var enstrophySum = 0.0;
+  var vorticityPeak = 0.0;
   for (var i = 0u; i < 64u; i = i + 1u) {
     sum = sum + pressureResidualSum[i];
     peak = max(peak, pressureResidualMax[i]);
     wideSum = wideSum + pressureResidualWideSum[i];
     widePeak = max(widePeak, pressureResidualWideMax[i]);
+    enstrophySum = enstrophySum + pressureResidualEnstrophySum[i];
+    vorticityPeak = max(vorticityPeak, pressureResidualVorticityMax[i]);
   }
-  let partialIndex = 2u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
+  let partialIndex = 3u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
   let previousCompact = pressureResidualPartials[partialIndex];
   let previousWide = pressureResidualPartials[partialIndex + 1u];
   if (afterProjection) {
@@ -3552,6 +3662,7 @@ fn pressureResidualReduce(
   } else {
     pressureResidualPartials[partialIndex] = vec4<f32>(sum, peak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 1u] = vec4<f32>(wideSum, widePeak, 0.0, 0.0);
+    pressureResidualPartials[partialIndex + 2u] = vec4<f32>(enstrophySum, vorticityPeak, 0.0, 0.0);
   }
 }
 
@@ -5084,7 +5195,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (oracleActivityCue > 0.0005 && oracleActivityCurlGain > 0.0005) {
     oracleActivityCurl = oracleActivityCurlForce(cellI, oracleActivityCue, oracleActivityCurlGain);
   }
-  let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
+  let confinementMode = u.reserved_source_extension_0.y;
+  var confinement = vec3<f32>(0.0);
+  if (confinementMode < 0.5) {
+    // Curl-driven law, unchanged for saved basins: Curl sets the amount and the
+    // force concentrates in smoke and heat.
+    confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044) * (0.35 + smoke * 0.34 + heat * 0.52);
+  } else if (confinementMode < 1.5) {
+    // Calibrated: one epsilon for the transport scheme, applied uniformly, so
+    // confinement only compensates the scheme's numerical loss.
+    confinement = vorticityConfinement(cellI, u.reserved_source_extension_0.z);
+  }
   let bonfireReferenceFrontContact = clamp(
     bonfireFrontContactRadiance * 0.42
       + bonfireCombustionFrontBirth * 0.44
@@ -5145,11 +5266,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
     }
   }
-  let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
+  let heatExpansion = thermalExpansionForce(cellI, heat, select(u.reserved_source_extension_0.w, 0.048 + curl * 0.019, confinementMode < 0.5));
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
-  vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
+  vel = vel + confinement;
   vel = vel + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
@@ -9150,6 +9271,7 @@ export function createKaminosVolumePrototype({
     pressureRedBlackHalfPasses: 0,
     transport: { ...resolveTransportConfig(controlsSnapshot), uniform: null, predictorBufferBytes: 0 },
     transportPredictorPasses: 0,
+    confinement: { ...resolveConfinementConfig(controlsSnapshot, { epsilonOverride: null }), uniform: null, confinementEpsilonOverride: null },
     tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
     tallPlumePressureIterationTarget: 0,
     pressureStrategy: normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene),
@@ -9615,6 +9737,9 @@ export function createKaminosVolumePrototype({
   let fluidBuffers = [];
   let fluidPredictBuffer = null;
   let fluidPredictBufferBytes = 0;
+  // Evidence route only: a calibrated-mode epsilon set through the debug API,
+  // never persisted, always named in the receipt.
+  let confinementEpsilonOverride = null;
   let frontBuffers = [];
   let quenchBuffers = [];
   let pressureBuffers = [];
@@ -13447,6 +13572,10 @@ export function createKaminosVolumePrototype({
     );
     uniforms.fill(0, 344, 364);
     uniforms[344] = controlsSnapshot.fixedSourceDephase === false ? 0 : 1;
+    const confinementConfig = resolveConfinementConfig(controlsSnapshot, { epsilonOverride: confinementEpsilonOverride });
+    uniforms[345] = confinementModeUniformValue(confinementConfig.effective.mode);
+    uniforms[346] = confinementConfig.effective.confinementAmount;
+    uniforms[347] = confinementConfig.effective.thermalExpansionAmount;
     uniforms.set(detailForceContributionMask(controlsSnapshot.detailForceContributions), 348);
     uniforms[352] = normalizeFineBreakupLocalization(controlsSnapshot.fineBreakupLocalization);
     uniforms[353] = controlsSnapshot.commonGasTransport === true ? 1 : 0;
@@ -13596,6 +13725,11 @@ export function createKaminosVolumePrototype({
     state.proceduralTransportSlip = false;
     state.microdetailTransportSlipRetirementIdentity = MICRODETAIL_TRANSPORT_SLIP_RETIREMENT_IDENTITY;
     state.fixedSourceDephase = uniforms[344] >= 0.5;
+    state.confinement = {
+      ...confinementConfig,
+      uniform: { mode: uniforms[345], confinementAmount: uniforms[346], thermalExpansionAmount: uniforms[347] },
+      confinementEpsilonOverride: confinementEpsilonOverride,
+    };
     state.pressureSolver = {
       ...resolvePressureSolverConfig(controlsSnapshot),
       uniform: { converged: uniforms[356], openTop: uniforms[357], omega: uniforms[358], projectionGain: uniforms[359] },
@@ -14242,6 +14376,13 @@ export function createKaminosVolumePrototype({
           meanReduction: sumAfter > 0 ? sumBefore / sumAfter : null,
         };
       };
+      let enstrophySum = 0;
+      let vorticityPeak = 0;
+      for (let i = 0; i < workgroupCount; i += 1) {
+        const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP + 8;
+        enstrophySum += partials[at];
+        vorticityPeak = Math.max(vorticityPeak, partials[at + 1]);
+      }
       const residual = {
         identity: 'pressure-divergence-residual-probe-v1',
         authority: 'gpu-workgroup-partials-async-readback',
@@ -14254,6 +14395,12 @@ export function createKaminosVolumePrototype({
         // legacy 2h central divergence. Both are measured on the same fields.
         compact: reduceOperator(0),
         wide: reduceOperator(4),
+        vorticity: {
+          identity: 'enstrophy-before-projection-v0',
+          enstrophyMean: enstrophySum / cells,
+          enstrophySum,
+          maxAbs: vorticityPeak,
+        },
         measuredAtMs: Number(performance.now().toFixed(3)),
       };
       const residualHistory = [...(state.pressureSolver?.residualHistory ?? []).slice(-15), residual];
@@ -21756,6 +21903,7 @@ export function createKaminosVolumePrototype({
         detailForceIsolation: state.detailForceIsolation,
         pressureSolver: state.pressureSolver,
         transport: state.transport,
+        confinement: state.confinement,
         gasTransport: state.gasTransport,
         tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
@@ -22136,6 +22284,7 @@ export function createKaminosVolumePrototype({
       detailForceIsolation: state.detailForceIsolation,
       pressureSolver: state.pressureSolver,
       transport: state.transport,
+      confinement: state.confinement,
       gasTransport: state.gasTransport,
       tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
@@ -24177,6 +24326,12 @@ export function createKaminosVolumePrototype({
     setForegroundOpportunityRequester,
     foregroundGpuContext() {
       return {device, queue: device?.queue, active: state.active, renderer: boundarySplatRequested() || browserResidualCanApply() ? 'alternate-volume' : 'ordinary-volume', productFrameOwner};
+    },
+    setConfinementEpsilonOverride(value) {
+      const next = value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+      confinementEpsilonOverride = next;
+      this.setControls({});
+      return state.confinement;
     },
     debugState() {
       return {

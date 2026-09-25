@@ -7,8 +7,14 @@
 // one frame per arm. Usage:
 //   node volume-transport-arm-capture.mjs <url> <outDir> "<arm>;<arm>;..." [settleMs] \
 //     --expected-repo-root <checkout> --expected-commit <sha> [--fault arm-error]
-// where an arm is name[,controlId=value,...]. Frames are admission and
-// attribution evidence for the implementer; the operator judges motion live.
+// where an arm is name[,controlId=value,...]. A control id starting with `@` is
+// a debug-API request instead of a DOM control: `@confinementEpsilon=<value|null>`
+// calls setConfinementEpsilonOverride so a calibration sweep can vary the
+// calibrated epsilon without a persisted knob; the receipt names the override.
+// During each settle the capture samples the renderer receipt every 2 s
+// (steps, enstrophy, divergence) so a trend is visible, not just an endpoint.
+// Frames are admission and attribution evidence for the implementer; the
+// operator judges motion live.
 //
 // The capture tries to lie and fails: it verifies the server's effective source
 // (repo root, commit, clean tree) before admission, requires every requested
@@ -72,6 +78,8 @@ function effectiveMismatches(arm, end) {
   const mismatches = [];
   for (const [cid, value] of arm.set) {
     if (cid === 'volume-advection-scheme' && end.transport?.scheme !== value) mismatches.push(`scheme requested ${value}, effective ${end.transport?.scheme}`);
+    if (cid === 'volume-confinement' && end.confinement?.mode !== value) mismatches.push(`confinement requested ${value}, effective ${end.confinement?.mode}`);
+    if (cid === '@confinementEpsilon' && value !== 'null' && end.confinement?.confinementAmount !== Number(value)) mismatches.push(`confinement epsilon override ${value} requested, effective amount ${end.confinement?.confinementAmount} (mode ${end.confinement?.mode})`);
     if (cid === 'volume-pressure-solver') {
       const expected = solverExpectation[value];
       if (!expected) mismatches.push(`unknown solver request ${value}`);
@@ -105,7 +113,7 @@ try {
   const call = (method, params = {}) => new Promise((res, rej) => { const myId = ++id; pending.set(myId, res); setTimeout(() => { pending.delete(myId); rej(new Error('timeout ' + method)); }, 60000); ws.send(JSON.stringify({ id: myId, method, params })); });
   const evaluate = async expr => { const r = await call('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || 'evaluate failed'); return r.result?.result?.value; };
   const op = body => `(() => { const f = document.querySelector('#basin'); const w = f?.contentWindow || window; const d = w.document; return (${body}); })()`;
-  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
+  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
   const setControl = (cid, value) => evaluate(op(`(() => { const e = d.getElementById(${JSON.stringify(cid)}); if (!e) throw new Error('missing ' + ${JSON.stringify(cid)}); if (e.type === 'checkbox') { e.checked = ${JSON.stringify(value)} === 'true'; } else { e.value = ${JSON.stringify(value)}; } e.dispatchEvent(new w.Event('input', { bubbles: true })); e.dispatchEvent(new w.Event('change', { bubbles: true })); return e.type === 'checkbox' ? String(e.checked) : e.value; })()`));
   await call('Page.enable'); await call('Runtime.enable'); await call('Log.enable'); await call('Page.navigate', { url });
 
@@ -122,6 +130,15 @@ try {
     report.failurePhase = `arm-${arm.name}-switch`;
     const applied = [];
     for (const [cid, value] of arm.set) {
+      if (cid === '@confinementEpsilon') {
+        const literal = value === 'null' ? 'null' : String(Number(value));
+        if (literal === 'NaN') fail(report.failurePhase, `@confinementEpsilon needs a number or null, got ${value}`);
+        const applied_ = await evaluate(op(`(() => { const r = w.__kaminosVolumePrototype?.setConfinementEpsilonOverride?.(${literal}); return r ? String(r.confinementEpsilonOverride) : 'missing-api'; })()`));
+        applied.push([cid, value, applied_]);
+        if (applied_ !== (value === 'null' ? 'null' : String(Number(value)))) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, `${cid} requested ${value} but the receipt holds ${JSON.stringify(applied_)}`); }
+        continue;
+      }
+      if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);
       const domValue = await setControl(cid, value);
       applied.push([cid, value, domValue]);
       if (domValue !== value) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, `control ${cid} requested ${value} but the DOM holds ${JSON.stringify(domValue)}`); }
@@ -131,11 +148,17 @@ try {
     if (!after) fail(report.failurePhase, 'renderer state unavailable after switch');
     report.failurePhase = `arm-${arm.name}-settle`;
     const t0 = Date.now(); const s0 = after.simStepCount;
-    await sleep(settleMs);
+    const samples = [];
+    while (Date.now() - t0 < settleMs) {
+      await sleep(Math.min(2000, Math.max(50, settleMs - (Date.now() - t0))));
+      const probe = await evaluate(stateExpr);
+      if (!probe) break;
+      samples.push({ tMs: Date.now() - t0, simStepCount: probe.simStepCount, residualStep: probe.residual?.step ?? null, enstrophyMean: probe.vorticity?.enstrophyMean ?? null, vorticityMax: probe.vorticity?.maxAbs ?? null, compactAfterMeanAbs: probe.residual?.compactAfter?.meanAbs ?? null, error: probe.error ?? null });
+    }
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, afterSwitch: after, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, afterSwitch: after, samples, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();

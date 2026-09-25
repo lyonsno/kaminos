@@ -55,7 +55,7 @@ assert.match(
 assert.doesNotMatch(core, /let phasedSway\b|sin\(phase\) \* \(smoke \+ heat\)|cos\(phase \* 0\.93\)/, 'the simulation retains no phased-sway force authority while the persisted route key survives');
 assert.match(
   core,
-  /vel = vel \+ confinement \* \(0\.35 \+ smoke \* 0\.34 \+ heat \* 0\.52\);/,
+  /confinement = vorticityConfinement\(cellI, 0\.034 \+ curl \* 0\.044\) \* \(0\.35 \+ smoke \* 0\.34 \+ heat \* 0\.52\);[^]*?vel = vel \+ confinement;/,
   'base vorticity confinement remains independent of the artistic switches',
 );
 assert.match(core, /vel = vel \+ detailForce;/, 'base turbulent detail remains independent of the artistic switches');
