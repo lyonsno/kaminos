@@ -2025,6 +2025,9 @@ export const TRANSPORT_SCHEME_MACCORMACK = 'maccormack';
 export const TRANSPORT_SCHEME_IDENTITY = 'low-dissipation-transport-v0';
 export const TRANSPORT_LEGACY_VELOCITY_DAMPING = 0.982;
 export const TRANSPORT_MAX_BACKTRACE_CELLS = 8;
+// The predictor buffer is a full fluid state only while a MacCormack scheme is
+// selected; otherwise a one-element placeholder keeps the binding legal.
+export const TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES = 16;
 const TRANSPORT_SCHEME_VALUES = Object.freeze([TRANSPORT_SCHEME_LEGACY, TRANSPORT_SCHEME_UNDAMPED, TRANSPORT_SCHEME_MACCORMACK_VELOCITY, TRANSPORT_SCHEME_MACCORMACK]);
 
 // 0 legacy, 1 undamped, 2 MacCormack on velocity only (scalars first-order on
@@ -9122,6 +9125,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
   let fluidPredictBuffer = null;
+  let fluidPredictBufferBytes = 0;
   let frontBuffers = [];
   let quenchBuffers = [];
   let pressureBuffers = [];
@@ -9675,6 +9679,7 @@ export function createKaminosVolumePrototype({
     for (const buffer of fluidBuffers) buffer.destroy();
     fluidPredictBuffer?.destroy();
     fluidPredictBuffer = null;
+    fluidPredictBufferBytes = 0;
     transportPredictBindGroup = null;
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of quenchBuffers) buffer.destroy();
@@ -9801,6 +9806,31 @@ export function createKaminosVolumePrototype({
         { binding: 13, resource: { buffer: quenchRead } },
         { binding: 14, resource: { buffer: quenchWrite } },
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
+      ],
+    });
+  }
+
+  function ensureTransportPredictorBuffer(required) {
+    // Size the predictor to the selected scheme: a full fluid state while a
+    // MacCormack scheme dispatches the predictor, a placeholder otherwise. Called
+    // on grid rebuild and every step, so a live scheme switch allocates or
+    // releases without a rebuild.
+    if (!device || !transportPredictBindGroupLayout) return;
+    const wantBytes = required ? fluidBufferBytes(gridSize) : TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES;
+    if (fluidPredictBuffer && fluidPredictBufferBytes === wantBytes) return;
+    fluidPredictBuffer?.destroy();
+    fluidPredictBuffer = device.createBuffer({
+      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor ${required ? `${gridSize}^3` : 'placeholder'}`,
+      size: wantBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    fluidPredictBufferBytes = wantBytes;
+    device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(wantBytes / Float32Array.BYTES_PER_ELEMENT));
+    transportPredictBindGroup = device.createBindGroup({
+      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group ${required ? `${gridSize}^3` : 'placeholder'}`,
+      layout: transportPredictBindGroupLayout,
+      entries: [
+        { binding: 1, resource: { buffer: fluidPredictBuffer } },
       ],
     });
   }
@@ -10668,19 +10698,10 @@ export function createKaminosVolumePrototype({
       device.queue.writeBuffer(buffer, 0, initialFluid);
       return buffer;
     });
-    fluidPredictBuffer = device.createBuffer({
-      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor ${gridSize}^3`,
-      size: nextBufferBytes,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-    device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(initialFluid.length));
-    transportPredictBindGroup = device.createBindGroup({
-      label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group ${gridSize}^3`,
-      layout: transportPredictBindGroupLayout,
-      entries: [
-        { binding: 1, resource: { buffer: fluidPredictBuffer } },
-      ],
-    });
+    fluidPredictBuffer?.destroy();
+    fluidPredictBuffer = null;
+    fluidPredictBufferBytes = 0;
+    ensureTransportPredictorBuffer(resolveTransportConfig(controlsSnapshot).effective.predictorPass);
     frontBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos ${FRONT_FIELD_IDENTITY} ${gridSize}^3 ${i}`,
@@ -13078,7 +13099,8 @@ export function createKaminosVolumePrototype({
     state.transport = {
       ...transportConfig,
       uniform: { commonCharacteristic: uniforms[353], scheme: uniforms[360], velocityDamping: uniforms[361], maxBacktraceCells: uniforms[362], correctionWeight: uniforms[363] },
-      predictorBufferBytes: fluidPredictBuffer ? fluidBufferBytes(gridSize) : 0,
+      predictorBufferBytes: fluidPredictBufferBytes,
+      predictorAllocated: fluidPredictBufferBytes === fluidBufferBytes(gridSize),
     };
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
@@ -13525,6 +13547,7 @@ export function createKaminosVolumePrototype({
 
   function encodeSim(encoder, options = {}) {
     const transportConfig = resolveTransportConfig(controlsSnapshot);
+    ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
     if (transportConfig.effective.predictorPass) {
       if (!transportPredictPipeline || !transportPredictBindGroup) {
         throw new Error('transport predictor pipeline unavailable');

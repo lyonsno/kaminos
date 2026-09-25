@@ -192,3 +192,25 @@ test('runtime receipt, predictor dispatch, and cost ledger name the transport sc
   assert.match(encodeSim, /pass\.setBindGroup\(3, transportPredictBindGroup\)/, 'main sim pass sets bind group 3');
   assert.match(source, /label: `kaminos first fluid sim compute pipeline \$\{gridSize\}\^3`,\s*layout: transportPipelineLayout,/, 'main sim pipeline uses the transport layout');
 });
+
+test('the predictor buffer is allocated only while a MacCormack scheme is selected', () => {
+  // Review finding (fresh GPT-6 Sol, 2026-09-24): the predictor consumed a full
+  // fluid state of memory under legacy. The buffer must be a placeholder until a
+  // scheme that dispatches the predictor is selected, and shrink back after.
+  assert.equal(typeof core.TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES, 'number');
+  assert.ok(core.TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES >= 16 && core.TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES <= 4096, 'placeholder is a few bytes, not a field');
+  const ensure = source.slice(source.indexOf('  function ensureTransportPredictorBuffer('), source.indexOf('  function rebuildFluidBindGroups('));
+  assert.ok(ensure.length > 0 && ensure.length < 4000, 'ensureTransportPredictorBuffer must exist near the fluid bind-group builders');
+  assert.match(ensure, /required \? fluidBufferBytes\(gridSize\) : TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES/, 'full allocation only when required');
+  assert.match(ensure, /fluidPredictBuffer\?\.destroy\(\);/, 'the previous buffer is released when the size changes');
+  assert.match(ensure, /transportPredictBindGroup = device\.createBindGroup\(/, 'the bind group follows the buffer');
+  const rebuildStart = source.indexOf('  function rebuildFluidState(');
+  const rebuildEnd = source.indexOf('\n  function ', rebuildStart + 1);
+  const rebuild = source.slice(rebuildStart, rebuildEnd);
+  assert.match(rebuild, /ensureTransportPredictorBuffer\(resolveTransportConfig\(controlsSnapshot\)\.effective\.predictorPass\)/, 'grid rebuild sizes the predictor from the selected scheme');
+  assert.doesNotMatch(rebuild, /predictor \$\{gridSize\}\^3`,\s*size: nextBufferBytes/, 'no unconditional full-grid predictor allocation on rebuild');
+  const encodeSim = source.slice(source.indexOf('  function encodeSim(encoder'), source.indexOf('  function retirePressureResidualMap('));
+  assert.match(encodeSim, /ensureTransportPredictorBuffer\(transportConfig\.effective\.predictorPass\);/, 'each step reconciles the allocation with the selected scheme, so a live switch allocates or releases');
+  assert.match(source, /predictorBufferBytes: fluidPredictBufferBytes,/, 'receipt reports the actual predictor allocation');
+  assert.match(source, /predictorAllocated: fluidPredictBufferBytes === fluidBufferBytes\(gridSize\),/, 'receipt says whether the full predictor is resident');
+});
