@@ -6,7 +6,7 @@
 # Usage: SF3D_WEBGPU_CHECKOUT=/path/to/sf3d-webgpu ./serve-sf3d-elfinblue.sh [port]   (default 8095)
 cd "$(dirname "$0")"
 PORT="${1:-8095}"
-SF3D="${SF3D_WEBGPU_CHECKOUT:-/private/tmp/sf3d-webgpu-slow-kit-0148-0915}"
+SF3D="${SF3D_WEBGPU_CHECKOUT:?set SF3D_WEBGPU_CHECKOUT to an sf3d-webgpu checkout holding public/weights.bin and public/tets}"
 for asset in weights.bin tets; do
   if [ ! -e "lib/sf3d/$asset" ]; then
     [ -e "$SF3D/public/$asset" ] || { echo "missing $SF3D/public/$asset (set SF3D_WEBGPU_CHECKOUT)"; exit 2; }
