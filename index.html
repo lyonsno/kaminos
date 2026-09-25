@@ -9764,7 +9764,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const worldPositionNode = sceneCameraWorldMatrix.mul(vec4(viewPositionNode, 1.0)).xyz;
 
   // Trilinear sample of the 32^3 lattice through its 2D tile atlas. The
-  // lattice spans the raymarch's [-1,1]^3 shared-camera world box.
+  // lattice spans the [-1,1]^3 world cube, the lower cube of the tall raymarch box.
   const sampleLatticeAt = (positionNode) => {
     const uvw = positionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
     const sliceCoord = uvw.z.mul(atlasGrid).sub(0.5);
@@ -10323,7 +10323,7 @@ async function initScene() {
         ? (sharedGpu?.device ? 'pass-construction-pending' : `shared-device-unavailable: ${sharedGpuFailureReason || 'unknown'}`)
         : 'fire-light-field-route-not-requested',
       sharedDeviceIdentity: sharedGpu?.identity ?? null,
-      sharedDeviceFailureReason,
+      sharedDeviceFailureReason: sharedGpuFailureReason,
     });
   window.kaminosFireLightFieldSetWitnessMute = muted => (fireLightFieldPass
     ? fireLightFieldPass.setWitnessMute(muted)
@@ -21689,7 +21689,9 @@ async function initKaminosVolumeRoute() {
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
     transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute(),
-    sharedGpuContext: sharedGpu,
+    // The finger-fluid liquid-contact route adopts the fluid solver's device
+    // through its descriptor; seating the host device here would refuse it.
+    sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
     getSceneDepth: isFireLightFieldRoute() ? () => ordinarySceneDepthProvider?.() ?? null : null,
   });
   if (isFireLightFieldRoute()) {
@@ -26749,6 +26751,12 @@ sceneInitialization.then(() => {
     }
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
   }).catch(error => {
+    // Only an authored composition restore blocks saving; ordinary routes keep
+    // their own failure reporting (the volume route reports separately).
+    if (new URLSearchParams(location.hash.slice(1)).get('authoring') !== '1') {
+      console.error('Scene route load failed:', error);
+      return;
+    }
     sceneSaveBlockedByFailedRestore = true;
     compositionStatus(`Restore failed: ${error.message || error}`, true);
     setInfo(`Composition restore failed: ${error.message || error}`);

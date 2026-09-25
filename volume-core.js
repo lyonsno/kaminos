@@ -3725,7 +3725,7 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
 // Fire irradiance light field: a compact world-space RGB lattice seeded from
 // the same advancing fluid state and emission law as the visible raymarch
 // flame. Identity: fire-irradiance-lattice-32-same-state-rgb-v0. The lattice
-// spans the same [-1,1]^3 shared-camera world box as the raymarch.
+// spans the [-1,1]^3 world cube: the lower cube of the tall raymarch domain.
 const IRRADIANCE_TILES_X: u32 = 8u;
 
 fn irradianceIndex(cell: vec3<u32>) -> u32 {
@@ -13669,9 +13669,12 @@ export function createKaminosVolumePrototype({
       tilesY: atlasTilesY,
       atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
       atlasHeight: irradianceGridSize * atlasTilesY,
+      // The lattice covers the lower unit cube of the tall raymarch domain;
+      // emission above world y = 1 is outside the light field and far field.
       worldMin: [-1, -1, -1],
       worldMax: [1, 1, 1],
-      worldBoundsAuthority: 'raymarch-unit-box-shared-camera-world-v0',
+      worldBoundsAuthority: 'lower-unit-cube-of-tall-raymarch-domain-v0',
+      raymarchWorldMax: [1, -1 + 2 * gridHeight / gridSize, 1],
       generation: irradianceAtlasGeneration,
       builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
       frameCount: state.fireLightFieldFrameCount || 0,
