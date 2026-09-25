@@ -16,7 +16,7 @@ test('viewport reserves LMB for selection and leaves navigation buttons to the m
 });
 
 const {navigationPivot,adoptNavigationDepth,orbitCamera,panCamera,zoomCamera,installSceneNavigation} = await import('../scene-navigation.mjs');
-const {frameObjects,sceneObjectsForFraming}=await import('../scene-frame-selected.mjs');
+const {frameObjects,frameObject,frameSceneObjectRecord,sceneObjectsForFraming}=await import('../scene-frame-selected.mjs');
 const near=(a,b,message='vectors agree')=>assert.ok(a.distanceTo(b)<1e-8,`${message}: ${a.toArray()} vs ${b.toArray()}`);
 function cameraAt(z=10){const c=new THREE.PerspectiveCamera(40,4/3,.01,100);c.position.set(0,0,z);c.lookAt(0,0,0);c.updateMatrixWorld(true);return c;}
 
@@ -74,6 +74,15 @@ test('selected and all-object framing include visible splat point-cloud records'
  const c=cameraAt(),target=new THREE.Vector3(),controls={target,update(){c.lookAt(target);c.updateMatrixWorld(true);}};
  assert.ok(frameObjects(sceneObjectsForFraming(records,'splat-1'),c,controls));
  for(const x of [-4,4]){const p=new THREE.Vector3(x,0,0).project(c);assert.ok(Math.abs(p.x)<1 && Math.abs(p.y)<1,'framed point-cloud bounds must fit the viewport');}
+});
+
+test('framing an offset mesh includes its authored pivot so F restores pivot visibility',()=>{
+ const root=new THREE.Group();root.position.x=-100;
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial());mesh.position.x=100;root.add(mesh);
+ const c=cameraAt(),target=new THREE.Vector3(),controls={target,update(){c.lookAt(target);c.updateMatrixWorld(true);}};
+ assert.ok(frameObject(root,c,controls));
+ const pivot=root.getWorldPosition(new THREE.Vector3()).project(c);
+ assert.ok(Math.abs(pivot.x)<1 && Math.abs(pivot.y)<1,'selected authored origin must remain inside the framed view even when geometry is offset');
 });
 
 test('dolly expands the far plane with camera distance and keeps framed scene geometry visible',()=>{

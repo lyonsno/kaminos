@@ -222,6 +222,128 @@ async function runMeshAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
+async function runModalPivotVisibilityScenario(ws) {
+  phase = 'scenario-modal-pivot-visibility';
+  await runMeshAssetLinkScenario(ws);
+  const objectId = lastEvidence.meshAssetLink?.state?.registeredObjectId;
+  if (!objectId) throw new Error('pivot visibility witness has no registered mesh identity');
+  const visibleState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      const get = () => ({
+        pose: window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId)?.transform || null,
+        hud: document.getElementById('scene-edit-hud')?.textContent || null,
+        overlay: document.getElementById('scene-edit-overlay')?.innerHTML || null,
+      });
+      const before = get();
+      if (!before.pose || !before.hud?.includes('G Move')) throw new Error('registered object was not in the active authoring state: ' + JSON.stringify(before));
+      const visibleCapture = await window.kaminosSceneEdits.apply(objectId, { position: [0, 0, 0] }, 'Visible pivot witness');
+      await wait(250);
+      const visible = get();
+      if (!visible.overlay) throw new Error('visible synthetic object did not render its pivot cue: ' + JSON.stringify(visible));
+      return { objectId, visible, camera: window.kaminosCameraDebugState?.() || null };
+    })()
+  `, { timeoutMs: 30000 });
+  const visiblePath = out.replace(/\.png$/i, '-pivot-visible.png');
+  const visibleShot = await capturePngScreenshot(ws, visiblePath);
+  const hiddenState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      await window.kaminosSceneEdits.apply(objectId, { position: [0, 0, 20] }, 'Behind-camera pivot witness');
+      await wait(250);
+      const hidden = {
+        pose: window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId)?.transform || null,
+        hud: document.getElementById('scene-edit-hud')?.textContent || null,
+        overlay: document.getElementById('scene-edit-overlay')?.innerHTML || null,
+        hudRect: document.getElementById('scene-edit-hud')?.getBoundingClientRect().toJSON() || null,
+        infoRect: document.getElementById('info-bar')?.getBoundingClientRect().toJSON() || null,
+      };
+      if (hidden.overlay) throw new Error('behind-camera object still rendered a pivot cue: ' + JSON.stringify(hidden));
+      if (!hidden.hud?.includes('Pivot hidden: selected pivot is behind the camera')) {
+        throw new Error('behind-camera state did not explain the hidden pivot and recovery: ' + JSON.stringify(hidden));
+      }
+      if (hidden.hudRect.bottom > hidden.infoRect.top) throw new Error('pivot warning overlaps viewport status: ' + JSON.stringify(hidden));
+      return { objectId, hidden };
+    })()
+  `, { timeoutMs: 30000 });
+  const behindPath = out.replace(/\.png$/i, '-pivot-behind-camera.png');
+  const behindShot = await capturePngScreenshot(ws, behindPath);
+  const recoveryState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      const key = value => document.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true }));
+      document.getElementById('viewport')?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+      key('g');
+      const duringModal = document.getElementById('scene-edit-hud')?.textContent || '';
+      if (!duringModal.includes('finish edit with Enter/Esc, then F to frame pivot and object')) throw new Error('modal warning offered F without explaining the required edit exit: ' + duringModal);
+      key('f');
+      if (!window.kaminosPlacementDebugState?.().active) throw new Error('F unexpectedly ended or committed the modal edit');
+      key('Escape');await wait(100);
+      key('f');await wait(250);
+      const afterFrame = {
+        pose: window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId)?.transform || null,
+        hud: document.getElementById('scene-edit-hud')?.textContent || null,
+        overlay: document.getElementById('scene-edit-overlay')?.innerHTML || null,
+      };
+      if (!afterFrame.overlay || afterFrame.hud?.includes('Pivot hidden')) throw new Error('F did not frame the authored pivot with the registered geometry: ' + JSON.stringify(afterFrame));
+      return { duringModal, afterFrame };
+    })()
+  `, { timeoutMs: 30000 });
+  const wrappedStatusState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      const info = document.getElementById('info-bar');
+      await window.kaminosSceneEdits.apply(objectId, { position: [10, 0, 20] }, 'Prepare wrapped status witness');
+      info.textContent = 'Synthetic long-status witness: this deliberately verbose status exercises responsive wrapping and warning separation '.repeat(4);
+      await wait(250);
+      const longStatus = { hud: document.getElementById('scene-edit-hud')?.getBoundingClientRect().toJSON(), info: info.getBoundingClientRect().toJSON(), text: info.textContent };
+      if (longStatus.info.height <= 29) throw new Error('long-status witness did not wrap into a taller status bar: ' + JSON.stringify(longStatus));
+      if (longStatus.hud.bottom > longStatus.info.top) throw new Error('pivot warning overlaps wrapped status: ' + JSON.stringify(longStatus));
+      info.textContent = 'Mesh asset loaded: Modal Authoring Fixture';
+      await wait(100);
+      return { longStatus };
+    })()
+  `, { timeoutMs: 30000 });
+  const outsideState = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const objectId = ${JSON.stringify(objectId)};
+      const initialCamera = ${JSON.stringify(visibleState.camera)};
+      if (!initialCamera?.position || !initialCamera?.target) throw new Error('initial camera pose missing from pivot witness');
+      window.kaminosSetCameraDebugPose({ position: initialCamera.position, target: initialCamera.target });
+      await window.kaminosSceneEdits.apply(objectId, { position: [2.2, 0, 0], scale: [2.5, 2.5, 2.5] }, 'Offscreen pivot visible bounds witness');
+      await wait(250);
+      const outside = {
+        pose: window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId)?.transform || null,
+        hud: document.getElementById('scene-edit-hud')?.textContent || null,
+        overlay: document.getElementById('scene-edit-overlay')?.innerHTML || null,
+        hudRect: document.getElementById('scene-edit-hud')?.getBoundingClientRect().toJSON() || null,
+        infoRect: document.getElementById('info-bar')?.getBoundingClientRect().toJSON() || null,
+      };
+      if (!outside.pose || !outside.hud?.includes('Pivot hidden: selected pivot is outside the view · F to frame')) throw new Error('offscreen pivot was not described precisely: ' + JSON.stringify(outside));
+      if (outside.hudRect.bottom > outside.infoRect.top) throw new Error('offscreen pivot warning overlaps viewport status: ' + JSON.stringify(outside));
+      const mesh = window.kaminosSceneObjectDebugState?.().find(object => object.id === objectId);
+      if (!mesh || Math.max(...mesh.transform.scale) < 2) throw new Error('offscreen-pivot case did not use an enlarged mesh: ' + JSON.stringify(mesh));
+      return { objectId, outside };
+    })()
+  `, { timeoutMs: 30000 });
+  lastEvidence.modalPivotVisibility = {
+    ...visibleState,
+    ...hiddenState,
+    ...recoveryState,
+    ...wrappedStatusState,
+    ...outsideState,
+    visibleScreenshot: visiblePath,
+    visibleScreenshotBytes: visibleShot.bytes,
+    behindScreenshot: behindPath,
+    behindScreenshotBytes: behindShot.bytes,
+  };
+}
+
 const DIRECT_ASSET_LINK_SCENARIOS = {
   splat: {
     scenario: 'splat-asset-link',
@@ -4923,6 +5045,8 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'modal-pivot-visibility') {
+    await runModalPivotVisibilityScenario(ws);
   } else if (scenario === 'splat-asset-link') {
     await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.splat);
   } else if (scenario === 'image-asset-link') {

@@ -2,6 +2,9 @@ import * as THREE from './lib/three.core.js';
 export function sceneObjectsForFraming(entries,selectedId=null) {
   return entries.filter(entry=>selectedId===null||entry.id===selectedId).map(entry=>entry.object).filter(Boolean);
 }
+export function frameSceneObjectRecord(record,camera,controls) {
+  return frameObjects(record?.object?[record.object]:[],camera,controls);
+}
 export function frameObject(object,camera,controls) {
   return frameObjects(object ? [object] : [],camera,controls);
 }
@@ -11,8 +14,12 @@ export function frameObjects(objects,camera,controls) {
     if(!object?.visible)continue;
     object.updateWorldMatrix(true,true);
     box.union(new THREE.Box3().setFromObject(object));
+    box.expandByPoint(object.getWorldPosition(new THREE.Vector3()));
   }
   if(box.isEmpty())return false;
+  return frameBox(box,camera,controls);
+}
+function frameBox(box,camera,controls) {
   const center=box.getCenter(new THREE.Vector3()),radius=box.getSize(new THREE.Vector3()).length()/2;
   if(!Number.isFinite(radius)||radius<=0)return false;
   const vertical=camera.fov*Math.PI/360,horizontal=Math.atan(Math.tan(vertical)*camera.aspect);

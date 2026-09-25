@@ -169,7 +169,11 @@ canvas { display: block; }
 #viewport-drop-overlay { position: absolute; inset: 0; background: rgba(25,118,210,0.12); border: 2px dashed #1976d2; display: none; align-items: center; justify-content: center; font-size: 16px; color: #1976d2; font-weight: 600; pointer-events: none; z-index: 10; border-radius: 0; }
 #viewport.dragover #viewport-drop-overlay { display: flex; }
 
-#info-bar { position: absolute; bottom: 16px; left: 16px; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
+#info-bar { position: absolute; bottom: 70px; left: 16px; max-width:min(560px,calc(100% - 32px)); white-space:normal; overflow-wrap:anywhere; box-sizing:border-box; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 8px 14px; border-radius: 6px; font-size: 10px; color: #777; font-family: 'SF Mono', 'Fira Code', monospace; border: 1px solid rgba(255,255,255,0.05); }
+#scene-edit-overlay { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:9; }
+#scene-edit-hud { position:absolute; bottom:34px; left:16px; max-width:calc(100% - 32px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; z-index:10; padding:2px 6px; border-radius:3px; background:rgba(0,0,0,0.48); font:10px/1.5 'SF Mono','Fira Code',monospace; color:#d2d2d2; text-shadow:0 1px 3px #000; }
+#scene-edit-hud[data-active="true"] { color:#f4c176; }
+#scene-edit-hud[data-alert="true"] { max-width:min(560px,calc(100% - 32px)); overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:anywhere; padding:5px 8px; border:1px solid rgba(169,120,55,.9); background:rgba(26,20,14,.94); color:#ffd18e; }
 
 #env-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 12px; font-family: 'SF Mono', monospace; pointer-events: none; }
 
@@ -457,7 +461,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .scene-object-tools { display: flex; gap: 6px; margin-bottom: 8px; }
 .scene-object-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; background: #202020; border: 1px solid #303030; border-radius: 6px; color: #bbb; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; }
 .scene-object-row:hover { background: #262626; border-color: #3a3a3a; }
-.scene-object-row.active { background: #172235; border-color: #2f67c7; color: #fff; }
+.scene-object-row.active { background: #29251f; border-color: #a97837; color: #fff; }
 .scene-object-row.grouped { margin-left: 14px; width: calc(100% - 14px); }
 .scene-group-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px; background: #1c2426; border: 1px solid #2b3b3f; border-radius: 6px; color: #c8d8dc; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; }
 .scene-group-row:hover { background: #213034; border-color: #3a545a; }
@@ -3288,7 +3292,8 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
-import { frameObject, frameObjects, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { installScenePlacementTools } from './scene-placement-tools.mjs';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -3332,6 +3337,7 @@ function escapeHtml(s) {
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
+let scenePlacementTools = null;
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
@@ -5382,6 +5388,7 @@ async function enterSplatCorrectionMode(id = activeSceneObjectId) {
     setInfo('Select a splat first');
     return null;
   }
+  scenePlacementTools?.finish(false);
   if (splatCorrectionMode?.objectId === record.id) {
     attachTransformControlsToCurrentTarget();
     updateSplatCorrectionModeUi();
@@ -5861,6 +5868,7 @@ function updateTransformInspector() {
       input.value = formatInspectorNumber(value);
     }
   }
+  scenePlacementTools?.draw();
 }
 
 function applyTransformInspectorField(input) {
@@ -5920,10 +5928,7 @@ function applySplatCorrectionInspectorField(input) {
 }
 
 function initTransformInspector() {
-  document.querySelectorAll('[data-transform-field]').forEach(input => {
-    input.addEventListener('input', () => applyTransformInspectorField(input));
-    input.addEventListener('change', () => updateTransformInspector());
-  });
+  // The viewport authoring adapter owns typed, relative, and reversible edits.
   document.querySelectorAll('[data-splat-correction-field]').forEach(input => {
     input.addEventListener('input', () => applySplatCorrectionInspectorField(input));
     input.addEventListener('change', () => {
@@ -6095,6 +6100,7 @@ function renderSceneObjectList() {
 }
 
 function clearActiveSceneObjectSelection() {
+  scenePlacementTools?.selectionChanged();
   if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
   activeSceneObjectId = null;
   activeSceneGroupId = null;
@@ -6109,6 +6115,7 @@ function clearActiveSceneObjectSelection() {
 }
 
 function setActiveSceneObject(id) {
+  if (id !== activeSceneObjectId) scenePlacementTools?.selectionChanged();
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) {
     clearActiveSceneObjectSelection();
@@ -6134,6 +6141,7 @@ function setActiveSceneObject(id) {
 }
 
 function setActiveSceneGroup(id) {
+  scenePlacementTools?.selectionChanged();
   if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
   const group = sceneGroups.find(entry => entry.id === id);
   if (!group) {
@@ -6514,7 +6522,7 @@ document.querySelector('[data-scene-group-create]')?.addEventListener('click', (
   window.createSceneGroupFromAllObjects();
 });
 
-window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
+function applyAuthoredScenePose(id, transform = {}) {
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
   if (entry.type === 'splat') {
@@ -6524,13 +6532,13 @@ window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
     applySceneObjectTransformState(entry.object, transform);
   }
   updateTransformInspector();
-  if (entry.id === activeSceneObjectId && transformControls && !splatCorrectionTransformTarget()) {
-    transformControls.detach();
-    transformControls.attach(entry.object);
-    transformControls.visible = true;
-    document.getElementById('transform-bar').classList.add('visible');
-  }
   window._kaminosDirty?.();
+  return window.kaminosSceneObjectDebugState().find(record => record.id === id);
+}
+
+window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
+  if (scenePlacementTools) scenePlacementTools.edits.apply(id, transform, 'Set scene object pose');
+  else applyAuthoredScenePose(id, transform);
   return window.kaminosSceneObjectDebugState().find(record => record.id === id);
 };
 
@@ -9317,6 +9325,8 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
 };
 
 window.removeSceneObject = function(id) {
+  scenePlacementTools?.finish(false);
+  scenePlacementTools?.edits.discard(entry => entry.id === id);
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
   const [entry] = sceneObjects.splice(index, 1);
@@ -9734,7 +9744,7 @@ async function initScene() {
     gizmo: transformControls,
     roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object), groundPlane],
     frameAll: () => { frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); markDirty(); },
-    frameSelected: () => { if (frameObject(sceneObjectsForFraming(sceneObjects, activeSceneObjectId)[0], camera, controls)) markDirty(); },
+    frameSelected: () => { if (frameSceneObjectRecord(sceneObjects.find(entry => entry.id === activeSceneObjectId), camera, controls)) markDirty(); },
     blocked: () => transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
@@ -9745,9 +9755,27 @@ async function initScene() {
   });
   window.kaminosNavigationState = navigation.state;
   window.kaminosFrameSelected = () => {
-    const object = sceneObjectsForFraming(sceneObjects, activeSceneObjectId)[0];
-    const changed = frameObject(object, camera, controls); if (changed) markDirty(); return changed;
+    const entry = sceneObjects.find(item => item.id === activeSceneObjectId);
+    const changed = frameSceneObjectRecord(entry, camera, controls); if (changed) markDirty(); return changed;
   };
+  scenePlacementTools = installScenePlacementTools({
+    viewport: viewportEl,
+    camera,
+    controls,
+    gizmo: transformControls,
+    selected: () => activeSceneObjectId,
+    read: id => {
+      const entry = sceneObjects.find(item => item.id === id);
+      return !entry ? null : entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
+    },
+    write: applyAuthoredScenePose,
+    object: id => sceneObjects.find(item => item.id === id)?.object,
+    refresh: () => { updateTransformInspector(); markDirty(); },
+    allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
+    frameSelected: window.kaminosFrameSelected,
+  });
+  window.kaminosSceneEdits = scenePlacementTools.edits;
+  window.kaminosPlacementDebugState = scenePlacementTools.state;
 
   // FPS counter
   const fpsEl = document.getElementById('fps-counter');
@@ -9887,6 +9915,7 @@ function applyEnvMap(envMap, intensity) {
 
 // --- File Loading ---
 function clearScene() {
+  scenePlacementTools?.clear();
   sceneMutationToken++;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
@@ -22993,20 +23022,14 @@ window.setGizmoMode = function(mode) {
   setInfo(`${mode.charAt(0).toUpperCase() + mode.slice(1)} gizmo: ${noun}`);
 };
 
-// Keyboard shortcuts for gizmo modes
+// The modal placement adapter owns G/R/S. Keep Escape scoped to the splat
+// correction draft, whose preview has a separate rollback boundary.
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.key === 'Escape' && splatCorrectionMode) {
     e.preventDefault();
     exitSplatCorrectionMode({ revert: true });
     return;
-  }
-  if (!currentMesh && !splatCorrectionTransformTarget()) return;
-  switch (e.key.toLowerCase()) {
-    case 'w': setGizmoMode('translate'); break;
-    case 'e': setGizmoMode('rotate'); break;
-    case 'r': setGizmoMode('scale'); break;
-    case 'q': setGizmoMode(null); break;
   }
 });
 
