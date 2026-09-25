@@ -92,8 +92,22 @@ try {
   report.phase='inference';save();
   let sampleBusy=false;
   sampling=setInterval(async()=>{if(sampleBusy)return;sampleBusy=true;try{
-    report.samples.push(await page.evaluate(()=>({at:performance.now(),infer:document.getElementById('sf3d-infer')?.textContent,flame:window.__kaminosVolumePrototype?.debugState(),foregroundCount:window.__sf3dLiveFlame?.foregroundFrames.length})));save();
+    const sample=await page.evaluate(()=>({at:performance.now(),infer:document.getElementById('sf3d-infer')?.textContent,flame:window.__kaminosVolumePrototype?.debugState(),foregroundCount:window.__sf3dLiveFlame?.foregroundFrames.length}));
+    report.samples.push(sample);
+    if(report.inferenceStartedAt&&!report.inferenceCapture&&sample.infer&&!/^idle$|loading SF3D weights/i.test(sample.infer)){
+      const debugFrame='during-inference-debug.png';
+      const sceneFrame='during-inference.png';
+      await page.screenshot({path:path.join(out,debugFrame)});
+      const diagnosticStyle=await page.addStyleTag({content:'#sf3d-hud { display: none !important; }'});
+      try{await page.screenshot({path:path.join(out,sceneFrame)});}
+      finally{await diagnosticStyle.evaluate(element=>element.remove());}
+      report.inferenceCapture={at:new Date().toISOString(),sourceCommit:report.sourceCommit,inferenceStatus:sample.infer,
+        foregroundFrameCount:sample.foregroundCount,flameFrameCount:sample.flame?.ordinaryForeground?.completedFrames??null,
+        hiddenDiagnostics:['#sf3d-hud'],debugFrame,sceneFrame};
+    }
+    save();
   }catch(error){report.events.push({kind:'sample-error',message:String(error)});save();}finally{sampleBusy=false;}},2000);
+  report.inferenceStartedAt=Date.now();save();
   await page.click('#sf3d-run');
   await page.waitForFunction(()=>window.__sf3dLiveFlame.lastResult || window.__sf3dLiveFlame.lastError);
   report.phase='output-capture';save();
