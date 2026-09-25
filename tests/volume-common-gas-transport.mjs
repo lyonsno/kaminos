@@ -30,12 +30,16 @@ function translate(source) {
     .replace(/vec[34]<f32>/g, 'vec')
     .replace(/\b(\d+)u\b/g, '$1')
     .replace(/cell - \(velocity \+ (\w+)\) \* (\([^;]+\))/g, 'backtrace(cell, add(velocity, $1), $2)')
-    .replace(/cell - advectVelocity \* (\([^;]+\))/g, 'backtrace(cell, advectVelocity, $1)');
+    .replace(/cell - advectVelocity \* (\([^;]+\)|\w+)/g, 'backtrace(cell, advectVelocity, $1)');
 }
 
-const helpers = ['thermalAdvection', 'fireLayerAdvection', 'transportedMicrodetailAdvection']
+const helpers = ['transportBacktraceScale', 'thermalAdvection', 'fireLayerAdvection', 'transportedMicrodetailAdvection']
   .map(functionBody).join('\n');
-const mainStart = core.indexOf('  let backCell = cell - advectVelocity');
+// The MacCormack predictor kernel shares the backtrace expression, so anchor
+// inside the main sim kernel rather than at the first occurrence in the file.
+const mainKernelStart = core.indexOf('\nfn cs(@builtin(global_invocation_id) gid: vec3<u32>) {');
+assert.notEqual(mainKernelStart, -1, 'main sim kernel is located');
+const mainStart = core.indexOf('  let backtraceScale = transportBacktraceScale(speed);', mainKernelStart);
 const mainEnd = core.indexOf('  if (bonfireScene > 0.5)', mainStart);
 assert.ok(mainStart >= 0 && mainEnd > mainStart, 'production advection block is located');
 const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
@@ -45,7 +49,9 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const backtrace = (c,v,s) => vec(c.x-v.x*s, c.y-v.y*s, c.z-v.z*s);
   const clamp = (v,lo,hi) => Math.min(hi, Math.max(lo,v));
   const cellI = cell;
-  const u = {reserved_source_extension_2:{y:enabled ? 1 : 0}};
+  // transport_controls.x = 0 selects the legacy scheme, so this exercises the
+  // first-order branch that the common-gas switch routes.
+  const u = {reserved_source_extension_2:{y:enabled ? 1 : 0}, transport_controls:{x:0}};
   const thermalAdvectionRiseDirection = 1, fireLayerRiseDirection = 1, microdetailRiseDirection = 1;
   const readSlot = () => vec(0.4,heat,0.3,0.2);
   const sampleFluidSlot = (p,slot) => {calls.push({slot,p:[p.x,p.y,p.z]}); return vec(0.4,heat,0.3,0.2);};

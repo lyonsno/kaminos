@@ -2604,6 +2604,32 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-pressure-mode-val">Default</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Pressure Solver</span>
+      <select id="volume-pressure-solver" class="select-input" data-volume-settings-param="volume_pressure_solver">
+        <option value="legacy" selected>Legacy Jacobi</option>
+        <option value="converged">Converged, closed top</option>
+        <option value="converged-open-top">Converged, open top</option>
+      </select>
+      <span class="slider-val" id="volume-pressure-solver-val">legacy</span>
+    </div>
+    <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies a 0-1 gain on the correction; the gain is Projection, and in the Bonfire scene the gain is Projection × its projection ablation. At effective gain 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − gain) of the divergence. Pressure iterations 0 (route override or the GPU-pressure impostor tier) or gain 0 turns pressure work off in either mode. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
+    <div class="slider-row">
+      <span class="slider-label">Solver Sweeps</span>
+      <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
+      <span class="slider-val" id="volume-pressure-solver-iterations-val">60</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Advection</span>
+      <select id="volume-advection-scheme" class="select-input" data-volume-settings-param="volume_advection_scheme">
+        <option value="legacy" selected>Legacy semi-Lagrangian (damped)</option>
+        <option value="undamped">Semi-Lagrangian, undamped</option>
+        <option value="maccormack-velocity">MacCormack velocity, first-order scalars</option>
+        <option value="maccormack">MacCormack, all fields</option>
+      </select>
+      <span class="slider-val" id="volume-advection-scheme-val">legacy</span>
+    </div>
+    <span class="slider-help">Legacy is first-order semi-Lagrangian with 0.982 velocity damping every step and a fixed velocity clamp. Undamped keeps the first-order step but drops the damping and bounds the step by backtrace distance instead. MacCormack adds a predictor pass and a limited round-trip error correction on one shared characteristic, so vortex roll-up and plume pulsing that the first-order step smears away can survive without synthetic stirring. Live switching keeps evolved state.</span>
+    <div class="slider-row">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pressure-tier-overlay-val">0.00</span>
@@ -3226,7 +3252,7 @@ import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, 
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=kiln-tall-domain-0925';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig } from './volume-core.js?v=flame-doctor-landing-0925';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -15262,6 +15288,9 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroCarrierView', 'volume_pyro_carrier_view'],
   ['pyroOverdrive', 'volume_pyro_overdrive'],
   ['pressureMode', 'volume_pressure_mode'],
+  ['pressureSolver', 'volume_pressure_solver'],
+  ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
+  ['advectionScheme', 'volume_advection_scheme'],
   ['pressureTierOverlay', 'volume_pressure_tier_overlay'],
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
@@ -20494,6 +20523,9 @@ function readVolumeControls() {
     pyroOverdrive: parseFloat(document.getElementById('volume-pyro-overdrive').value),
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
+    pressureSolver: document.getElementById('volume-pressure-solver').value,
+    pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
+    advectionScheme: document.getElementById('volume-advection-scheme').value,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
     pressureTierLowerMax: parseFloat(document.getElementById('volume-pressure-tier-lower-max').value),
     pressureTierHeroMin: parseFloat(document.getElementById('volume-pressure-tier-hero-min').value),
@@ -20543,7 +20575,12 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-force-interface-shred-val').textContent = c.detailForceContributions.shred ? 'on' : 'off';
   document.getElementById('volume-force-fine-breakup-val').textContent = c.detailForceContributions.fine ? 'on' : 'off';
   document.getElementById('volume-fine-breakup-localization-val').textContent = `${c.fineBreakupLocalization.toFixed(2)}${c.fineBreakupLocalization === 0 ? ' broad' : ' localized'}`;
-  document.getElementById('volume-common-gas-transport-val').textContent = c.commonGasTransport ? 'common gas' : 'legacy split';
+  {
+    const transportConfig = resolveTransportConfig(c);
+    document.getElementById('volume-common-gas-transport-val').textContent = transportConfig.effective.commonCharacteristic
+      ? (c.commonGasTransport ? 'common gas' : 'common gas (MacCormack)')
+      : 'legacy split';
+  }
   document.getElementById('volume-exposure-val').textContent = c.volumeExposure.toFixed(2);
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
@@ -20682,6 +20719,27 @@ function updateVolumeControlLabels() {
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
+  {
+    const solverConfig = resolvePressureSolverConfig(c);
+    const solver = String(c.pressureSolver || 'legacy');
+    const sweeps = Math.round(Number(c.pressureSolverIterations) || 60);
+    const gain = solverConfig.effective.projectionGain;
+    const offReason = solverConfig.effective.disabledReason === 'pressure-iterations-zero' ? 'pressure iterations 0' : 'gain 0';
+    const convergedName = solverConfig.effective.openTop ? 'converged, open top' : 'converged';
+    document.getElementById('volume-pressure-solver-val').textContent = solverConfig.effective.solver === 'legacy'
+      ? (solver === 'legacy'
+        ? (solverConfig.effective.dispatch === 'disabled' ? `legacy · off (${offReason})` : 'legacy')
+        : `legacy (${solverConfig.effective.reason || 'unknown solver'})`)
+      : (solverConfig.effective.dispatch === 'disabled'
+        ? `${convergedName} · off (${offReason})`
+        : `${convergedName} · ${sweeps} sweeps · ${solverConfig.effective.projection === 'full' ? 'full projection' : `partial projection, gain ${gain.toFixed(2)}`}`);
+    document.getElementById('volume-pressure-solver-iterations-val').textContent = solverConfig.effective.solver === 'legacy' ? `${sweeps} (converged only)` : String(sweeps);
+    const transportConfig = resolveTransportConfig(c);
+    const schemeName = { legacy: 'legacy', undamped: 'undamped', 'maccormack-velocity': 'MacCormack velocity', maccormack: 'MacCormack' }[transportConfig.effective.scheme] || transportConfig.effective.scheme;
+    document.getElementById('volume-advection-scheme-val').textContent = transportConfig.effective.reason
+      ? `legacy (${transportConfig.effective.reason})`
+      : `${schemeName}${transportConfig.effective.scheme === 'legacy' ? '' : ` · bound ${transportConfig.effective.velocityBound.maxCells} cells`}`;
+  }
   const pressureTierControls = normalizeVolumePressureTierControls(c);
   if (pressureTierControls.lowerMax !== c.pressureTierLowerMax) setVolumeControlValue('volume-pressure-tier-lower-max', pressureTierControls.lowerMax.toFixed(2));
   if (pressureTierControls.heroMin !== c.pressureTierHeroMin) setVolumeControlValue('volume-pressure-tier-hero-min', pressureTierControls.heroMin.toFixed(2));
@@ -21672,6 +21730,9 @@ async function initKaminosVolumeRoute() {
     ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
+    ['volume-pressure-solver', 'volume_pressure_solver'],
+    ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
+    ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-fine-breakup-localization', 'volume_fine_breakup_localization'],
     ['volume-common-gas-transport', 'volume_common_gas_transport'],
   ]) {
@@ -21964,6 +22025,9 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-shear-width',
     'volume-emitter-edge-entrainment',
     'volume-fixed-source-dephase',
+    'volume-pressure-solver',
+    'volume-pressure-solver-iterations',
+    'volume-advection-scheme',
     'volume-common-gas-transport',
   ]) {
     document.getElementById(id).addEventListener('input', syncControls);

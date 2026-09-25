@@ -114,21 +114,48 @@ assert.equal(legacyFineBreakupReceipt.preset.controlCount, schema.controlCount,
 
 const commonGasTransport = schema.controls.find(control => control.key === 'volume-common-gas-transport');
 assert.equal(commonGasTransport?.additiveSinceControlCount, 211);
+// A 210-control basin predates common gas transport and every later addition,
+// so the fixture strips everything declared additive at 211 or later.
+const additionsSinceCommonGas = schema.controls.filter(control => control.additiveSinceControlCount >= 211);
+assert.equal(additionsSinceCommonGas[0]?.key, commonGasTransport.key, 'common gas transport is the first addition after the 210-control schema');
 const legacyTransportArtifact = currentPresetArtifact();
-delete legacyTransportArtifact.preset.domControls[commonGasTransport.key];
 const legacyTransportRoute = new URL(legacyTransportArtifact.preset.route);
-legacyTransportRoute.searchParams.delete(commonGasTransport.param);
+for (const control of additionsSinceCommonGas) {
+  delete legacyTransportArtifact.preset.domControls[control.key];
+  legacyTransportRoute.searchParams.delete(control.param);
+}
 legacyTransportArtifact.preset.route = legacyTransportRoute.href;
-legacyTransportArtifact.controlCount -= 1;
-legacyTransportArtifact.preset.controlCount -= 1;
+legacyTransportArtifact.controlCount = 210;
+legacyTransportArtifact.preset.controlCount = 210;
 const legacyTransportReceipt = validateVolumeSettingsPresetDocument(legacyTransportArtifact, legacyTransportArtifact.presetId, schema);
-assert.deepEqual(legacyTransportReceipt.retirementMigration?.addedControlIds, [commonGasTransport.key]);
+assert.deepEqual(legacyTransportReceipt.retirementMigration?.addedControlIds, additionsSinceCommonGas.map(control => control.key));
 assert.equal(legacyTransportReceipt.preset.domControls[commonGasTransport.key].value, false);
 assert.equal(legacyTransportReceipt.presetRoute.searchParams.get(commonGasTransport.param), 'false');
 assert.equal(legacyFineBreakupReceipt.preset.domControls[commonGasTransport.key].value, false,
   'both 209- and 210-control basins retain the legacy gas transport law');
 assert.equal(validateVolumeSettingsPresetDocument(currentPresetArtifact(), parentArtifact.presetId, schema)
   .preset.domControls[commonGasTransport.key].value, false);
+const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme']
+  .map(key => schema.controls.find(control => control.key === key));
+assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214],
+  'the pressure solver, solver sweeps, and advection scheme declare successive additive counts after common gas transport');
+const legacySolverArtifact = currentPresetArtifact();
+const legacySolverRoute = new URL(legacySolverArtifact.preset.route);
+for (const control of schema.controls.filter(control => control.additiveSinceControlCount >= 212)) {
+  delete legacySolverArtifact.preset.domControls[control.key];
+  legacySolverRoute.searchParams.delete(control.param);
+}
+legacySolverArtifact.preset.route = legacySolverRoute.href;
+legacySolverArtifact.controlCount = 211;
+legacySolverArtifact.preset.controlCount = 211;
+const legacySolverReceipt = validateVolumeSettingsPresetDocument(legacySolverArtifact, legacySolverArtifact.presetId, schema);
+assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, flameDoctorControls.map(control => control.key));
+assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver'].value, 'legacy', 'a 211-control basin keeps the legacy Jacobi solver');
+assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver-iterations'].value, 60);
+assert.equal(legacySolverReceipt.preset.domControls['volume-advection-scheme'].value, 'legacy', 'a 211-control basin keeps legacy damped transport');
+assert.equal(legacySolverReceipt.presetRoute.searchParams.get('volume_advection_scheme'), 'legacy');
+assert.equal(legacySolverReceipt.preset.domControls[commonGasTransport.key].value, false, 'the 211-control basin keeps its stored common gas value');
+assert.equal(legacySolverReceipt.preset.controlCount, schema.controlCount);
 const enabledTransportArtifact = currentPresetArtifact();
 enabledTransportArtifact.preset.domControls[commonGasTransport.key].value = true;
 const enabledTransportRoute = new URL(enabledTransportArtifact.preset.route);
