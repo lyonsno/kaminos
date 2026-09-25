@@ -50,7 +50,12 @@ test('calibrated mode takes its epsilon from the scheme table, not from Curl, an
     assert.equal(low.effective.thermalExpansionAmount, core.THERMAL_EXPANSION_BASELINE, 'thermal expansion is decoupled from Curl');
     assert.equal(high.effective.thermalExpansionAmount, core.THERMAL_EXPANSION_BASELINE);
     assert.equal(low.effective.calibration.scheme, scheme);
+    assert.equal(low.effective.calibration.measured, core.CONFINEMENT_CALIBRATED_MEASURED_SCHEMES.includes(scheme), `the receipt says whether ${scheme} was measured or inherited`);
   }
+  assert.deepEqual([...core.CONFINEMENT_CALIBRATED_MEASURED_SCHEMES], ['undamped', 'maccormack-velocity'], 'only the schemes the sweep ran count as measured');
+  assert.match(core.CONFINEMENT_CALIBRATION_STATUS, /provisional/, 'the status names the table a provisional choice, not a demonstrated physical level');
+  assert.doesNotMatch(source, /only compensates the scheme's numerical loss/, 'source text no longer claims demonstrated loss compensation');
+  assert.doesNotMatch(index, /injects no authored curl energy/, 'help text no longer claims isolated injection');
   assert.ok(core.CONFINEMENT_CALIBRATED_EPSILON['maccormack-velocity'] < core.CONFINEMENT_CALIBRATED_EPSILON.legacy, 'a second-order scheme needs less numerical-loss compensation than first-order');
 });
 
@@ -126,4 +131,9 @@ test('the arm capture records confinement and enstrophy in its receipt', () => {
   assert.match(capture, /confinement: s\.confinement\?\.effective \?\? null/, 'effective confinement in the arm receipt');
   assert.match(capture, /vorticity: s\.pressureSolver\?\.residual\?\.vorticity \?\? null/, 'enstrophy readout in the arm receipt');
   assert.match(capture, /volume-confinement/, 'requested-vs-effective check covers the confinement mode');
+  assert.match(capture, /confinementUniform: s\.confinement\?\.uniform \?\? null/, 'the packed uniform is recorded');
+  assert.match(capture, /observed !== Math\.fround\(Number\(value\)\)/, 'the packed epsilon is compared as float32 against the request');
+  assert.match(capture, /null override: packed epsilon/, 'a null override must return to the table value in calibrated mode');
+  assert.match(capture, /stale residual: probe step/, 'an arm needs a residual probe newer than its switch');
+  assert.match(capture, /\['arm-error', 'packed-epsilon', 'stale-residual'\]/, 'both new failure paths have fault cases');
 });

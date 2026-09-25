@@ -21,8 +21,11 @@
 // control to take effect and the effective scheme/solver to match the arm, exits
 // nonzero on a renderer error or an incomplete arm, and persists a report naming
 // the failure phase and last trustworthy evidence whenever it stops early.
-// `--fault arm-error` injects a synthetic renderer error into the first arm so the
-// failure path itself can be exercised.
+// Faults exercise the failure paths on a live route: `--fault arm-error` injects a
+// synthetic renderer error into the first arm; `--fault packed-epsilon` perturbs
+// the observed packed epsilon so the shader-facing comparison must fail;
+// `--fault stale-residual` demands a residual probe newer than any step so the
+// freshness check must fail.
 
 import { spawn } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -61,7 +64,8 @@ const fail = (phase, message) => { throw new PhaseFailure(phase, message); };
 
 if (!url || !outDir || !armsArg) fail('argument-validation', 'usage: <url> <outDir> "<arm>;<arm>" [settleMs] --expected-repo-root <dir> --expected-commit <sha>');
 if (!expectedRepoRoot || !expectedCommit) { report.failure = 'expected repo root and commit are required so the capture cannot pass on an unintended server'; writeReport(); console.error(report.failure); process.exit(1); }
-if (fault && fault !== 'arm-error') { report.failure = `unknown fault ${fault}`; writeReport(); console.error(report.failure); process.exit(1); }
+const FAULTS = ['arm-error', 'packed-epsilon', 'stale-residual'];
+if (fault && !FAULTS.includes(fault)) { report.failure = `unknown fault ${fault}; known: ${FAULTS.join(', ')}`; writeReport(); console.error(report.failure); process.exit(1); }
 const arms = armsArg.split(';').map(a => { const [name, ...pairs] = a.split(','); return { name, set: pairs.map(p => p.split('=')) }; });
 mkdirSync(outDir, { recursive: true });
 writeReport();
@@ -78,8 +82,28 @@ function effectiveMismatches(arm, end) {
   const mismatches = [];
   for (const [cid, value] of arm.set) {
     if (cid === 'volume-advection-scheme' && end.transport?.scheme !== value) mismatches.push(`scheme requested ${value}, effective ${end.transport?.scheme}`);
-    if (cid === 'volume-confinement' && end.confinement?.mode !== value) mismatches.push(`confinement requested ${value}, effective ${end.confinement?.mode}`);
-    if (cid === '@confinementEpsilon' && value !== 'null' && end.confinement?.confinementAmount !== Number(value)) mismatches.push(`confinement epsilon override ${value} requested, effective amount ${end.confinement?.confinementAmount} (mode ${end.confinement?.mode})`);
+    if (cid === 'volume-confinement') {
+      if (end.confinement?.mode !== value) mismatches.push(`confinement requested ${value}, effective ${end.confinement?.mode}`);
+      const packedMode = { 'curl-slider': 0, calibrated: 1, off: 2 }[value];
+      if (end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement ${value} requested but uniform slot 345 holds mode ${end.confinementUniform?.mode}`);
+    }
+    if (cid === '@confinementEpsilon') {
+      // The shader reads uniform slot 346 (a Float32Array element), so the packed
+      // value must equal the float32 rounding of the request, not just the
+      // resolver's double. `packed-epsilon` perturbs the observation to prove
+      // this comparison can fail.
+      const packed = end.confinementUniform?.confinementAmount;
+      const observed = fault === 'packed-epsilon' ? (Number(packed) || 0) + 1 : packed;
+      if (value === 'null') {
+        if (end.confinement?.mode === 'calibrated') {
+          if (end.confinement?.calibration?.source !== 'table') mismatches.push(`null override requested but calibration source is ${end.confinement?.calibration?.source}`);
+          if (observed !== Math.fround(Number(end.confinement?.calibration?.epsilon))) mismatches.push(`null override: packed epsilon ${observed} is not the table value ${end.confinement?.calibration?.epsilon}`);
+        }
+      } else {
+        if (end.confinement?.confinementAmount !== Number(value)) mismatches.push(`confinement epsilon override ${value} requested, effective amount ${end.confinement?.confinementAmount} (mode ${end.confinement?.mode})`);
+        if (observed !== Math.fround(Number(value))) mismatches.push(`packed epsilon ${observed} is not the float32 of the requested ${value} (${Math.fround(Number(value))})`);
+      }
+    }
     if (cid === 'volume-pressure-solver') {
       const expected = solverExpectation[value];
       if (!expected) mismatches.push(`unknown solver request ${value}`);
@@ -113,7 +137,7 @@ try {
   const call = (method, params = {}) => new Promise((res, rej) => { const myId = ++id; pending.set(myId, res); setTimeout(() => { pending.delete(myId); rej(new Error('timeout ' + method)); }, 60000); ws.send(JSON.stringify({ id: myId, method, params })); });
   const evaluate = async expr => { const r = await call('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || 'evaluate failed'); return r.result?.result?.value; };
   const op = body => `(() => { const f = document.querySelector('#basin'); const w = f?.contentWindow || window; const d = w.document; return (${body}); })()`;
-  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
+  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementUniform: s.confinement?.uniform ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
   const setControl = (cid, value) => evaluate(op(`(() => { const e = d.getElementById(${JSON.stringify(cid)}); if (!e) throw new Error('missing ' + ${JSON.stringify(cid)}); if (e.type === 'checkbox') { e.checked = ${JSON.stringify(value)} === 'true'; } else { e.value = ${JSON.stringify(value)}; } e.dispatchEvent(new w.Event('input', { bubbles: true })); e.dispatchEvent(new w.Event('change', { bubbles: true })); return e.type === 'checkbox' ? String(e.checked) : e.value; })()`));
   await call('Page.enable'); await call('Runtime.enable'); await call('Log.enable'); await call('Page.navigate', { url });
 
@@ -164,6 +188,10 @@ try {
     writeReport();
     if (end.error) fail(report.failurePhase, `renderer error during arm ${arm.name}: ${end.error}`);
     if (!(end.simStepCount > s0)) fail(report.failurePhase, `simulation did not advance during arm ${arm.name}`);
+    // An arm's enstrophy/divergence is its own measurement only if the probe ran
+    // after the switch; `stale-residual` makes that impossible to prove the check.
+    const freshnessFloor = fault === 'stale-residual' ? Number.POSITIVE_INFINITY : s0;
+    if (!(end.residual?.step > freshnessFloor)) fail(report.failurePhase, `stale residual: probe step ${end.residual?.step ?? 'none'} is not newer than the arm switch at step ${s0}; the arm's enstrophy is not its own measurement`);
     const mismatches = effectiveMismatches(arm, end);
     if (mismatches.length) fail(report.failurePhase, `effective state does not match arm ${arm.name}: ${mismatches.join('; ')}`);
     report.failurePhase = `arm-${arm.name}-capture`;

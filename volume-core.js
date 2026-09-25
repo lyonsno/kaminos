@@ -2252,19 +2252,21 @@ export function resolveTransportConfig(controls = {}) {
 // Confinement mode (flame-doctor slice 3). `curl-slider` is the law every saved
 // basin was authored under: confinement amount 0.034 + Curl·0.044 with material
 // weighting and thermal expansion 0.048 + Curl·0.019, both computed in the
-// shader exactly as before. `calibrated` replaces both with one epsilon per
-// transport scheme (uniform weighting, expansion held at the Curl-0 baseline) so
-// confinement compensates the scheme's numerical loss instead of injecting
-// authored curl energy; `off` removes confinement. The table was set by the
-// enstrophy assay of 2026-09-25 (128 x 256 x 128 ring burner, converged open
-// top, Projection 1, synthetic forces off, sampled 20 s arms): under
-// MacCormack-velocity the carried enstrophy is flat within run-to-run scatter
-// for epsilon in [0, 0.06] (0.0075-0.0090 per cell), rises at 0.1 (0.0103)
-// and under the authored Curl-4 law (0.0113); under first-order undamped it is
-// flat for every epsilon up to the authored law (~0.0041) - confinement cannot
-// restore what first-order diffusion removes at this resolution. 0.010 for
-// MacCormack sits inside the flat region, six times below the knee; the
-// first-order schemes keep the authored Curl-0 floor.
+// shader exactly as before. `calibrated` replaces both with one small epsilon
+// per transport scheme (uniform weighting, expansion held at the Curl-0
+// baseline) as a reversible alternative to the authored Curl law; `off`
+// removes confinement. The table holds provisional
+// choices from the enstrophy sweep of 2026-09-25 (one basin, 128 x 256 x 128,
+// converged open top, Projection 1, synthetic forces off, sequential 20 s
+// arms): under MacCormack-velocity the domain-mean enstrophy did not
+// distinguish epsilon in [0, 0.06] from zero and rose near 0.1; under
+// first-order undamped it did not respond to epsilon at all. That sweep does
+// not show that 0.010 compensates a measured loss, nor that it adds no energy
+// at scales the domain mean cannot see, and it did not isolate which part of
+// the authored Curl law (amount, smoke/heat weighting, expansion) raises
+// enstrophy. `legacy` and full `maccormack` inherit the measured neighbours'
+// values unmeasured (`calibration.measured`). The operator's live ladder owns
+// the comparison; this is the reversible candidate for it.
 export const CONFINEMENT_IDENTITY = 'confinement-mode-v0';
 export const CONFINEMENT_MODE_VALUES = Object.freeze(['curl-slider', 'calibrated', 'off']);
 const CONFINEMENT_MODE_CURL_SLIDER = 'curl-slider';
@@ -2280,7 +2282,9 @@ export const CONFINEMENT_CALIBRATED_EPSILON = Object.freeze({
   [TRANSPORT_SCHEME_MACCORMACK_VELOCITY]: 0.010,
   [TRANSPORT_SCHEME_MACCORMACK]: 0.010,
 });
-export const CONFINEMENT_CALIBRATION_STATUS = 'enstrophy-assay-2026-09-25-flat-to-0.06-under-maccormack';
+export const CONFINEMENT_CALIBRATION_STATUS = 'provisional-choice-from-enstrophy-sweep-2026-09-25';
+// Schemes the sweep actually ran; the others inherit a neighbour's value.
+export const CONFINEMENT_CALIBRATED_MEASURED_SCHEMES = Object.freeze([TRANSPORT_SCHEME_UNDAMPED, TRANSPORT_SCHEME_MACCORMACK_VELOCITY]);
 
 export function confinementModeUniformValue(mode) {
   if (mode === CONFINEMENT_MODE_CALIBRATED) return 1;
@@ -2341,6 +2345,7 @@ export function resolveConfinementConfig(controls = {}, options = {}) {
         epsilon: tableEpsilon,
         epsilonOverride,
         source: epsilonOverride === null ? 'table' : 'override',
+        measured: CONFINEMENT_CALIBRATED_MEASURED_SCHEMES.includes(scheme),
         status: CONFINEMENT_CALIBRATION_STATUS,
       },
       reason,
@@ -5210,8 +5215,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     // force concentrates in smoke and heat.
     confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044) * (0.35 + smoke * 0.34 + heat * 0.52);
   } else if (confinementMode < 1.5) {
-    // Calibrated: one epsilon for the transport scheme, applied uniformly, so
-    // confinement only compensates the scheme's numerical loss.
+    // Calibrated: one small epsilon for the transport scheme, applied uniformly
+    // (a provisional choice from the enstrophy sweep; see the table comment).
     confinement = vorticityConfinement(cellI, u.reserved_source_extension_0.z);
   }
   let bonfireReferenceFrontContact = clamp(
