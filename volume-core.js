@@ -24330,8 +24330,9 @@ export function createKaminosVolumePrototype({
     setConfinementEpsilonOverride(value) {
       const next = value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
       confinementEpsilonOverride = next;
-      this.setControls({});
-      return state.confinement;
+      // Uniforms are packed once per frame by updateUniforms; the receipt
+      // (state.confinement) proves application on the next frame.
+      return { confinementEpsilonOverride, appliesOn: 'next-frame', previous: state.confinement };
     },
     debugState() {
       return {
