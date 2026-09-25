@@ -7,19 +7,12 @@
     "effective": "local Node.js CPU / shear-regularized linear-spring PCG",
     "fallback": false,
     "node": "v25.9.0",
-    "sourceRevision": "a122ffe5b473334e62bbb9b1983e5760c4dd0c0a",
+    "sourceRevision": "b73a07d6dd1171a31500be4520b52913ab0ec572",
     "sourceDirtyPaths": [
-      "structural-material-arch-core.js",
-      "structural-material-arch-depth-assay.mjs",
-      "tests/structural-material-arch-depth-assay-cli-contracts.mjs",
       "artifacts/structural-material-3d/authored-bell-initial.json",
       "artifacts/structural-material-3d/authored-bell-initial.png",
       "artifacts/structural-material-3d/authored-bell-local-smoke.json",
-      "artifacts/structural-material-3d/authored-bell-local-smoke.png",
-      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/contact-patch-r032_2026-09-25.json",
-      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/point-load-enhanced_2026-09-25.json",
-      "tests/structural-material-arch-contact-patch-assay-contracts.mjs",
-      "tests/structural-material-arch-contact-patch-contracts.mjs"
+      "artifacts/structural-material-3d/authored-bell-local-smoke.png"
     ],
     "implementationSha256": {
       "structural-material-arch-core.js": "d550019f639714f223b0cc6c230fbf3a95fd80aaace8fc643c8f767dbc92be54",
@@ -216,7 +209,7 @@
                   "travel": 0.004351629664209108,
                   "peakStrain": 0.01893365891473491,
                   "solve": {
-                    "elapsedMs": 73.49483300000003,
+                    "elapsedMs": 118.20883300000003,
                     "iterations": 239,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.804632490734671e-8
@@ -301,7 +294,7 @@
                   "travel": 0.008703259328418216,
                   "peakStrain": 0.03786731782946982,
                   "solve": {
-                    "elapsedMs": 76.85558399999996,
+                    "elapsedMs": 124.50295800000004,
                     "iterations": 239,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.804632490734671e-8
@@ -425,7 +418,7 @@
                   "travel": 0.01305488899262657,
                   "peakStrain": 0.05680097674489549,
                   "solve": {
-                    "elapsedMs": 61.49512499999997,
+                    "elapsedMs": 71.09199999999998,
                     "iterations": 239,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.80880038405425e-8
@@ -586,7 +579,7 @@
                   "travel": 0.015276375122712219,
                   "peakStrain": 0.0898489608559871,
                   "solve": {
-                    "elapsedMs": 70.36537499999997,
+                    "elapsedMs": 92.64804099999992,
                     "iterations": 237,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.72845857592734e-8
@@ -777,7 +770,7 @@
                   "travel": 0.042331749369033056,
                   "peakStrain": 0.25000000070635253,
                   "solve": {
-                    "elapsedMs": 70.48541699999998,
+                    "elapsedMs": 92.35504200000003,
                     "iterations": 241,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.190769756651184e-8
@@ -1091,7 +1084,7 @@
                   "travel": 0.034813037313672864,
                   "peakStrain": 0.15146927131787927,
                   "solve": {
-                    "elapsedMs": 82.65608400000008,
+                    "elapsedMs": 68.86908299999993,
                     "iterations": 239,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.804632490734671e-8
@@ -2032,7 +2025,7 @@
                   "travel": 0.11530586529406761,
                   "peakStrain": 0.6666666685505118,
                   "solve": {
-                    "elapsedMs": 57.50120800000002,
+                    "elapsedMs": 67.83195799999999,
                     "iterations": 244,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.27868846248249e-8
@@ -3822,7 +3815,7 @@
                   "travel": 0.004695460067377113,
                   "peakStrain": 0.019333315166700313,
                   "solve": {
-                    "elapsedMs": 94.35316599999999,
+                    "elapsedMs": 112.89704200000006,
                     "iterations": 402,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.677460891641872e-8
@@ -3907,7 +3900,7 @@
                   "travel": 0.009390920134754226,
                   "peakStrain": 0.03866663033340063,
                   "solve": {
-                    "elapsedMs": 97.83383400000002,
+                    "elapsedMs": 112.6747089999999,
                     "iterations": 402,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.677460891641872e-8
@@ -4031,7 +4024,7 @@
                   "travel": 0.014086380202187448,
                   "peakStrain": 0.05799994554954599,
                   "solve": {
-                    "elapsedMs": 94.79495799999995,
+                    "elapsedMs": 114.25029099999983,
                     "iterations": 403,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.70165674310322e-8
@@ -4222,7 +4215,7 @@
                   "travel": 0.01770990234487436,
                   "peakStrain": 0.11826927813619699,
                   "solve": {
-                    "elapsedMs": 92.93370899999991,
+                    "elapsedMs": 109.36549999999988,
                     "iterations": 401,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.685795925877598e-8
@@ -4476,7 +4469,7 @@
                   "travel": 0.0375636805390169,
                   "peakStrain": 0.1546665213336025,
                   "solve": {
-                    "elapsedMs": 106.67387500000018,
+                    "elapsedMs": 114.96095800000012,
                     "iterations": 402,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.677460891641872e-8
@@ -5677,7 +5670,7 @@
                   "travel": 0.11908618014605073,
                   "peakStrain": 0.6670421365296411,
                   "solve": {
-                    "elapsedMs": 109.0608749999999,
+                    "elapsedMs": 109.1094169999999,
                     "iterations": 410,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.112892322776105e-8
@@ -7987,7 +7980,7 @@
                   "travel": 0.004400471843781048,
                   "peakStrain": 0.018943961087273663,
                   "solve": {
-                    "elapsedMs": 67.04412500000012,
+                    "elapsedMs": 72.3386660000001,
                     "iterations": 240,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.453404209301472e-8
@@ -8072,7 +8065,7 @@
                   "travel": 0.008800943687562096,
                   "peakStrain": 0.037887922174547325,
                   "solve": {
-                    "elapsedMs": 67.72583299999997,
+                    "elapsedMs": 70.45095800000013,
                     "iterations": 240,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.453404209301472e-8
@@ -8196,7 +8189,7 @@
                   "travel": 0.013201415531341569,
                   "peakStrain": 0.056831883259755606,
                   "solve": {
-                    "elapsedMs": 66.83016700000007,
+                    "elapsedMs": 103.7410420000001,
                     "iterations": 240,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.432960921687328e-8
@@ -8357,7 +8350,7 @@
                   "travel": 0.015425954089725151,
                   "peakStrain": 0.08975461275413818,
                   "solve": {
-                    "elapsedMs": 66.0719590000001,
+                    "elapsedMs": 69.59349999999995,
                     "iterations": 241,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.518412772630665e-8
@@ -8548,7 +8541,7 @@
                   "travel": 0.04249740196538773,
                   "peakStrain": 0.25000000052989885,
                   "solve": {
-                    "elapsedMs": 108.38529199999994,
+                    "elapsedMs": 79.61945800000012,
                     "iterations": 242,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.78884007871622e-8
@@ -8862,7 +8855,7 @@
                   "travel": 0.035203774750248384,
                   "peakStrain": 0.1515516886981893,
                   "solve": {
-                    "elapsedMs": 65.429666,
+                    "elapsedMs": 72.728208,
                     "iterations": 240,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.453404209301472e-8
@@ -9803,7 +9796,7 @@
                   "travel": 0.11575483391541413,
                   "peakStrain": 0.6666666697496586,
                   "solve": {
-                    "elapsedMs": 66.98954099999992,
+                    "elapsedMs": 77.37908400000015,
                     "iterations": 243,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.240438931614862e-8
@@ -11623,7 +11616,7 @@
                   "travel": 0.004737636307138369,
                   "peakStrain": 0.019330576373906484,
                   "solve": {
-                    "elapsedMs": 107.98799999999983,
+                    "elapsedMs": 114.1232500000001,
                     "iterations": 402,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.125600677700566e-8
@@ -11708,7 +11701,7 @@
                   "travel": 0.009475272614276739,
                   "peakStrain": 0.03866115274781297,
                   "solve": {
-                    "elapsedMs": 152.24170800000002,
+                    "elapsedMs": 156.3292080000001,
                     "iterations": 402,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.125600677700566e-8
@@ -11832,7 +11825,7 @@
                   "travel": 0.014212908921478447,
                   "peakStrain": 0.05799172940408857,
                   "solve": {
-                    "elapsedMs": 152.22312500000044,
+                    "elapsedMs": 155.9703330000002,
                     "iterations": 401,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.860507604650118e-8
@@ -12023,7 +12016,7 @@
                   "travel": 0.01784157083160709,
                   "peakStrain": 0.11836470816331676,
                   "solve": {
-                    "elapsedMs": 129.0478750000002,
+                    "elapsedMs": 159.7545,
                     "iterations": 402,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.903106382787093e-8
@@ -12277,7 +12270,7 @@
                   "travel": 0.037901090457106955,
                   "peakStrain": 0.15464461099125187,
                   "solve": {
-                    "elapsedMs": 130.52075000000013,
+                    "elapsedMs": 179.8454999999999,
                     "iterations": 402,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.125600677700566e-8
@@ -13508,7 +13501,7 @@
                   "travel": 0.11962594048982551,
                   "peakStrain": 0.6671015483470962,
                   "solve": {
-                    "elapsedMs": 129.36687500000016,
+                    "elapsedMs": 159.03612500000008,
                     "iterations": 407,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.587337567938834e-8

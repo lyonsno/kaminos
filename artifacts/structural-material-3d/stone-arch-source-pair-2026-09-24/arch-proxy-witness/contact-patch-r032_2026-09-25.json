@@ -7,19 +7,13 @@
     "effective": "local Node.js CPU / shear-regularized linear-spring PCG",
     "fallback": false,
     "node": "v25.9.0",
-    "sourceRevision": "a122ffe5b473334e62bbb9b1983e5760c4dd0c0a",
+    "sourceRevision": "b73a07d6dd1171a31500be4520b52913ab0ec572",
     "sourceDirtyPaths": [
-      "structural-material-arch-core.js",
-      "structural-material-arch-depth-assay.mjs",
-      "tests/structural-material-arch-depth-assay-cli-contracts.mjs",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/point-load-enhanced_2026-09-25.json",
       "artifacts/structural-material-3d/authored-bell-initial.json",
       "artifacts/structural-material-3d/authored-bell-initial.png",
       "artifacts/structural-material-3d/authored-bell-local-smoke.json",
-      "artifacts/structural-material-3d/authored-bell-local-smoke.png",
-      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/contact-patch-r032_2026-09-25.json",
-      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/point-load-enhanced_2026-09-25.json",
-      "tests/structural-material-arch-contact-patch-assay-contracts.mjs",
-      "tests/structural-material-arch-contact-patch-contracts.mjs"
+      "artifacts/structural-material-3d/authored-bell-local-smoke.png"
     ],
     "implementationSha256": {
       "structural-material-arch-core.js": "d550019f639714f223b0cc6c230fbf3a95fd80aaace8fc643c8f767dbc92be54",
@@ -248,7 +242,7 @@
                   "travel": 0.0038656242697617397,
                   "peakStrain": 0.006927516810158023,
                   "solve": {
-                    "elapsedMs": 129.50987499999997,
+                    "elapsedMs": 78.176083,
                     "iterations": 247,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.51760935399758e-8
@@ -365,7 +359,7 @@
                   "travel": 0.007731248539523479,
                   "peakStrain": 0.013855033620316046,
                   "solve": {
-                    "elapsedMs": 149.28754100000003,
+                    "elapsedMs": 75.62737500000003,
                     "iterations": 247,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.51760935399758e-8
@@ -482,7 +476,7 @@
                   "travel": 0.011596872809285995,
                   "peakStrain": 0.0207825504327773,
                   "solve": {
-                    "elapsedMs": 120.95212500000002,
+                    "elapsedMs": 61.205832999999984,
                     "iterations": 247,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.474364144086703e-8
@@ -803,7 +797,7 @@
                   "travel": 0.030924994158093917,
                   "peakStrain": 0.055420134481264184,
                   "solve": {
-                    "elapsedMs": 178.40029100000004,
+                    "elapsedMs": 64.93574999999998,
                     "iterations": 247,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.51760935399758e-8
@@ -1416,7 +1410,7 @@
                   "travel": 0.03287671182187194,
                   "peakStrain": 0.052309806338262245,
                   "solve": {
-                    "elapsedMs": 190.05708400000003,
+                    "elapsedMs": 76.22149999999999,
                     "iterations": 245,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.743343766348927e-8
@@ -2389,7 +2383,7 @@
                   "travel": 0.037609179350774985,
                   "peakStrain": 0.10042780393374025,
                   "solve": {
-                    "elapsedMs": 160.65416699999992,
+                    "elapsedMs": 95.50983399999996,
                     "iterations": 249,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.677803599605806e-8
@@ -4472,7 +4466,7 @@
                   "travel": 0.065125722210507,
                   "peakStrain": 0.1994289233372287,
                   "solve": {
-                    "elapsedMs": 121.31116700000007,
+                    "elapsedMs": 76.85462499999994,
                     "iterations": 274,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.572657681311375e-8
@@ -8811,7 +8805,7 @@
                   "travel": 0.004201884982902406,
                   "peakStrain": 0.007361323700745413,
                   "solve": {
-                    "elapsedMs": 195.02520800000002,
+                    "elapsedMs": 117.50137500000005,
                     "iterations": 415,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.851194188213373e-8
@@ -8928,7 +8922,7 @@
                   "travel": 0.008403769965804811,
                   "peakStrain": 0.014722647401490827,
                   "solve": {
-                    "elapsedMs": 159.93220800000017,
+                    "elapsedMs": 121.4178750000001,
                     "iterations": 415,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.851194188213373e-8
@@ -9045,7 +9039,7 @@
                   "travel": 0.012605654948630028,
                   "peakStrain": 0.0220839710914515,
                   "solve": {
-                    "elapsedMs": 128.0067079999999,
+                    "elapsedMs": 229.0554169999998,
                     "iterations": 415,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.737077863500044e-8
@@ -9391,7 +9385,7 @@
                   "travel": 0.033615079863219245,
                   "peakStrain": 0.05889058960596331,
                   "solve": {
-                    "elapsedMs": 224.7164160000002,
+                    "elapsedMs": 446.48237500000005,
                     "iterations": 415,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.851194188213373e-8
@@ -10364,7 +10358,7 @@
                   "travel": 0.03667320664746878,
                   "peakStrain": 0.07468475200664948,
                   "solve": {
-                    "elapsedMs": 148.07395799999995,
+                    "elapsedMs": 116.47895800000015,
                     "iterations": 419,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.389518597633654e-8
@@ -12147,7 +12141,7 @@
                   "travel": 0.04813768025451216,
                   "peakStrain": 0.1314985060848035,
                   "solve": {
-                    "elapsedMs": 242.43612500000017,
+                    "elapsedMs": 118.62437500000033,
                     "iterations": 441,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.453380739943221e-8
@@ -15290,7 +15284,7 @@
                   "travel": 0.14854547958104225,
                   "peakStrain": 0.3555772341675451,
                   "solve": {
-                    "elapsedMs": 268.7422080000001,
+                    "elapsedMs": 148.11620799999992,
                     "iterations": 549,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.732448819425385e-8
@@ -22478,7 +22472,7 @@
                   "travel": 0.003914523656068809,
                   "peakStrain": 0.00686851741911933,
                   "solve": {
-                    "elapsedMs": 103.61579100000017,
+                    "elapsedMs": 81.08033299999988,
                     "iterations": 246,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.982594257556006e-8
@@ -22595,7 +22589,7 @@
                   "travel": 0.007829047312137618,
                   "peakStrain": 0.01373703483823866,
                   "solve": {
-                    "elapsedMs": 98.52033299999994,
+                    "elapsedMs": 79.7183329999998,
                     "iterations": 246,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.982594257556006e-8
@@ -22712,7 +22706,7 @@
                   "travel": 0.011743570968206836,
                   "peakStrain": 0.020605552257801175,
                   "solve": {
-                    "elapsedMs": 70.32500000000027,
+                    "elapsedMs": 80.17745800000012,
                     "iterations": 246,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.957424534699115e-8
@@ -23058,7 +23052,7 @@
                   "travel": 0.03131618924855047,
                   "peakStrain": 0.05494813935295464,
                   "solve": {
-                    "elapsedMs": 115.17425000000003,
+                    "elapsedMs": 71.24079100000017,
                     "iterations": 246,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.982594257556006e-8
@@ -23671,7 +23665,7 @@
                   "travel": 0.03327361374717835,
                   "peakStrain": 0.05172513506325378,
                   "solve": {
-                    "elapsedMs": 128.5664999999999,
+                    "elapsedMs": 81.06095800000003,
                     "iterations": 246,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.888400177916906e-8
@@ -24824,7 +24818,7 @@
                   "travel": 0.0393581844176047,
                   "peakStrain": 0.09459674536470206,
                   "solve": {
-                    "elapsedMs": 133.747167,
+                    "elapsedMs": 86.575875,
                     "iterations": 253,
                     "iterationBudget": 1200,
                     "relativeResidual": 8.583487061849675e-8
@@ -27125,7 +27119,7 @@
                   "travel": 0.0787296028258335,
                   "peakStrain": 0.20692054036782917,
                   "solve": {
-                    "elapsedMs": 118.46495899999991,
+                    "elapsedMs": 91.11691700000029,
                     "iterations": 283,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.689021352742277e-8
@@ -33083,7 +33077,7 @@
                   "travel": 0.004244109241525517,
                   "peakStrain": 0.007301215230116265,
                   "solve": {
-                    "elapsedMs": 177.73054200000024,
+                    "elapsedMs": 125.34625000000005,
                     "iterations": 411,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.424129896561534e-8
@@ -33200,7 +33194,7 @@
                   "travel": 0.008488218483051034,
                   "peakStrain": 0.01460243046023253,
                   "solve": {
-                    "elapsedMs": 207.32658300000003,
+                    "elapsedMs": 115.16829199999984,
                     "iterations": 411,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.424129896561534e-8
@@ -33317,7 +33311,7 @@
                   "travel": 0.012732327724525962,
                   "peakStrain": 0.021903645691319466,
                   "solve": {
-                    "elapsedMs": 159.9717499999997,
+                    "elapsedMs": 113.7805000000003,
                     "iterations": 411,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.463472309674747e-8
@@ -33663,7 +33657,7 @@
                   "travel": 0.033952873932204135,
                   "peakStrain": 0.05840972184093012,
                   "solve": {
-                    "elapsedMs": 167.95191700000032,
+                    "elapsedMs": 124.89637499999981,
                     "iterations": 411,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.424129896561534e-8
@@ -34666,7 +34660,7 @@
                   "travel": 0.03718176267621081,
                   "peakStrain": 0.07454685082815853,
                   "solve": {
-                    "elapsedMs": 176.28204199999982,
+                    "elapsedMs": 112.44075000000021,
                     "iterations": 415,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.395477910000548e-8
@@ -36489,7 +36483,7 @@
                   "travel": 0.04929390548034086,
                   "peakStrain": 0.13493987560075082,
                   "solve": {
-                    "elapsedMs": 217.2444999999998,
+                    "elapsedMs": 120.32079199999998,
                     "iterations": 436,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.530011530260772e-8
@@ -39872,7 +39866,7 @@
                   "travel": 0.1490730509083688,
                   "peakStrain": 0.32264416631816545,
                   "solve": {
-                    "elapsedMs": 218.42512499999975,
+                    "elapsedMs": 155.7538330000002,
                     "iterations": 537,
                     "iterationBudget": 1200,
                     "relativeResidual": 9.731045615372096e-8
