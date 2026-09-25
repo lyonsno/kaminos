@@ -73,7 +73,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
-  let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false;
+  let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false, inspectionView='surface';
   let opticalOptions={};
   const onGpuError=event=>{failure=event.error?.message || 'Host WebGPU error';};
   device.addEventListener('uncapturederror',onGpuError);
@@ -140,7 +140,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         sceneDepth:attachment('host-depth',depthTarget,{format:'r32float',encoding:'linear_view_depth_meters'}),
         environment:attachment('host-environment',environmentTarget,{format:'rgba16float',mapping:'equirectangular_world_radiance'}),
         target:attachment('host-liquid-output',outputTarget,{format:'rgba16float',colorSpace:'linear_hdr'})};
-      solver.render({...opticalOptions,hostFrame,externalCamera:cameraSnapshot});
+      solver.render({...opticalOptions,particleDebugView:inspectionView==='particles',hostFrame,externalCamera:cameraSnapshot});
       device.queue.submit([commandEncoder.finish()]);
       renderer.setRenderTarget(previousTarget); presentation.render();
       frameCount=generation;
@@ -213,6 +213,11 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       authored=next; syncSource();
     },
     setPaused(value){paused=Boolean(value);return paused;},
+    setInspectionView(value){
+      if(value!=='surface'&&value!=='particles')throw Error(`Unsupported local liquid inspection view: ${value}`);
+      inspectionView=value;return inspectionView;
+    },
+    get inspectionView(){return inspectionView;},
     setOpticalOptions(options={}) {
       if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw Error('Local liquid optical options must be an object');
@@ -227,7 +232,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         interfaceFrequencyMode:resolveFingerFluidInterfaceFrequencyMode};
       for(const [key,value] of Object.entries(options)) {
         if(typeof value!=='string'||validators[key](value)!==value)throw Error(`Invalid local liquid ${key}: ${value}`);
-        if(key==='rendererMode'&&value!=='screen_space_refraction'&&value!=='sphere_debug') {
+        if(key==='rendererMode'&&value!=='screen_space_refraction') {
           throw Error(`Unsupported local liquid rendererMode for the mounted host: ${value}`);
         }
       }
@@ -237,7 +242,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     get opticalOptions(){return structuredClone(opticalOptions);},
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
-      frameCount,paused,failure,setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
+      frameCount,paused,inspectionView,failure,setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
     dispose() {
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});

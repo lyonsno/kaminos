@@ -13839,6 +13839,7 @@ export async function createWebGPUFingerFluidSolver({
   let lastFrameDynamicToyMeshDrawCount = 0;
   let lastFrameParticleDrawCount = 0;
   let lastParticleVisibility = 'visible';
+  let lastParticleDebugView = false;
   let lastHostFrameCompositionEvidence = null;
   let lastEffectiveRendererMode = safeRendererMode;
   let lastRequestedRendererMode = safeRendererMode;
@@ -14429,6 +14430,7 @@ export async function createWebGPUFingerFluidSolver({
     externalCamera = null,
     hostFrame = null,
     particleVisibility = 'visible',
+    particleDebugView = false,
   } = {}) {
     if (runtimeLifecycle.stopped) return;
     lastHostFrameCompositionEvidence = null;
@@ -14484,19 +14486,25 @@ export async function createWebGPUFingerFluidSolver({
     const resolvedBodyTransportMode = resolveFingerFluidBodyTransportMode(requestedBodyTransportMode);
     const requestedInterfaceFrequencyMode = String(interfaceFrequencyMode || safeInterfaceFrequencyMode);
     const resolvedInterfaceFrequencyMode = resolveFingerFluidInterfaceFrequencyMode(requestedInterfaceFrequencyMode);
-    const effectiveOpticalLightingMode = effectiveRendererMode === 'screen_space_refraction'
+    if (typeof particleDebugView !== 'boolean') {
+      throw new Error('Finger fluid particleDebugView must be a boolean');
+    }
+    if (particleDebugView && !validatedHostFrame) {
+      throw new Error('Finger fluid particleDebugView requires a validated host frame');
+    }
+    const effectiveOpticalLightingMode = !particleDebugView && effectiveRendererMode === 'screen_space_refraction'
       ? resolvedOpticalLightingMode
       : 'not_executed';
-    const effectiveOpticalFootprintMode = effectiveRendererMode === 'screen_space_refraction'
+    const effectiveOpticalFootprintMode = !particleDebugView && effectiveRendererMode === 'screen_space_refraction'
       ? resolvedOpticalFootprintMode
       : 'not_executed';
-    const effectiveTransmissionFootprintMode = effectiveRendererMode === 'screen_space_refraction'
+    const effectiveTransmissionFootprintMode = !particleDebugView && effectiveRendererMode === 'screen_space_refraction'
       ? resolvedTransmissionFootprintMode
       : 'not_executed';
-    const effectiveBodyTransportMode = effectiveRendererMode === 'screen_space_refraction'
+    const effectiveBodyTransportMode = !particleDebugView && effectiveRendererMode === 'screen_space_refraction'
       ? resolvedBodyTransportMode
       : 'not_executed';
-    const effectiveInterfaceFrequencyMode = effectiveRendererMode === 'screen_space_refraction'
+    const effectiveInterfaceFrequencyMode = !particleDebugView && effectiveRendererMode === 'screen_space_refraction'
       ? resolvedInterfaceFrequencyMode
       : 'not_executed';
     const renderFrameId = directRenderFrameCount + 1;
@@ -14505,6 +14513,7 @@ export async function createWebGPUFingerFluidSolver({
     }
     lastRequestedRendererMode = requestedRendererMode;
     lastEffectiveRendererMode = effectiveRendererMode;
+    lastParticleDebugView = particleDebugView;
     lastOpticalDebugMode = effectiveOpticalDebugMode;
     lastRequestedOpticalLightingMode = requestedOpticalLightingMode;
     lastEffectiveOpticalLightingMode = effectiveOpticalLightingMode;
@@ -14764,18 +14773,22 @@ export async function createWebGPUFingerFluidSolver({
     }
     }
 
-    if (effectiveRendererMode === 'sphere_debug') {
+    if (effectiveRendererMode === 'sphere_debug' || particleDebugView) {
       const pass = encoder.beginRenderPass({
-        label: KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
+        label: particleDebugView
+          ? `${KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE}:local-host-inspection-overlay`
+          : KAMINOS_FINGER_FLUID_SPHERE_DEBUG_RENDERER_ROUTE,
         colorAttachments: [{
           view: linearSceneRadianceView,
           clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          loadOp: liquidSupportDiagnostic ? 'clear' : 'load',
+          loadOp: validatedHostFrame ? 'load' : liquidSupportDiagnostic ? 'clear' : 'load',
           storeOp: 'store',
         }],
         depthStencilAttachment: {
           view: depthTexture.createView(),
-          depthLoadOp: 'load',
+          ...(validatedHostFrame
+            ? { depthClearValue: 1, depthLoadOp: 'clear' }
+            : { depthLoadOp: 'load' }),
           depthStoreOp: 'store',
         },
       });
@@ -15733,6 +15746,7 @@ export async function createWebGPUFingerFluidSolver({
       effectivePresentationMode: safePresentationMode,
       requestedRendererMode: lastRequestedRendererMode,
       effectiveRendererMode: lastEffectiveRendererMode,
+      particleDebugView: lastParticleDebugView,
       requestedRenderer: rendererRouteForMode(lastRequestedRendererMode),
       effectiveRenderer: rendererRouteForMode(lastEffectiveRendererMode),
       fallbackReason: lastRendererFallbackReason,

@@ -2671,7 +2671,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <h2 id="finger-fluid-tab-title">Finger Fluid</h2>
     <div class="panel" id="finger-fluid-inspection-controls">
       <div class="field"><span class="field-key">Inspect</span><span class="field-val" id="finger-fluid-inspection-target">Fluid bench</span></div>
-      <p class="finger-fluid-inspection-note">Freeze the particles, then switch between the rendered surface and particle view. The camera stays live so you can compare the same state from different angles.</p>
+      <p class="finger-fluid-inspection-note">Freeze water, then compare its rendered surface with the same particles drawn as spheres. The camera stays live; particle view overlays the host scene.</p>
       <div class="finger-fluid-inspection-actions">
         <button class="btn" id="finger-fluid-inspection-pause" type="button" aria-pressed="false">Freeze water</button>
       </div>
@@ -3215,6 +3215,7 @@ function localLiquidInspectionActive() {
 }
 function currentFingerFluidInspectionMode() {
   if (localLiquidInspectionActive()) {
+    if (localLiquidHost.inspectionView === 'particles') return 'sphere_debug';
     return localLiquidHost.opticalOptions.rendererMode
       || localLiquidHost.state().solver.effectiveRendererMode
       || 'screen_space_refraction';
@@ -3251,11 +3252,13 @@ function updateFingerFluidInspectionControls() {
       const solver = localState.solver || {};
       const step = solver.stepCount ?? 'unknown';
       const phase = paused ? 'frozen' : 'running';
-      status.textContent = `Local authored water · ${phase} at step ${step} · ${isParticleView ? 'particle view' : 'surface view'}`;
+      status.textContent = `Local authored water · ${phase} at step ${step} · ${isParticleView ? 'particle overlay' : 'surface view'}`;
       if (benchStatus) benchStatus.textContent = phase;
       if (benchSolver) benchSolver.textContent = solver.solver_backend === 'webgpu_compute' ? 'WebGPU compute' : (solver.solver_backend || 'pending');
       if (requestedRenderer) requestedRenderer.textContent = localLiquidHost.opticalOptions.rendererMode || 'screen_space_refraction';
-      if (effectiveRenderer) effectiveRenderer.textContent = solver.effectiveRendererMode || 'pending';
+      if (effectiveRenderer) effectiveRenderer.textContent = localState.inspectionView === 'particles'
+        ? 'host frame + particle overlay (surface composite skipped)'
+        : (solver.effectiveRendererMode || 'pending');
     } else if (localLiquidFailure) {
       status.textContent = `Local authored water failed: ${localLiquidFailure}`;
       if (benchStatus) benchStatus.textContent = 'failed';
@@ -3299,19 +3302,17 @@ function toggleFingerFluidInspectionPause() {
   updateFingerFluidInspectionControls();
 }
 function setFingerFluidInspectionView(view) {
+  if (localLiquidInspectionActive()) {
+    localLiquidHost.setInspectionView(view === 'particles' ? 'particles' : 'surface');
+    updateFingerFluidInspectionControls();
+    return;
+  }
   const rendererMode = view === 'particles'
     ? 'sphere_debug'
-    : localLiquidInspectionActive()
-      ? 'screen_space_refraction'
-      : fingerFluidBenchConfig?.effectiveRendererMode === 'sphere_debug'
-        ? 'screen_space_surface'
-        : (fingerFluidBenchConfig?.effectiveRendererMode || 'screen_space_surface');
-  if (localLiquidInspectionActive()) {
-    localLiquidHost.setOpticalOptions({
-      ...localLiquidHost.opticalOptions,
-      rendererMode,
-    });
-  } else if (!localLiquidInspectionRequested()) {
+    : fingerFluidBenchConfig?.effectiveRendererMode === 'sphere_debug'
+      ? 'screen_space_surface'
+      : (fingerFluidBenchConfig?.effectiveRendererMode || 'screen_space_surface');
+  if (!localLiquidInspectionRequested()) {
     fingerFluidBenchInteractiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
   }
   updateFingerFluidInspectionControls();
