@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { normalizeBurner } from '../annular-burner.mjs';
+import { volumeSettingsPresetControlValuesEqual } from '../volume-settings-preset-contract.mjs';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const between = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
@@ -9,7 +10,7 @@ let intensity = 1;
 const gainControl = { value: '0' };
 const geometryControl = { checked: false };
 const context = vm.createContext({
-  burnerRecipe: null, normalizeBurner,
+  burnerRecipe: null, normalizeBurner, activeVolumeSettingsPresetReceipt: null, volumeSettingsPresetControlValuesEqual,
   volumePrototype: { debugState: () => ({ active: true }) }, activeSceneComposition: null,
   isFireLightFieldRoute: () => true, volumeCockpitLayoutReady: Promise.resolve(),
   buildVolumeSettingsPreset: () => ({ savedAt: new Date().toISOString(), domControls: { intensity }, rendererControls: {}, presentationControls: {}, route: 'exact' }),
@@ -33,6 +34,19 @@ context.burnerRecipe = { schema: 'kaminos.annular-burner.v1', ringCount: 24 };
 const burnerUnchanged = await vm.runInContext('collectSceneComposition()', context);
 context.burnerRecipe.ringCount = 8;
 assert.throws(burnerUnchanged, /changed/, 'burner edits before sampling must reject the earlier saved recipe');
+context.burnerRecipe = null;
+// An unchanged loaded basin keeps its authored identity without writing a projected copy.
+let writes = 0;
+context.saveVolumeSettingsPreset = async () => { writes += 1; return { effective: { presetId: 'projected', label: 'Projected' } }; };
+context.activeVolumeSettingsPresetReceipt = { presetId: 'authored', label: 'Authored',
+  preset: { domControls: { intensity }, rendererControls: {}, presentationControls: {} } };
+await vm.runInContext('collectSceneComposition()', context);
+assert.equal(writes, 0, 'unchanged loaded basin is not re-saved');
+assert.equal(vm.runInContext('activeSceneComposition.flame.presetId', context), 'authored');
+intensity = 3;
+await vm.runInContext('collectSceneComposition()', context);
+assert.equal(writes, 1, 'an edited basin is written');
+assert.equal(vm.runInContext('activeSceneComposition.flame.presetId', context), 'projected');
 
 const empty = vm.createContext({ sceneObjects: [], volumePrimitives: [],
   volumePrototype: { debugState: () => ({ active: true }) }, isFireLightFieldRoute: () => false });

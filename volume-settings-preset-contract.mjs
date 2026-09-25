@@ -344,6 +344,33 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
   });
 }
 
+// Preset content identity is the per-control value (rawValue when present,
+// otherwise value) on the DOM, renderer, and presentation axes, as hashed by
+// serve.py. Equal values on every axis are the same basin under the current
+// schema, regardless of control order or descriptor metadata.
+function presetControlValues(controls) {
+  return Object.fromEntries(Object.entries(controls || {}).map(([key, descriptor]) => [
+    key,
+    descriptor === null || typeof descriptor !== 'object'
+      ? descriptor
+      : (Object.hasOwn(descriptor, 'rawValue') ? descriptor.rawValue : descriptor.value),
+  ]));
+}
+
+export function volumeSettingsPresetControlValuesEqual(left, right) {
+  if (!left || !right) return false;
+  for (const axis of ['domControls', 'rendererControls', 'presentationControls']) {
+    const leftValues = presetControlValues(left[axis]);
+    const rightValues = presetControlValues(right[axis]);
+    const keys = Object.keys(leftValues);
+    if (keys.length !== Object.keys(rightValues).length) return false;
+    for (const key of keys) {
+      if (!Object.hasOwn(rightValues, key) || JSON.stringify(leftValues[key]) !== JSON.stringify(rightValues[key])) return false;
+    }
+  }
+  return true;
+}
+
 export function buildVolumeSettingsPresetTarget(receipt, origin) {
   const target = new URL('/', origin);
   for (const [key, value] of receipt.routeEntries) target.searchParams.set(key, value);

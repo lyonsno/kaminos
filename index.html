@@ -3244,6 +3244,7 @@ import {
   validateVolumeSettingsPresetDocument,
   validateVolumeSettingsPresetIndex,
   validateVolumeSettingsPresetTarget,
+  volumeSettingsPresetControlValuesEqual,
 } from './volume-settings-preset-contract.mjs';
 import {
   collectVolumeCockpitControlElements,
@@ -26076,7 +26077,15 @@ async function collectSceneComposition() {
       throw new Error('Flame settings changed during save or capture; try again');
     }
   };
-  const receipt = await saveVolumeSettingsPreset({ preset });
+  // An unchanged loaded basin keeps its authored identity. Content identity
+  // covers the current schema's full control list, so re-saving a basin
+  // authored before the schema grew mints a projected copy under a new id and
+  // would silently repoint this scene and the basin's label alias to it.
+  const basin = activeVolumeSettingsPresetReceipt
+    && volumeSettingsPresetControlValuesEqual(preset, activeVolumeSettingsPresetReceipt.preset)
+    ? { presetId: activeVolumeSettingsPresetReceipt.presetId,
+      label: activeVolumeSettingsPresetReceipt.label || activeVolumeSettingsPresetReceipt.presetId }
+    : (await saveVolumeSettingsPreset({ preset })).effective;
   assertUnchanged();
   const route = {};
   for (const [key, value] of fireLightFieldRouteParams()) {
@@ -26087,7 +26096,7 @@ async function collectSceneComposition() {
   route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';
   activeSceneComposition = {
     schema: COMPOSITION_SCHEMA,
-    flame: { presetId: receipt.effective.presetId, label: receipt.effective.label, stationary: true },
+    flame: { presetId: basin.presetId, label: basin.label, stationary: true },
     route,
     lightGainStops: Number(document.getElementById('fire-light-gain-stops').value),
     ...(burnerRecipe ? { burner: normalizeBurner(burnerRecipe) } : {}),
