@@ -519,6 +519,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .basin-drive-icon-replay::after { content: ""; position: absolute; left: -3px; top: -3px; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-right: 5px solid #8fc7d6; transform: rotate(35deg); }
 #basin-drive-state { min-height: 28px; color: #8fc7d6; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; user-select: text; }
 #basin-drive-state.failed { color: #e0a0a0; }
+#volume-view-capture-status { min-width: 0; flex: 1; min-height: 24px; color: #8fc7d6; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; user-select: text; }
+#volume-view-capture-status.failed { color: #e0a0a0; }
 .volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
 #volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
@@ -1114,6 +1116,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="volume-cockpit-layout-toolbar-row">
         <span id="volume-cockpit-layout-status" role="status" aria-live="polite">connecting…</span>
+      </div>
+      <div class="volume-cockpit-layout-toolbar-row">
+        <button id="volume-view-capture" type="button">Capture View</button>
+        <button id="volume-view-restore" type="button">Restore View</button>
+        <input id="volume-view-restore-input" type="file" accept="application/json,.json" hidden>
+        <span id="volume-view-capture-status" role="status" aria-live="polite">No captured view</span>
       </div>
     </div>
     <h2>Volume Renderer</h2>
@@ -19072,6 +19080,180 @@ function frameVolumeCamera() {
   window._kaminosDirty?.();
 }
 
+function volumeViewCaptureStatus(message, failed = false) {
+  const status = document.getElementById('volume-view-capture-status');
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle('failed', failed);
+}
+
+function volumeViewCameraState() {
+  camera.updateMatrixWorld?.();
+  return {
+    type: camera.type,
+    position: camera.position.toArray(),
+    target: controls.target.toArray(),
+    up: camera.up.toArray(),
+    fov: camera.fov,
+    aspect: camera.aspect,
+    near: camera.near,
+    far: camera.far,
+    zoom: camera.zoom,
+  };
+}
+
+function volumeViewFilename(label, simStepCount, extension) {
+  const slug = String(label || 'volume-view')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48) || 'volume-view';
+  return `kaminos-${slug}-s${simStepCount}${extension ? `.${extension}` : ''}`;
+}
+
+function downloadVolumeViewArtifact(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function captureVolumeViewEvidence() {
+  if (!volumePrototype?.debugState?.().active) throw new Error('Volume renderer is inactive');
+  const initial = volumePrototype.debugState();
+  const wasSimulationPaused = initial.simulationPaused === true;
+  const wasRenderPaused = initial.selectiveHeadLiveCapturePaused === true;
+  const controlsWereEnabled = controls.enabled;
+  const captureId = `operator-view-${crypto.randomUUID()}`;
+  let before;
+  let cameraState;
+  let frame;
+  volumePrototype.setSimulationPaused(true);
+  volumePrototype.setSelectiveHeadLiveCapturePaused(true);
+  controls.enabled = false;
+  try {
+    before = volumePrototype.debugState();
+    cameraState = volumeViewCameraState();
+    frame = await volumePrototype.sampleFrame({
+      advanceSim: false,
+      includeRgba: true,
+      now: performance.now(),
+      sameStateCaptureId: captureId,
+      baseFrameCount: before.frameCount,
+      baseSimStepCount: before.simStepCount,
+    });
+    if (frame.simStepCount !== before.simStepCount) throw new Error('Capture unexpectedly advanced the simulation');
+    if (JSON.stringify(volumeViewCameraState()) !== JSON.stringify(cameraState)) throw new Error('Camera moved during capture');
+  } finally {
+    controls.enabled = controlsWereEnabled;
+    volumePrototype.setSimulationPaused(wasSimulationPaused);
+    volumePrototype.setSelectiveHeadLiveCapturePaused(wasRenderPaused);
+  }
+  const rgba = frame.image?.rgba;
+  if (!frame.ok || (!Array.isArray(rgba) && !ArrayBuffer.isView(rgba))) throw new Error(`Renderer frame capture failed: ${frame.reason || 'RGBA unavailable'}`);
+  const pixelCount = frame.width * frame.height;
+  if (!Number.isSafeInteger(pixelCount) || rgba.length !== pixelCount * 4) throw new Error('Renderer frame capture is partial');
+  if (!rgba.some((value, index) => index % 4 !== 3 && value !== 0)) throw new Error('Renderer frame capture is blank');
+
+  const canvas = document.createElement('canvas');
+  canvas.width = frame.width;
+  canvas.height = frame.height;
+  const context = canvas.getContext('2d', { alpha: false });
+  if (!context) throw new Error('PNG encoder canvas is unavailable');
+  const image = context.createImageData(frame.width, frame.height);
+  image.data.set(rgba);
+  context.putImageData(image, 0, 0);
+  const png = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('PNG encoding failed')), 'image/png'));
+  const pngHash = await crypto.subtle.digest('SHA-256', await png.arrayBuffer());
+  const pngSha256 = Array.from(new Uint8Array(pngHash), byte => byte.toString(16).padStart(2, '0')).join('');
+  const route = new URL(window.location.href);
+  const presetId = route.searchParams.get('settings_preset');
+  let sourceIdentity = null;
+  let sourceIdentityFailure = null;
+  try {
+    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
+    if (!response.ok) {
+      sourceIdentityFailure = `runtime-config-http-${response.status}`;
+    } else {
+      const runtime = await response.json();
+      sourceIdentity = runtime.source ? {
+        repoRoot: runtime.source.repoRoot || null,
+        branch: runtime.source.branch || null,
+        commit: runtime.source.commit || null,
+        dirty: runtime.source.dirty ?? null,
+        serverPort: runtime.source.serverPort ?? null,
+      } : null;
+      if (!sourceIdentity?.commit) sourceIdentityFailure = 'runtime-source-identity-missing';
+    }
+  } catch (error) {
+    sourceIdentityFailure = String(error?.message || error);
+  }
+  const receipt = {
+    schema: 'kaminos.volume-view-capture.v0',
+    capturedAt: new Date().toISOString(),
+    captureId,
+    frame: { filename: volumeViewFilename(presetId || 'volume-view', before.simStepCount, 'png'), sha256: pngSha256, width: frame.width, height: frame.height },
+    source: {
+      url: window.location.href,
+      presetId,
+      requestedRoute: route.searchParams.get('kaminos_volume_smoke') || null,
+      runtimeIdentityStatus: sourceIdentity?.commit ? 'reported-by-runtime-config' : 'unverified',
+      runtimeIdentityFailure: sourceIdentityFailure,
+      runtimeIdentity: sourceIdentity,
+    },
+    camera: cameraState,
+    basinControls: readVolumeDomControls(),
+    rendererControls: readVolumeRendererControls(),
+    presentationControls: readVolumeSettingsPresentationControls(),
+    renderer: {
+      requestedRoute: before.routeIdentity || 'native-3d-compute-fluid-raymarch-v0',
+      effectiveRoute: frame.effectiveRoute,
+      backend: frame.backend,
+      simGrid: before.simGrid,
+      frameCountBeforeCapture: before.frameCount,
+      frameCountAfterCapture: frame.frameCount,
+      simStepCount: frame.simStepCount,
+      sameStateCaptureId: captureId,
+      imageAuthority: 'gpu-volume-frame-rgba8-capture-no-simulation-step-v0',
+      cameraRestorable: true,
+      simulationRestorable: false,
+    },
+  };
+  const baseName = volumeViewFilename(presetId || 'volume-view', before.simStepCount, '');
+  downloadVolumeViewArtifact(png, `${baseName}.png`);
+  downloadVolumeViewArtifact(new Blob([JSON.stringify(receipt, null, 2)], { type: 'application/json' }), `${baseName}.json`);
+  volumeViewCaptureStatus(`Captured ${receipt.frame.width}x${receipt.frame.height} | sim step ${frame.simStepCount} | PNG + view JSON`);
+  return receipt;
+}
+
+function restoreVolumeViewEvidence(receipt) {
+  if (receipt?.schema !== 'kaminos.volume-view-capture.v0') throw new Error('Unsupported view receipt schema');
+  const activePresetId = new URL(window.location.href).searchParams.get('settings_preset');
+  if (receipt.source?.presetId !== activePresetId) throw new Error('View receipt belongs to a different or unsaved basin');
+  const pose = receipt.camera;
+  const validVector = value => Array.isArray(value) && value.length === 3 && value.every(Number.isFinite);
+  if (pose?.type !== camera.type || !validVector(pose.position) || !validVector(pose.target) || !validVector(pose.up)
+    || Math.hypot(...pose.position.map((value, index) => value - pose.target[index])) === 0
+    || Math.hypot(...pose.up) === 0
+    || ![pose.fov, pose.near, pose.far, pose.zoom].every(Number.isFinite)
+    || pose.fov <= 0 || pose.fov >= 180 || pose.near <= 0 || pose.far <= pose.near || pose.zoom <= 0) {
+    throw new Error('View receipt camera is invalid');
+  }
+  camera.position.fromArray(pose.position);
+  camera.up.fromArray(pose.up);
+  camera.fov = pose.fov;
+  camera.near = pose.near;
+  camera.far = pose.far;
+  camera.zoom = pose.zoom;
+  controls.target.fromArray(pose.target);
+  camera.updateProjectionMatrix();
+  controls.update();
+  window._kaminosDirty?.();
+  return { restored: true, simStepCount: receipt.renderer?.simStepCount ?? null };
+}
+
 function createVolumeMainRendererBridge() {
   const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
   sourceTexture.colorSpace = THREE.SRGBColorSpace;
@@ -21025,6 +21207,32 @@ async function initKaminosVolumeRoute() {
     refreshVolumeReadout();
   });
   document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
+  document.getElementById('volume-view-capture')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    volumeViewCaptureStatus('Capturing frozen renderer frame...');
+    try {
+      await captureVolumeViewEvidence();
+    } catch (error) {
+      volumeViewCaptureStatus(`CAPTURE FAILED | ${error.message || error}`, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+  const restoreViewInput = document.getElementById('volume-view-restore-input');
+  document.getElementById('volume-view-restore')?.addEventListener('click', () => restoreViewInput?.click());
+  restoreViewInput?.addEventListener('change', async () => {
+    const file = restoreViewInput.files?.[0];
+    if (!file) return;
+    try {
+      const restored = restoreVolumeViewEvidence(JSON.parse(await file.text()));
+      volumeViewCaptureStatus(`Camera restored | source sim step ${restored.simStepCount ?? 'unknown'} (fluid state unchanged)`);
+    } catch (error) {
+      volumeViewCaptureStatus(`RESTORE FAILED | ${error.message || error}`, true);
+    } finally {
+      restoreViewInput.value = '';
+    }
+  });
 
   let syntheticEmitterTimer = 0;
   const refreshSyntheticExternalEmitters = () => {
