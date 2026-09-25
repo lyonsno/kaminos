@@ -2671,7 +2671,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <h2 id="finger-fluid-tab-title">Finger Fluid</h2>
     <div class="panel" id="finger-fluid-inspection-controls">
       <div class="field"><span class="field-key">Inspect</span><span class="field-val" id="finger-fluid-inspection-target">Fluid bench</span></div>
-      <p class="finger-fluid-inspection-note">Freeze water, then compare its rendered surface with the same particles drawn as spheres. The camera stays live; particle view overlays the host scene.</p>
+      <p class="finger-fluid-inspection-note">Freeze water, then compare its rendered surface with the same particles drawn as spheres. The camera stays live; spheres overlay the host scene without host-geometry occlusion.</p>
       <div class="finger-fluid-inspection-actions">
         <button class="btn" id="finger-fluid-inspection-pause" type="button" aria-pressed="false">Freeze water</button>
       </div>
@@ -3257,7 +3257,7 @@ function updateFingerFluidInspectionControls() {
       if (benchSolver) benchSolver.textContent = solver.solver_backend === 'webgpu_compute' ? 'WebGPU compute' : (solver.solver_backend || 'pending');
       if (requestedRenderer) requestedRenderer.textContent = localLiquidHost.opticalOptions.rendererMode || 'screen_space_refraction';
       if (effectiveRenderer) effectiveRenderer.textContent = localState.inspectionView === 'particles'
-        ? 'host frame + particle overlay (surface composite skipped)'
+        ? 'host frame + particle overlay (surface composite and host depth skipped)'
         : (solver.effectiveRendererMode || 'pending');
     } else if (localLiquidFailure) {
       status.textContent = `Local authored water failed: ${localLiquidFailure}`;
