@@ -40,6 +40,9 @@ test('selection feedback hides untrustworthy offscreen pivots and names the reco
   assert.match(editTools, /new ResizeObserver\(\(\) => draw\(\)\)/);
   assert.match(html, /#info-bar \{[^}]*max-width:min\(560px,calc\(100% - 32px\)\)[^}]*overflow-wrap:anywhere/);
   assert.match(html, /#scene-edit-hud\[data-alert="true"\] \{[^}]*overflow-wrap:anywhere/);
-  assert.match(html, /renderPipeline\.outputNode = scenePass\.mul\(vec4\(vec3\(aoOutput\), 1\)\)/);
+  // Selection feedback stays out of the lit output: AO is applied as indirect-only
+  // scene context and the output is that scene (or the fire light-field receiver over it).
+  assert.match(html, /scenePass\.contextNode = builtinAOContext\(aoOutput\)/);
+  assert.match(html, /const baseSceneOutput = scenePass;[\s\S]*?renderPipeline\.outputNode = baseSceneOutput;/);
   assert.doesNotMatch(html, /createSelectionFeedback|selectionFeedback\.output/);
 });

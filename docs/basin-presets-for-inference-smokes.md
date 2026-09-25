@@ -113,3 +113,45 @@ For a useful cooperative smoke, retain: basin ID/revision and source commits; re
 ## GPU access versus in-page scheduling
 
 In this shop, consult the [GPU Greenroom README](https://github.com/lyonsno/gpu-greenroom#cooperative-external-leases-and-bumps) before agent-run GPU smokes. Its external lease/bump protocol coordinates machine access with other agents. The inference kit's cooperative scheduler coordinates fire and model duties **inside the admitted workload**. Neither replaces the other. An operator-authorized visual check is not automatically an isolated timing benchmark; HTTP-only import/mount checks need no rendering run.
+
+## Stationary flame composition authoring
+
+The existing Assets editor can position registered meshes around a stationary ordinary emissive flame. Add `#authoring=1&volume_light_field=1&volume_light_field_scene_depth=1&volume_light_field_test_scene=0` to the immutable-preset loader URL. This uses the ordinary depth/light-field bridge, not the caller-product renderer. The flame's world transform is fixed; use the object inspector or gizmos for mesh placement and the existing camera/environment controls for the shot.
+
+The Composition section provides a shot label, Capture, Basins, Library, and inspection-ground visibility/height. Save overwrites the current scene; Save As and Capture create distinct scene files. Capture samples the mesh and ordinary volume canvases in one animation callback, omits the transform gizmo, and embeds a PNG with its label, timestamp, dimensions, and simulation-frame metadata. Library thumbnails reopen the saved settings. They do not replay the captured fluid instant. Splat-overlay captures and alternate volume renderer captures are explicitly unsupported in this first slice.
+
+Scene version5 retains the existing `kaminos.scene.v1` object/camera/environment contract and adds:
+
+```json
+{
+  "composition": {
+    "schema": "kaminos.stationary-flame-composition.v1",
+    "flame": { "presetId": "vsp-<64 lowercase hex digits>", "label": "Authored basin", "stationary": true },
+    "route": { "volume_light_field": "1", "volume_light_field_scene_depth": "1", "volume_light_field_test_scene": "0" },
+    "lightGainStops": 0
+  },
+  "capture": null
+}
+```
+
+Use `buildSceneDocument()` from `scene-persistence-core.js` to create a full document, POST it to `/api/save-scene`, and pass the returned `saved` filename to `compositionRestoreUrl(composition, filename, origin)` from `scene-authoring.mjs`. This is the same document and persistence API used by the UI. A capture lives inside that scene document rather than in a separate mutable thumbnail record. `window.captureComposition()`, `window.saveScene()`, and `window.saveSceneAs()` return promises of success. Missing/mismatched presets and failed restoration block saves instead of silently adopting another basin. Settings edited during an asynchronous capture reject that capture.
+
+Choose durable stores independently of the checkout:
+
+```sh
+KAMINOS_SCENES_DIR=/absolute/path/to/compositions \
+KAMINOS_VOLUME_SETTINGS_STORE=/absolute/path/to/basins \
+python3 serve.py 8106
+```
+
+Reopening also requires the same registered asset sources. Moving the JSON alone does not bundle its GLBs, environment assets, or immutable basin artifact. `/api/roots` and `/api/volume-settings-presets` report effective stores; `/api/runtime-config` reports the served checkout. Existing mesh-only documents remain loadable and leave the pinned flame route when opened from an authored composition.
+
+### Parameterized annular burner
+
+The Assets editor's Burner section adds a fixed concentric bed beneath an ordinary ring emitter. Bed dimensions, ring/sector counts, groove proportions, tessellation, material colors and channel glow/cooling are saved as optional `composition.burner` data with schema `kaminos.annular-burner.v1`. The defaults and validation live in `annular-burner.mjs`. Legacy compositions omit the field.
+
+The Flame radius and Flow controls derive their limits and granularity from the existing basin controls. Hardware granularity does not quantize the source radius or create extra simulations. Channel emission follows the effective compiler descriptor and cools after the active band passes; this is a visual cue rather than a thermal simulation. The current flame's radius range is 0.08..0.7 in steps of 0.01; Flow is 0..2.5 in steps of 0.05, with 0 extinguishing it. Geometry is rebuilt for recipe edits, not each animation frame or radius change. Mount height follows the source law: full torus for legacy injection, or its intersection with the depth slab for shallow injection.
+
+Headless callers use `window.kaminosSetBurner(recipe)` and `window.kaminosBurnerState()` on the mounted composition. Passing `null` removes the insert. Unsupported emitter families hide the bed and report `ring-emitter-unavailable`; an insufficient bed radius reports `emitter-outside-bed`. The first mount uses the ordinary renderer's identity unit-box world mapping and upright source, not a freely transformed flame. Save, Save As and Capture retain the same recipe; captured pixels are not an exact replay of residual fluid or channel heat.
+
+`scene-authoring-witness.mjs` exercises the real registered GLB and basin through this UI, validates serving-source identity, records source hashes and effective stores, captures desktop/mobile/library images, and checks a moving volume layer. Required arguments are `--out`, `--playwright` (installed Playwright module path), `--greenroom` (CLI path), `--preset`, and `--mesh` (registered API asset URL); `--origin` defaults to `http://127.0.0.1:8106`. Each run writes `report.json` before work and updates it on success or failure. Run from the checkout actually served. This is authoring evidence, not an inference-cadence benchmark.

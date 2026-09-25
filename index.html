@@ -225,6 +225,9 @@ canvas { display: block; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
 .slider-row input[type="range"] { min-height: 24px; cursor: grab; touch-action: pan-y; }
 .slider-row input[type="range"]:active { cursor: grabbing; }
+.rim-number { width: 66px; min-width: 66px; padding: 4px; color: #ddd; background: #202020; border: 1px solid #444; border-radius: 3px; }
+#rim-controls .slider-label { min-width: 70px; }
+#rim-controls input[type="range"] { min-width: 0; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #1976d2; border-radius: 50%; cursor: pointer; }
 input[type="color"].volume-color-swatch { flex: 1; min-width: 0; height: 24px; padding: 0; border: 1px solid #333; border-radius: 5px; background: #151515; cursor: pointer; }
 input[type="color"].volume-color-swatch::-webkit-color-swatch-wrapper { padding: 2px; }
@@ -514,6 +517,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-readout .field-key { white-space: nowrap; }
 .volume-readout .field-val { max-width: 220px; text-align: right; }
 #volume-settings-preset-state { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; user-select: text; text-align: left; }
+#settings-preset-select { min-width: 0; max-width: 100%; }
 .basin-drive-recorder { display: grid; gap: 6px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #2a2a2a; }
 .basin-drive-recorder-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 30px); gap: 5px; align-items: center; }
 .basin-drive-recorder-mark { display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 5px; align-items: center; }
@@ -642,6 +646,34 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .finger-fluid-oracle-cockpit-readout .field-key { margin-right: 6px; }
 .finger-fluid-oracle-cockpit-readout .field-val { overflow-wrap: anywhere; }
 .finger-fluid-oracle-cockpit-warn { margin-top: 6px; color: #ffcb7c; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
+.authoring-controls { display: grid; gap: 8px; padding: 0 0 12px; border-bottom: 1px solid #383838; }
+.authoring-controls label { font-size: 11px; color: #aaa; }
+#composition-label { min-width: 0; width: 100%; padding: 8px; border: 1px solid #444; border-radius: 4px; background: #242424; color: #eee; font: inherit; font-size: 12px; }
+.authoring-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.authoring-actions .btn { min-height: 32px; margin: 0; }
+.burner-fields { display: grid; gap: 10px; padding: 10px 0; }
+.burner-field { display: grid; grid-template-columns: minmax(0, 1fr) 74px; gap: 5px 10px; align-items: center; }
+.burner-field label { grid-column: 1 / -1; }
+.burner-fields label { font-size: 11px; color: #bbb; overflow-wrap: anywhere; }
+.burner-field input { min-width: 0; width: 100%; box-sizing: border-box; }
+#burner-status { font-size: 11px; color: #d1ac73; overflow-wrap: anywhere; }
+#composition-capture { background: #204538; border-color: #4a7867; color: #e2f8ee; }
+#composition-status { font-size: 11px; line-height: 1.4; color: #a4c4b8; overflow-wrap: anywhere; }
+#composition-status[data-failed="true"] { color: #ffa18e; }
+.saved-scene-shot { margin: 10px 0; border: 1px solid #3d3d3d; border-radius: 4px; overflow: hidden; }
+.saved-scene-picture { display: block; width: 100%; border: 0; background: #101010; cursor: pointer; }
+.saved-scene-picture img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
+.saved-scene-basin { padding: 0 8px 8px; color: #aaa; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.saved-scene-shot .gr-name { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+body.composition-authoring #volume-authored-mix-panel { display: none; }
+body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width: max-content; flex-wrap: wrap; justify-content: center; }
+@media (max-width: 760px) {
+  body.composition-authoring { flex-direction: column-reverse; }
+  body.composition-authoring #sidebar { width: 100%; height: 42%; border-right: 0; border-top: 1px solid #333; }
+  body.composition-authoring #viewport { width: 100%; min-height: 0; }
+  body.composition-authoring #transform-bar { left: 8px; transform: none; width: calc(100% - 16px); max-width: none; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
+  body.composition-authoring #transform-bar > * { flex-shrink: 0; }
+}
 </style>
 </head>
 <body>
@@ -704,6 +736,32 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span>Append</span>
     </label>
 
+    <h2>Composition</h2>
+    <div class="authoring-controls">
+      <label for="composition-label">Shot label</label>
+      <input id="composition-label" type="text" value="Kiln study" autocomplete="off">
+      <div class="authoring-actions">
+        <button type="button" class="btn" id="composition-capture">Capture</button>
+        <button type="button" class="btn" id="composition-basins">Basins</button>
+        <button type="button" class="btn" id="composition-library">Library</button>
+      </div>
+      <div id="composition-status" role="status" aria-live="polite"></div>
+      <label><input id="composition-ground-visible" type="checkbox" checked> Ground</label>
+      <label for="composition-ground-height">Ground height</label>
+      <input id="composition-ground-height" type="number" step="0.05" value="-0.85" class="transform-input">
+    </div>
+
+    <h2>Burner</h2>
+    <label class="import-mode"><input id="burner-enabled" type="checkbox"><span>Annular bed</span></label>
+    <div id="burner-controls" hidden>
+      <div class="burner-fields" id="burner-fields"></div>
+      <div class="burner-fields">
+        <div class="burner-field"><label for="burner-radius">Flame radius</label><input id="burner-radius" type="range"><input id="burner-radius-number" type="number" class="transform-input" aria-label="Flame radius value"></div>
+        <div class="burner-field"><label for="burner-flow">Flow</label><input id="burner-flow" type="range"><input id="burner-flow-number" type="number" class="transform-input" aria-label="Flow value"></div>
+      </div>
+    </div>
+    <div id="burner-status" role="status"></div>
+
     <h2>Scene Objects</h2>
     <div class="panel">
       <div class="scene-object-tools">
@@ -715,6 +773,19 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
       <div id="scene-object-list" class="scene-object-list"></div>
+    </div>
+
+    <h2>Fire Light</h2>
+    <div class="panel">
+      <label class="import-mode">
+        <input type="checkbox" id="fire-light-test-scene-toggle">
+        <span>Test geometry</span>
+      </label>
+      <div class="slider-row">
+        <span class="slider-label">Light gain (stops)</span>
+        <input type="range" id="fire-light-gain-stops" min="-4" max="4" step="0.25" value="0">
+        <span class="slider-val" id="fire-light-gain-stops-val">+0.0</span>
+      </div>
     </div>
 
     <h2>Transform</h2>
@@ -864,6 +935,36 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-label">Blur</span>
       <input type="range" id="env-blur-slider" min="0" max="1" step="0.01" value="0.4">
       <span class="slider-val" id="env-blur-val">0.4</span>
+    </div>
+    <div id="env-backdrop-controls" style="display: none;">
+      <div class="slider-row">
+        <label class="slider-label" for="env-bg-brightness">BG Brightness</label>
+        <input type="range" id="env-bg-brightness" min="0" max="5" step="0.05" value="0.6">
+        <span class="slider-val" id="env-bg-brightness-val">0.60</span>
+      </div>
+      <div class="slider-row">
+        <label class="slider-label" for="env-bg-contrast">BG Contrast</label>
+        <input type="range" id="env-bg-contrast" min="0" max="3" step="0.05" value="1">
+        <span class="slider-val" id="env-bg-contrast-val">1.00</span>
+      </div>
+    </div>
+
+    <button class="btn" id="env-reset" title="Reset this environment's lighting recipe">Reset Map</button>
+
+    <h2>Rim Light</h2>
+    <label><input type="checkbox" id="rim-enabled"> Enabled</label>
+    <div id="rim-controls" hidden>
+      <div class="field"><label for="rim-color">Color</label><input type="color" id="rim-color" value="#d6e5ff"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-intensity">Intensity</label><input type="range" id="rim-intensity" min="0" max="500" step="1" value="120"><input class="rim-number" id="rim-intensity-number" aria-label="Rim intensity" type="number" min="0" step="1" value="120"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-azimuth">Azimuth</label><input type="range" id="rim-azimuth" min="-180" max="180" step="1" value="135"><input class="rim-number" id="rim-azimuth-number" aria-label="Rim azimuth" type="number" step="1" value="135"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-elevation">Elevation</label><input type="range" id="rim-elevation" min="-89" max="89" step="1" value="30"><input class="rim-number" id="rim-elevation-number" aria-label="Rim elevation" type="number" min="-89" max="89" step="1" value="30"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-distance">Distance</label><input type="range" id="rim-distance" min="0.1" max="15" step="0.1" value="6"><input class="rim-number" id="rim-distance-number" aria-label="Rim distance" type="number" min="0.1" step="0.1" value="6"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-angle">Cone Angle</label><input type="range" id="rim-angle" min="1" max="89" step="1" value="35"><input class="rim-number" id="rim-angle-number" aria-label="Rim cone half-angle" type="number" min="1" max="89" step="1" value="35"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-penumbra">Soft Edge</label><input type="range" id="rim-penumbra" min="0" max="1" step="0.01" value="0.65"><input class="rim-number" id="rim-penumbra-number" aria-label="Rim soft edge" type="number" min="0" max="1" step="0.01" value="0.65"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-x">Target X</label><input type="range" id="rim-target-x" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-x-number" aria-label="Rim target X" type="number" step="0.05" value="0"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-y">Target Y</label><input type="range" id="rim-target-y" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-y-number" aria-label="Rim target Y" type="number" step="0.05" value="0"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-z">Target Z</label><input type="range" id="rim-target-z" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-z-number" aria-label="Rim target Z" type="number" step="0.05" value="0"></div>
+      <button class="btn" id="rim-aim" title="Aim at the orbit camera's current target">Aim at View Target</button>
     </div>
 
     <h2>Post Processing</h2>
@@ -1996,6 +2097,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="core">core</option>
           <option value="curl">curl</option>
           <option value="divergence">divergence</option>
+          <option value="boundary">boundary</option>
+          <option value="boundary_fire">boundary fire</option>
         </select>
         <span class="slider-val" id="volume-shell-inspect-mode-val">shell</span>
       </div>
@@ -3118,10 +3221,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
+import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
+import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=fire-actor-parity-0722';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=kiln-tall-domain-0925';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -3151,6 +3256,42 @@ import {
   parseVolumeBasinDriveSession,
   replayVolumeBasinDriveSession,
 } from './volume-basin-drive-session.mjs';
+
+// One explicit GPUDevice shared by the Three scene renderer and the Pyro
+// volume simulator; seated in initScene before either consumer constructs.
+let sharedGpu = null;
+let sharedGpuFailureReason = null;
+let compositionModule = null;
+let compositionSetupError = null;
+const importCompositionModule = url => import(url);
+let fireLightFieldPass = null;
+let ordinarySceneDepthProvider = null;
+let compositionHost = null;
+
+// Fire light-field route params may ride the URL HASH as well as the query:
+// settings-preset routes are contract-validated and reject unexpected
+// volume_* query parameters, so on basin routes the light field is enabled
+// the same way the composition-module seam is (#volume_light_field=1&...).
+// Hash entries override query entries.
+function fireLightFieldRouteParams() {
+  const merged = new URLSearchParams(window.location.search);
+  for (const [key, value] of new URLSearchParams(window.location.hash.replace(/^#/, ''))) {
+    if (key.startsWith('volume_light_field')) merged.set(key, value);
+  }
+  return merged;
+}
+
+function isFireLightFieldRoute(params = fireLightFieldRouteParams()) {
+  return params.get('volume_light_field') === '1';
+}
+
+function isFireLightFieldIsolateRoute(params = fireLightFieldRouteParams()) {
+  return params.get('volume_light_field_isolate') === '1';
+}
+
+function isFireLightFieldTimingRoute(params = fireLightFieldRouteParams()) {
+  return params.get('volume_light_field_timing') === '1';
+}
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -3189,6 +3330,9 @@ import {
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
+import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
+import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   FORGE_HOST_REGISTRY_SNAPSHOT_SCHEMA,
   FORGE_HOST_STATION_ATTENTION_SCHEMA,
@@ -3347,7 +3491,10 @@ let groundPlane = null;
 let lermsPreviewActorsGroup = null;
 let loadedFiles = {};
 let receipt = null;
-let currentEnvName = 'studio';
+let currentEnvName = null;
+let environmentRecipes = {};
+let environmentLoadToken = 0;
+let rimLight = null;
 let showEnvBg = false;
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
@@ -3355,7 +3502,12 @@ let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
+let activeSceneComposition = null;
+let authoringBusy = false;
 let volumePrototype = null;
+let annularBurner = null;
+let burnerRecipe = null;
+let burnerError = null;
 let volumeBridge = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
@@ -9394,14 +9546,16 @@ window.addEventListener('keydown', e => {
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
+let restoringSettings = false;
 const PERSISTED_SLIDERS = [
   'exposure-slider', 'env-intensity-slider', 'env-rotation-slider', 'env-blur-slider',
   'ao-radius', 'ao-intensity', 'ao-scale', 'ao-thickness', 'ao-falloff',
-  'backdrop-brightness', 'dof-focus', 'dof-aperture', 'dof-maxblur'
+  'backdrop-brightness', 'env-bg-brightness', 'env-bg-contrast', 'dof-focus', 'dof-aperture', 'dof-maxblur'
 ];
 const PERSISTED_CHECKBOXES = ['ao-toggle', 'show-env-bg', 'backdrop-toggle', 'dof-toggle'];
 
 function saveSettings() {
+  if (restoringSettings) return;
   const settings = {};
   for (const id of PERSISTED_SLIDERS) {
     const el = document.getElementById(id);
@@ -9411,6 +9565,10 @@ function saveSettings() {
     const el = document.getElementById(id);
     if (el) settings[id] = el.checked;
   }
+  rememberEnvironmentRecipe();
+  settings.environmentRecipes = environmentRecipes;
+  settings.environmentName = currentEnvName;
+  settings.rimLight = readRimLightSettings();
   try { localStorage.setItem(KAMINOS_SETTINGS_KEY, JSON.stringify(settings)); } catch {}
 }
 
@@ -9418,19 +9576,27 @@ function restoreSettings() {
   let settings;
   try { settings = JSON.parse(localStorage.getItem(KAMINOS_SETTINGS_KEY)); } catch {}
   if (!settings) return;
-  for (const id of PERSISTED_SLIDERS) {
-    const el = document.getElementById(id);
-    if (el && settings[id] !== undefined) {
-      el.value = settings[id];
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+  restoringSettings = true;
+  try {
+    for (const id of PERSISTED_SLIDERS) {
+      const el = document.getElementById(id);
+      if (el && settings[id] !== undefined) {
+        el.value = settings[id];
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     }
-  }
-  for (const id of PERSISTED_CHECKBOXES) {
-    const el = document.getElementById(id);
-    if (el && settings[id] !== undefined) {
-      el.checked = settings[id];
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+    for (const id of PERSISTED_CHECKBOXES) {
+      const el = document.getElementById(id);
+      if (el && settings[id] !== undefined) {
+        el.checked = settings[id];
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }
+    environmentRecipes = normalizeEnvironmentRecipes(settings.environmentRecipes);
+    setRimLight(settings.rimLight);
+    return Object.hasOwn(HDR_ENVS, settings.environmentName) ? settings.environmentName : 'studio';
+  } finally {
+    restoringSettings = false;
   }
 }
 
@@ -9519,6 +9685,12 @@ async function ensureSamImageTools() {
   return samImageToolsPromise;
 }
 
+async function samHostDeviceRequirements(adapter) {
+  const { createWebGpuDeviceRequest } = await import('./webgpu-inference-kit/src/core.js');
+  const request = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
+  return { requiredFeatures: request.requiredFeatures, requiredLimits: request.requiredLimits };
+}
+
 window.kaminosOpenImageMasks = async (source, metadata = {}) => {
   setActiveTab('masks');
   return (await ensureSamImageTools()).open(source, metadata);
@@ -9526,6 +9698,351 @@ window.kaminosOpenImageMasks = async (source, metadata = {}) => {
 window.addEventListener('pagehide', () => {
   void samImageTools?.close().finally(() => samHostContext?.inferenceSession.close());
 }, { once: true });
+
+// World-position fire light-field receiver pass. Samples the volume producer's
+// same-state RGB irradiance lattice atlas (native GPU texture on the shared
+// device) at the world position reconstructed from the scene prepass depth,
+// then adds the response to the post-AO scene color.
+// Identity: world-position-fire-light-field-receiver-pass-v0
+function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneNormalNode) {
+  const FIRE_LIGHT_FIELD_PASS_IDENTITY = 'world-position-fire-light-field-receiver-pass-v0';
+  const FIRE_LIGHT_FIELD_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
+  const FIRE_LIGHT_FIELD_MASK_AUTHORITY = 'scene-prepass-depth-world-position-normal-material-v0';
+  const routeParams = fireLightFieldRouteParams();
+  const blackAtlasTexture = sharedGpu.device.createTexture({
+    label: 'kaminos fire light field black atlas placeholder',
+    size: { width: 1, height: 1, depthOrArrayLayers: 1 },
+    format: 'rgba16float',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const atlasExternalTexture = new THREE.ExternalTexture(blackAtlasTexture);
+  atlasExternalTexture.image = { width: 1, height: 1, depth: 1 };
+  atlasExternalTexture.format = THREE.RGBAFormat;
+  atlasExternalTexture.type = THREE.HalfFloatType;
+  atlasExternalTexture.colorSpace = THREE.NoColorSpace;
+  atlasExternalTexture.minFilter = THREE.LinearFilter;
+  atlasExternalTexture.magFilter = THREE.LinearFilter;
+  atlasExternalTexture.generateMipmaps = false;
+
+  const routeStrength = parseFloat(routeParams.get('volume_light_field_strength') ?? '');
+  const baseStrength = Number.isFinite(routeStrength) ? Math.max(0, routeStrength) : 1.0;
+  const routeFarStrength = parseFloat(routeParams.get('volume_light_field_far') ?? '');
+  const baseFarStrength = Number.isFinite(routeFarStrength) ? Math.max(0, routeFarStrength) : 1.0;
+  const debugView = routeParams.get('volume_light_field_debug') || '';
+  const fireLightFieldStrength = uniform(0.0);
+  const farFieldStrength = uniform(baseFarStrength);
+  const blackMetaTexture = sharedGpu.device.createTexture({
+    label: 'kaminos fire light field black meta placeholder',
+    size: { width: 2, height: 1, depthOrArrayLayers: 1 },
+    format: 'rgba16float',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const metaExternalTexture = new THREE.ExternalTexture(blackMetaTexture);
+  metaExternalTexture.image = { width: 2, height: 1, depth: 1 };
+  metaExternalTexture.format = THREE.RGBAFormat;
+  metaExternalTexture.type = THREE.HalfFloatType;
+  metaExternalTexture.colorSpace = THREE.NoColorSpace;
+  metaExternalTexture.minFilter = THREE.NearestFilter;
+  metaExternalTexture.magFilter = THREE.NearestFilter;
+  metaExternalTexture.generateMipmaps = false;
+  const metaTextureNode = texture(metaExternalTexture);
+  const isolateMix = uniform(isFireLightFieldIsolateRoute(routeParams) ? 1.0 : 0.0);
+  const atlasGrid = uniform(32.0);
+  const atlasTilesX = uniform(8.0);
+  const atlasTexelSize = uniform(new THREE.Vector2(1 / 256, 1 / 128));
+
+  const atlasTextureNode = texture(atlasExternalTexture);
+  const depthSampleNode = sceneDepthNode.sample(viewportUV).r;
+  // The output pass renders with a fullscreen quad camera, so the TSL
+  // cameraProjectionMatrixInverse/cameraWorldMatrix nodes would resolve to the
+  // quad's ortho camera. Bind the scene camera's matrices explicitly and
+  // refresh them every frame in update(), the same way GTAO does.
+  const sceneProjectionMatrixInverse = uniform(new THREE.Matrix4());
+  const sceneCameraWorldMatrix = uniform(new THREE.Matrix4());
+  const viewPositionNode = getViewPosition(viewportUV, depthSampleNode, sceneProjectionMatrixInverse);
+  const worldPositionNode = sceneCameraWorldMatrix.mul(vec4(viewPositionNode, 1.0)).xyz;
+
+  // Trilinear sample of the 32^3 lattice through its 2D tile atlas. The
+  // lattice spans the raymarch's [-1,1]^3 shared-camera world box.
+  const sampleLatticeAt = (positionNode) => {
+    const uvw = positionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+    const sliceCoord = uvw.z.mul(atlasGrid).sub(0.5);
+    const slice0 = floor(sliceCoord).clamp(float(0.0), atlasGrid.sub(1.0));
+    const slice1 = slice0.add(1.0).clamp(float(0.0), atlasGrid.sub(1.0));
+    const sliceMix = sliceCoord.sub(slice0).clamp(0.0, 1.0);
+    const inTileTexel = uvw.xy.mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+    const atlasUvForSlice = (sliceIndex) => {
+      const tileX = mod(sliceIndex, atlasTilesX);
+      const tileY = floor(sliceIndex.div(atlasTilesX));
+      return vec2(
+        tileX.mul(atlasGrid).add(inTileTexel.x),
+        tileY.mul(atlasGrid).add(inTileTexel.y)
+      ).mul(atlasTexelSize);
+    };
+    return mix(
+      atlasTextureNode.sample(atlasUvForSlice(slice0)),
+      atlasTextureNode.sample(atlasUvForSlice(slice1)),
+      sliceMix
+    );
+  };
+  const latticeUvw = worldPositionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+  const latticeSample = sampleLatticeAt(worldPositionNode);
+
+  // Directional shading: the irradiance field's luminance gradient points
+  // toward the fire, so central differences over one lattice cell recover the
+  // incident light direction at every receiver pixel. Shading with true
+  // N.L against this direction replaces the earlier camera-facing stand-in,
+  // which lit surfaces by screen orientation instead of the fire-to-surface
+  // vector (operator-reported as proximity glow with no above/below response).
+  const lumaWeights = vec3(0.2126, 0.7152, 0.0722);
+  const gradientEps = float(2.0 / 32.0);
+  const lumaAt = (positionNode) => sampleLatticeAt(positionNode).rgb.dot(lumaWeights);
+  const latticeGradient = vec3(
+    lumaAt(worldPositionNode.add(vec3(gradientEps, 0.0, 0.0))).sub(lumaAt(worldPositionNode.sub(vec3(gradientEps, 0.0, 0.0)))),
+    lumaAt(worldPositionNode.add(vec3(0.0, gradientEps, 0.0))).sub(lumaAt(worldPositionNode.sub(vec3(0.0, gradientEps, 0.0)))),
+    lumaAt(worldPositionNode.add(vec3(0.0, 0.0, gradientEps))).sub(lumaAt(worldPositionNode.sub(vec3(0.0, 0.0, gradientEps))))
+  );
+  const gradientLength = latticeGradient.length();
+  const lightDirection = latticeGradient.div(gradientLength.max(1e-6));
+
+  // Outside the lattice box, attenuate continuously with exterior distance so
+  // nearby receivers keep light while the far scene falls off.
+  const exteriorNode = worldPositionNode.abs().sub(vec3(1.0)).max(vec3(0.0));
+  const exteriorDistance = exteriorNode.length();
+  const exteriorFalloff = float(1.0).div(
+    exteriorDistance.mul(exteriorDistance).mul(3.0).add(exteriorDistance.mul(1.5)).add(1.0)
+  );
+
+  // Only the native clear depth is background. A .999 cutoff rejects real
+  // surfaces ~9.1 units away with this camera's .01/100 near/far planes,
+  // sweeping a false lighting boundary across the kiln during camera dolly.
+  const backgroundMask = float(1.0).sub(step(float(1.0), depthSampleNode));
+  const normalSampleNode = sceneNormalNode.sample(viewportUV).rgb.normalize();
+  // The prepass stores view-space normals; rotate into world space with the
+  // scene camera's world matrix (w = 0 keeps it a pure rotation).
+  const worldNormalNode = sceneCameraWorldMatrix.mul(vec4(normalSampleNode, 0.0)).xyz.normalize();
+  // Half-wrapped N.L keeps soft fill on grazing surfaces while giving the
+  // above/below/beside response; where the gradient is too weak to trust
+  // (deep outside the field, or dead-flat regions) fall back to isotropic.
+  const wrappedNdotL = worldNormalNode.dot(lightDirection).mul(0.5).add(0.5).pow(2.0);
+  const gradientConfidence = gradientLength.smoothstep(0.00002, 0.0005);
+  const directionalResponse = mix(float(1.0), wrappedNdotL.mul(0.9).add(0.1), gradientConfidence);
+  const materialResponse = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
+
+  // Analytic far field: the diffusion lattice only carries light ~4 cells
+  // from the flame body, which reads as a flashlight pointing straight up.
+  // The producer reduces the live field to centroid/power/color each frame
+  // (fire-irradiance-far-field-meta-v0); receivers add a true 1/r^2 radial
+  // term from that center, N.L shaded and NOT clipped to the lattice box,
+  // so side walls and out-of-box geometry receive real fire light.
+  const metaCore = metaTextureNode.sample(vec2(0.25, 0.5));
+  const metaColor = metaTextureNode.sample(vec2(0.75, 0.5));
+  const fireCenterWorld = metaCore.xyz.mul(2.0).sub(vec3(1.0));
+  const fireShadow = createFireLightFieldShadow({renderer,scene,
+    sourceNode:fireCenterWorld,receiverNode:worldPositionNode,normalNode:worldNormalNode,
+    requested:routeParams.get('volume_light_field_shadows') === '1'});
+  const fireShadowVisibility = fireShadow.visibility;
+  const firePower = metaCore.w;
+  const farVector = fireCenterWorld.sub(worldPositionNode);
+  const farDistanceSq = farVector.dot(farVector);
+  const farDirection = farVector.div(farDistanceSq.sqrt().max(1e-5));
+  const farNdotL = worldNormalNode.dot(farDirection).mul(0.5).add(0.5).pow(2.0);
+  // Soft-saturate the radial term (Reinhard) so a large bright fire raises
+  // the wash sublinearly instead of flooding the scene flat: falloff shape
+  // survives because the compression is monotonic in the raw term.
+  const farRadialRaw = firePower.mul(0.006).div(farDistanceSq.mul(2.5).add(0.25));
+  const farRadial = farRadialRaw.div(farRadialRaw.mul(1.5).add(1.0));
+  const farSignal = metaColor.rgb.mul(farRadial).mul(farNdotL).mul(farFieldStrength);
+
+  const nearSignal = latticeSample.rgb
+    .mul(exteriorFalloff)
+    .mul(directionalResponse);
+  const receiverSignal = nearSignal.add(farSignal)
+    .mul(fireShadowVisibility)
+    .mul(backgroundMask)
+    .mul(materialResponse)
+    .mul(fireLightFieldStrength);
+  const compositeOutput = baseOutputNode.add(vec4(receiverSignal, 0.0));
+  const isolateOutput = vec4(
+    baseOutputNode.rgb.mul(0.08).mul(backgroundMask).add(receiverSignal),
+    1.0
+  );
+  let outputNode = mix(compositeOutput, isolateOutput, isolateMix);
+  // Compile-time diagnostic views (route volume_light_field_debug=uvw|lattice|mask).
+  if (debugView === 'uvw') {
+    outputNode = vec4(latticeUvw, 1.0);
+  } else if (debugView === 'lattice') {
+    outputNode = vec4(latticeSample.rgb.mul(4.0), 1.0);
+  } else if (debugView === 'mask') {
+    outputNode = vec4(backgroundMask, directionalResponse, exteriorFalloff, 1.0);
+  } else if (debugView === 'direction') {
+    // Incident light direction as RGB (world axes mapped [-1,1] -> [0,1]),
+    // alpha-carried confidence; geometry only.
+    outputNode = vec4(lightDirection.mul(0.5).add(vec3(0.5)).mul(backgroundMask).mul(gradientConfidence), 1.0);
+  } else if (debugView === 'ndotl') {
+    outputNode = vec4(vec3(wrappedNdotL.mul(backgroundMask)), 1.0);
+  } else if (debugView === 'far') {
+    outputNode = vec4(farSignal.mul(4.0).mul(backgroundMask), 1.0);
+  } else if (debugView === 'atlas') {
+    outputNode = vec4(atlasTextureNode.sample(viewportUV).rgb.mul(4.0), 1.0);
+  } else if (debugView === 'groundtest') {
+    // World-coordinate readout for the unflipped reconstruction:
+    // R = worldY mapped [-2,2] -> [0,1]; G = worldZ mapped [-4,4] -> [0,1];
+    // B = geometry mask.
+    const altView = getViewPosition(vec2(viewportUV.x, viewportUV.y.oneMinus()), depthSampleNode, sceneProjectionMatrixInverse);
+    const altWorld = sceneCameraWorldMatrix.mul(vec4(altView, 1.0)).xyz;
+    const primaryHit = float(1.0).sub(step(float(0.1), worldPositionNode.y.add(0.85).abs()));
+    const altHit = float(1.0).sub(step(float(0.1), altWorld.y.add(0.85).abs()));
+    outputNode = vec4(primaryHit, altHit, backgroundMask.mul(0.5), 1.0);
+  } else if (debugView === 'slab') {
+    // Exercise the exact tile/trilinear math over a fixed mid-depth slab.
+    const slabTexel = vec2(viewportUV.x, float(1.0).sub(viewportUV.y)).mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+    const slabSliceCoord = float(0.5).mul(atlasGrid).sub(0.5);
+    const slabSlice0 = floor(slabSliceCoord);
+    const slabTile = vec2(mod(slabSlice0, atlasTilesX), floor(slabSlice0.div(atlasTilesX)));
+    const slabUv = slabTile.mul(atlasGrid).add(slabTexel).mul(atlasTexelSize);
+    outputNode = vec4(atlasTextureNode.sample(slabUv).rgb.mul(4.0), 1.0);
+  }
+
+  const passState = {
+    identity: FIRE_LIGHT_FIELD_PASS_IDENTITY,
+    maskAuthority: FIRE_LIGHT_FIELD_MASK_AUTHORITY,
+    atlasIdentity: FIRE_LIGHT_FIELD_ATLAS_IDENTITY,
+    requested: true,
+    effective: false,
+    reason: 'fire-light-field-not-polled-yet',
+    adoptionKey: null,
+    sameDevice: false,
+    witnessMuted: false,
+    isolate: isFireLightFieldIsolateRoute(routeParams),
+    baseStrength,
+    gainStops: 0,
+    lightField: null,
+    cpuReadbackAuthority: false,
+    canvasBridgeAuthority: false,
+    fallbackAuthority: false,
+  };
+
+  // Adoption swaps a fresh THREE.ExternalTexture into the texture node's
+  // public value slot; no renderer-internal cache surgery.
+  const makeAdoptedAtlasTexture = (sourceTexture, width, height) => {
+    const adopted = new THREE.ExternalTexture(sourceTexture);
+    adopted.image = { width, height, depth: 1 };
+    adopted.format = THREE.RGBAFormat;
+    adopted.type = THREE.HalfFloatType;
+    adopted.colorSpace = THREE.NoColorSpace;
+    adopted.minFilter = THREE.LinearFilter;
+    adopted.magFilter = THREE.LinearFilter;
+    adopted.generateMipmaps = false;
+    return adopted;
+  };
+
+  const bindBlackAtlas = (reason) => {
+    if (passState.adoptionKey !== 'black') {
+      atlasTextureNode.value = atlasExternalTexture;
+      metaTextureNode.value = metaExternalTexture;
+      passState.adoptionKey = 'black';
+      passState.farFieldIdentity = null;
+    }
+    passState.effective = false;
+    passState.reason = reason;
+    passState.sameDevice = false;
+    fireLightFieldStrength.value = 0;
+  };
+
+  return {
+    outputNode,
+    renderShadows() { if(passState.effective) fireShadow.render(); },
+    setShadowsEnabled(enabled) { return fireShadow.setEnabled(enabled); },
+    diagnoseShadows(anchors) { return fireShadow.diagnose(anchors,camera.position.toArray()); },
+    update() {
+      camera.updateMatrixWorld();
+      sceneProjectionMatrixInverse.value.copy(camera.projectionMatrixInverse);
+      sceneCameraWorldMatrix.value.copy(camera.matrixWorld);
+      const lightField = volumePrototype?.fireIrradianceLightField?.() ?? null;
+      passState.lightField = lightField ? { ...lightField, atlasTexture: undefined, device: undefined } : null;
+      const sameDevice = !!lightField && lightField.device === sharedGpu.device;
+      if (
+        !lightField
+        || lightField.status !== 'effective'
+        || lightField.identity !== FIRE_LIGHT_FIELD_ATLAS_IDENTITY
+        || !sameDevice
+        || !lightField.atlasTexture
+      ) {
+        bindBlackAtlas(
+          !lightField
+            ? 'volume-prototype-light-field-unavailable'
+            : (!sameDevice && lightField.status === 'effective'
+              ? 'producer-consumer-device-mismatch'
+              : lightField.reason || `light-field-${lightField.status}`)
+        );
+        return false;
+      }
+      const adoptionKey = `${lightField.generation}:${lightField.atlasWidth}x${lightField.atlasHeight}`;
+      if (passState.adoptionKey !== adoptionKey) {
+        atlasTextureNode.value = makeAdoptedAtlasTexture(lightField.atlasTexture, lightField.atlasWidth, lightField.atlasHeight);
+        if (lightField.metaTexture) {
+          const adoptedMeta = makeAdoptedAtlasTexture(lightField.metaTexture, lightField.metaWidth, lightField.metaHeight);
+          adoptedMeta.minFilter = THREE.NearestFilter;
+          adoptedMeta.magFilter = THREE.NearestFilter;
+          metaTextureNode.value = adoptedMeta;
+        } else {
+          metaTextureNode.value = metaExternalTexture;
+        }
+        passState.adoptionKey = adoptionKey;
+        passState.farFieldIdentity = lightField.farFieldIdentity ?? null;
+        atlasGrid.value = lightField.grid;
+        atlasTilesX.value = lightField.tilesX;
+        atlasTexelSize.value.set(1 / lightField.atlasWidth, 1 / lightField.atlasHeight);
+      }
+      passState.effective = true;
+      passState.reason = null;
+      passState.sameDevice = true;
+      fireLightFieldStrength.value = passState.witnessMuted ? 0 : passState.baseStrength * Math.pow(2, passState.gainStops || 0);
+      return true;
+    },
+    setWitnessMute(muted) {
+      passState.witnessMuted = muted === true;
+      fireLightFieldStrength.value = passState.witnessMuted ? 0 : (passState.effective ? passState.baseStrength * Math.pow(2, passState.gainStops || 0) : 0);
+      return {
+        identity: 'fire-light-field-witness-mute-v0',
+        muted: passState.witnessMuted,
+        strength: fireLightFieldStrength.value,
+      };
+    },
+    setGainStops(stops) {
+      passState.gainStops = Number.isFinite(Number(stops)) ? Math.max(-6, Math.min(6, Number(stops))) : 0;
+      return {
+        identity: 'fire-light-field-gain-stops-v0',
+        gainStops: passState.gainStops,
+        multiplier: Math.pow(2, passState.gainStops),
+      };
+    },
+    setWitnessIsolate(isolate) {
+      passState.isolate = isolate === true;
+      isolateMix.value = passState.isolate ? 1 : 0;
+      return {
+        identity: 'fire-light-field-witness-isolate-v0',
+        isolate: passState.isolate,
+        isolateMix: isolateMix.value,
+      };
+    },
+    debugState() {
+      return {
+        ...passState,
+        strength: fireLightFieldStrength.value,
+        isolateMix: isolateMix.value,
+        atlasGrid: atlasGrid.value,
+        shadow: fireShadow.debugState(),
+        sharedDeviceIdentity: sharedGpu?.identity ?? null,
+      };
+    },
+    dispose() {
+      fireShadow.dispose();
+      blackAtlasTexture.destroy?.();
+    },
+  };
+}
 
 async function initScene() {
   await initializeHybridSplatOverlayModuleUrl();
@@ -9539,17 +10056,62 @@ async function initScene() {
     const response = await fetch('/api/runtime-config', { cache: 'no-store' });
     if (response.ok) samHostConfig = (await response.json()).sam3 || null;
   } catch (error) { console.warn('SAM runtime configuration unavailable', error); }
+  // Load declarative requirements before constructing either GPU consumer.
+  // Module top levels must be inert; mount remains after volume construction.
+  const compositionModuleUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('composition_module_url');
+  compositionModule = null;
+  compositionSetupError = null;
+  window.__kaminosCompositionSetup = {moduleUrl: compositionModuleUrl, status: compositionModuleUrl ? 'pending' : 'absent', phase: 'module-load'};
+  try {
+    if (compositionModuleUrl) {
+      compositionModule = await importCompositionModule(compositionModuleUrl);
+      if (typeof compositionModule.mountComposition !== 'function') {
+        throw new Error('composition module did not export mountComposition');
+      }
+    }
+  } catch (error) {
+    compositionSetupError = error;
+    Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: String(error?.message || error)});
+    throw error;
+  }
+  const requiresSharedDevice = compositionModule?.sharedGpuBufferRequirements !== undefined;
+  window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
+  try {
+    sharedGpu = await requestKaminosSharedWebGpuDevice({
+      bufferRequirements: requiresSharedDevice ? compositionModule.sharedGpuBufferRequirements : {},
+      // A mounted SAM host borrows the same device, so its kit requirements
+      // (all adapter features and limits) compose into the one acquisition.
+      hostRequirements: samHostConfig?.mounted ? samHostDeviceRequirements : null,
+    });
+    sharedGpuFailureReason = null;
+  } catch (error) {
+    sharedGpu = null;
+    sharedGpuFailureReason = String(error?.message || error);
+    if (requiresSharedDevice) {
+      compositionSetupError = error;
+      Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: sharedGpuFailureReason});
+      throw error;
+    }
+    console.warn('Kaminos shared WebGPU device unavailable; falling back to independent devices:', sharedGpuFailureReason);
+  }
   if (samHostConfig?.mounted) {
     const { createWebGpuDeviceRequest, createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/core.js');
-    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) throw new Error('SAM host WebGPU adapter unavailable');
-    const request = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
-    const device = await adapter.requestDevice({ requiredFeatures: request.requiredFeatures, requiredLimits: request.requiredLimits });
+    let adapter = sharedGpu?.adapter || null;
+    let device = sharedGpu?.device || null;
+    if (!device) {
+      // Shared acquisition failed on an ordinary route: keep SAM on its own device as before.
+      adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (!adapter) throw new Error('SAM host WebGPU adapter unavailable');
+      const request = createWebGpuDeviceRequest(adapter, { requirements: { requiredFeatures: [...adapter.features] } });
+      device = await adapter.requestDevice({ requiredFeatures: request.requiredFeatures, requiredLimits: request.requiredLimits });
+    }
     const inferenceSession = await createWebGpuInferenceSession({ sessionId: `kaminos-images:${crypto.randomUUID()}`, adapter, device,
       adapterName: adapter.info?.description || adapter.info?.device || adapter.info?.vendor || 'unknown-webgpu-adapter', deviceOwnership: 'borrowed' });
     samHostContext = { adapter, device, inferenceSession };
   }
-  renderer = new THREE.WebGPURenderer({ antialias: true, ...(samHostContext ? { device: samHostContext.device } : {}) });
+  renderer = sharedGpu?.device
+    ? new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device, trackTimestamp: isFireLightFieldTimingRoute() })
+    : new THREE.WebGPURenderer({ antialias: true, ...(samHostContext ? { device: samHostContext.device } : {}) });
   renderer.domElement.id = 'kaminos-host-renderer-canvas';
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -9598,6 +10160,66 @@ async function initScene() {
   groundPlane.receiveShadow = true;
   scene.add(groundPlane);
 
+  // Fire-light geometry witness set: neutral primitives at the positions
+  // that exercise the light field - a pillar beside the flame (vertical
+  // falloff), a sphere hung above it (under-lighting), a cube on the floor
+  // at distance (contact + falloff), a wall behind (gradient screen), and a
+  // small sphere near the base. Neutral matte albedo so received light color
+  // reads honestly. Toggled from the Assets tab (Fire Light panel); route
+  // volume_light_field_test_scene=1 enables it at load and frames the camera.
+  let fireLightWitnessGroup = null;
+  const setFireLightWitnessScene = (enabled) => {
+    if (enabled && !fireLightWitnessGroup) {
+      // Light-meter spec: mid-dark albedo and near-zero environment response,
+      // so the hemisphere/IBL ambience leaves headroom and added firelight
+      // reads as a visible warm delta instead of clipping an already-white
+      // surface (operator report: blown out even at zero stops).
+      const witnessMat = new THREE.MeshStandardMaterial({ color: 0x4a4a48, roughness: 0.95, metalness: 0.0 });
+      witnessMat.envMapIntensity = 0.05;
+      const witnessSet = [
+        { geo: new THREE.BoxGeometry(0.35, 2.0, 0.35), position: [1.6, -0.85 + 1.0, 0] },
+        { geo: new THREE.SphereGeometry(0.3, 48, 32), position: [0, 1.7, 0] },
+        { geo: new THREE.BoxGeometry(0.4, 0.4, 0.4), position: [-1.7, -0.85 + 0.2, 0.6] },
+        { geo: new THREE.BoxGeometry(4.4, 2.6, 0.12), position: [0, -0.85 + 1.3, -2.2] },
+        { geo: new THREE.SphereGeometry(0.18, 48, 32), position: [0.85, -0.55, 0.4] },
+      ];
+      fireLightWitnessGroup = new THREE.Group();
+      fireLightWitnessGroup.name = 'fire-light-witness-set';
+      for (const entry of witnessSet) {
+        const mesh = new THREE.Mesh(entry.geo, witnessMat);
+        mesh.position.set(...entry.position);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        fireLightWitnessGroup.add(mesh);
+      }
+      scene.add(fireLightWitnessGroup);
+    } else if (!enabled && fireLightWitnessGroup) {
+      scene.remove(fireLightWitnessGroup);
+      for (const mesh of fireLightWitnessGroup.children) mesh.geometry?.dispose?.();
+      fireLightWitnessGroup = null;
+    }
+    return !!fireLightWitnessGroup;
+  };
+  const fireLightWitnessToggle = document.getElementById('fire-light-test-scene-toggle');
+  const fireLightGainSlider = document.getElementById('fire-light-gain-stops');
+  const fireLightGainVal = document.getElementById('fire-light-gain-stops-val');
+  fireLightWitnessToggle?.addEventListener('change', () => {
+    setFireLightWitnessScene(fireLightWitnessToggle.checked);
+  });
+  fireLightGainSlider?.addEventListener('input', () => {
+    const stops = parseFloat(fireLightGainSlider.value) || 0;
+    if (fireLightGainVal) fireLightGainVal.textContent = `${stops >= 0 ? '+' : ''}${stops.toFixed(2)}`;
+    fireLightFieldPass?.setGainStops?.(stops);
+  });
+  if (fireLightFieldRouteParams().get('volume_light_field_test_scene') === '1') {
+    setFireLightWitnessScene(true);
+    if (fireLightWitnessToggle) fireLightWitnessToggle.checked = true;
+    // Frame the whole tableau so the route is one-click; orbit still works.
+    camera.position.set(3.0, 1.1, 4.6);
+    controls.target.set(0.1, 0.2, -0.4);
+    controls.update();
+  }
+
   // Key light for shadows
   const keyLight = new THREE.DirectionalLight(0xffffff, 0.5);
   keyLight.position.set(3, 5, 4);
@@ -9611,6 +10233,14 @@ async function initScene() {
   keyLight.shadow.camera.bottom = -3;
   keyLight.shadow.bias = -0.001;
   scene.add(keyLight);
+  rimLight = new THREE.SpotLight(0xd6e5ff, 120);
+  rimLight.name = 'Authored rim light';
+  rimLight.castShadow = true;
+  rimLight.shadow.mapSize.set(1024, 1024);
+  rimLight.shadow.bias = -0.0001;
+  rimLight.shadow.normalBias = 0.02;
+  scene.add(rimLight, rimLight.target);
+  setRimLight();
 
   // Transform gizmo
   transformControls = new TransformControls(camera, renderer.domElement);
@@ -9655,16 +10285,75 @@ async function initScene() {
   const depthTexNode = texture(depthRT.texture);
   const normalTexNode = texture(normalTexture);
   aoPass = aoCompute(depthTexNode, normalTexNode, camera);
-  aoPass.setDepthPass(depthRT, depthMaterial, scene);
+  configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, depthMaterial }, THREE.RendererUtils);
 
   const aoResolved = convertToTexture(aoPass.getTextureNode());
   const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
+  const denoiseResolved = convertToTexture(denoisePass);
+  // Resolve screen-space visibility before the lit pass, not once per material.
+  const setupScenePass = scenePass.setup;
+  scenePass.setup = function(builder) {
+    denoiseResolved.build(builder);
+    return setupScenePass.call(this, builder);
+  };
 
   aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
-  const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
-  renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
+  // Preserve the existing 0..1 look; stronger AO darkens smoothly without negative light.
+  const aoVisibility = texture(denoiseResolved.value, screenUV).r.clamp(0, 1);
+  const aoOutput = mix(float(1.0), aoVisibility, aoIntensity.min(1)).div(
+    float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
+  scenePass.contextNode = builtinAOContext(aoOutput);
+  const baseSceneOutput = scenePass;
+  fireLightFieldPass?.dispose?.();
+  fireLightFieldPass = null;
+  if (isFireLightFieldRoute() && sharedGpu?.device) {
+    fireLightFieldPass = createFireLightFieldReceiverPass(baseSceneOutput, prePassDepth, prePassNormal);
+    renderPipeline.outputNode = fireLightFieldPass.outputNode;
+  } else {
+    renderPipeline.outputNode = baseSceneOutput;
+  }
+  window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
+    ? fireLightFieldPass.debugState()
+    : {
+      identity: 'world-position-fire-light-field-receiver-pass-v0',
+      requested: isFireLightFieldRoute(),
+      status: 'pass-not-constructed',
+      reason: isFireLightFieldRoute()
+        ? (sharedGpu?.device ? 'pass-construction-pending' : `shared-device-unavailable: ${sharedGpuFailureReason || 'unknown'}`)
+        : 'fire-light-field-route-not-requested',
+      sharedDeviceIdentity: sharedGpu?.identity ?? null,
+      sharedDeviceFailureReason,
+    });
+  window.kaminosFireLightFieldSetWitnessMute = muted => (fireLightFieldPass
+    ? fireLightFieldPass.setWitnessMute(muted)
+    : { error: 'fire-light-field-pass-not-constructed' });
+  window.kaminosFireLightFieldSetShadowsEnabled = enabled => fireLightFieldPass?.setShadowsEnabled(enabled);
+  window.kaminosFireShadowDiagnose = anchors => fireLightFieldPass.diagnoseShadows(anchors);
+  window.kaminosFireLightFieldSetWitnessIsolate = isolate => (fireLightFieldPass
+    ? fireLightFieldPass.setWitnessIsolate(isolate)
+    : { error: 'fire-light-field-pass-not-constructed' });
+  window.kaminosFireLightFieldGpuProfile = async () => {
+    const compute = await (volumePrototype?.sampleFireLightFieldGpuProfile?.() ?? Promise.resolve(null));
+    let renderTimestampMs = null;
+    if (renderer?.backend?.trackTimestamp) {
+      try {
+        await renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER);
+        renderTimestampMs = renderer.info?.render?.timestamp ?? null;
+      } catch (error) {
+        renderTimestampMs = `resolve-failed: ${String(error?.message || error)}`;
+      }
+    }
+    return {
+      identity: 'fire-light-field-combined-gpu-profile-v0',
+      compute,
+      renderTimestampMs,
+      renderTimestampScope: 'whole-render-pipeline-not-receiver-only',
+      trackTimestamp: renderer?.backend?.trackTimestamp === true,
+    };
+  };
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
+    depthVisibility: 'source-material-side',
     hasRenderPipeline: !!renderPipeline,
     hasAoPass: !!aoPass,
     hasAoIntensity: !!aoIntensity,
@@ -9696,6 +10385,13 @@ async function initScene() {
   viewportResizeObserver.observe(vp);
 
   // --- Render loop with idle detection ---
+  window.__kaminosSetSceneCameraFrame = (position, target) => {
+    camera.position.set(...position);
+    controls.target.set(...target);
+    controls.update();
+    needsRender = true;
+    return { position: camera.position.toArray(), target: controls.target.toArray() };
+  };
   const IDLE_THRESHOLD = 3;
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
@@ -9777,10 +10473,49 @@ async function initScene() {
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
 
+  let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1';
+  let sceneRenderedForVolume = false;
+  let foregroundServiceActive = false;
+  let insideForegroundFrame = false;
+  let sceneFrameCount = 0;
+  ordinarySceneDepthProvider = () => {
+    if (!ordinaryDepthEnabled) return null;
+    if (!sharedGpu?.device) throw new Error('ordinary-scene-depth-shared-device-unavailable');
+    // Own a current prepass before the ordinary volume frame encodes. Both
+    // consumers share camera/device; the volume may render at lower resolution.
+    syncViewportRendererSize();
+    camera.updateMatrixWorld();
+    fireLightFieldPass?.update();
+    renderSceneFrame();
+    sceneRenderedForVolume = true;
+    const texture = renderer.backend.get(prePass.getTexture('depth')).texture;
+    return {device:sharedGpu.device, camera, texture};
+  };
+  window.kaminosOrdinaryDepthSetEnabled = enabled => {
+    ordinaryDepthEnabled = Boolean(enabled); markDirty(); return ordinaryDepthEnabled;
+  };
+
   // FPS counter
   const fpsEl = document.getElementById('fps-counter');
   let fpsFrames = 0;
   let fpsLast = performance.now();
+
+  function renderSceneFrame() {
+    const t0 = performance.now();
+    updateAnnularBurnerFrame(t0);
+    fireLightFieldPass?.renderShadows();
+    renderPipeline.render();
+    sceneFrameCount++;
+    const frameMs = performance.now() - t0;
+    fpsFrames++;
+    const elapsed = performance.now() - fpsLast;
+    if (elapsed >= 500) {
+      const fps = (fpsFrames / elapsed * 1000).toFixed(0);
+      fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
+      fpsFrames = 0;
+      fpsLast = performance.now();
+    }
+  }
 
   function animate() {
     requestAnimationFrame(animate);
@@ -9795,32 +10530,110 @@ async function initScene() {
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
-    const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const fireLightFieldRouteActive = fireLightFieldPass !== null;
+    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && volumeBridge ? volumeBridge.update() === true : false;
+    const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
+    const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
-      const t0 = performance.now();
+    if (!foregroundServiceActive && mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
+      if (!sceneRenderedForVolume) renderSceneFrame();
+      sceneRenderedForVolume = false;
 
-      renderPipeline.render();
-
-      const frameMs = performance.now() - t0;
-      fpsFrames++;
-      const elapsed = performance.now() - fpsLast;
-      if (elapsed >= 500) {
-        const fps = (fpsFrames / elapsed * 1000).toFixed(0);
-        fpsEl.textContent = `${fps} app fps · ${frameMs.toFixed(1)}ms app CPU`;
-        fpsFrames = 0;
-        fpsLast = performance.now();
-      }
-
-      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive && !fireLightFieldActive) idleFrames++;
       needsRender = false;
     }
   }
+  compositionHost = {
+    device: renderer.backend.device,
+    setForegroundServiceActive(active) { foregroundServiceActive = Boolean(active); },
+    runForegroundFrame(run) {
+      if (!foregroundServiceActive || insideForegroundFrame) throw new Error('invalid foreground scene frame state');
+      insideForegroundFrame = true;
+      sceneRenderedForVolume = false;
+      try {
+        // The ordinary depth provider runs after the volume updates controls
+        // and camera, preserving identical camera state for prepass/raymarch.
+        const result = run();
+        if (!sceneRenderedForVolume) {
+          syncViewportRendererSize();
+          camera.updateMatrixWorld();
+          fireLightFieldPass?.update();
+          renderSceneFrame();
+        }
+        return {...result, sceneFrameCount, sceneAuthority:'three-render-returned-inside-service-not-presentation'};
+      } finally { insideForegroundFrame = false; }
+    },
+    async presentGlb(glb, {runId, sha256}) {
+      const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
+      const saved = await response.json();
+      if (!response.ok || saved.sha256 !== sha256) throw new Error(saved.error || 'generated mesh persistence hash mismatch');
+      const object = await showGLB(saved.source, {clear:false, metadata:{source:saved.source,type:'glb',fileName:`${sha256}.glb`,label:`SF3D chair · ${runId}`}});
+      const entry = sceneObjects.find(row => row.object === object);
+      if (!entry) throw new Error('SF3D output was not registered in the host scene');
+      window._kaminosDirty?.();
+      return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
+    },
+  };
   animate();
 }
 
 // --- Environment Loading ---
+const environmentRecipeFields = {
+  exposure: 'exposure-slider', intensity: 'env-intensity-slider', rotation: 'env-rotation-slider',
+  backgroundBrightness: 'env-bg-brightness', backgroundContrast: 'env-bg-contrast', backgroundBlur: 'env-blur-slider',
+};
+
+function environmentDefaults(name) {
+  return { exposure: HDR_ENVS[name].exposure, intensity: HDR_ENVS[name].intensity,
+    rotation: 0, backgroundBrightness: 0.6, backgroundContrast: 1, backgroundBlur: 0.4 };
+}
+
+function normalizeEnvironmentRecipe(name, recipe = {}) {
+  const defaults = environmentDefaults(name);
+  return Object.fromEntries(Object.keys(environmentRecipeFields).map(key => {
+    const value = recipe[key];
+    if (value === undefined) return [key, defaults[key]];
+    if (typeof value !== 'number' || !Number.isFinite(value) || (key !== 'rotation' && value < 0)) {
+      throw new Error(`Invalid environment ${name} ${key}`);
+    }
+    if (key === 'backgroundBlur' && value > 1) throw new Error('Background blur must be between 0 and 1');
+    return [key, value];
+  }));
+}
+
+function normalizeEnvironmentRecipes(recipes = {}) {
+  const result = {};
+  for (const [name, recipe] of Object.entries(recipes)) {
+    if (Object.hasOwn(HDR_ENVS, name)) result[name] = normalizeEnvironmentRecipe(name, recipe);
+  }
+  return result;
+}
+
+function readEnvironmentRecipe() {
+  return Object.fromEntries(Object.entries(environmentRecipeFields).map(([key,id]) => [key, Number(document.getElementById(id).value)]));
+}
+
+function rememberEnvironmentRecipe() {
+  if (currentEnvName) environmentRecipes[currentEnvName] = readEnvironmentRecipe();
+}
+
+function applyEnvironmentRecipe(recipe) {
+  for (const [key,id] of Object.entries(environmentRecipeFields)) {
+    const input = document.getElementById(id);
+    // Range bounds are editing affordances, not limits on a valid saved recipe.
+    input.min = Math.min(Number(input.min), recipe[key]);
+    input.max = Math.max(Number(input.max), recipe[key]);
+    input.step = 'any';
+    input.value = recipe[key];
+    const label = document.getElementById(id.endsWith('-slider') ? id.replace('-slider','-val') : `${id}-val`);
+    label.textContent = recipe[key].toFixed(2);
+  }
+  renderer.toneMappingExposure = recipe.exposure;
+  scene.environmentIntensity = recipe.intensity;
+  scene.environmentRotation = new THREE.Euler(0, recipe.rotation, 0);
+  updateBackground();
+}
+
 function createProceduralEnv() {
   // Create a simple gradient environment for fallback
   const envScene = new THREE.Scene();
@@ -9843,10 +10656,11 @@ function createProceduralEnv() {
   return pmremGenerator.fromScene(envScene, 0.04).texture;
 }
 
-async function loadEnvironment(name) {
+async function loadEnvironment(name, { remember = true } = {}) {
   const env = HDR_ENVS[name];
   if (!env) return;
-
+  if (remember) rememberEnvironmentRecipe();
+  const token = ++environmentLoadToken;
   currentEnvName = name;
 
   // Update button states
@@ -9854,15 +10668,14 @@ async function loadEnvironment(name) {
     b.classList.toggle('active', b.dataset.env === name);
   });
 
-  // Update sliders
-  document.getElementById('exposure-slider').value = env.exposure;
-  document.getElementById('exposure-val').textContent = env.exposure.toFixed(1);
-  document.getElementById('env-intensity-slider').value = env.intensity;
-  document.getElementById('env-intensity-val').textContent = env.intensity.toFixed(1);
-  renderer.toneMappingExposure = env.exposure;
+  const recipe = normalizeEnvironmentRecipe(name, environmentRecipes[name]);
+  environmentRecipes[name] = recipe;
+  applyEnvironmentRecipe(recipe);
+  const loadingEl = document.getElementById('env-loading');
+  loadingEl.style.display = 'none';
 
   if (envCache[name]) {
-    applyEnvMap(envCache[name], env.intensity);
+    applyEnvMap(envCache[name], recipe.intensity);
     return;
   }
 
@@ -9870,11 +10683,10 @@ async function loadEnvironment(name) {
     // Procedural environment
     const tex = createProceduralEnv();
     envCache[name] = tex;
-    applyEnvMap(tex, env.intensity);
+    applyEnvMap(tex, recipe.intensity);
     return;
   }
 
-  const loadingEl = document.getElementById('env-loading');
   loadingEl.style.display = 'block';
   loadingEl.textContent = `Loading ${env.label} HDR...`;
 
@@ -9885,14 +10697,14 @@ async function loadEnvironment(name) {
     const envMap = pmremGenerator.fromEquirectangular(tex).texture;
     tex.dispose();
     envCache[name] = envMap;
-    applyEnvMap(envMap, env.intensity);
+    if (token === environmentLoadToken) applyEnvMap(envMap, readEnvironmentRecipe().intensity);
   } catch (e) {
     console.warn(`Failed to load HDR ${name}, using procedural fallback:`, e);
     const tex = createProceduralEnv();
     envCache[name] = tex;
-    applyEnvMap(tex, env.intensity);
+    if (token === environmentLoadToken) applyEnvMap(tex, readEnvironmentRecipe().intensity);
   }
-  loadingEl.style.display = 'none';
+  if (token === environmentLoadToken) loadingEl.style.display = 'none';
 }
 
 function applyEnvMap(envMap, intensity) {
@@ -9904,9 +10716,9 @@ function applyEnvMap(envMap, intensity) {
   // Update all materials in scene to use envMap
   sceneObjects.forEach(({ object }) => {
     object.traverse(child => {
-      if (child.material) {
-        child.material.envMapIntensity = intensity;
-        child.material.needsUpdate = true;
+      for (const material of [].concat(child.material || [])) {
+        material.envMapIntensity = intensity;
+        material.needsUpdate = true;
       }
     });
   });
@@ -14623,11 +15435,13 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     if (!response.ok) throw new Error(index.error || `preset index failed: ${response.status}`);
     validateVolumeSettingsPresetIndex(index);
     volumeSettingsPresetIndex = index;
+    const unavailable = index.unavailableEntries || [];
     if (select) {
       const previous = selectedPresetId || select.value;
       select.replaceChildren();
       if (!index.entries.length) {
-        select.add(new Option('No saved presets', ''));
+        select.add(new Option(unavailable.length ? 'No compatible presets' : 'No saved presets', ''));
+        select.value = '';
       } else {
         for (const entry of index.entries) {
           const option = new Option(`${entry.label} | ${entry.presetId.slice(0, 16)}`, entry.presetId);
@@ -14636,9 +15450,16 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         }
         select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
       }
+      for (const entry of unavailable) {
+        const option = new Option(`${entry.label} | unavailable on this version`, entry.presetId);
+        option.disabled = true;
+        option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId} | ${entry.error}`;
+        select.add(option);
+      }
     }
     volumeSettingsPresetStatus(
-      `${index.entries.length} presets | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      `${index.entries.length} presets${unavailable.length ? ` | ${unavailable.length} unavailable on this version` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      unavailable.length > 0,
     );
     return index;
   } catch (error) {
@@ -14649,14 +15470,14 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
   }
 }
 
-async function saveVolumeSettingsPreset() {
+async function saveVolumeSettingsPreset({ preset: suppliedPreset } = {}) {
   const labelInput = document.getElementById('settings-preset-label');
   const label = String(labelInput?.value || '').trim()
     || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
   volumeSettingsPresetStatus(`saving ${label}...`);
   try {
     await volumeCockpitLayoutReady;
-    const preset = buildVolumeSettingsPreset();
+    const preset = suppliedPreset || buildVolumeSettingsPreset();
     const response = await fetch('/api/volume-settings-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -15173,6 +15994,11 @@ async function replayLastVolumeBasinDriveSession() {
       || artifact.artifactPath !== lastVolumeBasinDriveArtifactPath) {
       throw new Error('basin drive artifact identity or effective path mismatch');
     }
+    const compatibility = artifact.replayCompatibility;
+    if (compatibility?.identity !== 'kaminos.volume.basin-drive-replay-compatibility.v0'
+      || compatibility.compatible !== true) {
+      throw new Error(`basin drive replay incompatible: ${compatibility?.reasons?.join(', ') || 'missing compatibility receipt'}; capture is preserved; use its recorded source/schema`);
+    }
     const session = parseVolumeBasinDriveSession(`${JSON.stringify(artifact.session)}\n`);
     let replayStartedAt = null;
     const receipt = await replayVolumeBasinDriveSession(session, {
@@ -15314,6 +16140,15 @@ function openSelectedVolumeSettingsPresetInspection() {
 function navigateToSelectedVolumeSettingsPreset(openFresh = false) {
   try {
     const entry = selectedVolumeSettingsPresetEntry();
+    if (isCompositionAuthoring() && !openFresh) {
+      // An authored composition keeps its scene: the basin changes in place
+      // through the serialized authoring save-and-reload, which reports its own
+      // failures. A request made while another authoring action is saving is
+      // refused visibly instead of being dropped behind the stale one.
+      if (authoringBusy) throw new Error('another composition change is still saving');
+      void changeCompositionBasin(entry);
+      return null;
+    }
     const target = selectedVolumeSettingsPresetUrl();
     const destination = openFresh ? 'a fresh cockpit tab' : 'the current cockpit tab';
     volumeSettingsPresetStatus(`opening exact preset loader for ${entry.label} | ${entry.presetId} in ${destination}...`);
@@ -19569,6 +20404,9 @@ function readVolumeControls() {
     oracleActivityVorticity: parseFloat(document.getElementById('volume-oracle-activity-vorticity').value),
     oracleActivityMaterial: parseFloat(document.getElementById('volume-oracle-activity-material').value),
     lookFreeze: parseFloat(document.getElementById('volume-look-freeze').value),
+    fireLightField: fireLightFieldRouteParams().get('volume_light_field') === '1',
+    fireProbe: parseInt(new URLSearchParams(window.location.search).get('volume_fire_probe') || '', 10) || 0,
+    fireLightFieldGrid: parseInt(fireLightFieldRouteParams().get('volume_light_field_grid') || '', 10) || undefined,
     reactionHeatMin: parseFloat(document.getElementById('volume-reaction-heat-min').value),
     reactionHeatMax: parseFloat(document.getElementById('volume-reaction-heat-max').value),
     reactionFuelMin: parseFloat(document.getElementById('volume-reaction-fuel-min').value),
@@ -20181,6 +21019,7 @@ async function admitVolumeSettingsPresetRoute(params) {
   validateVolumeSettingsPresetTarget(receipt, params);
   activeVolumeSettingsPresetReceipt = receipt;
   window.__kaminosVolumeSettingsPresetReceipt = receipt;
+  document.getElementById('settings-preset-label').value = receipt.label || receipt.presetId;
   volumeSettingsPresetStatus(
     `${receipt.label || receipt.presetId} | requested ${requestedPresetId} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}`,
   );
@@ -20202,6 +21041,7 @@ function reportKaminosVolumeRouteInitFailure(error) {
 }
 
 async function initKaminosVolumeRoute() {
+  if (compositionSetupError) throw compositionSetupError;
   const params = new URLSearchParams(window.location.search);
   await admitVolumeSettingsPresetRoute(params);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
@@ -20847,9 +21687,36 @@ async function initKaminosVolumeRoute() {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
-    transparentCanvas: fingerFluidPyroCompositionRequested(),
+    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute(),
+    sharedGpuContext: sharedGpu,
+    getSceneDepth: isFireLightFieldRoute() ? () => ordinarySceneDepthProvider?.() ?? null : null,
   });
+  if (isFireLightFieldRoute()) {
+    // Fire-to-scene lighting needs the live Three scene visible under the
+    // flame: alpha-composite the native volume canvas instead of the opaque
+    // near-black overlay, and keep the CanvasTexture bridge out of the route.
+    const volumeCanvasElement = volumePrototype.canvasElement?.();
+    if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
+  }
   window.__kaminosVolumePrototype = volumePrototype;
+  // Optional composition-module seam: a URL HASH entry
+  // #composition_module_url=<module> (hash, not query — settings routes are
+  // contract-validated and reject unexpected query parameters) loads an ES
+  // module before GPU acquisition and mounts after the volume exists via
+  // mountComposition({ prototype, params, sharedGpu, host }). Absent: no-op. Used to compose
+  // long-running inference (e.g. MoGe) into the live app route.
+  {
+    if (compositionModule) {
+      window.__kaminosCompositionSetup.phase = 'mount';
+      Promise.resolve().then(() => compositionModule.mountComposition({ prototype: volumePrototype, params: new URLSearchParams(window.location.search), sharedGpu, host: compositionHost }))
+        .then(() => { window.__kaminosCompositionSetup.status = 'mounted'; })
+        .catch(error => {
+          Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: String(error?.message || error)});
+          console.error('composition module failed:', error);
+          setInfo(`Composition module: ${error.message}`);
+        });
+    }
+  }
   let volumeEmitterRuntimeFrame = 0;
   function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot) {
     const family = document.getElementById('emitter-assay-family').value;
@@ -22271,10 +23138,88 @@ function initEnvButtons() {
     btn.className = 'env-btn' + (key === 'studio' ? ' active' : '');
     btn.textContent = env.label;
     btn.dataset.env = key;
-    btn.onclick = () => loadEnvironment(key);
+    btn.onclick = () => loadEnvironment(key).then(saveSettings).catch(error => setInfo(error.message));
     container.appendChild(btn);
   }
 }
+
+document.getElementById('env-reset').onclick = () => {
+  if (!currentEnvName) return;
+  environmentRecipes[currentEnvName] = environmentDefaults(currentEnvName);
+  loadEnvironment(currentEnvName, { remember: false }).then(saveSettings).catch(error => setInfo(error.message));
+};
+
+// --- Authored Rim Light ---
+const RIM_DEFAULTS = { enabled: false, color: '#d6e5ff', intensity: 120, azimuth: 135, elevation: 30,
+  distance: 6, angle: 35, penumbra: 0.65, target: [0, 0, 0] };
+const rimFields = ['intensity', 'azimuth', 'elevation', 'distance', 'angle', 'penumbra', 'target-x', 'target-y', 'target-z'];
+
+function readRimLightSettings() {
+  const settings = { enabled: document.getElementById('rim-enabled').checked, color: document.getElementById('rim-color').value };
+  for (const key of rimFields.slice(0, 6)) settings[key] = Number(document.getElementById(`rim-${key}`).value);
+  settings.target = ['x','y','z'].map(axis => Number(document.getElementById(`rim-target-${axis}`).value));
+  return settings;
+}
+
+function updateRimLight() {
+  const settings = readRimLightSettings();
+  document.getElementById('rim-controls').hidden = !settings.enabled;
+  if (!rimLight) return;
+  rimLight.visible = settings.enabled;
+  rimLight.color.set(settings.color);
+  rimLight.intensity = settings.intensity;
+  rimLight.angle = THREE.MathUtils.degToRad(settings.angle);
+  rimLight.penumbra = settings.penumbra;
+  const azimuth = THREE.MathUtils.degToRad(settings.azimuth), elevation = THREE.MathUtils.degToRad(settings.elevation);
+  rimLight.target.position.fromArray(settings.target);
+  rimLight.position.set(
+    settings.target[0] + settings.distance * Math.cos(elevation) * Math.sin(azimuth),
+    settings.target[1] + settings.distance * Math.sin(elevation),
+    settings.target[2] + settings.distance * Math.cos(elevation) * Math.cos(azimuth));
+  rimLight.shadow.camera.near = Math.min(0.1, settings.distance * 0.05);
+  rimLight.shadow.camera.far = Math.max(20, settings.distance * 3);
+  rimLight.shadow.camera.updateProjectionMatrix();
+  window._kaminosDirty?.();
+}
+
+function setRimLight(recipe = null) {
+  const settings = { ...RIM_DEFAULTS, ...recipe };
+  if (typeof settings.enabled !== 'boolean' || !/^#[\da-f]{6}$/i.test(settings.color)
+    || !Array.isArray(settings.target) || settings.target.length !== 3 || !settings.target.every(Number.isFinite)) throw new Error('Invalid rim light');
+  for (const key of rimFields.slice(0, 6)) if (!Number.isFinite(settings[key])) throw new Error(`Invalid rim ${key}`);
+  if (settings.intensity < 0 || settings.distance < 0.1 || Math.abs(settings.elevation) > 89
+    || settings.angle < 1 || settings.angle > 89 || settings.penumbra < 0 || settings.penumbra > 1) throw new Error('Invalid rim light range');
+  document.getElementById('rim-enabled').checked = settings.enabled;
+  document.getElementById('rim-color').value = settings.color;
+  for (const key of rimFields) {
+    const value = key.startsWith('target-') ? settings.target['xyz'.indexOf(key.at(-1))] : settings[key];
+    const range = document.getElementById(`rim-${key}`), number = document.getElementById(`rim-${key}-number`);
+    range.min = Math.min(Number(range.min), value);
+    range.max = Math.max(Number(range.max), value);
+    range.step = 'any';
+    range.value = number.value = value;
+  }
+  updateRimLight();
+}
+
+for (const key of rimFields) {
+  const range = document.getElementById(`rim-${key}`), number = document.getElementById(`rim-${key}-number`);
+  number.step = 'any';
+  range.addEventListener('input', () => { number.value = range.value; updateRimLight(); });
+  number.addEventListener('change', () => {
+    if (number.value === '' || !number.validity.valid || !Number.isFinite(number.valueAsNumber)) { number.value = range.value; return; }
+    range.min = Math.min(Number(range.min), number.valueAsNumber);
+    range.max = Math.max(Number(range.max), number.valueAsNumber);
+    range.value = number.value;
+    updateRimLight();
+  });
+}
+document.getElementById('rim-enabled').addEventListener('change', updateRimLight);
+document.getElementById('rim-color').addEventListener('input', updateRimLight);
+document.getElementById('rim-aim').onclick = () => {
+  setRimLight({ ...readRimLightSettings(), target: controls.target.toArray() });
+  saveSettings();
+};
 
 // --- Exposure / Intensity Controls ---
 document.getElementById('exposure-slider').addEventListener('input', e => {
@@ -22288,14 +23233,9 @@ document.getElementById('env-intensity-slider').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   scene.environmentIntensity = v;
   document.getElementById('env-intensity-val').textContent = v.toFixed(1);
-  if (currentMesh) {
-    currentMesh.traverse(child => {
-      if (child.material) {
-        child.material.envMapIntensity = v;
-        child.material.needsUpdate = true;
-      }
-    });
-  }
+  for (const { object } of sceneObjects) object.traverse(child => {
+    for (const material of [].concat(child.material || [])) material.envMapIntensity = v;
+  });
   window._kaminosDirty?.();
 });
 
@@ -22312,6 +23252,7 @@ document.getElementById('env-rotation-slider').addEventListener('input', e => {
 document.getElementById('show-env-bg').addEventListener('change', e => {
   showEnvBg = e.target.checked;
   document.getElementById('blur-row').style.display = showEnvBg ? '' : 'none';
+  document.getElementById('env-backdrop-controls').style.display = showEnvBg ? '' : 'none';
   updateBackground();
   window._kaminosDirty?.();
 });
@@ -22323,13 +23264,29 @@ document.getElementById('env-blur-slider').addEventListener('input', e => {
   window._kaminosDirty?.();
 });
 
+const envBackdropContrast = uniform(1);
+for (const id of ['env-bg-brightness', 'env-bg-contrast']) {
+  document.getElementById(id).addEventListener('input', event => {
+    document.getElementById(`${id}-val`).textContent = Number(event.target.value).toFixed(2);
+    updateBackground();
+    window._kaminosDirty?.();
+  });
+}
+
 function updateBackground() {
   if (showEnvBg && currentEnvMap) {
+    if (scene.background !== currentEnvMap || !scene.backgroundNode) {
+      // Grade only the background; the environment used by mesh materials is unchanged.
+      const graded = pmremTexture(currentEnvMap).rgb.max(0).div(0.18).pow(envBackdropContrast.max(1)).mul(0.18);
+      scene.backgroundNode = mix(vec3(0.18), graded, envBackdropContrast.min(1));
+    }
     scene.background = currentEnvMap;
     scene.backgroundBlurriness = parseFloat(document.getElementById('env-blur-slider').value);
-    scene.backgroundIntensity = 0.6;
+    scene.backgroundIntensity = Number(document.getElementById('env-bg-brightness').value);
+    envBackdropContrast.value = Number(document.getElementById('env-bg-contrast').value);
     scene.backgroundRotation = scene.environmentRotation;
   } else {
+    scene.backgroundNode = null;
     scene.background = new THREE.Color(0x0a0a0a);
     scene.backgroundBlurriness = 0;
   }
@@ -23091,7 +24048,7 @@ async function grFetchApi(endpoint, params = {}) {
   }
 }
 
-const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
+const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx', 'generated-meshes'];
 
 function greenroomHumanizeName(value, fallback = 'Untitled') {
   const raw = String(value || '').trim();
@@ -24712,6 +25669,9 @@ async function grBrowseScenes() {
       provenance: sceneData?.provenance || null,
       modelFileName: sceneData?.model?.fileName || entry.name,
       timestamp: sceneData?.timestamp || '',
+      label: sceneData?.label || sceneData?.capture?.label || '',
+      capture: sceneData?.capture || null,
+      composition: sceneData?.composition || null,
     });
   }
 
@@ -24751,8 +25711,8 @@ async function grBrowseScenes() {
       icon.textContent = '\uD83C\uDFA8';
       const name = document.createElement('span');
       name.className = 'gr-name';
-      name.textContent = entry.name.replace('.kaminos.json', '');
-      name.title = entry.provenance?.source_url || '';
+      name.textContent = entry.label || entry.name.replace('.kaminos.json', '');
+      name.title = [entry.name, entry.composition?.flame?.label, entry.composition?.flame?.presetId].filter(Boolean).join('\n');
 
       // Show provenance badge
       if (entry.provenance?.greenroom_job_id) {
@@ -24777,7 +25737,7 @@ async function grBrowseScenes() {
         if (sceneData && !sceneData.error) {
           const blob = new Blob([JSON.stringify(sceneData)], { type: 'application/json' });
           const file = new File([blob], entry.name);
-          loadSceneFile(file);
+          loadSceneFile(file, { sceneFile: entry.name });
         }
       };
       const delBtn = document.createElement('button');
@@ -24792,7 +25752,26 @@ async function grBrowseScenes() {
       };
       div.appendChild(btn);
       div.appendChild(delBtn);
-      listEl.appendChild(div);
+      if (entry.capture?.image?.startsWith('data:image/png;base64,')) {
+        const shot = document.createElement('div');
+        shot.className = 'saved-scene-shot';
+        const thumbnail = document.createElement('img');
+        thumbnail.src = entry.capture.image;
+        thumbnail.alt = entry.capture.label || entry.label;
+        thumbnail.loading = 'lazy';
+        const pictureButton = document.createElement('button');
+        pictureButton.className = 'saved-scene-picture';
+        pictureButton.title = `Open ${entry.label || entry.name}`;
+        pictureButton.append(thumbnail);
+        pictureButton.onclick = btn.onclick;
+        const basin = document.createElement('div');
+        basin.className = 'saved-scene-basin';
+        basin.textContent = [entry.composition?.flame?.label || 'Mesh scene', entry.capture.capturedAt].filter(Boolean).join(' | ');
+        shot.append(pictureButton, div, basin);
+        listEl.append(shot);
+      } else {
+        listEl.appendChild(div);
+      }
     }
   }
 }
@@ -25003,18 +25982,21 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   }
 }
 
-function buildSceneData() {
+function buildSceneData(capture = null) {
+  rememberEnvironmentRecipe();
   const objects = sceneObjects.map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
-  return buildSceneDocument({
+  const data = buildSceneDocument({
     timestamp: new Date().toISOString(),
     objects,
     groups: serializeSceneGroups(),
     activeObjectId: activeSceneObjectId,
     activeGroupId: activeSceneGroupId,
     provenance,
+    composition: activeSceneComposition,
+    capture,
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
@@ -25030,6 +26012,11 @@ function buildSceneData() {
       rotation: parseFloat(document.getElementById('env-rotation-slider').value),
       showBackground: showEnvBg,
       backgroundBlur: parseFloat(document.getElementById('env-blur-slider').value),
+      backgroundBrightness: Number(document.getElementById('env-bg-brightness').value),
+      backgroundContrast: Number(document.getElementById('env-bg-contrast').value),
+      recipes: environmentRecipes,
+      rimLight: readRimLightSettings(),
+      ground: { visible: groundPlane.visible, height: groundPlane.position.y },
     },
     volumePrimitives: getVolumePrimitiveState(),
     postprocessing: {
@@ -25052,7 +26039,290 @@ function buildSceneData() {
     backdrop: !!backdropMesh,
     backdropBrightness: backdropMesh ? parseFloat(document.getElementById('backdrop-brightness').value) : undefined,
   });
+  data.label = document.getElementById('composition-label').value.trim() || 'Untitled composition';
+  return data;
 }
+
+function isCompositionAuthoring() {
+  return new URLSearchParams(location.hash.slice(1)).get('authoring') === '1' || isFireLightFieldRoute();
+}
+
+function compositionStatus(message, failed = false) {
+  const status = document.getElementById('composition-status');
+  status.textContent = message;
+  status.dataset.failed = String(failed);
+}
+
+async function collectSceneComposition() {
+  const debug = volumePrototype?.debugState?.();
+  if (!isFireLightFieldRoute() && !activeSceneComposition) return;
+  if (!debug?.active) {
+    if (activeSceneComposition || isFireLightFieldRoute()) throw new Error(debug?.error || 'Authored flame is not active');
+    activeSceneComposition = null;
+    return;
+  }
+  if (!isFireLightFieldRoute()) throw new Error('Composition saving requires the ordinary flame light-field route');
+  await volumeCockpitLayoutReady;
+  const preset = buildVolumeSettingsPreset();
+  const fingerprint = value => JSON.stringify([
+    value.domControls, value.rendererControls, value.presentationControls, value.route,
+    document.getElementById('fire-light-gain-stops').value,
+    document.getElementById('fire-light-test-scene-toggle').checked,
+    burnerRecipe,
+  ]);
+  const savedFingerprint = fingerprint(preset);
+  const assertUnchanged = () => {
+    if (fingerprint(buildVolumeSettingsPreset()) !== savedFingerprint) {
+      throw new Error('Flame settings changed during save or capture; try again');
+    }
+  };
+  const receipt = await saveVolumeSettingsPreset({ preset });
+  assertUnchanged();
+  const route = {};
+  for (const [key, value] of fireLightFieldRouteParams()) {
+    if (key.startsWith('volume_light_field')) route[key] = value;
+  }
+  const moduleUrl = new URLSearchParams(location.hash.slice(1)).get('composition_module_url');
+  if (moduleUrl) route.composition_module_url = moduleUrl;
+  route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';
+  activeSceneComposition = {
+    schema: COMPOSITION_SCHEMA,
+    flame: { presetId: receipt.effective.presetId, label: receipt.effective.label, stationary: true },
+    route,
+    lightGainStops: Number(document.getElementById('fire-light-gain-stops').value),
+    ...(burnerRecipe ? { burner: normalizeBurner(burnerRecipe) } : {}),
+  };
+  return assertUnchanged;
+}
+
+async function withAuthoringAction(action) {
+  if (authoringBusy) return false;
+  authoringBusy = true;
+  document.getElementById('composition-capture').disabled = true;
+  try {
+    return await action();
+  } catch (error) {
+    compositionStatus(error.message || String(error), true);
+    setInfo(`Composition failed: ${error.message || error}`);
+    return false;
+  } finally {
+    authoringBusy = false;
+    document.getElementById('composition-capture').disabled = false;
+  }
+}
+
+async function changeCompositionBasin(entry) {
+  return withAuthoringAction(async () => {
+    if (sceneSaveIsBlocked()) return false;
+    await collectSceneComposition();
+    const next = buildSceneData();
+    next.composition ||= {
+      schema: COMPOSITION_SCHEMA,
+      route: { volume_light_field: '1', volume_light_field_scene_depth: '1', volume_light_field_test_scene: '0' },
+      lightGainStops: 0,
+    };
+    next.composition.flame = { presetId: entry.presetId, label: entry.label, stationary: true };
+    if (!await saveToServer(next, null)) throw new Error('Could not save the basin composition');
+    location.assign(compositionRestoreUrl(next.composition, currentSceneFile, location.origin));
+    return true;
+  });
+}
+
+window.captureComposition = () => withAuthoringAction(async () => {
+  if (sceneSaveIsBlocked() || sceneIsEmpty()) return false;
+  if (volumePrototype?.debugState?.()?.active && !isFireLightFieldRoute()) {
+    throw new Error('Capture supports the ordinary flame light-field composition, not this volume route');
+  }
+  if (sceneObjects.some(object => object.type === 'splat')) {
+    throw new Error('Splat overlay capture is not supported by this mesh/flame capture');
+  }
+  const label = document.getElementById('composition-label').value.trim();
+  if (!label) throw new Error('Give this shot a label');
+  compositionStatus('Capturing...');
+  const assertUnchanged = await collectSceneComposition();
+  const helper = transformControls?.getHelper();
+  const visible = helper?.visible;
+  let data;
+  try {
+    if (helper) helper.visible = false;
+    window._kaminosDirty?.();
+    // The second callback samples after both render loops have had a turn.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const state = volumePrototype?.debugState?.();
+    assertUnchanged?.();
+    if (activeSceneComposition && (!state?.active || state.error)) throw new Error(state?.error || 'Flame stopped before capture');
+    const capture = captureComposedCanvases({
+      host: renderer.domElement,
+      volume: activeSceneComposition ? volumePrototype.canvasElement() : null,
+      document, label,
+      simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
+    });
+    data = buildSceneData(capture);
+  } finally {
+    if (helper) helper.visible = visible;
+    window._kaminosDirty?.();
+  }
+  if (!await saveToServer(data, null)) throw new Error('Capture was not saved');
+  compositionStatus(`${label} | ${activeSceneComposition?.flame.label || 'Mesh scene'}`);
+  return true;
+});
+
+document.getElementById('composition-capture').onclick = window.captureComposition;
+document.getElementById('composition-ground-visible').onchange = event => {
+  if (groundPlane) groundPlane.visible = event.target.checked;
+  window._kaminosDirty?.();
+};
+document.getElementById('composition-ground-height').onchange = event => {
+  const height = event.target.valueAsNumber;
+  if (groundPlane && Number.isFinite(height)) groundPlane.position.y = height;
+  window._kaminosDirty?.();
+};
+document.getElementById('composition-basins').onclick = () => setActiveTab('volume');
+
+const burnerFields = [
+  ['innerRadius', 'Inner radius', 'number', 0.005, 0, 0.85], ['outerRadius', 'Outer radius', 'number', 0.01, 0.01, 2],
+  ['ringCount', 'Ring count', 'number', 1, 1, 96], ['grooveFraction', 'Groove fraction', 'number', 0.01, 0.01, 0.99],
+  ['grooveDepth', 'Groove depth', 'number', 0.001, 0.001, 0.1], ['sectorCount', 'Sector count', 'number', 1, 1, 64],
+  ['thickness', 'Bed thickness', 'number', 0.005, 0.005, 0.3], ['rimHeight', 'Rim height', 'number', 0.005, 0, 0.2],
+  ['subdivisions', 'Subdivisions', 'number', 1, 3, 512], ['glow', 'Channel glow', 'number', 0.1, 0, 10],
+  ['coolingSeconds', 'Cooling seconds', 'number', 0.1, 0, 10], ['bedColor', 'Refractory', 'color'],
+  ['rimColor', 'Metal rim', 'color'], ['glowColor', 'Active channels', 'color'],
+];
+for (const [key, label, type, step, min, max] of burnerFields) {
+  const row = document.createElement('div');
+  row.className = 'burner-field';
+  const caption = document.createElement('label');
+  caption.htmlFor = `burner-${key}`;
+  caption.textContent = label;
+  const input = document.createElement('input');
+  input.id = caption.htmlFor;
+  input.type = type;
+  if (step) { input.step = step; input.min = min; }
+  input.className = 'transform-input';
+  const commit = value => {
+    try {
+      const next = { ...(burnerRecipe || BURNER_DEFAULTS) };
+      next[key] = value;
+      setAnnularBurner(next);
+    } catch (error) {
+      burnerError = error.message;
+      document.getElementById('burner-status').textContent = burnerError;
+      syncBurnerControls();
+    }
+  };
+  input.onchange = () => commit(type === 'color' ? input.value : input.valueAsNumber);
+  row.append(caption);
+  if (type === 'number') {
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.id = `burner-${key}-slider`;
+    slider.setAttribute('aria-label', label);
+    Object.assign(slider, { min, max, step: step < 1 ? 'any' : step });
+    slider.oninput = () => {
+      const rounded = Number((Math.round(slider.valueAsNumber / step) * step).toFixed(Math.max(0, -Math.floor(Math.log10(step)))));
+      commit(Math.max(Number(slider.min), Math.min(Number(slider.max), rounded)));
+    };
+    row.append(slider);
+  }
+  row.append(input);
+  document.getElementById('burner-fields').append(row);
+}
+
+function syncBurnerControls() {
+  const enabled = !!burnerRecipe && burnerRecipe.enabled !== false;
+  document.getElementById('burner-enabled').checked = enabled;
+  document.getElementById('burner-controls').hidden = !enabled;
+  const recipe = burnerRecipe || BURNER_DEFAULTS;
+  for (const [key, , type, step, min, max] of burnerFields) {
+    document.getElementById(`burner-${key}`).value = recipe[key];
+    if (type !== 'number') continue;
+    const slider = document.getElementById(`burner-${key}-slider`);
+    // Slider travel is a useful editing range, not a cap on numeric entry or loaded recipes.
+    slider.min = Math.min(min, recipe[key]);
+    slider.max = Math.max(max, recipe[key]);
+    if (key === 'innerRadius') slider.max = Math.max(recipe[key], recipe.outerRadius - step);
+    if (key === 'outerRadius') slider.min = Math.min(recipe[key], recipe.innerRadius + step);
+    if (key === 'grooveDepth') slider.max = Math.max(recipe[key], recipe.thickness - step);
+    if (key === 'thickness') slider.min = Math.min(recipe[key], recipe.grooveDepth + step);
+    if (key === 'sectorCount') slider.max = Math.min(Number(slider.max), Math.floor(recipe.subdivisions / 2));
+    if (key === 'subdivisions') slider.min = Math.max(min, recipe.sectorCount * 2);
+    slider.value = recipe[key];
+  }
+}
+
+function setAnnularBurner(value) {
+  const next = normalizeBurner(value);
+  const replacement = next && next.enabled !== false ? createAnnularBurner(THREE, mergeGeometries, next) : null;
+  annularBurner?.dispose();
+  annularBurner = replacement;
+  burnerRecipe = next;
+  burnerError = null;
+  if (replacement) scene.add(replacement.group);
+  if (activeSceneComposition) {
+    if (next) activeSceneComposition.burner = next;
+    else delete activeSceneComposition.burner;
+  }
+  syncBurnerControls();
+  document.getElementById('burner-status').textContent = '';
+  window._kaminosDirty?.();
+  return burnerRecipe;
+}
+
+function updateAnnularBurnerFrame(now) {
+  if (!annularBurner) return;
+  const state = annularBurner.update(window.__kaminosVolumeEmitterReceipt, !!volumePrototype?.debugState?.().active, now);
+  const status = document.getElementById('burner-status');
+  const message = burnerError || (state.reason === 'ring-emitter-unavailable' ? 'No compatible ring emitter' : state.reason === 'emitter-outside-bed' ? 'Flame footprint extends beyond the bed' : '');
+  if (status.textContent !== message && !document.activeElement?.id?.startsWith('burner-')) status.textContent = message;
+  for (const [id, sourceId] of [['radius', 'volume-input-radius'], ['flow', 'volume-flow-rate']]) {
+    const input = document.getElementById(`burner-${id}`);
+    const source = document.getElementById(sourceId);
+    if (document.activeElement !== input) input.value = source.value;
+    const number = document.getElementById(`burner-${id}-number`);
+    if (document.activeElement !== number) number.value = source.value;
+  }
+}
+
+document.getElementById('burner-enabled').onchange = event => {
+  try {
+    if (event.target.checked && (!isFireLightFieldRoute() || !burnerSource(window.__kaminosVolumeEmitterReceipt))) {
+      throw new Error('Annular bed requires an active ordinary ring-flame composition');
+    }
+    setAnnularBurner({ ...(burnerRecipe || BURNER_DEFAULTS), enabled: event.target.checked });
+  } catch (error) {
+    syncBurnerControls();
+    document.getElementById('burner-status').textContent = error.message;
+  }
+};
+for (const [id, sourceId] of [['radius', 'volume-input-radius'], ['flow', 'volume-flow-rate']]) {
+  const input = document.getElementById(`burner-${id}`);
+  const number = document.getElementById(`burner-${id}-number`);
+  const source = document.getElementById(sourceId);
+  for (const key of ['min', 'max', 'step', 'value']) input[key] = number[key] = source[key];
+  input.oninput = event => {
+    source.value = event.target.value;
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+    number.value = source.value;
+    window._kaminosDirty?.();
+  };
+  number.onchange = () => {
+    if (Number.isFinite(number.valueAsNumber)) {
+      input.value = number.value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    number.value = source.value;
+  };
+}
+window.kaminosBurnerState = () => annularBurner?.debugState() || { effective: false, recipe: burnerRecipe, reason: 'disabled' };
+window.kaminosSetBurner = value => {
+  if (value && (!isFireLightFieldRoute() || !burnerSource(window.__kaminosVolumeEmitterReceipt))) throw new Error('Annular bed requires an ordinary ring-flame composition');
+  return setAnnularBurner(value);
+};
+
+document.getElementById('composition-library').onclick = () => {
+  setActiveTab('greenroom');
+  grBrowseScenes().then(() => document.getElementById('scenes-list').scrollIntoView({ block: 'start' }));
+};
 
 async function saveToServer(sceneData, filename) {
   const body = { ...sceneData };
@@ -25079,7 +26349,8 @@ async function saveToServer(sceneData, filename) {
 }
 
 function sceneIsEmpty() {
-  return sceneObjects.length === 0 && volumePrimitives.length === 0;
+  const persistableFlame = isFireLightFieldRoute() && volumePrototype?.debugState?.()?.active;
+  return sceneObjects.length === 0 && volumePrimitives.length === 0 && !persistableFlame;
 }
 
 function sceneSaveIsBlocked() {
@@ -25093,26 +26364,28 @@ function sceneSaveIsBlocked() {
 }
 
 // Save: overwrite current scene file, or create new if none
-window.saveScene = async function() {
+window.saveScene = () => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked()) return false;
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
     return false;
   }
+  await collectSceneComposition();
   const data = buildSceneData();
   return saveToServer(data, currentSceneFile);
-};
+});
 
 // Save As: always create a new scene file
-window.saveSceneAs = async function() {
+window.saveSceneAs = () => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked()) return false;
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
     return false;
   }
+  await collectSceneComposition();
   const data = buildSceneData();
   return saveToServer(data, null);
-};
+});
 
 function getMaterialState() {
   return getMaterialStateForObject(currentMesh);
@@ -25146,9 +26419,14 @@ function claimLoadedSceneFile(file) {
   }
 }
 
-async function loadSceneFile(file) {
+async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
+  if (authoringBusy) {
+    setInfo('Wait for the current capture or save');
+    return;
+  }
   const previousSceneFile = currentSceneFile;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
+  sceneSaveBlockedByFailedRestore = true;
   const text = await file.text();
   let data;
   try {
@@ -25176,12 +26454,26 @@ async function loadSceneFile(file) {
     return;
   }
 
+  if ((restorePlan.composition || isCompositionAuthoring()) && !mounted) {
+    if (!sceneFile) {
+      if (!await saveToServer(data, null)) return;
+      sceneFile = currentSceneFile;
+    }
+    location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
+    return;
+  }
+  activeSceneComposition = restorePlan.composition;
+  setAnnularBurner(activeSceneComposition?.burner || null);
+
   setInfo('Loading scene...');
 
   // Load environment first
   if (data.environment) {
     const env = data.environment;
-    await loadEnvironment(env.name || 'studio');
+    const name = env.name || 'studio';
+    environmentRecipes = normalizeEnvironmentRecipes(env.recipes);
+    environmentRecipes[name] = normalizeEnvironmentRecipe(name, env);
+    await loadEnvironment(name, { remember: false });
     renderer.toneMappingExposure = env.exposure ?? 1.5;
     document.getElementById('exposure-slider').value = renderer.toneMappingExposure;
     document.getElementById('exposure-val').textContent = renderer.toneMappingExposure.toFixed(1);
@@ -25191,6 +26483,11 @@ async function loadSceneFile(file) {
     document.getElementById('env-intensity-val').textContent = intensity.toFixed(1);
     scene.environmentIntensity = intensity;
 
+    groundPlane.visible = env.ground?.visible ?? true;
+    groundPlane.position.y = Number.isFinite(env.ground?.height) ? env.ground.height : -0.85;
+    document.getElementById('composition-ground-visible').checked = groundPlane.visible;
+    document.getElementById('composition-ground-height').value = groundPlane.position.y;
+
     const rotation = env.rotation ?? 0;
     document.getElementById('env-rotation-slider').value = rotation;
     document.getElementById('env-rotation-val').textContent = rotation.toFixed(1);
@@ -25199,12 +26496,18 @@ async function loadSceneFile(file) {
     showEnvBg = env.showBackground ?? false;
     document.getElementById('show-env-bg').checked = showEnvBg;
     document.getElementById('blur-row').style.display = showEnvBg ? '' : 'none';
+    document.getElementById('env-backdrop-controls').style.display = showEnvBg ? '' : 'none';
+    for (const [id, value] of [['env-bg-brightness', env.backgroundBrightness ?? 0.6], ['env-bg-contrast', env.backgroundContrast ?? 1]]) {
+      document.getElementById(id).value = value;
+      document.getElementById(`${id}-val`).textContent = Number(value).toFixed(2);
+    }
     if (showEnvBg) {
       document.getElementById('env-blur-slider').value = env.backgroundBlur ?? 0.4;
       document.getElementById('env-blur-val').textContent = (env.backgroundBlur ?? 0.4).toFixed(2);
     }
     updateBackground();
   }
+  setRimLight(data.environment?.rimLight);
 
   if (objectRecords.length > 0) {
     try {
@@ -25220,9 +26523,13 @@ async function loadSceneFile(file) {
     clearScene();
   }
 
-  setVolumePrimitivesState(restorePlan.volumePrimitives);
-  if (hasVolumePrimitiveScene) {
-    setActiveTab('volume');
+  // The pinned basin is already mounted. Reapplying identical primitives would
+  // rebuild its GPU field and invalidate textures held by the lighting pass.
+  if (!activeSceneComposition || JSON.stringify(previousVolumePrimitiveState) !== JSON.stringify(restorePlan.volumePrimitives)) {
+    setVolumePrimitivesState(restorePlan.volumePrimitives);
+  }
+  if (hasVolumePrimitiveScene || activeSceneComposition) {
+    setActiveTab(activeSceneComposition ? 'assets' : 'volume');
     await volumePrototype?.setActive?.(true);
   } else {
     await volumePrototype?.setActive?.(false);
@@ -25274,6 +26581,10 @@ async function loadSceneFile(file) {
         document.getElementById('ao-falloff').value = aoFalloff;
         document.getElementById('ao-falloff-val').textContent = aoFalloff.toFixed(2);
       }
+      for (const id of ['ao-radius', 'ao-intensity', 'ao-scale', 'ao-thickness', 'ao-falloff']) {
+        document.getElementById(id)?.dispatchEvent(new Event('input'));
+      }
+      document.getElementById('ao-toggle').dispatchEvent(new Event('change'));
     }
     const dof = data.postprocessing.dof;
     if (dof) {
@@ -25311,6 +26622,13 @@ async function loadSceneFile(file) {
   }
 
   claimLoadedSceneFile(file);
+  if (data.label) document.getElementById('composition-label').value = data.label;
+  if (activeSceneComposition) {
+    const gain = document.getElementById('fire-light-gain-stops');
+    gain.value = activeSceneComposition.lightGainStops;
+    gain.dispatchEvent(new Event('input'));
+    compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
+  }
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
@@ -25351,9 +26669,9 @@ const sceneInitialization = initScene();
 sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
-  restoreSettings();
+  const initialEnvironment = restoreSettings();
   // Load HDR environment first, then auto-load deep-linked splat if present
-  loadEnvironment('studio').then(async () => {
+  const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
     const loadSplat = params.get('load');
     if (loadSplat) {
@@ -25402,7 +26720,30 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
-  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  const volumeLoaded = initKaminosVolumeRoute();
+  volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
+  Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
+    const hash = new URLSearchParams(location.hash.slice(1));
+    if (hash.get('authoring') !== '1') return;
+    document.body.classList.add('composition-authoring');
+    setActiveTab('assets');
+    const sceneFile = hash.get('scene');
+    if (!sceneFile) return;
+    sceneSaveBlockedByFailedRestore = true;
+    const response = await fetch(`/api/read?root=scenes&path=${encodeURIComponent(sceneFile)}`);
+    if (!response.ok) throw new Error(`Scene unavailable: ${sceneFile}`);
+    const data = await response.json();
+    const plan = planSceneRestore(data);
+    if (plan.composition) {
+      const preset = new URLSearchParams(location.search).get('settings_preset');
+      if (preset !== plan.composition.flame.presetId) throw new Error('Mounted basin does not match the saved scene');
+    }
+    await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
+  }).catch(error => {
+    sceneSaveBlockedByFailedRestore = true;
+    compositionStatus(`Restore failed: ${error.message || error}`, true);
+    setInfo(`Composition restore failed: ${error.message || error}`);
+  });
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
   initKaminosFingerFluidBenchRoute();

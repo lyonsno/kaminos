@@ -1,0 +1,365 @@
+{
+  "source": "SF3D 0ff8dc4 src/lib/foreground_opportunity_bridge.js; kit dependency pinned by its lock",
+  "claim": "actual producer bridge receipt shape; CPU queue stub, no GPU execution",
+  "bridgeReport": {
+    "schema": "kaminos.webgpu-foreground-opportunity-interlock.v0",
+    "routeId": "sf3d.image-to-mesh.webgpu-local.v0",
+    "runId": "contract-replay",
+    "retention": "uncapped",
+    "requestCount": 3,
+    "pendingRequestCount": 0,
+    "activeRequestCount": 0,
+    "activeServiceCount": 0,
+    "queuedServiceCount": 0,
+    "receiptCount": 3,
+    "receipts": [
+      {
+        "schema": "kaminos.webgpu-foreground-opportunity-receipt.v0",
+        "routeId": "sf3d.image-to-mesh.webgpu-local.v0",
+        "runId": "contract-replay",
+        "requestId": "frame-1",
+        "requestSequence": 1,
+        "status": "completed",
+        "requestedAtMs": 361.060875,
+        "startedAtMs": 362.529417,
+        "settledAtMs": 362.889875,
+        "elapsedMs": 0.36045799999999417,
+        "boundary": {
+          "invocationId": "contract-replay:sf3d-producer-run-finish",
+          "boundaryId": "contract-replay:sf3d-producer-run-finish:1",
+          "dutyId": "sf3d-producer-run-finish:1",
+          "phase": "sf3d-producer-run-finish",
+          "position": "before-encode",
+          "metadata": {
+            "runtimeLabel": "sf3d-producer-foreground-bridge",
+            "reason": "run-finished-with-pending-foreground-demand",
+            "drainAfterMs": 16.7,
+            "drainIntervalMs": 8
+          }
+        },
+        "metadata": {},
+        "result": {
+          "status": "submitted",
+          "renderer": "ordinary-volume",
+          "frameCount": 1,
+          "simStepCount": 1,
+          "sceneFrameCount": 1
+        },
+        "submissionCount": 1,
+        "submissions": [
+          {
+            "submissionId": "frame-1:submission:1",
+            "submissionSequence": 1,
+            "commandBufferCount": 1,
+            "submittedAtMs": 362.787208,
+            "returnedAtMs": 362.818625,
+            "submissionStatus": "queue-submit-returned",
+            "metadata": {},
+            "authority": "queue-submit-call-returned-no-gpu-completion-or-presentation-claim"
+          }
+        ],
+        "cancellation": null,
+        "failure": null,
+        "authority": "foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim"
+      },
+      {
+        "schema": "kaminos.webgpu-foreground-opportunity-receipt.v0",
+        "routeId": "sf3d.image-to-mesh.webgpu-local.v0",
+        "runId": "contract-replay",
+        "requestId": "frame-2",
+        "requestSequence": 2,
+        "status": "completed",
+        "requestedAtMs": 361.107667,
+        "startedAtMs": 363.122917,
+        "settledAtMs": 363.194458,
+        "elapsedMs": 0.07154100000002472,
+        "boundary": {
+          "invocationId": "contract-replay:sf3d-producer-run-finish",
+          "boundaryId": "contract-replay:sf3d-producer-run-finish:1",
+          "dutyId": "sf3d-producer-run-finish:1",
+          "phase": "sf3d-producer-run-finish",
+          "position": "before-encode",
+          "metadata": {
+            "runtimeLabel": "sf3d-producer-foreground-bridge",
+            "reason": "run-finished-with-pending-foreground-demand",
+            "drainAfterMs": 16.7,
+            "drainIntervalMs": 8
+          }
+        },
+        "metadata": {},
+        "result": {
+          "status": "submitted",
+          "renderer": "ordinary-volume",
+          "frameCount": 2,
+          "simStepCount": 2,
+          "sceneFrameCount": 2
+        },
+        "submissionCount": 1,
+        "submissions": [
+          {
+            "submissionId": "frame-2:submission:1",
+            "submissionSequence": 1,
+            "commandBufferCount": 1,
+            "submittedAtMs": 363.147167,
+            "returnedAtMs": 363.150583,
+            "submissionStatus": "queue-submit-returned",
+            "metadata": {},
+            "authority": "queue-submit-call-returned-no-gpu-completion-or-presentation-claim"
+          }
+        ],
+        "cancellation": null,
+        "failure": null,
+        "authority": "foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim"
+      },
+      {
+        "schema": "kaminos.webgpu-foreground-opportunity-receipt.v0",
+        "routeId": "sf3d.image-to-mesh.webgpu-local.v0",
+        "runId": "contract-replay",
+        "requestId": "frame-3",
+        "requestSequence": 3,
+        "status": "completed",
+        "requestedAtMs": 361.118542,
+        "startedAtMs": 363.247458,
+        "settledAtMs": 363.284208,
+        "elapsedMs": 0.03674999999998363,
+        "boundary": {
+          "invocationId": "contract-replay:sf3d-producer-run-finish",
+          "boundaryId": "contract-replay:sf3d-producer-run-finish:1",
+          "dutyId": "sf3d-producer-run-finish:1",
+          "phase": "sf3d-producer-run-finish",
+          "position": "before-encode",
+          "metadata": {
+            "runtimeLabel": "sf3d-producer-foreground-bridge",
+            "reason": "run-finished-with-pending-foreground-demand",
+            "drainAfterMs": 16.7,
+            "drainIntervalMs": 8
+          }
+        },
+        "metadata": {},
+        "result": {
+          "status": "submitted",
+          "renderer": "ordinary-volume",
+          "frameCount": 3,
+          "simStepCount": 3,
+          "sceneFrameCount": 3
+        },
+        "submissionCount": 1,
+        "submissions": [
+          {
+            "submissionId": "frame-3:submission:1",
+            "submissionSequence": 1,
+            "commandBufferCount": 1,
+            "submittedAtMs": 363.263875,
+            "returnedAtMs": 363.266583,
+            "submissionStatus": "queue-submit-returned",
+            "metadata": {},
+            "authority": "queue-submit-call-returned-no-gpu-completion-or-presentation-claim"
+          }
+        ],
+        "cancellation": null,
+        "failure": null,
+        "authority": "foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim"
+      }
+    ],
+    "serviceCount": 1,
+    "services": [
+      {
+        "schema": "kaminos.webgpu-foreground-opportunity-service.v0",
+        "status": "serviced",
+        "routeId": "sf3d.image-to-mesh.webgpu-local.v0",
+        "runId": "contract-replay",
+        "serviceSequence": 1,
+        "boundary": {
+          "invocationId": "contract-replay:sf3d-producer-run-finish",
+          "boundaryId": "contract-replay:sf3d-producer-run-finish:1",
+          "dutyId": "sf3d-producer-run-finish:1",
+          "phase": "sf3d-producer-run-finish",
+          "position": "before-encode",
+          "metadata": {
+            "runtimeLabel": "sf3d-producer-foreground-bridge",
+            "reason": "run-finished-with-pending-foreground-demand",
+            "drainAfterMs": 16.7,
+            "drainIntervalMs": 8
+          }
+        },
+        "startedAtMs": 362.524083,
+        "settledAtMs": 363.35375,
+        "capturedRequestCount": 3,
+        "servicedRequestCount": 3,
+        "receiptIds": [
+          "frame-1",
+          "frame-2",
+          "frame-3"
+        ],
+        "failures": [],
+        "authority": "foreground-callbacks-settled-before-next-inference-encode-no-gpu-completion-or-presentation-claim"
+      }
+    ],
+    "noDemandBoundaryCount": 0,
+    "authority": "foreground-opportunity-request-and-queue-submit-observation-no-presentation-claim",
+    "status": "succeeded",
+    "producer": {
+      "schema": "sf3d.foreground-opportunity-bridge.v0",
+      "runId": "contract-replay",
+      "requestCount": 3,
+      "schedulerBoundaryServiceCount": 0,
+      "idleDrainBoundaryCount": 0,
+      "idleDrainServicedCount": 0,
+      "finishDrainServicedCount": 3,
+      "finishDrainStatus": "serviced",
+      "drainFailures": [],
+      "drainAfterMs": 16.7,
+      "drainIntervalMs": 8,
+      "authority": "producer-boundary-service-counters-no-presentation-claim"
+    }
+  },
+  "rows": [
+    {
+      "schema": "kaminos.webgpu-foreground-opportunity-receipt.v0",
+      "routeId": "sf3d.image-to-mesh.webgpu-local.v0",
+      "runId": "contract-replay",
+      "requestId": "frame-1",
+      "requestSequence": 1,
+      "status": "completed",
+      "requestedAtMs": 361.060875,
+      "startedAtMs": 362.529417,
+      "settledAtMs": 362.889875,
+      "elapsedMs": 0.36045799999999417,
+      "boundary": {
+        "invocationId": "contract-replay:sf3d-producer-run-finish",
+        "boundaryId": "contract-replay:sf3d-producer-run-finish:1",
+        "dutyId": "sf3d-producer-run-finish:1",
+        "phase": "sf3d-producer-run-finish",
+        "position": "before-encode",
+        "metadata": {
+          "runtimeLabel": "sf3d-producer-foreground-bridge",
+          "reason": "run-finished-with-pending-foreground-demand",
+          "drainAfterMs": 16.7,
+          "drainIntervalMs": 8
+        }
+      },
+      "metadata": {},
+      "result": {
+        "status": "submitted",
+        "renderer": "ordinary-volume",
+        "frameCount": 1,
+        "simStepCount": 1,
+        "sceneFrameCount": 1
+      },
+      "submissionCount": 1,
+      "submissions": [
+        {
+          "submissionId": "frame-1:submission:1",
+          "submissionSequence": 1,
+          "commandBufferCount": 1,
+          "submittedAtMs": 362.787208,
+          "returnedAtMs": 362.818625,
+          "submissionStatus": "queue-submit-returned",
+          "metadata": {},
+          "authority": "queue-submit-call-returned-no-gpu-completion-or-presentation-claim"
+        }
+      ],
+      "cancellation": null,
+      "failure": null,
+      "authority": "foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim"
+    },
+    {
+      "schema": "kaminos.webgpu-foreground-opportunity-receipt.v0",
+      "routeId": "sf3d.image-to-mesh.webgpu-local.v0",
+      "runId": "contract-replay",
+      "requestId": "frame-2",
+      "requestSequence": 2,
+      "status": "completed",
+      "requestedAtMs": 361.107667,
+      "startedAtMs": 363.122917,
+      "settledAtMs": 363.194458,
+      "elapsedMs": 0.07154100000002472,
+      "boundary": {
+        "invocationId": "contract-replay:sf3d-producer-run-finish",
+        "boundaryId": "contract-replay:sf3d-producer-run-finish:1",
+        "dutyId": "sf3d-producer-run-finish:1",
+        "phase": "sf3d-producer-run-finish",
+        "position": "before-encode",
+        "metadata": {
+          "runtimeLabel": "sf3d-producer-foreground-bridge",
+          "reason": "run-finished-with-pending-foreground-demand",
+          "drainAfterMs": 16.7,
+          "drainIntervalMs": 8
+        }
+      },
+      "metadata": {},
+      "result": {
+        "status": "submitted",
+        "renderer": "ordinary-volume",
+        "frameCount": 2,
+        "simStepCount": 2,
+        "sceneFrameCount": 2
+      },
+      "submissionCount": 1,
+      "submissions": [
+        {
+          "submissionId": "frame-2:submission:1",
+          "submissionSequence": 1,
+          "commandBufferCount": 1,
+          "submittedAtMs": 363.147167,
+          "returnedAtMs": 363.150583,
+          "submissionStatus": "queue-submit-returned",
+          "metadata": {},
+          "authority": "queue-submit-call-returned-no-gpu-completion-or-presentation-claim"
+        }
+      ],
+      "cancellation": null,
+      "failure": null,
+      "authority": "foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim"
+    },
+    {
+      "schema": "kaminos.webgpu-foreground-opportunity-receipt.v0",
+      "routeId": "sf3d.image-to-mesh.webgpu-local.v0",
+      "runId": "contract-replay",
+      "requestId": "frame-3",
+      "requestSequence": 3,
+      "status": "completed",
+      "requestedAtMs": 361.118542,
+      "startedAtMs": 363.247458,
+      "settledAtMs": 363.284208,
+      "elapsedMs": 0.03674999999998363,
+      "boundary": {
+        "invocationId": "contract-replay:sf3d-producer-run-finish",
+        "boundaryId": "contract-replay:sf3d-producer-run-finish:1",
+        "dutyId": "sf3d-producer-run-finish:1",
+        "phase": "sf3d-producer-run-finish",
+        "position": "before-encode",
+        "metadata": {
+          "runtimeLabel": "sf3d-producer-foreground-bridge",
+          "reason": "run-finished-with-pending-foreground-demand",
+          "drainAfterMs": 16.7,
+          "drainIntervalMs": 8
+        }
+      },
+      "metadata": {},
+      "result": {
+        "status": "submitted",
+        "renderer": "ordinary-volume",
+        "frameCount": 3,
+        "simStepCount": 3,
+        "sceneFrameCount": 3
+      },
+      "submissionCount": 1,
+      "submissions": [
+        {
+          "submissionId": "frame-3:submission:1",
+          "submissionSequence": 1,
+          "commandBufferCount": 1,
+          "submittedAtMs": 363.263875,
+          "returnedAtMs": 363.266583,
+          "submissionStatus": "queue-submit-returned",
+          "metadata": {},
+          "authority": "queue-submit-call-returned-no-gpu-completion-or-presentation-claim"
+        }
+      ],
+      "cancellation": null,
+      "failure": null,
+      "authority": "foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim"
+    }
+  ]
+}

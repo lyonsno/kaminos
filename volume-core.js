@@ -5,6 +5,7 @@ import {
   fineBreakupSupportReceipt,
   normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
+import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
@@ -405,6 +406,7 @@ const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
 });
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 136, 140, 160];
+const VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER = 2;
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
 const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
   off: 'off',
@@ -492,6 +494,15 @@ const BOUNDARY_SPLAT_CHANNELS = [
   'nonRidgeAdmitted',
   'nonRidgeScore',
 ];
+const FIRE_IRRADIANCE_LATTICE_IDENTITY = 'fire-irradiance-lattice-32-same-state-rgb-v0';
+const FIRE_IRRADIANCE_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
+const FIRE_IRRADIANCE_PROPAGATION_IDENTITY = 'irradiance-lattice-axis-diffusion-4-round-v0';
+const FIRE_LIGHT_FIELD_GPU_PROFILE_IDENTITY = 'fire-light-field-gpu-timestamp-profile-v0';
+const DEFAULT_FIRE_IRRADIANCE_GRID_SIZE = 32;
+const SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES = [32, 48];
+const FIRE_IRRADIANCE_ATLAS_TILES_X = 8;
+const FIRE_IRRADIANCE_PROPAGATION_ROUNDS = 4;
+const KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY = 'kaminos-three-volume-shared-webgpu-device-v0';
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 
@@ -1331,6 +1342,166 @@ function fluidBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize)
   return gridCellCount(gridSize, gridHeight, gridDepth) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
 
+// Largest storage buffer the volume prototype binds for one grid: fluid state
+// over the tall domain, or a per-cell flow-kernel / boundary-splat buffer.
+// The prototype's own device request and the shared host device both use it,
+// so an adopted shared device is never smaller than the one the prototype owns.
+function volumeStorageBufferRequestBytes(gridSize, cellCapacity = null) {
+  const gridHeight = gridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+  const maxRequestedCellCapacity = cellCapacity ?? gridCellCount(gridSize, gridHeight, gridSize);
+  const maxRequestedFluidBufferBytes = fluidBufferBytes(gridSize, gridHeight, gridSize);
+  const maxRequestedFlowKernelDescriptorBytes = maxRequestedCellCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
+  const maxRequestedBoundarySplatBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+  const maxRequestedBoundaryFeatureBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+  return Math.max(
+    maxRequestedFluidBufferBytes,
+    maxRequestedFlowKernelDescriptorBytes,
+    maxRequestedBoundarySplatBytes,
+    maxRequestedBoundaryFeatureBytes,
+  );
+}
+
+function irradianceLatticeBufferBytes(irradianceGridSize = DEFAULT_FIRE_IRRADIANCE_GRID_SIZE) {
+  return irradianceGridSize * irradianceGridSize * irradianceGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function normalizeFireIrradianceGridSize(value) {
+  const parsed = Number(value);
+  return SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES.includes(parsed) ? parsed : DEFAULT_FIRE_IRRADIANCE_GRID_SIZE;
+}
+
+// One explicit GPUDevice for both the Three scene renderer and the Pyro volume
+// simulator. Native same-device GPU texture sharing is the implementation
+// ancestor; browser-canvas-to-Three CanvasTexture transport is the falsified
+// path and must not carry scene lighting. The device must admit the storage
+// the volume prototype would request for its own device (tall domain and
+// per-cell buffers), declared composition buffers, and host requirements
+// such as the SAM inference session's features and limits.
+export async function requestKaminosSharedWebGpuDevice({
+  bufferRequirements = {},
+  hostRequirements = null,
+  adapter: suppliedAdapter = null,
+} = {}) {
+  const gpu = globalThis.navigator?.gpu;
+  if (!suppliedAdapter && !gpu) throw new Error('WebGPU unavailable');
+  const adapter = suppliedAdapter || await gpu.requestAdapter({
+    powerPreference: 'high-performance',
+    featureLevel: 'core',
+  });
+  if (!adapter) throw new Error('WebGPU adapter unavailable');
+  const adapterLimit = name => Number(adapter.limits?.[name] || 0);
+  const requiredLimits = {};
+  const raise = (name, value) => { requiredLimits[name] = Math.max(requiredLimits[name] || 0, value); };
+
+  const supportedStorageBytes = Math.min(adapterLimit('maxBufferSize'), adapterLimit('maxStorageBufferBindingSize'));
+  if (supportedStorageBytes > 0) {
+    const volumeStorageBytes = Math.min(supportedStorageBytes, volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES)));
+    raise('maxBufferSize', volumeStorageBytes);
+    raise('maxStorageBufferBindingSize', volumeStorageBytes);
+  }
+  // Request the adapter's own per-stage storage-buffer capacity: the fluid
+  // pipeline layouts declare 10 compute-visible storage buffers, and newer
+  // Chrome validates layout counts strictly, so a hardcoded 9 is a silent cap
+  // that breaks pipeline creation.
+  const storageBuffersPerStage = adapterLimit('maxStorageBuffersPerShaderStage');
+  if (storageBuffersPerStage < BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT) {
+    throw new Error(
+      `boundary-splat-compute-layout-storage-buffer-limit:`
+      + `required=${BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT}:supported=${storageBuffersPerStage}`,
+    );
+  }
+  raise('maxStorageBuffersPerShaderStage', storageBuffersPerStage);
+  for (const [name, required] of Object.entries({
+    maxStorageBuffersInFragmentStage: 5,
+    maxStorageBuffersInVertexStage: 4,
+  })) {
+    const available = adapterLimit(name);
+    if (available < required) {
+      throw new Error(`WebGPU adapter ${name} ${available} is below Kaminos shared-device requirement ${required}`);
+    }
+    raise(name, required);
+  }
+  // Composition requirements are known before any consumer receives the one
+  // device. Only the two buffer capacity limits are admitted by this seam.
+  if (!bufferRequirements || typeof bufferRequirements !== 'object' || Array.isArray(bufferRequirements)) {
+    throw new Error('invalid composition buffer requirements');
+  }
+  for (const [name, required] of Object.entries(bufferRequirements)) {
+    if (!['maxBufferSize', 'maxStorageBufferBindingSize'].includes(name)
+      || !Number.isSafeInteger(required) || required <= 0) {
+      throw new Error(`invalid composition buffer requirement ${name}`);
+    }
+    const available = adapterLimit(name);
+    if (available < required) {
+      throw new Error(`WebGPU adapter ${name} ${available} is below composition buffer requirement ${required}`);
+    }
+    raise(name, required);
+  }
+  // Host requirements (an object, or a function of the adapter such as the
+  // SAM kit's device request): max* limits combine upward; alignment min*
+  // limits combine downward and are satisfied by values at or below the request.
+  const host = typeof hostRequirements === 'function' ? await hostRequirements(adapter) : (hostRequirements ?? {});
+  if (!host || typeof host !== 'object') throw new Error('invalid shared-device host requirements');
+  const hostLimits = host.requiredLimits ?? {};
+  const hostFeatures = host.requiredFeatures == null ? [] : [...host.requiredFeatures];
+  if (!hostLimits || typeof hostLimits !== 'object' || Array.isArray(hostLimits)) {
+    throw new Error('invalid shared-device limit requirements');
+  }
+  for (const [name, required] of Object.entries(hostLimits)) {
+    if (!Number.isSafeInteger(required) || required <= 0) {
+      throw new Error(`invalid shared-device limit requirement ${name}`);
+    }
+    const available = adapterLimit(name);
+    if (name.startsWith('min')) {
+      if (!(available > 0 && available <= required)) {
+        throw new Error(`WebGPU adapter ${name} ${available} cannot satisfy shared-device requirement ${required}`);
+      }
+      requiredLimits[name] = Object.hasOwn(requiredLimits, name) ? Math.min(requiredLimits[name], required) : required;
+    } else {
+      if (available < required) {
+        throw new Error(`WebGPU adapter ${name} ${available} is below shared-device requirement ${required}`);
+      }
+      raise(name, required);
+    }
+  }
+  if (hostFeatures.some(feature => typeof feature !== 'string' || !feature)) {
+    throw new Error('invalid shared-device feature requirements');
+  }
+  const features = new Set(hostFeatures);
+  if (adapter.features?.has?.('timestamp-query')) features.add('timestamp-query');
+  for (const feature of features) {
+    if (!adapter.features?.has?.(feature)) throw new Error(`WebGPU adapter feature ${feature} is unavailable`);
+  }
+  const requiredFeatures = [...features].sort();
+  const device = await adapter.requestDevice({
+    requiredLimits,
+    ...(requiredFeatures.length ? { requiredFeatures } : {}),
+  });
+  for (const [name, required] of Object.entries(requiredLimits)) {
+    const effective = Number(device.limits?.[name]);
+    const satisfied = Number.isFinite(effective) && (name.startsWith('min') ? effective <= required : effective >= required);
+    if (!satisfied) {
+      device.destroy?.();
+      throw new Error(`WebGPU effective device ${name} ${effective} does not satisfy shared-device requirement ${required}`);
+    }
+  }
+  for (const feature of requiredFeatures) {
+    if (!device.features?.has?.(feature)) {
+      device.destroy?.();
+      throw new Error(`WebGPU effective device feature ${feature} is unavailable`);
+    }
+  }
+  return {
+    identity: KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY,
+    authority: 'single-explicit-device-three-and-volume-v0',
+    adapter,
+    device,
+    queue: device.queue,
+    requiredLimits,
+    requiredFeatures,
+  };
+}
+
 function boundarySidecarBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
   return gridCellCount(gridSize, gridHeight, gridDepth) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
@@ -2125,6 +2296,7 @@ const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override GRID_Y: u32 = 128u;
 override TRANSPARENT_CANVAS: f32 = 0.0;
+override IRRADIANCE_GRID: u32 = 32u;
 override LEAN_STOCK_RAYMARCH: bool = false;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
@@ -2257,6 +2429,10 @@ struct NonRidgeOpticalCaptureRow {
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
 @group(3) @binding(0) var<storage, read_write> boundarySidecarDst: array<vec4<f32>>;
+@group(1) @binding(1) var<storage, read_write> irradianceDst: array<vec4<f32>>;
+@group(1) @binding(2) var<storage, read> irradianceSrc: array<vec4<f32>>;
+@group(1) @binding(3) var irradianceAtlasOut: texture_storage_2d<rgba16float, write>;
+@group(1) @binding(4) var irradianceMetaOut: texture_storage_2d<rgba16float, write>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -3546,6 +3722,174 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
 }
 
+// Fire irradiance light field: a compact world-space RGB lattice seeded from
+// the same advancing fluid state and emission law as the visible raymarch
+// flame. Identity: fire-irradiance-lattice-32-same-state-rgb-v0. The lattice
+// spans the same [-1,1]^3 shared-camera world box as the raymarch.
+const IRRADIANCE_TILES_X: u32 = 8u;
+
+fn irradianceIndex(cell: vec3<u32>) -> u32 {
+  return cell.x + cell.y * IRRADIANCE_GRID + cell.z * IRRADIANCE_GRID * IRRADIANCE_GRID;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(IRRADIANCE_GRID))) {
+    return;
+  }
+  let brickStart = vec3<u32>(floor(vec3<f32>(gid) * f32(GRID) / f32(IRRADIANCE_GRID)));
+  let brickEnd = max(brickStart + vec3<u32>(1), vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1)) * f32(GRID) / f32(IRRADIANCE_GRID))));
+  let radianceGain = max(u.radiance_controls.x, 0.0);
+  let glowGain = max(u.radiance_controls.z, 0.0);
+  var accum = vec3<f32>(0.0);
+  var weightAccum = 0.0;
+  var cellCount = 0.0;
+  if (u.physical_fire.x > 1.5) {
+    // Emissive-transport basins zero the legacy radiance/glow gains and draw
+    // the flame from the emissive material law, so seed the lattice from that
+    // same law (Sexy's emissiveMaterial on the reconstructed field with live
+    // boundary support), white-balanced and exposed like the camera arm, so
+    // scene light carries the flame's displayed color and brightness.
+    let carriers = max(u.topology_shell_carriers, vec4<f32>(0.0));
+    let smokeVisible = 1.0 - u.boundary_fire_display.z;
+    let exposure = exp2(u.physical_display.y) * 0.35;
+    for (var k = 0u; k < 8u; k = k + 1u) {
+      let offset = (vec3<f32>(f32(k & 1u), f32((k >> 1u) & 1u), f32((k >> 2u) & 1u)) + vec3<f32>(0.5)) * 0.5;
+      let p = (vec3<f32>(gid) + offset) * (2.0 / f32(IRRADIANCE_GRID)) - vec3<f32>(1.0);
+      let r = sampleWorldFlowReconstructionRaw(p);
+      let coverage = liveBoundarySupportAt(p, carriers);
+      let medium = emissiveMaterial(r, coverage, smokeVisible);
+      let e = medium.emission;
+      let balanced = vec3<f32>(dot(u.emissive_white_r.xyz, e), dot(u.emissive_white_g.xyz, e), dot(u.emissive_white_b.xyz, e));
+      let exposed = max(balanced, vec3<f32>(0.0)) * exposure;
+      let lum = dot(exposed, vec3<f32>(0.2126, 0.7152, 0.0722));
+      accum = accum + exposed * 0.125;
+      weightAccum = weightAccum + smoothstep(0.0005, 0.02, lum) * 0.125;
+    }
+    irradianceDst[irradianceIndex(gid)] = vec4<f32>(accum, weightAccum);
+    return;
+  }
+  for (var z = brickStart.z; z < min(brickEnd.z, GRID); z = z + 1u) {
+    for (var y = brickStart.y; y < min(brickEnd.y, GRID); y = y + 1u) {
+      for (var x = brickStart.x; x < min(brickEnd.x, GRID); x = x + 1u) {
+        let c = vec3<i32>(vec3<u32>(x, y, z));
+        let velocityDensity = readSlot(c, 0u);
+        let material = readSlot(c, 1u);
+        let fireLayer = readSlot(c, 2u);
+        let microLayer = readSlot(c, 3u);
+        let velMag = length(velocityDensity.xyz);
+        let temp = emissiveTemperature(fireLayer, material, microLayer, velMag);
+        // Gate by live combustion presence so the emission-law ambient floor
+        // cannot masquerade as fire light in empty cells.
+        let fireBodyWeight = smoothstep(0.04, 0.30, temp);
+        let emission = fireRadianceEmission(temp, fireLayer.z, microLayer.z, microLayer.w, radianceGain, glowGain);
+        accum = accum + emission * fireBodyWeight;
+        weightAccum = weightAccum + fireBodyWeight;
+        cellCount = cellCount + 1.0;
+      }
+    }
+  }
+  let inv = 1.0 / max(cellCount, 1.0);
+  irradianceDst[irradianceIndex(gid)] = vec4<f32>(accum * inv, weightAccum * inv);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csIrradiancePropagate(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(IRRADIANCE_GRID))) {
+    return;
+  }
+  let cell = vec3<i32>(gid);
+  let bound = i32(IRRADIANCE_GRID);
+  // Six axis neighbors, fully unrolled (dynamic vector indexing is
+  // pathologically slow on Metal). Out-of-lattice neighbors contribute zero:
+  // the open boundary lets light dilute toward the box faces instead of
+  // reflecting inward.
+  var neighborSum = vec4<f32>(0.0);
+  if (cell.x > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(1, 0, 0)))]; }
+  if (cell.x < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(1, 0, 0)))]; }
+  if (cell.y > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(0, 1, 0)))]; }
+  if (cell.y < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(0, 1, 0)))]; }
+  if (cell.z > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(0, 0, 1)))]; }
+  if (cell.z < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(0, 0, 1)))]; }
+  let center = irradianceSrc[irradianceIndex(gid)];
+  irradianceDst[irradianceIndex(gid)] = center * 0.55 + neighborSum * (0.60 / 6.0);
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn csIrradianceResolve(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let tilesY = (IRRADIANCE_GRID + IRRADIANCE_TILES_X - 1u) / IRRADIANCE_TILES_X;
+  let atlasWidth = IRRADIANCE_GRID * IRRADIANCE_TILES_X;
+  let atlasHeight = IRRADIANCE_GRID * tilesY;
+  if (gid.x >= atlasWidth || gid.y >= atlasHeight) {
+    return;
+  }
+  let tileX = gid.x / IRRADIANCE_GRID;
+  let tileY = gid.y / IRRADIANCE_GRID;
+  let slice = tileY * IRRADIANCE_TILES_X + tileX;
+  if (slice >= IRRADIANCE_GRID) {
+    textureStore(irradianceAtlasOut, vec2<i32>(gid.xy), vec4<f32>(0.0));
+    return;
+  }
+  let cell = vec3<u32>(gid.x % IRRADIANCE_GRID, gid.y % IRRADIANCE_GRID, slice);
+  textureStore(irradianceAtlasOut, vec2<i32>(gid.xy), irradianceSrc[irradianceIndex(cell)]);
+}
+
+// Analytic far-field reduce: collapse the live lattice to its luminance
+// centroid, total power, and mean color so receivers can add a true 1/r^2
+// radial term beyond the diffusion shell. The 4-round axis diffusion carries
+// light only ~4 cells laterally, which reads as a flashlight pointed straight
+// up; this reduce is the far-field's source of truth and flickers with the
+// same advancing field. Identity: fire-irradiance-far-field-meta-v0.
+var<workgroup> irradianceReduceLum: array<f32, 64>;
+var<workgroup> irradianceReducePos: array<vec3<f32>, 64>;
+var<workgroup> irradianceReduceColor: array<vec3<f32>, 64>;
+
+@compute @workgroup_size(64)
+fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
+  let cellCount = IRRADIANCE_GRID * IRRADIANCE_GRID * IRRADIANCE_GRID;
+  var lumSum = 0.0;
+  var posSum = vec3<f32>(0.0);
+  var colorSum = vec3<f32>(0.0);
+  for (var i = tid; i < cellCount; i = i + 64u) {
+    let sample = irradianceSrc[i];
+    let lum = dot(max(sample.rgb, vec3<f32>(0.0)), vec3<f32>(0.2126, 0.7152, 0.0722));
+    let cell = vec3<f32>(
+      f32(i % IRRADIANCE_GRID),
+      f32((i / IRRADIANCE_GRID) % IRRADIANCE_GRID),
+      f32(i / (IRRADIANCE_GRID * IRRADIANCE_GRID))
+    );
+    lumSum = lumSum + lum;
+    posSum = posSum + cell * lum;
+    colorSum = colorSum + max(sample.rgb, vec3<f32>(0.0));
+  }
+  irradianceReduceLum[tid] = lumSum;
+  irradianceReducePos[tid] = posSum;
+  irradianceReduceColor[tid] = colorSum;
+  workgroupBarrier();
+  var stride = 32u;
+  while (stride > 0u) {
+    if (tid < stride) {
+      irradianceReduceLum[tid] = irradianceReduceLum[tid] + irradianceReduceLum[tid + stride];
+      irradianceReducePos[tid] = irradianceReducePos[tid] + irradianceReducePos[tid + stride];
+      irradianceReduceColor[tid] = irradianceReduceColor[tid] + irradianceReduceColor[tid + stride];
+    }
+    workgroupBarrier();
+    stride = stride / 2u;
+  }
+  if (tid == 0u) {
+    let totalLum = irradianceReduceLum[0];
+    let centroidUvw = select(
+      vec3<f32>(0.5),
+      (irradianceReducePos[0] / max(totalLum, 1e-6) + vec3<f32>(0.5)) / f32(IRRADIANCE_GRID),
+      totalLum > 1e-5
+    );
+    let colorTotal = irradianceReduceColor[0];
+    let colorLum = max(dot(colorTotal, vec3<f32>(0.2126, 0.7152, 0.0722)), 1e-6);
+    textureStore(irradianceMetaOut, vec2<i32>(0, 0), vec4<f32>(centroidUvw, totalLum));
+    textureStore(irradianceMetaOut, vec2<i32>(1, 0), vec4<f32>(colorTotal / colorLum, 1.0));
+  }
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
@@ -3721,7 +4065,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceRadial = length(sourceCenter.xz);
   let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.92, 1.32, sourceCenter.y));
   let canonicalSourceY = canonicalSourceYControl;
-  let canonicalSourceBand = exp(-pow((p.y - canonicalSourceY) / 0.070, 2.0));
+  // Square by multiplication, never pow: WGSL pow(x, 2.0) is exp2(2*log2(x)),
+  // NaN for the negative bases every cell below the source line produces, and
+  // Chrome 152's Tint no longer strength-reduces pow(x, 2.0) to x*x.
+  let canonicalSourceBandT = (p.y - canonicalSourceY) / 0.070;
+  let canonicalSourceBand = exp(-canonicalSourceBandT * canonicalSourceBandT);
   let transportedSourceStructure = clamp(
     material.w * 0.24
       + fireLayer.z * 0.20
@@ -4895,7 +5243,21 @@ fn productSceneDepthEndT(in: VSOut, ro: vec3<f32>, rd: vec3<f32>) -> f32 {
   return max(0.0, dot(depthWorld - ro, rd));
 }
 
-fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
+fn ordinarySceneDepthEndT(in: VSOut) -> f32 {
+  let dimensions = vec2<i32>(textureDimensions(productSceneDepth));
+  let uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let pixel = clamp(vec2<i32>(floor(uv * vec2<f32>(dimensions))), vec2<i32>(0), dimensions - vec2<i32>(1));
+  let depth = textureLoad(productSceneDepth, pixel, 0);
+  if (depth >= 0.999999) { return 1.0e6; }
+  let ndc = in.uv * 2.0 - vec2<f32>(1.0);
+  let world = u.invViewProj * vec4<f32>(ndc, depth, 1.0);
+  let farWorld = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
+  let ro = u.cameraPos_time.xyz;
+  let rd = normalize(farWorld.xyz / farWorld.w - ro);
+  return max(0.0, dot(world.xyz / world.w - ro, rd));
+}
+
+fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && nonRidgeOpticalCaptureHeader.mode >= 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
@@ -4907,7 +5269,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));
-  if (!fullGridCapture && hit.y <= max(hit.x, 0.0)) {
+  if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
       vec4<f32>(vec3<f32>(0.004, 0.005, 0.006) * missAlpha, missAlpha),
@@ -5041,7 +5403,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
   let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
   let endT = select(min(hit.y, sceneDepthEndT), 4.0, fullGridCapture);
-  let dtBase = (endT - startT) / steps;
+  // Keep ordinary sample positions stable; clipping removes hidden samples,
+  // rather than resampling the visible fire at a different density.
+  let dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;
   let jitter = dtBase * 0.5;
   var t = startT + jitter;
   var trans = 1.0;
@@ -5875,7 +6239,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     );
     var local = smokeCol * visibleSmokeAuthority;
     local = mix(local, flameCol * 0.30 + radianceEmission * 0.70, stockRenderMode * fireMix * pyroStockFireVisibility);
-    local = local + shellColor * shellRenderMode * smoothstep(0.002, 0.060, shellAlpha) * 0.92;
+    // Shell visibility weight is step-invariant: alpha already carries the
+    // per-step rayStepOpacity scaling, so gating on rayStepOpacity-scaled
+    // shellAlpha double-scaled by step length and collapsed as raySteps grew.
+    let shellVisibilityBody = clamp(shellMask * fireVisualAuthority * shellWrinkle * fireSnuffDamping, 0.0, 2.4);
+    local = local + shellColor * shellRenderMode * smoothstep(0.020, 0.520, shellVisibilityBody) * 0.92;
     local = mix(local, inspectColor, inspectRenderMode * smoothstep(0.002, 0.060, inspectAlpha));
     let pyroFlamePaintSignal = clamp(
       pyroBaseCarrier
@@ -6206,7 +6574,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let result = raymarchVolume(in, 1.0e6);
+  let result = raymarchVolume(in, ordinarySceneDepthEndT(in), true);
   return result.color;
 }
 
@@ -6217,7 +6585,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
   let farWorldRaw = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorldRaw.xyz / farWorldRaw.w - nearWorldRaw.xyz / nearWorldRaw.w);
-  let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd));
+  let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd), false);
   let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
   let premultipliedRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
   return vec4<f32>(premultipliedRadiance, alpha);
@@ -6225,7 +6593,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
 
 @fragment
 fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
-  let result = raymarchVolume(in, 1.0e6);
+  let result = raymarchVolume(in, 1.0e6, false);
   var out: ResidualSourceOutput;
   out.color = result.color;
   out.residualFeature = result.residualFeature;
@@ -6234,7 +6602,7 @@ fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
 
 @fragment
 fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOutput {
-  let result = raymarchVolume(in, 1.0e6);
+  let result = raymarchVolume(in, 1.0e6, false);
   var out: OpticalTransportContributionOutput;
   out.sharedRidge = result.sharedRidgeContribution;
   out.sharedNonRidge = result.sharedNonRidgeContribution;
@@ -7835,6 +8203,7 @@ export function createKaminosVolumePrototype({
   getControls,
   onStatus,
   sharedGpuContext = null,
+  getSceneDepth = null,
   transparentCanvas = false,
   productFrameOwner = 'prototype',
   externalDevice = null,
@@ -7849,7 +8218,7 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
-  const VERTICAL_DOMAIN_EXTENT_MULTIPLIER = 2;
+  const VERTICAL_DOMAIN_EXTENT_MULTIPLIER = VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
   const gridHeightForSize = size => size * VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
   const gridShapeLabel = size => `${size}x${gridHeightForSize(size)}x${size}`;
   function gridCellCount(size) {
@@ -8569,6 +8938,19 @@ export function createKaminosVolumePrototype({
   let analyticEmitterInjectionBindGroups = [];
   let fluidFrontReadBindGroups = [];
   let boundarySidecarReadBindGroups = [];
+  let irradianceLatticeBuffers = null;
+  let irradianceAtlasTexture = null;
+  let irradianceMetaTexture = null;
+  let irradianceAnalyticPipeline = null;
+  let irradianceBindGroups = null;
+  let irradianceLatticeBindGroupLayout = null;
+  let irradiancePipelineLayout = null;
+  let irradianceSeedPipeline = null;
+  let irradiancePropagatePipeline = null;
+  let irradianceResolvePipeline = null;
+  let irradianceResourcesKey = null;
+  let irradianceAtlasGeneration = 0;
+  const irradianceGridSize = normalizeFireIrradianceGridSize(controlsSnapshot.fireLightFieldGrid);
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
@@ -8592,6 +8974,13 @@ export function createKaminosVolumePrototype({
   let analyticEmitterInjectionPipelineLayout = null;
   let productRaymarchDepthBindGroupLayout = null;
   let productRaymarchPipelineLayout = null;
+  let ordinarySceneDepthFallback = null;
+  let ordinarySceneDepthTexture = null;
+  let ordinarySceneDepthBindGroup = null;
+  let ordinaryMultisampleDepthLayout = null;
+  let ordinaryMultisamplePipelineLayout = null;
+  let ordinaryMultisampleShader = null;
+  const ordinaryDepthPipelines = new Map();
   let boundarySidecarPipelineLayout = null;
   let boundarySplatComputePipelineLayout = null;
   let boundarySplatRenderPipelineLayout = null;
@@ -9250,6 +9639,7 @@ export function createKaminosVolumePrototype({
     nonRidgeOpticalCaptureRowBuffer?.destroy();
     flowKernelDescriptorBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
+    destroyFireIrradianceResources();
     boundarySidecarBuffer = null;
     boundarySplatBuffer = null;
     boundarySplatDrawBuffer = null;
@@ -10259,11 +10649,12 @@ export function createKaminosVolumePrototype({
       };
     }
     const renderPipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
+    ordinaryDepthPipelines.clear();
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
     const computePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight };
     const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
       label,
-      layout: pipelineLayout,
+      layout: productRaymarchPipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
       fragment: { module: shader, entryPoint: 'fs', constants, targets: [{ format: targetFormat }] },
       primitive: { topology: 'triangle-list' },
@@ -10769,22 +11160,9 @@ export function createKaminosVolumePrototype({
             info: configuredSharedGpuContext.adapter?.info || { vendor: 'shared-device' } }
         : await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('WebGPU adapter unavailable');
-    const maxRequestedGridSize = productFrameOwner === 'caller'
-      ? gridSize
-      : Math.max(...SUPPORTED_GRID_SIZES);
-    const maxRequestedCellCapacity = productFrameOwner === 'caller'
-      ? boundarySplatCapacity
-      : gridCellCount(maxRequestedGridSize);
-    const maxRequestedFluidBufferBytes = fluidBufferBytes(maxRequestedGridSize);
-    const maxRequestedFlowKernelDescriptorBytes = maxRequestedCellCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
-    const maxRequestedBoundarySplatBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
-    const maxRequestedBoundaryFeatureBytes = maxRequestedCellCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
-    const maxRequestedStorageBufferBytes = Math.max(
-      maxRequestedFluidBufferBytes,
-      maxRequestedFlowKernelDescriptorBytes,
-      maxRequestedBoundarySplatBytes,
-      maxRequestedBoundaryFeatureBytes,
-    );
+    const maxRequestedStorageBufferBytes = productFrameOwner === 'caller'
+      ? volumeStorageBufferRequestBytes(gridSize, boundarySplatCapacity)
+      : volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES));
     const requiredLimits = {};
     const maxSupportedStorageBufferBytes = Math.min(
       adapter.limits?.maxBufferSize ?? 0,
@@ -11046,6 +11424,14 @@ export function createKaminosVolumePrototype({
         visibility: GPUShaderStage.FRAGMENT,
         texture: { sampleType: 'depth' },
       }],
+    });
+    ordinaryMultisampleDepthLayout = device.createBindGroupLayout({
+      label:'ordinary scene MSAA depth layout', entries:[{binding:1,visibility:GPUShaderStage.FRAGMENT,
+        texture:{sampleType:'depth',multisampled:true}}],
+    });
+    ordinaryMultisamplePipelineLayout = device.createPipelineLayout({
+      label:'ordinary emissive MSAA depth pipeline layout',
+      bindGroupLayouts:[bindGroupLayout,ordinaryMultisampleDepthLayout],
     });
     boundarySidecarReadBindGroupLayout = device.createBindGroupLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} fluid-front read bind group layout`,
@@ -11918,6 +12304,16 @@ export function createKaminosVolumePrototype({
 
   function updateUniforms(now) {
     resize();
+    if (typeof getSceneDepth === 'function' && productFrameOwner === 'prototype') {
+      const source = getSceneDepth();
+      const texture = source === null ? null : validateOrdinarySceneDepth(source, {device, camera});
+      if (ordinarySceneDepthTexture !== texture) ordinarySceneDepthBindGroup = null;
+      ordinarySceneDepthTexture = texture;
+      state.ordinarySceneDepth = {requested: true, effective: Boolean(texture),
+        reason: texture ? null : 'host-disabled', width: texture?.width ?? null,
+        height: texture?.height ?? null, sampleCount: texture?.sampleCount ?? null, convention: 'webgpu-zero-one-top-down',
+        source: 'same-camera-same-device-scene-prepass'};
+    }
     camera.updateMatrixWorld();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (lookFreeze) {
@@ -13085,6 +13481,300 @@ export function createKaminosVolumePrototype({
     });
     state.boundarySplatExecutionPlan = plan;
     return plan;
+  }
+
+  function fireLightFieldRequested() {
+    return controlsSnapshot.fireLightField === true;
+  }
+
+  function destroyFireIrradianceResources() {
+    if (irradianceLatticeBuffers) for (const buffer of irradianceLatticeBuffers) buffer?.destroy?.();
+    irradianceAtlasTexture?.destroy?.();
+    irradianceMetaTexture?.destroy?.();
+    irradianceLatticeBuffers = null;
+    irradianceAtlasTexture = null;
+    irradianceMetaTexture = null;
+    irradianceAnalyticPipeline = null;
+    irradianceBindGroups = null;
+    irradianceSeedPipeline = null;
+    irradiancePropagatePipeline = null;
+    irradianceResolvePipeline = null;
+    irradianceResourcesKey = null;
+  }
+
+  function ensureFireIrradianceResources() {
+    if (!device || !shader || !boundarySidecarReadBindGroupLayout) return false;
+    const key = `${gridSize}x${gridHeight}:${irradianceGridSize}`;
+    if (irradianceResourcesKey === key && irradianceSeedPipeline && irradianceAtlasTexture) return true;
+    destroyFireIrradianceResources();
+    const latticeBytes = irradianceLatticeBufferBytes(irradianceGridSize);
+    irradianceLatticeBuffers = [0, 1].map(index => device.createBuffer({
+      label: `kaminos ${FIRE_IRRADIANCE_LATTICE_IDENTITY} lattice ${index}`,
+      size: latticeBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    }));
+    const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    irradianceAtlasTexture = device.createTexture({
+      label: `kaminos ${FIRE_IRRADIANCE_ATLAS_IDENTITY} atlas`,
+      size: {
+        width: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
+        height: irradianceGridSize * atlasTilesY,
+        depthOrArrayLayers: 1,
+      },
+      format: 'rgba16float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    irradianceMetaTexture = device.createTexture({
+      label: 'kaminos fire-irradiance-far-field-meta-v0',
+      size: { width: 2, height: 1, depthOrArrayLayers: 1 },
+      format: 'rgba16float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    irradianceLatticeBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos fire irradiance lattice bind group layout',
+      entries: [
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '2d' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '2d' } },
+      ],
+    });
+    irradiancePipelineLayout = device.createPipelineLayout({
+      label: 'kaminos fire irradiance pipeline layout',
+      bindGroupLayouts: [boundarySidecarReadBindGroupLayout, irradianceLatticeBindGroupLayout],
+    });
+    const atlasView = irradianceAtlasTexture.createView();
+    const metaView = irradianceMetaTexture.createView();
+    irradianceBindGroups = [0, 1].map(index => device.createBindGroup({
+      label: `kaminos fire irradiance lattice bind group dst${index}`,
+      layout: irradianceLatticeBindGroupLayout,
+      entries: [
+        { binding: 1, resource: { buffer: irradianceLatticeBuffers[index] } },
+        { binding: 2, resource: { buffer: irradianceLatticeBuffers[1 - index] } },
+        { binding: 3, resource: atlasView },
+        { binding: 4, resource: metaView },
+      ],
+    }));
+    const irradiancePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, IRRADIANCE_GRID: irradianceGridSize };
+    irradianceSeedPipeline = device.createComputePipeline({
+      label: `kaminos fire irradiance seed ${gridSize}x${gridHeight}x${gridSize} to ${irradianceGridSize}^3`,
+      layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csIrradianceSeed', constants: irradiancePipelineConstants },
+    });
+    irradiancePropagatePipeline = device.createComputePipeline({
+      label: `kaminos fire irradiance propagate ${irradianceGridSize}^3`,
+      layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csIrradiancePropagate', constants: irradiancePipelineConstants },
+    });
+    irradianceResolvePipeline = device.createComputePipeline({
+      label: `kaminos fire irradiance resolve ${irradianceGridSize}^3 atlas`,
+      layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csIrradianceResolve', constants: irradiancePipelineConstants },
+    });
+    irradianceAnalyticPipeline = device.createComputePipeline({
+      label: `kaminos fire irradiance far-field reduce ${irradianceGridSize}^3`,
+      layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csIrradianceAnalytic', constants: irradiancePipelineConstants },
+    });
+    irradianceResourcesKey = key;
+    irradianceAtlasGeneration += 1;
+    state.fireLightFieldGrid = irradianceGridSize;
+    state.fireLightFieldBytes = latticeBytes * 2
+      + irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X * irradianceGridSize * atlasTilesY * 8;
+    return true;
+  }
+
+  function encodeFireIrradianceLightField(encoder, options = {}) {
+    const requested = fireLightFieldRequested();
+    state.fireLightFieldRequested = requested;
+    state.fireLightFieldIdentity = FIRE_IRRADIANCE_LATTICE_IDENTITY;
+    if (!requested) {
+      state.fireLightFieldEffective = false;
+      state.fireLightFieldReason = 'fire-light-field-route-not-requested';
+      return false;
+    }
+    if (!ensureFireIrradianceResources()) {
+      state.fireLightFieldEffective = false;
+      state.fireLightFieldReason = 'fire-light-field-resources-unavailable';
+      return false;
+    }
+    const readBindGroup = options.readBindGroup || boundarySidecarReadBindGroups[currentFluid];
+    const latticeWorkgroups = Math.ceil(irradianceGridSize / 4);
+    const seedPass = encoder.beginComputePass({
+      label: 'kaminos fire irradiance seed pass',
+      ...(options.seedTimestampWrites ? { timestampWrites: options.seedTimestampWrites } : {}),
+    });
+    seedPass.setPipeline(irradianceSeedPipeline);
+    seedPass.setBindGroup(0, readBindGroup);
+    seedPass.setBindGroup(1, irradianceBindGroups[0]);
+    seedPass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroups, latticeWorkgroups);
+    seedPass.end();
+    const propagatePass = encoder.beginComputePass({
+      label: `kaminos ${FIRE_IRRADIANCE_PROPAGATION_IDENTITY} pass`,
+      ...(options.propagationTimestampWrites ? { timestampWrites: options.propagationTimestampWrites } : {}),
+    });
+    propagatePass.setPipeline(irradiancePropagatePipeline);
+    propagatePass.setBindGroup(0, readBindGroup);
+    for (let round = 0; round < FIRE_IRRADIANCE_PROPAGATION_ROUNDS; round += 1) {
+      propagatePass.setBindGroup(1, irradianceBindGroups[(round + 1) % 2]);
+      propagatePass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroups, latticeWorkgroups);
+    }
+    propagatePass.end();
+    // With an even round count the final lattice lives in buffer 0, which is
+    // bound as irradianceSrc inside bind group 1.
+    const resolveReadGroup = irradianceBindGroups[FIRE_IRRADIANCE_PROPAGATION_ROUNDS % 2 === 0 ? 1 : 0];
+    const resolvePass = encoder.beginComputePass({
+      label: 'kaminos fire irradiance atlas resolve pass',
+      ...(options.resolveTimestampWrites ? { timestampWrites: options.resolveTimestampWrites } : {}),
+    });
+    resolvePass.setPipeline(irradianceResolvePipeline);
+    resolvePass.setBindGroup(0, readBindGroup);
+    resolvePass.setBindGroup(1, resolveReadGroup);
+    const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    resolvePass.dispatchWorkgroups(
+      Math.ceil((irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X) / 8),
+      Math.ceil((irradianceGridSize * atlasTilesY) / 8),
+      1
+    );
+    resolvePass.end();
+    const analyticPass = encoder.beginComputePass({ label: 'kaminos fire irradiance far-field reduce pass' });
+    analyticPass.setPipeline(irradianceAnalyticPipeline);
+    analyticPass.setBindGroup(0, readBindGroup);
+    analyticPass.setBindGroup(1, resolveReadGroup);
+    analyticPass.dispatchWorkgroups(1, 1, 1);
+    analyticPass.end();
+    state.fireLightFieldEffective = true;
+    state.fireLightFieldReason = null;
+    state.fireLightFieldPropagationRounds = FIRE_IRRADIANCE_PROPAGATION_ROUNDS;
+    state.fireLightFieldPropagationIdentity = FIRE_IRRADIANCE_PROPAGATION_IDENTITY;
+    state.fireLightFieldLastBuiltFrame = state.frameCount;
+    state.fireLightFieldFrameCount = (state.fireLightFieldFrameCount || 0) + 1;
+    state.fireLightFieldGeneration = irradianceAtlasGeneration;
+    state.fireLightFieldProducedAtMs = performance.now();
+    return true;
+  }
+
+  function fireIrradianceLightField() {
+    const requested = fireLightFieldRequested();
+    const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    const base = {
+      identity: FIRE_IRRADIANCE_ATLAS_IDENTITY,
+      latticeIdentity: FIRE_IRRADIANCE_LATTICE_IDENTITY,
+      propagationIdentity: FIRE_IRRADIANCE_PROPAGATION_IDENTITY,
+      requested,
+      device: gpuInitialized ? device : null,
+      deviceIdentity: configuredSharedGpuContext?.identity ?? null,
+      grid: irradianceGridSize,
+      tilesX: FIRE_IRRADIANCE_ATLAS_TILES_X,
+      tilesY: atlasTilesY,
+      atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
+      atlasHeight: irradianceGridSize * atlasTilesY,
+      worldMin: [-1, -1, -1],
+      worldMax: [1, 1, 1],
+      worldBoundsAuthority: 'raymarch-unit-box-shared-camera-world-v0',
+      generation: irradianceAtlasGeneration,
+      builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
+      frameCount: state.fireLightFieldFrameCount || 0,
+      producedAtMs: state.fireLightFieldProducedAtMs ?? null,
+      cpuReadbackAuthority: false,
+      fallbackAuthority: false,
+      canvasAuthority: false,
+    };
+    if (!requested) {
+      return { ...base, status: 'inactive', reason: 'fire-light-field-route-not-requested', atlasTexture: null, metaTexture: null };
+    }
+    if (!gpuInitialized || !irradianceAtlasTexture || !state.fireLightFieldEffective) {
+      return {
+        ...base,
+        status: 'unavailable',
+        reason: state.fireLightFieldReason || 'fire-light-field-not-built-yet',
+        atlasTexture: null,
+        metaTexture: null,
+      };
+    }
+    return {
+      ...base,
+      status: 'effective',
+      reason: null,
+      atlasTexture: irradianceAtlasTexture,
+      metaTexture: irradianceMetaTexture,
+      metaWidth: 2,
+      metaHeight: 1,
+      farFieldIdentity: 'fire-irradiance-far-field-meta-v0',
+    };
+  }
+
+  async function sampleFireLightFieldGpuProfile() {
+    const profile = {
+      identity: FIRE_LIGHT_FIELD_GPU_PROFILE_IDENTITY,
+      timestampStatus: 'unsupported',
+      reason: null,
+      stages: [],
+    };
+    if (!gpuInitialized || !device) {
+      profile.reason = 'gpu-not-initialized';
+      return profile;
+    }
+    if (!device.features?.has?.('timestamp-query')) {
+      profile.reason = 'timestamp-query-not-supported';
+      return profile;
+    }
+    if (!fireLightFieldRequested()) {
+      profile.reason = 'fire-light-field-route-not-requested';
+      return profile;
+    }
+    if (!ensureFireIrradianceResources()) {
+      profile.reason = 'fire-light-field-resources-unavailable';
+      return profile;
+    }
+    const queryCount = 6;
+    const querySet = device.createQuerySet({ type: 'timestamp', count: queryCount });
+    const resolveBuffer = device.createBuffer({
+      label: 'kaminos fire light field profile resolve',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    const readbackBuffer = device.createBuffer({
+      label: 'kaminos fire light field profile readback',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos fire light field gpu profile' });
+      const encoded = encodeFireIrradianceLightField(encoder, {
+        seedTimestampWrites: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+        propagationTimestampWrites: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+        resolveTimestampWrites: { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 },
+      });
+      if (!encoded) {
+        profile.reason = state.fireLightFieldReason || 'fire-light-field-encode-unavailable';
+        return profile;
+      }
+      encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
+      encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
+      device.queue.submit([encoder.finish()]);
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      let invalid = false;
+      for (const value of timestamps) {
+        if (value === 0n) invalid = true;
+      }
+      const nsToMs = (endIndex, startIndex) => Number(timestamps[endIndex] - timestamps[startIndex]) / 1_000_000;
+      profile.timestampStatus = invalid ? 'invalid-zero-timestamp' : 'sampled';
+      profile.stages = [
+        { name: 'irradiance-seed', gpuMs: nsToMs(1, 0) },
+        { name: 'irradiance-propagation', gpuMs: nsToMs(3, 2), rounds: FIRE_IRRADIANCE_PROPAGATION_ROUNDS },
+        { name: 'irradiance-resolve', gpuMs: nsToMs(5, 4) },
+      ];
+      profile.grid = irradianceGridSize;
+      profile.sourceGrid = gridSize;
+      return profile;
+    } finally {
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+    }
   }
 
   function encodeBoundarySidecar(encoder, options = {}) {
@@ -15518,6 +16208,45 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    if (!ordinarySceneDepthFallback) {
+      ordinarySceneDepthFallback = device.createTexture({label:'ordinary depth unoccluded fallback',
+        size:[1,1], format:'depth32float', usage:GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT});
+      const clear = encoder.beginRenderPass({colorAttachments:[],depthStencilAttachment:{
+        view:ordinarySceneDepthFallback.createView(),depthLoadOp:'clear',depthClearValue:1,depthStoreOp:'store'}});
+      clear.end();
+    }
+    const multisampled = ordinarySceneDepthTexture?.sampleCount > 1;
+    if (!ordinarySceneDepthBindGroup) {
+      ordinarySceneDepthBindGroup = device.createBindGroup({label:'ordinary emissive scene depth',
+        layout:multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,entries:[{binding:1,
+          resource:(ordinarySceneDepthTexture || ordinarySceneDepthFallback).createView()}]});
+    }
+    let drawPipeline = selectRaymarchPipeline(targetPipeline);
+    if (multisampled) {
+      const basePipeline = drawPipeline;
+      if (!ordinaryDepthPipelines.has(basePipeline)) {
+        // Compiled on first MSAA scene-depth draw: a second full volume shader
+        // module is only needed when the host supplies multisampled depth.
+        ordinaryMultisampleShader ||= device.createShaderModule({label:'ordinary emissive MSAA scene-depth shader',
+          code:WGSL.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
+            .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',
+              `var depth = textureLoad(productSceneDepth, pixel, 0);
+           for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
+             depth = min(depth, textureLoad(productSceneDepth, pixel, sample));
+           }`),
+        });
+        ordinaryDepthPipelines.set(basePipeline,device.createRenderPipeline({
+          label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:ordinaryMultisamplePipelineLayout,
+          vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
+          fragment:{module:ordinaryMultisampleShader,entryPoint:'fs',
+            constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas ? 1 : 0,
+              LEAN_STOCK_RAYMARCH:basePipeline === leanStockPipeline || basePipeline === leanStockReadbackPipeline},
+            targets:[{format:targetPipeline === readbackPipeline ? 'rgba8unorm' : format}]},
+          primitive:{topology:'triangle-list'},
+        }));
+      }
+      drawPipeline = ordinaryDepthPipelines.get(basePipeline);
+    }
     if (uniforms[368] > 1.5) {
       emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
       state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
@@ -15534,8 +16263,9 @@ export function createKaminosVolumePrototype({
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(selectRaymarchPipeline(targetPipeline));
+    pass.setPipeline(drawPipeline);
     pass.setBindGroup(0, options.bindGroup || fluidBindGroup());
+    pass.setBindGroup(1, ordinarySceneDepthBindGroup);
     pass.draw(3);
     pass.end();
   }
@@ -15677,7 +16407,62 @@ export function createKaminosVolumePrototype({
     return state.selectiveHeadLivePassReceipt;
   }
 
+  let foregroundRequester = null;
+  let foregroundPending = null;
+  let foregroundSequence = 0;
+
+  function setForegroundOpportunityRequester(requester) {
+    if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
+    if (foregroundPending) throw new Error('foreground frame is still pending');
+    if (productFrameOwner === 'caller') throw new Error('ordinary foreground service requires the prototype-owned renderer');
+    if (requester && (boundarySplatRequested() || browserResidualCanApply())) throw new Error('ordinary foreground service requires the ordinary raymarch route');
+    foregroundRequester = requester;
+    state.ordinaryForeground = {mode: requester ? 'producer-foreground-opportunities' : 'private-animation-loop', completedFrames: 0, lastReceipt: null};
+  }
+
   function render(now) {
+    if (!foregroundRequester) return renderOrdinaryFrame(now);
+    raf = 0;
+    if (!state.active || selectiveHeadLiveCapturePaused || foregroundPending) return;
+    const requestId = `ordinary-flame-frame-${++foregroundSequence}`;
+    const requester = foregroundRequester;
+    // Reserve before invoking the requester, which may service synchronously.
+    foregroundPending = {requestId};
+    Promise.resolve().then(() => {
+      const handle = requester({
+        requestId,
+        metadata: {renderer: 'ordinary-volume', frameCountBefore: state.frameCount, simStepCountBefore: state.simStepCount},
+        run(service) {
+          if (!state.active || requester !== foregroundRequester) throw new Error('ordinary foreground frame no longer active');
+          if (service.device !== device || service.queue !== device.queue || typeof service.submit !== 'function') {
+            throw new Error('ordinary foreground device/queue mismatch');
+          }
+          if (service.signal?.aborted) throw new Error('ordinary foreground frame aborted');
+          if (boundarySplatRequested() || browserResidualCanApply()) throw new Error('ordinary foreground route changed');
+          return renderOrdinaryFrame(performance.now(), service);
+        },
+      });
+      if (!handle?.completion) throw new Error('foreground requester did not return a completion handle');
+      foregroundPending = handle;
+      return handle.completion;
+    }).then(receipt => {
+      if (receipt?.status !== 'completed' || receipt.result?.status !== 'submitted') {
+        throw new Error(`ordinary foreground frame failed: ${receipt?.status || 'missing receipt'}`);
+      }
+      state.ordinaryForeground.completedFrames += 1;
+      state.ordinaryForeground.lastReceipt = receipt;
+    }).catch(error => {
+      state.active = false;
+      state.error = error?.message || String(error);
+      canvas.classList.remove('active');
+      emitStatus({phase: 'foreground-frame-error', error: state.error});
+    }).finally(() => {
+      foregroundPending = null;
+      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+    });
+  }
+
+  function renderOrdinaryFrame(now, foregroundService = null) {
     if (productFrameOwner === 'caller') {
       throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
     }
@@ -15705,6 +16490,7 @@ export function createKaminosVolumePrototype({
       }
       if (!lookFreeze && !simulationPaused) {
         encodeSim(encoder);
+        encodeFireIrradianceLightField(encoder);
         encodeLiquidFireContactTransfer(encoder);
         encodeSelectiveHeadLiveFields(encoder);
       }
@@ -15856,7 +16642,8 @@ export function createKaminosVolumePrototype({
       if (!appearanceDecompositionActive()) {
       }
       encodeBoundarySplatTelemetry(encoder);
-      device.queue.submit([encoder.finish()]);
+      if (foregroundService) foregroundService.submit([encoder.finish()], {metadata: {renderer: 'ordinary-volume', simStepCount: state.simStepCount}});
+      else device.queue.submit([encoder.finish()]);
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       state.frameCount += 1;
       if (selectiveHeadLiveExactPause) {
@@ -15911,6 +16698,8 @@ export function createKaminosVolumePrototype({
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
       recordVolumeFrameTiming(now, performance.now() - cpuStart);
       if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
+      return {status: 'submitted', renderer: 'ordinary-volume', frameCount: state.frameCount, simStepCount: state.simStepCount, atMs: now,
+        authority: 'queue-submit-returned-not-gpu-completion-or-presentation'};
     } catch (err) {
       if (selectiveHeadLiveExactPause) {
         selectiveHeadLiveExactPause.resolve({
@@ -15935,8 +16724,9 @@ export function createKaminosVolumePrototype({
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
       emitStatus({ phase: 'render-error', error: state.error });
+      if (foregroundService) throw err;
     } finally {
-      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      if (!foregroundService && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     }
   }
 
@@ -22409,6 +23199,10 @@ export function createKaminosVolumePrototype({
         emitStatus({ phase: 'inactive' });
       }
     },
+    setForegroundOpportunityRequester,
+    foregroundGpuContext() {
+      return {device, queue: device?.queue, active: state.active, renderer: boundarySplatRequested() || browserResidualCanApply() ? 'alternate-volume' : 'ordinary-volume', productFrameOwner};
+    },
     debugState() {
       return {
         ...state,
@@ -22424,6 +23218,181 @@ export function createKaminosVolumePrototype({
     canvasElement() {
       return canvas;
     },
+    async sampleFluidFieldNaNCensus() {
+      if (!gpuInitialized || !device) return { ok: false, reason: 'gpu-not-initialized' };
+      const bytes = fluidBufferBytes(gridSize);
+      const staging = device.createBuffer({ label: 'kaminos fluid nan census staging', size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      try {
+        const encoder = device.createCommandEncoder({ label: 'kaminos fluid nan census copy' });
+        encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
+        const frontStaging = device.createBuffer({ label: 'kaminos front nan census staging', size: frontFieldBufferBytes(gridSize), usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+        encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontStaging, 0, frontFieldBufferBytes(gridSize));
+        device.queue.submit([encoder.finish()]);
+        await staging.mapAsync(GPUMapMode.READ);
+        await frontStaging.mapAsync(GPUMapMode.READ);
+        const data = new Float32Array(staging.getMappedRange());
+        const front = new Float32Array(frontStaging.getMappedRange());
+        const cells = gridCellCount(gridSize);
+        const slotStats = [];
+        for (let slot = 0; slot < 4; slot += 1) {
+          const perComponent = [0, 0, 0, 0];
+          const maxAbs = [0, 0, 0, 0];
+          for (let cell = 0; cell < cells; cell += 1) {
+            const base = cell * 16 + slot * 4;
+            for (let component = 0; component < 4; component += 1) {
+              const value = data[base + component];
+              if (Number.isNaN(value)) perComponent[component] += 1;
+              else if (Math.abs(value) > maxAbs[component]) maxAbs[component] = Math.abs(value);
+            }
+          }
+          slotStats.push({ slot, nanPerComponent: perComponent, maxAbsPerComponent: maxAbs.map(value => +value.toFixed(3)) });
+        }
+        let frontNaN = 0;
+        let frontMax = 0;
+        for (let cell = 0; cell < cells; cell += 1) {
+          const value = front[cell];
+          if (Number.isNaN(value)) frontNaN += 1;
+          else if (Math.abs(value) > frontMax) frontMax = Math.abs(value);
+        }
+        staging.unmap();
+        frontStaging.unmap();
+        frontStaging.destroy();
+        return { ok: true, cells, slotStats, frontNaN, frontMax: +frontMax.toFixed(3), frame: state.frameCount };
+      } finally {
+        staging.destroy();
+      }
+    },
+    async sampleShellChainCensus(options = {}) {
+      if (!gpuInitialized || !device) return { ok: false, reason: 'gpu-not-initialized' };
+      const fire = Number.isFinite(options.fire) ? options.fire : 0.10;
+      const raySteps = Number.isFinite(options.raySteps) ? options.raySteps : 160;
+      const shell = state.topologyShellControls || {};
+      const gains = {
+        thermal: shell.thermal ?? 0.85,
+        reaction: shell.reaction ?? 1.10,
+        front: shell.front ?? 1.25,
+        edge: shell.edge ?? 0.85,
+        curl: shell.curl ?? 0.25,
+        divergence: shell.divergence ?? 0.0,
+        amount: shell.amount ?? 1.10,
+        width: shell.width ?? 0.90,
+        coreSuppress: shell.coreSuppress ?? 0.55,
+        bite: shell.bite ?? 0.80,
+      };
+      const bytes = fluidBufferBytes(gridSize);
+      const staging = device.createBuffer({ label: 'kaminos shell census staging', size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const frontStaging = device.createBuffer({ label: 'kaminos shell census front staging', size: frontFieldBufferBytes(gridSize), usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      try {
+        const encoder = device.createCommandEncoder({ label: 'kaminos shell census copy' });
+        encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
+        encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontStaging, 0, frontFieldBufferBytes(gridSize));
+        device.queue.submit([encoder.finish()]);
+        await staging.mapAsync(GPUMapMode.READ);
+        await frontStaging.mapAsync(GPUMapMode.READ);
+        const data = new Float32Array(staging.getMappedRange());
+        const front = new Float32Array(frontStaging.getMappedRange());
+        const n = gridSize;
+        const ny = gridHeight;
+        const idx = (x, y, z) => ((z * ny + y) * n + x);
+        const cl = v => Math.max(0, Math.min(n - 1, v));
+        const clY = v => Math.max(0, Math.min(ny - 1, v));
+        const slotAt = (x, y, z, slot) => {
+          const base = idx(cl(x), clY(y), cl(z)) * 16 + slot * 4;
+          return [data[base], data[base + 1], data[base + 2], data[base + 3]];
+        };
+        const ss = (e0, e1, x) => {
+          const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+          return t * t * (3 - 2 * t);
+        };
+        const clampf = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const fireGain = 0.42 + fire * 1.15;
+        const spanNominal = 2.0;
+        const rayStepOpacity = (spanNominal / raySteps) * 3.65;
+        const widthTerm = 0.050 + gains.width * 0.070;
+        const carrierScale = 0.52 + gains.width * 0.62;
+        const track = () => ({ max: 0, sum: 0, count: 0 });
+        const add = (t, v) => { t.count += 1; t.sum += v; if (v > t.max) t.max = v; };
+        const stats = {
+          thermal: track(), reaction: track(), frontS: track(), edge: track(), curl: track(), div: track(),
+          carrierRaw: track(), carrier: track(), mask: track(), wrinkle: track(), alpha: track(), weight: track(),
+        };
+        let activeCells = 0;
+        let visibleCells = 0;
+        for (let z = 1; z < n - 1; z += 1) {
+          for (let y = 1; y < ny - 1; y += 1) {
+            for (let x = 1; x < n - 1; x += 1) {
+              const st = slotAt(x, y, z, 0);
+              const material = slotAt(x, y, z, 1);
+              const fireLayer = slotAt(x, y, z, 2);
+              const microLayer = slotAt(x, y, z, 3);
+              const topo = front[idx(x, y, z)];
+              const velMag = Math.hypot(st[0], st[1], st[2]);
+              const rawTemp = clampf(fireLayer[0] * 1.22 + fireLayer[1] * 0.46 + fireLayer[2] * 0.40 + microLayer[2] * 1.18 + microLayer[3] * 0.48 + material[1] * 0.20 + velMag * 0.30, 0, 2.4);
+              if (rawTemp < 0.04 && topo < 0.002 && fireLayer[2] < 0.01) continue;
+              activeCells += 1;
+              const heat = material[1];
+              const fuel = material[2];
+              const flameDetail = fireLayer[2];
+              const combustionFront = fireLayer[3];
+              const ember = fireLayer[1];
+              const microSmoke = microLayer[0];
+              const interfaceShred = microLayer[1];
+              const fireLick = microLayer[2];
+              const renderTemp = rawTemp * fireGain;
+              const vxp = slotAt(x + 1, y, z, 0); const vxn = slotAt(x - 1, y, z, 0);
+              const vyp = slotAt(x, y + 1, z, 0); const vyn = slotAt(x, y - 1, z, 0);
+              const vzp = slotAt(x, y, z + 1, 0); const vzn = slotAt(x, y, z - 1, 0);
+              const curlV = [
+                ((vyp[2] - vyn[2]) - (vzp[1] - vzn[1])) * 0.5,
+                ((vzp[0] - vzn[0]) - (vxp[2] - vxn[2])) * 0.5,
+                ((vxp[1] - vxn[1]) - (vyp[0] - vyn[0])) * 0.5,
+              ];
+              const curlDebug = Math.hypot(curlV[0], curlV[1], curlV[2]);
+              const divDebug = Math.abs(((vxp[0] - vxn[0]) + (vyp[1] - vyn[1]) + (vzp[2] - vzn[2])) * 0.5);
+              const rawExtinction = clampf((material[0] * 0.74 + microSmoke * 0.42 + interfaceShred * 0.34 + material[3] * 0.12) * (0.34 + 2.0 * 0.46), 0, 2.3);
+              const curlActivity = ss(0.006, 0.16, curlDebug);
+              const thermalSupport = ss(0.018, 0.62, rawTemp + renderTemp * 0.20 + heat * 0.20 + ember * 0.12);
+              const reactionSupport = ss(0.004, 0.30, flameDetail * 0.72 + fireLick * 0.44 + combustionFront * 0.34 + fuel * heat * 0.28);
+              const frontSupport = ss(0.001, 0.088, topo * 1.08 + combustionFront * 0.54 + fireLick * 0.12);
+              const edgeSupport = ss(0.004, 0.24, interfaceShred * 0.58 + microSmoke * 0.18 + rawExtinction * 0.08 + curlDebug * 0.42);
+              const curlSupport = curlActivity * ss(0.010, 0.52, rawTemp + heat * 0.16 + flameDetail * 0.28 + combustionFront * 0.16);
+              const divSupport = ss(0.010, 0.18, divDebug) * ss(0.010, 0.46, rawTemp + heat * 0.18 + flameDetail * 0.32);
+              const carrierRaw = gains.thermal * thermalSupport + gains.reaction * reactionSupport + gains.front * frontSupport + gains.edge * edgeSupport + gains.curl * curlSupport + gains.divergence * divSupport;
+              const carrier = clampf(1 - Math.exp(-Math.max(0, carrierRaw) * carrierScale), 0, 1.65);
+              const coreBody = ss(0.26, 1.18, rawTemp * 0.36 + renderTemp * 0.18 + flameDetail * 0.44 + heat * 0.12 + ember * 0.12) * (1 - clampf(frontSupport * 0.54 + edgeSupport * 0.30 + curlActivity * 0.12, 0, 0.86));
+              const mask = clampf(carrier * (1 + gains.coreSuppress * (-coreBody * 0.82)), 0, 1.35);
+              const wrinkle = clampf(1 + gains.bite * (frontSupport * 0.26 + edgeSupport * 0.24 + curlActivity * 0.20), 0, 2.4);
+              const alpha = clampf(mask * gains.amount * rayStepOpacity * widthTerm * wrinkle, 0, 0.20);
+              const weight = ss(0.002, 0.060, alpha);
+              add(stats.thermal, thermalSupport); add(stats.reaction, reactionSupport); add(stats.frontS, frontSupport);
+              add(stats.edge, edgeSupport); add(stats.curl, curlSupport); add(stats.div, divSupport);
+              add(stats.carrierRaw, carrierRaw); add(stats.carrier, carrier); add(stats.mask, mask);
+              add(stats.wrinkle, wrinkle); add(stats.alpha, alpha); add(stats.weight, weight);
+              if (weight > 0.05) visibleCells += 1;
+            }
+          }
+        }
+        staging.unmap();
+        frontStaging.unmap();
+        const summarize = t => ({ max: +t.max.toFixed(5), mean: +(t.count ? t.sum / t.count : 0).toFixed(5) });
+        return {
+          ok: true,
+          identity: 'shell-chain-cpu-census-v0',
+          frame: state.frameCount,
+          activeCells,
+          visibleCells,
+          rayStepOpacity: +rayStepOpacity.toFixed(5),
+          assumptions: { fire, raySteps, spanNominal, quench: 0, bonfire: 0 },
+          gains,
+          stats: Object.fromEntries(Object.entries(stats).map(([k, t]) => [k, summarize(t)])),
+        };
+      } finally {
+        staging.destroy();
+        frontStaging.destroy();
+      }
+    },
+    fireIrradianceLightField,
+    sampleFireLightFieldGpuProfile,
     sampleFrame,
     sampleLiquidFireContactConsumer,
     sampleFourArmHeldStateLedger,
@@ -22469,6 +23438,7 @@ export function createKaminosVolumePrototype({
       fourArmHeldStateResidualGrid = null;
       clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
+      ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();
       fourArmHeldStateLinearTexture?.destroy();

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import {
   VOLUME_BASIN_DRIVE_SESSION_SCHEMA,
   createVolumeBasinDriveSessionRecorder,
@@ -303,5 +305,65 @@ assert.throws(
   /gesture.*trusted.*boolean/i,
   'gesture provenance cannot silently weaken into an ambiguous value',
 );
+
+// Exercise the same schema the cockpit fetches, so additions cannot leave the
+// synthetic historical fixture passing while the operator's Record button fails.
+const schemaBytes = readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url));
+const schemaDocument = JSON.parse(schemaBytes);
+const currentSchema = {
+  identity: schemaDocument.identity,
+  sha256: createHash('sha256').update(schemaBytes).digest('hex'),
+  basinControlCount: schemaDocument.controls.length,
+  rendererControlCount: schemaDocument.rendererControls.length,
+  presentationControlCount: schemaDocument.presentationControls.length,
+  inventory: ['basin', 'renderer', 'presentation'].flatMap((axis, index) =>
+    schemaDocument[['controls', 'rendererControls', 'presentationControls'][index]].map(descriptor => ({
+      axis, id: descriptor.key, param: descriptor.param, type: descriptor.type,
+    }))),
+};
+const currentState = {
+  ...initialState,
+  ...Object.fromEntries(['basin', 'renderer', 'presentation'].map(axis => [axis,
+    Object.fromEntries(currentSchema.inventory.filter(item => item.axis === axis).map(item => [
+      item.id, initialState[axis][item.id] ?? 0,
+    ])),
+  ])),
+};
+const currentRecorder = createVolumeBasinDriveSessionRecorder({
+  sessionId: 'current-schema-flow-drive', source, controlSchema: currentSchema,
+  runtime, initialState: currentState, startedAt: '2026-09-22T08:49:36.000Z', now: () => 0,
+});
+currentRecorder.recordControl({
+  axis: 'basin', controlId: 'volume-flow-rate', param: 'volume_flow_rate', inputType: 'range',
+  requested: 0.55, effective: 0.55,
+  gesture: { eventType: 'input', targetId: 'volume-flow-rate', targeted: true, trusted: true, commandDriven: false },
+});
+const currentSession = currentRecorder.finish({
+  finalState: { ...currentState, basin: { ...currentState.basin, 'volume-flow-rate': 0.55 } },
+  endedAt: '2026-09-22T08:49:36.000Z',
+});
+const currentRoundTrip = parseVolumeBasinDriveSession(serializeVolumeBasinDriveSession(currentSession));
+const currentReplay = await replayVolumeBasinDriveSession(currentRoundTrip, {
+  applyInitialState: state => state,
+  waitUntilElapsed() {},
+  applyControl: event => event.effective,
+  captureState: () => currentRoundTrip.finalState,
+});
+assert.equal(currentReplay.effectiveMatch, true);
+assert.equal(currentReplay.finalStateMatch, true);
+assert.equal(Object.keys(currentRoundTrip.initialState.basin).length, schemaDocument.controls.length);
+for (const field of ['basinControlCount', 'rendererControlCount', 'presentationControlCount']) {
+  for (const value of [undefined, 0, -1, 1.5, '206']) {
+    assert.throws(() => validateVolumeBasinDriveSession({
+      ...currentSession, controlSchema: { ...currentSchema, [field]: value },
+    }), /positive integer/, `${field} rejects invalid counts`);
+  }
+}
+assert.throws(() => validateVolumeBasinDriveSession({
+  ...currentSession, controlSchema: { ...currentSchema, basinControlCount: currentSchema.basinControlCount - 1 },
+}), /inventory count mismatch/, 'declared count must still match the full inventory');
+assert.throws(() => validateVolumeBasinDriveSession({
+  ...currentSession, initialState: { ...currentState, basin: { ...currentState.basin, 'unknown-control': 1 } },
+}), /basin inventory mismatch/, 'unknown state controls cannot pass inventory validation');
 
 console.log('volume basin drive session contracts passed');

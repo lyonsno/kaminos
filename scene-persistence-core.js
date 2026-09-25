@@ -1,6 +1,7 @@
+import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 4;
+export const SCENE_VERSION = 5;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -97,7 +98,7 @@ export function hasVolumePrimitives(data) {
 
 export function sceneDocumentIsLoadable(data) {
   if (!data?.version) return false;
-  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data);
+  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition);
 }
 
 export function isReloadableSceneObjectRecord(record) {
@@ -127,6 +128,7 @@ export function planSceneRestore(data) {
     activeGroupId: requestedActiveGroupId,
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
+    composition: normalizeComposition(data.composition),
   };
 }
 
@@ -138,6 +140,8 @@ export function buildSceneDocument({
   activeGroupId = null,
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
+  composition = null,
+  capture = null,
   camera = null,
   environment = null,
   postprocessing = null,
@@ -162,6 +166,8 @@ export function buildSceneDocument({
       fileName: activeObject.fileName,
     } : null,
     provenance: cloneJson(provenance),
+    composition: normalizeComposition(composition),
+    capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
     environment: cloneJson(environment),

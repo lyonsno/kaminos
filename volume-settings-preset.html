@@ -20,6 +20,7 @@
     <div id="status">Validating exact controls...</div>
   </main>
   <script type="module">
+    import { forwardCompositionHash } from './scene-authoring.mjs';
     import {
       buildVolumeSettingsPresetTarget,
       buildVolumeSettingsPresetVisualTarget,
@@ -50,12 +51,12 @@
       if (!view) {
         const target = buildVolumeSettingsPresetTarget(receipt, location.origin);
         status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | entering live cockpit`;
-        location.replace(target);
+        location.replace(forwardCompositionHash(target, location.hash));
         return;
       }
       const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view, { assayToolbar: assayToolbarRequested });
       status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin + ${receipt.rendererControlCount} renderer + ${receipt.presentationControlCount} presentation controls | effective ${view} view`;
-      location.replace(target);
+      location.replace(forwardCompositionHash(target, location.hash));
     }
 
     loadPreset().catch(error => {

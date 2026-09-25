@@ -13,7 +13,7 @@ function sourceBetween(source, startMarker, endMarker) {
 
 const raymarch = sourceBetween(
   core,
-  'fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {',
+  'fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {',
   'fn fs(in: VSOut) -> @location(0) vec4<f32> {',
 );
 
@@ -180,8 +180,8 @@ const retiredPyroMutations = [
   [
     'aliased reserved-array read',
     source => source.replace(
-      'fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {',
-      `fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
+      'fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {',
+      `fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
   let renamedReservedCells = u.pyro_detail_cells;
   let leakedReservedCell = renamedReservedCells[0u];`,
     ),

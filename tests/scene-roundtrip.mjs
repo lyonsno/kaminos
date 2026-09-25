@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   SCENE_SCHEMA,
+  SCENE_VERSION,
   buildSceneDocument,
   getSceneGroupRecords,
   getSceneObjectRecords,
@@ -139,7 +140,7 @@ const saved = JSON.parse(JSON.stringify(document));
 const restorePlan = planSceneRestore(saved);
 
 assert.equal(saved.schema, SCENE_SCHEMA, 'round-trip scene document uses the v1 multi-object schema');
-assert.equal(saved.version, 4, 'round-trip scene document keeps the current scene version');
+assert.equal(saved.version, SCENE_VERSION, 'round-trip scene document keeps the current scene version');
 assert.equal(saved.objects.length, 3, 'round-trip scene document saves all authored objects');
 assert.equal(saved.objects[2].type, 'image', 'round-trip scene document preserves image scene object type');
 assert.deepEqual(saved.objects[2].image, imageObject.image, 'round-trip scene document preserves image import provenance');

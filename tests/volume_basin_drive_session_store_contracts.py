@@ -1,3 +1,4 @@
+import copy
 import importlib.util
 import json
 import tempfile
@@ -120,6 +121,62 @@ with tempfile.TemporaryDirectory(prefix="kaminos-basin-session-store-") as tempo
     repeated = serve.write_volume_basin_drive_session(session_store, session_document(session_store))
     assert repeated["effective"]["artifactId"] == receipt["effective"]["artifactId"]
     assert repeated["effective"]["idempotent"] is True
+
+    # Stored packages remain inspectable after a source update; replay admission
+    # is explicit and does not pretend the old trajectory belongs to new code.
+    serve.volume_settings_server_source = lambda: {**SOURCE, "commit": "2" * 40}
+    old = serve.read_volume_basin_drive_session(session_store, receipt["effective"]["artifactId"])
+    assert old["session"] == artifact["session"]
+    assert old["replayCompatibility"]["compatible"] is False
+    assert old["replayCompatibility"]["reasons"] == ["source-commit-mismatch"]
+    assert old["replayCompatibility"]["recordedSourceCommit"] == SOURCE["commit"]
+    assert old["replayCompatibility"]["effectiveSourceCommit"] == "2" * 40
+    serve.volume_settings_server_source = lambda: dict(SOURCE)
+
+    # Synthetic earlier inventory tests local historical-read policy, not an
+    # assertion about any particular historical glTF or external runtime.
+    current_schema = serve._canonical_volume_basin_drive_control_schema()
+    historical_schema = copy.deepcopy(current_schema)
+    basin = [item for item in historical_schema["inventory"] if item["axis"] == "basin"]
+    removed_ids = {item["id"] for item in basin[192:]}
+    assert "volume-exposure" not in removed_ids
+    historical_schema["inventory"] = [item for item in historical_schema["inventory"]
+                                       if item["id"] not in removed_ids]
+    historical_schema["basinControlCount"] = 192
+    historical_schema["sha256"] = "a" * 64
+    canonical = serve._canonical_volume_basin_drive_control_schema
+    serve._canonical_volume_basin_drive_control_schema = lambda: historical_schema
+    historical = session_document(session_store)
+    historical["sessionId"] = "synthetic-earlier-192-control-drive"
+    historical_receipt = serve.write_volume_basin_drive_session(session_store, historical)
+    serve._canonical_volume_basin_drive_control_schema = canonical
+    read_historical = serve.read_volume_basin_drive_session(session_store, historical_receipt["effective"]["artifactId"])
+    assert read_historical["session"] == historical
+    assert read_historical["replayCompatibility"]["compatible"] is False
+    assert "control-schema-mismatch" in read_historical["replayCompatibility"]["reasons"]
+    index = serve.list_volume_basin_drive_sessions(session_store)
+    assert len(index["entries"]) == 2
+    compatibility = {entry["artifactId"]: entry["replayCompatibility"]["compatible"] for entry in index["entries"]}
+    assert compatibility[receipt["effective"]["artifactId"]] is True
+    assert compatibility[historical_receipt["effective"]["artifactId"]] is False
+    try:
+        serve.write_volume_basin_drive_session(session_store, historical)
+    except ValueError as error:
+        assert "canonical control schema mismatch" in str(error)
+    else:
+        raise AssertionError("historical-read support weakened current write admission")
+
+    # Read access still enforces the stored content identity.
+    historical_path = Path(historical_receipt["effective"]["artifactPath"])
+    tampered = json.loads(historical_path.read_text())
+    tampered["session"]["sessionId"] += "-tampered"
+    historical_path.write_text(json.dumps(tampered))
+    try:
+        serve.read_volume_basin_drive_session(session_store, historical_receipt["effective"]["artifactId"])
+    except ValueError as error:
+        assert "content hash mismatch" in str(error)
+    else:
+        raise AssertionError("historical-read support accepted a tampered artifact")
 
     truncated = session_document(session_store)
     truncated["eventCount"] = 2

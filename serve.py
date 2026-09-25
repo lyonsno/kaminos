@@ -15,6 +15,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
@@ -109,7 +110,7 @@ def read_volume_basin_drive_session(store_path, session_ref):
         or document.get("artifactId") != artifact_id
     ):
         raise ValueError("volume basin drive session artifact identity mismatch")
-    normalized = _normalize_volume_basin_drive_session(document.get("session"))
+    normalized = _normalize_volume_basin_drive_session(document.get("session"), require_current_runtime=False)
     content_hash = _volume_basin_drive_session_content_hash(normalized)
     if document.get("contentHash") != f"sha256:{content_hash}" or artifact_id != f"vds-{content_hash}":
         raise ValueError("volume basin drive session artifact content hash mismatch")
@@ -118,6 +119,7 @@ def read_volume_basin_drive_session(store_path, session_ref):
         "session": normalized,
         "artifactPath": str(artifact_path),
         "storePath": str(store),
+        "replayCompatibility": volume_basin_drive_replay_compatibility(normalized),
     }
 
 
@@ -141,6 +143,7 @@ def list_volume_basin_drive_sessions(store_path):
             "markCount": session["markCount"],
             "sourceCommit": session["source"]["commit"],
             "writtenAt": document.get("writtenAt"),
+            "replayCompatibility": document["replayCompatibility"],
         })
     entries.sort(key=lambda entry: (entry.get("writtenAt") or "", entry["artifactId"]), reverse=True)
     return {
@@ -150,7 +153,7 @@ def list_volume_basin_drive_sessions(store_path):
     }
 
 
-def _normalize_volume_basin_drive_session(session):
+def _normalize_volume_basin_drive_session(session, *, require_current_runtime=True):
     if not isinstance(session, dict):
         raise ValueError("volume basin drive session must be a JSON object")
     result = subprocess.run(
@@ -171,6 +174,8 @@ def _normalize_volume_basin_drive_session(session):
         raise ValueError(f"volume basin drive session validator returned invalid JSON: {error}") from error
     if not isinstance(normalized, dict):
         raise ValueError("volume basin drive session validator returned a non-object")
+    if not require_current_runtime:
+        return normalized
     canonical_schema = _canonical_volume_basin_drive_control_schema()
     authored_schema = normalized.get("controlSchema") or {}
     for field in (
@@ -185,6 +190,28 @@ def _normalize_volume_basin_drive_session(session):
     if normalized.get("source", {}).get("commit") != server_source.get("commit"):
         raise ValueError("volume basin drive session source commit does not match the effective server")
     return normalized
+
+
+def volume_basin_drive_replay_compatibility(session):
+    canonical = _canonical_volume_basin_drive_control_schema()
+    recorded = session["controlSchema"]
+    source = volume_settings_server_source()
+    reasons = []
+    if any(recorded.get(field) != value for field, value in canonical.items()):
+        reasons.append("control-schema-mismatch")
+    if session["source"]["commit"] != source.get("commit"):
+        reasons.append("source-commit-mismatch")
+    if source.get("dirty") is not False:
+        reasons.append("server-source-dirty")
+    return {
+        "identity": "kaminos.volume.basin-drive-replay-compatibility.v0",
+        "compatible": not reasons,
+        "reasons": reasons,
+        "recordedSourceCommit": session["source"]["commit"],
+        "effectiveSourceCommit": source.get("commit"),
+        "recordedControlSchemaSha256": recorded["sha256"],
+        "effectiveControlSchemaSha256": canonical["sha256"],
+    }
 
 
 def _canonical_volume_basin_drive_control_schema():
@@ -317,6 +344,10 @@ def _validate_settings_preset_schema(schema):
     return schema
 
 
+class UnsupportedVolumeSettingsControls(ValueError):
+    """Saved controls require a different renderer/schema version."""
+
+
 def normalize_volume_settings_preset_payload(payload, schema=None):
     """Project a compatible older payload through schema-owned additive defaults."""
     schema = _validate_settings_preset_schema(
@@ -365,7 +396,7 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         retired_by_key = retired_by_axis[field]
         unknown = sorted(set(source_controls) - set(expected_by_key) - set(retired_by_key))
         if unknown:
-            raise ValueError(f"settings preset {field} contain unknown controls: {','.join(unknown)}")
+            raise UnsupportedVolumeSettingsControls(f"settings preset {field} contain unknown controls: {','.join(unknown)}")
         for key in sorted(set(source_controls) & set(retired_by_key)):
             descriptor = source_controls.pop(key)
             expected = retired_by_key[key]
@@ -1095,7 +1126,7 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
         "schemaProjection": schema_projection,
         "requestedPresetRef": requested,
         "alias": alias_document.get("alias") if alias_document else None,
-        "label": alias_document.get("label") if alias_document else document.get("initialLabel"),
+        "label": alias_document.get("label") if alias_document else (document.get("initialLabel") or document.get("label")),
         "storePath": str(store),
     }
 
@@ -1106,6 +1137,7 @@ def list_volume_settings_presets(store_path, schema=None):
     aliases_dir = store / "aliases"
     aliases_dir.mkdir(parents=True, exist_ok=True)
     entries = []
+    unavailable_entries = []
     for alias_path in aliases_dir.glob("*.json"):
         try:
             alias_document = _read_json_object(alias_path, "alias")
@@ -1114,7 +1146,18 @@ def list_volume_settings_presets(store_path, schema=None):
         alias = alias_document.get("alias")
         if alias_path.stem != alias:
             raise ValueError(f"volume settings preset alias filename mismatch: {alias_path.name}")
-        document = read_volume_settings_preset(store, alias, schema)
+        try:
+            document = read_volume_settings_preset(store, alias, schema)
+        except UnsupportedVolumeSettingsControls as error:
+            unavailable_entries.append({
+                "alias": alias,
+                "label": alias_document["label"],
+                "presetId": alias_document["presetId"],
+                "updatedAt": alias_document.get("updatedAt"),
+                "source": alias_document.get("source") or {},
+                "error": str(error),
+            })
+            continue
         entries.append({
             "alias": alias,
             "label": document["label"],
@@ -1130,6 +1173,7 @@ def list_volume_settings_presets(store_path, schema=None):
             "source": alias_document.get("source") or {},
         })
     entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
+    unavailable_entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
     return {
         "identity": "kaminos-volume-settings-preset-index-v1",
         "storePath": str(store),
@@ -1138,6 +1182,7 @@ def list_volume_settings_presets(store_path, schema=None):
         "rendererControlCount": len(schema.get("rendererControls") or []),
         "presentationControlCount": len(schema.get("presentationControls") or []),
         "entries": entries,
+        "unavailableEntries": unavailable_entries,
     }
 
 
@@ -1263,8 +1308,8 @@ def parse_server_arguments(argv):
     return port, store, basin_session_store, cockpit_layout_store
 
 # Directories the browse API can access
-SCENES_DIR = ROOT / "scenes"
-SCENES_DIR.mkdir(exist_ok=True)
+SCENES_DIR = Path(os.environ.get("KAMINOS_SCENES_DIR", ROOT / "scenes")).expanduser().resolve()
+SCENES_DIR.mkdir(parents=True, exist_ok=True)
 KAMINOS_ASSETS_DIR = Path(os.environ.get(
     "KAMINOS_ASSETS_DIR",
     os.path.expanduser("~/.local/state/kaminos/assets"),
@@ -1288,6 +1333,7 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
 SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_SAM3_PACKET_ROOT') else None
 
 BROWSE_ROOTS = {
+    "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
     "scratch": ROOT / "scratch",
     "scenes": SCENES_DIR,
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
@@ -2291,7 +2337,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/save-scene":
+        if parsed.path == "/api/ingest-mesh":
+            self.handle_ingest_mesh()
+        elif parsed.path == "/api/save-scene":
             self.handle_save_scene()
         elif parsed.path == "/api/run-pipeline":
             self.handle_run_pipeline()
@@ -2804,7 +2852,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             model_name = (data.get("model") or {}).get("fileName", "scene")
             model_name = Path(model_name).stem
             timestamp = data.get("timestamp", "")[:19].replace(":", "-").replace("T", "_")
-            filename = f"{model_name}_{timestamp}.kaminos.json"
+            filename = f"{model_name}_{timestamp}_{uuid.uuid4().hex}.kaminos.json"
             filename = "".join(c for c in filename if c.isalnum() or c in "._-")
             if not filename:
                 filename = "scene.kaminos.json"
@@ -2815,8 +2863,55 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Path traversal"}, 403)
             return
 
-        scene_path.write_text(json.dumps(data, indent=2))
+        _atomic_write_json(scene_path, data)
         self.send_json({"saved": filename, "path": str(scene_path)})
+
+    def handle_ingest_mesh(self):
+        """Persist a generated GLB by content hash for the existing scene loader."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length < 20:
+                raise ValueError("GLB header and first chunk required")
+            content = self.rfile.read(length)
+            if (len(content) != length or content[:4] != b"glTF"
+                    or int.from_bytes(content[4:8], "little") != 2
+                    or int.from_bytes(content[8:12], "little") != length):
+                raise ValueError("Invalid GLB version or length")
+            # Check container boundaries; GLTFLoader owns semantic mesh validation.
+            offset = 12
+            while offset < length:
+                if offset + 8 > length:
+                    raise ValueError("Incomplete GLB chunk header")
+                chunk_length = int.from_bytes(content[offset:offset + 4], "little")
+                if chunk_length % 4 or offset + 8 + chunk_length > length:
+                    raise ValueError("Invalid GLB chunk length")
+                if offset == 12 and content[offset + 4:offset + 8] != b"JSON":
+                    raise ValueError("First GLB chunk must be JSON")
+                offset += 8 + chunk_length
+            digest = hashlib.sha256(content).hexdigest()
+            root = BROWSE_ROOTS["generated-meshes"].resolve()
+            root.mkdir(parents=True, exist_ok=True)
+            target = root / f"{digest}.glb"
+            # Publish atomically without overwriting another writer's content.
+            with tempfile.NamedTemporaryFile(dir=root, delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(content)
+            try:
+                try:
+                    os.link(temporary, target)
+                except FileExistsError:
+                    if target.is_symlink() or hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+                        raise ValueError("Stored GLB content identity conflict")
+            finally:
+                temporary.unlink()
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except OSError as error:
+            self.send_json({"error": str(error), "phase": "mesh-persistence"}, 500)
+            return
+        self.send_json({"schema": "kaminos.generated-mesh.v0", "sha256": digest,
+                        "bytes": length, "source": f"/api/read?root=generated-meshes&path={digest}.glb"})
 
     def handle_ingest_splat(self, params):
         """Write a dropped PLY/SPZ into the experimental splat inbox."""
