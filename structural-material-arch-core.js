@@ -109,6 +109,33 @@ export function rasterizeArchTriangleDepthEnvelope(triangles, bounds, columns, r
   return envelope;
 }
 
+function deriveRadialJointConstruction(profile, segmentCount) {
+  const { columns, rows, occupancy, bounds } = profile;
+  const centerColumn = Math.floor(columns / 2);
+  const openings = [];
+  for (let row = 0; row < rows; row += 1) {
+    if (occupancy[row * columns + centerColumn]) continue;
+    let left = centerColumn;
+    let right = centerColumn;
+    while (left > 0 && !occupancy[row * columns + left - 1]) left -= 1;
+    while (right + 1 < columns && !occupancy[row * columns + right + 1]) right += 1;
+    const width = right - left + 1;
+    if (width > 1 && width < columns) openings.push({ row, width });
+  }
+  if (!openings.length) throw new Error('radial arch joints require a rasterized central opening');
+  const widestOpening = Math.max(...openings.map(opening => opening.width));
+  const springRow = openings.filter(opening => opening.width === widestOpening).at(-1).row;
+  const springlineY = bounds.min[1] + (springRow + 0.5) * (bounds.max[1] - bounds.min[1]) / rows;
+  const centerX = bounds.min[0] + (centerColumn + 0.5) * (bounds.max[0] - bounds.min[0]) / columns;
+  return {
+    algorithm: 'raster-opening-maximum-width-radial-sectors-v0',
+    radialJointCount: segmentCount,
+    radialFanCenter: { x: centerX, y: springlineY },
+    springlineY,
+    widestOpeningCells: widestOpening,
+  };
+}
+
 export function buildArchStructuralProxy(profile, options = {}) {
   const { columns, rows, occupancy, bounds } = profile;
   if (!Number.isInteger(columns) || !Number.isInteger(rows) || occupancy?.length !== columns * rows) {
@@ -121,6 +148,22 @@ export function buildArchStructuralProxy(profile, options = {}) {
   if (depth <= 0) throw new Error('arch depth must be positive');
   const depthMode = options.depthMode ?? 'uniform';
   if (!['uniform', 'surface-envelope'].includes(depthMode)) throw new Error('unsupported arch depth mode');
+  const interiorMode = options.interiorMode ?? 'continuous';
+  if (!['continuous', 'radial-voussoir-joints'].includes(interiorMode)) {
+    throw new Error('unsupported arch interior mode');
+  }
+  const radialJointCount = options.radialJointCount ?? 9;
+  if (!Number.isInteger(radialJointCount) || radialJointCount < 2) {
+    throw new Error('radial joint count must be an integer of at least two');
+  }
+  const jointStiffnessRatio = finite(options.jointStiffnessRatio ?? 0.35, 'joint stiffness ratio');
+  const jointStrength = finite(options.jointStrength ?? 0.025, 'joint strength');
+  if (jointStiffnessRatio <= 0 || jointStiffnessRatio > 1 || jointStrength <= 0) {
+    throw new Error('joint stiffness ratio must be in (0, 1] and joint strength must be positive');
+  }
+  const interiorConstruction = interiorMode === 'radial-voussoir-joints'
+    ? deriveRadialJointConstruction(profile, radialJointCount)
+    : { algorithm: 'continuous-neighbor-lattice-v0' };
   const inferredDepthCells = [];
   const resolvedDepth = new Map();
   if (depthMode === 'surface-envelope') {
@@ -189,14 +232,23 @@ export function buildArchStructuralProxy(profile, options = {}) {
         const index = nodes.length;
         const cellIndex = row * columns + column;
         const envelope = depthMode === 'surface-envelope' ? resolvedDepth.get(cellIndex) : null;
+        const x = bounds.min[0] + (column + 0.5) * (bounds.max[0] - bounds.min[0]) / columns;
+        const y = bounds.min[1] + (row + 0.5) * (bounds.max[1] - bounds.min[1]) / rows;
+        const aboveSpringline = interiorMode === 'radial-voussoir-joints' && y >= interiorConstruction.springlineY;
+        const voussoirId = aboveSpringline
+          ? Math.max(0, Math.min(radialJointCount - 1, Math.floor(Math.atan2(
+            y - interiorConstruction.springlineY,
+            x - interiorConstruction.radialFanCenter.x,
+          ) / Math.PI * radialJointCount)))
+          : null;
         nodes.push({
           id: `n${index}`, column, row, layer,
-          x: bounds.min[0] + (column + 0.5) * (bounds.max[0] - bounds.min[0]) / columns,
-          y: bounds.min[1] + (row + 0.5) * (bounds.max[1] - bounds.min[1]) / rows,
+          x, y,
           z: envelope
             ? envelope.minZ + layer * (envelope.maxZ - envelope.minZ) / (layers - 1)
             : -depth / 2 + layer * depth / (layers - 1),
           pinned: column < midColumn ? row === leftFootRow : row === rightFootRow,
+          voussoirId,
           displacement: { x: 0, y: 0, z: 0 },
         });
         byGrid.set(key(column, row, layer), index);
@@ -216,12 +268,15 @@ export function buildArchStructuralProxy(profile, options = {}) {
       const other = nodes[next];
       const delta = [other.x - node.x, other.y - node.y, other.z - node.z];
       const rest = Math.hypot(...delta);
+      const crossesJoint = node.voussoirId !== null && other.voussoirId !== null &&
+        node.voussoirId !== other.voussoirId;
       bonds.push({
         id: `b${bonds.length}`, a: byGrid.get(key(node.column, node.row, node.layer)), b: next,
         rest, direction: delta.map(value => value / rest),
         midpoint: { x: (node.x + other.x) / 2, y: (node.y + other.y) / 2, z: (node.z + other.z) / 2 },
-        kind: dl ? 'depth' : dc && dr ? 'diagonal' : 'axis',
-        stiffness: dl ? 0.6 : 1,
+        kind: crossesJoint ? 'joint' : dl ? 'depth' : dc && dr ? 'diagonal' : 'axis',
+        stiffness: (dl ? 0.6 : 1) * (crossesJoint ? jointStiffnessRatio : 1),
+        ...(crossesJoint ? { strength: jointStrength } : {}),
         alive: true, lastStrain: 0,
       });
     }
@@ -234,7 +289,7 @@ export function buildArchStructuralProxy(profile, options = {}) {
     solverAuthority: 'shear-regularized-linear-spring-pcg-v0',
     visualAuthority: 'glb-consumer-not-structural-truth-v0',
     source: profile.source || null,
-    columns, rows, layers, depth, depthMode,
+    columns, rows, layers, depth, depthMode, interiorMode, interiorConstruction,
     depthSource: profile.depthSource || null,
     inferredDepthCells,
     occupancy: [...occupancy], bounds,
@@ -247,6 +302,10 @@ function solveArchLinearSystem(state, load, mode) {
   const y = finite(load.y ?? state.bounds.max[1], 'load y');
   const magnitude = finite(mode === 'force' ? load.force : load.travel, mode === 'force' ? 'load force' : 'load travel');
   const patchRadius = finite(load.patchRadius ?? 0, 'load patch radius');
+  const contactDepthMode = load.contactDepthMode ?? 'through-thickness';
+  if (!['through-thickness', 'camera-facing-surface'].includes(contactDepthMode)) {
+    throw new Error('unsupported contact depth mode');
+  }
   const iterations = load.iterations ?? 1200;
   if (!(magnitude >= 0) || patchRadius < 0 || !Number.isInteger(iterations) || iterations < 1) {
     throw new Error('invalid arch load');
@@ -261,7 +320,8 @@ function solveArchLinearSystem(state, load, mode) {
     .sort((a, b) => a.row - b.row || a.column - b.column);
   const contactCellKeys = new Set(contactCells.map(cell => `${cell.column}:${cell.row}`));
   const contactIndices = state.nodes.flatMap((node, index) =>
-    contactCellKeys.has(`${node.column}:${node.row}`) ? [index] : []);
+    contactCellKeys.has(`${node.column}:${node.row}`) &&
+      (contactDepthMode === 'through-thickness' || node.layer === state.layers - 1) ? [index] : []);
   if (mode === 'force' && magnitude > 0) {
     const adjacency = state.nodes.map(() => []);
     for (const bond of state.bonds) {
@@ -417,8 +477,10 @@ function solveArchLinearSystem(state, load, mode) {
       mode: mode === 'force' ? 'equal-force' : 'prescribed-travel',
       x, y, contact: { column: contact.column, row: contact.row },
       contactCells,
+      contactDepthMode,
       patchRadius,
       loadedNodeCount: contactIndices.length,
+      loadedNodeLayers: [...new Set(contactIndices.map(index => state.nodes[index].layer))].sort((a, b) => a - b),
       forcePerNode: mode === 'force' ? magnitude / contactIndices.length : null,
       requestedForce: mode === 'force' ? magnitude : null,
       effectiveForce: mode === 'force' ? supportReaction : null,
@@ -444,10 +506,13 @@ export function fractureArchStructuralProxy(state, options = {}) {
   if (threshold <= 0) throw new Error('fracture threshold must be positive');
   const events = [];
   const bonds = state.bonds.map(bond => {
-    if (!bond.alive || bond.lastStrain <= threshold) return { ...bond };
+    const bondStrength = bond.strength === undefined ? threshold : finite(bond.strength, 'bond strength');
+    if (bondStrength <= 0) throw new Error('bond strength must be positive');
+    if (!bond.alive || bond.lastStrain <= bondStrength) return { ...bond };
     events.push({
       kind: 'crack', bondId: bond.id, midpoint: bond.midpoint,
-      strain: bond.lastStrain, energy: (bond.lastStrain - threshold) * bond.rest * bond.stiffness,
+      strain: bond.lastStrain, strength: bondStrength,
+      energy: (bond.lastStrain - bondStrength) * bond.rest * bond.stiffness,
     });
     return { ...bond, alive: false };
   });

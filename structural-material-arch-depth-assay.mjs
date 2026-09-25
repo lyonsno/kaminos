@@ -120,6 +120,10 @@ export function runArchQuasistaticFracture(profile, settings) {
     layers: settings.layers,
     depth: settings.uniformDepth,
     depthMode: settings.depthMode,
+    interiorMode: settings.interiorMode,
+    radialJointCount: settings.radialJointCount,
+    jointStiffnessRatio: settings.jointStiffnessRatio,
+    jointStrength: settings.jointStrength,
   });
   const contact = locateContact(state, settings.contact.x, settings.contact.y);
   const contactCells = contactPatchCells(state, contact, settings.contactPatchRadius);
@@ -147,6 +151,7 @@ export function runArchQuasistaticFracture(profile, settings) {
       ...settings.contact,
       force: settings.force,
       patchRadius: settings.contactPatchRadius,
+      contactDepthMode: settings.contactDepthMode,
       iterations: settings.iterations,
     });
     const solveElapsedMs = performance.now() - solveStarted;
@@ -176,7 +181,9 @@ export function runArchQuasistaticFracture(profile, settings) {
       liveBondsAtStart,
       contact: solved.load.contact,
       contactCells: solved.load.contactCells,
+      contactDepthMode: solved.load.contactDepthMode,
       loadedNodeCount: solved.load.loadedNodeCount,
+      loadedNodeLayers: solved.load.loadedNodeLayers,
       requestedForce: solved.load.requestedForce,
       effectiveForce: solved.load.effectiveForce,
       forcePerNode: solved.load.forcePerNode,
@@ -245,7 +252,7 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-const settings = {
+export const ARCH_DEPTH_ASSAY_SETTINGS = {
   resolution: { columns: 48, rows: 36 },
   sharedBounds: { min: [-0.5, -0.39], max: [0.5, 0.39] },
   layers: 3,
@@ -264,6 +271,7 @@ const settings = {
   notchComparisonMargin: 0.04,
   meaningfulTravelRelativeDelta: 0.02,
 };
+const settings = ARCH_DEPTH_ASSAY_SETTINGS;
 
 function profileSummary(profile) {
   return {

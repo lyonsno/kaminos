@@ -1,47 +1,69 @@
 # Projected Arch Structural Witness
 
-## Current Checkpoint: Distributed Crown Contact
+## Current Checkpoint: Contact And Interior Sensitivity
 
-The 2026-09-25 follow-up held the intact TRELLIS source fixed (SHA-256
-`c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5`) and
-compared its controlled shoulder notch under a point contact with a fixed
-0.032-source-unit crown patch. The patch covers nine occupied XY cells and
-loads 27 depth nodes; the same requested force is divided evenly among them.
-Radius zero preserves the prior one-cell, three-node point load.
+The 2026-09-25 CPU sensitivity assay holds the intact TRELLIS source fixed
+(SHA-256 `c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5`)
+and compares a controlled shoulder notch under a nine-cell crown patch at
+normalized force `2.0`. It crosses two contact assumptions (force shared over
+all three inferred depth layers, or applied only to the camera-facing layer)
+with two interior assumptions (continuous lattice, or nine authored radial
+voussoir sectors joined by weaker bonds). Intact and notched runs use matched
+settings within every pair. The patch distributes the same total force across
+27 nodes or 9 nodes, respectively.
 
-At normalized force `2.0`, the depth-envelope point-load cases both lose the
-three-node crown component after two damage solves (333 intact / 343 notched
-broken bonds). With the distributed patch, all 27 loaded nodes remain in one
-pinned-supported component through three damage/re-solve epochs. The fourth
-damage epoch produces broad fragmentation and disconnects the patch from its
-supports in both cases. The notched case records 12 fracture events in the
-predeclared shoulder comparison zone versus zero for intact, despite 1,233
-total breaks versus 1,246 intact. This is a local crack-distribution signal,
-not a different ultimate load-path result; neither normalized force is
-calibrated to stone.
+The local notch-crack contrast **changes sign under the radial-joint
+assumption in both contact modes**:
 
-The assay records every newly failed bond, its rest-space midpoint, strain and
-event energy, plus component sizes, pinned-node counts, loaded-node counts and
-support status after each epoch. These records show that distributed contact
-makes this arch proxy carry load through several connectivity updates before a
-broad terminal separation. They do not show the authored GLB consuming that
-state: the mesh remains visual input, and the three depth layers still fill an
-inferred surface envelope rather than a source-truth solid interior.
+| Contact depth | Continuous: intact / notched local cracks | Radial joints: intact / notched local cracks | Notch contrast |
+| --- | ---: | ---: | --- |
+| Through thickness | 0 / 12 | 73 / 40 | `+12` becomes `-33` |
+| Camera-facing surface | 0 / 8 | 68 / 19 | `+8` becomes `-49` |
 
-**Disposition:** keep this as a useful CPU diagnostic; do not port this exact
-graph to the resident GPU sidecar yet. The next object-level question is what
-structural interior the arch asset represents. An open surface envelope does
-not tell us whether it is continuous stone, separate voussoirs with joints, or
-mesh reconstruction noise. The next CPU comparison should state those geometry
-and connectivity hypotheses explicitly before GPU parity or visible mesh
-deformation is treated as structural evidence.
+All eight cases end in loaded-path separation at this force. The proxy is
+therefore sensitive to both contact and interior assumptions, but this
+endpoint does not discriminate between them. The radial-joint construction is
+an explicit geometric counterfactual, not a claim that the asset depicts
+voussoirs. The notched and intact cases are controlled ablations of one
+projected source profile, not separately reconstructed meshes.
 
-Reports: [point-load baseline](point-load-enhanced_2026-09-25.json) and
-[0.032-radius crown patch](contact-patch-r032_2026-09-25.json).
+The assay retains every failed bond's rest-space midpoint, strain and event
+energy, plus component sizes, pinned and loaded counts, support status, and
+solver route per epoch. The mesh still consumes neither stress nor
+connectivity: the three depth layers fill an inferred envelope, not a
+source-truth solid interior.
+
+**Disposition:** retain this as a CPU architecture/sensitivity diagnostic;
+do not infer source-true construction or migrate this exact graph to the GPU
+sidecar yet. The result establishes that visible occupancy plus an authored
+interior prior can produce distinct causal crack ledgers, while also showing
+that the ledger depends materially on that unobserved prior. Before selecting
+a material model for a user-facing asset, identify whether contact acts on a
+surface or through volume and whether the represented arch is continuous or
+jointed. The radial joints are an explicit counterfactual, not a claim about
+the represented arch.
+
+Full per-epoch failures, positions, strain, event energy, connectivity,
+support status and route/code provenance are retained in
+[contact/interior sensitivity report](contact-interior-sensitivity-2026-09-25.json).
+The earlier load-distribution evidence remains in the [point-load baseline](point-load-enhanced_2026-09-25.json)
+and [0.032-radius crown patch report](contact-patch-r032_2026-09-25.json).
+The assay ran on Node `v25.9.0`, local CPU route
+`shear-regularized-linear-spring-pcg-v0`, with no fallback; the eight-case run
+reported `1726.746 ms` elapsed. This is one assay-run duration, not an isolated
+solver benchmark or performance claim. The report binds the route to source
+revision `9248525e54dcb1fbe35ec96e041041fe75df567a` and records SHA-256 hashes
+for the implementation files.
 
 Replay from this Kaminos worktree:
 
 ```sh
+node structural-material-arch-contact-interior-assay.mjs \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/contact-interior-sensitivity-2026-09-25.json
+
+node --test tests/structural-material-arch-*.mjs
+
 node structural-material-arch-depth-assay.mjs \
   artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb \
   artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/point-load-enhanced_2026-09-25.json 0
@@ -178,15 +200,20 @@ Other limits matter for the next decision:
 
 ## Next Cut
 
-This result is evidence that a compact graph can consume geometry-derived
-shape and produce a force-dependent fracture route. The distributed-contact
-witness advances the load-path question but does not settle the asset's
-interior or member semantics. Before GPU migration, build a bounded CPU
-comparison with explicit alternatives for a continuous stone-like volume and
-a discrete voussoir/joint structure, both constrained by the same visible
-surface and fixed crown patch. Record which surface features are source-derived
-and which internal connections are authored assumptions. If those alternatives
-disagree materially, ask the operator which object/material interpretation the
-asset is meant to carry; do not select one silently from the image. Only
-migrate a representation whose geometry and connectivity authority is explicit
-and whose post-break load response remains legible.
+The first bounded CPU comparison has now been run. It demonstrates an
+assumption-sensitive local response, not the asset's true material behavior:
+the authored radial-joint interior reverses the controlled-notch crack-count
+contrast under both tested contact-depth rules, while every case reaches the
+same broad terminal category. Neither the open TRELLIS surface nor this proxy
+selects the true interior or load contact. Do not convert this sensitivity
+result into a GPU-parity or mesh-destruction claim.
+
+Next, inspect the actual arch mesh and source-image evidence for construction
+clues and surface/contact geometry, while keeping inferred internal joints
+separate from source-derived facts. Then choose one cheap discriminator that
+can establish the intended representation (or explicitly keep both priors as
+separate material recipes). After that, implement the smallest visual consumer
+that maps the existing structural state onto mesh displacement or segment
+separation, preserving the same contact anchor, load ledger and connectivity
+changes. Review its visible frame before deciding whether GPU migration is the
+next bottleneck; do not begin with GPU parity alone.
