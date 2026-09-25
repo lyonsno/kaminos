@@ -45,8 +45,16 @@ test('selection feedback hides untrustworthy offscreen pivots and names the reco
 });
 
 test('scene reopen admits and applies its serialized flame basin before reporting success', () => {
+  const loader = html.slice(html.indexOf('async function loadSceneFile(file)'), html.indexOf('// File input handler for Load Scene'));
   assert.match(html, /async function fetchVolumeSettingsPresetReceipt\(requestedPresetId\)[\s\S]*validateVolumeSettingsPresetDocument/);
   assert.match(html, /async function restoreSceneFlamePreset\(presetId\)[\s\S]*fetchVolumeSettingsPresetReceipt\(presetId\)[\s\S]*applyVolumeSettingsPresetReceipt\(receipt\)/);
-  assert.match(html, /const flamePresetId = data\.composition\?\.flame\?\.presetId[\s\S]*await restoreSceneFlamePreset\(flamePresetId\)[\s\S]*claimLoadedSceneFile\(file\)/);
+  assert.match(loader, /const flameComposition = data\.composition\?\.flame[\s\S]*restoreSceneFlamePreset\(flameComposition\.presetId\)[\s\S]*claimLoadedSceneFile\(file\)/);
   assert.match(html, /function applyVolumeSettingsPresetReceipt\(receipt\)[\s\S]*preset\.domControls[\s\S]*preset\.rendererControls[\s\S]*setControls\?\.\(readVolumeControls\(\)\)/);
+});
+
+test('scene reopen rejects a present flame composition without a basin identity', () => {
+  const loader = html.slice(html.indexOf('async function loadSceneFile(file)'), html.indexOf('// File input handler for Load Scene'));
+  assert.match(loader, /const flameComposition = data\.composition\?\.flame[\s\S]*if \(flameComposition !== undefined\)/);
+  assert.match(loader, /typeof flameComposition\?\.presetId !== 'string' \|\| !flameComposition\.presetId\.trim\(\)/);
+  assert.match(loader, /Scene load failed: flame basin restore:/);
 });

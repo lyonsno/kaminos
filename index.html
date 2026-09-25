@@ -25417,10 +25417,13 @@ async function loadSceneFile(file) {
     await volumePrototype?.setActive?.(false);
   }
 
-  const flamePresetId = data.composition?.flame?.presetId;
-  if (flamePresetId) {
+  const flameComposition = data.composition?.flame;
+  if (flameComposition !== undefined) {
     try {
-      await restoreSceneFlamePreset(flamePresetId);
+      if (typeof flameComposition?.presetId !== 'string' || !flameComposition.presetId.trim()) {
+        throw new Error('scene flame composition is missing its preset identity');
+      }
+      await restoreSceneFlamePreset(flameComposition.presetId);
     } catch (e) {
       sceneSaveBlockedByFailedRestore = true;
       currentSceneFile = null;
