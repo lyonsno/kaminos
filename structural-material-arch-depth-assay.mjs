@@ -87,7 +87,10 @@ function contactPatchCells(state, contact, patchRadius) {
     .sort((a, b) => a.row - b.row || a.column - b.column);
 }
 
-function componentSummary(state, cells) {
+function componentSummary(state, cells, contactDepthMode = 'through-thickness') {
+  if (!['through-thickness', 'camera-facing-surface'].includes(contactDepthMode)) {
+    throw new Error('unsupported contact depth mode');
+  }
   const keys = new Set(cells.map(cell => `${cell.column}:${cell.row}`));
   const summaries = state.components.map(component => ({
     componentId: component.id,
@@ -98,7 +101,10 @@ function componentSummary(state, cells) {
   for (const node of state.nodes) {
     const summary = summaries[node.componentId];
     if (node.pinned) summary.pinnedNodeCount += 1;
-    if (keys.has(`${node.column}:${node.row}`)) summary.loadedNodeCount += 1;
+    if (keys.has(`${node.column}:${node.row}`) &&
+        (contactDepthMode === 'through-thickness' || node.layer === state.layers - 1)) {
+      summary.loadedNodeCount += 1;
+    }
   }
   return summaries.map(summary => ({
     ...summary,
@@ -106,12 +112,12 @@ function componentSummary(state, cells) {
   }));
 }
 
-function loadComponentSummary(state, cells) {
-  return componentSummary(state, cells).filter(component => component.loadedNodeCount > 0);
+function loadComponentSummary(state, cells, contactDepthMode) {
+  return componentSummary(state, cells, contactDepthMode).filter(component => component.loadedNodeCount > 0);
 }
 
-function supportedContact(state, contactCells) {
-  const components = loadComponentSummary(state, contactCells);
+export function isArchContactSupported(state, contactCells, contactDepthMode = 'through-thickness') {
+  const components = loadComponentSummary(state, contactCells, contactDepthMode);
   return components.length > 0 && components.every(component => component.hasPinnedSupport);
 }
 
@@ -127,6 +133,7 @@ export function runArchQuasistaticFracture(profile, settings) {
   });
   const contact = locateContact(state, settings.contact.x, settings.contact.y);
   const contactCells = contactPatchCells(state, contact, settings.contactPatchRadius);
+  const contactDepthMode = settings.contactDepthMode ?? 'through-thickness';
   const history = [];
   let current = state;
   let status = 'stable';
@@ -134,14 +141,14 @@ export function runArchQuasistaticFracture(profile, settings) {
 
   while (true) {
     const liveBondsAtStart = current.bonds.filter(bond => bond.alive).length;
-    if (!supportedContact(current, contactCells)) {
+    if (!isArchContactSupported(current, contactCells, contactDepthMode)) {
       status = 'load-path-separated';
       terminal = {
         reason: 'loaded-contact-component-has-no-pinned-support',
         contact: { column: contact.column, row: contact.row },
         contactCells,
-        loadedContactComponents: loadComponentSummary(current, contactCells),
-        components: componentSummary(current, contactCells),
+        loadedContactComponents: loadComponentSummary(current, contactCells, contactDepthMode),
+        components: componentSummary(current, contactCells, contactDepthMode),
         componentSizes: current.components.map(component => component.size).sort((a, b) => b - a),
       };
       break;
@@ -217,8 +224,8 @@ export function runArchQuasistaticFracture(profile, settings) {
           newCrackEnergy: localEvents.reduce((sum, event) => sum + event.energy, 0),
         },
         componentSizes: fractured.components.map(component => component.size).sort((a, b) => b - a),
-        components: componentSummary(fractured, contactCells),
-        loadedContactComponents: loadComponentSummary(fractured, contactCells),
+        components: componentSummary(fractured, contactCells, solved.load.contactDepthMode),
+        loadedContactComponents: loadComponentSummary(fractured, contactCells, solved.load.contactDepthMode),
         connectivityEpoch: fractured.connectivityEpoch,
         supportPins: pins.length,
         maxPinnedDisplacement,

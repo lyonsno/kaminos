@@ -4,9 +4,39 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { runArchContactInteriorAssay } from '../structural-material-arch-contact-interior-assay.mjs';
+import { isArchContactSupported } from '../structural-material-arch-depth-assay.mjs';
 
 const source = 'artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb';
 const report = runArchContactInteriorAssay(source, { contactPatchRadius: 0.032, force: 1.25 });
+
+const contactCell = [{ column: 2, row: 2 }];
+const splitDepthState = faceSupported => {
+  const supportedComponent = 0;
+  const detachedComponent = 1;
+  return {
+    layers: 3,
+    components: [{ id: 0, size: 2 }, { id: 1, size: 3 }],
+    nodes: faceSupported ? [
+      { column: 2, row: 2, layer: 2, pinned: false, componentId: supportedComponent },
+      { column: 1, row: 2, layer: 2, pinned: true, componentId: supportedComponent },
+      { column: 2, row: 2, layer: 1, pinned: false, componentId: detachedComponent },
+      { column: 2, row: 2, layer: 0, pinned: false, componentId: detachedComponent },
+      { column: 1, row: 2, layer: 1, pinned: false, componentId: detachedComponent },
+    ] : [
+      { column: 2, row: 2, layer: 2, pinned: false, componentId: detachedComponent },
+      { column: 1, row: 2, layer: 2, pinned: false, componentId: detachedComponent },
+      { column: 2, row: 2, layer: 1, pinned: false, componentId: supportedComponent },
+      { column: 2, row: 2, layer: 0, pinned: false, componentId: supportedComponent },
+      { column: 1, row: 2, layer: 1, pinned: true, componentId: supportedComponent },
+    ],
+  };
+};
+assert.equal(isArchContactSupported(splitDepthState(true), contactCell, 'camera-facing-surface'), true,
+  'an unsupported unloaded rear component must not invalidate a supported loaded face');
+assert.equal(isArchContactSupported(splitDepthState(false), contactCell, 'camera-facing-surface'), false,
+  'a supported unloaded rear component must not mask an unsupported loaded face');
+assert.equal(isArchContactSupported(splitDepthState(true), contactCell, 'through-thickness'), false,
+  'through-thickness contact must still include an unsupported rear component');
 
 assert.equal(report.status, 'passed');
 assert.equal(report.schema, 'kaminos.structural-material.arch-contact-interior-sensitivity.v0');
@@ -31,6 +61,11 @@ for (const item of report.cases) {
   assert.ok(item.result.history.every(epoch => epoch.solve.relativeResidual <= 1e-6));
   const expectedLoadedNodes = item.contactDepthMode === 'through-thickness' ? 27 : 9;
   assert.equal(item.result.history[0].loadedNodeCount, expectedLoadedNodes);
+  for (const epoch of item.result.history) {
+    assert.equal(epoch.fracture.loadedContactComponents.reduce(
+      (sum, component) => sum + component.loadedNodeCount, 0), expectedLoadedNodes,
+    `connectivity ledger must count only force-loaded nodes for ${item.shape}/${item.contactDepthMode}/${item.interiorMode}`);
+  }
   assert.deepEqual(item.result.history[0].loadedNodeLayers,
     item.contactDepthMode === 'through-thickness' ? [0, 1, 2] : [2]);
   assert.ok(Math.abs(item.result.history[0].forcePerNode * expectedLoadedNodes - 1.25) < 1e-12);
