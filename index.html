@@ -9728,7 +9728,9 @@ async function initScene() {
   const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
 
   aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
-  const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
+  const aoVisibility = denoisePass.r.clamp(0, 1);
+  const aoOutput = mix(float(1.0), aoVisibility, aoIntensity.min(1)).div(
+    float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
