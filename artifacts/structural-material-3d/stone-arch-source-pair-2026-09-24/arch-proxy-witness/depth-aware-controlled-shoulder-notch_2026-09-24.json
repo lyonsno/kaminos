@@ -1,0 +1,1960 @@
+{
+  "schema": "kaminos.structural-material.arch-depth-assay.v0",
+  "status": "passed",
+  "phase": "complete",
+  "route": {
+    "requested": "local Node.js CPU experiment",
+    "effective": "local Node.js CPU / shear-regularized linear-spring PCG",
+    "fallback": false,
+    "node": "v25.9.0",
+    "sourceRevision": "7f1fadb1f0f15ef30a7f9b637458e6a396e9d96d",
+    "sourceDirtyPaths": [
+      "structural-material-arch-core.js",
+      "structural-material-arch-profile.mjs",
+      "artifacts/structural-material-3d/authored-bell-initial.json",
+      "artifacts/structural-material-3d/authored-bell-initial.png",
+      "artifacts/structural-material-3d/authored-bell-local-smoke.json",
+      "artifacts/structural-material-3d/authored-bell-local-smoke.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/depth-aware-controlled-shoulder-notch_2026-09-24.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/depth-aware-controlled-shoulder-notch_2026-09-24.md",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/depth-aware-springing-notch-exploratory_2026-09-24.json",
+      "structural-material-arch-depth-assay.mjs",
+      "tests/structural-material-arch-controlled-notch-contracts.mjs",
+      "tests/structural-material-arch-depth-assay-cli-contracts.mjs",
+      "tests/structural-material-arch-depth-assay-contracts.mjs",
+      "tests/structural-material-arch-depth-profile-contracts.mjs",
+      "tests/structural-material-arch-depth-state-contracts.mjs",
+      "tests/structural-material-arch-static-support-contracts.mjs"
+    ],
+    "implementationSha256": {
+      "structural-material-arch-core.js": "c3adbef66250ea353ba46e154301138a0fc72a755298cc350d32564cfebefa36",
+      "structural-material-arch-profile.mjs": "fdd82b40bcccd5ef3ae439ce7fbe23aa9450553125da5ef72a897043662bf201",
+      "structural-material-arch-depth-assay.mjs": "b3b490808952834425726dea7a22e5431568c1d74e812c648800b43f2b9e6b90"
+    }
+  },
+  "requestedSourcePath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb",
+  "outputPath": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/depth-aware-controlled-shoulder-notch_2026-09-24.json",
+  "configuration": {
+    "resolution": {
+      "columns": 48,
+      "rows": 36
+    },
+    "sharedBounds": {
+      "min": [
+        -0.5,
+        -0.39
+      ],
+      "max": [
+        0.5,
+        0.39
+      ]
+    },
+    "layers": 3,
+    "uniformDepth": 0.36,
+    "depthModes": [
+      "uniform",
+      "surface-envelope"
+    ],
+    "contact": {
+      "x": -0.05,
+      "y": 0.29
+    },
+    "forces": [
+      0.25,
+      0.5,
+      0.75,
+      2
+    ],
+    "fractureThreshold": 0.04,
+    "iterations": 1200,
+    "maxRelativeResidual": 0.000001,
+    "controlledNotch": {
+      "side": "left",
+      "region": {
+        "minX": -0.42,
+        "maxX": -0.34,
+        "minY": 0.2,
+        "maxY": 0.27
+      }
+    },
+    "notchComparisonMargin": 0.04,
+    "meaningfulTravelRelativeDelta": 0.02
+  },
+  "lastTrustworthyEvidence": "same-source intact/notch and uniform/depth-envelope force ladders completed",
+  "claim": "a single open TRELLIS arch surface supplies a per-cell Z envelope to a coarse spring graph; a controlled exterior notch and a uniform-depth control are compared under matched crown forces with quasistatic damage re-solved after each live-bond update",
+  "claimCeiling": [
+    "surface-derived per-cell depth envelope; the GLB is open and no source-truth solid interior is claimed",
+    "three graph layers fill the measured envelope as an explicit structural reconstruction",
+    "single zero-span sample is expanded to the union of its measured Z point and the separate median lower/upper surfaces of valid 8-neighbors; the inferred cell is recorded and remains inside source bounds",
+    "linear spring PCG in normalized proxy units; no calibrated stone constitutive law or SI force",
+    "post-break solve is same-force linear re-equilibration from fixed reference geometry, not nonlinear residual deformation or history-dependent plasticity",
+    "load-path separation is a quasistatic terminal condition; detached inertia, collision, mesh separation, GPU execution, and sound playback are not included"
+  ],
+  "source": {
+    "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb",
+    "sha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+    "profile": {
+      "source": {
+        "kind": "trellis-glb",
+        "sha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5"
+      },
+      "occupiedCells": 716,
+      "meshTopology": {
+        "uniqueEdges": 392040,
+        "boundaryEdges": 155628,
+        "manifoldInteriorEdges": 236412,
+        "nonManifoldEdges": 0,
+        "edgeIncidenceClosed": false
+      },
+      "depthCoverageCells": 716,
+      "depthSpanQuantiles": [
+        {
+          "quantile": 0.1,
+          "span": 0.20461624714550006
+        },
+        {
+          "quantile": 0.5,
+          "span": 0.2706502946085899
+        },
+        {
+          "quantile": 0.9,
+          "span": 0.307766535095649
+        },
+        {
+          "quantile": 0.95,
+          "span": 0.31066038441927507
+        }
+      ],
+      "controlledNotch": null
+    },
+    "controlledNotchProfile": {
+      "source": {
+        "kind": "trellis-glb",
+        "sha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5"
+      },
+      "occupiedCells": 710,
+      "meshTopology": {
+        "uniqueEdges": 392040,
+        "boundaryEdges": 155628,
+        "manifoldInteriorEdges": 236412,
+        "nonManifoldEdges": 0,
+        "edgeIncidenceClosed": false
+      },
+      "depthCoverageCells": 710,
+      "depthSpanQuantiles": [
+        {
+          "quantile": 0.1,
+          "span": 0.20882282313382583
+        },
+        {
+          "quantile": 0.5,
+          "span": 0.2708724163760439
+        },
+        {
+          "quantile": 0.9,
+          "span": 0.3077926099262116
+        },
+        {
+          "quantile": 0.95,
+          "span": 0.31066038441927507
+        }
+      ],
+      "controlledNotch": {
+        "operation": "exterior-boundary-cell-removal-v0",
+        "side": "left",
+        "region": {
+          "minX": -0.42,
+          "maxX": -0.34,
+          "minY": 0.2,
+          "maxY": 0.27
+        },
+        "removedCells": [
+          1301,
+          1302,
+          1303,
+          1350,
+          1351,
+          1399
+        ]
+      }
+    },
+    "sameSource": true
+  },
+  "proxy": {
+    "cases": {
+      "intact": {
+        "uniform": {
+          "nodes": 2148,
+          "bonds": 9187,
+          "componentsAtRest": 1,
+          "inferredDepthCells": [],
+          "geometryAuthority": "glb-projected-silhouette-extrusion-v0",
+          "exampleContact": {
+            "column": 21,
+            "row": 31
+          },
+          "runs": [
+            {
+              "status": "stable",
+              "terminal": {
+                "reason": "no-live-bond-exceeded-fracture-threshold"
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9187,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.25,
+                  "effectiveForce": 0.2499999929390519,
+                  "travel": 0.004351629664209108,
+                  "peakStrain": 0.01893365891473491,
+                  "solve": {
+                    "elapsedMs": 91.17275000000001,
+                    "iterations": 239,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 8.804632490734671e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 0,
+                    "totalBrokenBonds": 0,
+                    "newEventEnergy": 0,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.0030880186724899263,
+                      "meanLiveStrain": 0.0013384895408927126,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 0,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 0,
+              "finalComponents": [
+                2148
+              ],
+              "finalConnectivityEpoch": 0,
+              "postBreakReequilibration": "none-required-before-first-damage-result",
+              "detachedMotion": false
+            },
+            {
+              "status": "stable",
+              "terminal": {
+                "reason": "no-live-bond-exceeded-fracture-threshold"
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9187,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.5,
+                  "effectiveForce": 0.4999999858781038,
+                  "travel": 0.008703259328418216,
+                  "peakStrain": 0.03786731782946982,
+                  "solve": {
+                    "elapsedMs": 89.24658299999999,
+                    "iterations": 239,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 8.804632490734671e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 0,
+                    "totalBrokenBonds": 0,
+                    "newEventEnergy": 0,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.0061760373449798525,
+                      "meanLiveStrain": 0.002676979081785425,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 0,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 0,
+              "finalComponents": [
+                2148
+              ],
+              "finalConnectivityEpoch": 0,
+              "postBreakReequilibration": "none-required-before-first-damage-result",
+              "detachedMotion": false
+            },
+            {
+              "status": "load-path-separated",
+              "terminal": {
+                "reason": "loaded-contact-component-has-no-pinned-support",
+                "contact": {
+                  "column": 21,
+                  "row": 31
+                },
+                "contactComponentIds": [
+                  1
+                ],
+                "componentSizes": [
+                  2145,
+                  3
+                ]
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9187,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7499999788241027,
+                  "travel": 0.01305488899262657,
+                  "peakStrain": 0.05680097674489549,
+                  "solve": {
+                    "elapsedMs": 54.01416699999993,
+                    "iterations": 239,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 8.80880038405425e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 9,
+                    "totalBrokenBonds": 9,
+                    "newEventEnergy": 0.002264364296267899,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.009264056005896746,
+                      "meanLiveStrain": 0.00401546862289576,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 1,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 1,
+                  "liveBondsAtStart": 9178,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7500000026452491,
+                  "travel": 0.015276375122712219,
+                  "peakStrain": 0.0898489608559871,
+                  "solve": {
+                    "elapsedMs": 71.71512499999994,
+                    "iterations": 237,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.72845857592734e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 12,
+                    "totalBrokenBonds": 21,
+                    "newEventEnergy": 0.013388392832204414,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.009345023681638458,
+                      "meanLiveStrain": 0.004061156446889671,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 2,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 2,
+                  "liveBondsAtStart": 9166,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7499999794100765,
+                  "travel": 0.042331749369033056,
+                  "peakStrain": 0.25000000070635253,
+                  "solve": {
+                    "elapsedMs": 84.35870900000009,
+                    "iterations": 241,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 8.190769756651184e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 18,
+                    "totalBrokenBonds": 39,
+                    "newEventEnergy": 0.01656130380688052,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.009763562074055808,
+                      "meanLiveStrain": 0.004278415246309387,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2145,
+                      3
+                    ],
+                    "connectivityEpoch": 3,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 39,
+              "finalComponents": [
+                2145,
+                3
+              ],
+              "finalConnectivityEpoch": 3,
+              "postBreakReequilibration": "same-force linear spring solve on newly live bonds from fixed reference geometry",
+              "detachedMotion": false
+            },
+            {
+              "status": "load-path-separated",
+              "terminal": {
+                "reason": "loaded-contact-component-has-no-pinned-support",
+                "contact": {
+                  "column": 21,
+                  "row": 31
+                },
+                "contactComponentIds": [
+                  1
+                ],
+                "componentSizes": [
+                  2145,
+                  3
+                ]
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9187,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 2,
+                  "effectiveForce": 1.9999999435124152,
+                  "travel": 0.034813037313672864,
+                  "peakStrain": 0.15146927131787927,
+                  "solve": {
+                    "elapsedMs": 57.084833,
+                    "iterations": 239,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 8.804632490734671e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 87,
+                    "totalBrokenBonds": 87,
+                    "newEventEnergy": 0.04480614883453014,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.02470414937991941,
+                      "meanLiveStrain": 0.0107079163271417,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 1,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 1,
+                  "liveBondsAtStart": 9100,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 2,
+                  "effectiveForce": 1.9999999403225948,
+                  "travel": 0.11530586529406761,
+                  "peakStrain": 0.6666666685505118,
+                  "solve": {
+                    "elapsedMs": 84.30591600000002,
+                    "iterations": 244,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 8.27868846248249e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 168,
+                    "totalBrokenBonds": 255,
+                    "newEventEnergy": 0.1061658233861257,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.02661570035576994,
+                      "meanLiveStrain": 0.01177248535394123,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2145,
+                      3
+                    ],
+                    "connectivityEpoch": 2,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 255,
+              "finalComponents": [
+                2145,
+                3
+              ],
+              "finalConnectivityEpoch": 2,
+              "postBreakReequilibration": "same-force linear spring solve on newly live bonds from fixed reference geometry",
+              "detachedMotion": false
+            }
+          ]
+        },
+        "surface-envelope": {
+          "nodes": 2148,
+          "bonds": 9187,
+          "componentsAtRest": 1,
+          "inferredDepthCells": [
+            1374
+          ],
+          "geometryAuthority": "glb-projected-surface-depth-envelope-reconstruction-v0",
+          "exampleContact": {
+            "column": 21,
+            "row": 31
+          },
+          "runs": [
+            {
+              "status": "stable",
+              "terminal": {
+                "reason": "no-live-bond-exceeded-fracture-threshold"
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9187,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.25,
+                  "effectiveForce": 0.2500000025687232,
+                  "travel": 0.004695460067377113,
+                  "peakStrain": 0.019333315166700313,
+                  "solve": {
+                    "elapsedMs": 148.33641699999987,
+                    "iterations": 402,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.677460891641872e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 0,
+                    "totalBrokenBonds": 0,
+                    "newEventEnergy": 0,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.0034008559977019,
+                      "meanLiveStrain": 0.0012178013824063784,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 0,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 0,
+              "finalComponents": [
+                2148
+              ],
+              "finalConnectivityEpoch": 0,
+              "postBreakReequilibration": "none-required-before-first-damage-result",
+              "detachedMotion": false
+            },
+            {
+              "status": "stable",
+              "terminal": {
+                "reason": "no-live-bond-exceeded-fracture-threshold"
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9187,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.5,
+                  "effectiveForce": 0.5000000051374464,
+                  "travel": 0.009390920134754226,
+                  "peakStrain": 0.03866663033340063,
+                  "solve": {
+                    "elapsedMs": 85.434708,
+                    "iterations": 402,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.677460891641872e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 0,
+                    "totalBrokenBonds": 0,
+                    "newEventEnergy": 0,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.0068017119954038,
+                      "meanLiveStrain": 0.0024356027648127568,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 0,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 0,
+              "finalComponents": [
+                2148
+              ],
+              "finalConnectivityEpoch": 0,
+              "postBreakReequilibration": "none-required-before-first-damage-result",
+              "detachedMotion": false
+            },
+            {
+              "status": "load-path-separated",
+              "terminal": {
+                "reason": "loaded-contact-component-has-no-pinned-support",
+                "contact": {
+                  "column": 21,
+                  "row": 31
+                },
+                "contactComponentIds": [
+                  1
+                ],
+                "componentSizes": [
+                  2145,
+                  3
+                ]
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9187,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7500000089273131,
+                  "travel": 0.014086380202187448,
+                  "peakStrain": 0.05799994554954599,
+                  "solve": {
+                    "elapsedMs": 92.0473750000001,
+                    "iterations": 403,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.70165674310322e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 12,
+                    "totalBrokenBonds": 12,
+                    "newEventEnergy": 0.002376954557084754,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.010202567863706415,
+                      "meanLiveStrain": 0.0036534041583043096,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 1,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 1,
+                  "liveBondsAtStart": 9175,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7499999928996609,
+                  "travel": 0.01770990234487436,
+                  "peakStrain": 0.11826927813619699,
+                  "solve": {
+                    "elapsedMs": 91.8124170000001,
+                    "iterations": 401,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.685795925877598e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 12,
+                    "totalBrokenBonds": 24,
+                    "newEventEnergy": 0.014328170955841924,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.010327644301480142,
+                      "meanLiveStrain": 0.0037293193946968707,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2145,
+                      3
+                    ],
+                    "connectivityEpoch": 2,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 24,
+              "finalComponents": [
+                2145,
+                3
+              ],
+              "finalConnectivityEpoch": 2,
+              "postBreakReequilibration": "same-force linear spring solve on newly live bonds from fixed reference geometry",
+              "detachedMotion": false
+            },
+            {
+              "status": "load-path-separated",
+              "terminal": {
+                "reason": "loaded-contact-component-has-no-pinned-support",
+                "contact": {
+                  "column": 21,
+                  "row": 31
+                },
+                "contactComponentIds": [
+                  1
+                ],
+                "componentSizes": [
+                  2145,
+                  3
+                ]
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9187,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 2,
+                  "effectiveForce": 2.0000000205497854,
+                  "travel": 0.0375636805390169,
+                  "peakStrain": 0.1546665213336025,
+                  "solve": {
+                    "elapsedMs": 92.10187500000006,
+                    "iterations": 402,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.677460891641872e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 113,
+                    "totalBrokenBonds": 113,
+                    "newEventEnergy": 0.045890429012897825,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.0272068479816152,
+                      "meanLiveStrain": 0.009742411059251027,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2148
+                    ],
+                    "connectivityEpoch": 1,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 1,
+                  "liveBondsAtStart": 9074,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 2,
+                  "effectiveForce": 2.0000000342023574,
+                  "travel": 0.11908618014605073,
+                  "peakStrain": 0.6670421365296411,
+                  "solve": {
+                    "elapsedMs": 91.47004200000015,
+                    "iterations": 410,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.112892322776105e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 220,
+                    "totalBrokenBonds": 333,
+                    "newEventEnergy": 0.12061378050247996,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 268,
+                      "peakLiveStrain": 0.028610747494919993,
+                      "meanLiveStrain": 0.010360496873162353,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2145,
+                      3
+                    ],
+                    "connectivityEpoch": 2,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 333,
+              "finalComponents": [
+                2145,
+                3
+              ],
+              "finalConnectivityEpoch": 2,
+              "postBreakReequilibration": "same-force linear spring solve on newly live bonds from fixed reference geometry",
+              "detachedMotion": false
+            }
+          ]
+        }
+      },
+      "controlled-notch": {
+        "uniform": {
+          "nodes": 2130,
+          "bonds": 9097,
+          "componentsAtRest": 1,
+          "inferredDepthCells": [],
+          "geometryAuthority": "glb-projected-silhouette-extrusion-v0",
+          "exampleContact": {
+            "column": 21,
+            "row": 31
+          },
+          "runs": [
+            {
+              "status": "stable",
+              "terminal": {
+                "reason": "no-live-bond-exceeded-fracture-threshold"
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9097,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.25,
+                  "effectiveForce": 0.24999999659736966,
+                  "travel": 0.004400471843781048,
+                  "peakStrain": 0.018943961087273663,
+                  "solve": {
+                    "elapsedMs": 59.066499999999905,
+                    "iterations": 240,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.453404209301472e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 0,
+                    "totalBrokenBonds": 0,
+                    "newEventEnergy": 0,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.005005878723214439,
+                      "meanLiveStrain": 0.0015364579722990694,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 0,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 0,
+              "finalComponents": [
+                2130
+              ],
+              "finalConnectivityEpoch": 0,
+              "postBreakReequilibration": "none-required-before-first-damage-result",
+              "detachedMotion": false
+            },
+            {
+              "status": "stable",
+              "terminal": {
+                "reason": "no-live-bond-exceeded-fracture-threshold"
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9097,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.5,
+                  "effectiveForce": 0.4999999931947393,
+                  "travel": 0.008800943687562096,
+                  "peakStrain": 0.037887922174547325,
+                  "solve": {
+                    "elapsedMs": 52.77904100000001,
+                    "iterations": 240,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.453404209301472e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 0,
+                    "totalBrokenBonds": 0,
+                    "newEventEnergy": 0,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.010011757446428878,
+                      "meanLiveStrain": 0.0030729159445981387,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 0,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 0,
+              "finalComponents": [
+                2130
+              ],
+              "finalConnectivityEpoch": 0,
+              "postBreakReequilibration": "none-required-before-first-damage-result",
+              "detachedMotion": false
+            },
+            {
+              "status": "load-path-separated",
+              "terminal": {
+                "reason": "loaded-contact-component-has-no-pinned-support",
+                "contact": {
+                  "column": 21,
+                  "row": 31
+                },
+                "contactComponentIds": [
+                  1
+                ],
+                "componentSizes": [
+                  2127,
+                  3
+                ]
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9097,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7499999898066046,
+                  "travel": 0.013201415531341569,
+                  "peakStrain": 0.056831883259755606,
+                  "solve": {
+                    "elapsedMs": 49.780250000000024,
+                    "iterations": 240,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.432960921687328e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 9,
+                    "totalBrokenBonds": 9,
+                    "newEventEnergy": 0.002281111322221573,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.015017636178807007,
+                      "meanLiveStrain": 0.0046093739167854956,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 1,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 1,
+                  "liveBondsAtStart": 9088,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7499999786083996,
+                  "travel": 0.015425954089725151,
+                  "peakStrain": 0.08975461275413818,
+                  "solve": {
+                    "elapsedMs": 86.38404100000002,
+                    "iterations": 241,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 8.518412772630665e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 12,
+                    "totalBrokenBonds": 21,
+                    "newEventEnergy": 0.013393119814963923,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.015124580522623114,
+                      "meanLiveStrain": 0.004664941177579746,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 2,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 2,
+                  "liveBondsAtStart": 9076,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7499999842708738,
+                  "travel": 0.04249740196538773,
+                  "peakStrain": 0.25000000052989885,
+                  "solve": {
+                    "elapsedMs": 87.75774999999999,
+                    "iterations": 242,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 8.78884007871622e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 18,
+                    "totalBrokenBonds": 39,
+                    "newEventEnergy": 0.01658075743021595,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.015906816454535407,
+                      "meanLiveStrain": 0.004914157351600678,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2127,
+                      3
+                    ],
+                    "connectivityEpoch": 3,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 39,
+              "finalComponents": [
+                2127,
+                3
+              ],
+              "finalConnectivityEpoch": 3,
+              "postBreakReequilibration": "same-force linear spring solve on newly live bonds from fixed reference geometry",
+              "detachedMotion": false
+            },
+            {
+              "status": "load-path-separated",
+              "terminal": {
+                "reason": "loaded-contact-component-has-no-pinned-support",
+                "contact": {
+                  "column": 21,
+                  "row": 31
+                },
+                "contactComponentIds": [
+                  1
+                ],
+                "componentSizes": [
+                  2127,
+                  3
+                ]
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9097,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 2,
+                  "effectiveForce": 1.9999999727789572,
+                  "travel": 0.035203774750248384,
+                  "peakStrain": 0.1515516886981893,
+                  "solve": {
+                    "elapsedMs": 51.203250000000025,
+                    "iterations": 240,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.453404209301472e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 87,
+                    "totalBrokenBonds": 87,
+                    "newEventEnergy": 0.045552402106408214,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.04004702978571551,
+                      "meanLiveStrain": 0.012291663778392555,
+                      "newCrackEvents": 3,
+                      "newCrackEnergy": 0.0000042407745332541446
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 1,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 1,
+                  "liveBondsAtStart": 9010,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 2,
+                  "effectiveForce": 1.9999999135172848,
+                  "travel": 0.11575483391541413,
+                  "peakStrain": 0.6666666697496586,
+                  "solve": {
+                    "elapsedMs": 63.179041999999754,
+                    "iterations": 243,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.240438931614862e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 171,
+                    "totalBrokenBonds": 258,
+                    "newEventEnergy": 0.1091729897864784,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 175,
+                      "peakLiveStrain": 0.046946679254640786,
+                      "meanLiveStrain": 0.013259415067994093,
+                      "newCrackEvents": 6,
+                      "newCrackEnergy": 0.0010338262950299313
+                    },
+                    "componentSizes": [
+                      2127,
+                      3
+                    ],
+                    "connectivityEpoch": 2,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 258,
+              "finalComponents": [
+                2127,
+                3
+              ],
+              "finalConnectivityEpoch": 2,
+              "postBreakReequilibration": "same-force linear spring solve on newly live bonds from fixed reference geometry",
+              "detachedMotion": false
+            }
+          ]
+        },
+        "surface-envelope": {
+          "nodes": 2130,
+          "bonds": 9097,
+          "componentsAtRest": 1,
+          "inferredDepthCells": [
+            1374
+          ],
+          "geometryAuthority": "glb-projected-surface-depth-envelope-reconstruction-v0",
+          "exampleContact": {
+            "column": 21,
+            "row": 31
+          },
+          "runs": [
+            {
+              "status": "stable",
+              "terminal": {
+                "reason": "no-live-bond-exceeded-fracture-threshold"
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9097,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.25,
+                  "effectiveForce": 0.2500000107761048,
+                  "travel": 0.004737636307138369,
+                  "peakStrain": 0.019330576373906484,
+                  "solve": {
+                    "elapsedMs": 99.90395899999976,
+                    "iterations": 402,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.125600677700566e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 0,
+                    "totalBrokenBonds": 0,
+                    "newEventEnergy": 0,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.005318986301557521,
+                      "meanLiveStrain": 0.0014663677562853149,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 0,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 0,
+              "finalComponents": [
+                2130
+              ],
+              "finalConnectivityEpoch": 0,
+              "postBreakReequilibration": "none-required-before-first-damage-result",
+              "detachedMotion": false
+            },
+            {
+              "status": "stable",
+              "terminal": {
+                "reason": "no-live-bond-exceeded-fracture-threshold"
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9097,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.5,
+                  "effectiveForce": 0.5000000215522096,
+                  "travel": 0.009475272614276739,
+                  "peakStrain": 0.03866115274781297,
+                  "solve": {
+                    "elapsedMs": 98.72891699999991,
+                    "iterations": 402,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.125600677700566e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 0,
+                    "totalBrokenBonds": 0,
+                    "newEventEnergy": 0,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.010637972603115041,
+                      "meanLiveStrain": 0.0029327355125706297,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 0,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 0,
+              "finalComponents": [
+                2130
+              ],
+              "finalConnectivityEpoch": 0,
+              "postBreakReequilibration": "none-required-before-first-damage-result",
+              "detachedMotion": false
+            },
+            {
+              "status": "load-path-separated",
+              "terminal": {
+                "reason": "loaded-contact-component-has-no-pinned-support",
+                "contact": {
+                  "column": 21,
+                  "row": 31
+                },
+                "contactComponentIds": [
+                  1
+                ],
+                "componentSizes": [
+                  2127,
+                  3
+                ]
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9097,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.7500000327456132,
+                  "travel": 0.014212908921478447,
+                  "peakStrain": 0.05799172940408857,
+                  "solve": {
+                    "elapsedMs": 98.36241699999982,
+                    "iterations": 401,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.860507604650118e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 12,
+                    "totalBrokenBonds": 12,
+                    "newEventEnergy": 0.0023935115634255047,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.01595695898468729,
+                      "meanLiveStrain": 0.004399103256222289,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 1,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 1,
+                  "liveBondsAtStart": 9085,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 0.75,
+                  "effectiveForce": 0.750000023639952,
+                  "travel": 0.01784157083160709,
+                  "peakStrain": 0.11836470816331676,
+                  "solve": {
+                    "elapsedMs": 93.08929099999978,
+                    "iterations": 402,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.903106382787093e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 12,
+                    "totalBrokenBonds": 24,
+                    "newEventEnergy": 0.014330334267498829,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.016315402102436666,
+                      "meanLiveStrain": 0.004493962501380316,
+                      "newCrackEvents": 0,
+                      "newCrackEnergy": 0
+                    },
+                    "componentSizes": [
+                      2127,
+                      3
+                    ],
+                    "connectivityEpoch": 2,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 24,
+              "finalComponents": [
+                2127,
+                3
+              ],
+              "finalConnectivityEpoch": 2,
+              "postBreakReequilibration": "same-force linear spring solve on newly live bonds from fixed reference geometry",
+              "detachedMotion": false
+            },
+            {
+              "status": "load-path-separated",
+              "terminal": {
+                "reason": "loaded-contact-component-has-no-pinned-support",
+                "contact": {
+                  "column": 21,
+                  "row": 31
+                },
+                "contactComponentIds": [
+                  1
+                ],
+                "componentSizes": [
+                  2127,
+                  3
+                ]
+              },
+              "history": [
+                {
+                  "epoch": 0,
+                  "liveBondsAtStart": 9097,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 2,
+                  "effectiveForce": 2.0000000862088383,
+                  "travel": 0.037901090457106955,
+                  "peakStrain": 0.15464461099125187,
+                  "solve": {
+                    "elapsedMs": 90.00220899999977,
+                    "iterations": 402,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.125600677700566e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 116,
+                    "totalBrokenBonds": 116,
+                    "newEventEnergy": 0.04618186779411451,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 178,
+                      "peakLiveStrain": 0.042551890412460165,
+                      "meanLiveStrain": 0.011730942050282519,
+                      "newCrackEvents": 1,
+                      "newCrackEnergy": 0.0000771304534846389
+                    },
+                    "componentSizes": [
+                      2130
+                    ],
+                    "connectivityEpoch": 1,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                },
+                {
+                  "epoch": 1,
+                  "liveBondsAtStart": 8981,
+                  "contact": {
+                    "column": 21,
+                    "row": 31
+                  },
+                  "requestedForce": 2,
+                  "effectiveForce": 2.000000024311053,
+                  "travel": 0.11962594048982551,
+                  "peakStrain": 0.6671015483470962,
+                  "solve": {
+                    "elapsedMs": 88.16699999999992,
+                    "iterations": 407,
+                    "iterationBudget": 1200,
+                    "relativeResidual": 9.587337567938834e-8
+                  },
+                  "fracture": {
+                    "threshold": 0.04,
+                    "newBrokenBonds": 227,
+                    "totalBrokenBonds": 343,
+                    "newEventEnergy": 0.12051992988212039,
+                    "notchZone": {
+                      "bounds": {
+                        "minX": -0.45999999999999996,
+                        "maxX": -0.30000000000000004,
+                        "minY": 0.16,
+                        "maxY": 0.31
+                      },
+                      "liveBondCount": 177,
+                      "peakLiveStrain": 0.04812591538125939,
+                      "meanLiveStrain": 0.012569209865240738,
+                      "newCrackEvents": 4,
+                      "newCrackEnergy": 0.0005186705217463482
+                    },
+                    "componentSizes": [
+                      2127,
+                      3
+                    ],
+                    "connectivityEpoch": 2,
+                    "supportPins": 48,
+                    "maxPinnedDisplacement": 0
+                  }
+                }
+              ],
+              "totalBrokenBonds": 343,
+              "finalComponents": [
+                2127,
+                3
+              ],
+              "finalConnectivityEpoch": 2,
+              "postBreakReequilibration": "same-force linear spring solve on newly live bonds from fixed reference geometry",
+              "detachedMotion": false
+            }
+          ]
+        }
+      }
+    }
+  },
+  "contrast": {
+    "uniform": [
+      {
+        "force": 0.25,
+        "intact": {
+          "status": "stable",
+          "brokenBonds": 0,
+          "travel": 0.004351629664209108,
+          "components": [
+            2148
+          ],
+          "damageSolves": 1
+        },
+        "controlledNotch": {
+          "status": "stable",
+          "brokenBonds": 0,
+          "travel": 0.004400471843781048,
+          "components": [
+            2130
+          ],
+          "damageSolves": 1
+        },
+        "travelDelta": 0.00004884217957194011,
+        "relativeTravelDelta": 0.011223882393681814,
+        "brokenBondDelta": 0,
+        "intactLocalCrackEvents": 0,
+        "controlledNotchLocalCrackEvents": 0,
+        "localCrackDelta": 0,
+        "responseDistinguishable": false
+      },
+      {
+        "force": 0.5,
+        "intact": {
+          "status": "stable",
+          "brokenBonds": 0,
+          "travel": 0.008703259328418216,
+          "components": [
+            2148
+          ],
+          "damageSolves": 1
+        },
+        "controlledNotch": {
+          "status": "stable",
+          "brokenBonds": 0,
+          "travel": 0.008800943687562096,
+          "components": [
+            2130
+          ],
+          "damageSolves": 1
+        },
+        "travelDelta": 0.00009768435914388023,
+        "relativeTravelDelta": 0.011223882393681814,
+        "brokenBondDelta": 0,
+        "intactLocalCrackEvents": 0,
+        "controlledNotchLocalCrackEvents": 0,
+        "localCrackDelta": 0,
+        "responseDistinguishable": false
+      },
+      {
+        "force": 0.75,
+        "intact": {
+          "status": "load-path-separated",
+          "brokenBonds": 39,
+          "travel": 0.042331749369033056,
+          "components": [
+            2145,
+            3
+          ],
+          "damageSolves": 3
+        },
+        "controlledNotch": {
+          "status": "load-path-separated",
+          "brokenBonds": 39,
+          "travel": 0.04249740196538773,
+          "components": [
+            2127,
+            3
+          ],
+          "damageSolves": 3
+        },
+        "travelDelta": 0.00016565259635467622,
+        "relativeTravelDelta": 0.0039131998753601255,
+        "brokenBondDelta": 0,
+        "intactLocalCrackEvents": 0,
+        "controlledNotchLocalCrackEvents": 0,
+        "localCrackDelta": 0,
+        "responseDistinguishable": false
+      },
+      {
+        "force": 2,
+        "intact": {
+          "status": "load-path-separated",
+          "brokenBonds": 255,
+          "travel": 0.11530586529406761,
+          "components": [
+            2145,
+            3
+          ],
+          "damageSolves": 2
+        },
+        "controlledNotch": {
+          "status": "load-path-separated",
+          "brokenBonds": 258,
+          "travel": 0.11575483391541413,
+          "components": [
+            2127,
+            3
+          ],
+          "damageSolves": 2
+        },
+        "travelDelta": 0.0004489686213465238,
+        "relativeTravelDelta": 0.003893718851174719,
+        "brokenBondDelta": 3,
+        "intactLocalCrackEvents": 0,
+        "controlledNotchLocalCrackEvents": 9,
+        "localCrackDelta": 9,
+        "responseDistinguishable": true
+      }
+    ],
+    "surface-envelope": [
+      {
+        "force": 0.25,
+        "intact": {
+          "status": "stable",
+          "brokenBonds": 0,
+          "travel": 0.004695460067377113,
+          "components": [
+            2148
+          ],
+          "damageSolves": 1
+        },
+        "controlledNotch": {
+          "status": "stable",
+          "brokenBonds": 0,
+          "travel": 0.004737636307138369,
+          "components": [
+            2130
+          ],
+          "damageSolves": 1
+        },
+        "travelDelta": 0.00004217623976125653,
+        "relativeTravelDelta": 0.00898234446807173,
+        "brokenBondDelta": 0,
+        "intactLocalCrackEvents": 0,
+        "controlledNotchLocalCrackEvents": 0,
+        "localCrackDelta": 0,
+        "responseDistinguishable": false
+      },
+      {
+        "force": 0.5,
+        "intact": {
+          "status": "stable",
+          "brokenBonds": 0,
+          "travel": 0.009390920134754226,
+          "components": [
+            2148
+          ],
+          "damageSolves": 1
+        },
+        "controlledNotch": {
+          "status": "stable",
+          "brokenBonds": 0,
+          "travel": 0.009475272614276739,
+          "components": [
+            2130
+          ],
+          "damageSolves": 1
+        },
+        "travelDelta": 0.00008435247952251305,
+        "relativeTravelDelta": 0.00898234446807173,
+        "brokenBondDelta": 0,
+        "intactLocalCrackEvents": 0,
+        "controlledNotchLocalCrackEvents": 0,
+        "localCrackDelta": 0,
+        "responseDistinguishable": false
+      },
+      {
+        "force": 0.75,
+        "intact": {
+          "status": "load-path-separated",
+          "brokenBonds": 24,
+          "travel": 0.01770990234487436,
+          "components": [
+            2145,
+            3
+          ],
+          "damageSolves": 2
+        },
+        "controlledNotch": {
+          "status": "load-path-separated",
+          "brokenBonds": 24,
+          "travel": 0.01784157083160709,
+          "components": [
+            2127,
+            3
+          ],
+          "damageSolves": 2
+        },
+        "travelDelta": 0.0001316684867327285,
+        "relativeTravelDelta": 0.007434738157708491,
+        "brokenBondDelta": 0,
+        "intactLocalCrackEvents": 0,
+        "controlledNotchLocalCrackEvents": 0,
+        "localCrackDelta": 0,
+        "responseDistinguishable": false
+      },
+      {
+        "force": 2,
+        "intact": {
+          "status": "load-path-separated",
+          "brokenBonds": 333,
+          "travel": 0.11908618014605073,
+          "components": [
+            2145,
+            3
+          ],
+          "damageSolves": 2
+        },
+        "controlledNotch": {
+          "status": "load-path-separated",
+          "brokenBonds": 343,
+          "travel": 0.11962594048982551,
+          "components": [
+            2127,
+            3
+          ],
+          "damageSolves": 2
+        },
+        "travelDelta": 0.0005397603437747867,
+        "relativeTravelDelta": 0.004532518744935886,
+        "brokenBondDelta": 10,
+        "intactLocalCrackEvents": 0,
+        "controlledNotchLocalCrackEvents": 5,
+        "localCrackDelta": 5,
+        "responseDistinguishable": true
+      }
+    ]
+  },
+  "adjudication": {
+    "depthAwareNotchChangesMeasuredOutcome": true,
+    "matchedLoadPathStatusDiffers": false,
+    "additionalShoulderCracks": [
+      {
+        "force": 2,
+        "intactEvents": 0,
+        "notchEvents": 5
+      }
+    ],
+    "damageSolveCountDiffers": [],
+    "interpretation": "same-source controlled shoulder removal changes the depth-envelope proxy damage history under matched crown force; this supports geometry-conditioned behavior of the expressive proxy, not calibrated stone prediction"
+  }
+}

@@ -71,6 +71,44 @@ export function rasterizeArchTriangles(triangles, bounds, columns, rows) {
   return { columns, rows, occupancy, bounds };
 }
 
+export function rasterizeArchTriangleDepthEnvelope(triangles, bounds, columns, rows) {
+  if (!Number.isInteger(columns) || !Number.isInteger(rows) || columns < 2 || rows < 2) {
+    throw new Error('arch raster dimensions must be integers of at least two');
+  }
+  const [minX, minY] = bounds.min;
+  const [maxX, maxY] = bounds.max;
+  if (!(maxX > minX && maxY > minY)) throw new Error('arch raster bounds must have area');
+  const envelope = Array(columns * rows).fill(null);
+  const dx = (maxX - minX) / columns;
+  const dy = (maxY - minY) / rows;
+  for (const triangle of triangles) {
+    const [[ax, ay, az], [bx, by, bz], [cx, cy, cz]] = triangle;
+    const denominator = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+    if (Math.abs(denominator) < 1e-12) continue;
+    const left = Math.max(0, Math.floor((Math.min(ax, bx, cx) - minX) / dx));
+    const right = Math.min(columns - 1, Math.floor((Math.max(ax, bx, cx) - minX) / dx));
+    const bottom = Math.max(0, Math.floor((Math.min(ay, by, cy) - minY) / dy));
+    const top = Math.min(rows - 1, Math.floor((Math.max(ay, by, cy) - minY) / dy));
+    for (let row = bottom; row <= top; row += 1) {
+      const y = minY + (row + 0.5) * dy;
+      for (let column = left; column <= right; column += 1) {
+        const x = minX + (column + 0.5) * dx;
+        const a = ((by - cy) * (x - cx) + (cx - bx) * (y - cy)) / denominator;
+        const b = ((cy - ay) * (x - cx) + (ax - cx) * (y - cy)) / denominator;
+        const c = 1 - a - b;
+        if (a < -1e-8 || b < -1e-8 || c < -1e-8) continue;
+        const z = a * az + b * bz + c * cz;
+        const index = row * columns + column;
+        const cell = envelope[index] || { minZ: Infinity, maxZ: -Infinity };
+        cell.minZ = Math.min(cell.minZ, z);
+        cell.maxZ = Math.max(cell.maxZ, z);
+        envelope[index] = cell;
+      }
+    }
+  }
+  return envelope;
+}
+
 export function buildArchStructuralProxy(profile, options = {}) {
   const { columns, rows, occupancy, bounds } = profile;
   if (!Number.isInteger(columns) || !Number.isInteger(rows) || occupancy?.length !== columns * rows) {
@@ -81,6 +119,56 @@ export function buildArchStructuralProxy(profile, options = {}) {
   if (!Number.isInteger(layers) || layers < 2) throw new Error('arch proxy requires at least two depth layers');
   const depth = finite(options.depth ?? 0.36, 'depth');
   if (depth <= 0) throw new Error('arch depth must be positive');
+  const depthMode = options.depthMode ?? 'uniform';
+  if (!['uniform', 'surface-envelope'].includes(depthMode)) throw new Error('unsupported arch depth mode');
+  const inferredDepthCells = [];
+  const resolvedDepth = new Map();
+  if (depthMode === 'surface-envelope') {
+    if (profile.depthSource?.kind !== 'triangle-barycentric-z-envelope-v0' ||
+        profile.depthEnvelope?.length !== columns * rows) {
+      throw new Error('surface-envelope mode requires a mesh-derived depth profile');
+    }
+    const validEnvelopeAt = index => {
+      const value = profile.depthEnvelope[index];
+      return value && value.maxZ - value.minZ > 1e-8 ? value : null;
+    };
+    for (let index = 0; index < occupancy.length; index += 1) {
+      if (!occupancy[index]) continue;
+      const cell = profile.depthEnvelope[index];
+      if (!cell || !Number.isFinite(cell.minZ) || !Number.isFinite(cell.maxZ) || cell.maxZ < cell.minZ) {
+        throw new Error(`surface depth envelope missing or invalid at cell ${index}`);
+      }
+      let minZ = cell.minZ;
+      let maxZ = cell.maxZ;
+      if (maxZ - minZ <= 1e-8) {
+        const column = index % columns;
+        const row = Math.floor(index / columns);
+        const neighborEnvelopes = [];
+        for (let dr = -1; dr <= 1; dr += 1) {
+          for (let dc = -1; dc <= 1; dc += 1) {
+            if (!dc && !dr) continue;
+            const nextColumn = column + dc;
+            const nextRow = row + dr;
+            if (nextColumn < 0 || nextColumn >= columns || nextRow < 0 || nextRow >= rows) continue;
+            const nextIndex = nextRow * columns + nextColumn;
+            if (!occupancy[nextIndex]) continue;
+            const envelope = validEnvelopeAt(nextIndex);
+            if (envelope) neighborEnvelopes.push(envelope);
+          }
+        }
+        if (!neighborEnvelopes.length) throw new Error(`cannot reconstruct zero-span surface cell ${index}`);
+        const median = values => {
+          values.sort((a, b) => a - b);
+          const middle = Math.floor(values.length / 2);
+          return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+        };
+        minZ = Math.min(minZ, median(neighborEnvelopes.map(envelope => envelope.minZ)));
+        maxZ = Math.max(maxZ, median(neighborEnvelopes.map(envelope => envelope.maxZ)));
+        inferredDepthCells.push(index);
+      }
+      resolvedDepth.set(index, { minZ, maxZ });
+    }
+  }
   const nodes = [];
   const byGrid = new Map();
   const occupied = (column, row) => column >= 0 && column < columns && row >= 0 && row < rows && occupancy[row * columns + column];
@@ -99,11 +187,15 @@ export function buildArchStructuralProxy(profile, options = {}) {
       for (let column = 0; column < columns; column += 1) {
         if (!occupied(column, row)) continue;
         const index = nodes.length;
+        const cellIndex = row * columns + column;
+        const envelope = depthMode === 'surface-envelope' ? resolvedDepth.get(cellIndex) : null;
         nodes.push({
           id: `n${index}`, column, row, layer,
           x: bounds.min[0] + (column + 0.5) * (bounds.max[0] - bounds.min[0]) / columns,
           y: bounds.min[1] + (row + 0.5) * (bounds.max[1] - bounds.min[1]) / rows,
-          z: -depth / 2 + layer * depth / (layers - 1),
+          z: envelope
+            ? envelope.minZ + layer * (envelope.maxZ - envelope.minZ) / (layers - 1)
+            : -depth / 2 + layer * depth / (layers - 1),
           pinned: column < midColumn ? row === leftFootRow : row === rightFootRow,
           displacement: { x: 0, y: 0, z: 0 },
         });
@@ -136,11 +228,16 @@ export function buildArchStructuralProxy(profile, options = {}) {
   }
   return withComponents({
     schema: STRUCTURAL_ARCH_PROXY_SCHEMA,
-    geometryAuthority: 'glb-projected-silhouette-extrusion-v0',
+    geometryAuthority: depthMode === 'surface-envelope'
+      ? 'glb-projected-surface-depth-envelope-reconstruction-v0'
+      : 'glb-projected-silhouette-extrusion-v0',
     solverAuthority: 'shear-regularized-linear-spring-pcg-v0',
     visualAuthority: 'glb-consumer-not-structural-truth-v0',
     source: profile.source || null,
-    columns, rows, layers, depth, occupancy: [...occupancy], bounds,
+    columns, rows, layers, depth, depthMode,
+    depthSource: profile.depthSource || null,
+    inferredDepthCells,
+    occupancy: [...occupancy], bounds,
     nodes, bonds, connectivityEpoch: 0, events: [],
   });
 }
@@ -157,6 +254,40 @@ function solveArchLinearSystem(state, load, mode) {
     (node.x - x) ** 2 + (node.y - y) ** 2 < (best.x - x) ** 2 + (best.y - y) ** 2 ? node : best);
   const contactIndices = state.nodes.flatMap((node, index) =>
     node.column === contact.column && node.row === contact.row ? [index] : []);
+  if (mode === 'force' && magnitude > 0) {
+    const adjacency = state.nodes.map(() => []);
+    for (const bond of state.bonds) {
+      if (!bond.alive) continue;
+      adjacency[bond.a].push(bond.b);
+      adjacency[bond.b].push(bond.a);
+    }
+    const labels = Array(state.nodes.length).fill(-1);
+    const supported = [];
+    for (let start = 0; start < state.nodes.length; start += 1) {
+      if (labels[start] !== -1) continue;
+      const label = supported.length;
+      const queue = [start];
+      labels[start] = label;
+      let hasPinnedNode = false;
+      for (let head = 0; head < queue.length; head += 1) {
+        const current = queue[head];
+        hasPinnedNode ||= state.nodes[current].pinned;
+        for (const next of adjacency[current]) {
+          if (labels[next] !== -1) continue;
+          labels[next] = label;
+          queue.push(next);
+        }
+      }
+      supported.push(hasPinnedNode);
+    }
+    const pinnedPath = contactIndices.every(index => supported[labels[index]]);
+    if (!pinnedPath) {
+      const error = new Error('arch force contact is disconnected from pinned supports');
+      error.code = 'ARCH_LOAD_PATH_SEPARATED';
+      error.contact = { column: contact.column, row: contact.row };
+      throw error;
+    }
+  }
   const count = state.nodes.length * 3;
   const fixed = new Uint8Array(count);
   const fixedValues = new Float64Array(count);

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { rasterizeArchTriangles } from './structural-material-arch-core.js';
+import { rasterizeArchTriangles, rasterizeArchTriangleDepthEnvelope } from './structural-material-arch-core.js';
 
 export function readArchGlbTriangles(bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length < 28 || bytes.toString('ascii', 0, 4) !== 'glTF' ||
@@ -54,19 +54,29 @@ export function readArchGlbTriangles(bytes) {
   const vertices = [];
   let minX = Infinity;
   let minY = Infinity;
+  let minZ = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
+  let maxZ = -Infinity;
   for (let index = 0; index < positions.count; index += 1) {
     const x = bytes.readFloatLE(positionsStart + index * 12);
     const y = bytes.readFloatLE(positionsStart + index * 12 + 4);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error('arch GLB position is not finite');
-    vertices.push([x, y]);
+    const z = bytes.readFloatLE(positionsStart + index * 12 + 8);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) throw new Error('arch GLB position is not finite');
+    vertices.push([x, y, z]);
     minX = Math.min(minX, x);
     minY = Math.min(minY, y);
+    minZ = Math.min(minZ, z);
     maxX = Math.max(maxX, x);
     maxY = Math.max(maxY, y);
+    maxZ = Math.max(maxZ, z);
   }
   const triangles = [];
+  const edgeIncidence = new Map();
+  const countEdge = (a, b) => {
+    const id = a < b ? `${a}:${b}` : `${b}:${a}`;
+    edgeIncidence.set(id, (edgeIncidence.get(id) || 0) + 1);
+  };
   for (let index = 0; index < indices.count; index += 3) {
     const a = readIndex(index);
     const b = readIndex(index + 1);
@@ -74,19 +84,41 @@ export function readArchGlbTriangles(bytes) {
     if (a >= vertices.length || b >= vertices.length || c >= vertices.length) {
       throw new Error('arch GLB index exceeds position count');
     }
+    countEdge(a, b);
+    countEdge(b, c);
+    countEdge(c, a);
     triangles.push([vertices[a], vertices[b], vertices[c]]);
   }
-  return { triangles, bounds: { min: [minX, minY], max: [maxX, maxY] } };
+  const incidences = [...edgeIncidence.values()];
+  const boundaryEdges = incidences.filter(count => count === 1).length;
+  const nonManifoldEdges = incidences.filter(count => count > 2).length;
+  return {
+    triangles,
+    bounds: { min: [minX, minY], max: [maxX, maxY] },
+    bounds3d: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] },
+    meshTopology: {
+      uniqueEdges: edgeIncidence.size,
+      boundaryEdges,
+      manifoldInteriorEdges: incidences.filter(count => count === 2).length,
+      nonManifoldEdges,
+      edgeIncidenceClosed: boundaryEdges === 0 && nonManifoldEdges === 0,
+    },
+  };
 }
 
 export function buildArchProfileFromGlb(path, columns = 48, rows = 36, sharedBounds = null) {
   const bytes = readFileSync(path);
   const sourceSha256 = createHash('sha256').update(bytes).digest('hex');
-  const { triangles, bounds } = readArchGlbTriangles(bytes);
+  const { triangles, bounds, bounds3d, meshTopology } = readArchGlbTriangles(bytes);
+  const rasterBounds = sharedBounds || bounds;
   return {
-    ...rasterizeArchTriangles(triangles, sharedBounds || bounds, columns, rows),
+    ...rasterizeArchTriangles(triangles, rasterBounds, columns, rows),
+    depthEnvelope: rasterizeArchTriangleDepthEnvelope(triangles, rasterBounds, columns, rows),
+    depthBounds: bounds3d,
+    depthSource: { kind: 'triangle-barycentric-z-envelope-v0' },
+    meshTopology,
     source: { kind: 'trellis-glb', sha256: sourceSha256 },
-    extraction: 'triangle-xy-projection-cell-centers-v0',
+    extraction: 'triangle-xy-occupancy-and-barycentric-z-envelope-cell-centers-v1',
   };
 }
 
