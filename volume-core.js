@@ -2255,8 +2255,16 @@ export function resolveTransportConfig(controls = {}) {
 // shader exactly as before. `calibrated` replaces both with one epsilon per
 // transport scheme (uniform weighting, expansion held at the Curl-0 baseline) so
 // confinement compensates the scheme's numerical loss instead of injecting
-// authored curl energy; `off` removes confinement. The table is provisional
-// until the enstrophy assay sets it; the receipt says so.
+// authored curl energy; `off` removes confinement. The table was set by the
+// enstrophy assay of 2026-09-25 (128 x 256 x 128 ring burner, converged open
+// top, Projection 1, synthetic forces off, sampled 20 s arms): under
+// MacCormack-velocity the carried enstrophy is flat within run-to-run scatter
+// for epsilon in [0, 0.06] (0.0075-0.0090 per cell), rises at 0.1 (0.0103)
+// and under the authored Curl-4 law (0.0113); under first-order undamped it is
+// flat for every epsilon up to the authored law (~0.0041) - confinement cannot
+// restore what first-order diffusion removes at this resolution. 0.010 for
+// MacCormack sits inside the flat region, six times below the knee; the
+// first-order schemes keep the authored Curl-0 floor.
 export const CONFINEMENT_IDENTITY = 'confinement-mode-v0';
 export const CONFINEMENT_MODE_VALUES = Object.freeze(['curl-slider', 'calibrated', 'off']);
 const CONFINEMENT_MODE_CURL_SLIDER = 'curl-slider';
@@ -2272,7 +2280,7 @@ export const CONFINEMENT_CALIBRATED_EPSILON = Object.freeze({
   [TRANSPORT_SCHEME_MACCORMACK_VELOCITY]: 0.010,
   [TRANSPORT_SCHEME_MACCORMACK]: 0.010,
 });
-export const CONFINEMENT_CALIBRATION_STATUS = 'provisional-pending-enstrophy-assay';
+export const CONFINEMENT_CALIBRATION_STATUS = 'enstrophy-assay-2026-09-25-flat-to-0.06-under-maccormack';
 
 export function confinementModeUniformValue(mode) {
   if (mode === CONFINEMENT_MODE_CALIBRATED) return 1;
