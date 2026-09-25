@@ -28,6 +28,10 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 
 .btn { display: inline-block; padding: 6px 14px; background: #252525; border: 1px solid #333; border-radius: 6px; color: #bbb; font-size: 11px; cursor: pointer; margin: 2px; transition: all 0.15s; }
 .btn:hover { background: #333; color: #fff; border-color: #444; }
+.finger-fluid-inspection-actions { display: flex; gap: 4px; margin: 6px 0; }
+.finger-fluid-inspection-actions .btn { flex: 1; min-width: 0; padding: 6px 5px; margin: 0; }
+.finger-fluid-inspection-actions .btn[aria-pressed="true"] { background: #18333a; border-color: #3a92a4; color: #d7f7fb; }
+.finger-fluid-inspection-note { margin: 6px 0; color: #777; font-size: 10px; line-height: 1.4; }
 .btn.active { background: #1565c0; border-color: #1976d2; color: #fff; }
 
 #drop-zone { border: 2px dashed #333; border-radius: 10px; padding: 20px; text-align: center; color: #555; font-size: 12px; margin-bottom: 14px; cursor: pointer; transition: all 0.2s; }
@@ -2664,10 +2668,22 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
   <!-- Finger Fluid Bench Tab -->
   <div class="tab-content" id="tab-finger-fluid-bench">
-    <h2>Finger Fluid Bench</h2>
+    <h2 id="finger-fluid-tab-title">Finger Fluid</h2>
+    <div class="panel" id="finger-fluid-inspection-controls">
+      <div class="field"><span class="field-key">Inspect</span><span class="field-val" id="finger-fluid-inspection-target">Fluid bench</span></div>
+      <p class="finger-fluid-inspection-note">Freeze the particles, then switch between the rendered surface and particle view. The camera stays live so you can compare the same state from different angles.</p>
+      <div class="finger-fluid-inspection-actions">
+        <button class="btn" id="finger-fluid-inspection-pause" type="button" aria-pressed="false">Freeze water</button>
+      </div>
+      <div class="finger-fluid-inspection-actions" role="group" aria-label="Water rendering view">
+        <button class="btn" id="finger-fluid-inspection-surface" type="button" aria-pressed="true">Surface</button>
+        <button class="btn" id="finger-fluid-inspection-particles" type="button" aria-pressed="false">Particles</button>
+      </div>
+      <div id="finger-fluid-inspection-status" role="status" aria-live="polite">Waiting for water…</div>
+    </div>
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_finger_fluid_bench=1</span></div>
-      <div class="field"><span class="field-key">Bench</span><span class="field-val">kaminos/finger-fluid-bench</span></div>
+      <div class="field"><span class="field-key">Bench</span><span class="field-val" id="finger-fluid-bench-route">kaminos/finger-fluid-bench</span></div>
       <div class="field"><span class="field-key">Source</span><span class="field-val" id="finger-fluid-bench-source-schema">big-papa.finger-fluid.synthetic-source.v0</span></div>
       <div class="field"><span class="field-key">Status</span><span class="field-val" id="finger-fluid-bench-status">pending</span></div>
     </div>
@@ -3190,11 +3206,122 @@ for (const [key,label,step] of localLiquidFields) {
   row.append(caption,input);document.getElementById('local-liquid-fields').append(row);
 }
 function localLiquidStatus(message) {document.getElementById('local-liquid-status').textContent=message;}
+function localLiquidInspectionRequested() {
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  return hash.get('local_liquid') === '1' || Boolean(localLiquidSetup);
+}
+function localLiquidInspectionActive() {
+  return Boolean(localLiquidHost && !localLiquidFailure);
+}
+function currentFingerFluidInspectionMode() {
+  if (localLiquidInspectionActive()) {
+    return localLiquidHost.opticalOptions.rendererMode
+      || localLiquidHost.state().solver.effectiveRendererMode
+      || 'screen_space_refraction';
+  }
+  return fingerFluidBenchInteractiveRendererMode
+    || fingerFluidBenchConfig?.effectiveRendererMode
+    || 'screen_space_surface';
+}
+function updateFingerFluidInspectionControls() {
+  const target = document.getElementById('finger-fluid-inspection-target');
+  if (!target) return;
+  const localActive = localLiquidInspectionActive();
+  const localRequested = localLiquidInspectionRequested();
+  const localState = localActive ? localLiquidHost.state() : null;
+  const benchState = fingerFluidBenchSolver?.getDebugState?.() || fingerFluidBenchState.runtime || null;
+  const paused = localActive ? localLiquidHost.paused : fingerFluidBenchSimulationPaused;
+  const viewMode = currentFingerFluidInspectionMode();
+  const isParticleView = viewMode === 'sphere_debug';
+  const pauseButton = document.getElementById('finger-fluid-inspection-pause');
+  const surfaceButton = document.getElementById('finger-fluid-inspection-surface');
+  const particleButton = document.getElementById('finger-fluid-inspection-particles');
+  const status = document.getElementById('finger-fluid-inspection-status');
+  const benchRoute = document.getElementById('finger-fluid-bench-route');
+  const source = document.getElementById('finger-fluid-bench-source-schema');
+  const benchStatus = document.getElementById('finger-fluid-bench-status');
+  const benchSolver = document.getElementById('finger-fluid-bench-solver');
+  const requestedRenderer = document.getElementById('finger-fluid-bench-renderer-requested');
+  const effectiveRenderer = document.getElementById('finger-fluid-bench-renderer');
+  if (localRequested) {
+    target.textContent = 'Local authored water · retained particles';
+    if (benchRoute) benchRoute.textContent = 'kaminos/finger-fluid/local-analytic-host-frame-v0';
+    if (source) source.textContent = 'local authored inlet · retained particle state';
+    if (localActive) {
+      const solver = localState.solver || {};
+      const step = solver.stepCount ?? 'unknown';
+      const phase = paused ? 'frozen' : 'running';
+      status.textContent = `Local authored water · ${phase} at step ${step} · ${isParticleView ? 'particle view' : 'surface view'}`;
+      if (benchStatus) benchStatus.textContent = phase;
+      if (benchSolver) benchSolver.textContent = solver.solver_backend === 'webgpu_compute' ? 'WebGPU compute' : (solver.solver_backend || 'pending');
+      if (requestedRenderer) requestedRenderer.textContent = localLiquidHost.opticalOptions.rendererMode || 'screen_space_refraction';
+      if (effectiveRenderer) effectiveRenderer.textContent = solver.effectiveRendererMode || 'pending';
+    } else if (localLiquidFailure) {
+      status.textContent = `Local authored water failed: ${localLiquidFailure}`;
+      if (benchStatus) benchStatus.textContent = 'failed';
+    } else {
+      status.textContent = 'Loading local authored water…';
+      if (benchStatus) benchStatus.textContent = 'loading';
+    }
+  } else {
+    target.textContent = 'Fluid bench · synthetic source';
+    if (benchRoute) benchRoute.textContent = 'kaminos/finger-fluid-bench';
+    if (source) source.textContent = BIG_PAPA_FLUID_SOURCE_SCHEMA;
+    const phase = paused ? 'frozen' : 'running';
+    const step = benchState?.stepCount ?? 'loading';
+    status.textContent = `Fluid bench · ${phase} at step ${step} · ${isParticleView ? 'particle view' : 'surface view'}`;
+    if (benchStatus) benchStatus.textContent = fingerFluidBenchState.status || (fingerFluidBenchSolver ? phase : 'loading');
+    if (benchSolver && benchState?.solver_backend) benchSolver.textContent = benchState.solver_backend === 'webgpu_compute' ? 'WebGPU PBF 3D' : benchState.solver_backend;
+    if (requestedRenderer) requestedRenderer.textContent = viewMode;
+    if (effectiveRenderer) effectiveRenderer.textContent = benchState?.effectiveRendererMode || viewMode;
+  }
+  if (pauseButton) {
+    pauseButton.textContent = paused ? 'Resume water' : 'Freeze water';
+    pauseButton.setAttribute('aria-pressed', String(paused));
+    pauseButton.disabled = localRequested && !localActive;
+  }
+  surfaceButton?.setAttribute('aria-pressed', String(!isParticleView));
+  particleButton?.setAttribute('aria-pressed', String(isParticleView));
+  if (surfaceButton) surfaceButton.disabled = localRequested && !localActive;
+  if (particleButton) particleButton.disabled = localRequested && !localActive;
+  const localPauseButton = document.getElementById('local-liquid-pause');
+  if (localPauseButton && localActive) {
+    localPauseButton.textContent = paused ? 'Resume water' : 'Freeze water';
+    localPauseButton.setAttribute('aria-pressed', String(paused));
+  }
+}
+function toggleFingerFluidInspectionPause() {
+  if (localLiquidInspectionActive()) {
+    localLiquidHost.setPaused(!localLiquidHost.paused);
+  } else if (!localLiquidInspectionRequested()) {
+    fingerFluidBenchSimulationPaused = !fingerFluidBenchSimulationPaused;
+  }
+  updateFingerFluidInspectionControls();
+}
+function setFingerFluidInspectionView(view) {
+  const rendererMode = view === 'particles'
+    ? 'sphere_debug'
+    : localLiquidInspectionActive()
+      ? 'screen_space_refraction'
+      : fingerFluidBenchConfig?.effectiveRendererMode === 'sphere_debug'
+        ? 'screen_space_surface'
+        : (fingerFluidBenchConfig?.effectiveRendererMode || 'screen_space_surface');
+  if (localLiquidInspectionActive()) {
+    localLiquidHost.setOpticalOptions({
+      ...localLiquidHost.opticalOptions,
+      rendererMode,
+    });
+  } else if (!localLiquidInspectionRequested()) {
+    fingerFluidBenchInteractiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
+  }
+  updateFingerFluidInspectionControls();
+}
 function showLocalLiquidSourceStatus() {
   const inlet=localLiquidHost?.state().solver.liveInlets.inlets[0];
   if(!inlet)return;
   const requested=inlet.requested.particleReleaseRate,effective=inlet.effective.particleReleaseRate;
-  localLiquidStatus(`Live water · ${effective.toFixed(0)} particles/s${effective===requested?'':` (${requested} requested; source capacity reached)`}. Undo changes settings; restart clears water.`);
+  localLiquidStatus(`Live water · ${effective.toFixed(0)} particles/s${effective===requested?'':` (${requested} requested; source capacity reached)`}. Freeze and compare Surface / Particles in the Fluid tab; restart clears water.`);
+  updateFingerFluidInspectionControls();
 }
 async function mountLocalLiquid(setup) {
   if (localLiquidLoading) throw Error('Local water is already loading');
@@ -3208,12 +3335,19 @@ async function mountLocalLiquid(setup) {
       const {createLocalLiquidHost}=await import('./local-liquid-host.mjs');
       localLiquidHost=await createLocalLiquidHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup:next});
       showLocalLiquidSourceStatus();
-      document.getElementById('local-liquid-pause').textContent='Pause water';
+      document.getElementById('local-liquid-pause').textContent='Freeze water';
     }
     sceneParameterTools?.sync();window._kaminosDirty?.();
   } catch(error) {
     localLiquidFailure=error.message || String(error);localLiquidStatus('Water stopped: '+localLiquidFailure);throw error;
-  } finally {localLiquidLoading=false;}
+  } finally {
+    localLiquidLoading=false;
+    updateFingerFluidInspectionControls();
+    const params=new URLSearchParams(window.location.search);
+    if(params.get('kaminos_finger_fluid_bench')==='1' || window.__kaminosActiveTab?.()==='finger-fluid-bench') {
+      setActiveTab('finger-fluid-bench');
+    }
+  }
 }
 window.kaminosLocalLiquidState=()=>({...(localLiquidHost?.state() || {requestedRoute:localLiquidSetup?'kaminos/finger-fluid/local-analytic-host-frame-v0':null,
   effectiveRoute:null,registered:Boolean(localLiquidSetup),mounted:false,loading:localLiquidLoading,failure:localLiquidFailure,setup:localLiquidSetup}),
@@ -3234,7 +3368,9 @@ window.kaminosLocalLiquidReadAnchors=anchors=>{
 document.getElementById('local-liquid-pause').onclick=()=>{
   if(!localLiquidHost)return;
   const paused=localLiquidHost.setPaused(!localLiquidHost.paused);
-  document.getElementById('local-liquid-pause').textContent=paused?'Resume water':'Pause water';window._kaminosDirty?.();
+  document.getElementById('local-liquid-pause').textContent=paused?'Resume water':'Freeze water';
+  document.getElementById('local-liquid-pause').setAttribute('aria-pressed',String(paused));
+  updateFingerFluidInspectionControls();
 };
 document.getElementById('local-liquid-restart').onclick=()=>{
   if(authoringBusy || localLiquidLoading)return;
@@ -3547,6 +3683,7 @@ let fingerFluidBenchSolver = null;
 let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchSimulationPaused = false;
+let fingerFluidBenchInteractiveRendererMode = null;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 const FINGER_FLUID_PYRO_PRE_CONTACT_CAPTURE_MIN_SIM_STEPS = 180;
 const FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP = 220;
@@ -10827,9 +10964,13 @@ function setActiveTab(tabName) {
   }
   const fingerFluidBenchPanel = document.getElementById('finger-fluid-bench-operator-panel');
   if (fingerFluidBenchPanel) {
-    fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench';
-    if (tabName === 'finger-fluid-bench') startFingerFluidBench();
+    const localWaterOwnsFluidView = tabName === 'finger-fluid-bench'
+      && (localLiquidInspectionActive() || localLiquidLoading || localLiquidInspectionRequested());
+    fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench' || localWaterOwnsFluidView;
+    if (tabName === 'finger-fluid-bench' && !localWaterOwnsFluidView) startFingerFluidBench();
+    else if (tabName === 'finger-fluid-bench') stopFingerFluidBench();
     else stopFingerFluidBench();
+    updateFingerFluidInspectionControls();
   }
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
   if (fingerJuicePanel) {
@@ -11307,6 +11448,7 @@ function updateFingerFluidBenchReadout() {
   pulseControlElement.hidden = !pulseControlReadout;
   pulseControlElement.textContent = pulseControlReadout?.text || '';
   updateFingerFluidOracleCockpitState(state.runtime || {});
+  updateFingerFluidInspectionControls();
 }
 
 function replaceFingerFluidOracleUrl(nextUrl) {
@@ -11671,6 +11813,7 @@ function renderFingerFluidBenchCurrentStateForWitness(rendererMode, opticalDebug
   if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for same-state renderer witness');
   const effectiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
   const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
+  fingerFluidBenchInteractiveRendererMode = effectiveRendererMode;
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   if (!canvas) throw new Error('Finger Fluid canvas missing for same-state renderer witness');
   if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
@@ -11755,7 +11898,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     width: canvas.clientWidth,
     height: canvas.clientHeight,
     pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
-    rendererMode: fingerFluidBenchConfig.effectiveRendererMode,
+    rendererMode: fingerFluidBenchInteractiveRendererMode || fingerFluidBenchConfig.effectiveRendererMode,
     opticalDebugMode: fingerFluidBenchConfig.effectiveOpticalDebugMode,
     ...fingerFluidBenchCamera,
   });
@@ -11765,7 +11908,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveColorMode = gpuState.colorMode;
   gpuState.requestedTruthScene = fingerFluidBenchConfig.requestedTruthScene;
   gpuState.effectiveTruthScene = gpuState.truthScene;
-  gpuState.requestedRendererMode = fingerFluidBenchConfig.requestedRendererMode;
+  gpuState.routeRequestedRendererMode = fingerFluidBenchConfig.requestedRendererMode;
+  gpuState.requestedRendererMode = fingerFluidBenchInteractiveRendererMode || fingerFluidBenchConfig.requestedRendererMode;
   gpuState.requestedOpticalDebugMode = fingerFluidBenchConfig.requestedOpticalDebugMode;
   gpuState.effectiveOpticalDebugMode = gpuState.opticalDebugMode;
   gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
@@ -11897,6 +12041,7 @@ async function startFingerFluidBench() {
     const canvas = document.getElementById('finger-fluid-bench-canvas');
     try {
       fingerFluidBenchConfig = fingerFluidBenchConfigFromRoute();
+      fingerFluidBenchInteractiveRendererMode ||= fingerFluidBenchConfig.effectiveRendererMode;
       if (fingerFluidBenchConfig.effectiveTruthScene === 'laminar_inlets') {
         fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
       }
@@ -12014,6 +12159,10 @@ function initKaminosFingerFluidBenchRoute() {
       stepCount: runtime?.stepCount ?? null,
     };
   };
+  document.getElementById('finger-fluid-inspection-pause')?.addEventListener('click', toggleFingerFluidInspectionPause);
+  document.getElementById('finger-fluid-inspection-surface')?.addEventListener('click', () => setFingerFluidInspectionView('surface'));
+  document.getElementById('finger-fluid-inspection-particles')?.addEventListener('click', () => setFingerFluidInspectionView('particles'));
+  updateFingerFluidInspectionControls();
   window.kaminosFingerFluidBenchSetCameraForWitness = setFingerFluidBenchCameraForWitness;
   window.kaminosFingerFluidOracleCockpitDebugState = () => fingerFluidOracleCockpitState || updateFingerFluidOracleCockpitState(fingerFluidBenchState.runtime || {});
   window.__kaminosFingerFluidOracleCockpitDebugState = window.kaminosFingerFluidOracleCockpitDebugState;
@@ -12052,9 +12201,11 @@ function initKaminosFingerFluidBenchRoute() {
   const params = new URLSearchParams(window.location.search);
   if (params.get('kaminos_finger_fluid_bench') === '1') {
     setActiveTab('finger-fluid-bench');
-    setInfo(isFingerFluidOracleCockpitRoute(params)
-      ? 'Finger Fluid waterfall oracle cockpit route active'
-      : 'Finger Fluid bench route active: native WebGPU 3D PBF simulation');
+    setInfo(localLiquidInspectionRequested()
+      ? 'Local authored water inspection active: freeze and compare Surface / Particles'
+      : isFingerFluidOracleCockpitRoute(params)
+        ? 'Finger Fluid waterfall oracle cockpit route active'
+        : 'Finger Fluid bench route active: native WebGPU 3D PBF simulation');
   }
 }
 

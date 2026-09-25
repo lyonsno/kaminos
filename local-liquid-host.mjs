@@ -227,7 +227,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         interfaceFrequencyMode:resolveFingerFluidInterfaceFrequencyMode};
       for(const [key,value] of Object.entries(options)) {
         if(typeof value!=='string'||validators[key](value)!==value)throw Error(`Invalid local liquid ${key}: ${value}`);
-        if(key==='rendererMode'&&value!=='screen_space_refraction') {
+        if(key==='rendererMode'&&value!=='screen_space_refraction'&&value!=='sphere_debug') {
           throw Error(`Unsupported local liquid rendererMode for the mounted host: ${value}`);
         }
       }
