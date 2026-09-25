@@ -19,6 +19,11 @@ const report = { schema: 'kaminos.sf3d-kiln-save-reopen.v0', ok: false, phase: '
   requestedUrl: arg('--url'), inferenceReport: path.resolve(arg('--inference-report')), events: [] };
 const save = () => fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
 async function loadAuthoredScene(page, fileName) {
+  await page.waitForFunction(() => window.__sf3dLiveFlameReady
+    || window.__kaminosCompositionSetup?.status === 'failed');
+  if (!await page.evaluate(() => window.__sf3dLiveFlameReady === true)) {
+    throw new Error(`SF3D composition host did not mount before scene load: ${JSON.stringify(await page.evaluate(() => window.__kaminosCompositionSetup))}`);
+  }
   await page.waitForFunction(() => window.__kaminosVolumePrototype?.debugState?.().active === true);
   await page.evaluate(async name => {
     const response = await fetch(`/api/read?${new URLSearchParams({ root: 'scenes', path: name })}`, { cache: 'no-store' });
@@ -161,15 +166,40 @@ try {
   if (!savedPresetId || !savedSources.includes(original.modelSource) || !savedSources.includes(generatedSource)) {
     throw new Error('saved scene lost the kiln, generated mesh, or flame basin');
   }
+  const presetResponse = await fetch(new URL(`/api/volume-settings-preset?id=${encodeURIComponent(savedPresetId)}`, requestedUrl.origin), { cache: 'no-store' });
+  if (!presetResponse.ok) throw new Error(`saved basin preset HTTP ${presetResponse.status}`);
+  const presetDocument = await presetResponse.json();
+  const restoredControl = Object.values(presetDocument.preset?.domControls || {})
+    .find(control => control.id === 'volume-pyro-overdrive');
+  if (!restoredControl) throw new Error('saved basin preset lacks the volume-pyro-overdrive control');
+  report.basinReopen = {
+    presetId: savedPresetId,
+    controlId: restoredControl.id,
+    expected: Object.hasOwn(restoredControl, 'rawValue') ? restoredControl.rawValue : restoredControl.value,
+  };
   report.phase = 'reopen'; save();
   const reopenUrl = new URL(requestedUrl.href);
-  reopenUrl.searchParams.set('settings_preset', savedPresetId);
+  reopenUrl.searchParams.delete('settings_preset');
+  reopenUrl.searchParams.delete('settings_preset_authority');
   const hash = new URLSearchParams(reopenUrl.hash.slice(1));
   hash.set('scene', saved.saved);
   reopenUrl.hash = hash.toString();
   report.reopenUrl = reopenUrl.href; save();
   await page.goto(reopenUrl.href, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__kaminosVolumePrototype?.debugState?.().active === true);
+  await page.evaluate(() => {
+    const control = document.getElementById('volume-pyro-overdrive');
+    if (!control) throw new Error('basin control unavailable before scene restore');
+    control.value = '0';
+    control.dispatchEvent(new Event('input', { bubbles: true }));
+    control.dispatchEvent(new Event('change', { bubbles: true }));
+  });
   await loadAuthoredScene(page, saved.saved);
+  const effectiveBasinValue = await page.$eval('#volume-pyro-overdrive', control => Number(control.value));
+  report.basinReopen.effective = effectiveBasinValue;
+  if (String(effectiveBasinValue) !== String(report.basinReopen.expected)) {
+    throw new Error(`scene reopen basin mismatch: expected ${report.basinReopen.expected}, got ${effectiveBasinValue}`);
+  }
   await page.waitForFunction(sources => {
     const actual = window.kaminosSceneObjectDebugState?.().map(row => row.source) || [];
     return sources.every(source => actual.includes(source));
@@ -183,6 +213,14 @@ try {
     reopenedSources: window.kaminosSceneObjectDebugState?.().map(row => row.source) || [],
     reopenedPresetId: window.__kaminosVolumeSettingsPresetReceipt?.presetId || null,
     reopenedStatus: document.getElementById('info-bar')?.textContent || null,
+    compositionSetup: window.__kaminosCompositionSetup || null,
+    transparentComposition: document.documentElement.classList.contains('volume-transparent-composition'),
+    canvases: [...document.querySelectorAll('#viewport canvas')].map(canvas => {
+      const bounds = canvas.getBoundingClientRect();
+      return { id: canvas.id, width: canvas.width, height: canvas.height,
+        bounds: [bounds.x, bounds.y, bounds.width, bounds.height],
+        opacity: getComputedStyle(canvas).opacity, visibility: getComputedStyle(canvas).visibility };
+    }),
   }));
   const reopenedPosition = await page.evaluate(source => window.kaminosSceneObjectDebugState?.()
     .find(row => row.source === source)?.transform.position || null, generatedSource);

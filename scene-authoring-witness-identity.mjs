@@ -15,7 +15,10 @@ export async function verifyAuthoringServer({ origin, repoRoot, fetch = globalTh
   }
   const hashes = {};
   for (const name of ['index.html', 'serve.py', 'scene-persistence-core.js', 'scene-edit-session.mjs',
-    'scene-navigation.mjs', 'volume-settings-preset.html']) {
+    'scene-navigation.mjs', 'volume-settings-preset.html', 'volume-settings-preset-contract.mjs',
+    'volume-settings-preset-schema-v2.json', 'volume-core.js', 'sf3d-host-device.mjs',
+    'sf3d-live-flame-inject.mjs', 'lib/sf3d/sf3d-producer.js', 'sf3d-shared-device-smoke.mjs',
+    'sf3d-kiln-save-reopen-witness.mjs']) {
     const response = await fetch(new URL(`/${name}`, origin), { cache: 'no-store' });
     if (!response.ok) throw new Error(`Served source unavailable: ${name}`);
     const sha = bytes => createHash('sha256').update(bytes).digest('hex');

@@ -43,3 +43,10 @@ test('selection feedback hides untrustworthy offscreen pivots and names the reco
   assert.match(html, /renderPipeline\.outputNode = scenePass\.mul\(vec4\(vec3\(aoOutput\), 1\)\)/);
   assert.doesNotMatch(html, /createSelectionFeedback|selectionFeedback\.output/);
 });
+
+test('scene reopen admits and applies its serialized flame basin before reporting success', () => {
+  assert.match(html, /async function fetchVolumeSettingsPresetReceipt\(requestedPresetId\)[\s\S]*validateVolumeSettingsPresetDocument/);
+  assert.match(html, /async function restoreSceneFlamePreset\(presetId\)[\s\S]*fetchVolumeSettingsPresetReceipt\(presetId\)[\s\S]*applyVolumeSettingsPresetReceipt\(receipt\)/);
+  assert.match(html, /const flamePresetId = data\.composition\?\.flame\?\.presetId[\s\S]*await restoreSceneFlamePreset\(flamePresetId\)[\s\S]*claimLoadedSceneFile\(file\)/);
+  assert.match(html, /function applyVolumeSettingsPresetReceipt\(receipt\)[\s\S]*preset\.domControls[\s\S]*preset\.rendererControls[\s\S]*setControls\?\.\(readVolumeControls\(\)\)/);
+});

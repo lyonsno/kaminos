@@ -20281,13 +20281,8 @@ function createVolumeMainRendererBridge() {
 
 let activeVolumeSettingsPresetReceipt = null;
 
-async function admitVolumeSettingsPresetRoute(params) {
-  const requestedPresetId = params.get('settings_preset');
-  const requestedAuthority = params.get('settings_preset_authority');
-  if (!requestedPresetId && !requestedAuthority) return null;
-  if (!requestedPresetId || requestedAuthority !== 'shared-volume-settings-preset-v2') {
-    throw new Error('settings preset route identity or authority is incomplete');
-  }
+async function fetchVolumeSettingsPresetReceipt(requestedPresetId) {
+  if (!requestedPresetId) throw new Error('scene flame preset identity is missing');
   const [artifactResponse, schemaResponse] = await Promise.all([
     fetch(`/api/volume-settings-preset?id=${encodeURIComponent(requestedPresetId)}`, { cache: 'no-store' }),
     fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
@@ -20295,7 +20290,60 @@ async function admitVolumeSettingsPresetRoute(params) {
   const [artifact, schema] = await Promise.all([artifactResponse.json(), schemaResponse.json()]);
   if (!artifactResponse.ok) throw new Error(artifact.error || `settings preset lookup failed: ${artifactResponse.status}`);
   if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
-  const receipt = validateVolumeSettingsPresetDocument(artifact, requestedPresetId, schema);
+  return validateVolumeSettingsPresetDocument(artifact, requestedPresetId, schema);
+}
+
+function applyVolumeSettingsPresetReceipt(receipt) {
+  const preset = receipt?.preset;
+  if (!preset) throw new Error('validated scene flame preset payload is missing');
+  const descriptors = [
+    ...Object.values(preset.domControls || {}),
+    ...Object.values(preset.rendererControls || {}),
+  ];
+  for (const descriptor of descriptors) {
+    const control = document.getElementById(descriptor.id);
+    if (!control) throw new Error(`scene flame preset control is unavailable: ${descriptor.id}`);
+    const value = Object.hasOwn(descriptor, 'rawValue') ? descriptor.rawValue : descriptor.value;
+    setVolumeControlValue(descriptor.id, value);
+  }
+  const presetParams = new URL(preset.route, window.location.href).searchParams;
+  const volumeScene = presetParams.get('volume_scene');
+  if (volumeScene && document.getElementById('volume-scene')) {
+    document.getElementById('volume-scene').value = volumeScene;
+  }
+  const qualityReason = presetParams.get('volume_quality_reason');
+  if (qualityReason) routedVolumeQualityReason = normalizeVolumeQualityReason(qualityReason);
+  updateVolumeControlLabels();
+  volumePrototype?.setControls?.(readVolumeControls());
+  if (presetParams.has('volume_raymarch_smoke')) {
+    window.__kaminosRaymarchSmokePresentationReceipt = volumePrototype?.setRaymarchSmokePresentationMode?.(
+      presetParams.get('volume_raymarch_smoke'),
+    ) || null;
+    if (window.__kaminosRaymarchSmokePresentationReceipt) {
+      syncRaymarchSmokePresentationControls(window.__kaminosRaymarchSmokePresentationReceipt);
+    }
+  }
+  activeVolumeSettingsPresetReceipt = receipt;
+  window.__kaminosVolumeSettingsPresetReceipt = receipt;
+  volumeSettingsPresetStatus(
+    `${receipt.label || receipt.presetId} | scene basin effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}`,
+  );
+}
+
+async function restoreSceneFlamePreset(presetId) {
+  const receipt = await fetchVolumeSettingsPresetReceipt(presetId);
+  applyVolumeSettingsPresetReceipt(receipt);
+  return receipt;
+}
+
+async function admitVolumeSettingsPresetRoute(params) {
+  const requestedPresetId = params.get('settings_preset');
+  const requestedAuthority = params.get('settings_preset_authority');
+  if (!requestedPresetId && !requestedAuthority) return null;
+  if (!requestedPresetId || requestedAuthority !== 'shared-volume-settings-preset-v2') {
+    throw new Error('settings preset route identity or authority is incomplete');
+  }
+  const receipt = await fetchVolumeSettingsPresetReceipt(requestedPresetId);
   validateVolumeSettingsPresetTarget(receipt, params);
   activeVolumeSettingsPresetReceipt = receipt;
   window.__kaminosVolumeSettingsPresetReceipt = receipt;
@@ -25367,6 +25415,18 @@ async function loadSceneFile(file) {
     await volumePrototype?.setActive?.(true);
   } else if (!compositionModule) {
     await volumePrototype?.setActive?.(false);
+  }
+
+  const flamePresetId = data.composition?.flame?.presetId;
+  if (flamePresetId) {
+    try {
+      await restoreSceneFlamePreset(flamePresetId);
+    } catch (e) {
+      sceneSaveBlockedByFailedRestore = true;
+      currentSceneFile = null;
+      setInfo('Scene load failed: flame basin restore: ' + (e.message || e));
+      return;
+    }
   }
 
   // Apply camera
