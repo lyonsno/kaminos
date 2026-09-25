@@ -1293,6 +1293,9 @@ BROWSE_ROOTS = {
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
     "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
+    "generated-meshes": Path(os.environ.get(
+        "KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"),
+    )).expanduser(),
     "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
@@ -2299,6 +2302,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/ingest-image":
             self.handle_ingest_image(parse_qs(parsed.query))
+        elif parsed.path == "/api/ingest-mesh":
+            self.handle_ingest_mesh()
         elif parsed.path == "/api/splat-correction":
             self.handle_splat_correction_post(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-capture":
@@ -2817,6 +2822,53 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         scene_path.write_text(json.dumps(data, indent=2))
         self.send_json({"saved": filename, "path": str(scene_path)})
+
+    def handle_ingest_mesh(self):
+        """Persist a generated GLB by content hash for the scene loader."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length < 20:
+                raise ValueError("GLB header and first chunk required")
+            content = self.rfile.read(length)
+            if (len(content) != length or content[:4] != b"glTF"
+                    or int.from_bytes(content[4:8], "little") != 2
+                    or int.from_bytes(content[8:12], "little") != length):
+                raise ValueError("Invalid GLB version or length")
+            offset = 12
+            while offset < length:
+                if offset + 8 > length:
+                    raise ValueError("Incomplete GLB chunk header")
+                chunk_length = int.from_bytes(content[offset:offset + 4], "little")
+                if chunk_length % 4 or offset + 8 + chunk_length > length:
+                    raise ValueError("Invalid GLB chunk length")
+                if offset == 12 and content[offset + 4:offset + 8] != b"JSON":
+                    raise ValueError("First GLB chunk must be JSON")
+                offset += 8 + chunk_length
+            if offset != length:
+                raise ValueError("GLB chunks do not match declared length")
+            digest = hashlib.sha256(content).hexdigest()
+            root = BROWSE_ROOTS["generated-meshes"].resolve()
+            root.mkdir(parents=True, exist_ok=True)
+            target = root / f"{digest}.glb"
+            with tempfile.NamedTemporaryFile(dir=root, delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(content)
+            try:
+                try:
+                    os.link(temporary, target)
+                except FileExistsError:
+                    if target.is_symlink() or hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+                        raise ValueError("Stored GLB content identity conflict")
+            finally:
+                temporary.unlink()
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except OSError as error:
+            self.send_json({"error": str(error), "phase": "mesh-persistence"}, 500)
+            return
+        self.send_json({"schema": "kaminos.generated-mesh.v0", "sha256": digest,
+                        "bytes": length, "source": f"/api/read?root=generated-meshes&path={digest}.glb"})
 
     def handle_ingest_splat(self, params):
         """Write a dropped PLY/SPZ into the experimental splat inbox."""

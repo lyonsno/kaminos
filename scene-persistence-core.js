@@ -136,6 +136,7 @@ export function buildSceneDocument({
   groups = [],
   activeObjectId = null,
   activeGroupId = null,
+  composition = null,
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   camera = null,
@@ -170,6 +171,7 @@ export function buildSceneDocument({
     postprocessing: cloneJson(postprocessing),
     backdrop: !!backdrop,
   };
+  if (composition !== null) document.composition = cloneJson(composition);
   if (backdropBrightness !== undefined) document.backdropBrightness = backdropBrightness;
   return document;
 }

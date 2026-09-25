@@ -8780,6 +8780,10 @@ export function createKaminosVolumePrototype({
   let browserResidualFeatureTextureSize = '';
   let format = null;
   let raf = 0;
+  let foregroundOpportunityRequester = null;
+  let foregroundPending = null;
+  let foregroundSequence = 0;
+  const ordinaryForeground = { completedFrames: 0, lastReceipt: null };
   let selectiveHeadLiveCapturePaused = false;
   let selectiveHeadLiveExactPause = null;
   const timingSamples = {
@@ -15775,7 +15779,61 @@ export function createKaminosVolumePrototype({
     return state.selectiveHeadLivePassReceipt;
   }
 
+  function setForegroundOpportunityRequester(requester) {
+    if (requester !== null && typeof requester !== 'function') {
+      throw new Error('foreground opportunity requester must be a function or null');
+    }
+    foregroundOpportunityRequester = requester;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    if (state.active && !selectiveHeadLiveCapturePaused) raf = requestAnimationFrame(render);
+  }
+
   function render(now) {
+    if (productFrameOwner === 'caller') {
+      throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
+    }
+    if (!state.active) return;
+    if (selectiveHeadLiveCapturePaused) {
+      raf = 0;
+      return;
+    }
+    raf = 0;
+    if (!foregroundOpportunityRequester) return renderOrdinaryFrame(now);
+    if (foregroundPending) return;
+    const requestId = `ordinary-volume-frame-${++foregroundSequence}`;
+    try {
+      const handle = foregroundOpportunityRequester({
+        requestId,
+        metadata: { renderer: 'ordinary-volume', frameCount: state.frameCount, simStepCount: state.simStepCount },
+        run: service => renderOrdinaryFrame(now, service),
+      });
+      if (!handle?.completion) throw new Error('foreground requester did not return a completion handle');
+      foregroundPending = handle;
+      Promise.resolve(handle.completion).then(receipt => {
+        if (receipt?.status !== 'completed' || receipt.result?.status !== 'submitted') {
+          throw new Error(`ordinary foreground frame failed: ${receipt?.status || 'missing receipt'}`);
+        }
+        ordinaryForeground.completedFrames += 1;
+        ordinaryForeground.lastReceipt = receipt;
+      }).catch(error => {
+        state.active = false;
+        state.error = error?.message || String(error);
+        canvas.classList.remove('active');
+        emitStatus({ phase: 'foreground-frame-error', error: state.error });
+      }).finally(() => {
+        foregroundPending = null;
+        if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      });
+    } catch (error) {
+      state.active = false;
+      state.error = error?.message || String(error);
+      canvas.classList.remove('active');
+      emitStatus({ phase: 'foreground-frame-error', error: state.error });
+    }
+  }
+
+  function renderOrdinaryFrame(now, foregroundService = null) {
     if (productFrameOwner === 'caller') {
       throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
     }
@@ -15954,7 +16012,13 @@ export function createKaminosVolumePrototype({
       if (!appearanceDecompositionActive()) {
       }
       encodeBoundarySplatTelemetry(encoder);
-      device.queue.submit([encoder.finish()]);
+      if (foregroundService) {
+        foregroundService.submit([encoder.finish()], {
+          metadata: { renderer: 'ordinary-volume', frameCount: state.frameCount + 1, simStepCount: state.simStepCount },
+        });
+      } else {
+        device.queue.submit([encoder.finish()]);
+      }
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       state.frameCount += 1;
       if (selectiveHeadLiveExactPause) {
@@ -16008,7 +16072,15 @@ export function createKaminosVolumePrototype({
       }
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
       recordVolumeFrameTiming(now, performance.now() - cpuStart);
-      if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
+      if (!foregroundService && state.frameCount % 12 === 0) probeVolumeQueueTiming();
+      return {
+        status: 'submitted',
+        renderer: 'ordinary-volume',
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        atMs: now,
+        authority: 'queue-submit-returned-not-gpu-completion-or-presentation',
+      };
     } catch (err) {
       if (selectiveHeadLiveExactPause) {
         selectiveHeadLiveExactPause.resolve({
@@ -16033,8 +16105,9 @@ export function createKaminosVolumePrototype({
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
       emitStatus({ phase: 'render-error', error: state.error });
+      if (foregroundService) throw err;
     } finally {
-      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      if (!foregroundService && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     }
   }
 
@@ -22477,6 +22550,16 @@ export function createKaminosVolumePrototype({
     writeDebugBoundarySidecarOverrideChunk,
     finishDebugBoundarySidecarOverride,
     syntheticHandTrailEmitters,
+    setForegroundOpportunityRequester,
+    foregroundGpuContext() {
+      return {
+        device,
+        queue: device?.queue,
+        active: state.active,
+        renderer: boundarySplatRequested() || browserResidualCanApply() ? 'alternate-volume' : 'ordinary-volume',
+        productFrameOwner,
+      };
+    },
     async setActive(active) {
       if (active) {
         if (state.fullFieldImportReceipt?.status === 'applied'
@@ -22510,6 +22593,10 @@ export function createKaminosVolumePrototype({
     debugState() {
       return {
         ...state,
+        ordinaryForeground: {
+          completedFrames: ordinaryForeground.completedFrames,
+          lastReceipt: ordinaryForeground.lastReceipt,
+        },
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
         cameraSignature: cameraSignature(),
         boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),

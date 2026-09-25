@@ -112,6 +112,32 @@ assert.equal(legacyFineBreakupReceipt.presetRoute.searchParams.get(additiveFineB
 assert.equal(legacyFineBreakupReceipt.preset.controlCount, schema.controlCount,
   'the original basin traverses successive declared additions before exact current-schema validation');
 
+const legacy206Artifact = currentPresetArtifact();
+const additionsSince206 = [
+  'volume-force-micro-carrier',
+  'volume-force-interface-shred',
+  'volume-force-fine-breakup',
+  'volume-fine-breakup-localization',
+  'volume-common-gas-transport',
+].map(key => schema.controls.find(control => control.key === key));
+assert.ok(additionsSince206.every(Boolean), 'the 206-control basin additions remain in the canonical schema');
+const legacy206Route = new URL(legacy206Artifact.preset.route);
+for (const control of additionsSince206) {
+  delete legacy206Artifact.preset.domControls[control.key];
+  legacy206Route.searchParams.delete(control.param);
+}
+legacy206Artifact.preset.route = legacy206Route.href;
+legacy206Artifact.controlCount = 206;
+legacy206Artifact.preset.controlCount = 206;
+const legacy206Receipt = validateVolumeSettingsPresetDocument(legacy206Artifact, legacy206Artifact.presetId, schema);
+assert.deepEqual(legacy206Receipt.retirementMigration?.addedControlIds, additionsSince206.map(control => control.key),
+  'the captured 206-control basin crosses the three-control batch and subsequent single additions');
+for (const control of additionsSince206) {
+  assert.equal(legacy206Receipt.preset.domControls[control.key].value, control.additiveDefault);
+  assert.equal(legacy206Receipt.presetRoute.searchParams.get(control.param), String(control.additiveDefault));
+}
+assert.equal(legacy206Receipt.preset.controlCount, schema.controlCount);
+
 const commonGasTransport = schema.controls.find(control => control.key === 'volume-common-gas-transport');
 assert.equal(commonGasTransport?.additiveSinceControlCount, 211);
 const legacyTransportArtifact = currentPresetArtifact();

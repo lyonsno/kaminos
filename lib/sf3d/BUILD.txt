@@ -1,0 +1,5 @@
+source: lyonsno/sf3d-webgpu main e4ec909cbbd896e04b221bb9aed9c910fd03ec6d clean
+build: npx vite build -c vite.lib.config.js; vendored 2026-09-24; @kaminos/webgpu-inference-kit 0.1.53
+sf3d-producer.js sha256: 9c2a57a3c3772482ce89592d19f1bd1dbd17e651763dea7f4bc32fb591463230
+Runtime commit identity is supplied explicitly by sf3d-host-device.mjs; the generic library build default is dev.
+Code and five generated workers only. weights.bin and tets/ are separately mounted, not included in this source copy.

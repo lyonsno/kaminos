@@ -556,6 +556,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .reaction-front-atlas-state { color: #71848a; font: 9px 'SF Mono', monospace; margin: 5px 0 0; min-height: 13px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
+html.volume-transparent-composition #kaminos-volume-canvas.active { background: transparent; }
 
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
@@ -9490,6 +9491,7 @@ let sharedGpu = null;
 let sharedGpuFailureReason = null;
 let compositionModule = null;
 let compositionSetupError = null;
+let compositionHost = null;
 
 async function importCompositionModule(url) {
   return import(new URL(url, window.location.href).href);
@@ -9851,6 +9853,52 @@ async function initScene() {
   const fpsEl = document.getElementById('fps-counter');
   let fpsFrames = 0;
   let fpsLast = performance.now();
+  let foregroundServiceActive = false;
+  let insideForegroundFrame = false;
+  let sceneFrameCount = 0;
+
+  compositionHost = {
+    device: sharedGpu?.device || renderer.backend?.device || null,
+    setForegroundServiceActive(active) {
+      foregroundServiceActive = Boolean(active);
+    },
+    runForegroundFrame(run) {
+      if (!foregroundServiceActive || insideForegroundFrame) {
+        throw new Error('invalid foreground scene frame state');
+      }
+      if (typeof run !== 'function') throw new Error('foreground scene frame requires a callback');
+      insideForegroundFrame = true;
+      try {
+        controls.update();
+        const result = run();
+        renderPipeline.render();
+        sceneFrameCount += 1;
+        return {
+          ...result,
+          sceneFrameCount,
+          sceneAuthority: 'three-render-returned-inside-service-not-presentation',
+        };
+      } finally {
+        insideForegroundFrame = false;
+      }
+    },
+    async presentGlb(glb, {runId, sha256}) {
+      const response = await fetch('/api/ingest-mesh', {
+        method: 'POST', headers: {'Content-Type': 'model/gltf-binary'}, body: glb,
+      });
+      const saved = await response.json();
+      if (!response.ok || saved.sha256 !== sha256) {
+        throw new Error(saved.error || 'generated mesh persistence hash mismatch');
+      }
+      const object = await showGLB(saved.source, {clear: false, metadata: {
+        source: saved.source, type: 'glb', fileName: `${sha256}.glb`, label: `SF3D chair · ${runId}`,
+      }});
+      const entry = sceneObjects.find(row => row.object === object);
+      if (!entry) throw new Error('SF3D output was not registered in the host scene');
+      window._kaminosDirty?.();
+      return {status: 'registered', objectId: entry.id, source: entry.source, sha256, runId};
+    },
+  };
 
   function animate() {
     requestAnimationFrame(animate);
@@ -9868,7 +9916,7 @@ async function initScene() {
     const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
+    if (!foregroundServiceActive && mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -20908,6 +20956,9 @@ async function initKaminosVolumeRoute() {
     if (params.has(param)) setVolumeControlValue(id, params.get(param));
   }
   updateVolumeControlLabels();
+  const transparentVolumeCanvas = fingerFluidPyroCompositionRequested()
+    || compositionModule?.transparentVolumeCanvas === true;
+  document.documentElement.classList.toggle('volume-transparent-composition', transparentVolumeCanvas);
   volumePrototype = createKaminosVolumePrototype({
     THREE,
     viewport: document.getElementById('viewport'),
@@ -20918,7 +20969,7 @@ async function initKaminosVolumeRoute() {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
-    transparentCanvas: fingerFluidPyroCompositionRequested(),
+    transparentCanvas: transparentVolumeCanvas,
     sharedGpuContext: sharedGpu,
   });
   window.__kaminosVolumePrototype = volumePrototype;
@@ -21089,6 +21140,7 @@ async function initKaminosVolumeRoute() {
       prototype: volumePrototype,
       params: new URLSearchParams(window.location.search),
       sharedGpu,
+      host: compositionHost,
     })).then(() => {
       window.__kaminosCompositionSetup.status = 'mounted';
     }).catch(error => {
@@ -23177,7 +23229,7 @@ async function grFetchApi(endpoint, params = {}) {
   }
 }
 
-const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx'];
+const GR_OUTPUT_ROOTS = ['pixal3d', 'trellis2mlx', 'generated-meshes'];
 
 function greenroomHumanizeName(value, fallback = 'Untitled') {
   const raw = String(value || '').trim();
@@ -25100,6 +25152,9 @@ function buildSceneData() {
     groups: serializeSceneGroups(),
     activeObjectId: activeSceneObjectId,
     activeGroupId: activeSceneGroupId,
+    composition: window.__kaminosVolumeSettingsPresetReceipt?.presetId ? {
+      flame: { presetId: window.__kaminosVolumeSettingsPresetReceipt?.presetId || null },
+    } : null,
     provenance,
     camera: {
       position: camera.position.toArray(),
@@ -25310,7 +25365,7 @@ async function loadSceneFile(file) {
   if (hasVolumePrimitiveScene) {
     setActiveTab('volume');
     await volumePrototype?.setActive?.(true);
-  } else {
+  } else if (!compositionModule) {
     await volumePrototype?.setActive?.(false);
   }
 

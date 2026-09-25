@@ -111,7 +111,8 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   if (changedAxes.has('domControls') && migrated.controlCount !== undefined) {
     migrated.controlCount = preset.controlCount;
   }
-  for (const control of schema.controls || []) {
+  const controls = schema.controls || [];
+  for (const control of controls) {
     const introducedAt = Number(control.additiveSinceControlCount);
     if (!Number.isSafeInteger(introducedAt)) continue;
     if (!Object.hasOwn(control, 'additiveDefault')) {
@@ -119,25 +120,31 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     }
     const activeCount = Object.keys(preset.domControls || {}).length;
     if (activeCount >= introducedAt) continue;
-    if (activeCount !== introducedAt - 1) {
+    const batch = controls.filter(candidate => Number(candidate.additiveSinceControlCount) === introducedAt);
+    if (activeCount !== introducedAt - batch.length) {
       throw new Error(`settings preset cannot bridge additive control history at ${control.key}`);
     }
-    if (Object.hasOwn(preset.domControls, control.key)) {
-      throw new Error(`settings preset carries additive control before its declared schema count: ${control.key}`);
+    for (const added of batch) {
+      if (!Object.hasOwn(added, 'additiveDefault')) {
+        throw new Error(`additive control is missing its default: ${added.key}`);
+      }
+      if (Object.hasOwn(preset.domControls, added.key)) {
+        throw new Error(`settings preset carries additive control before its declared schema count: ${added.key}`);
+      }
+      if (route.searchParams.has(added.param)) {
+        throw new Error(`settings preset routes additive control without its descriptor: ${added.param}`);
+      }
+      preset.domControls[added.key] = {
+        id: added.key,
+        param: added.param,
+        tagName: added.tagName,
+        type: added.type,
+        value: added.additiveDefault,
+      };
+      route.searchParams.set(added.param, String(added.additiveDefault));
+      addedControlIds.push(added.key);
+      addedRouteParams.push(added.param);
     }
-    if (route.searchParams.has(control.param)) {
-      throw new Error(`settings preset routes additive control without its descriptor: ${control.param}`);
-    }
-    preset.domControls[control.key] = {
-      id: control.key,
-      param: control.param,
-      tagName: control.tagName,
-      type: control.type,
-      value: control.additiveDefault,
-    };
-    route.searchParams.set(control.param, String(control.additiveDefault));
-    addedControlIds.push(control.key);
-    addedRouteParams.push(control.param);
   }
   if (addedControlIds.length) {
     preset.controlCount = Object.keys(preset.domControls).length;
