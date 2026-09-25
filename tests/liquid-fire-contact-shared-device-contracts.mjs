@@ -47,8 +47,10 @@ const bindSolverDescriptor = sharedGpuContext => {
 assert.match(bindSolverDescriptor(hostShared), /conflicts with the configured shared GPUDevice/,
   'control: a volume seated on the host device refuses the solver device');
 const compositionResult = bindSolverDescriptor(contextFor(true, hostShared));
-assert.doesNotMatch(compositionResult, /conflicts with the configured shared GPUDevice/,
-  `liquid-contact composition must reach the solver descriptor, got: ${compositionResult}`);
+// The fake descriptor is not schema-valid, so reaching schema validation is the
+// proof that the device check admitted the solver device.
+assert.match(compositionResult, /Liquid fire contact descriptor schema mismatch/,
+  `liquid-contact composition must reach descriptor validation on the solver device, got: ${compositionResult}`);
 assert.equal(contextFor(false, hostShared), hostShared, 'ordinary and kiln routes keep the one host shared device');
 
 // The published fire light-field bounds are computed on every receiver poll.

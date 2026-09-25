@@ -32,8 +32,11 @@ const live = {
 };
 assert.equal(volumeSettingsPresetControlValuesEqual(live, loaded), true, 'order and non-value metadata do not change identity');
 assert.equal(volumeSettingsPresetControlValuesEqual(
-  { ...live, domControls: { ...live.domControls, b: control('0.5', { rawValue: '0.5' }) } }, loaded),
-false, 'rawValue is the identity value when present, as on the server');
+  { ...live, domControls: { ...live.domControls, b: control('9', { rawValue: '0.50' }) } }, loaded),
+true, 'rawValue is the identity value when present, as on the server');
+assert.equal(volumeSettingsPresetControlValuesEqual(
+  { ...live, domControls: { ...live.domControls, b: control('0.5', { rawValue: '0.6' }) } }, loaded),
+false, 'a different rawValue is a different basin even when value matches');
 assert.equal(volumeSettingsPresetControlValuesEqual(
   { ...live, domControls: { ...live.domControls, a: control(1.01) } }, loaded), false, 'an edited flame control is a new basin');
 const { added, ...missing } = live.domControls;
@@ -43,4 +46,16 @@ assert.equal(volumeSettingsPresetControlValuesEqual(
 assert.equal(volumeSettingsPresetControlValuesEqual(live, null), false, 'no loaded basin cannot be reused');
 assert.equal(volumeSettingsPresetControlValuesEqual({ domControls: { a: 1 } }, { domControls: { a: 2 } }), false,
   'bare values never collapse to an equal missing descriptor value');
+// Schema additive defaults can be numeric strings while the page reads range
+// inputs back as numbers; the applied value is the same basin.
+const withValue = (key, value) => ({ ...live, domControls: { ...live.domControls, [key]: control(value) } });
+const loadedWith = (key, value) => ({ ...loaded, domControls: { ...loaded.domControls, [key]: control(value) } });
+assert.equal(volumeSettingsPresetControlValuesEqual(withValue('added', 4000), loadedWith('added', '4000')), true,
+  'schema string default and page number are the same applied value');
+assert.equal(volumeSettingsPresetControlValuesEqual(withValue('added', 0.02), loadedWith('added', '0.020')), true,
+  'numeric formatting does not change identity');
+assert.equal(volumeSettingsPresetControlValuesEqual(withValue('added', 2.5), loadedWith('added', '2')), false,
+  'a different numeric value is a different basin');
+assert.equal(volumeSettingsPresetControlValuesEqual(withValue('added', true), loadedWith('added', 'true')), false,
+  'non-numeric values keep exact identity');
 console.log('scene composition basin identity contracts passed');

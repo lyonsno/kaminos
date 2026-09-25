@@ -346,8 +346,8 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
 
 // Preset content identity is the per-control value (rawValue when present,
 // otherwise value) on the DOM, renderer, and presentation axes, as hashed by
-// serve.py. Equal values on every axis are the same basin under the current
-// schema, regardless of control order or descriptor metadata.
+// serve.py. Equal applied values on every axis are the same basin under the
+// current schema, regardless of control order or descriptor metadata.
 function presetControlValues(controls) {
   return Object.fromEntries(Object.entries(controls || {}).map(([key, descriptor]) => [
     key,
@@ -355,6 +355,17 @@ function presetControlValues(controls) {
       ? descriptor
       : (Object.hasOwn(descriptor, 'rawValue') ? descriptor.rawValue : descriptor.value),
   ]));
+}
+
+// Schema additive defaults may be numeric strings ("4000") while the page reads
+// range inputs back as numbers (4000); both apply the same control value.
+function sameAppliedControlValue(left, right) {
+  const numeric = value => (typeof value === 'number' && Number.isFinite(value) ? value
+    : typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null);
+  const leftNumber = numeric(left);
+  const rightNumber = numeric(right);
+  if (leftNumber !== null && rightNumber !== null) return leftNumber === rightNumber;
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 export function volumeSettingsPresetControlValuesEqual(left, right) {
@@ -365,7 +376,7 @@ export function volumeSettingsPresetControlValuesEqual(left, right) {
     const keys = Object.keys(leftValues);
     if (keys.length !== Object.keys(rightValues).length) return false;
     for (const key of keys) {
-      if (!Object.hasOwn(rightValues, key) || JSON.stringify(leftValues[key]) !== JSON.stringify(rightValues[key])) return false;
+      if (!Object.hasOwn(rightValues, key) || !sameAppliedControlValue(leftValues[key], rightValues[key])) return false;
     }
   }
   return true;
