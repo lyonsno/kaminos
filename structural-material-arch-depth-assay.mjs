@@ -78,10 +78,41 @@ function locateContact(state, x, y) {
     (node.x - x) ** 2 + (node.y - y) ** 2 < (best.x - x) ** 2 + (best.y - y) ** 2 ? node : best);
 }
 
-function supportedContact(state, contact) {
-  const supports = new Set(state.nodes.filter(node => node.pinned).map(node => node.componentId));
-  const contactNodes = state.nodes.filter(node => node.column === contact.column && node.row === contact.row);
-  return contactNodes.every(node => supports.has(node.componentId));
+function contactPatchCells(state, contact, patchRadius) {
+  const layer = Math.floor(state.layers / 2);
+  return [...new Map(state.nodes
+    .filter(node => node.layer === layer && !node.pinned &&
+      Math.hypot(node.x - contact.x, node.y - contact.y) <= patchRadius + 1e-9)
+    .map(node => [`${node.column}:${node.row}`, { column: node.column, row: node.row }])).values()]
+    .sort((a, b) => a.row - b.row || a.column - b.column);
+}
+
+function componentSummary(state, cells) {
+  const keys = new Set(cells.map(cell => `${cell.column}:${cell.row}`));
+  const summaries = state.components.map(component => ({
+    componentId: component.id,
+    componentSize: component.size,
+    pinnedNodeCount: 0,
+    loadedNodeCount: 0,
+  }));
+  for (const node of state.nodes) {
+    const summary = summaries[node.componentId];
+    if (node.pinned) summary.pinnedNodeCount += 1;
+    if (keys.has(`${node.column}:${node.row}`)) summary.loadedNodeCount += 1;
+  }
+  return summaries.map(summary => ({
+    ...summary,
+    hasPinnedSupport: summary.pinnedNodeCount > 0,
+  }));
+}
+
+function loadComponentSummary(state, cells) {
+  return componentSummary(state, cells).filter(component => component.loadedNodeCount > 0);
+}
+
+function supportedContact(state, contactCells) {
+  const components = loadComponentSummary(state, contactCells);
+  return components.length > 0 && components.every(component => component.hasPinnedSupport);
 }
 
 export function runArchQuasistaticFracture(profile, settings) {
@@ -91,6 +122,7 @@ export function runArchQuasistaticFracture(profile, settings) {
     depthMode: settings.depthMode,
   });
   const contact = locateContact(state, settings.contact.x, settings.contact.y);
+  const contactCells = contactPatchCells(state, contact, settings.contactPatchRadius);
   const history = [];
   let current = state;
   let status = 'stable';
@@ -98,14 +130,14 @@ export function runArchQuasistaticFracture(profile, settings) {
 
   while (true) {
     const liveBondsAtStart = current.bonds.filter(bond => bond.alive).length;
-    if (!supportedContact(current, contact)) {
+    if (!supportedContact(current, contactCells)) {
       status = 'load-path-separated';
       terminal = {
         reason: 'loaded-contact-component-has-no-pinned-support',
         contact: { column: contact.column, row: contact.row },
-        contactComponentIds: [...new Set(current.nodes
-          .filter(node => node.column === contact.column && node.row === contact.row)
-          .map(node => node.componentId))],
+        contactCells,
+        loadedContactComponents: loadComponentSummary(current, contactCells),
+        components: componentSummary(current, contactCells),
         componentSizes: current.components.map(component => component.size).sort((a, b) => b - a),
       };
       break;
@@ -114,6 +146,7 @@ export function runArchQuasistaticFracture(profile, settings) {
     const solved = solveArchStructuralForce(current, {
       ...settings.contact,
       force: settings.force,
+      patchRadius: settings.contactPatchRadius,
       iterations: settings.iterations,
     });
     const solveElapsedMs = performance.now() - solveStarted;
@@ -142,8 +175,11 @@ export function runArchQuasistaticFracture(profile, settings) {
       epoch: history.length,
       liveBondsAtStart,
       contact: solved.load.contact,
+      contactCells: solved.load.contactCells,
+      loadedNodeCount: solved.load.loadedNodeCount,
       requestedForce: solved.load.requestedForce,
       effectiveForce: solved.load.effectiveForce,
+      forcePerNode: solved.load.forcePerNode,
       travel: solved.load.travel,
       peakStrain: solved.maxStrain,
       solve: {
@@ -155,6 +191,12 @@ export function runArchQuasistaticFracture(profile, settings) {
       fracture: {
         threshold: settings.fractureThreshold,
         newBrokenBonds: events.length,
+        failedBonds: events.map(event => ({
+          bondId: event.bondId,
+          midpoint: event.midpoint,
+          strain: event.strain,
+          energy: event.energy,
+        })),
         totalBrokenBonds: fractured.bonds.length - fractured.bonds.filter(bond => bond.alive).length,
         newEventEnergy: events.reduce((sum, event) => sum + event.energy, 0),
         notchZone: {
@@ -168,6 +210,8 @@ export function runArchQuasistaticFracture(profile, settings) {
           newCrackEnergy: localEvents.reduce((sum, event) => sum + event.energy, 0),
         },
         componentSizes: fractured.components.map(component => component.size).sort((a, b) => b - a),
+        components: componentSummary(fractured, contactCells),
+        loadedContactComponents: loadComponentSummary(fractured, contactCells),
         connectivityEpoch: fractured.connectivityEpoch,
         supportPins: pins.length,
         maxPinnedDisplacement,
@@ -208,6 +252,7 @@ const settings = {
   uniformDepth: 0.36,
   depthModes: ['uniform', 'surface-envelope'],
   contact: { x: -0.05, y: 0.29 },
+  contactPatchRadius: 0,
   forces: [0.25, 0.5, 0.75, 2],
   fractureThreshold: 0.04,
   iterations: 1200,
@@ -234,7 +279,11 @@ function profileSummary(profile) {
   };
 }
 
-export function runArchDepthAssay(sourcePath) {
+export function runArchDepthAssay(sourcePath, options = {}) {
+  const configuration = { ...settings, contactPatchRadius: options.contactPatchRadius ?? settings.contactPatchRadius };
+  if (!Number.isFinite(configuration.contactPatchRadius) || configuration.contactPatchRadius < 0) {
+    throw new Error('contact patch radius must be finite and nonnegative');
+  }
   const sourceBytes = readFileSync(sourcePath);
   const profile = buildArchProfileFromGlb(sourcePath, settings.resolution.columns,
     settings.resolution.rows, settings.sharedBounds);
@@ -249,8 +298,8 @@ export function runArchDepthAssay(sourcePath) {
         depthMode,
       });
       if (graph.components.length !== 1) throw new Error(`${shape}/${depthMode} graph is disconnected at rest`);
-      cases[shape][depthMode] = settings.forces.map(force => runArchQuasistaticFracture(currentProfile, {
-        ...settings,
+      cases[shape][depthMode] = configuration.forces.map(force => runArchQuasistaticFracture(currentProfile, {
+        ...configuration,
         notchComparisonRegion: settings.controlledNotch.region,
         depthMode,
         force,
@@ -259,7 +308,7 @@ export function runArchDepthAssay(sourcePath) {
   }
   const contrast = {};
   for (const depthMode of settings.depthModes) {
-    contrast[depthMode] = settings.forces.map((force, index) => {
+    contrast[depthMode] = configuration.forces.map((force, index) => {
       const intact = cases.intact[depthMode][index];
       const notched = cases['controlled-notch'][depthMode][index];
       const intactFinal = intact.history.at(-1);
@@ -295,7 +344,7 @@ export function runArchDepthAssay(sourcePath) {
         responseDistinguishable: intact.status !== notched.status ||
           intact.totalBrokenBonds !== notched.totalBrokenBonds ||
           notchedLocalCracks !== intactLocalCracks ||
-          (relativeTravelDelta !== null && Math.abs(relativeTravelDelta) >= settings.meaningfulTravelRelativeDelta),
+          (relativeTravelDelta !== null && Math.abs(relativeTravelDelta) >= configuration.meaningfulTravelRelativeDelta),
       };
     });
   }
@@ -337,7 +386,7 @@ export function runArchDepthAssay(sourcePath) {
       controlledNotchProfile: profileSummary(notchedProfile),
       sameSource: profile.source.sha256 === notchedProfile.source.sha256,
     },
-    configuration: settings,
+    configuration,
     proxy: {
       cases: Object.fromEntries(Object.entries(cases).map(([shape, modes]) => [shape,
         Object.fromEntries(Object.entries(modes).map(([depthMode, runs]) => {
@@ -381,12 +430,13 @@ export function runArchDepthAssay(sourcePath) {
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  const [sourceArgument, outputArgument] = process.argv.slice(2);
+  const [sourceArgument, outputArgument, contactPatchArgument] = process.argv.slice(2);
   if (!sourceArgument || !outputArgument) {
-    throw new Error('usage: node structural-material-arch-depth-assay.mjs <source.glb> <output.json>');
+    throw new Error('usage: node structural-material-arch-depth-assay.mjs <source.glb> <output.json> [contact-patch-radius]');
   }
   const sourcePath = resolve(process.cwd(), sourceArgument);
   const outputPath = resolve(process.cwd(), outputArgument);
+  const contactPatchRadius = contactPatchArgument === undefined ? 0 : Number(contactPatchArgument);
   const report = {
     schema: 'kaminos.structural-material.arch-depth-assay.v0',
     status: 'running',
@@ -399,15 +449,15 @@ if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).
     },
     requestedSourcePath: sourcePath,
     outputPath,
-    configuration: settings,
+    configuration: { ...settings, contactPatchRadius },
     lastTrustworthyEvidence: `source path ${sourcePath} and output path ${outputPath} accepted; source not yet read`,
   };
   try {
     mkdirSync(dirname(outputPath), { recursive: true });
     report.phase = 'load-source-and-run-depth-assay';
-    Object.assign(report, runArchDepthAssay(sourcePath));
+    Object.assign(report, runArchDepthAssay(sourcePath, { contactPatchRadius }));
     report.phase = 'complete';
-    report.lastTrustworthyEvidence = 'same-source intact/notch and uniform/depth-envelope force ladders completed';
+    report.lastTrustworthyEvidence = `same-source intact/notch and uniform/depth-envelope force ladders completed at contact patch radius ${contactPatchRadius}`;
     writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`);
     console.log(JSON.stringify({
       output: outputPath,

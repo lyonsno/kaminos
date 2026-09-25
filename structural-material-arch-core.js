@@ -246,14 +246,22 @@ function solveArchLinearSystem(state, load, mode) {
   const x = finite(load.x ?? 0, 'load x');
   const y = finite(load.y ?? state.bounds.max[1], 'load y');
   const magnitude = finite(mode === 'force' ? load.force : load.travel, mode === 'force' ? 'load force' : 'load travel');
+  const patchRadius = finite(load.patchRadius ?? 0, 'load patch radius');
   const iterations = load.iterations ?? 1200;
-  if (!(magnitude >= 0) || !Number.isInteger(iterations) || iterations < 1) throw new Error('invalid arch load');
+  if (!(magnitude >= 0) || patchRadius < 0 || !Number.isInteger(iterations) || iterations < 1) {
+    throw new Error('invalid arch load');
+  }
   const candidate = state.nodes.filter(node => node.layer === Math.floor(state.layers / 2) && !node.pinned);
   if (!candidate.length) throw new Error('arch has no movable contact');
   const contact = candidate.reduce((best, node) =>
     (node.x - x) ** 2 + (node.y - y) ** 2 < (best.x - x) ** 2 + (best.y - y) ** 2 ? node : best);
+  const contactCells = [...new Map(candidate
+    .filter(node => Math.hypot(node.x - contact.x, node.y - contact.y) <= patchRadius + 1e-9)
+    .map(node => [`${node.column}:${node.row}`, { column: node.column, row: node.row }])).values()]
+    .sort((a, b) => a.row - b.row || a.column - b.column);
+  const contactCellKeys = new Set(contactCells.map(cell => `${cell.column}:${cell.row}`));
   const contactIndices = state.nodes.flatMap((node, index) =>
-    node.column === contact.column && node.row === contact.row ? [index] : []);
+    contactCellKeys.has(`${node.column}:${node.row}`) ? [index] : []);
   if (mode === 'force' && magnitude > 0) {
     const adjacency = state.nodes.map(() => []);
     for (const bond of state.bonds) {
@@ -285,6 +293,7 @@ function solveArchLinearSystem(state, load, mode) {
       const error = new Error('arch force contact is disconnected from pinned supports');
       error.code = 'ARCH_LOAD_PATH_SEPARATED';
       error.contact = { column: contact.column, row: contact.row };
+      error.contactCells = contactCells;
       throw error;
     }
   }
@@ -407,6 +416,10 @@ function solveArchLinearSystem(state, load, mode) {
     load: {
       mode: mode === 'force' ? 'equal-force' : 'prescribed-travel',
       x, y, contact: { column: contact.column, row: contact.row },
+      contactCells,
+      patchRadius,
+      loadedNodeCount: contactIndices.length,
+      forcePerNode: mode === 'force' ? magnitude / contactIndices.length : null,
       requestedForce: mode === 'force' ? magnitude : null,
       effectiveForce: mode === 'force' ? supportReaction : null,
       travel: -contactIndices.reduce((sum, index) => sum + displacement[index * 3 + 1], 0) / contactIndices.length,

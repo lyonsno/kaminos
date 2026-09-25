@@ -1,6 +1,68 @@
 # Projected Arch Structural Witness
 
-## Decision
+## Current Checkpoint: Distributed Crown Contact
+
+The 2026-09-25 follow-up held the intact TRELLIS source fixed (SHA-256
+`c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5`) and
+compared its controlled shoulder notch under a point contact with a fixed
+0.032-source-unit crown patch. The patch covers nine occupied XY cells and
+loads 27 depth nodes; the same requested force is divided evenly among them.
+Radius zero preserves the prior one-cell, three-node point load.
+
+At normalized force `2.0`, the depth-envelope point-load cases both lose the
+three-node crown component after two damage solves (333 intact / 343 notched
+broken bonds). With the distributed patch, all 27 loaded nodes remain in one
+pinned-supported component through three damage/re-solve epochs. The fourth
+damage epoch produces broad fragmentation and disconnects the patch from its
+supports in both cases. The notched case records 12 fracture events in the
+predeclared shoulder comparison zone versus zero for intact, despite 1,233
+total breaks versus 1,246 intact. This is a local crack-distribution signal,
+not a different ultimate load-path result; neither normalized force is
+calibrated to stone.
+
+The assay records every newly failed bond, its rest-space midpoint, strain and
+event energy, plus component sizes, pinned-node counts, loaded-node counts and
+support status after each epoch. These records show that distributed contact
+makes this arch proxy carry load through several connectivity updates before a
+broad terminal separation. They do not show the authored GLB consuming that
+state: the mesh remains visual input, and the three depth layers still fill an
+inferred surface envelope rather than a source-truth solid interior.
+
+**Disposition:** keep this as a useful CPU diagnostic; do not port this exact
+graph to the resident GPU sidecar yet. The next object-level question is what
+structural interior the arch asset represents. An open surface envelope does
+not tell us whether it is continuous stone, separate voussoirs with joints, or
+mesh reconstruction noise. The next CPU comparison should state those geometry
+and connectivity hypotheses explicitly before GPU parity or visible mesh
+deformation is treated as structural evidence.
+
+Reports: [point-load baseline](point-load-enhanced_2026-09-25.json) and
+[0.032-radius crown patch](contact-patch-r032_2026-09-25.json).
+
+Replay from this Kaminos worktree:
+
+```sh
+node structural-material-arch-depth-assay.mjs \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/point-load-enhanced_2026-09-25.json 0
+
+node structural-material-arch-depth-assay.mjs \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/contact-patch-r032_2026-09-25.json 0.032
+
+node --test \
+  tests/structural-material-arch-profile-contracts.mjs \
+  tests/structural-material-arch-depth-profile-contracts.mjs \
+  tests/structural-material-arch-depth-state-contracts.mjs \
+  tests/structural-material-arch-static-support-contracts.mjs \
+  tests/structural-material-arch-controlled-notch-contracts.mjs \
+  tests/structural-material-arch-depth-assay-cli-contracts.mjs \
+  tests/structural-material-arch-contact-patch-contracts.mjs \
+  tests/structural-material-arch-contact-patch-assay-contracts.mjs \
+  tests/structural-material-arch-depth-assay-contracts.mjs
+```
+
+## Earlier Decision: Independent Profile Pair
 
 The TRELLIS assets are sufficient to ask the next question without pretending
 their open meshes are solver-ready volumes: does the missing outer shoulder
@@ -91,7 +153,7 @@ and never falls back to another route. Chrome's process stderr still contains pl
 `CVDisplayLinkCreateWithCGDisplay` errors and an allocator warning, despite
 exit 0; page exception and console-error events were empty.
 
-## Claim Ceiling
+## Earlier Witness Claim Ceiling
 
 The notch survives the profile projection as a geometry difference and the
 proxy responds to it under matched rules. But the two meshes were independently
@@ -116,13 +178,15 @@ Other limits matter for the next decision:
 
 ## Next Cut
 
-Keep this result as evidence that a compact graph can consume geometry-derived
-shape and produce a force-dependent fracture route. The next discriminating
-slice is not another solver family: compare the current silhouette extrusion
-against a mesh-derived, through-depth voxel/beam proxy that preserves local
-thickness and the real notch faces, then re-run the same contact/load ladder.
-Require post-break re-equilibration before interpreting a detached chunk as a
-mechanical consequence. If that proxy preserves the notch-localized split,
-move the accepted representation to the existing resident GPU sidecar while
-keeping the CPU version as a reference oracle. If the split disappears, fix
-the representation before GPU migration.
+This result is evidence that a compact graph can consume geometry-derived
+shape and produce a force-dependent fracture route. The distributed-contact
+witness advances the load-path question but does not settle the asset's
+interior or member semantics. Before GPU migration, build a bounded CPU
+comparison with explicit alternatives for a continuous stone-like volume and
+a discrete voussoir/joint structure, both constrained by the same visible
+surface and fixed crown patch. Record which surface features are source-derived
+and which internal connections are authored assumptions. If those alternatives
+disagree materially, ask the operator which object/material interpretation the
+asset is meant to carry; do not select one silently from the image. Only
+migrate a representation whose geometry and connectivity authority is explicit
+and whose post-break load response remains legible.
