@@ -119,6 +119,7 @@ try {
   await page.screenshot({path:path.join(out,'after.png')});
   report.errors=judgeSf3dSmoke(report.output.result,{expectedScene:report.expectedScene});
   if(report.output.error)report.errors.push(JSON.stringify(report.output.error));
+  if(!report.inferenceCapture)report.errors.push('inference-time scene capture missing');
   if(report.events.some(row=>row.kind==='pageerror'||row.kind==='page-crash'||row.kind==='lease-renew-failed'))report.errors.push('runtime error events');
   report.ok=report.errors.length===0;report.phase='terminal';save();
   if(!report.ok)process.exitCode=1;
