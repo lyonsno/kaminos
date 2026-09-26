@@ -174,3 +174,25 @@ test('the residual probe carries a vertical profile of mean vertical velocity, h
   assert.match(capture, /--settle-steps/, 'the capture can settle by simulation steps so arms at different dt reach equal simulated time');
   assert.match(capture, /did not reach \$\{settleSteps\} settle steps within/, 'a step-settled arm that runs out of wall time fails instead of reporting a short arm');
 });
+
+test('the arm capture owns its browser: unique port and profile per run, recorded route, signal cleanup, non-fatal profile removal, caller-set call timeout', () => {
+  // 2026-09-26: a capture killed mid-arm left its headless Chrome alive on the
+  // fixed port 45141 / fixed profile dir; every later capture connected to that
+  // orphan's devtools endpoint instead of its own browser, its own spawn died on
+  // the locked profile, rmSync raced the orphan (ENOTEMPTY after a complete
+  // report), and two arms starved. The capture must only ever drive the browser
+  // it spawned, say which one it drove, and clean up when it is killed.
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(capture, /const port = 45141;/, 'no fixed devtools port');
+  assert.doesNotMatch(capture, /\/tmp\/kaminos-scheme-capture-\$\{port\}/, 'no profile directory shared across runs');
+  assert.match(capture, /mkdtempSync\(/, 'the profile directory is unique per run');
+  assert.match(capture, /--remote-debugging-port=0/, 'Chrome picks a free port');
+  assert.match(capture, /DevToolsActivePort/, 'the capture reads the port Chrome actually bound, so it cannot attach to another instance');
+  assert.match(capture, /browser: \{ pid: null, port: null, profile: null, devtoolsUrl: null \}/, 'the report carries the browser route');
+  assert.match(capture, /process\.on\('SIGTERM'/, 'a killed capture kills its browser');
+  assert.match(capture, /rmSync\(profile, \{ recursive: true, force: true, maxRetries: \d+, retryDelay: \d+ \}\)/, 'profile removal retries');
+  assert.match(capture, /cleanupWarning/, 'a failed profile removal is recorded, not turned into a failed arm');
+  assert.match(capture, /--call-timeout-ms/, 'the devtools call timeout is a caller input');
+  assert.match(capture, /callTimeoutMs, 'timeout ' \+ method/, 'the caller-set timeout is the one used');
+  assert.match(capture, /requested: \{ url, outDir, arms: armsArg, settleMs, settleSteps, callTimeoutMs,/, 'the report records the effective call timeout');
+});
