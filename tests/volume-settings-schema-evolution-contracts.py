@@ -178,38 +178,36 @@ def check_mixed_version_index():
             current = serve.write_volume_settings_preset(store, "Current basin", compatible, {}, SCHEMA)
             saved_bytes = {path: path.read_bytes() for path in store.rglob("*.json")}
 
+            # A basin from a branch with an extra control loads here: the extra
+            # control is carried out of the applied route and reported.
+            axis_name = {"domControls": "basin", "rendererControls": "renderer", "presentationControls": "presentation"}[field]
+            carried = [{"axis": axis_name, "id": "volume-future-control", "param": "volume_future_control", "value": 0.75}]
             index = serve.list_volume_settings_presets(store, SCHEMA)
-            assert [entry["presetId"] for entry in index["entries"]] == [current["effective"]["presetId"]]
-            assert len(index["unavailableEntries"]) == 1
-            unavailable = index["unavailableEntries"][0]
-            assert unavailable["alias"] == newer_alias
-            assert unavailable["label"] == "Newer basin"
-            assert unavailable["presetId"] == newer_id
-            assert unavailable["error"] == f"settings preset {field} contain unknown controls: volume-future-control"
+            assert sorted(entry["presetId"] for entry in index["entries"]) == sorted([current["effective"]["presetId"], newer_id])
+            assert index["unavailableEntries"] == []
+            newer_entry = next(entry for entry in index["entries"] if entry["presetId"] == newer_id)
+            assert newer_entry["alias"] == newer_alias and newer_entry["label"] == "Newer basin"
+            assert newer_entry["carriedControls"] == carried
             for ref in (newer_id, newer_alias):
-                try:
-                    serve.read_volume_settings_preset(store, ref, SCHEMA)
-                except ValueError as error:
-                    assert "unknown controls: volume-future-control" in str(error)
-                else:
-                    raise AssertionError("index compatibility handling weakened direct preset reads")
+                read = serve.read_volume_settings_preset(store, ref, SCHEMA)
+                assert read["presetId"] == newer_id
+                assert read["schemaProjection"]["carriedControls"] == carried
+                assert "volume-future-control" not in (read["preset"].get(field) or {})
+                assert "volume_future_control" not in read["preset"]["route"]
             assert saved_bytes == {path: path.read_bytes() for path in store.rglob("*.json")}
             assert serve.read_volume_settings_preset(store, newer_id, future_schema)["preset"][field]["volume-future-control"]["value"] == 0.75
 
             (store / "aliases" / f"{current['effective']['alias']}.json").unlink()
-            all_unavailable = serve.list_volume_settings_presets(store, SCHEMA)
-            assert all_unavailable["entries"] == []
-            assert len(all_unavailable["unavailableEntries"]) == 1
+            only_newer = serve.list_volume_settings_presets(store, SCHEMA)
+            assert [entry["presetId"] for entry in only_newer["entries"]] == [newer_id]
             artifact_path = store / "presets" / f"{newer_id}.json"
             corrupt = json.loads(artifact_path.read_text())
             corrupt["contentHash"] = "sha256:" + "0" * 64
             artifact_path.write_text(json.dumps(corrupt))
-            try:
-                serve.list_volume_settings_presets(store, SCHEMA)
-            except ValueError as error:
-                assert "content hash mismatch" in str(error)
-            else:
-                raise AssertionError("corruption was misrepresented as a version incompatibility")
+            corrupted = serve.list_volume_settings_presets(store, SCHEMA)
+            assert corrupted["entries"] == []
+            assert [(entry["reason"], "content hash mismatch" in entry["error"]) for entry in corrupted["unavailableEntries"]] == [
+                ("invalid-artifact", True)], "corruption was misrepresented as a version incompatibility"
 
 
 def main():
