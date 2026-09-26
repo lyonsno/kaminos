@@ -246,11 +246,11 @@
 
     function formatLoadPath(path) {
       return path.length
-        ? path.map(item => `${item.force.toFixed(2)} (${item.intactBrokenBondCount}/${item.damagedBrokenBondCount} broken)`).join(' → ')
+        ? path.map(item => `${item.label} ${item.force.toFixed(2)} (${item.intactBrokenBondCount}/${item.damagedBrokenBondCount} broken)`).join(' → ')
         : 'none';
     }
 
-    function applyPair(force, label, { intactState, damagedState, priorDamageEvents = damageHistory?.events.length ?? 0, recordLoad = force > 0 } = {}) {
+    function applyPair(force, label, { intactState, damagedState, priorDamageEvents = damageHistory?.events.length ?? 0, recordLoad = true } = {}) {
       if (!ready) return { status: 'not-ready' };
       const startingIntact = intactState ?? viewers.intact.state ?? viewers.intact.base;
       const startingDamaged = damagedState ?? viewers.damaged.state ?? viewers.damaged.base;
@@ -268,6 +268,7 @@
           const [intact, damaged] = updates;
           committedLoadPath = recordLoad
             ? [...acceptedLoadPath, {
+              label: label.startsWith('Unloaded') ? 'Unload' : 'Load',
               force,
               intactBrokenBondCount: intact.brokenBondCount,
               damagedBrokenBondCount: damaged.brokenBondCount,
@@ -305,6 +306,7 @@
         reportPresentationFailure: (error, updates) => {
           committedLoadPath = recordLoad
             ? [...acceptedLoadPath, {
+              label: label.startsWith('Unloaded') ? 'Unload' : 'Load',
               force,
               intactBrokenBondCount: updates[0].brokenBondCount,
               damagedBrokenBondCount: updates[1].brokenBondCount,

@@ -1,0 +1,2367 @@
+{
+  "schema": "kaminos.structural-material.arch-history-browser-smoke.v0",
+  "status": "passed",
+  "phase": "complete",
+  "requestedUrl": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+  "effectiveRoute": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+  "requestedSolver": "local browser JavaScript / CPU spring proxy",
+  "effectiveSolver": "local browser JavaScript / shear-regularized linear-spring PCG",
+  "fallback": false,
+  "deadlineMs": 180000,
+  "lastTrustworthyEvidence": "matched-history browser witness completed on http://127.0.0.1:8424/structural-material-arch-geometry.html",
+  "source": {
+    "revision": "405d9982c4443261582a10189ce9fb3c26bf52fa",
+    "dirtyPaths": [
+      "structural-material-arch-geometry.html",
+      "structural-material-arch-history-smoke.mjs",
+      "tests/structural-material-arch-paired-apply-atomicity.mjs",
+      "artifacts/structural-material-3d/authored-bell-initial.json",
+      "artifacts/structural-material-3d/authored-bell-initial.png",
+      "artifacts/structural-material-3d/authored-bell-local-smoke.json",
+      "artifacts/structural-material-3d/authored-bell-local-smoke.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-unload-path-fail-evolving-load-path.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-unload-path-fail-history-unloaded.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-unload-path-fail-initial.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-unload-path-fail-matched-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-unload-path-fail.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-evolving-load-path.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-history-unloaded.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-initial.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-matched-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final.json"
+    ]
+  },
+  "browser": {
+    "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "version": "Google Chrome 154.0.8037.57",
+    "deadlineMs": 180000,
+    "pid": 87957,
+    "exit": {
+      "code": 0,
+      "signal": null
+    }
+  },
+  "responses": [
+    {
+      "url": "http://127.0.0.1:8424/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:8424/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-surface-depth-profile.json",
+      "status": 200
+    }
+  ],
+  "runtimeExceptions": [],
+  "consoleErrors": [],
+  "checks": [
+    {
+      "name": "route is the local arch geometry consumer",
+      "passed": true,
+      "observed": "http://127.0.0.1:8424/structural-material-arch-geometry.html"
+    },
+    {
+      "name": "deadline is an explicit positive safe integer",
+      "passed": true,
+      "observed": 180000
+    },
+    {
+      "name": "Chrome exposes a page target",
+      "passed": true,
+      "observed": [
+        "background_page",
+        "page",
+        "browser_ui",
+        "browser_ui"
+      ]
+    },
+    {
+      "name": "page route is exact and fallback-free",
+      "passed": true,
+      "observed": {
+        "ready": "complete",
+        "status": "Loaded exact TRELLIS source · c65a3cf3dc3b · CPU structural proxy",
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html"
+      }
+    },
+    {
+      "name": "initial: screenshot is a complete PNG",
+      "passed": true,
+      "observed": {
+        "bytes": 195306
+      }
+    },
+    {
+      "name": "initial: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "width": 1440,
+        "height": 1100,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "history construction changes only one connectivity graph",
+      "passed": true,
+      "observed": {
+        "result": "accepted",
+        "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+        "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+        "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+        "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+        "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+        "contact": {
+          "x": 0.35,
+          "y": 0.2,
+          "patchRadius": 0.032,
+          "mode": "through-thickness"
+        },
+        "force": 0,
+        "acceptedLoadPath": [],
+        "fractureThreshold": 0.04,
+        "displayGain": 8,
+        "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+        "priorDamageEvents": 40,
+        "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+        "intact": {
+          "route": "kaminos.structural-material.trellis-arch-surface.v0",
+          "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "interiorMode": "continuous",
+          "contact": {
+            "column": 40,
+            "row": 27,
+            "contactDepthMode": "through-thickness",
+            "contactLayer": null
+          },
+          "force": 0,
+          "loadedNodeCount": 24,
+          "startingConnectivityEpoch": 0,
+          "connectivityEpoch": 0,
+          "brokenBondCount": 0,
+          "componentCount": 1,
+          "mappedStructuralNodeCount": 1615,
+          "surfaceVertexCount": 197871,
+          "maxRawVertexDisplacement": 0,
+          "maxDisplayedVertexDisplacement": 0
+        },
+        "damaged": {
+          "route": "kaminos.structural-material.trellis-arch-surface.v0",
+          "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "interiorMode": "continuous",
+          "contact": {
+            "column": 40,
+            "row": 27,
+            "contactDepthMode": "through-thickness",
+            "contactLayer": null
+          },
+          "force": 0,
+          "loadedNodeCount": 24,
+          "startingConnectivityEpoch": 2,
+          "connectivityEpoch": 2,
+          "brokenBondCount": 40,
+          "componentCount": 1,
+          "mappedStructuralNodeCount": 1615,
+          "surfaceVertexCount": 197871,
+          "maxRawVertexDisplacement": 0,
+          "maxDisplayedVertexDisplacement": 0
+        },
+        "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+      }
+    },
+    {
+      "name": "history construction preserves camera",
+      "passed": true,
+      "observed": {
+        "before": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "after": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "history-unloaded: screenshot is a complete PNG",
+      "passed": true,
+      "observed": {
+        "bytes": 208338
+      }
+    },
+    {
+      "name": "history-unloaded: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "width": 1440,
+        "height": 1100,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "same later force and located contact reach both consumers",
+      "passed": true,
+      "observed": {
+        "result": "accepted",
+        "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+        "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+        "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+        "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+        "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+        "contact": {
+          "x": 0.35,
+          "y": 0.2,
+          "patchRadius": 0.032,
+          "mode": "through-thickness"
+        },
+        "force": 0.5,
+        "acceptedLoadPath": [
+          {
+            "label": "Load",
+            "force": 0.5,
+            "intactBrokenBondCount": 0,
+            "damagedBrokenBondCount": 40
+          }
+        ],
+        "fractureThreshold": 0.04,
+        "displayGain": 8,
+        "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+        "priorDamageEvents": 40,
+        "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+        "intact": {
+          "route": "kaminos.structural-material.trellis-arch-surface.v0",
+          "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "interiorMode": "continuous",
+          "contact": {
+            "column": 40,
+            "row": 27,
+            "contactDepthMode": "through-thickness",
+            "contactLayer": null
+          },
+          "force": 0.5,
+          "loadedNodeCount": 24,
+          "startingConnectivityEpoch": 0,
+          "connectivityEpoch": 0,
+          "brokenBondCount": 0,
+          "componentCount": 1,
+          "mappedStructuralNodeCount": 1615,
+          "surfaceVertexCount": 197871,
+          "maxRawVertexDisplacement": 0.006530526254837683,
+          "maxDisplayedVertexDisplacement": 0.052244210038701465
+        },
+        "damaged": {
+          "route": "kaminos.structural-material.trellis-arch-surface.v0",
+          "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "interiorMode": "continuous",
+          "contact": {
+            "column": 40,
+            "row": 27,
+            "contactDepthMode": "through-thickness",
+            "contactLayer": null
+          },
+          "force": 0.5,
+          "loadedNodeCount": 24,
+          "startingConnectivityEpoch": 2,
+          "connectivityEpoch": 2,
+          "brokenBondCount": 40,
+          "componentCount": 1,
+          "mappedStructuralNodeCount": 1615,
+          "surfaceVertexCount": 197871,
+          "maxRawVertexDisplacement": 0.009537813956077909,
+          "maxDisplayedVertexDisplacement": 0.07630251164862327
+        },
+        "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+      }
+    },
+    {
+      "name": "damaged history changes the mesh-consumer response",
+      "passed": true,
+      "observed": {
+        "result": "accepted",
+        "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+        "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+        "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+        "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+        "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+        "contact": {
+          "x": 0.35,
+          "y": 0.2,
+          "patchRadius": 0.032,
+          "mode": "through-thickness"
+        },
+        "force": 0.5,
+        "acceptedLoadPath": [
+          {
+            "label": "Load",
+            "force": 0.5,
+            "intactBrokenBondCount": 0,
+            "damagedBrokenBondCount": 40
+          }
+        ],
+        "fractureThreshold": 0.04,
+        "displayGain": 8,
+        "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+        "priorDamageEvents": 40,
+        "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+        "intact": {
+          "route": "kaminos.structural-material.trellis-arch-surface.v0",
+          "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "interiorMode": "continuous",
+          "contact": {
+            "column": 40,
+            "row": 27,
+            "contactDepthMode": "through-thickness",
+            "contactLayer": null
+          },
+          "force": 0.5,
+          "loadedNodeCount": 24,
+          "startingConnectivityEpoch": 0,
+          "connectivityEpoch": 0,
+          "brokenBondCount": 0,
+          "componentCount": 1,
+          "mappedStructuralNodeCount": 1615,
+          "surfaceVertexCount": 197871,
+          "maxRawVertexDisplacement": 0.006530526254837683,
+          "maxDisplayedVertexDisplacement": 0.052244210038701465
+        },
+        "damaged": {
+          "route": "kaminos.structural-material.trellis-arch-surface.v0",
+          "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "interiorMode": "continuous",
+          "contact": {
+            "column": 40,
+            "row": 27,
+            "contactDepthMode": "through-thickness",
+            "contactLayer": null
+          },
+          "force": 0.5,
+          "loadedNodeCount": 24,
+          "startingConnectivityEpoch": 2,
+          "connectivityEpoch": 2,
+          "brokenBondCount": 40,
+          "componentCount": 1,
+          "mappedStructuralNodeCount": 1615,
+          "surfaceVertexCount": 197871,
+          "maxRawVertexDisplacement": 0.009537813956077909,
+          "maxDisplayedVertexDisplacement": 0.07630251164862327
+        },
+        "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+      }
+    },
+    {
+      "name": "matched apply preserves camera",
+      "passed": true,
+      "observed": {
+        "before": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "after": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "matched-load: screenshot is a complete PNG",
+      "passed": true,
+      "observed": {
+        "bytes": 206399
+      }
+    },
+    {
+      "name": "matched-load: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "width": 1440,
+        "height": 1100,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "later slider force is recorded as a new accepted comparison history",
+      "passed": true,
+      "observed": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "Matched load applied · paired continuous CPU proxy · camera unchanged",
+        "force": "1.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "loaded 24 nodes at (40, 27) · 24 broken bonds · 1 components · raw surface motion 0.01959 · display 0.15673",
+        "damagedText": "loaded 24 nodes at (40, 27) · 119 broken bonds · 1 components · raw surface motion 0.02861 · display 0.22891",
+        "intactPath": "Accepted load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken)",
+        "damagedPath": "Accepted load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken) · structural history 119 broken bonds",
+        "receipt": {
+          "result": "accepted",
+          "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+          "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+          "contact": {
+            "x": 0.35,
+            "y": 0.2,
+            "patchRadius": 0.032,
+            "mode": "through-thickness"
+          },
+          "force": 1.5,
+          "acceptedLoadPath": [
+            {
+              "label": "Load",
+              "force": 0.5,
+              "intactBrokenBondCount": 0,
+              "damagedBrokenBondCount": 40
+            },
+            {
+              "label": "Load",
+              "force": 1.5,
+              "intactBrokenBondCount": 24,
+              "damagedBrokenBondCount": 119
+            }
+          ],
+          "fractureThreshold": 0.04,
+          "displayGain": 8,
+          "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+          "priorDamageEvents": 40,
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "intact": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 1.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 0,
+            "connectivityEpoch": 1,
+            "brokenBondCount": 24,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.019591578734926406,
+            "maxDisplayedVertexDisplacement": 0.15673262987941125
+          },
+          "damaged": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 1.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 2,
+            "connectivityEpoch": 3,
+            "brokenBondCount": 119,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.028613441865202507,
+            "maxDisplayedVertexDisplacement": 0.22890753492162005
+          },
+          "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+        },
+        "receiptText": "Matched load applied · load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken) · contact (0.35, 0.20) through depth · intact 24 broken bonds / 1 components · damaged 119 / 1 · displayed motion 0.15673 vs 0.22891",
+        "buttons": {
+          "damage-history": true,
+          "apply": false,
+          "unload": false,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 16,
+            "y": 71,
+            "right": 356.390625,
+            "bottom": 91
+          },
+          "#damage-history": {
+            "x": 368.390625,
+            "y": 64,
+            "right": 530.203125,
+            "bottom": 98
+          },
+          "#apply": {
+            "x": 542.203125,
+            "y": 64,
+            "right": 696.734375,
+            "bottom": 98
+          },
+          "#unload": {
+            "x": 708.734375,
+            "y": 64,
+            "right": 780.46875,
+            "bottom": 98
+          },
+          "#reset": {
+            "x": 792.46875,
+            "y": 64,
+            "right": 855.078125,
+            "bottom": 98
+          },
+          "#status": {
+            "x": 1008.9375,
+            "y": 74.59375,
+            "right": 1424,
+            "bottom": 91.390625
+          }
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "evolving-load-path: screenshot is a complete PNG",
+      "passed": true,
+      "observed": {
+        "bytes": 204617
+      }
+    },
+    {
+      "name": "evolving-load-path: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "width": 1440,
+        "height": 1100,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "returning to the same force remains visibly distinct from the original fixed-history frame",
+      "passed": true,
+      "observed": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "Matched load applied · paired continuous CPU proxy · camera unchanged",
+        "force": "0.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "loaded 24 nodes at (40, 27) · 24 broken bonds · 1 components · raw surface motion 0.00732 · display 0.05857",
+        "damagedText": "loaded 24 nodes at (40, 27) · 150 broken bonds · 4 components · raw surface motion 0.08653 · display 0.69228",
+        "intactPath": "Accepted load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken) → Load 0.50 (24/150 broken)",
+        "damagedPath": "Accepted load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken) → Load 0.50 (24/150 broken) · structural history 150 broken bonds",
+        "receipt": {
+          "result": "accepted",
+          "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+          "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+          "contact": {
+            "x": 0.35,
+            "y": 0.2,
+            "patchRadius": 0.032,
+            "mode": "through-thickness"
+          },
+          "force": 0.5,
+          "acceptedLoadPath": [
+            {
+              "label": "Load",
+              "force": 0.5,
+              "intactBrokenBondCount": 0,
+              "damagedBrokenBondCount": 40
+            },
+            {
+              "label": "Load",
+              "force": 1.5,
+              "intactBrokenBondCount": 24,
+              "damagedBrokenBondCount": 119
+            },
+            {
+              "label": "Load",
+              "force": 0.5,
+              "intactBrokenBondCount": 24,
+              "damagedBrokenBondCount": 150
+            }
+          ],
+          "fractureThreshold": 0.04,
+          "displayGain": 8,
+          "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+          "priorDamageEvents": 40,
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "intact": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 1,
+            "connectivityEpoch": 1,
+            "brokenBondCount": 24,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.007321243793053311,
+            "maxDisplayedVertexDisplacement": 0.05856995034442649
+          },
+          "damaged": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 3,
+            "connectivityEpoch": 4,
+            "brokenBondCount": 150,
+            "componentCount": 4,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.08653486087236995,
+            "maxDisplayedVertexDisplacement": 0.6922788869789596
+          },
+          "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+        },
+        "receiptText": "Matched load applied · load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken) → Load 0.50 (24/150 broken) · contact (0.35, 0.20) through depth · intact 24 broken bonds / 1 components · damaged 150 / 4 · displayed motion 0.05857 vs 0.69228",
+        "buttons": {
+          "damage-history": true,
+          "apply": false,
+          "unload": false,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 16,
+            "y": 71,
+            "right": 356.390625,
+            "bottom": 91
+          },
+          "#damage-history": {
+            "x": 368.390625,
+            "y": 64,
+            "right": 530.203125,
+            "bottom": 98
+          },
+          "#apply": {
+            "x": 542.203125,
+            "y": 64,
+            "right": 696.734375,
+            "bottom": 98
+          },
+          "#unload": {
+            "x": 708.734375,
+            "y": 64,
+            "right": 780.46875,
+            "bottom": 98
+          },
+          "#reset": {
+            "x": 792.46875,
+            "y": 64,
+            "right": 855.078125,
+            "bottom": 98
+          },
+          "#status": {
+            "x": 1008.9375,
+            "y": 74.59375,
+            "right": 1424,
+            "bottom": 91.390625
+          }
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "reset and replay restores the fixed 0.50 matched-history comparison",
+      "passed": true,
+      "observed": {
+        "resetHistory": {
+          "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+          "status": "History built · 40 located bond events · one component · paired continuous CPU proxy · camera unchanged",
+          "force": "0.5",
+          "camera": {
+            "position": [
+              0.25,
+              0.3200000000000001,
+              3.5500000000000003
+            ],
+            "target": [
+              0,
+              0.02,
+              0
+            ]
+          },
+          "intactText": "loaded 24 nodes at (40, 27) · 0 broken bonds · 1 components · raw surface motion 0.00000 · display 0.00000",
+          "damagedText": "loaded 24 nodes at (40, 27) · 40 broken bonds · 1 components · raw surface motion 0.00000 · display 0.00000",
+          "intactPath": "Accepted load path: none",
+          "damagedPath": "Accepted load path: none · structural history 40 broken bonds",
+          "receipt": {
+            "result": "accepted",
+            "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+            "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+            "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+            "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+            "contact": {
+              "x": 0.35,
+              "y": 0.2,
+              "patchRadius": 0.032,
+              "mode": "through-thickness"
+            },
+            "force": 0,
+            "acceptedLoadPath": [],
+            "fractureThreshold": 0.04,
+            "displayGain": 8,
+            "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+            "priorDamageEvents": 40,
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "intact": {
+              "route": "kaminos.structural-material.trellis-arch-surface.v0",
+              "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+              "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+              "interiorMode": "continuous",
+              "contact": {
+                "column": 40,
+                "row": 27,
+                "contactDepthMode": "through-thickness",
+                "contactLayer": null
+              },
+              "force": 0,
+              "loadedNodeCount": 24,
+              "startingConnectivityEpoch": 0,
+              "connectivityEpoch": 0,
+              "brokenBondCount": 0,
+              "componentCount": 1,
+              "mappedStructuralNodeCount": 1615,
+              "surfaceVertexCount": 197871,
+              "maxRawVertexDisplacement": 0,
+              "maxDisplayedVertexDisplacement": 0
+            },
+            "damaged": {
+              "route": "kaminos.structural-material.trellis-arch-surface.v0",
+              "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+              "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+              "interiorMode": "continuous",
+              "contact": {
+                "column": 40,
+                "row": 27,
+                "contactDepthMode": "through-thickness",
+                "contactLayer": null
+              },
+              "force": 0,
+              "loadedNodeCount": 24,
+              "startingConnectivityEpoch": 2,
+              "connectivityEpoch": 2,
+              "brokenBondCount": 40,
+              "componentCount": 1,
+              "mappedStructuralNodeCount": 1615,
+              "surfaceVertexCount": 197871,
+              "maxRawVertexDisplacement": 0,
+              "maxDisplayedVertexDisplacement": 0
+            },
+            "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+          },
+          "receiptText": "History built · 40 located bond events · one component · load path: none · contact (0.35, 0.20) through depth · intact 0 broken bonds / 1 components · damaged 40 / 1 · displayed motion 0.00000 vs 0.00000",
+          "buttons": {
+            "damage-history": true,
+            "apply": false,
+            "unload": false,
+            "reset": false
+          },
+          "controls": {
+            ".force": {
+              "x": 16,
+              "y": 71,
+              "right": 356.390625,
+              "bottom": 91
+            },
+            "#damage-history": {
+              "x": 368.390625,
+              "y": 64,
+              "right": 530.203125,
+              "bottom": 98
+            },
+            "#apply": {
+              "x": 542.203125,
+              "y": 64,
+              "right": 696.734375,
+              "bottom": 98
+            },
+            "#unload": {
+              "x": 708.734375,
+              "y": 64,
+              "right": 780.46875,
+              "bottom": 98
+            },
+            "#reset": {
+              "x": 792.46875,
+              "y": 64,
+              "right": 855.078125,
+              "bottom": 98
+            },
+            "#status": {
+              "x": 819.71875,
+              "y": 114,
+              "right": 1424,
+              "bottom": 130.796875
+            }
+          },
+          "viewport": {
+            "width": 1440,
+            "height": 1100,
+            "documentWidth": 1440
+          }
+        },
+        "fixedReplay": {
+          "result": "accepted",
+          "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+          "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+          "contact": {
+            "x": 0.35,
+            "y": 0.2,
+            "patchRadius": 0.032,
+            "mode": "through-thickness"
+          },
+          "force": 0.5,
+          "acceptedLoadPath": [
+            {
+              "label": "Load",
+              "force": 0.5,
+              "intactBrokenBondCount": 0,
+              "damagedBrokenBondCount": 40
+            }
+          ],
+          "fractureThreshold": 0.04,
+          "displayGain": 8,
+          "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+          "priorDamageEvents": 40,
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "intact": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 0,
+            "connectivityEpoch": 0,
+            "brokenBondCount": 0,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.006530526254837683,
+            "maxDisplayedVertexDisplacement": 0.052244210038701465
+          },
+          "damaged": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 2,
+            "connectivityEpoch": 2,
+            "brokenBondCount": 40,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.009537813956077909,
+            "maxDisplayedVertexDisplacement": 0.07630251164862327
+          },
+          "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+        }
+      }
+    },
+    {
+      "name": "unload removes visible displacement but retains broken connectivity",
+      "passed": true,
+      "observed": {
+        "result": "accepted",
+        "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+        "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+        "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+        "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+        "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+        "contact": {
+          "x": 0.35,
+          "y": 0.2,
+          "patchRadius": 0.032,
+          "mode": "through-thickness"
+        },
+        "force": 0,
+        "acceptedLoadPath": [
+          {
+            "label": "Load",
+            "force": 0.5,
+            "intactBrokenBondCount": 0,
+            "damagedBrokenBondCount": 40
+          },
+          {
+            "label": "Unload",
+            "force": 0,
+            "intactBrokenBondCount": 0,
+            "damagedBrokenBondCount": 40
+          }
+        ],
+        "fractureThreshold": 0.04,
+        "displayGain": 8,
+        "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+        "priorDamageEvents": 40,
+        "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+        "intact": {
+          "route": "kaminos.structural-material.trellis-arch-surface.v0",
+          "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "interiorMode": "continuous",
+          "contact": {
+            "column": 40,
+            "row": 27,
+            "contactDepthMode": "through-thickness",
+            "contactLayer": null
+          },
+          "force": 0,
+          "loadedNodeCount": 24,
+          "startingConnectivityEpoch": 0,
+          "connectivityEpoch": 0,
+          "brokenBondCount": 0,
+          "componentCount": 1,
+          "mappedStructuralNodeCount": 1615,
+          "surfaceVertexCount": 197871,
+          "maxRawVertexDisplacement": 0,
+          "maxDisplayedVertexDisplacement": 0
+        },
+        "damaged": {
+          "route": "kaminos.structural-material.trellis-arch-surface.v0",
+          "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "interiorMode": "continuous",
+          "contact": {
+            "column": 40,
+            "row": 27,
+            "contactDepthMode": "through-thickness",
+            "contactLayer": null
+          },
+          "force": 0,
+          "loadedNodeCount": 24,
+          "startingConnectivityEpoch": 2,
+          "connectivityEpoch": 2,
+          "brokenBondCount": 40,
+          "componentCount": 1,
+          "mappedStructuralNodeCount": 1615,
+          "surfaceVertexCount": 197871,
+          "maxRawVertexDisplacement": 0,
+          "maxDisplayedVertexDisplacement": 0
+        },
+        "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+      }
+    },
+    {
+      "name": "accepted zero-force unload is retained in the explicit load path",
+      "passed": true,
+      "observed": [
+        {
+          "label": "Load",
+          "force": 0.5,
+          "intactBrokenBondCount": 0,
+          "damagedBrokenBondCount": 40
+        },
+        {
+          "label": "Unload",
+          "force": 0,
+          "intactBrokenBondCount": 0,
+          "damagedBrokenBondCount": 40
+        }
+      ]
+    },
+    {
+      "name": "unload preserves camera",
+      "passed": true,
+      "observed": {
+        "before": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "after": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "unloaded-history-retained: screenshot is a complete PNG",
+      "passed": true,
+      "observed": {
+        "bytes": 210671
+      }
+    },
+    {
+      "name": "unloaded-history-retained: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "width": 1440,
+        "height": 1100,
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "load after unload preserves the full causal action path",
+      "passed": true,
+      "observed": [
+        {
+          "label": "Load",
+          "force": 0.5,
+          "intactBrokenBondCount": 0,
+          "damagedBrokenBondCount": 40
+        },
+        {
+          "label": "Unload",
+          "force": 0,
+          "intactBrokenBondCount": 0,
+          "damagedBrokenBondCount": 40
+        },
+        {
+          "label": "Load",
+          "force": 0.5,
+          "intactBrokenBondCount": 0,
+          "damagedBrokenBondCount": 40
+        }
+      ]
+    },
+    {
+      "name": "reset restores intact and damaged proxies and disables history-only actions",
+      "passed": true,
+      "observed": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "Profiles loaded · no load applied",
+        "force": "0.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "No load applied",
+        "damagedText": "No load applied",
+        "intactPath": "Accepted load path: none",
+        "damagedPath": "Accepted load path: none",
+        "receipt": {},
+        "receiptText": "Same TRELLIS geometry restored. No solver event applied.",
+        "buttons": {
+          "damage-history": false,
+          "apply": true,
+          "unload": true,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 16,
+            "y": 71,
+            "right": 356.390625,
+            "bottom": 91
+          },
+          "#damage-history": {
+            "x": 368.390625,
+            "y": 64,
+            "right": 530.203125,
+            "bottom": 98
+          },
+          "#apply": {
+            "x": 542.203125,
+            "y": 64,
+            "right": 696.734375,
+            "bottom": 98
+          },
+          "#unload": {
+            "x": 708.734375,
+            "y": 64,
+            "right": 780.46875,
+            "bottom": 98
+          },
+          "#reset": {
+            "x": 792.46875,
+            "y": 64,
+            "right": 855.078125,
+            "bottom": 98
+          },
+          "#status": {
+            "x": 1242.921875,
+            "y": 74.59375,
+            "right": 1424,
+            "bottom": 91.390625
+          }
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    {
+      "name": "page reports no runtime or console errors",
+      "passed": true,
+      "observed": {
+        "runtimeExceptions": [],
+        "consoleErrors": []
+      }
+    },
+    {
+      "name": "source profile and mesh were fetched successfully",
+      "passed": true,
+      "observed": [
+        {
+          "url": "http://127.0.0.1:8424/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:8424/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-surface-depth-profile.json",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "name": "mobile: controls stay within viewport width",
+      "passed": true,
+      "observed": {
+        "width": 390,
+        "height": 844,
+        "documentWidth": 390
+      }
+    },
+    {
+      "name": "mobile: .force does not overlap #damage-history",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 60,
+          "right": 378,
+          "bottom": 80
+        },
+        "b": {
+          "x": 12,
+          "y": 92,
+          "right": 173.8125,
+          "bottom": 126
+        }
+      }
+    },
+    {
+      "name": "mobile: .force does not overlap #apply",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 60,
+          "right": 378,
+          "bottom": 80
+        },
+        "b": {
+          "x": 185.8125,
+          "y": 92,
+          "right": 340.34375,
+          "bottom": 126
+        }
+      }
+    },
+    {
+      "name": "mobile: .force does not overlap #unload",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 60,
+          "right": 378,
+          "bottom": 80
+        },
+        "b": {
+          "x": 12,
+          "y": 138,
+          "right": 83.734375,
+          "bottom": 172
+        }
+      }
+    },
+    {
+      "name": "mobile: .force does not overlap #reset",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 60,
+          "right": 378,
+          "bottom": 80
+        },
+        "b": {
+          "x": 95.734375,
+          "y": 138,
+          "right": 158.34375,
+          "bottom": 172
+        }
+      }
+    },
+    {
+      "name": "mobile: .force does not overlap #status",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 60,
+          "right": 378,
+          "bottom": 80
+        },
+        "b": {
+          "x": 12,
+          "y": 188,
+          "right": 378,
+          "bottom": 204.796875
+        }
+      }
+    },
+    {
+      "name": "mobile: #damage-history does not overlap #apply",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 92,
+          "right": 173.8125,
+          "bottom": 126
+        },
+        "b": {
+          "x": 185.8125,
+          "y": 92,
+          "right": 340.34375,
+          "bottom": 126
+        }
+      }
+    },
+    {
+      "name": "mobile: #damage-history does not overlap #unload",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 92,
+          "right": 173.8125,
+          "bottom": 126
+        },
+        "b": {
+          "x": 12,
+          "y": 138,
+          "right": 83.734375,
+          "bottom": 172
+        }
+      }
+    },
+    {
+      "name": "mobile: #damage-history does not overlap #reset",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 92,
+          "right": 173.8125,
+          "bottom": 126
+        },
+        "b": {
+          "x": 95.734375,
+          "y": 138,
+          "right": 158.34375,
+          "bottom": 172
+        }
+      }
+    },
+    {
+      "name": "mobile: #damage-history does not overlap #status",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 92,
+          "right": 173.8125,
+          "bottom": 126
+        },
+        "b": {
+          "x": 12,
+          "y": 188,
+          "right": 378,
+          "bottom": 204.796875
+        }
+      }
+    },
+    {
+      "name": "mobile: #apply does not overlap #unload",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 185.8125,
+          "y": 92,
+          "right": 340.34375,
+          "bottom": 126
+        },
+        "b": {
+          "x": 12,
+          "y": 138,
+          "right": 83.734375,
+          "bottom": 172
+        }
+      }
+    },
+    {
+      "name": "mobile: #apply does not overlap #reset",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 185.8125,
+          "y": 92,
+          "right": 340.34375,
+          "bottom": 126
+        },
+        "b": {
+          "x": 95.734375,
+          "y": 138,
+          "right": 158.34375,
+          "bottom": 172
+        }
+      }
+    },
+    {
+      "name": "mobile: #apply does not overlap #status",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 185.8125,
+          "y": 92,
+          "right": 340.34375,
+          "bottom": 126
+        },
+        "b": {
+          "x": 12,
+          "y": 188,
+          "right": 378,
+          "bottom": 204.796875
+        }
+      }
+    },
+    {
+      "name": "mobile: #unload does not overlap #reset",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 138,
+          "right": 83.734375,
+          "bottom": 172
+        },
+        "b": {
+          "x": 95.734375,
+          "y": 138,
+          "right": 158.34375,
+          "bottom": 172
+        }
+      }
+    },
+    {
+      "name": "mobile: #unload does not overlap #status",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 12,
+          "y": 138,
+          "right": 83.734375,
+          "bottom": 172
+        },
+        "b": {
+          "x": 12,
+          "y": 188,
+          "right": 378,
+          "bottom": 204.796875
+        }
+      }
+    },
+    {
+      "name": "mobile: #reset does not overlap #status",
+      "passed": true,
+      "observed": {
+        "a": {
+          "x": 95.734375,
+          "y": 138,
+          "right": 158.34375,
+          "bottom": 172
+        },
+        "b": {
+          "x": 12,
+          "y": 188,
+          "right": 378,
+          "bottom": 204.796875
+        }
+      }
+    },
+    {
+      "name": "mobile resize does not alter the operator camera",
+      "passed": true,
+      "observed": {
+        "before": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "after": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "mobile-layout: screenshot is a complete PNG",
+      "passed": true,
+      "observed": {
+        "bytes": 93116
+      }
+    },
+    {
+      "name": "mobile-layout: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "width": 390,
+        "height": 844,
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390
+        }
+      }
+    }
+  ],
+  "captures": {
+    "initial": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-initial.png",
+      "sha256": "ab926cbc1da293f139a22cd130449ec2e06fb5dd0fa3af65582be361722cb416",
+      "bytes": 195306,
+      "width": 1440,
+      "height": 1100,
+      "page": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "Loaded exact TRELLIS source · c65a3cf3dc3b · CPU structural proxy",
+        "force": "0.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "No load applied",
+        "damagedText": "No load applied",
+        "intactPath": "Accepted load path: none",
+        "damagedPath": "Accepted load path: none",
+        "receipt": {
+          "requestedMesh": "./artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb",
+          "effectiveMesh": "./artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb",
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "requestedProfile": "./artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-surface-depth-profile.json",
+          "effectiveProfile": "./artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-surface-depth-profile.json",
+          "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+          "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+          "interiorProfiles": [
+            "continuous",
+            "continuous"
+          ],
+          "comparison": "intact history versus one located damage history",
+          "contactMode": "fixed through-thickness contact",
+          "displayGain": 8
+        },
+        "receiptText": "TRELLIS source c65a3cf3dc3b · exact profile hash match · fixed through-thickness contact · display gain 8",
+        "buttons": {
+          "damage-history": false,
+          "apply": true,
+          "unload": true,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 16,
+            "y": 71,
+            "right": 356.390625,
+            "bottom": 91
+          },
+          "#damage-history": {
+            "x": 368.390625,
+            "y": 64,
+            "right": 530.203125,
+            "bottom": 98
+          },
+          "#apply": {
+            "x": 542.203125,
+            "y": 64,
+            "right": 696.734375,
+            "bottom": 98
+          },
+          "#unload": {
+            "x": 708.734375,
+            "y": 64,
+            "right": 780.46875,
+            "bottom": 98
+          },
+          "#reset": {
+            "x": 792.46875,
+            "y": 64,
+            "right": 855.078125,
+            "bottom": 98
+          },
+          "#status": {
+            "x": 1033.6875,
+            "y": 74.59375,
+            "right": 1424,
+            "bottom": 91.390625
+          }
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    "history-unloaded": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-history-unloaded.png",
+      "sha256": "9830f0f50bf0b3ef91e06956ad08ca51d702a679693fa1388e3018b16e48c1f5",
+      "bytes": 208338,
+      "width": 1440,
+      "height": 1100,
+      "page": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "History built · 40 located bond events · one component · paired continuous CPU proxy · camera unchanged",
+        "force": "0.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "loaded 24 nodes at (40, 27) · 0 broken bonds · 1 components · raw surface motion 0.00000 · display 0.00000",
+        "damagedText": "loaded 24 nodes at (40, 27) · 40 broken bonds · 1 components · raw surface motion 0.00000 · display 0.00000",
+        "intactPath": "Accepted load path: none",
+        "damagedPath": "Accepted load path: none · structural history 40 broken bonds",
+        "receipt": {
+          "result": "accepted",
+          "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+          "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+          "contact": {
+            "x": 0.35,
+            "y": 0.2,
+            "patchRadius": 0.032,
+            "mode": "through-thickness"
+          },
+          "force": 0,
+          "acceptedLoadPath": [],
+          "fractureThreshold": 0.04,
+          "displayGain": 8,
+          "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+          "priorDamageEvents": 40,
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "intact": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 0,
+            "connectivityEpoch": 0,
+            "brokenBondCount": 0,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0,
+            "maxDisplayedVertexDisplacement": 0
+          },
+          "damaged": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 2,
+            "connectivityEpoch": 2,
+            "brokenBondCount": 40,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0,
+            "maxDisplayedVertexDisplacement": 0
+          },
+          "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+        },
+        "receiptText": "History built · 40 located bond events · one component · load path: none · contact (0.35, 0.20) through depth · intact 0 broken bonds / 1 components · damaged 40 / 1 · displayed motion 0.00000 vs 0.00000",
+        "buttons": {
+          "damage-history": true,
+          "apply": false,
+          "unload": false,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 16,
+            "y": 71,
+            "right": 356.390625,
+            "bottom": 91
+          },
+          "#damage-history": {
+            "x": 368.390625,
+            "y": 64,
+            "right": 530.203125,
+            "bottom": 98
+          },
+          "#apply": {
+            "x": 542.203125,
+            "y": 64,
+            "right": 696.734375,
+            "bottom": 98
+          },
+          "#unload": {
+            "x": 708.734375,
+            "y": 64,
+            "right": 780.46875,
+            "bottom": 98
+          },
+          "#reset": {
+            "x": 792.46875,
+            "y": 64,
+            "right": 855.078125,
+            "bottom": 98
+          },
+          "#status": {
+            "x": 819.71875,
+            "y": 114,
+            "right": 1424,
+            "bottom": 130.796875
+          }
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    "matched-load": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-matched-load.png",
+      "sha256": "07e137d20722b2738e3c9ba1fe80b6424e15f3a03767525311bace00f9dffb7b",
+      "bytes": 206399,
+      "width": 1440,
+      "height": 1100,
+      "page": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "Matched load applied · paired continuous CPU proxy · camera unchanged",
+        "force": "0.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "loaded 24 nodes at (40, 27) · 0 broken bonds · 1 components · raw surface motion 0.00653 · display 0.05224",
+        "damagedText": "loaded 24 nodes at (40, 27) · 40 broken bonds · 1 components · raw surface motion 0.00954 · display 0.07630",
+        "intactPath": "Accepted load path: Load 0.50 (0/40 broken)",
+        "damagedPath": "Accepted load path: Load 0.50 (0/40 broken) · structural history 40 broken bonds",
+        "receipt": {
+          "result": "accepted",
+          "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+          "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+          "contact": {
+            "x": 0.35,
+            "y": 0.2,
+            "patchRadius": 0.032,
+            "mode": "through-thickness"
+          },
+          "force": 0.5,
+          "acceptedLoadPath": [
+            {
+              "label": "Load",
+              "force": 0.5,
+              "intactBrokenBondCount": 0,
+              "damagedBrokenBondCount": 40
+            }
+          ],
+          "fractureThreshold": 0.04,
+          "displayGain": 8,
+          "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+          "priorDamageEvents": 40,
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "intact": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 0,
+            "connectivityEpoch": 0,
+            "brokenBondCount": 0,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.006530526254837683,
+            "maxDisplayedVertexDisplacement": 0.052244210038701465
+          },
+          "damaged": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 2,
+            "connectivityEpoch": 2,
+            "brokenBondCount": 40,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.009537813956077909,
+            "maxDisplayedVertexDisplacement": 0.07630251164862327
+          },
+          "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+        },
+        "receiptText": "Matched load applied · load path: Load 0.50 (0/40 broken) · contact (0.35, 0.20) through depth · intact 0 broken bonds / 1 components · damaged 40 / 1 · displayed motion 0.05224 vs 0.07630",
+        "buttons": {
+          "damage-history": true,
+          "apply": false,
+          "unload": false,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 16,
+            "y": 71,
+            "right": 356.390625,
+            "bottom": 91
+          },
+          "#damage-history": {
+            "x": 368.390625,
+            "y": 64,
+            "right": 530.203125,
+            "bottom": 98
+          },
+          "#apply": {
+            "x": 542.203125,
+            "y": 64,
+            "right": 696.734375,
+            "bottom": 98
+          },
+          "#unload": {
+            "x": 708.734375,
+            "y": 64,
+            "right": 780.46875,
+            "bottom": 98
+          },
+          "#reset": {
+            "x": 792.46875,
+            "y": 64,
+            "right": 855.078125,
+            "bottom": 98
+          },
+          "#status": {
+            "x": 1008.9375,
+            "y": 74.59375,
+            "right": 1424,
+            "bottom": 91.390625
+          }
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    "evolving-load-path": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-evolving-load-path.png",
+      "sha256": "741e52f4ec870c08fe836daae7800af12dfeeedf428bd2585f21811068f51470",
+      "bytes": 204617,
+      "width": 1440,
+      "height": 1100,
+      "page": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "Matched load applied · paired continuous CPU proxy · camera unchanged",
+        "force": "1.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "loaded 24 nodes at (40, 27) · 24 broken bonds · 1 components · raw surface motion 0.01959 · display 0.15673",
+        "damagedText": "loaded 24 nodes at (40, 27) · 119 broken bonds · 1 components · raw surface motion 0.02861 · display 0.22891",
+        "intactPath": "Accepted load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken)",
+        "damagedPath": "Accepted load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken) · structural history 119 broken bonds",
+        "receipt": {
+          "result": "accepted",
+          "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+          "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+          "contact": {
+            "x": 0.35,
+            "y": 0.2,
+            "patchRadius": 0.032,
+            "mode": "through-thickness"
+          },
+          "force": 1.5,
+          "acceptedLoadPath": [
+            {
+              "label": "Load",
+              "force": 0.5,
+              "intactBrokenBondCount": 0,
+              "damagedBrokenBondCount": 40
+            },
+            {
+              "label": "Load",
+              "force": 1.5,
+              "intactBrokenBondCount": 24,
+              "damagedBrokenBondCount": 119
+            }
+          ],
+          "fractureThreshold": 0.04,
+          "displayGain": 8,
+          "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+          "priorDamageEvents": 40,
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "intact": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 1.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 0,
+            "connectivityEpoch": 1,
+            "brokenBondCount": 24,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.019591578734926406,
+            "maxDisplayedVertexDisplacement": 0.15673262987941125
+          },
+          "damaged": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 1.5,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 2,
+            "connectivityEpoch": 3,
+            "brokenBondCount": 119,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0.028613441865202507,
+            "maxDisplayedVertexDisplacement": 0.22890753492162005
+          },
+          "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+        },
+        "receiptText": "Matched load applied · load path: Load 0.50 (0/40 broken) → Load 1.50 (24/119 broken) · contact (0.35, 0.20) through depth · intact 24 broken bonds / 1 components · damaged 119 / 1 · displayed motion 0.15673 vs 0.22891",
+        "buttons": {
+          "damage-history": true,
+          "apply": false,
+          "unload": false,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 16,
+            "y": 71,
+            "right": 356.390625,
+            "bottom": 91
+          },
+          "#damage-history": {
+            "x": 368.390625,
+            "y": 64,
+            "right": 530.203125,
+            "bottom": 98
+          },
+          "#apply": {
+            "x": 542.203125,
+            "y": 64,
+            "right": 696.734375,
+            "bottom": 98
+          },
+          "#unload": {
+            "x": 708.734375,
+            "y": 64,
+            "right": 780.46875,
+            "bottom": 98
+          },
+          "#reset": {
+            "x": 792.46875,
+            "y": 64,
+            "right": 855.078125,
+            "bottom": 98
+          },
+          "#status": {
+            "x": 1008.9375,
+            "y": 74.59375,
+            "right": 1424,
+            "bottom": 91.390625
+          }
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    "unloaded-history-retained": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-unloaded-history-retained.png",
+      "sha256": "424ef30391f27c34dae61a7ceaca55fb71928523532a79253934a2b8cccee758",
+      "bytes": 210671,
+      "width": 1440,
+      "height": 1100,
+      "page": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "Unloaded · connectivity history retained · paired continuous CPU proxy · camera unchanged",
+        "force": "0.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "loaded 24 nodes at (40, 27) · 0 broken bonds · 1 components · raw surface motion 0.00000 · display 0.00000",
+        "damagedText": "loaded 24 nodes at (40, 27) · 40 broken bonds · 1 components · raw surface motion 0.00000 · display 0.00000",
+        "intactPath": "Accepted load path: Load 0.50 (0/40 broken) → Unload 0.00 (0/40 broken)",
+        "damagedPath": "Accepted load path: Load 0.50 (0/40 broken) → Unload 0.00 (0/40 broken) · structural history 40 broken bonds",
+        "receipt": {
+          "result": "accepted",
+          "requestedPageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectivePageRoute": "kaminos.structural-material.arch-surface-consumer.v0",
+          "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+          "effectiveMeshAuthority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+          "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+          "contact": {
+            "x": 0.35,
+            "y": 0.2,
+            "patchRadius": 0.032,
+            "mode": "through-thickness"
+          },
+          "force": 0,
+          "acceptedLoadPath": [
+            {
+              "label": "Load",
+              "force": 0.5,
+              "intactBrokenBondCount": 0,
+              "damagedBrokenBondCount": 40
+            },
+            {
+              "label": "Unload",
+              "force": 0,
+              "intactBrokenBondCount": 0,
+              "damagedBrokenBondCount": 40
+            }
+          ],
+          "fractureThreshold": 0.04,
+          "displayGain": 8,
+          "stateRetention": "damaged connectivity persists through unload; displacement recomputed per action",
+          "priorDamageEvents": 40,
+          "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "intact": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 0,
+            "connectivityEpoch": 0,
+            "brokenBondCount": 0,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0,
+            "maxDisplayedVertexDisplacement": 0
+          },
+          "damaged": {
+            "route": "kaminos.structural-material.trellis-arch-surface.v0",
+            "authority": "trellis-glb-to-persistent-arch-state-displacement-v0",
+            "sourceGlbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "interiorMode": "continuous",
+            "contact": {
+              "column": 40,
+              "row": 27,
+              "contactDepthMode": "through-thickness",
+              "contactLayer": null
+            },
+            "force": 0,
+            "loadedNodeCount": 24,
+            "startingConnectivityEpoch": 2,
+            "connectivityEpoch": 2,
+            "brokenBondCount": 40,
+            "componentCount": 1,
+            "mappedStructuralNodeCount": 1615,
+            "surfaceVertexCount": 197871,
+            "maxRawVertexDisplacement": 0,
+            "maxDisplayedVertexDisplacement": 0
+          },
+          "limitation": "Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces."
+        },
+        "receiptText": "Unloaded · connectivity history retained · load path: Load 0.50 (0/40 broken) → Unload 0.00 (0/40 broken) · contact (0.35, 0.20) through depth · intact 0 broken bonds / 1 components · damaged 40 / 1 · displayed motion 0.00000 vs 0.00000",
+        "buttons": {
+          "damage-history": true,
+          "apply": false,
+          "unload": false,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 16,
+            "y": 71,
+            "right": 356.390625,
+            "bottom": 91
+          },
+          "#damage-history": {
+            "x": 368.390625,
+            "y": 64,
+            "right": 530.203125,
+            "bottom": 98
+          },
+          "#apply": {
+            "x": 542.203125,
+            "y": 64,
+            "right": 696.734375,
+            "bottom": 98
+          },
+          "#unload": {
+            "x": 708.734375,
+            "y": 64,
+            "right": 780.46875,
+            "bottom": 98
+          },
+          "#reset": {
+            "x": 792.46875,
+            "y": 64,
+            "right": 855.078125,
+            "bottom": 98
+          },
+          "#status": {
+            "x": 905.078125,
+            "y": 74.59375,
+            "right": 1424,
+            "bottom": 91.390625
+          }
+        },
+        "viewport": {
+          "width": 1440,
+          "height": 1100,
+          "documentWidth": 1440
+        }
+      }
+    },
+    "mobile-layout": {
+      "path": "/private/tmp/kaminos-burning-demon-asset-adapter-luna-0923/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final-mobile-layout.png",
+      "sha256": "296703dfe971b0f2a86cf384a5f8e2c5d2234f7a193e031e2ee3f11620dd79ba",
+      "bytes": 93116,
+      "width": 390,
+      "height": 844,
+      "page": {
+        "url": "http://127.0.0.1:8424/structural-material-arch-geometry.html",
+        "status": "Profiles loaded · no load applied",
+        "force": "0.5",
+        "camera": {
+          "position": [
+            0.25,
+            0.3200000000000001,
+            3.5500000000000003
+          ],
+          "target": [
+            0,
+            0.02,
+            0
+          ]
+        },
+        "intactText": "No load applied",
+        "damagedText": "No load applied",
+        "intactPath": "Accepted load path: none",
+        "damagedPath": "Accepted load path: none",
+        "receipt": {},
+        "receiptText": "Same TRELLIS geometry restored. No solver event applied.",
+        "buttons": {
+          "damage-history": false,
+          "apply": true,
+          "unload": true,
+          "reset": false
+        },
+        "controls": {
+          ".force": {
+            "x": 12,
+            "y": 60,
+            "right": 378,
+            "bottom": 80
+          },
+          "#damage-history": {
+            "x": 12,
+            "y": 92,
+            "right": 173.8125,
+            "bottom": 126
+          },
+          "#apply": {
+            "x": 185.8125,
+            "y": 92,
+            "right": 340.34375,
+            "bottom": 126
+          },
+          "#unload": {
+            "x": 12,
+            "y": 138,
+            "right": 83.734375,
+            "bottom": 172
+          },
+          "#reset": {
+            "x": 95.734375,
+            "y": 138,
+            "right": 158.34375,
+            "bottom": 172
+          },
+          "#status": {
+            "x": 12,
+            "y": 188,
+            "right": 378,
+            "bottom": 204.796875
+          }
+        },
+        "viewport": {
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390
+        }
+      }
+    }
+  }
+}

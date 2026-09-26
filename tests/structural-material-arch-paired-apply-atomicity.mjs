@@ -102,6 +102,10 @@ assert.doesNotMatch(historyHandler, /viewers\.damaged\.state\s*=\s*candidateHist
   'a rejected first presentation must not leave hidden damaged solver state behind');
 assert.match(page, /acceptedLoadPath/,
   'later slider loads must retain an explicit identity for the evolving comparison history');
+assert.match(page, /recordLoad = true/,
+  'accepted zero-force operations must be retained as part of the causal load path');
+assert.match(page, /label: label\.startsWith\('Unloaded'\) \? 'Unload' : 'Load'/,
+  'the causal path must distinguish an unload from a zero-force load');
 assert.match(page, /load path:/,
   'the current accepted load path must be visible beside the paired result');
 

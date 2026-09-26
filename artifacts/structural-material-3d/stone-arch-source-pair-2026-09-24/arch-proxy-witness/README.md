@@ -47,11 +47,15 @@ solver state before the paired mesh transaction accepted it, and that later
 slider loads could quietly evolve both comparison histories. Both are corrected:
 the 40-bond candidate is committed only after paired acceptance, and each
 accepted force application now leaves a visible load path with cumulative
-broken-bond counts. Reset and replay restore the fixed `0.50` comparison.
+broken-bond counts, including named zero-force unload actions. Reset and replay
+restore the fixed `0.50` comparison; a `0.50 → unload → 0.50` sequence remains
+visible as three accepted transitions.
 The follow-up [review-fix smoke report](arch-history-consumer-smoke-2026-09-26-review-fix-final.json)
 records 46 checks across the fixed comparison, additional `1.50` and repeated
-`0.50` loads, reset/replay, unload, camera stability, and mobile layout. Its
-report-specific captures preserve the original five-frame report unchanged.
+`0.50` loads, reset/replay, unload, camera stability, and mobile layout. The
+[zero-force history report](arch-history-consumer-smoke-2026-09-26-zero-force-final.json)
+adds 48 checks, including unload followed by another `0.50` load. Both runs use
+report-specific captures and preserve the original five-frame report unchanged.
 
 The browser route is `http://127.0.0.1:8424/structural-material-arch-geometry.html`.
 The [browser smoke report](arch-history-consumer-smoke-2026-09-26.json) records
@@ -77,7 +81,7 @@ node --test --test-concurrency=1 tests/structural-material-arch-*.mjs
 
 node structural-material-arch-history-smoke.mjs \
   http://127.0.0.1:8424/structural-material-arch-geometry.html \
-  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-review-fix-final.json \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26-zero-force-final.json \
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' 180000
 ```
 

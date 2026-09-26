@@ -261,8 +261,15 @@ try {
   const unloaded = await click('unload');
   check('unload removes visible displacement but retains broken connectivity',
     unloaded.receipt.force === 0 && unloaded.receipt.damaged.maxDisplayedVertexDisplacement === 0 && unloaded.receipt.damaged.brokenBondCount === 40, unloaded.receipt);
+  check('accepted zero-force unload is retained in the explicit load path',
+    unloaded.receipt.acceptedLoadPath?.length === 2 && unloaded.receipt.acceptedLoadPath.at(-1).force === 0 &&
+    unloaded.receipt.acceptedLoadPath.at(-1).label === 'Unload', unloaded.receipt.acceptedLoadPath);
   check('unload preserves camera', JSON.stringify(applied.camera) === JSON.stringify(unloaded.camera), { before: applied.camera, after: unloaded.camera });
   await capture('unloaded-history-retained');
+  const reloaded = await click('apply');
+  check('load after unload preserves the full causal action path',
+    reloaded.receipt.acceptedLoadPath?.length === 3 && reloaded.receipt.acceptedLoadPath[1].label === 'Unload' &&
+    reloaded.receipt.acceptedLoadPath[2].force === 0.5, reloaded.receipt.acceptedLoadPath);
 
   report.phase = 'reset';
   const reset = await click('reset');
