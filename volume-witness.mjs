@@ -1297,7 +1297,45 @@ const TALL_PLUME_OPERATOR_PRESETS = {
   },
 };
 
-const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'boundary_fire_bonfire_a_la_ruffles_0709';
+// Bare smoke routes boot into the page's committed default basin; the witness
+// derives its expectations from the same file.
+const DEFAULT_VOLUME_SMOKE_BASIN_PATH = new URL('./artifacts/default-basin/cheap-blast-furnace.json', import.meta.url);
+const VOLUME_BASIN_EXPLICIT_KEYS = {
+  'volume-scene': 'volumeScene',
+  'volume-steps': 'raySteps',
+  'volume-pyro-detail': 'pyroDynamicDetail',
+  'volume-pyro-compare': 'pyroCompareMode',
+  'volume-look-freeze': 'lookFreeze',
+  'volume-exposure': 'volumeExposure',
+  'volume-residual-mode': 'volumeResidualMode',
+  'volume-residual-model-url': 'volumeResidualModelUrl',
+  'volume-residual-strength': 'volumeResidualStrength',
+  'volume-residual-feature-debug': 'volumeResidualFeatureDebug',
+};
+// Mirrors the page: basin control parameters absent from the URL take the
+// basin's route values; explicit URL parameters win.
+function mergeDefaultVolumeBasinRouteParams(routeParams, artifact) {
+  const basinParams = new Set(['domControls', 'rendererControls', 'presentationControls']
+    .flatMap(axis => Object.values(artifact.preset[axis] || {}).map(descriptor => descriptor?.param).filter(Boolean)));
+  for (const [key, value] of new URL(artifact.preset.route, 'http://basin.invalid').searchParams) {
+    if (basinParams.has(key) && !routeParams.has(key)) routeParams.set(key, value);
+  }
+}
+// Inverse of the page's volumeSceneControlId: DOM control ids become scene
+// preset keys, and numeric strings become numbers as the page reads them.
+function volumeBasinScenePreset(artifact) {
+  const preset = {};
+  for (const controls of [artifact.preset.domControls, artifact.preset.rendererControls || {}]) {
+    for (const [id, descriptor] of Object.entries(controls)) {
+      if (!id.startsWith('volume-')) continue;
+      const key = VOLUME_BASIN_EXPLICIT_KEYS[id]
+        || id.slice('volume-'.length).replace(/-([a-z0-9])/g, (_, letter) => letter.toUpperCase());
+      const value = Object.hasOwn(descriptor, 'rawValue') ? descriptor.rawValue : descriptor.value;
+      preset[key] = typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : value;
+    }
+  }
+  return preset;
+}
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
     density: 0.45,
@@ -1398,14 +1436,20 @@ function canonicalSourceDefaults(mode) {
 }
 const shouldApplyDefaultVolumeSmokeTallPreset =
   routeParams.get('kaminos_volume_smoke') === '1' &&
+  !routeParams.has('settings_preset') &&
   (!routeParams.has('volume_scene') || routeParams.get('volume_scene') === 'tall_plume') &&
   !routeParams.has('volume_tall_preset') &&
   !routeParams.has('volume_canonical_preset');
-const requestedTallPlumePreset = routeParams.get('volume_tall_preset') || (shouldApplyDefaultVolumeSmokeTallPreset ? DEFAULT_VOLUME_SMOKE_TALL_PRESET : '');
+const defaultVolumeBasin = shouldApplyDefaultVolumeSmokeTallPreset
+  ? JSON.parse(readFileSync(DEFAULT_VOLUME_SMOKE_BASIN_PATH, 'utf8'))
+  : null;
+if (defaultVolumeBasin) mergeDefaultVolumeBasinRouteParams(routeParams, defaultVolumeBasin);
+const requestedTallPlumePreset = routeParams.get('volume_tall_preset') || '';
 const expectedTallPlumePreset = Object.hasOwn(TALL_PLUME_OPERATOR_PRESETS, requestedTallPlumePreset)
   ? requestedTallPlumePreset
   : '';
-const tallPlumePreset = TALL_PLUME_OPERATOR_PRESETS[expectedTallPlumePreset] || {};
+const tallPlumePreset = TALL_PLUME_OPERATOR_PRESETS[expectedTallPlumePreset]
+  || (defaultVolumeBasin ? volumeBasinScenePreset(defaultVolumeBasin) : {});
 const requestedVolumeScene = routeParams.get('volume_scene') || tallPlumePreset.volumeScene || 'compact_plume';
 const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
   ? requestedVolumeScene
@@ -1461,15 +1505,15 @@ function quantizeFlowKernelControl(value, min, max, step, decimals) {
 const requestedFlowKernelStrength = Number(routeParams.get('volume_flow_kernel_strength'));
 const expectedFlowKernelStrength = routeParams.has('volume_flow_kernel_strength') && Number.isFinite(requestedFlowKernelStrength)
   ? quantizeFlowKernelControl(requestedFlowKernelStrength, 0, 1, 0.02, 2)
-  : 0;
+  : Number.isFinite(scenePreset.flowKernelStrength) ? quantizeFlowKernelControl(scenePreset.flowKernelStrength, 0, 1, 0.02, 2) : 0;
 const requestedFlowKernelRadius = Number(routeParams.get('volume_flow_kernel_radius'));
 const expectedFlowKernelRadius = routeParams.has('volume_flow_kernel_radius') && Number.isFinite(requestedFlowKernelRadius)
   ? quantizeFlowKernelControl(requestedFlowKernelRadius, 0.0025, 0.12, 0.0025, 4)
-  : 0.03;
+  : Number.isFinite(scenePreset.flowKernelRadius) ? quantizeFlowKernelControl(scenePreset.flowKernelRadius, 0.0025, 0.12, 0.0025, 4) : 0.03;
 const requestedFlowKernelCoherence = Number(routeParams.get('volume_flow_kernel_coherence'));
 const expectedFlowKernelCoherence = routeParams.has('volume_flow_kernel_coherence') && Number.isFinite(requestedFlowKernelCoherence)
   ? quantizeFlowKernelControl(requestedFlowKernelCoherence, 0, 2, 0.05, 2)
-  : 1;
+  : Number.isFinite(scenePreset.flowKernelCoherence) ? quantizeFlowKernelControl(scenePreset.flowKernelCoherence, 0, 2, 0.05, 2) : 1;
 const requestedPressureIterations = Number(routeParams.get('volume_pressure_iterations'));
 const requestedPressureMode = routeParams.get('volume_pressure_mode');
 const hasExplicitPressureRoute =
