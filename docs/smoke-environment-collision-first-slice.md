@@ -1,0 +1,32 @@
+# Smoke–environment collision: first implementation slice
+
+Status: implementation brief for operator inspection, not an implemented capability. Source inspected: `origin/main@4b4c02c72fb3452654d661504cf09d2a6413630c` (2026-09-26). Owner: `sexy-fireman`; intended implementer: Luna; consumer: the live Kaminos volume scene and its authored environment. The object is smoke and hot gas *moving around* a scene solid while retaining the newly landed plume behavior, not a depth mask that merely hides smoke inside geometry.
+
+## Current seam
+
+`volume-core.js` holds the `N × 2N × N` fluid/front/pressure fields. `encodeSim` runs transport, bounded analytic emitter injection, and then pressure projection. The new converged solver uses upper-face velocity, backward divergence, a compact pressure operator, and forward-gradient projection. That is the solver to extend. The legacy pressure path and partial projection gain cannot silently claim an impermeable solid.
+
+`index.html` owns registered `sceneObjects` and their Three.js world transforms. It passes `getSceneDepth` to the volume prototype only for compositing/ordinary-scene visibility. Neither that depth provider nor a visible mesh is currently a volume-flow obstacle. No scene-object geometry or occupancy field reaches the solver on this main revision. The annular burner is visual scene geometry under an emitter; it is not automatically a collider and must not swallow the inlet.
+
+## Slice 1: one honest static solid
+
+1. Add an explicit opt-in collision descriptor for a **closed box**, with stable scene-object identity, dimensions, world transform, and enabled state. The same descriptor must instantiate or identify the visible Three.js box and generate the simulation occupancy. Do not treat every imported GLB/OBJ, splat, image plane, floor, or depth surface as a collider. Do not call an arbitrary mesh's bounding box a mesh collision.
+2. Convert that box through the inverse product/volume transform into volume-local space, then voxelize a deterministic solid-cell field and blocked-face topology at the current grid resolution. A static transform/config change rebuilds once, not every frame. Record source ID, geometry/transform revision, grid, requested/effective collision mode, solid-cell count, blocked-face count, and rebuild step. An invalid transform, unsupported shape, or source–solid overlap reports a specific inactive/error state rather than quietly reverting to visual-only depth. Preserve the exact collision-off path and saved basins.
+3. Apply one impermeable-wall law coherently across the simulation:
+   - No advected gas/scalar/front sample may tunnel through a blocked face; a backtrace reaching solid terminates at the fluid side. Interpolation and MacCormack extrema must not import solid-cell values. Fully solid cells carry no transported smoke, fuel, heat, front, or velocity.
+   - The upper-face velocity is zero where either adjacent cell is solid (static wall); compact divergence reads that same masked flux. The pressure update includes only open fluid neighbors in its sum and diagonal, with a well-defined isolated-fluid-cell case. Projection subtracts gradients only on open faces and leaves blocked faces zero. The residual probe reports fluid-cell denominator and boundary flux separately, so a low aggregate residual cannot hide a leak.
+   - Emitter injection into solid is rejected/blocked with an overlap diagnostic. Do not clip the final raymarch as a substitute for transport or pressure collision. Preserve the existing open-top outlet where it is not occluded by a solid.
+4. Gate this first path to the converged pressure solver with full projection. A request under legacy/disabled/partial-gain pressure must either fail loudly or report collision **inactive** with the exact reason; it must not show `collision=on` while gas crosses the box. Audit WebGPU per-stage storage-buffer limits and bind-group layouts before adding a field buffer; do not assume one more binding fits every pipeline.
+
+The first box should sit above, not within, a source and intersect the upward plume. This is a real scene-solid interaction, though not yet arbitrary kiln-mesh collision. Keep the box interface field-shaped so a later watertight mesh voxelizer can supply the same cells/faces; that later adapter needs its own geometry and transform provenance and cannot be claimed by this slice.
+
+## Acceptance and evidence
+
+- Fail-first deterministic tests: collision off preserves an existing step/state contract; a box blocking a channel gives zero normal face flux and no transported material inside; pressure/divergence/residual use identical open-face topology; a fluid-side backtrace and MacCormack stencil cannot sample through the box; source overlap and unsupported solver fail explicitly; grid/transform revisions trigger one rebuild and cannot silently reuse stale occupancy.
+- Effective-route evidence: a native WebGPU run records the named source/preset, effective solver/transport/collision modes, box source ID and transform revision, grid, step range, complete frame readback, and pressure/boundary diagnostics. No default/fallback route may impersonate it. Preserve frames, not just a pass/fail summary.
+- Visual comparison: inspect a short sequence at matched source and camera with collider off/on. With the box on, the plume should split or curl around it and form a downstream wake; material must not pass through or simply vanish at the box; the moving tongues outside the obstacle should remain recognizable. A static screenshot or a low divergence number alone cannot close this visual claim.
+- Cost: report occupancy rebuild time, added GPU resident bytes, and steady-frame cost on the actual route. This first static box should not require per-frame CPU voxelization or a new full-grid readback.
+
+## Mutation boundary and next handoff
+
+Luna owns the opt-in descriptor/scene adapter, field construction, solver/transport changes, fail-first tests, and the native box witness on a Kaminos feature worktree. `sexy-fireman` owns composition with the existing basin, review, source-truth verdict, and eventual main integration only after operator authorization. Handy's light/raymarch work and Sexy Flame Doctor's source/confinement behavior are adjacent and should not be rewritten to make the box demo pass. The next slice after this one is explicit authored static kiln geometry or watertight mesh-to-field conversion, using the same solver contract once box behavior is visually credible.
