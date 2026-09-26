@@ -404,13 +404,15 @@ try {
       radius: 0.26,
     },
   });
-  const meshLayout = bindGroupLayouts.find(layout => layout.label === 'structural combustion mesh presentation layout');
-  assert.ok(meshLayout, 'mesh presentation must create its own binding layout');
-  assert.equal(
-    meshLayout.entries.find(entry => entry.binding === 4)?.visibility,
-    GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-    'mesh presentation uniform is read by both vertex and fragment shaders',
-  );
+  for (const label of ['structural combustion presentation layout', 'structural combustion mesh presentation layout']) {
+    const layout = bindGroupLayouts.find(candidate => candidate.label === label);
+    assert.ok(layout, `${label} must be created`);
+    assert.equal(
+      layout.entries.find(entry => entry.binding === 4)?.visibility,
+      GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+      `${label} uniform is read by both vertex and fragment shaders`,
+    );
+  }
   const sourceDescriptor = assembly.sourceDescriptor();
   assert.equal(sourceDescriptor.schema, 'kaminos.combustible-object-source-descriptor.v0');
   assert.equal(sourceDescriptor.device, device);
