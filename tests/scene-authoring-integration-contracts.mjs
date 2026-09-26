@@ -29,6 +29,13 @@ test('clearing resets scene history while reloadable object removal becomes a ch
   assert.match(html, /function sceneObjectMembershipSnapshot\(id\)[\s\S]*record\.type !== 'glb' \|\| !isReloadableSceneObjectRecord\(record\)/);
   assert.match(html, /function removeSceneObjectInternal\(id, \{ recordHistory = true \} = \{\}\)[\s\S]*if \(recordHistory && !editId\) scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\)/);
   assert.match(html, /recordApplied\(editId, before, null, `Remove/);
+  const removeStart = html.indexOf('function removeSceneObjectInternal(');
+  const removeEnd = html.indexOf('window.removeSceneObject = function', removeStart);
+  const removeSource = html.slice(removeStart, removeEnd);
+  const admissionIndex = removeSource.indexOf('scenePlacementTools.edits.assertCanRecordApplied(editId)');
+  const removalIndex = removeSource.indexOf('sceneObjects.splice(index, 1)');
+  assert.ok(admissionIndex >= 0 && admissionIndex < removalIndex, 'membership history admission must succeed before the scene object is removed');
+  assert.match(removeSource, /catch \(error\) \{ setInfo\(error\.message\); return false; \}/, 'a rejected admission must leave a visible reason and preserve scene membership');
   assert.match(html, /function clearScene\(\) \{\s*scenePlacementTools\?\.clear\(\);\s*for \(const editId of sceneMembershipEditTargets\) scenePlacementTools\.edits\.unregister\(editId\);\s*sceneMembershipEditTargets\.clear\(\);\s*sceneMutationToken\+\+;/);
   assert.match(html, /if \(id !== activeSceneObjectId\) scenePlacementTools\?\.selectionChanged\(\);/);
   assert.match(html, /historyScope: document\.getElementById\('scene-object-list'\)/);

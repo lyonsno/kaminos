@@ -125,10 +125,7 @@ export function createSceneEdits({ read, write, changed = () => {}, admit = () =
   }
 
   function recordApplied(id, before, after, label = 'Change') {
-    admit();
-    assertAvailable();
-    if (active?.id === id) throw new Error('Finish the active edit on this target first');
-    if (!targets.has(id)) throw new Error(`Scene edit target "${id}" is not registered`);
+    assertCanRecordApplied(id);
     const checkedBefore = check(id, before);
     const checkedAfter = check(id, after);
     if (JSON.stringify(get(id)) !== JSON.stringify(checkedAfter)) {
@@ -139,6 +136,13 @@ export function createSceneEdits({ read, write, changed = () => {}, admit = () =
     future = [];
     notify();
     return true;
+  }
+
+  function assertCanRecordApplied(id) {
+    admit();
+    assertAvailable();
+    if (active?.id === id) throw new Error('Finish the active edit on this target first');
+    if (!targets.has(id)) throw new Error(`Scene edit target "${id}" is not registered`);
   }
 
   function discard(predicate) {
@@ -172,6 +176,7 @@ export function createSceneEdits({ read, write, changed = () => {}, admit = () =
     undo: () => replay(past, future, 'before'),
     redo: () => replay(future, past, 'after'),
     recordApplied,
+    assertCanRecordApplied,
     discard,
     unregister,
     clear() { assertAvailable(); if (active) cancel(); past = []; future = []; notify(); },

@@ -9628,6 +9628,10 @@ function removeSceneObjectInternal(id, { recordHistory = true } = {}) {
   if (index < 0) return;
   const before = recordHistory ? sceneObjectMembershipSnapshot(id) : null;
   const editId = before ? ensureSceneObjectMembershipTarget(id) : null;
+  if (editId) {
+    try { scenePlacementTools.edits.assertCanRecordApplied(editId); }
+    catch (error) { setInfo(error.message); return false; }
+  }
   if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
   const [entry] = sceneObjects.splice(index, 1);
   if (hybridSplatOverlayState.objectId === entry.id) {
