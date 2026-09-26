@@ -169,7 +169,10 @@ export function applyVolumeEmitterFamilyRuntime({
   const inletVelocity = finiteNumber(controls.emitterInletVelocity ?? 0.04, 'controls.emitterInletVelocity');
   const shearWidthCells = finiteNumber(controls.emitterShearWidthCells ?? 3, 'controls.emitterShearWidthCells');
   const edgeEntrainment = finiteNumber(controls.emitterEdgeEntrainment ?? 0.65, 'controls.emitterEdgeEntrainment');
-  const transportSpeed = finiteNumber(controls.speed ?? 1, 'controls.speed');
+  // The cockpit passes the time-step dynamics Speed as emitterTransportSpeed
+  // (the requested Speed under the legacy step, the reference under uniform);
+  // plain Speed remains the fallback for callers that do not.
+  const transportSpeed = finiteNumber(controls.emitterTransportSpeed ?? controls.speed ?? 1, 'controls.emitterTransportSpeed');
   if (inputRadius < 0.08 || inputRadius > 0.7) {
     throw new Error(`controls.inputRadius ${inputRadius} must be within [0.08, 0.7]`);
   }

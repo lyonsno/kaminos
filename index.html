@@ -3271,7 +3271,7 @@ import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, 
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig } from './volume-core.js?v=flame-doctor-time-step-0926';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -21886,7 +21886,7 @@ async function initKaminosVolumeRoute() {
     const receipt = applyVolumeEmitterFamilyRuntime({
       prototype: volumePrototype,
       family,
-      controls: controlsSnapshot,
+      controls: emitterCompilerControls(controlsSnapshot),
       timestampMs,
       frameId,
       externalRequest,

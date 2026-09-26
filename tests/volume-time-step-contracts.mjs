@@ -129,8 +129,35 @@ test('the emitter is an additive per-step source: its increments carry dt at pac
   assert.doesNotMatch(injection, /time_step_controls/, 'the emitter kernel has no time-step member');
   assert.match(injection, /let injectedVelocity = clamp\(\s*previousVelocityDensity\.xyz \+ axialVelocity \+ entrainmentVelocity,\s*vec3<f32>\(-0\.34\),\s*vec3<f32>\(0\.52\)\s*\);/, 'the additive update and the authored clamp are untouched, so Speed 1 is identical in both modes');
   assert.match(source, /writeAnalyticEmitterInjectionUniform\([^;]*\{ incrementScale: timeStepConfig\.effective\.incrementScale \}/, 'the frame packer passes the dt factor to the emitter increments');
-  assert.match(source, /state\.timeStep = \{\s*\.\.\.timeStepConfig,\s*uniform: \{ mode: uniforms\[354\], referenceSpeed: uniforms\[355\] \},[^]*?emitterPacked: analyticEmitterDispatch\?\.active\s*\?\s*\{ inletIncrement: analyticEmitterInjectionUniformFloats\[26\], edgeEntrainment: analyticEmitterInjectionUniformFloats\[23\] \}/, 'runtime receipt records what the emitter kernel received');
+  assert.match(source, /state\.timeStep = \{\s*\.\.\.timeStepConfig,\s*uniform: \{ mode: uniforms\[354\], referenceSpeed: uniforms\[355\] \},[^]*?emitterPacked: analyticEmitterDispatch\?\.active\s*\?\s*\{\s*inletIncrement: analyticEmitterInjectionUniformFloats\[26\],\s*edgeEntrainment: analyticEmitterInjectionUniformFloats\[23\],/, 'runtime receipt records what the emitter kernel received');
   assert.equal((source.match(/^\s*timeStep: state\.timeStep,$/gm) || []).length, 2, 'debugState exports the receipt on both routes');
+});
+
+test('the momentum-linked inlet is sized at the dynamics Speed, so under uniform its only Speed dependence is the dt factor', async () => {
+  // Confirmation 2 (GPT-6 Sol, 2026-09-26): with Link momentum to flow on (the
+  // cockpit default) a Speed edit recompiled the emitter with the requested
+  // Speed, so the packed increment carried Speed twice.
+  const basis = await import('../volume-emitter-basis.mjs');
+  const linked = speed => basis.resolveVolumeEmitterInletVelocity({ momentumLinked: true, sourceStrength: 1, velocitySpeed: 0.22, transportSpeed: speed }).effectiveInletVelocity;
+  assert.notEqual(linked(0.5), linked(2), 'the linked inlet coefficient depends on the Speed the compiler sees');
+  assert.equal(typeof core.emitterCompilerControls, 'function');
+  const legacy = core.emitterCompilerControls({ speed: 2, timeStep: 'legacy', advectionScheme: 'maccormack' });
+  assert.equal(legacy.emitterTransportSpeed, 2, 'legacy compiles at the requested Speed');
+  assert.equal(legacy.emitterTransportSpeedSource, 'time-step-legacy');
+  const uniform = core.emitterCompilerControls({ speed: 2, timeStep: 'uniform', advectionScheme: 'maccormack' });
+  assert.equal(uniform.emitterTransportSpeed, 1, 'uniform compiles at the reference Speed');
+  assert.equal(uniform.speed, 2, 'the requested Speed is untouched for everything else');
+  const refused = core.emitterCompilerControls({ speed: 2, timeStep: 'uniform', advectionScheme: 'legacy' });
+  assert.equal(refused.emitterTransportSpeed, 2, 'a refused uniform request compiles like legacy');
+  for (const speed of [0.5, 1, 2, 3.4]) {
+    const controls = core.emitterCompilerControls({ speed, timeStep: 'uniform', advectionScheme: 'maccormack-velocity' });
+    const perUnitTime = linked(controls.emitterTransportSpeed) * core.resolveTimeStepConfig(controls).effective.incrementScale / speed;
+    near(perUnitTime, linked(1), 1e-12, `momentum added per unit simulated time is Speed-invariant under uniform (Speed ${speed})`);
+  }
+  const runtime = readFileSync(new URL('../volume-emitter-runtime.mjs', import.meta.url), 'utf8');
+  assert.match(runtime, /finiteNumber\(controls\.emitterTransportSpeed \?\? controls\.speed \?\? 1, 'controls\.emitterTransportSpeed'\)/, 'the emitter runtime reads the dynamics Speed first');
+  assert.match(index, /applyVolumeEmitterFamilyRuntime\(\{\s*prototype: volumePrototype,\s*family,\s*controls: emitterCompilerControls\(controlsSnapshot\),/, 'the cockpit compile path passes the controls through the helper');
+  assert.match(source, /transportSpeed: analyticEmitterDescriptor\?\.transportSpeed \?\? null,\s*momentumLinked: analyticEmitterDescriptor\?\.momentumLinked \?\? null,/, 'the receipt names the Speed the compiler saw and the link state');
 });
 
 test('cockpit, schema and layout carry the time-step mode', () => {

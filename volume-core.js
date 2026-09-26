@@ -2391,6 +2391,17 @@ export function transportBacktraceScaleForSpeed(speed) {
   return TRANSPORT_BACKTRACE_BASE_CELLS + speed * TRANSPORT_BACKTRACE_SPEED_CELLS;
 }
 
+// The emitter compiler reads Speed to size the momentum-linked inlet
+// (velocitySpeed x strength x (0.18 + transportSpeed x 0.036)). Under the
+// uniform step that coefficient must be read at the reference Speed, exactly
+// like every other authored coefficient, or the writer's dt factor would
+// multiply an already Speed-dependent increment. Both compile paths pass the
+// controls through here.
+export function emitterCompilerControls(controls = {}) {
+  const timeStep = resolveTimeStepConfig(controls).effective;
+  return { ...controls, emitterTransportSpeed: timeStep.dynamicsSpeed, emitterTransportSpeedSource: `time-step-${timeStep.mode}` };
+}
+
 export function timeStepModeUniformValue(mode) {
   return mode === TIME_STEP_MODE_UNIFORM ? 1 : 0;
 }
@@ -13867,7 +13878,14 @@ export function createKaminosVolumePrototype({
       // What the emitter kernel actually receives: its per-step increments carry
       // the dt factor under uniform; the clamp in the kernel does not.
       emitterPacked: analyticEmitterDispatch?.active
-        ? { inletIncrement: analyticEmitterInjectionUniformFloats[26], edgeEntrainment: analyticEmitterInjectionUniformFloats[23] }
+        ? {
+          inletIncrement: analyticEmitterInjectionUniformFloats[26],
+          edgeEntrainment: analyticEmitterInjectionUniformFloats[23],
+          // The Speed the emitter compiler saw when it sized the linked inlet,
+          // and whether the link was on; both decide what the packed increment means.
+          transportSpeed: analyticEmitterDescriptor?.transportSpeed ?? null,
+          momentumLinked: analyticEmitterDescriptor?.momentumLinked ?? null,
+        }
         : null,
     };
     state.pressureSolver = {
