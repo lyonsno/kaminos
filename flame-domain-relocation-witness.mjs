@@ -1,0 +1,157 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
+import { verifyAuthoringServer } from './scene-authoring-witness-identity.mjs';
+import { compositionRestoreUrl } from './scene-authoring.mjs';
+
+const { values: args } = parseArgs({ options: { manifest: { type: 'string' }, out: { type: 'string' } } });
+assert.ok(args.manifest && args.out && path.isAbsolute(args.out));
+await fs.mkdir(args.out, { recursive: true });
+const report = { status: 'running', phase: 'arguments', startedAt: new Date().toISOString(), errors: [], frames: [] };
+const save = () => fs.writeFile(path.join(args.out, 'report.json'), JSON.stringify(report, null, 2));
+await save();
+let browser, context, page;
+try {
+  const manifest = JSON.parse(await fs.readFile(args.manifest, 'utf8'));
+  report.requested = manifest;
+  assert.equal(manifest.requestedRoute, 'local-native-chrome-webgpu');
+  report.phase = 'source-preflight'; await save();
+  report.source = await verifyAuthoringServer({ origin: manifest.origin, repoRoot: process.cwd() });
+  assert.equal(report.source.source.commit, manifest.sourceCommit);
+  assert.equal(report.source.source.dirty, false);
+  assert.equal(report.source.sceneStore, manifest.sceneStore);
+  const { chromium } = await import(pathToFileURL(manifest.playwright));
+  report.phase = 'browser-start'; await save();
+  browser = await chromium.launch({ executablePath: manifest.chrome, headless: false,
+    args: ['--enable-unsafe-webgpu', '--disable-background-timer-throttling', '--disable-renderer-backgrounding'] });
+  report.execution = { requestedRoute: manifest.requestedRoute, browserVersion: browser.version(),
+    effectiveExecutable: await fs.realpath(manifest.chrome) };
+  context = await browser.newContext({ viewport: manifest.viewport, deviceScaleFactor: 1 });
+  page = await context.newPage();
+  page.on('pageerror', error => report.errors.push(error.stack || error.message));
+  page.on('console', message => { if (message.type() === 'error') report.errors.push(message.text()); });
+  const state = () => page.evaluate(() => ({
+    volume: window.__kaminosVolumePrototype?.debugState?.(),
+    emitter: window.kaminosFlameEmitterState?.(),
+    receipt: window.__kaminosVolumeEmitterReceipt,
+    history: window.kaminosSceneEdits?.state?.(),
+    light: window.__kaminosVolumePrototype?.fireIrradianceLightField?.(),
+    timeOrigin: performance.timeOrigin,
+  })).then(result => { if (result.light) { delete result.light.device; delete result.light.atlasTexture; delete result.light.metaTexture; } return result; });
+  const check = (s, { x, domain, suspended = false }) => {
+    assert.match(s.volume.backend, /WebGPU/);
+    assert.equal(s.volume.active, true);
+    assert.equal(s.volume.error, null);
+    assert.ok(s.volume.frameCount > 0);
+    assert.ok(s.volume.simStepCount > 0);
+    assert.equal(s.volume.ordinarySceneDepth.effective, true);
+    assert.ok(Math.abs(s.emitter.pose.position[0] - x) < 1e-8);
+    assert.ok(Math.abs(s.emitter.domainTranslation[0] - domain) < 1e-8);
+    assert.deepEqual(s.volume.ordinaryDomainTranslation, s.emitter.domainTranslation);
+    assert.equal(s.emitter.injectionSuspended, suspended);
+    assert.equal(s.receipt.fallbackUsed, false);
+    if (suspended) {
+      assert.equal(s.emitter.effectiveMode, 'off');
+      assert.equal(s.volume.analyticEmitterDispatchActive, false);
+    } else {
+      assert.equal(s.emitter.effectiveMode, 'analytic-fixed');
+      assert.equal(s.volume.analyticEmitterDispatchActive, true);
+      assert.ok(Math.abs(s.emitter.source.origin[0] - (x - domain)) < 1e-8);
+      assert.equal(s.light.status, 'effective');
+      assert.ok(Math.abs(s.light.worldMin[0] - (domain - 1)) < 1e-8);
+    }
+  };
+  const waitSim = async (minimumFrame = 0) => {
+    await page.waitForFunction(minimumFrame => {
+      const v = window.__kaminosVolumePrototype?.debugState?.();
+      return v?.error || (v?.simStepCount > 20 && v?.frameCount > minimumFrame && window.kaminosFlameEmitterState?.().registered);
+    }, minimumFrame, { timeout: 120000 });
+    return state();
+  };
+  const shot = async (name, s) => {
+    const image = path.join(args.out, `${name}.png`);
+    await page.screenshot({ path: image });
+    const data = await page.evaluate(() => window.__kaminosVolumePrototype.canvasElement().toDataURL('image/png'));
+    const volumeImage = path.join(args.out, `${name}-volume.png`);
+    await fs.writeFile(volumeImage, Buffer.from(data.split(',')[1], 'base64'));
+    report.frames.push({ name, image, volumeImage, state: s }); await save();
+  };
+  report.phase = 'mount'; report.url = manifest.sceneUrl; await save();
+  await page.goto(manifest.sceneUrl);
+  const initial = await waitSim(); check(initial, { x: 0, domain: 0 });
+  for (const mutate of [
+    s => { s.volume.backend = 'WebGL'; },
+    s => { s.volume.frameCount = 0; },
+    s => { s.volume.ordinarySceneDepth.effective = false; },
+    s => { s.emitter.domainTranslation = [2.3, 0, 0]; },
+    s => { s.receipt.fallbackUsed = true; },
+    s => { s.light.status = 'inactive'; },
+  ]) {
+    const falseClosure = structuredClone(initial);
+    mutate(falseClosure);
+    assert.throws(() => check(falseClosure, { x: 0, domain: 0 }));
+  }
+  report.execution.rendererBackend = initial.volume.backend;
+  await shot('01-before', initial);
+  report.phase = 'preview'; await save();
+  await page.locator('[data-scene-object-id="flame-emitter"] .scene-object-meta').click();
+  const box = await page.locator('#kaminos-host-renderer-canvas').boundingBox();
+  await page.mouse.move(box.x + box.width * .7, box.y + box.height * .5);
+  for (const key of ['g', 'x', '2', '.', '3']) await page.keyboard.press(key);
+  const preview = await state();
+  assert.ok(Math.abs(preview.emitter.pose.position[0] - 2.3) < 1e-8);
+  assert.equal(preview.emitter.injectionSuspended, true);
+  assert.deepEqual(preview.emitter.domainTranslation, [0, 0, 0]);
+  assert.equal(preview.volume.fluidStateResetCount, initial.volume.fluidStateResetCount);
+  await shot('02-preview-outside', preview);
+  report.phase = 'release'; await save();
+  await page.keyboard.press('Enter');
+  const released = await waitSim(preview.volume.frameCount + 8); check(released, { x: 2.3, domain: 2.3 });
+  assert.equal(released.volume.fluidStateResetCount, initial.volume.fluidStateResetCount + 1);
+  assert.equal(released.volume.fluidStateResetReason, 'authored-flame-domain-relocation');
+  await shot('03-released-plume', released);
+  report.phase = 'history'; await save();
+  await page.locator('#kaminos-host-renderer-canvas').hover();
+  await page.keyboard.press('Meta+z');
+  const undone = await waitSim(released.volume.frameCount + 8); check(undone, { x: 0, domain: 0 });
+  assert.equal(undone.volume.fluidStateResetCount, released.volume.fluidStateResetCount + 1);
+  await shot('04-undo', undone);
+  await page.keyboard.press('Meta+Shift+z');
+  const redone = await waitSim(undone.volume.frameCount + 8); check(redone, { x: 2.3, domain: 2.3 });
+  assert.equal(redone.volume.fluidStateResetCount, undone.volume.fluidStateResetCount + 1);
+  await shot('05-redo', redone);
+  for (const key of ['g', 'x', '0', '.', '5', 'Escape']) await page.keyboard.press(key);
+  const cancelled = await state();
+  assert.ok(Math.abs(cancelled.emitter.pose.position[0] - 2.3) < 1e-8);
+  assert.equal(cancelled.volume.fluidStateResetCount, redone.volume.fluidStateResetCount);
+  report.phase = 'save-reopen'; await save();
+  const response = page.waitForResponse(r => r.url().endsWith('/api/save-scene') && r.request().method() === 'POST');
+  assert.equal(await page.evaluate(() => window.saveScene()), true);
+  const savedReceipt = await (await response).json();
+  const saved = await (await fetch(`${manifest.origin}/api/read?root=scenes&path=${encodeURIComponent(savedReceipt.saved)}`)).json();
+  await fs.writeFile(path.join(args.out, 'saved-scene.json'), JSON.stringify(saved, null, 2));
+  assert.ok(Math.abs(saved.objects.find(o => o.id === 'flame-emitter').transform.position[0] - 2.3) < 1e-8);
+  report.reopenUrl = compositionRestoreUrl(saved.composition, savedReceipt.saved, manifest.origin);
+  await page.goto('about:blank'); await page.goto(report.reopenUrl);
+  const reopened = await waitSim(); check(reopened, { x: 2.3, domain: 2.3 });
+  assert.notEqual(reopened.timeOrigin, redone.timeOrigin);
+  assert.equal(reopened.history.undoCount, 0);
+  await shot('06-reopened-plume', reopened);
+  assert.deepEqual(report.errors, []);
+  report.status = 'passed'; report.phase = 'complete';
+} catch (error) {
+  report.status = 'failed'; report.failurePhase = report.phase;
+  report.error = error.stack || String(error); process.exitCode = 1;
+  if (page) {
+    report.lastObserved = await page.evaluate(() => ({ volume: window.__kaminosVolumePrototype?.debugState?.(),
+      emitter: window.kaminosFlameEmitterState?.() })).catch(() => null);
+    await page.screenshot({ path: path.join(args.out, 'failed.png') }).catch(() => {});
+  }
+  console.error(report.error);
+} finally {
+  await context?.close().catch(() => {});
+  await browser?.close().catch(() => {});
+  report.finishedAt = new Date().toISOString(); await save();
+}
