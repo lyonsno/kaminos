@@ -44,7 +44,7 @@ for (const [nm, x, y, z] of CIE_1931_2DEG) {
 }
 const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => sum + v*reactionXYZ[i], 0)));
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
-export const EMISSIVE_LIGHT_GRID = 32;
+export const EMISSIVE_LIGHT_GRID = 48;
 const cubicDirectionMinor = 1 / Math.sqrt(8);
 const cubicDirectionMajor = Math.sqrt(3) / 2;
 export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze(Array.from({ length: 24 }, (_, variant) => {
