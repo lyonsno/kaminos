@@ -3285,6 +3285,7 @@ import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mj
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
+  describeVolumeSettingsPresetProjection,
   resolveVolumeSettingsPresetVisualView,
   validateVolumeSettingsPresetDocument,
   validateVolumeSettingsPresetIndex,
@@ -15538,8 +15539,11 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         select.value = '';
       } else {
         for (const entry of index.entries) {
-          const option = new Option(`${entry.label} | ${entry.presetId.slice(0, 16)}`, entry.presetId);
-          option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId}`;
+          const projected = entry.carriedControls?.length || entry.unsupportedValuesDefaulted?.length;
+          const option = new Option(`${entry.label} | ${entry.presetId.slice(0, 16)}${projected ? ' | from another branch' : ''}`, entry.presetId);
+          option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId}${projected ? ` | ${describeVolumeSettingsPresetProjection({
+            carriedControls: entry.carriedControls || [], unsupportedValuesDefaulted: entry.unsupportedValuesDefaulted || [],
+          }).text}` : ''}`;
           select.add(option);
         }
         select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
@@ -21161,8 +21165,10 @@ async function admitVolumeSettingsPresetRoute(params) {
   activeVolumeSettingsPresetReceipt = receipt;
   window.__kaminosVolumeSettingsPresetReceipt = receipt;
   document.getElementById('settings-preset-label').value = receipt.label || receipt.presetId;
+  const projectionSummary = describeVolumeSettingsPresetProjection(receipt.serverProjection);
   volumeSettingsPresetStatus(
-    `${receipt.label || receipt.presetId} | requested ${requestedPresetId} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}`,
+    `${receipt.label || receipt.presetId} | requested ${requestedPresetId} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projectionSummary.text ? ` | ${projectionSummary.text}` : ''}`,
+    projectionSummary.warning,
   );
   return receipt;
 }
