@@ -71,11 +71,17 @@ function shaderFunction(name) {
   assert.ok(start >= 0, `${name} must exist`);
   return shader.slice(start, shader.indexOf('\n}', start) + 2);
 }
-for (const name of ['sampleFrontField', 'sampleFluidSlot', 'samplePredictSlot']) {
+for (const name of ['sampleFrontFieldMasked', 'sampleFluidSlotMasked', 'samplePredictSlot']) {
   const body = shaderFunction(name);
   assert.match(body, /sceneSolidAt\(sampleCell\)/, `${name} must exclude solid interpolation corners`);
   assert.match(body, /weightSum/, `${name} must renormalize fluid-side sample weights`);
 }
+for (const name of ['readSlot', 'readFrontField', 'sampleFrontField', 'sampleFluidSlot']) {
+  assert.doesNotMatch(shaderFunction(name), /sceneSolidAt|sceneSolidEnabled/,
+    `${name} is shared with raymarch and must not pull wall lookups into optical shader compilation`);
+}
+assert.match(shaderFunction('csTransportPredict'), /sampleFluidSlotMasked\(/,
+  'the actual predictor must consume wall-aware transport samples');
 assert.match(shaderFunction('slotExtrema'), /sceneSolidAt\(sampleCell\)/,
   'MacCormack limiter must exclude masked solid corners from its source envelope');
 const selectiveRoles = shader.slice(shader.indexOf('function rebuildSelectiveHeadLiveBindGroups()'),
@@ -84,11 +90,6 @@ assert.match(selectiveRoles, /fluidFrontRead:[\s\S]*?binding: 16,[\s\S]*?sidecar
   'selective-head fluid/front read must bind the solid texture');
 assert.match(selectiveRoles, /sidecar:[\s\S]*?binding: 16,[\s\S]*?splat:/,
   'selective-head sidecar read must bind the solid texture');
-const emissiveBuilder = readFileSync(new URL('../volume-emissive-transport.mjs', import.meta.url), 'utf8');
-assert.match(emissiveBuilder, /seedInputs[\s\S]*?binding: 16, resource: sceneSolidTextureView/,
-  'auto-layout emissive seed must bind the shared solid texture');
-assert.ok(shader.indexOf('installSceneSolidTexture();\n    emissiveLightField = createEmissiveLightField') >= 0,
-  'solid texture must exist before emissive seed bind groups are created');
 
 const ring = {family: 'ring', sourceLaw: 'shallow-primary', origin: [0, -0.5, 0],
   axis: [0, 1, 0], supportAxis: [1, 0, 0], radius: .08, extent: .45,
