@@ -3275,6 +3275,7 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
 import { defaultLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
+import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -3927,9 +3928,24 @@ let volumePrimitives = [];
 let sceneObjects = [];
 let localLiquidSetup = null;
 let localLiquidHost = null;
-let localLiquidLoading = false;
 let localLiquidFailure = null;
 let localLiquidGeneration = 0;
+const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
+  getGeneration: () => localLiquidGeneration,
+  getHost: () => localLiquidHost,
+  setHost: host => { localLiquidHost = host; },
+  createHost: async ({ setup, emitters, isCurrent }) => {
+    const { createLocalLiquidHost } = await import('./local-liquid-host.mjs');
+    return createLocalLiquidHost({
+      renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
+      setup, emitters, isCurrent,
+    });
+  },
+  onFailure: error => {
+    localLiquidFailure = error.message || String(error);
+    setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
+  },
+});
 const sceneMembershipEditTargets = new Set();
 let sceneImportStatus = null;
 let sceneGroups = [];
@@ -6499,31 +6515,18 @@ function syncLocalLiquidHostEmitters() {
 }
 
 async function mountLocalLiquidHost() {
-  if (!localLiquidSetup || localLiquidLoading) return;
+  if (!localLiquidSetup) return false;
   if (localLiquidHost) return true;
-  localLiquidLoading = true;
   localLiquidFailure = null;
-  try {
-    const {createLocalLiquidHost} = await import('./local-liquid-host.mjs');
-    localLiquidHost = await createLocalLiquidHost({
-      renderer,
-      scene,
-      camera,
-      pipeline: renderPipeline,
-      device: sharedGpu?.device,
-      setup: localLiquidSetup,
-      emitters: localLiquidEmitterRecords(),
-    });
+  const mounted = await localLiquidHostMount.mount({
+    setup: structuredClone(localLiquidSetup),
+    emitters: localLiquidEmitterRecords(),
+  });
+  if (mounted) {
     setInfo('Local water mounted on the retained analytical basin. The solver restarts from its saved authored setup.');
     window._kaminosDirty?.();
-    return true;
-  } catch (error) {
-    localLiquidFailure = error.message || String(error);
-    setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
-    return false;
-  } finally {
-    localLiquidLoading = false;
   }
+  return mounted;
 }
 
 window.kaminosLocalLiquidState = () => {
@@ -6533,7 +6536,8 @@ window.kaminosLocalLiquidState = () => {
   effectiveRoute: localLiquidHost?.state().effectiveRoute || null,
   backend: renderer?.backend?.constructor?.name || null,
   mounted: Boolean(localLiquidHost),
-  loading: localLiquidLoading,
+  loading: localLiquidHostMount.isLoading(),
+  frameCount: hostState?.frameCount ?? 0,
   failure: localLiquidFailure,
   setup: localLiquidSetup ? structuredClone(localLiquidSetup) : null,
   emitters: localLiquidEmitterRecords(),

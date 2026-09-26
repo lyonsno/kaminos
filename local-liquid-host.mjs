@@ -38,7 +38,7 @@ function cameraFrame(camera, width, height, generation) {
     near:camera.near, far:camera.far, viewport:{width,height}};
 }
 
-export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = []}) {
+export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
@@ -46,6 +46,10 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     particleCount:authored.particleCount, densityIterations:authored.densityIterations,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
     liveInletPacket:localLiquidInletPacket(authored, authoredEmitters, sourceGeneration)});
+  if (!isCurrent()) {
+    solver.destroy?.();
+    return null;
+  }
   if (!solver.available) throw Error(solver.reason || 'Local liquid solver unavailable');
   const group = supportMesh(); scene.add(group);
   const targetOptions = {type:THREE.HalfFloatType, depthBuffer:false, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter};

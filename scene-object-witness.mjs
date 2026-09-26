@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { countVisibleWaterPixels } from './screenshot-png-rgb.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -998,6 +999,8 @@ async function runLocalLiquidLiveHostScenario(ws) {
       }
       if (!state) throw new Error('Kaminos local-water state probe is unavailable');
       const firstFrameId = state.lastFrame?.frameId || null;
+      const firstFrameCount = state.frameCount;
+      const firstStepCount = state.solver?.stepCount;
       await wait(8000);
       state = window.kaminosLocalLiquidState?.() || state;
       const requestedRoute = state.requestedRoute;
@@ -1010,6 +1013,11 @@ async function runLocalLiquidLiveHostScenario(ws) {
       if (state.failure || !state.lastFrame || state.lastFrame.submittedByHost !== true || state.lastFrame.presentedByHost !== true) {
         throw new Error('local-water frame was not submitted and presented by the current host: ' + JSON.stringify(state));
       }
+      if (!Number.isSafeInteger(firstFrameCount) || !Number.isSafeInteger(state.frameCount)
+        || state.frameCount <= firstFrameCount || state.lastFrame.frameId === firstFrameId) {
+        throw new Error('local-water host did not advance to a new presented frame during the observation interval: '
+          + JSON.stringify({firstFrameId,frameId:state.lastFrame.frameId,firstFrameCount,frameCount:state.frameCount}));
+      }
       if (state.lastFrame.route !== requestedRoute || !state.lastFrame.frameId) {
         throw new Error('local-water final frame has stale or substituted route identity: ' + JSON.stringify(state.lastFrame));
       }
@@ -1019,9 +1027,21 @@ async function runLocalLiquidLiveHostScenario(ws) {
         throw new Error('live local-water source is not one visible authored scene object: ' + JSON.stringify({emitterIds, rows:rows.map(row=>row.dataset.sceneObjectId)}));
       }
       const solver = state.solver || {};
-      if (!Number.isSafeInteger(solver.stepCount) || solver.stepCount < 1) {
+      if (!Number.isSafeInteger(firstStepCount) || !Number.isSafeInteger(solver.stepCount) || solver.stepCount <= firstStepCount) {
         throw new Error('local-water host mounted but the solver did not advance: ' + JSON.stringify({lastFrame:state.lastFrame,stepCount:solver.stepCount}));
       }
+      const encodedHostFrameId = state.hostFrameCompositionEvidence?.hostFrameId || null;
+      if (encodedHostFrameId !== state.lastFrame.frameId
+        || state.hostFrameCompositionEvidence?.effectiveRoute !== requestedRoute
+        || state.hostFrameCompositionEvidence?.primaryCommandEncoded !== true) {
+        throw new Error('local-water presented frame does not match solver host-frame encoding evidence: '
+          + JSON.stringify({frameId:state.lastFrame.frameId,hostFrameCompositionEvidence:state.hostFrameCompositionEvidence}));
+      }
+      const canvas = document.getElementById('kaminos-host-renderer-canvas');
+      if (!canvas) throw new Error('Kaminos host canvas is missing');
+      const canvasRect = canvas.getBoundingClientRect();
+      const canvasBounds = {x:canvasRect.x,y:canvasRect.y,width:canvasRect.width,height:canvasRect.height,
+        viewportWidth:window.innerWidth,viewportHeight:window.innerHeight};
       const sceneParams = new URLSearchParams(location.hash.replace(/^#/, ''));
       let savedFile = sceneParams.get('scene') || null;
       if (!savedFile) {
@@ -1054,7 +1074,11 @@ async function runLocalLiquidLiveHostScenario(ws) {
         emitterIds,
         lastFrame:state.lastFrame,
         firstFrameId,
+        firstFrameCount,
+        hostFrameCount:state.frameCount,
+        encodedHostFrameId,
         solverStepCount:solver.stepCount,
+        canvasBounds,
         liveInlets:solver.liveInlets || null,
         particleDrawCount:solver.particleDrawCount ?? null,
         screenSpaceSurfaceRenderFrameCount:solver.screenSpaceSurfaceRenderFrameCount ?? null,
@@ -1071,6 +1095,22 @@ async function runLocalLiquidLiveHostScenario(ws) {
       };
     })()
   `, {timeoutMs:60000});
+  const visibleShot = await capturePngScreenshot(ws, siblingPngPath('-local-water-visible'));
+  const canvasBounds = lastEvidence.localLiquidLiveHost.canvasBounds;
+  const pngPixels = countVisibleWaterPixels({
+    png:readFileSync(visibleShot.path), bounds:canvasBounds,
+    viewportWidth:canvasBounds.viewportWidth, viewportHeight:canvasBounds.viewportHeight,
+    minimumPixels:2000,
+  });
+  Object.assign(lastEvidence.localLiquidLiveHost, {
+    visibleWaterScreenshot:visibleShot.path,
+    visibleWaterPixelCount:pngPixels.visibleWaterPixelCount,
+    sampledCanvasPixels:pngPixels.sampledPixels,
+  });
+  if (pngPixels.visibleWaterPixelCount < pngPixels.minimumPixels) {
+    throw new Error('local-water live host produced too few blue/cyan canvas pixels to prove visible water: '
+      + JSON.stringify({canvasBounds,pngPixels}));
+  }
 }
 
 async function runTransformInspectorScenario(ws) {
