@@ -26,8 +26,23 @@ test('F frames the selected authored object through generic geometry bounds', ()
 
 test('clearing or removing authored scene objects cancels previews and invalidates only their history', () => {
   assert.match(html, /window\.removeSceneObject = function\(id\) \{\s*scenePlacementTools\?\.finish\(false\);\s*scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\);/);
-  assert.match(html, /function clearScene\(\) \{\s*scenePlacementTools\?\.clear\(\);\s*sceneMutationToken\+\+;/);
+  assert.match(html, /function clearScene\(\) \{\s*sceneControlHistory\?\.cancel\(\);\s*scenePlacementTools\?\.clear\(\);\s*sceneMutationToken\+\+;/);
   assert.match(html, /if \(id !== activeSceneObjectId\) scenePlacementTools\?\.selectionChanged\(\);/);
+});
+
+test('Burner control commits share scene undo and restore through the live flame setters', () => {
+  assert.match(html, /import \{ installSceneControlHistory \} from '\.\/scene-control-history\.mjs'/);
+  assert.match(editTools, /historyScopes = \[\]/);
+  assert.match(editTools, /inHistoryScope\(event\.target\)/);
+  assert.match(html, /edits\.register\('@burner-controls'/);
+  assert.match(html, /controls: document\.querySelectorAll\('#burner-enabled, #burner-controls input'\)/);
+  assert.match(html, /function restoreBurnerControlHistoryState\(value\) \{[\s\S]*?setAnnularBurner\(next\.recipe\);[\s\S]*?dispatchEvent\(new Event\('input', \{ bubbles: true \}\)\)/);
+  assert.match(html, /historyScopes: \[document\.getElementById\('burner-enabled'\)\.parentElement, document\.getElementById\('burner-controls'\)\]/);
+  const composition = html.slice(html.indexOf('async function collectSceneComposition()'), html.indexOf('async function withAuthoringAction('));
+  const settings = html.slice(html.indexOf('function buildVolumeSettingsPreset('), html.indexOf('function isCompositionAuthoring('));
+  assert.match(settings, /inputRadius: parseFloat\(document\.getElementById\('volume-input-radius'\)\.value\)/);
+  assert.match(settings, /flowRate: parseFloat\(document\.getElementById\('volume-flow-rate'\)\.value\)/);
+  assert.match(composition, /burnerRecipe/);
 });
 
 test('selection feedback hides untrustworthy offscreen pivots and names the recovery cue', () => {

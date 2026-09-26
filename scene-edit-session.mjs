@@ -82,6 +82,25 @@ export function createSceneEdits({ read, write, changed = () => {}, admit = () =
     return clone(pose);
   }
 
+  function assertCanRecordApplied(id) {
+    admit();
+    if (active) throw new Error('Finish the active scene edit first');
+    if (!targets.has(id)) throw new Error(`Scene edit target "${id}" was not registered`);
+    get(id);
+    return true;
+  }
+
+  function recordApplied(id, before, label = 'Edit') {
+    assertCanRecordApplied(id);
+    const entryBefore = check(id, before);
+    const after = get(id);
+    if (JSON.stringify(entryBefore) === JSON.stringify(after)) return false;
+    past.push({ id, label, before: clone(entryBefore), after: clone(after) });
+    future = [];
+    notify();
+    return true;
+  }
+
   function replay(from, to, key) {
     admit();
     if (active) throw new Error('Finish the active scene edit first');
@@ -105,7 +124,7 @@ export function createSceneEdits({ read, write, changed = () => {}, admit = () =
   }
 
   return {
-    begin, preview, commit, cancel, apply, state,
+    begin, preview, commit, cancel, apply, state, assertCanRecordApplied, recordApplied,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     register(id, target) {
       if (!id.startsWith('@') || targets.has(id)) throw new Error('Duplicate or invalid edit target');

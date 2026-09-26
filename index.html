@@ -3484,6 +3484,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
+import { installSceneControlHistory } from './scene-control-history.mjs';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -3528,6 +3529,7 @@ function escapeHtml(s) {
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let scenePlacementTools = null;
+let sceneControlHistory = null;
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
@@ -10515,6 +10517,21 @@ async function initScene() {
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
     frameSelected: window.kaminosFrameSelected,
+    historyScopes: [document.getElementById('burner-enabled').parentElement, document.getElementById('burner-controls')],
+  });
+  scenePlacementTools.edits.register('@burner-controls', {
+    read: readBurnerControlHistoryState,
+    write: restoreBurnerControlHistoryState,
+    check: checkedBurnerControlHistoryState,
+  });
+  sceneControlHistory = installSceneControlHistory({
+    controls: document.querySelectorAll('#burner-enabled, #burner-controls input'),
+    edits: scenePlacementTools.edits,
+    id: '@burner-controls',
+    label: 'Adjust Burner',
+    read: readBurnerControlHistoryState,
+    write: restoreBurnerControlHistoryState,
+    onError: error => { document.getElementById('burner-status').textContent = error.message; },
   });
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
@@ -10773,6 +10790,7 @@ function applyEnvMap(envMap, intensity) {
 
 // --- File Loading ---
 function clearScene() {
+  sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
   sceneMutationToken++;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
@@ -26434,6 +26452,38 @@ function setAnnularBurner(value) {
   document.getElementById('burner-status').textContent = '';
   window._kaminosDirty?.();
   return burnerRecipe;
+}
+
+function readBurnerControlHistoryState() {
+  return {
+    recipe: burnerRecipe == null ? null : structuredClone(burnerRecipe),
+    radius: Number(document.getElementById('volume-input-radius').value),
+    flow: Number(document.getElementById('volume-flow-rate').value),
+  };
+}
+
+function checkedBurnerControlHistoryState(value) {
+  if (!Number.isFinite(value?.radius) || !Number.isFinite(value?.flow)) throw new Error('Flame radius and flow must be finite');
+  for (const [key, inputId] of [['radius', 'volume-input-radius'], ['flow', 'volume-flow-rate']]) {
+    const input = document.getElementById(inputId);
+    if (value[key] < Number(input.min) || value[key] > Number(input.max)) throw new Error(`Flame ${key} is outside the active source range`);
+  }
+  return {
+    recipe: normalizeBurner(value.recipe),
+    radius: value.radius,
+    flow: value.flow,
+  };
+}
+
+function restoreBurnerControlHistoryState(value) {
+  const next = checkedBurnerControlHistoryState(value);
+  setAnnularBurner(next.recipe);
+  for (const [key, id] of [['radius', 'burner-radius'], ['flow', 'burner-flow']]) {
+    const input = document.getElementById(id);
+    input.value = String(next[key]);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  return readBurnerControlHistoryState();
 }
 
 function updateAnnularBurnerFrame(now) {

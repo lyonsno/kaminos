@@ -10,9 +10,10 @@ class Element extends EventTarget {
  getBoundingClientRect(){return this.rect||{left:0,top:0,right:800,bottom:600,width:800,height:600};}
  setPointerCapture(id){this.captures.add(id);} hasPointerCapture(id){return this.captures.has(id);} releasePointerCapture(id){this.captures.delete(id);}
 }
-function emit(target,type,values={}){const event=new Event(type,{cancelable:true});Object.assign(event,values);target.dispatchEvent(event);}
+function emit(target,type,values={}){const event=new Event(type,{cancelable:true});for(const [key,value] of Object.entries(values))Object.defineProperty(event,key,{configurable:true,value});target.dispatchEvent(event);return event;}
 function fixture(){
- const document=new Element(),window=new Element(),viewport=new Element(),input=new Element(),grip=new Element(),status=new Element();
+ const document=new Element(),window=new Element(),viewport=new Element(),input=new Element(),grip=new Element(),status=new Element(),historyControl=new Element(),numberControl=new Element(),historyScope=new Element();
+ historyControl.tagName='INPUT';historyControl.type='range';numberControl.tagName='INPUT';numberControl.type='number';numberControl.closest=()=>numberControl;historyScope.contains=target=>target===historyControl||target===numberControl;
  status.rect={left:16,top:520,right:290,bottom:549,width:274,height:29};document.getElementById=id=>id==='info-bar'?status:null;
  input.dataset.transformField='position.x';input.value='0';Object.defineProperty(input,'valueAsNumber',{get:()=>Number(input.value)});input.parentElement={querySelector:()=>grip};input.blur=()=>{};
  document.createElement=()=>new Element();document.createElementNS=()=>new Element();document.querySelectorAll=()=>[input];
@@ -23,8 +24,8 @@ function fixture(){
  let pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},allowed=true,busy=false;
  const sceneObject={userData:{kaminosSceneObject:{label:'kiln'}},updateWorldMatrix(){}};
  let frames=0;
- const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected:()=> 'kiln',read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},allowed:()=>allowed,busy:()=>busy,frameSelected:()=>frames++});
- return {tools,input,grip,document,window,viewport,status,controls,gizmo,helper,get frames(){return frames;},get pose(){return pose;},set allowed(v){allowed=v;},set busy(v){busy=v;},
+ const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected:()=> 'kiln',read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},allowed:()=>allowed,busy:()=>busy,frameSelected:()=>frames++,historyScopes:[historyScope]});
+ return {tools,input,grip,document,window,viewport,status,controls,gizmo,helper,historyControl,numberControl,historyScope,get frames(){return frames;},get pose(){return pose;},set allowed(v){allowed=v;},set busy(v){busy=v;},
    set position(value){pose.position=[...value];tools.draw();},
    get hud(){return viewport.children.find(child=>child.id==='scene-edit-hud');},get overlay(){return viewport.children.find(child=>child.id==='scene-edit-overlay');},
    beginDrag(){emit(viewport,'pointerdown',{pointerId:7,button:0});viewport.setPointerCapture(7);gizmo.dragging=true;controls.enabled=false;gizmo.dispatchEvent({type:'mouseDown'});pose.position[0]=2;},
@@ -96,4 +97,22 @@ test('switching operation restores gesture-start pose while keeping frame and on
  emit(f.document,'keydown',{key:'3'});emit(f.document,'keydown',{key:'0'});
  f.tools.finish(true);assert.deepEqual(f.pose.position,[0,0,0]);assert.equal(f.tools.state().undoCount,1);
  f.tools.edits.undo();assert.deepEqual(f.pose.rotation,[0,0,0]);
+});
+
+test('scene undo and redo work over a Burner control while ordinary text undo remains native',()=>{
+ const f=fixture();let setting=1;
+ f.tools.edits.register('@burner',{
+  read:()=>setting,
+  write:value=>{setting=value;},
+  check:value=>{if(!Number.isFinite(value))throw new Error('setting must be finite');return value;},
+ });
+ setting=2;f.tools.edits.recordApplied('@burner',1,'Adjust Burner');
+ let event=emit(f.document,'keydown',{key:'z',metaKey:true,target:f.historyControl});
+ assert.equal(event.defaultPrevented,true);assert.equal(setting,1);
+ event=emit(f.document,'keydown',{key:'z',metaKey:true,shiftKey:true,target:f.historyControl});
+ assert.equal(event.defaultPrevented,true);assert.equal(setting,2);
+ event=emit(f.document,'keydown',{key:'z',metaKey:true,target:{tagName:'INPUT',type:'text',closest:()=>({})}});
+ assert.equal(event.defaultPrevented,false,'text editing keeps the browser undo path');
+ event=emit(f.document,'keydown',{key:'z',metaKey:true,target:f.numberControl});
+ assert.equal(event.defaultPrevented,false,'uncommitted number editing keeps the browser undo path');
 });
