@@ -1,3 +1,5 @@
+import { fractureArchStructuralProxy, solveArchStructuralForce } from './structural-material-arch-core.js';
+
 export const ARCH_SURFACE_CONSUMER_SCHEMA = 'kaminos.structural-material.arch-surface-consumer.v0';
 export const ARCH_SURFACE_CONSUMER_ROUTE = 'kaminos.structural-material.trellis-arch-surface.v0';
 export const ARCH_SURFACE_CONSUMER_AUTHORITY = 'trellis-glb-to-persistent-arch-state-displacement-v0';
@@ -5,6 +7,17 @@ export const ARCH_SURFACE_CONSUMER_AUTHORITY = 'trellis-glb-to-persistent-arch-s
 function finite(value, label) {
   if (!Number.isFinite(value)) throw new Error(`${label} must be finite`);
   return value;
+}
+
+export function resolveArchCameraFacingLayer(cameraZ, targetZ, layers) {
+  finite(cameraZ, 'camera z');
+  finite(targetZ, 'view target z');
+  if (!Number.isInteger(layers) || layers < 1) throw new Error('arch requires at least one depth layer');
+  return cameraZ >= targetZ ? layers - 1 : 0;
+}
+
+export function advanceArchSurfaceState(state, load, fractureOptions = {}) {
+  return fractureArchStructuralProxy(solveArchStructuralForce(state, load), fractureOptions);
 }
 
 function nearestOccupiedCells(profile) {

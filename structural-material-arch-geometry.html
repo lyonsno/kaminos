@@ -94,11 +94,27 @@
     <div class="receipt" id="receipt">Requested surface route: TRELLIS GLB to persistent arch state. No solver event applied.</div>
   </main>
   <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { buildArchStructuralProxy, solveArchStructuralForce, fractureArchStructuralProxy } from './structural-material-arch-core.js';
-    import { projectArchStructuralStateToSurface } from './structural-material-arch-geometry-sidecar.js';
+    const status = document.getElementById('status');
+    const receipt = document.getElementById('receipt');
+    const requestedPageRoute = 'kaminos.structural-material.arch-surface-consumer.v0';
+    let startupPhase = 'dependency-import';
+
+    try {
+    const [THREE, controlsModule, loaderModule, core, surface] = await Promise.all([
+      import('three'),
+      import('three/addons/controls/OrbitControls.js'),
+      import('three/addons/loaders/GLTFLoader.js'),
+      import('./structural-material-arch-core.js'),
+      import('./structural-material-arch-geometry-sidecar.js'),
+    ]);
+    const { OrbitControls } = controlsModule;
+    const { GLTFLoader } = loaderModule;
+    const { buildArchStructuralProxy } = core;
+    const {
+      advanceArchSurfaceState,
+      projectArchStructuralStateToSurface,
+      resolveArchCameraFacingLayer,
+    } = surface;
 
     const PROFILE_URL = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-surface-depth-profile.json';
     const GLB_URL = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb';
@@ -107,12 +123,11 @@
     const THRESHOLD = 0.04;
     const forceInput = document.getElementById('force');
     const forceOutput = document.getElementById('force-value');
-    const status = document.getElementById('status');
-    const receipt = document.getElementById('receipt');
     const profiles = {};
     const viewers = {};
     let ready = false;
 
+    startupPhase = 'renderer-initialization';
     const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('view'), antialias: true, alpha: false });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -143,8 +158,9 @@
       floor.rotation.x = -Math.PI / 2;
       floor.position.y = -0.355;
       scene.add(floor);
+      return floor;
     };
-    makeFloor();
+    const floor = makeFloor();
 
     function render() {
       renderer.render(scene, camera);
@@ -157,6 +173,16 @@
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      const compact = width / height < 1.15;
+      const continuous = viewers.continuous;
+      const joints = viewers.joints;
+      if (continuous && joints) {
+        continuous.root.position.x = compact ? 0 : -0.56;
+        joints.root.position.x = compact ? 0 : 0.56;
+        continuous.root.position.y = compact ? 0.5 : 0;
+        joints.root.position.y = compact ? -0.5 : 0;
+      }
+      floor.position.y = compact ? -0.92 : -0.355;
       render();
     }
 
@@ -187,13 +213,20 @@
     }
 
     function applyState(viewer, force) {
-      const solved = solveArchStructuralForce(viewer.base, {
+      const startingState = viewer.state ?? viewer.base;
+      const startingConnectivityEpoch = startingState.connectivityEpoch;
+      const contactLayer = resolveArchCameraFacingLayer(
+        camera.position.z,
+        controls.target.z,
+        startingState.layers,
+      );
+      const state = advanceArchSurfaceState(startingState, {
         ...CONTACT,
         force,
         contactDepthMode: 'camera-facing-surface',
+        contactLayer,
         iterations: 600,
-      });
-      const state = fractureArchStructuralProxy(solved, { threshold: THRESHOLD });
+      }, { threshold: THRESHOLD });
       const projection = projectArchStructuralStateToSurface(
         profiles.profile,
         state,
@@ -211,8 +244,10 @@
       viewer.projection = projection;
       return {
         force,
+        startingConnectivityEpoch,
         loadedNodeCount: state.load.loadedNodeCount,
         contact: state.load.contact,
+        contactLayer: state.load.contactLayer,
         brokenBondCount: projection.brokenBondIds.length,
         componentCount: projection.componentCount,
         maxRawVertexDisplacement: projection.maxRawVertexDisplacement,
@@ -240,17 +275,23 @@
         const joints = applyState(viewers.joints, force);
         document.getElementById('continuous-readout').textContent = formatResult(continuous);
         document.getElementById('joints-readout').textContent = formatResult(joints);
-        status.textContent = 'CPU spring proxy · same TRELLIS mesh · paired interior assumptions';
+        status.textContent = 'CPU spring proxy · accepted connectivity retained · displacement recomputed per load';
         receipt.textContent = JSON.stringify({
           requestedPageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
           effectivePageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
           effectiveMeshRoute: continuous.route,
           effectiveMeshAuthority: continuous.authority,
           effectiveSolverRoute: viewers.continuous.base.solverAuthority,
-          contact: { ...CONTACT, mode: 'camera-facing-surface' },
+          contact: {
+            ...CONTACT,
+            mode: 'camera-facing-surface',
+            side: continuous.contactLayer === viewers.continuous.base.layers - 1 ? '+z' : '-z',
+            layer: continuous.contactLayer,
+          },
           force,
           fractureThreshold: THRESHOLD,
           displayGain: DISPLAY_GAIN,
+          stateRetention: 'accepted connectivity and event history; displacement recomputed per Apply',
           sourceGlbSha256: continuous.sourceGlbSha256,
           continuous,
           radialJointCounterfactual: joints,
@@ -286,6 +327,7 @@
     window.addEventListener('resize', resize);
 
     try {
+      startupPhase = 'asset-load';
       const [profileResponse, sourceResponse] = await Promise.all([
         fetch(PROFILE_URL, { cache: 'no-store' }).then(response => {
           if (!response.ok) throw new Error(`profile request returned ${response.status}`);
@@ -333,6 +375,17 @@
       status.textContent = `Load failed: ${error.message}`;
       receipt.textContent = error.stack || error.message;
       throw error;
+    }
+    } catch (error) {
+      status.textContent = `Startup failed during ${startupPhase}: ${error.message}`;
+      receipt.textContent = JSON.stringify({
+        requestedPageRoute,
+        effectivePageRoute: 'unavailable',
+        failurePhase: startupPhase,
+        errorName: error.name || 'Error',
+        error: error.message || String(error),
+      });
+      console.error('Arch surface startup failed', startupPhase, error);
     }
   </script>
 </body>

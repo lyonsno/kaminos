@@ -303,8 +303,12 @@ function solveArchLinearSystem(state, load, mode) {
   const magnitude = finite(mode === 'force' ? load.force : load.travel, mode === 'force' ? 'load force' : 'load travel');
   const patchRadius = finite(load.patchRadius ?? 0, 'load patch radius');
   const contactDepthMode = load.contactDepthMode ?? 'through-thickness';
+  const contactLayer = load.contactLayer ?? state.layers - 1;
   if (!['through-thickness', 'camera-facing-surface'].includes(contactDepthMode)) {
     throw new Error('unsupported contact depth mode');
+  }
+  if (!Number.isInteger(contactLayer) || contactLayer < 0 || contactLayer >= state.layers) {
+    throw new Error('contact layer must identify a structural depth layer');
   }
   const iterations = load.iterations ?? 1200;
   if (!(magnitude >= 0) || patchRadius < 0 || !Number.isInteger(iterations) || iterations < 1) {
@@ -321,7 +325,7 @@ function solveArchLinearSystem(state, load, mode) {
   const contactCellKeys = new Set(contactCells.map(cell => `${cell.column}:${cell.row}`));
   const contactIndices = state.nodes.flatMap((node, index) =>
     contactCellKeys.has(`${node.column}:${node.row}`) &&
-      (contactDepthMode === 'through-thickness' || node.layer === state.layers - 1) ? [index] : []);
+      (contactDepthMode === 'through-thickness' || node.layer === contactLayer) ? [index] : []);
   if (mode === 'force' && magnitude > 0) {
     const adjacency = state.nodes.map(() => []);
     for (const bond of state.bonds) {
@@ -478,6 +482,7 @@ function solveArchLinearSystem(state, load, mode) {
       x, y, contact: { column: contact.column, row: contact.row },
       contactCells,
       contactDepthMode,
+      contactLayer: contactDepthMode === 'camera-facing-surface' ? contactLayer : null,
       patchRadius,
       loadedNodeCount: contactIndices.length,
       loadedNodeLayers: [...new Set(contactIndices.map(index => state.nodes[index].layer))].sort((a, b) => a - b),
