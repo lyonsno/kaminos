@@ -23001,6 +23001,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
   }
+  document.getElementById('volume-emissive-light-transport').addEventListener('input', syncControls);
   document.getElementById('volume-emissive-light-transport').addEventListener('change', syncControls);
   for (const id of ['volume-exposure', 'volume-reaction-boundary-fire-clean-color', 'volume-reaction-boundary-fire-soot-color']) {
     document.getElementById(id)?.addEventListener('input', syncControls);

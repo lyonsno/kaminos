@@ -17,6 +17,7 @@ assert.equal(schema.controlCount, schema.controls.length);
 assert.deepEqual(control?.allowedValues, ['axes', 'oblique']);
 assert.equal(control?.additiveDefault, 'axes');
 assert.match(html, /id="volume-emissive-light-transport"/);
+assert.match(html, /getElementById\('volume-emissive-light-transport'\)\.addEventListener\('input', syncControls\)/);
 assert.match(core, /emissiveLightField\.encode\(encoder, currentFluid, [^\n]*lightTransport/);
 assert.equal(resolveEmissiveLightTransport(undefined), 'axes');
 assert.equal(resolveEmissiveLightTransport('oblique'), 'oblique');
