@@ -9,7 +9,8 @@ import { compositionRestoreUrl } from './scene-authoring.mjs';
 const { values: args } = parseArgs({ options: { manifest: { type: 'string' }, out: { type: 'string' } } });
 assert.ok(args.manifest && args.out && path.isAbsolute(args.out));
 await fs.mkdir(args.out, { recursive: true });
-const report = { status: 'running', phase: 'arguments', startedAt: new Date().toISOString(), errors: [], frames: [] };
+const report = { status: 'running', phase: 'arguments', receiver: 'invoking-agent',
+  terminalReport: path.join(args.out, 'report.json'), startedAt: new Date().toISOString(), errors: [], frames: [] };
 const save = () => fs.writeFile(path.join(args.out, 'report.json'), JSON.stringify(report, null, 2));
 await save();
 let browser, context, page;
