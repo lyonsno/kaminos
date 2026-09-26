@@ -32,6 +32,8 @@ export function judgeForegroundRebind(result) {
 }
 
 export async function mountComposition({prototype, sharedGpu, host} = {}) {
+  if (!prototype?.setActive) throw new Error('foreground rebind probe requires the ordinary volume prototype');
+  await prototype.setActive(true);
   const context = prototype?.foregroundGpuContext?.();
   if (!sharedGpu?.device || sharedGpu.queue !== sharedGpu.device.queue || host?.device !== sharedGpu.device ||
       context?.device !== sharedGpu.device || context.queue !== sharedGpu.device.queue ||
