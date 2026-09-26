@@ -24,6 +24,17 @@ try {
   if (report.serving.source.commit !== report.sourceCommit || report.serving.source.dirty) {
     throw new Error('server does not expose the committed assay source');
   }
+  report.phase = 'scene-source'; save();
+  const entryUrl = new URL(arg('--url'));
+  const sceneFile = new URLSearchParams(entryUrl.hash.slice(1)).get('scene');
+  if (!sceneFile) throw new Error('authored scene route is missing');
+  const sceneResponse = await fetch(new URL(`/api/read?${new URLSearchParams({root: 'scenes', path: sceneFile})}`, entryUrl.origin), {cache: 'no-store'});
+  if (!sceneResponse.ok) throw new Error(`authored scene HTTP ${sceneResponse.status}`);
+  const sceneDocument = await sceneResponse.json();
+  report.expectedScene = {file: sceneFile, presetId: sceneDocument.composition?.flame?.presetId, modelSource: sceneDocument.model?.source}; save();
+  if (!report.expectedScene.presetId || !report.expectedScene.modelSource || entryUrl.searchParams.get('preset') !== report.expectedScene.presetId) {
+    throw new Error('authored scene and basin route identity do not agree');
+  }
   report.phase = 'worker-supervision'; save();
   const parentCommand = execFileSync('ps', ['-p', String(process.ppid), '-o', 'command='], {encoding: 'utf8'}).trim();
   report.supervision = {parentPid: process.ppid, parentCommand}; save();
@@ -42,6 +53,7 @@ try {
   page.setDefaultTimeout(45000);
   page.on('pageerror', error => { report.events.push({kind: 'pageerror', message: error.message}); save(); });
   page.on('console', message => { if (message.type() === 'error') {report.events.push({kind: 'console-error', message: message.text()}); save();} });
+  page.on('response', response => { if (response.status() >= 400) {report.events.push({kind: 'http-error', status: response.status(), url: response.url()}); save();} });
   report.phase = 'page-load'; save();
   await page.goto(arg('--url'), {waitUntil: 'domcontentloaded'});
   report.phase = 'composition-mount'; save();
@@ -54,6 +66,21 @@ try {
   })); save();
   if (report.preflight.setup.status !== 'mounted' || !report.preflight.probe?.sameDevice || !report.preflight.flame?.active) {
     throw new Error(`ordinary flame probe did not mount: ${JSON.stringify(report.preflight)}`);
+  }
+  report.phase = 'scene-restore'; save();
+  await page.waitForFunction(expected => {
+    const status = document.getElementById('composition-status')?.textContent || '';
+    return /^Restore failed:/i.test(status) || window.kaminosSceneObjectDebugState?.().some(row => row.source === expected.modelSource);
+  }, {timeout: 180000}, report.expectedScene);
+  report.sceneEvidence = await page.evaluate(() => ({
+    file: new URLSearchParams(location.hash.slice(1)).get('scene'),
+    presetId: window.__kaminosVolumeSettingsPresetReceipt?.presetId || null,
+    sources: window.kaminosSceneObjectDebugState?.().map(row => row.source) || [],
+    status: document.getElementById('composition-status')?.textContent || null,
+  })); save();
+  if (report.sceneEvidence.file !== report.expectedScene.file || report.sceneEvidence.presetId !== report.expectedScene.presetId ||
+      !report.sceneEvidence.sources.includes(report.expectedScene.modelSource) || /^Restore failed:/i.test(report.sceneEvidence.status || '')) {
+    throw new Error(`authored kiln scene did not restore: ${JSON.stringify(report.sceneEvidence)}`);
   }
   await page.screenshot({path: path.join(out, 'before.png')});
   report.phase = 'a-b-a'; save();
