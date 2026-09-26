@@ -45,12 +45,13 @@ its counters.
 The browser route is `http://127.0.0.1:8424/structural-material-arch-geometry.html`.
 The [browser smoke report](arch-history-consumer-smoke-2026-09-26.json) records
 the effective route, exact source hash, state snapshots, camera-pose stability,
-four PNG captures, and checks. The loaded frame is
+five PNG captures, and 41 checks. The loaded frame is
 [`matched-load.png`](matched-load.png); compare with
 [`history-unloaded.png`](history-unloaded.png) and
-[`unloaded-history-retained.png`](unloaded-history-retained.png). The captures
-were inspected at 1440 x 1100. Only an operator can decide whether the visible
-shape delta itself reads as changed response.
+[`unloaded-history-retained.png`](unloaded-history-retained.png). The desktop
+captures were inspected at 1440 x 1100 and the responsive view at 390 x 844.
+Only an operator can decide whether the visible shape delta itself reads as
+changed response.
 
 The machine-readable event ledger, per-step loads, response summaries, source
 identity, effective CPU route, and implementation hashes are in the
