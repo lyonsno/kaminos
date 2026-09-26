@@ -13,23 +13,19 @@
     "effective": "local Node.js CPU / shear-regularized linear-spring PCG",
     "fallback": false,
     "node": "v25.9.0",
-    "sourceRevision": "35665e881b4f0616aefe78e03152aa6772c46ba8",
+    "sourceRevision": "d02a6d5f09b5428e71c2639ebfda040daffd2e53",
     "sourceDirtyPaths": [
-      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/README.md",
-      "structural-material-arch-depth-assay.mjs",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/matched-history-continuous-2026-09-26.json",
       "artifacts/structural-material-3d/authored-bell-initial.json",
       "artifacts/structural-material-3d/authored-bell-initial.png",
       "artifacts/structural-material-3d/authored-bell-local-smoke.json",
-      "artifacts/structural-material-3d/authored-bell-local-smoke.png",
-      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/matched-history-continuous-2026-09-26.json",
-      "structural-material-arch-history-assay.mjs",
-      "tests/structural-material-arch-history-assay-contracts.mjs"
+      "artifacts/structural-material-3d/authored-bell-local-smoke.png"
     ],
     "implementationSha256": {
       "structural-material-arch-core.js": "9d78a4622ed1edbfb133a2fd17bc817326575c65be8910bd9880e3425dc6e335",
       "structural-material-arch-profile.mjs": "fdd82b40bcccd5ef3ae439ce7fbe23aa9450553125da5ef72a897043662bf201",
-      "structural-material-arch-depth-assay.mjs": "f7f3f7c0bcf03be6f8e81f4b3e4dfae1f2db660ddf46f0329bf4cc9378f30dd0",
-      "structural-material-arch-history-assay.mjs": "6a99d8a1d4a03b3cfb99ac47b9b7c9857271f6cb1791b20a0aee97e091051c6d"
+      "structural-material-arch-depth-assay.mjs": "dc53d748bb790dd18db0fd7a06be372b705be69442ee4ff9497e1143fed0f85e",
+      "structural-material-arch-history-assay.mjs": "466e4096e166386e5e5c61d2aeef9d33a0ac2c338fa56807b15aaa64fddb4a36"
     }
   },
   "source": {
@@ -936,6 +932,45 @@
     "intact": {
       "peakDisplacement": 0.007193720008602448,
       "rmsDisplacement": 0.0025664194248360946,
+      "requestedForce": 0.5,
+      "contact": {
+        "column": 40,
+        "row": 27
+      },
+      "contactCells": [
+        {
+          "column": 39,
+          "row": 26
+        },
+        {
+          "column": 40,
+          "row": 26
+        },
+        {
+          "column": 41,
+          "row": 26
+        },
+        {
+          "column": 39,
+          "row": 27
+        },
+        {
+          "column": 40,
+          "row": 27
+        },
+        {
+          "column": 41,
+          "row": 27
+        },
+        {
+          "column": 39,
+          "row": 28
+        },
+        {
+          "column": 40,
+          "row": 28
+        }
+      ],
       "contactTravel": 0.005369672386914017,
       "residual": 9.005823976343686e-8,
       "componentCount": 1,
@@ -944,6 +979,45 @@
     "damaged": {
       "peakDisplacement": 0.01061529348280608,
       "rmsDisplacement": 0.002873068609697813,
+      "requestedForce": 0.5,
+      "contact": {
+        "column": 40,
+        "row": 27
+      },
+      "contactCells": [
+        {
+          "column": 39,
+          "row": 26
+        },
+        {
+          "column": 40,
+          "row": 26
+        },
+        {
+          "column": 41,
+          "row": 26
+        },
+        {
+          "column": 39,
+          "row": 27
+        },
+        {
+          "column": 40,
+          "row": 27
+        },
+        {
+          "column": 41,
+          "row": 27
+        },
+        {
+          "column": 39,
+          "row": 28
+        },
+        {
+          "column": 40,
+          "row": 28
+        }
+      ],
       "contactTravel": 0.00841255503354137,
       "residual": 9.993573406103922e-8,
       "componentCount": 1,
@@ -957,6 +1031,45 @@
     "damaged": {
       "peakDisplacement": 0,
       "rmsDisplacement": 0,
+      "requestedForce": 0,
+      "contact": {
+        "column": 40,
+        "row": 27
+      },
+      "contactCells": [
+        {
+          "column": 39,
+          "row": 26
+        },
+        {
+          "column": 40,
+          "row": 26
+        },
+        {
+          "column": 41,
+          "row": 26
+        },
+        {
+          "column": 39,
+          "row": 27
+        },
+        {
+          "column": 40,
+          "row": 27
+        },
+        {
+          "column": 41,
+          "row": 27
+        },
+        {
+          "column": 39,
+          "row": 28
+        },
+        {
+          "column": 40,
+          "row": 28
+        }
+      ],
       "contactTravel": 0,
       "residual": 0,
       "componentCount": 1,
