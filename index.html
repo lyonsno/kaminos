@@ -3484,6 +3484,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
+import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -3921,6 +3922,7 @@ let fingerFluidBenchState = createFingerFluidBenchState({
 window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 let sceneObjects = [];
+const sceneMembershipEditTargets = new Set();
 let sceneImportStatus = null;
 let sceneGroups = [];
 let activeSceneObjectId = null;
@@ -9522,11 +9524,120 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
   };
 };
 
-window.removeSceneObject = function(id) {
+function membershipEditTargetId(id) {
+  return `@scene-membership:${encodeURIComponent(id)}`;
+}
+
+function sceneObjectMembershipSnapshot(id) {
+  const index = sceneObjects.findIndex(obj => obj.id === id);
+  if (index < 0) return null;
+  const entry = sceneObjects[index];
+  const record = serializeSceneObject(entry);
+  if (record.type !== 'glb' || !isReloadableSceneObjectRecord(record)) return null;
+  return {
+    record,
+    index,
+    groups: sceneGroups.flatMap((group, groupIndex) => group.objectIds.includes(id)
+      ? [{ ...group, groupIndex, objectIds: [...group.objectIds] }]
+      : []),
+    selection: { objectId: activeSceneObjectId, groupId: activeSceneGroupId },
+  };
+}
+
+function checkedSceneObjectMembership(value, id) {
+  if (value == null) return null;
+  if (!value || typeof value !== 'object' || !value.record || value.record.id !== id
+      || value.record.type !== 'glb' || !isReloadableSceneObjectRecord(value.record)
+      || !Number.isInteger(value.index) || value.index < 0 || !Array.isArray(value.groups)
+      || value.groups.some(group => !group || typeof group.id !== 'string'
+        || !Number.isInteger(group.groupIndex) || group.groupIndex < 0
+        || !Array.isArray(group.objectIds) || !group.objectIds.includes(id))
+      || !value.selection
+      || !(value.selection.objectId === null || typeof value.selection.objectId === 'string')
+      || !(value.selection.groupId === null || typeof value.selection.groupId === 'string')) {
+    throw new Error(`Scene object "${id}" cannot be restored from its retained source`);
+  }
+  return {
+    record: structuredClone(value.record),
+    index: value.index,
+    groups: value.groups.map(group => ({ ...structuredClone(group), objectIds: [...group.objectIds] })),
+    selection: structuredClone(value.selection),
+  };
+}
+
+function restoreSceneObjectGroups(entry, groups) {
+  sceneGroups = restoreSceneObjectGroupsState(
+    sceneGroups,
+    groups,
+    entry.id,
+    sceneObjects.map(record => record.id),
+  );
+  const restoredGroup = sceneGroups.find(group => group.objectIds.includes(entry.id));
+  setSceneObjectGroupId(entry, restoredGroup?.id || null);
+  pruneSceneGroups();
+}
+
+async function restoreSceneObjectMembership(snapshot) {
+  const { record, index, groups, selection } = snapshot;
+  if (sceneObjects.some(entry => entry.id === record.id)) {
+    throw new Error(`Scene object "${record.id}" is already present`);
+  }
+  const object = await addSceneObjectFromSource(record);
+  const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
+  if (!entry || object !== entry.object) throw new Error(`Scene object "${record.id}" did not restore its retained identity`);
+  applySceneObjectTransformState(object, record.transform);
+  applyMaterialStateToObject(object, record.materials);
+  sceneObjects.splice(sceneObjects.indexOf(entry), 1);
+  sceneObjects.splice(Math.min(index, sceneObjects.length), 0, entry);
+  restoreSceneObjectGroups(entry, groups);
+  if (selection.groupId && sceneGroups.some(group => group.id === selection.groupId)) {
+    setActiveSceneGroup(selection.groupId);
+  } else if (selection.objectId && sceneObjects.some(record => record.id === selection.objectId)) {
+    setActiveSceneObject(selection.objectId);
+  } else {
+    clearActiveSceneObjectSelection();
+  }
+  window._kaminosDirty?.();
+  return true;
+}
+
+function ensureSceneObjectMembershipTarget(id) {
+  const editId = membershipEditTargetId(id);
+  if (!scenePlacementTools) throw new Error('Scene edit history is not installed');
+  if (!sceneMembershipEditTargets.has(editId)) {
+    scenePlacementTools.edits.register(editId, {
+      allowMissing: true,
+      read: () => sceneObjectMembershipSnapshot(id),
+      check: value => checkedSceneObjectMembership(value, id),
+      write: value => value == null
+        ? removeSceneObjectInternal(id, { recordHistory: false })
+        : restoreSceneObjectMembership(value),
+    });
+    sceneMembershipEditTargets.add(editId);
+  }
+  return editId;
+}
+
+function recordSceneObjectInsertion(id) {
+  const after = sceneObjectMembershipSnapshot(id);
+  if (!after) return false;
+  const editId = ensureSceneObjectMembershipTarget(id);
+  return scenePlacementTools.edits.recordApplied(editId, null, after, `Add ${after.record.label || after.record.fileName || id}`);
+}
+
+window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
+
+function removeSceneObjectInternal(id, { recordHistory = true } = {}) {
+  if (recordHistory && scenePlacementTools?.edits.state().replaying) {
+    setInfo('Wait for the current scene history action to finish');
+    return false;
+  }
   scenePlacementTools?.finish(false);
-  scenePlacementTools?.edits.discard(entry => entry.id === id);
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
+  const before = recordHistory ? sceneObjectMembershipSnapshot(id) : null;
+  const editId = before ? ensureSceneObjectMembershipTarget(id) : null;
+  if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
   const [entry] = sceneObjects.splice(index, 1);
   if (hybridSplatOverlayState.objectId === entry.id) {
     stopHybridSplatOverlay({ silent: true });
@@ -9557,7 +9668,15 @@ window.removeSceneObject = function(id) {
     updateTransformInspector();
   }
   setInfo(`Removed: ${entry.label || entry.fileName || entry.id}`);
+  if (editId) {
+    scenePlacementTools.edits.recordApplied(editId, before, null, `Remove ${entry.label || entry.fileName || id}`);
+  }
   window._kaminosDirty?.();
+  return true;
+}
+
+window.removeSceneObject = function(id) {
+  return removeSceneObjectInternal(id);
 };
 
 function shouldIgnoreSceneObjectDeleteShortcut(e) {
@@ -10502,6 +10621,7 @@ async function initScene() {
   };
   scenePlacementTools = installScenePlacementTools({
     viewport: viewportEl,
+    historyScope: document.getElementById('scene-object-list'),
     camera,
     controls,
     gizmo: transformControls,
@@ -10518,7 +10638,6 @@ async function initScene() {
   });
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
-
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1';
   let sceneRenderedForVolume = false;
   let foregroundServiceActive = false;
@@ -10616,6 +10735,12 @@ async function initScene() {
       const object = await showGLB(saved.source, {clear:false, metadata:{source:saved.source,type:'glb',fileName:`${sha256}.glb`,label:`SF3D chair · ${runId}`}});
       const entry = sceneObjects.find(row => row.object === object);
       if (!entry) throw new Error('SF3D output was not registered in the host scene');
+      try {
+        if (!recordSceneObjectInsertion(entry.id)) throw new Error('SF3D output has no retained scene-membership history target');
+      } catch (error) {
+        removeSceneObjectInternal(entry.id, { recordHistory: false });
+        throw error;
+      }
       window._kaminosDirty?.();
       return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
     },
@@ -10774,6 +10899,8 @@ function applyEnvMap(envMap, intensity) {
 // --- File Loading ---
 function clearScene() {
   scenePlacementTools?.clear();
+  for (const editId of sceneMembershipEditTargets) scenePlacementTools.edits.unregister(editId);
+  sceneMembershipEditTargets.clear();
   sceneMutationToken++;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
@@ -26522,6 +26649,10 @@ function sceneIsEmpty() {
 }
 
 function sceneSaveIsBlocked() {
+  if (scenePlacementTools?.edits.state().replaying) {
+    setInfo('Wait for the current scene history action to finish');
+    return true;
+  }
   if (greenroomPreviewIsActive()) {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;
@@ -26590,6 +26721,10 @@ function claimLoadedSceneFile(file) {
 async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (authoringBusy) {
     setInfo('Wait for the current capture or save');
+    return;
+  }
+  if (scenePlacementTools?.edits.state().replaying) {
+    setInfo('Wait for the current scene history action to finish');
     return;
   }
   const previousSceneFile = currentSceneFile;
