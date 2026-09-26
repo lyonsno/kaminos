@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildSceneDocument, planSceneRestore, isReloadableSceneObjectRecord } from '../scene-persistence-core.js';
 import { createSceneEdits } from '../scene-edit-session.mjs';
+import { flamePoseInDomain } from '../scene-flame-emitter.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
@@ -44,7 +45,8 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
   let pose={position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]};
   let suspended=false;
   const calls=[];
-  const context={normalizeFlameEmitterPose:value=>structuredClone(value),
+  const context={normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain,
+    flameDomainTranslation:[0,0,0],
     applyFlameEmitterPose:(next,{sourceEnabled=true}={})=>{
       calls.push({x:next.position[0],sourceEnabled});
       if(sourceEnabled && next.position[0]>1.5)throw Error('generated emitter support exceeds volume-local analytic bounds [-1.5, 1.5]');
@@ -128,9 +130,11 @@ test('a source-free analytic family retains the flame handle for editing and sav
   let removed=0,updated=0;
   const context={scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'off'}}},
-    sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:{visible:false},
+    sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:{visible:false,box:{set:()=>{}}},
+    flameDomainTranslation:[0,0,0],
     flameEmitterPose:{position:[2,0,0],rotation:[0,0,0],scale:[1,1,1]},
-    applySceneObjectTransformState:()=>updated++,updateFlameEmitterSupportOutline:()=>{},THREE:{}};
+    applySceneObjectTransformState:()=>updated++,updateFlameEmitterSupportOutline:()=>{},
+    THREE:{Vector3:class {add(){return this;}}}};
   vm.runInNewContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter();',context);
   assert.equal(removed,0);
   assert.equal(updated,1);

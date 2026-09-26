@@ -18,6 +18,30 @@ export function normalizeFlameEmitterPose(value = defaultFlameEmitterPose()) {
   return pose;
 }
 
+export function flameDomainTranslationForPose(value) {
+  const pose = normalizeFlameEmitterPose(value);
+  const [x, y, z] = pose.position;
+  if (Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1) return [0, 0, 0];
+  return [x, y - defaultFlameEmitterPose().position[1], z];
+}
+
+export function flamePoseInDomain(value, translation) {
+  const pose = normalizeFlameEmitterPose(value);
+  if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
+    throw new Error('Flame domain translation requires three finite coordinates');
+  }
+  const [x, y, z] = pose.position.map((component, index) => component - translation[index]);
+  return Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1;
+}
+
+export function flamePoseToDomain(value, translation) {
+  const pose = normalizeFlameEmitterPose(value);
+  if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
+    throw new Error('Flame domain translation requires three finite coordinates');
+  }
+  return { ...pose, position: pose.position.map((component, index) => component - translation[index]) };
+}
+
 // The current ordinary flame has one fixed world-aligned simulation domain.
 // This frame changes injection only; it does not transform the advected field.
 export function flameEmitterFrame(value) {
