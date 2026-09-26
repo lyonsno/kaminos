@@ -176,8 +176,41 @@ export function validateVolumeSettingsPresetSourceIdentity(requestedSource, effe
   return true;
 }
 
+function volumeSettingsPresetServerProjection(document) {
+  const projection = document?.schemaProjection || {};
+  const list = value => (Array.isArray(value) ? value : []);
+  return Object.freeze({
+    defaultsApplied: Object.freeze(list(projection.defaultsApplied).map(String)),
+    retiredControlIds: Object.freeze(list(projection.retiredControlsStripped).map(entry => String(entry?.id))),
+    carriedControls: Object.freeze(list(projection.carriedControls).map(entry => Object.freeze({ ...entry }))),
+    unsupportedValuesDefaulted: Object.freeze(list(projection.unsupportedValuesDefaulted).map(entry => Object.freeze({ ...entry }))),
+  });
+}
+
+// One status line for what the server changed to make a basin load here.
+// Carried controls and replaced values are warnings: the basin on screen is
+// not exactly the basin that was saved.
+export function describeVolumeSettingsPresetProjection(projection) {
+  const parts = [];
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const carried = projection?.carriedControls || [];
+  const replaced = projection?.unsupportedValuesDefaulted || [];
+  if (carried.length) {
+    parts.push(`carries ${plural(carried.length, 'control')} from another branch: ${carried.map(entry => entry.id).join(', ')}`);
+  }
+  if (replaced.length) {
+    parts.push(`${plural(replaced.length, 'value')} not offered here: ${replaced.map(entry => `${entry.id} ${entry.value} -> ${entry.effective}`).join(', ')}`);
+  }
+  const defaults = projection?.defaultsApplied || [];
+  if (defaults.length) parts.push(`${plural(defaults.length, 'newer control')} at defaults`);
+  const retired = projection?.retiredControlIds || [];
+  if (retired.length) parts.push(`${plural(retired.length, 'retired control')} dropped`);
+  return { text: parts.join(' | '), warning: Boolean(carried.length || replaced.length) };
+}
+
 export function validateVolumeSettingsPresetDocument(document, requestedPresetRef = null, rawSchema = null) {
   const schema = validatePresetSchema(rawSchema);
+  const serverProjection = volumeSettingsPresetServerProjection(document);
   const retirementMigration = migrateRetiredVolumeSettingsPresetDocument(document, schema);
   document = retirementMigration.document;
   if (!document || document.identity !== 'kaminos-volume-settings-preset-artifact-v2') {
@@ -333,6 +366,7 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     presentationControlCount: presentationEntries.length,
     routeEntries: Object.freeze([...presetRoute.searchParams].map(entry => Object.freeze([...entry]))),
     routeVolumeEntries: Object.freeze(routeVolumeEntries.map(entry => Object.freeze([...entry]))),
+    serverProjection,
     retirementMigration: Object.freeze({
       identity: 'kaminos.volume.retired-control-migration.v1',
       applied: retirementMigration.applied,
