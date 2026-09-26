@@ -200,6 +200,12 @@ function orthogonalSupportAxis(direction, supportAxis) {
   return normalize(projected, 'supportAxis projected perpendicular to direction');
 }
 
+function fallbackOrthogonalSupportAxis(direction) {
+  const candidates = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    .sort((left, right) => Math.abs(dot(left, direction)) - Math.abs(dot(right, direction)));
+  return orthogonalSupportAxis(direction, candidates[0]);
+}
+
 function normalizeChemistry(value = {}) {
   const chemistry = { ...DEFAULT_CHEMISTRY, ...value };
   return {
@@ -353,6 +359,18 @@ export function compileVolumeEmitterFamily(request = {}) {
       supportAxis = orthogonalSupportAxis(axis, requestedSupportAxis);
       familyRequested = { supportAxis: requestedSupportAxis, length: extent };
     } else {
+      const candidate = request.supportAxis;
+      if (candidate === undefined) {
+        // Wick/nozzle shape does not consume this side axis, but the core still
+        // needs a deterministic orthogonal basis after an arbitrary aim.
+        supportAxis = fallbackOrthogonalSupportAxis(axis);
+        requestedSupportAxis = supportAxis;
+      } else {
+        // An authored basis is authority-bearing input: reject it when it
+        // cannot form a frame instead of silently replacing it.
+        requestedSupportAxis = vec3(candidate, 'supportAxis');
+        supportAxis = orthogonalSupportAxis(axis, requestedSupportAxis);
+      }
       familyRequested = { length: extent };
     }
   }

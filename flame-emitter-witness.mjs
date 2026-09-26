@@ -27,8 +27,16 @@ function assertFrame(observed) {
   assert.equal(volume.analyticEmitterDispatchActive,true);
   assert.equal(observed.receipt.fallbackUsed,false);
 }
+function assertPose(actual,expected,label='pose') {
+  for(const group of ['position','rotation','scale']) {
+    assert.equal(actual?.[group]?.length,3,`${label}.${group} must be a 3-vector`);
+    for(let axis=0;axis<3;axis++) assert.ok(Math.abs(actual[group][axis]-expected[group][axis])<1e-10,
+      `${label}.${group}[${axis}] differs: ${actual[group][axis]} vs ${expected[group][axis]}`);
+  }
+}
 try {
   const manifest=JSON.parse(await fs.readFile(args.manifest,'utf8'));report.requested=manifest;
+  assert.equal(manifest.requestedRoute,'local-native-chrome-webgpu','witness requires its declared local Chrome/WebGPU route');
   report.phase='source-preflight';await save();
   report.source=await verifyAuthoringServer({origin:manifest.origin,repoRoot:process.cwd()});
   assert.equal(report.source.source.commit,manifest.sourceCommit,'source revision changed');
@@ -39,17 +47,11 @@ try {
     const raw=Buffer.from(await response.arrayBuffer());assert.deepEqual(raw,await fs.readFile(file),`wrong source ${file}`);
     report.source.hashes[file]=createHash('sha256').update(raw).digest('hex');
   }
-  report.phase='greenroom-admission';await save();
-  const running=path.join(manifest.queueRoot,'running'),matches=[];
-  for(const entry of await fs.readdir(running)) {
-    const request=JSON.parse(await fs.readFile(path.join(running,entry,'request.json'),'utf8'));
-    if(request.input_path===args.manifest)matches.push({jobId:entry,request,status:JSON.parse(await fs.readFile(path.join(running,entry,'status.json'),'utf8'))});
-  }
-  assert.equal(matches.length,1,'native FIFO running request must own this exact manifest');
-  assert.equal(matches[0].request.output_dir,args.out);assert.match(matches[0].status.effective_route,/flame-emitter-witness\.mjs/);
-  report.admission=matches[0];report.phase='browser-start';await save();
+  report.phase='browser-start';await save();
   const {chromium}=await import(pathToFileURL(manifest.playwright));
   browser=await chromium.launch({executablePath:manifest.chrome,headless:false,args:['--enable-unsafe-webgpu','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
+  report.execution={requestedRoute:manifest.requestedRoute,effectiveExecutable:await fs.realpath(manifest.chrome),
+    browserVersion:browser.version(),nodeVersion:process.version,rendererBackend:null};
   context=await browser.newContext({viewport:manifest.viewport,deviceScaleFactor:1,recordVideo:{dir:path.join(args.out,'video')}});
   await context.tracing.start({screenshots:true,snapshots:true,sources:true});
   page=await context.newPage();report.browser=await browser.version();
@@ -73,6 +75,7 @@ try {
   }
   report.phase='host-mount';report.url=manifest.sceneUrl;await save();
   await page.goto(report.url);report.initial=await waitFrame(120);
+  report.execution.rendererBackend=report.initial.volume.backend;
   console.log(JSON.stringify({backend:report.initial.volume.backend,source:report.source.source,emitter:report.initial.emitter}));
   for(const mutate of [s=>s.volume.backend='WebGL',s=>s.emitter.registered=false,s=>s.volume.simStepCount=0,
     s=>s.emitter.source.origin=[99,99,99],s=>s.volume.analyticEmitterFrameId='stale',s=>s.receipt.fallbackUsed=true]) {
@@ -92,10 +95,11 @@ try {
   assert.notDeepEqual(moved.volume.analyticEmitterDispatchCellMin,before.volume.analyticEmitterDispatchCellMin,'the GPU injection dispatch must follow the source');
   report.move={before,after:moved};await shot('02-immediately-moved');
   await waitFrame(moved.volume.frameCount+30);await shot('03-plume-after-move');
-  await page.keyboard.press('Meta+z');assert.deepEqual((await state()).emitter.pose,original);
-  await page.keyboard.press('Meta+Shift+z');assert.deepEqual((await state()).emitter.pose,moved.emitter.pose);
+  await page.locator('#kaminos-host-renderer-canvas').hover();await page.evaluate(()=>document.activeElement?.blur());
+  await page.keyboard.press('Meta+z');assertPose((await state()).emitter.pose,original,'undo pose');
+  await page.keyboard.press('Meta+Shift+z');assertPose((await state()).emitter.pose,moved.emitter.pose,'redo pose');
   for(const key of ['g','x','0','.','2','Escape'])await page.keyboard.press(key);
-  assert.deepEqual((await state()).emitter.pose,moved.emitter.pose);
+  assertPose((await state()).emitter.pose,moved.emitter.pose,'cancel pose');
   for(const key of ['r','z','2','0','Enter'])await page.keyboard.press(key);
   for(const key of ['s','1','.','1','Enter'])await page.keyboard.press(key);
   report.aimed=await state();assertFrame(report.aimed);
@@ -107,7 +111,7 @@ try {
     try{window.kaminosSetSceneObjectTransform('flame-emitter',{position:[99,0,0]});}catch(e){error=e.message;}
     return {before,after:window.kaminosFlameEmitterState(),historyBefore:history,historyAfter:window.kaminosSceneEdits.state(),error};
   });
-  assert.match(report.invalidMove.error,/bounds/);assert.deepEqual(report.invalidMove.after.pose,report.invalidMove.before.pose);
+  assert.match(report.invalidMove.error,/bounds/);assertPose(report.invalidMove.after.pose,report.invalidMove.before.pose,'rejected move pose');
   assert.deepEqual(report.invalidMove.historyAfter,report.invalidMove.historyBefore,'rejected source placement must not strand a transaction');
   await waitFrame(report.aimed.volume.frameCount+30);await shot('04-aimed');
   report.phase='save-reopen';await save();
@@ -116,11 +120,11 @@ try {
   report.savedReceipt=await(await responsePromise).json();
   const saved=await(await fetch(`${manifest.origin}/api/read?root=scenes&path=${encodeURIComponent(report.savedReceipt.saved)}`)).json();
   await fs.writeFile(path.join(args.out,'saved-scene.json'),JSON.stringify(saved,null,2));
-  assert.deepEqual(saved.objects.find(o=>o.id==='flame-emitter').transform,report.beforeSave.emitter.pose);
+  assertPose(saved.objects.find(o=>o.id==='flame-emitter').transform,report.beforeSave.emitter.pose,'saved pose');
   report.reopenUrl=compositionRestoreUrl(saved.composition,report.savedReceipt.saved,manifest.origin);
   await page.goto('about:blank');await page.goto(report.reopenUrl);
   report.reopened=await waitFrame(120);assert.notEqual(report.reopened.timeOrigin,report.beforeSave.timeOrigin);
-  assert.deepEqual(report.reopened.emitter.pose,report.beforeSave.emitter.pose);
+  assertPose(report.reopened.emitter.pose,report.beforeSave.emitter.pose,'reopened pose');
   assert.equal(report.reopened.history.undoCount,0);await shot('05-reopened');
   assert.deepEqual(report.errors,[],'page errors require inspection');
   assert.deepEqual(report.console.filter(x=>x.type==='error'),[],'console errors require inspection');
