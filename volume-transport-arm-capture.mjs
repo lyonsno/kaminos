@@ -97,11 +97,13 @@ function effectiveMismatches(arm, end, expectedMode) {
       // this comparison can fail.
       const packed = end.confinementUniform?.confinementAmount;
       const observed = fault === 'packed-epsilon' ? (Number(packed) || 0) + 1 : packed;
-      const observedMode = fault === 'null-mode-drift' ? 'off' : end.confinement?.mode;
+      // The drift fault targets the null-override arm specifically, the case the
+      // confirmation review constructed (override-only arm ending in `off`).
+      const observedMode = fault === 'null-mode-drift' && value === 'null' ? 'off' : end.confinement?.mode;
       const packedMode = { 'curl-slider': 0, calibrated: 1, off: 2 }[expectedMode];
       if (!expectedMode) mismatches.push('override requested but no confinement mode has been requested or admitted');
       else if (observedMode !== expectedMode) mismatches.push(`confinement mode drifted: expected ${expectedMode} (last requested or admitted), observed ${observedMode}`);
-      else if (fault !== 'null-mode-drift' && end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement mode ${expectedMode} expected but uniform slot 345 holds ${end.confinementUniform?.mode}`);
+      else if (!(fault === 'null-mode-drift' && value === 'null') && end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement mode ${expectedMode} expected but uniform slot 345 holds ${end.confinementUniform?.mode}`);
       if (value === 'null') {
         if (expectedMode === 'calibrated') {
           if (end.confinement?.calibration?.source !== 'table') mismatches.push(`null override requested but calibration source is ${end.confinement?.calibration?.source}`);
