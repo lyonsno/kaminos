@@ -41,6 +41,7 @@ assert.notDeepEqual(secondAccepted.bonds, repeatedFromIntact.bonds,
   'the second load must solve through the first load’s accepted broken bonds');
 
 const page = readFileSync('structural-material-arch-geometry.html', 'utf8');
+const historyConsumer = readFileSync('structural-material-arch-history-consumer.mjs', 'utf8');
 assert.match(page, /const startingState = viewer\.state \?\? viewer\.base;/,
   'Apply must select the last accepted state, falling back to intact only before the first load');
 assert.match(page, /state: startingState,/,
@@ -52,22 +53,22 @@ assert.match(sidecar, /export function acceptArchSurfaceBatch\([\s\S]*positions:
   'paired mesh acceptance must retain rollback positions until both render buffers update');
 assert.match(sidecar, /for \(let index = 0; index < entries\.length; index \+= 1\) \{[\s\S]*viewer\.state = updates\[index\]\.state/,
   'viewer structural states commit only after each staged mesh write succeeds');
-assert.match(page, /stateRetention: 'accepted connectivity and event history; displacement recomputed per Apply'/,
+assert.match(page, /stateRetention: 'damaged connectivity persists through unload; displacement recomputed per action'/,
   'the receipt must distinguish retained topology from recomputed elastic displacement');
 assert.match(page, /viewer\.state = viewer\.base;/,
   'Reset must be the explicit transition back to intact topology');
-assert.match(page, /contactLayer,\s*iterations: 600/,
-  'the current camera-facing layer must reach the structural solver');
-assert.match(page, /side: continuous\.contactLayer === viewers\.continuous\.base\.layers - 1 \? '\+z' : '-z'/,
-  'the effective loaded face must be named in the operator receipt');
+assert.match(historyConsumer, /contactDepthMode: 'through-thickness', iterations: 1200/,
+  'the matched experiment must use its fixed through-thickness contact rule');
 assert.match(page, /import\('three'\)/,
   'external modules must be loaded inside the startup error boundary');
 assert.match(page, /Startup failed during \$\{startupPhase\}/,
   'module and renderer startup failures must replace the indefinite Loading state');
 assert.match(page, /const compact = width \/ height < 1\.15;/,
   'portrait canvas layouts must stack the paired cases without changing the camera');
-assert.match(page, /continuous\.root\.position\.y = compact \? 0\.5 : 0;/,
-  'the portrait layout must stack the paired cases rather than crop them');
+assert.match(page, /intact\.root\.position\.y = compact \? 0\.5 : 0;/,
+  'the portrait layout must stack the paired histories rather than crop them');
+assert.match(page, /damaged\.root\.position\.y = compact \? -0\.5 : 0;/,
+  'the damaged history remains paired in the portrait layout');
 assert.match(page, /camera\.position\.(?:set|z)/,
   'responsive layout must not rewrite the operator-owned camera');
 

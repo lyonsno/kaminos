@@ -1,6 +1,6 @@
 # Projected Arch Structural Witness
 
-## Current Checkpoint: Continuous-Arch Matched History
+## Current Checkpoint: Matched History Reaches The TRELLIS Consumer
 
 The 2026-09-26 assay isolates the source-intended continuous interior instead
 of letting the radial-joint counterfactual veto or confound the result. It
@@ -27,6 +27,31 @@ response of this expressive proxy. It is **not** a residual visible scar:
 each solve uses fixed reference geometry. No calibrated stone behavior,
 permanent shape change, detached motion, GPU execution, or audio is claimed.
 
+The paired geometry consumer now carries that experiment onto two copies of
+the same GLB. The left remains intact; the right receives the six-load crack
+history. Both receive force `0.50` at `(0.35, 0.20)` through all inferred depth
+layers, with 1200 solver iterations and the same display gain. This route uses
+a dedicated profile with the assay's shared bounds
+`[-0.5, 0.5] x [-0.39, 0.39]`: reusing the older mesh-bounds profile moved the
+nominal contact patch to different grid cells, so it was not an honest matched
+comparison. Both loaded copies resolve to cell `(40, 27)` and map the state
+onto the same 197871 source vertices. Peak displayed motion is `0.05224`
+intact versus `0.07630` with prior cracking. Unloading returns both surfaces
+to exact zero displacement while the damaged graph retains 40 broken bonds.
+The pixel difference is restrained; this proves state reaches the mesh
+consumer, not yet that an operator finds the injury legible without reading
+its counters.
+
+The browser route is `http://127.0.0.1:8424/structural-material-arch-geometry.html`.
+The [browser smoke report](arch-history-consumer-smoke-2026-09-26.json) records
+the effective route, exact source hash, state snapshots, camera-pose stability,
+four PNG captures, and checks. The loaded frame is
+[`matched-load.png`](matched-load.png); compare with
+[`history-unloaded.png`](history-unloaded.png) and
+[`unloaded-history-retained.png`](unloaded-history-retained.png). The captures
+were inspected at 1440 x 1100. Only an operator can decide whether the visible
+shape delta itself reads as changed response.
+
 The machine-readable event ledger, per-step loads, response summaries, source
 identity, effective CPU route, and implementation hashes are in the
 [matched-history report](matched-history-continuous-2026-09-26.json). Replay:
@@ -36,16 +61,21 @@ node structural-material-arch-history-assay.mjs \
   artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb \
   artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/matched-history-continuous-2026-09-26.json
 
-node --test tests/structural-material-arch-*.mjs
+node --test --test-concurrency=1 tests/structural-material-arch-*.mjs
+
+node structural-material-arch-history-smoke.mjs \
+  http://127.0.0.1:8424/structural-material-arch-geometry.html \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-consumer-smoke-2026-09-26.json \
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' 180000
 ```
 
-**Next consumer slice:** let an operator compare intact and cracked connectivity
-under the same later contact, then release the load. The current visual page
-does not yet exercise this matched-history pair; its mesh mapping also has no
-residual-set model, so an unloaded visual scar would be dishonest. First show
-the loaded displacement/connectivity delta on the same arch, then decide
-whether adding an explicit residual-deformation state is necessary for the
-intended material grammar.
+**Next consumer slice:** ask the operator whether the restrained mesh delta is
+visible and causally legible while orbiting freely. If it is not, keep solver
+evidence separate from the visual claim and identify the smallest projection
+adjustment that improves perception without changing matched force or material
+state. Do not add an unloaded scar: no residual-set model exists. Next decide
+whether the intended stone grammar needs persistent deformation, physical
+surface separation, or both before selecting a GPU migration target.
 
 ## Earlier Checkpoint: Contact And Interior Sensitivity
 

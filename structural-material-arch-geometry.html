@@ -46,7 +46,7 @@
     section + section { border-left: 1px solid var(--line); padding: 12px 0 8px 12px; }
     h2 { margin: 0; font-size: 14px; font-weight: 620; }
     .continuous h2 { color: var(--mint); }
-    .joints h2 { color: var(--gold); }
+    .damaged h2 { color: var(--gold); }
     .readout { margin-top: 4px; font-variant-numeric: tabular-nums; }
     .receipt { padding-top: 10px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
     @media (max-width: 720px) {
@@ -64,31 +64,33 @@
 </head>
 <body>
   <header>
-    <h1>Arch surface</h1>
-    <span class="identity">TRELLIS GLB · structural state consumer · source-intended continuous body</span>
+    <h1>Arch response</h1>
+    <span class="identity">TRELLIS GLB · matched continuous structural histories</span>
   </header>
   <main>
     <div class="controls">
       <div class="force">
-        <label for="force">Crown load · proxy units</label>
-        <input id="force" type="range" min="0.1" max="1.5" step="0.05" value="0.75">
-        <output id="force-value" for="force">0.75</output>
-      </div>
-      <button id="apply">Apply load</button>
+      <label for="force">Matched load · proxy units</label>
+      <input id="force" type="range" min="0.1" max="1.5" step="0.05" value="0.5">
+      <output id="force-value" for="force">0.50</output>
+    </div>
+      <button id="damage-history">Build damage history</button>
+      <button id="apply" disabled>Apply matched load</button>
+      <button id="unload" disabled>Unload</button>
       <button id="reset">Reset</button>
       <div class="route readout" id="status">Loading source mesh and structural profile</div>
     </div>
-    <canvas id="view" class="stage" aria-label="Two views of the same TRELLIS arch under two structural interior assumptions"></canvas>
+    <canvas id="view" class="stage" aria-label="Matched intact and damaged histories of the same TRELLIS arch"></canvas>
     <div class="pair">
       <section class="continuous">
-        <h2>Continuous interior</h2>
-        <div class="subhead">Source-intended structural recipe · camera-facing crown contact</div>
-        <div class="readout" id="continuous-readout">Waiting for source mesh</div>
+        <h2>Intact history</h2>
+        <div class="subhead">Same continuous proxy · no prior damage transition</div>
+        <div class="readout" id="intact-readout">Waiting for source mesh</div>
       </section>
-      <section class="joints">
-        <h2>Radial-joint counterfactual</h2>
-        <div class="subhead">Authored comparison prior · same geometry, load and contact layer</div>
-        <div class="readout" id="joints-readout">Waiting for source mesh</div>
+      <section class="damaged">
+        <h2>Damaged history</h2>
+        <div class="subhead">Same continuous proxy · located prior crack sequence</div>
+        <div class="readout" id="damaged-readout">Waiting for source mesh</div>
       </section>
     </div>
     <div class="receipt" id="receipt">Requested surface route: TRELLIS GLB to persistent arch state. No solver event applied.</div>
@@ -110,24 +112,25 @@
     const { OrbitControls } = controlsModule;
     const { GLTFLoader } = loaderModule;
     const { buildArchStructuralProxy } = core;
+    const { buildArchDamageHistory, ARCH_HISTORY_RECIPE } = await import('./structural-material-arch-history-consumer.mjs');
     const {
       stageArchSurfaceBatch,
       acceptArchSurfaceBatch,
       runArchSurfaceApply,
       summarizeArchSurfaceUpdate,
-      resolveArchCameraFacingLayer,
     } = surface;
 
-    const PROFILE_URL = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-surface-depth-profile.json';
+    const PROFILE_URL = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-surface-depth-profile.json';
     const GLB_URL = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb';
     const DISPLAY_GAIN = 8;
-    const CONTACT = { x: -0.05, y: 0.29, patchRadius: 0.032 };
     const THRESHOLD = 0.04;
     const forceInput = document.getElementById('force');
     const forceOutput = document.getElementById('force-value');
     const profiles = {};
     const viewers = {};
     let ready = false;
+    let damageHistory = null;
+    let latestReceipt = {};
 
     startupPhase = 'renderer-initialization';
     const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('view'), antialias: true, alpha: false });
@@ -151,6 +154,11 @@
     controls.target.set(0, 0.02, 0);
     controls.enableDamping = false;
     controls.addEventListener('change', render);
+    window.__archHistoryCamera = () => ({
+      position: camera.position.toArray(),
+      target: controls.target.toArray(),
+    });
+    window.__archHistoryReceipt = () => latestReceipt;
 
     const makeFloor = () => {
       const floor = new THREE.Mesh(
@@ -176,13 +184,13 @@
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       const compact = width / height < 1.15;
-      const continuous = viewers.continuous;
-      const joints = viewers.joints;
-      if (continuous && joints) {
-        continuous.root.position.x = compact ? 0 : -0.56;
-        joints.root.position.x = compact ? 0 : 0.56;
-        continuous.root.position.y = compact ? 0.5 : 0;
-        joints.root.position.y = compact ? -0.5 : 0;
+      const intact = viewers.intact;
+      const damaged = viewers.damaged;
+      if (intact && damaged) {
+        intact.root.position.x = compact ? 0 : -0.56;
+        damaged.root.position.x = compact ? 0 : 0.56;
+        intact.root.position.y = compact ? 0.5 : 0;
+        damaged.root.position.y = compact ? -0.5 : 0;
       }
       floor.position.y = compact ? -0.92 : -0.355;
       render();
@@ -216,22 +224,15 @@
 
     function prepareView(viewer, force) {
       const startingState = viewer.state ?? viewer.base;
-      const contactLayer = resolveArchCameraFacingLayer(
-        camera.position.z,
-        controls.target.z,
-        startingState.layers,
-      );
       return {
         viewer,
         profile: profiles.profile,
         state: startingState,
         sourcePositions: viewer.mesh.userData.archBasePositions,
         load: {
-          ...CONTACT,
+          ...ARCH_HISTORY_RECIPE.contact,
           force,
-          contactDepthMode: 'camera-facing-surface',
-          contactLayer,
-          iterations: 600,
+          ...ARCH_HISTORY_RECIPE.solverLoad,
         },
       };
     }
@@ -240,45 +241,41 @@
       return `loaded ${result.loadedNodeCount} nodes at (${result.contact.column}, ${result.contact.row}) · ${result.brokenBondCount} broken bonds · ${result.componentCount} components · raw surface motion ${result.maxRawVertexDisplacement.toFixed(5)} · display ${result.maxDisplayedVertexDisplacement.toFixed(5)}`;
     }
 
-    document.getElementById('apply').addEventListener('click', () => {
+    function applyPair(force, label) {
       if (!ready) return;
       runArchSurfaceApply({
         prepare: () => {
-          const force = Number(forceInput.value);
           return [
-            prepareView(viewers.continuous, force),
-            prepareView(viewers.joints, force),
+            prepareView(viewers.intact, force),
+            prepareView(viewers.damaged, force),
           ];
         },
         stage: entries => stageArchSurfaceBatch(entries, DISPLAY_GAIN, { threshold: THRESHOLD }),
         accept: acceptArchSurfaceBatch,
         present: updates => {
-          const [continuous, joints] = updates;
-          document.getElementById('continuous-readout').textContent = formatResult(continuous);
-          document.getElementById('joints-readout').textContent = formatResult(joints);
-          status.textContent = 'CPU spring proxy · accepted connectivity retained · displacement recomputed per load';
-          receipt.textContent = JSON.stringify({
+          const [intact, damaged] = updates;
+          document.getElementById('intact-readout').textContent = formatResult(intact);
+          document.getElementById('damaged-readout').textContent = formatResult(damaged);
+          status.textContent = `${label} · paired continuous CPU proxy · camera unchanged`;
+          latestReceipt = {
             result: 'accepted',
-            requestedPageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
-            effectivePageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
-            effectiveMeshRoute: continuous.route,
-            effectiveMeshAuthority: continuous.authority,
-            effectiveSolverRoute: viewers.continuous.base.solverAuthority,
-            contact: {
-              ...CONTACT,
-              mode: 'camera-facing-surface',
-              side: continuous.contactLayer === viewers.continuous.base.layers - 1 ? '+z' : '-z',
-              layer: continuous.contactLayer,
-            },
+            requestedPageRoute,
+            effectivePageRoute: requestedPageRoute,
+            effectiveMeshRoute: intact.route,
+            effectiveMeshAuthority: intact.authority,
+            effectiveSolverRoute: viewers.intact.base.solverAuthority,
+            contact: { ...ARCH_HISTORY_RECIPE.contact, mode: 'through-thickness' },
             force,
             fractureThreshold: THRESHOLD,
             displayGain: DISPLAY_GAIN,
-            stateRetention: 'accepted connectivity and event history; displacement recomputed per Apply',
-            sourceGlbSha256: continuous.sourceGlbSha256,
-            continuous: summarizeArchSurfaceUpdate(continuous),
-            radialJointCounterfactual: summarizeArchSurfaceUpdate(joints),
-            limitation: 'Display-gained mesh displacement consumes proxy state; this witness does not establish source-true masonry or solver-derived cut surfaces.',
-          });
+            stateRetention: 'damaged connectivity persists through unload; displacement recomputed per action',
+            priorDamageEvents: damageHistory?.events.length ?? 0,
+            sourceGlbSha256: intact.sourceGlbSha256,
+            intact: summarizeArchSurfaceUpdate(intact),
+            damaged: summarizeArchSurfaceUpdate(damaged),
+            limitation: 'Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces.',
+          };
+          receipt.textContent = `${label} · contact (${ARCH_HISTORY_RECIPE.contact.x.toFixed(2)}, ${ARCH_HISTORY_RECIPE.contact.y.toFixed(2)}) through depth · intact ${intact.brokenBondCount} broken bonds / ${intact.componentCount} components · damaged ${damaged.brokenBondCount} / ${damaged.componentCount} · displayed motion ${intact.maxDisplayedVertexDisplacement.toFixed(5)} vs ${damaged.maxDisplayedVertexDisplacement.toFixed(5)}`;
           render();
         },
         reportFailure: error => {
@@ -287,18 +284,44 @@
         },
         reportPresentationFailure: (error, updates) => {
           status.textContent = `State accepted; presentation failed: ${error.message}`;
-          receipt.textContent = JSON.stringify({
+          latestReceipt = {
             result: 'accepted-presentation-failed',
             error: error.message,
-            continuous: summarizeArchSurfaceUpdate(updates[0]),
-            radialJointCounterfactual: summarizeArchSurfaceUpdate(updates[1]),
-          });
+            intact: summarizeArchSurfaceUpdate(updates[0]),
+            damaged: summarizeArchSurfaceUpdate(updates[1]),
+          };
+          receipt.textContent = `State accepted; presentation failed: ${error.message}`;
         },
       });
+    }
+
+    document.getElementById('damage-history').addEventListener('click', () => {
+      if (!ready) return;
+      try {
+        damageHistory = buildArchDamageHistory(viewers.damaged.base);
+        viewers.damaged.state = damageHistory.state;
+        document.getElementById('damage-history').disabled = true;
+        document.getElementById('apply').disabled = false;
+        document.getElementById('unload').disabled = false;
+        applyPair(0, `History built · ${damageHistory.events.length} located bond events · one component`);
+      } catch (error) {
+        status.textContent = `History build failed: ${error.message}`;
+        receipt.textContent = `No matched comparison accepted. ${error.message}`;
+      }
+    });
+
+    document.getElementById('apply').addEventListener('click', () => {
+      applyPair(Number(forceInput.value), 'Matched load applied');
+    });
+
+    document.getElementById('unload').addEventListener('click', () => {
+      applyPair(0, 'Unloaded · connectivity history retained');
     });
 
     document.getElementById('reset').addEventListener('click', () => {
       if (!ready) return;
+      damageHistory = null;
+      latestReceipt = {};
       for (const viewer of Object.values(viewers)) {
         const position = viewer.mesh.geometry.getAttribute('position');
         position.array.set(viewer.mesh.userData.archBasePositions);
@@ -308,10 +331,13 @@
         viewer.state = viewer.base;
         viewer.projection = null;
       }
-      document.getElementById('continuous-readout').textContent = 'No load applied';
-      document.getElementById('joints-readout').textContent = 'No load applied';
+      document.getElementById('intact-readout').textContent = 'No load applied';
+      document.getElementById('damaged-readout').textContent = 'No load applied';
+      document.getElementById('apply').disabled = true;
+      document.getElementById('unload').disabled = true;
+      document.getElementById('damage-history').disabled = false;
       status.textContent = 'Profiles loaded · no load applied';
-      receipt.textContent = 'Same TRELLIS geometry restored from its source vertices. No solver event applied.';
+      receipt.textContent = 'Same TRELLIS geometry restored. No solver event applied.';
       render();
     });
     forceInput.addEventListener('input', () => {
@@ -344,13 +370,13 @@
         throw new Error(`GLB/profile hash mismatch: ${sourceHash} != ${profiles.profile.source.sha256}`);
       }
       const gltf = await new GLTFLoader().parseAsync(sourceResponse, new URL('.', new URL(GLB_URL, location.href)).href);
-      prepareModel(gltf.scene, -0.56, 'continuous', 'continuous');
-      prepareModel(gltf.scene, 0.56, 'radial-voussoir-joints', 'joints');
+      prepareModel(gltf.scene, -0.56, 'continuous', 'intact');
+      prepareModel(gltf.scene, 0.56, 'continuous', 'damaged');
       ready = true;
       status.textContent = `Loaded exact TRELLIS source · ${profiles.profile.source.sha256.slice(0, 12)} · CPU structural proxy`;
-      document.getElementById('continuous-readout').textContent = 'No load applied';
-      document.getElementById('joints-readout').textContent = 'No load applied';
-      receipt.textContent = JSON.stringify({
+      document.getElementById('intact-readout').textContent = 'No load applied';
+      document.getElementById('damaged-readout').textContent = 'No load applied';
+      latestReceipt = {
         requestedMesh: GLB_URL,
         effectiveMesh: GLB_URL,
         sourceGlbSha256: profiles.profile.source.sha256,
@@ -358,10 +384,12 @@
         effectiveProfile: PROFILE_URL,
         effectiveMeshRoute: 'kaminos.structural-material.trellis-arch-surface.v0',
         effectiveSolverRoute: 'shear-regularized-linear-spring-pcg-v0',
-        interiorProfiles: ['continuous', 'radial-voussoir-joints'],
-        contactMode: 'camera-facing-surface',
+        interiorProfiles: ['continuous', 'continuous'],
+        comparison: 'intact history versus one located damage history',
+        contactMode: 'fixed through-thickness contact',
         displayGain: DISPLAY_GAIN,
-      });
+      };
+      receipt.textContent = `TRELLIS source ${profiles.profile.source.sha256.slice(0, 12)} · exact profile hash match · fixed through-thickness contact · display gain ${DISPLAY_GAIN}`;
       resize();
       render();
     } catch (error) {

@@ -80,14 +80,14 @@ for (let index = 0; index < accepted.length; index += 1) {
 }
 
 const page = readFileSync('structural-material-arch-geometry.html', 'utf8');
-const applyStart = page.indexOf("document.getElementById('apply').addEventListener('click'");
-const applyEnd = page.indexOf("document.getElementById('reset').addEventListener('click'");
+const applyStart = page.indexOf('function applyPair(force, label)');
+const applyEnd = page.indexOf("document.getElementById('damage-history').addEventListener('click'");
 assert.ok(applyStart >= 0 && applyEnd > applyStart, 'Apply handler must remain locatable');
 const applyHandler = page.slice(applyStart, applyEnd);
 assert.match(applyHandler, /runArchSurfaceApply\(/,
   'the live Apply handler must use the exercised shared transaction boundary');
-assert.doesNotMatch(applyHandler, /applyState\(viewers\.continuous, force\)[\s\S]*applyState\(viewers\.joints, force\)/,
-  'Apply must not commit the continuous mesh before the radial-joint solve succeeds');
+assert.match(applyHandler, /prepareView\(viewers\.intact, force\)[\s\S]*prepareView\(viewers\.damaged, force\)/,
+  'the intact and damaged histories must stage as one paired transaction');
 assert.match(page, /accept: acceptArchSurfaceBatch/,
   'the page must route staged candidates through the tested atomic mesh acceptance');
 
