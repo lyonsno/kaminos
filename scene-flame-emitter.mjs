@@ -46,3 +46,26 @@ export function createFlameEmitterHandle(THREE) {
   }
   return group;
 }
+
+export function updateFlameEmitterSupportOutline(THREE, group, { family, inputRadius } = {}) {
+  if (!group) return;
+  const signature = `${family}:${inputRadius}`;
+  if (group.userData.supportSignature === signature) return;
+  const previous = group.userData.supportOutline;
+  if (previous) {
+    group.remove(previous);
+    previous.geometry.dispose();
+    previous.material.dispose();
+  }
+  group.userData.supportOutline = null;
+  group.userData.supportSignature = signature;
+  if (family !== 'ring' || !Number.isFinite(inputRadius) || inputRadius <= 0) return;
+  const material = new THREE.MeshBasicMaterial({ color: 0xffbf66, wireframe: true,
+    transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, toneMapped: false });
+  const outline = new THREE.Mesh(new THREE.TorusGeometry(inputRadius, inputRadius * 0.2, 6, 48), material);
+  outline.rotation.x = -Math.PI / 2;
+  outline.renderOrder = 1001;
+  outline.userData.kaminosEditorHelper = true;
+  group.add(outline);
+  group.userData.supportOutline = outline;
+}
