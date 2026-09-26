@@ -1,4 +1,5 @@
 import test from 'node:test';
+import * as localLiquidSceneObjectModule from '../local-liquid-scene-object.mjs';
 import assert from 'node:assert/strict';
 import {
   createLocalLiquidEmitterObject,
@@ -73,4 +74,16 @@ test('removing the final emitter emits an empty inlet update while retaining the
   assert.deepEqual(state.domain, defaultLocalLiquidSetup());
   assert.equal(state.inletPacket.packet_id, 'kaminos-authored-liquid-7');
   assert.deepEqual(state.inletPacket.emitters, []);
+});
+
+test('partial authored transform patches merge into the accepted pose before aperture validation', () => {
+  const mergeAndValidate = localLiquidSceneObjectModule.mergeAndValidateLocalLiquidEmitterPose;
+  assert.equal(typeof mergeAndValidate, 'function', 'scene transforms must validate the merged pose, not an incomplete patch');
+  const current = { position: [0, 0.45, -1.3], rotation: [0.24, 0, 0], scale: [1, 1, 1] };
+  assert.deepEqual(mergeAndValidate({ schema: 'kaminos.local-liquid-emitter.v1', baseRadius: 0.08, strength: 1.15, rate: 1200 }, current, {
+    position: [0.2, 0.45, -1.3],
+  }), { position: [0.2, 0.45, -1.3], rotation: [0.24, 0, 0], scale: [1, 1, 1] });
+  assert.throws(() => mergeAndValidate({ schema: 'kaminos.local-liquid-emitter.v1', baseRadius: 0.08, strength: 1.15, rate: 1200 }, current, {
+    scale: [3, 3, 3],
+  }), /aperture must stay between/);
 });

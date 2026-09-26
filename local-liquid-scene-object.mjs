@@ -11,6 +11,12 @@ import {
 
 const clone = value => structuredClone(value);
 
+export function mergeAndValidateLocalLiquidEmitterPose(settings, currentPose, patch = {}) {
+  const pose = normalizeLocalLiquidEmitterPose({ ...currentPose, ...patch });
+  normalizeLocalLiquidEmitter(settings, pose);
+  return pose;
+}
+
 export function createLocalLiquidEmitterSceneRecord({
   id,
   transform,
