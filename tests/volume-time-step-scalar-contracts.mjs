@@ -157,6 +157,12 @@ test('the resolver, receipt and help say the scalar rates follow the step', () =
   assert.equal(core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'maccormack' }).effective.scalarRates, 'per-time');
   assert.doesNotMatch(index, /scalar reaction and decay rates remain per step in both modes/, 'the help no longer names the half-step limit');
   assert.match(index, /decays, reaction, conversion and the boundary sponges follow the same step/, 'the help states the scalar law');
+  // Confirmation 2 (33047017): the help promised "slow motion of the same fire",
+  // which the matched-steps receipts contradict for first-order scalars (heat
+  // 0.42, smoke 0.25 retained at dt 0.1). The help states the coefficient law
+  // and leaves the fire's Speed dependence to the scheme and the live judgment.
+  assert.doesNotMatch(index, /slow motion of the same fire/, 'the help makes no same-fire promise');
+  assert.match(index, /one law across Speeds; how the fire itself changes with Speed still depends on the Advection scheme/, 'the help says what Uniform establishes and what stays scheme dependent');
 });
 
 test('the residual probe carries a vertical profile of mean vertical velocity, heat and smoke per height slab', () => {
