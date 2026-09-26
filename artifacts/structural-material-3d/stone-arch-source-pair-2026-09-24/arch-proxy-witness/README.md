@@ -44,8 +44,10 @@ evidence; mobile behavior remains unverified.
 The interactive route is `http://127.0.0.1:8424/structural-material-arch-assumptions.html`.
 The [inspected desktop capture](assumption-matrix-desktop.png) is 1440 x 1100;
 it shows all four mesh copies, accepted same-location load, zero broken bonds,
-and per-case consumer readouts. Its SHA-256 is
-`8098829c4f7503a76519d1d122a5fe1ad73a6705bcf7e7695d9c21b515c15d7a`. Chrome
+per-case consumer readouts, separate profile/GLB digests, and the visible label
+that radial joints are an authored counterfactual, not source truth. Its
+SHA-256 is
+`b23b56e7b01ffc7561cf995b8839848cd436214212ba13eefd0c37b5cf7996a5`. Chrome
 was run headless with software WebGL only for this visual smoke; the measured
 structural route is local CPU `shear-regularized-linear-spring-pcg-v0`, not
 WebGPU. No latency or performance claim is made. The complete route, source,

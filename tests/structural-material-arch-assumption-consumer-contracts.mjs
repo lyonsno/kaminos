@@ -81,5 +81,8 @@ assert.ok(pageSource.includes('runArchSurfaceApply'),
   'the browser must use the same accepted-versus-presentation-failed transaction boundary');
 assert.ok(pageSource.includes('Radial joints are an authored counterfactual, not source truth'),
   'the operator-facing comparison must distinguish the authored interior prior from asset evidence');
+const witnessReadme = readFileSync('artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/README.md', 'utf8');
+assert.ok(witnessReadme.includes('b23b56e7b01ffc7561cf995b8839848cd436214212ba13eefd0c37b5cf7996a5'),
+  'the linked desktop capture digest in the witness README must match the refreshed capture');
 
 console.log('structural arch assumption mesh consumer contracts passed');
