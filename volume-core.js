@@ -2450,9 +2450,13 @@ export function resolveTimeStepConfig(controls = {}) {
       emitterIncrement: 'per-step-increment',
       incrementScale: dtScale,
       scalarRates: 'per-time',
-      // What deliberately stays per step under uniform: max() birth floors and
-      // the canonical scene's 0/1 selector masks.
-      scalarExceptions: 'max-birth-floors-and-canonical-scene-masks',
+      // What deliberately stays per step under uniform: max() birth floors
+      // (including the vertical velocity floor) and the 0/1 selector masks
+      // (the canonical scene's carrier/content masks and the Bonfire scene
+      // selectors that choose between two candidates). Every survival,
+      // relaxation blend and additive increment on a stored channel, and the
+      // wall sponge on velocity, follow the step.
+      scalarExceptions: 'max-birth-floors-and-scene-selector-masks',
       reason,
     },
   };
@@ -2998,6 +3002,14 @@ fn dynamicsBacktraceScale() -> f32 {
 fn stepRate(rate: f32) -> f32 {
   let uniformStep = u.reserved_source_extension_2.z > 0.5;
   return select(rate, pow(max(rate, 0.0), timeStepScale()), uniformStep);
+}
+
+// A relaxation blend x = mix(x, target, weight) keeps (1 - weight) of the
+// deviation from its target each step, so it is the same law as a survival:
+// under the uniform step the weight becomes 1 - (1 - weight)^dt and under
+// legacy it stays exactly the authored weight.
+fn stepBlend(weight: f32) -> f32 {
+  return 1.0 - stepRate(1.0 - weight);
 }
 
 fn transportVelocityDamping() -> f32 {
@@ -4829,10 +4841,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       readFrontField(cellI + vec3<i32>(0, 0, -1)) +
       readFrontField(cellI + vec3<i32>(0, 0,  1))
     ) * (1.0 / 6.0);
-    material = mix(material, diffuseMaterial, bonfireTurbulentDiffusionMix);
-    fireLayer = mix(fireLayer, diffuseFireLayer, bonfireTurbulentDiffusionMix * 0.55);
-    microLayer = mix(microLayer, diffuseMicroLayer, bonfireTurbulentDiffusionMix * 0.90);
-    combustionFrontTopology = mix(combustionFrontTopology, diffuseFrontTopology, bonfireTurbulentDiffusionMix * 0.42);
+    material = mix(material, diffuseMaterial, stepBlend(bonfireTurbulentDiffusionMix));
+    fireLayer = mix(fireLayer, diffuseFireLayer, stepBlend(bonfireTurbulentDiffusionMix * 0.55));
+    microLayer = mix(microLayer, diffuseMicroLayer, stepBlend(bonfireTurbulentDiffusionMix * 0.90));
+    combustionFrontTopology = mix(combustionFrontTopology, diffuseFrontTopology, stepBlend(bonfireTurbulentDiffusionMix * 0.42));
     let mirrorXCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, cellI.z);
     let mirrorZCell = vec3<i32>(cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
     let mirrorXZCell = vec3<i32>(i32(GRID) - 1 - cellI.x, cellI.y, i32(GRID) - 1 - cellI.z);
@@ -4841,10 +4853,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let symmetricFireLayer = (fireLayer + readSlot(mirrorXCell, 2u) + readSlot(mirrorZCell, 2u) + readSlot(mirrorXZCell, 2u)) * 0.25;
     let symmetricMicroLayer = (microLayer + readSlot(mirrorXCell, 3u) + readSlot(mirrorZCell, 3u) + readSlot(mirrorXZCell, 3u)) * 0.25;
     let symmetricFrontTopology = (combustionFrontTopology + readFrontField(mirrorXCell) + readFrontField(mirrorZCell) + readFrontField(mirrorXZCell)) * 0.25;
-    material = mix(material, symmetricMaterial, bonfireScalarSymmetryBlend);
-    fireLayer = mix(fireLayer, symmetricFireLayer, bonfireScalarSymmetryBlend * 0.70);
-    microLayer = mix(microLayer, symmetricMicroLayer, bonfireScalarSymmetryBlend * 0.82);
-    combustionFrontTopology = mix(combustionFrontTopology, symmetricFrontTopology, bonfireScalarSymmetryBlend * 0.38);
+    material = mix(material, symmetricMaterial, stepBlend(bonfireScalarSymmetryBlend));
+    fireLayer = mix(fireLayer, symmetricFireLayer, stepBlend(bonfireScalarSymmetryBlend * 0.70));
+    microLayer = mix(microLayer, symmetricMicroLayer, stepBlend(bonfireScalarSymmetryBlend * 0.82));
+    combustionFrontTopology = mix(combustionFrontTopology, symmetricFrontTopology, stepBlend(bonfireScalarSymmetryBlend * 0.38));
   }
   let velTransported = advected.xyz * transportVelocityDamping();
   var vel = velTransported;
@@ -6001,7 +6013,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fireLick = fireLick * stepRate(1.0 - localQuenchSuppression * 0.035);
   emberFleck = emberFleck * stepRate(1.0 - localQuenchSuppression * 0.020);
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
-  vel = vel * mix(0.55, 1.0, wallFade);
+  // The wall sponge on velocity is a per-step survival written after the
+  // increment law's line, so it takes the rate law directly.
+  vel = vel * stepRate(mix(0.55, 1.0, wallFade));
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
   fluidDst[base] = vec4<f32>(boundVelocity(vel), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));

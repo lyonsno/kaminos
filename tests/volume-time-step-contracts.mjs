@@ -100,7 +100,7 @@ test('the shader reads coefficients at the dynamics speed and scales transport, 
   assert.match(main, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'the transported velocity is kept apart from the increments');
   assert.match(main, /vel = velTransported \+ \(vel - velTransported\) \* timeStep;/, 'every per-step increment scales with dt in one place');
   assert.ok(main.indexOf('vel = velTransported + (vel - velTransported) * timeStep;') > main.indexOf('vel = vel - projectionCorrection'), 'the scaling follows the last additive increment');
-  assert.ok(main.indexOf('vel = velTransported + (vel - velTransported) * timeStep;') < main.indexOf('vel = vel * mix(0.55, 1.0, wallFade);'), 'the scaling precedes the wall damping');
+  assert.ok(main.indexOf('vel = velTransported + (vel - velTransported) * timeStep;') < main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), 'the scaling precedes the wall damping');
   const bound = wgslFunction('boundVelocity');
   assert.match(bound, /fn boundVelocity\(v: vec3<f32>\) -> vec3<f32>/, 'the bound reads the effective backtrace itself');
   assert.match(bound, /\/ dynamicsBacktraceScale\(\)/, 'the bound divides by the dt-scaled backtrace');
