@@ -316,9 +316,22 @@
           latestReceipt = {
             result: 'accepted-presentation-failed',
             error: error.message,
+            requestedPageRoute,
+            effectivePageRoute: requestedPageRoute,
+            effectiveMeshRoute: updates[0].route,
+            effectiveMeshAuthority: updates[0].authority,
+            effectiveSolverRoute: viewers.intact.base.solverAuthority,
+            contact: { ...ARCH_HISTORY_RECIPE.contact, mode: 'through-thickness' },
+            force,
+            fractureThreshold: THRESHOLD,
+            displayGain: DISPLAY_GAIN,
+            stateRetention: 'paired solver and mesh state accepted before presentation failed',
+            priorDamageEvents,
+            sourceGlbSha256: updates[0].sourceGlbSha256,
             acceptedLoadPath: committedLoadPath,
             intact: summarizeArchSurfaceUpdate(updates[0]),
             damaged: summarizeArchSurfaceUpdate(updates[1]),
+            limitation: 'Display-gained mesh displacement consumes an explicit continuous proxy; this witness does not establish source-true masonry, residual deformation, or solver-derived cut surfaces.',
           };
           receipt.textContent = `State accepted; presentation failed: ${error.message}`;
         },

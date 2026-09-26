@@ -222,6 +222,22 @@ try {
   check('history construction preserves camera', JSON.stringify(pre.camera) === JSON.stringify(history.camera), { before: pre.camera, after: history.camera });
   await capture('history-unloaded');
 
+  await evaluate(`(() => { const target=document.getElementById('intact-readout'); Object.defineProperty(target,'textContent',{configurable:true,get(){return ''},set(){throw new Error('injected presentation failure')}}); })()`);
+  await evaluate(`(() => { const input=document.getElementById('force'); input.value='0.5'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  const presentationFailed = await click('apply');
+  await evaluate(`delete document.getElementById('intact-readout').textContent`);
+  check('post-acceptance presentation failure retains transition identity in its receipt',
+    presentationFailed.receipt.result === 'accepted-presentation-failed' &&
+    presentationFailed.receipt.force === 0.5 &&
+    presentationFailed.receipt.contact?.x === 0.35 &&
+    presentationFailed.receipt.effectivePageRoute === 'kaminos.structural-material.arch-surface-consumer.v0' &&
+    presentationFailed.receipt.effectiveMeshRoute === 'kaminos.structural-material.trellis-arch-surface.v0' &&
+    presentationFailed.receipt.sourceGlbSha256 === history.receipt.sourceGlbSha256 &&
+    presentationFailed.receipt.acceptedLoadPath?.length === 1,
+    { receipt: presentationFailed.receipt, status: presentationFailed.status });
+  await click('reset');
+  const replayedHistory = await click('damage-history');
+
   report.phase = 'matched-load';
   await evaluate(`(() => { const input=document.getElementById('force'); input.value='0.5'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
   const applied = await click('apply');
