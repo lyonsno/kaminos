@@ -191,7 +191,7 @@ try {
     // An arm's enstrophy/divergence is its own measurement only if the probe ran
     // after the switch; `stale-residual` makes that impossible to prove the check.
     const freshnessFloor = fault === 'stale-residual' ? Number.POSITIVE_INFINITY : s0;
-    if (!(end.residual?.step > freshnessFloor)) fail(report.failurePhase, `stale residual: probe step ${end.residual?.step ?? 'none'} is not newer than the arm switch at step ${s0}; the arm's enstrophy is not its own measurement`);
+    if (!(end.residual?.step > freshnessFloor)) fail(report.failurePhase, `stale residual: probe step ${end.residual?.step ?? 'none'} is not newer than the required floor ${freshnessFloor} (arm switch at step ${s0}${fault === 'stale-residual' ? ', fault stale-residual' : ''}); the arm's enstrophy is not its own measurement`);
     const mismatches = effectiveMismatches(arm, end);
     if (mismatches.length) fail(report.failurePhase, `effective state does not match arm ${arm.name}: ${mismatches.join('; ')}`);
     report.failurePhase = `arm-${arm.name}-capture`;
