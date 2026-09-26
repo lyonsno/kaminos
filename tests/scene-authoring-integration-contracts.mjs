@@ -24,10 +24,33 @@ test('F frames the selected authored object through generic geometry bounds', ()
   assert.doesNotMatch(framing, /record\?\.type\s*===?\s*['"]splat['"]/);
 });
 
-test('clearing or removing authored scene objects cancels previews and invalidates only their history', () => {
-  assert.match(html, /window\.removeSceneObject = function\(id\) \{\s*scenePlacementTools\?\.finish\(false\);\s*scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\);/);
-  assert.match(html, /function clearScene\(\) \{\s*scenePlacementTools\?\.clear\(\);\s*sceneMutationToken\+\+;/);
+test('clearing resets scene history while reloadable object removal becomes a chronological history action', () => {
+  assert.match(html, /window\.removeSceneObject = function\(id\) \{\s*return removeSceneObjectInternal\(id\);/);
+  assert.match(html, /function sceneObjectMembershipSnapshot\(id\)[\s\S]*record\.type !== 'glb' \|\| !isReloadableSceneObjectRecord\(record\)/);
+  assert.match(html, /function removeSceneObjectInternal\(id, \{ recordHistory = true \} = \{\}\)[\s\S]*if \(recordHistory && !editId\) scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\)/);
+  assert.match(html, /recordApplied\(editId, before, null, `Remove/);
+  assert.match(html, /function clearScene\(\) \{\s*scenePlacementTools\?\.clear\(\);\s*for \(const editId of sceneMembershipEditTargets\) scenePlacementTools\.edits\.unregister\(editId\);\s*sceneMembershipEditTargets\.clear\(\);\s*sceneMutationToken\+\+;/);
   assert.match(html, /if \(id !== activeSceneObjectId\) scenePlacementTools\?\.selectionChanged\(\);/);
+  assert.match(html, /historyScope: document\.getElementById\('scene-object-list'\)/);
+  assert.match(editTools, /historyScope\?\.addEventListener\('pointerdown'.*historyScopeArmed = true/);
+  assert.match(editTools, /const viewportScoped = hover \|\| viewport\.contains\(document\.activeElement\);/);
+  assert.match(editTools, /const historyScopedUndo = historyScopeArmed && \(event\.ctrlKey \|\| event\.metaKey\) && key === 'z';/);
+  assert.doesNotMatch(editTools, /viewportScoped \|\| historyScopeArmed/);
+  assert.match(html, /selection: \{ objectId: activeSceneObjectId, groupId: activeSceneGroupId \}/);
+  assert.match(html, /selection\.groupId[\s\S]*setActiveSceneGroup\(selection\.groupId\)[\s\S]*selection\.objectId[\s\S]*setActiveSceneObject\(selection\.objectId\)/);
+  assert.match(html, /group\.groupIndex\) \|\| group\.groupIndex < 0[\s\S]*group\.objectIds\.includes\(id\)/);
+});
+
+test('the same authored history records SF3D insertion and restores its retained GLB source', () => {
+  assert.match(html, /async presentGlb\(glb, \{runId, sha256\}\)[\s\S]*showGLB\(saved\.source[\s\S]*recordSceneObjectInsertion\(entry\.id\)/);
+  assert.match(html, /function restoreSceneObjectMembership\(snapshot\)[\s\S]*addSceneObjectFromSource\(record\)[\s\S]*applySceneObjectTransformState\(object, record\.transform\)/);
+  assert.match(html, /window\.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion/);
+  assert.match(html, /window\.kaminosSceneEdits = scenePlacementTools\.edits/);
+});
+
+test('scene load and save wait for an asynchronous history replay to finish', () => {
+  assert.match(html, /async function loadSceneFile\([\s\S]*?scenePlacementTools\?\.edits\.state\(\)\.replaying[\s\S]*?Wait for the current scene history action to finish/);
+  assert.match(html, /function sceneSaveIsBlocked\(\) \{[\s\S]*?scenePlacementTools\?\.edits\.state\(\)\.replaying[\s\S]*?Wait for the current scene history action to finish/);
 });
 
 test('selection feedback hides untrustworthy offscreen pivots and names the recovery cue', () => {
