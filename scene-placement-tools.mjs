@@ -58,6 +58,10 @@ export function installScenePlacementTools({
   const steal = event => { event.preventDefault(); event.stopImmediatePropagation(); };
   const pose = () => read(selected());
   const viewAxis = () => camera.getWorldDirection(new Vector3()).negate();
+  const pointerInViewport = point => {
+    const rect = viewport.getBoundingClientRect();
+    return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+  };
 
   function screen(point) {
     const projected = point.clone().project(camera);
@@ -101,6 +105,7 @@ export function installScenePlacementTools({
     edits.preview(modal.base);
     modal.operation = operation;
     modal.anchor = { ...lastPointer };
+    modal.awaitViewportEntry = !pointerInViewport(lastPointer);
     modal.numeric = '';
     modal.amount = operation === 'scale' ? 1 : 0;
     if (operation === 'scale' && modal.axis) modal.frame = 'local';
@@ -205,7 +210,18 @@ export function installScenePlacementTools({
   viewport.addEventListener('pointerleave', () => { hover = false; });
   document.addEventListener('pointermove', event => {
     lastPointer = { x: event.clientX, y: event.clientY };
-    if (modal) { modal.snap = event.ctrlKey; modal.precise = event.shiftKey; try { preview(); } catch (error) { finish(false); hud.textContent = error.message; } }
+    if (modal) {
+      modal.snap = event.ctrlKey;
+      modal.precise = event.shiftKey;
+      if (modal.awaitViewportEntry) {
+        if (pointerInViewport(lastPointer)) {
+          modal.anchor = { ...lastPointer };
+          modal.awaitViewportEntry = false;
+        }
+      } else {
+        try { preview(); } catch (error) { finish(false); hud.textContent = error.message; }
+      }
+    }
     if (field?.drag) {
       const delta = (event.clientX - field.startX) * (event.shiftKey ? .1 : 1) * field.step;
       field.input.value = String(field.startValue + delta);
