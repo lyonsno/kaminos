@@ -3276,6 +3276,7 @@ import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolve
 import { defaultLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
+import { createSceneLoadRequests } from './scene-load-generation.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -3930,6 +3931,7 @@ let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
 let localLiquidGeneration = 0;
+const sceneLoadRequests = createSceneLoadRequests();
 const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   getGeneration: () => localLiquidGeneration,
   getHost: () => localLiquidHost,
@@ -3944,6 +3946,9 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   onFailure: error => {
     localLiquidFailure = error.message || String(error);
     setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
+  },
+  onMounted: host => {
+    if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
   },
 });
 const sceneMembershipEditTargets = new Set();
@@ -6502,16 +6507,20 @@ function localLiquidEmitterRecords() {
   }));
 }
 
-function syncLocalLiquidHostEmitters() {
-  if (!localLiquidHost || !localLiquidSetup) return;
-  const state = localLiquidRuntimeSourceState({ objects: sceneObjects.map(entry => ({
+function localLiquidEmitterState() {
+  if (!localLiquidSetup) return {emitters:[]};
+  return localLiquidRuntimeSourceState({ objects: sceneObjects.map(entry => ({
     id: entry.id,
     type: entry.type,
     source: entry.source,
     transform: sceneObjectTransformState(entry.object),
     localLiquidEmitter: entry.localLiquidEmitter,
   })), localLiquid: localLiquidSetup });
-  localLiquidHost.setEmitters(state.emitters);
+}
+
+function syncLocalLiquidHostEmitters() {
+  if (!localLiquidHost || !localLiquidSetup) return;
+  localLiquidHost.setEmitters(localLiquidEmitterState().emitters);
 }
 
 async function mountLocalLiquidHost() {
@@ -11049,7 +11058,8 @@ function applyEnvMap(envMap, intensity) {
 }
 
 // --- File Loading ---
-function clearScene() {
+function clearScene({loadRequestId = null} = {}) {
+  if (loadRequestId === null || !sceneLoadRequests.isCurrent(loadRequestId)) sceneLoadRequests.invalidate();
   scenePlacementTools?.clear();
   for (const editId of sceneMembershipEditTargets) scenePlacementTools.edits.unregister(editId);
   sceneMembershipEditTargets.clear();
@@ -26401,13 +26411,15 @@ function assertSceneObjectsReloadable(records) {
   }
 }
 
-async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null) {
-  clearScene();
+async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null, loadRequestId = null) {
+  if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
+  clearScene(loadRequestId === null ? {} : {loadRequestId});
   localLiquidSetup = liquidSetup;
   const loaded = [];
   try {
     for (const record of records) {
       const object = await addSceneObjectFromSource(record);
+      if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
       if (record.transform) {
         const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
         if (entry?.type === 'splat') {
@@ -26423,16 +26435,25 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
       loaded.push(record.id);
     }
   } catch (e) {
-    clearScene();
+    if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
+    clearScene(loadRequestId === null ? {} : {loadRequestId});
     throw e;
   }
-  if (localLiquidSetup) await mountLocalLiquidHost();
+  if (localLiquidSetup) {
+    if (loadRequestId === null) await mountLocalLiquidHost();
+    else {
+      const hostStage = await sceneLoadRequests.awaitStage(loadRequestId, mountLocalLiquidHost());
+      if (!hostStage.current) return false;
+    }
+  }
+  if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
   setSceneGroupsFromRecords(groups, activeGroupId);
   if (activeGroupId && sceneGroups.some(group => group.id === activeGroupId)) {
     setActiveSceneGroup(activeGroupId);
   } else {
     setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
   }
+  return true;
 }
 
 function buildSceneData(capture = null) {
@@ -26894,14 +26915,17 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     setInfo('Wait for the current scene history action to finish');
     return;
   }
+  const loadRequestId = sceneLoadRequests.begin();
   const previousSceneFile = currentSceneFile;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
   sceneSaveBlockedByFailedRestore = true;
   const text = await file.text();
+  if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   let data;
   try {
     data = JSON.parse(text);
   } catch {
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
     setInfo('Invalid scene file');
     return;
   }
@@ -26909,6 +26933,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   try {
     restorePlan = planSceneRestore(data);
   } catch {
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
     setInfo('Invalid scene format');
     return;
   }
@@ -26918,6 +26943,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   try {
     assertSceneObjectsReloadable(objectRecords);
   } catch (e) {
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
     sceneSaveBlockedByFailedRestore = true;
     currentSceneFile = null;
     setInfo('Scene load failed: ' + e.message);
@@ -26927,6 +26953,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if ((restorePlan.composition || isCompositionAuthoring()) && !mounted) {
     if (!sceneFile) {
       if (!await saveToServer(data, null)) return;
+      if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
       sceneFile = currentSceneFile;
     }
     location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
@@ -26944,6 +26971,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     environmentRecipes = normalizeEnvironmentRecipes(env.recipes);
     environmentRecipes[name] = normalizeEnvironmentRecipe(name, env);
     await loadEnvironment(name, { remember: false });
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
     renderer.toneMappingExposure = env.exposure ?? 1.5;
     document.getElementById('exposure-slider').value = renderer.toneMappingExposure;
     document.getElementById('exposure-val').textContent = renderer.toneMappingExposure.toFixed(1);
@@ -26981,8 +27009,10 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 
   if (objectRecords.length > 0) {
     try {
-      await loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid);
+      const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
+      if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return;
     } catch (e) {
+      if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
       setVolumePrimitivesState(previousVolumePrimitiveState);
       sceneSaveBlockedByFailedRestore = true;
       currentSceneFile = null;
@@ -26990,9 +27020,13 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
       return;
     }
   } else {
-    clearScene();
+    clearScene({loadRequestId});
     localLiquidSetup = restorePlan.localLiquid;
-    if (localLiquidSetup) await mountLocalLiquidHost();
+    if (localLiquidSetup) {
+      const hostStage = await sceneLoadRequests.awaitStage(loadRequestId, mountLocalLiquidHost());
+      if (!hostStage.current) return;
+    }
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   }
 
   // The pinned basin is already mounted. Reapplying identical primitives would
@@ -27003,8 +27037,10 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (hasVolumePrimitiveScene || activeSceneComposition) {
     setActiveTab(activeSceneComposition ? 'assets' : 'volume');
     await volumePrototype?.setActive?.(true);
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   } else {
     await volumePrototype?.setActive?.(false);
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   }
 
   // Apply camera
@@ -27093,6 +27129,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     document.getElementById('backdrop-toggle').checked = false;
   }
 
+  if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   claimLoadedSceneFile(file);
   if (data.label) document.getElementById('composition-label').value = data.label;
   if (activeSceneComposition) {

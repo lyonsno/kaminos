@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
-import { countVisibleWaterPixels } from './screenshot-png-rgb.mjs';
+import { countChangedVisibleWaterPixels, countVisibleWaterPixels } from './screenshot-png-rgb.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -983,7 +983,7 @@ async function runSaveLoadRoundtripScenario(ws) {
 
 async function runLocalLiquidLiveHostScenario(ws) {
   phase = 'scenario-local-liquid-live-host';
-  lastEvidence.localLiquidLiveHost = await evaluate(ws, `
+  const first = await evaluate(ws, `
     (async () => {
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
       let state = window.kaminosLocalLiquidState?.() || null;
@@ -997,12 +997,30 @@ async function runLocalLiquidLiveHostScenario(ws) {
         state = window.kaminosLocalLiquidState?.() || null;
         if (state?.lastFrame?.frameId) break;
       }
-      if (!state) throw new Error('Kaminos local-water state probe is unavailable');
-      const firstFrameId = state.lastFrame?.frameId || null;
-      const firstFrameCount = state.frameCount;
-      const firstStepCount = state.solver?.stepCount;
+      if (!state?.lastFrame?.frameId) throw new Error('Kaminos local-water host did not produce its first frame');
+      const canvas = document.getElementById('kaminos-host-renderer-canvas');
+      if (!canvas) throw new Error('Kaminos host canvas is missing');
+      const canvasRect = canvas.getBoundingClientRect();
+      return {
+        frameId:state.lastFrame.frameId,
+        frameCount:state.frameCount,
+        stepCount:state.solver?.stepCount,
+        cameraIdentity:state.lastFrame.cameraIdentity,
+        width:state.lastFrame.width,
+        height:state.lastFrame.height,
+        canvasBounds:{x:canvasRect.x,y:canvasRect.y,width:canvasRect.width,height:canvasRect.height,
+          viewportWidth:window.innerWidth,viewportHeight:window.innerHeight},
+      };
+    })()
+  `, {timeoutMs:60000});
+  const firstShot = await capturePngScreenshot(ws, siblingPngPath('-local-water-first'));
+  lastEvidence.localLiquidLiveHost = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const first = ${JSON.stringify(first)};
       await wait(8000);
-      state = window.kaminosLocalLiquidState?.() || state;
+      const state = window.kaminosLocalLiquidState?.() || null;
+      if (!state) throw new Error('Kaminos local-water state probe is unavailable');
       const requestedRoute = state.requestedRoute;
       if (state.backend !== 'WebGPUBackend') {
         throw new Error('local-water smoke used an unexpected renderer backend: ' + JSON.stringify(state));
@@ -1013,10 +1031,15 @@ async function runLocalLiquidLiveHostScenario(ws) {
       if (state.failure || !state.lastFrame || state.lastFrame.submittedByHost !== true || state.lastFrame.presentedByHost !== true) {
         throw new Error('local-water frame was not submitted and presented by the current host: ' + JSON.stringify(state));
       }
-      if (!Number.isSafeInteger(firstFrameCount) || !Number.isSafeInteger(state.frameCount)
-        || state.frameCount <= firstFrameCount || state.lastFrame.frameId === firstFrameId) {
+      if (state.lastFrame.cameraIdentity !== first.cameraIdentity
+        || state.lastFrame.width !== first.width || state.lastFrame.height !== first.height) {
+        throw new Error('local-water temporal pixel comparison crossed a camera or render extent change: '
+          + JSON.stringify({firstCameraIdentity:first.cameraIdentity,firstExtent:{width:first.width,height:first.height},lastFrame:state.lastFrame}));
+      }
+      if (!Number.isSafeInteger(first.frameCount) || !Number.isSafeInteger(state.frameCount)
+        || state.frameCount <= first.frameCount || state.lastFrame.frameId === first.frameId) {
         throw new Error('local-water host did not advance to a new presented frame during the observation interval: '
-          + JSON.stringify({firstFrameId,frameId:state.lastFrame.frameId,firstFrameCount,frameCount:state.frameCount}));
+          + JSON.stringify({firstFrameId:first.frameId,frameId:state.lastFrame.frameId,firstFrameCount:first.frameCount,frameCount:state.frameCount}));
       }
       if (state.lastFrame.route !== requestedRoute || !state.lastFrame.frameId) {
         throw new Error('local-water final frame has stale or substituted route identity: ' + JSON.stringify(state.lastFrame));
@@ -1027,7 +1050,7 @@ async function runLocalLiquidLiveHostScenario(ws) {
         throw new Error('live local-water source is not one visible authored scene object: ' + JSON.stringify({emitterIds, rows:rows.map(row=>row.dataset.sceneObjectId)}));
       }
       const solver = state.solver || {};
-      if (!Number.isSafeInteger(firstStepCount) || !Number.isSafeInteger(solver.stepCount) || solver.stepCount <= firstStepCount) {
+      if (!Number.isSafeInteger(first.stepCount) || !Number.isSafeInteger(solver.stepCount) || solver.stepCount <= first.stepCount) {
         throw new Error('local-water host mounted but the solver did not advance: ' + JSON.stringify({lastFrame:state.lastFrame,stepCount:solver.stepCount}));
       }
       const encodedHostFrameId = state.hostFrameCompositionEvidence?.hostFrameId || null;
@@ -1042,6 +1065,12 @@ async function runLocalLiquidLiveHostScenario(ws) {
       const canvasRect = canvas.getBoundingClientRect();
       const canvasBounds = {x:canvasRect.x,y:canvasRect.y,width:canvasRect.width,height:canvasRect.height,
         viewportWidth:window.innerWidth,viewportHeight:window.innerHeight};
+      for (const key of Object.keys(first.canvasBounds)) {
+        if (canvasBounds[key] !== first.canvasBounds[key]) {
+          throw new Error('local-water temporal pixel comparison crossed a canvas or viewport resize: '
+            + JSON.stringify({first: first.canvasBounds,last:canvasBounds}));
+        }
+      }
       const sceneParams = new URLSearchParams(location.hash.replace(/^#/, ''));
       let savedFile = sceneParams.get('scene') || null;
       if (!savedFile) {
@@ -1073,8 +1102,11 @@ async function runLocalLiquidLiveHostScenario(ws) {
         failure:state.failure,
         emitterIds,
         lastFrame:state.lastFrame,
-        firstFrameId,
-        firstFrameCount,
+        firstFrameId:first.frameId,
+        firstFrameCount:first.frameCount,
+        firstStepCount:first.stepCount,
+        firstCameraIdentity:first.cameraIdentity,
+        firstHostExtent:{width:first.width,height:first.height},
         hostFrameCount:state.frameCount,
         encodedHostFrameId,
         solverStepCount:solver.stepCount,
@@ -1102,14 +1134,26 @@ async function runLocalLiquidLiveHostScenario(ws) {
     viewportWidth:canvasBounds.viewportWidth, viewportHeight:canvasBounds.viewportHeight,
     minimumPixels:2000,
   });
+  const changedPixels = countChangedVisibleWaterPixels({
+    beforePng:readFileSync(firstShot.path), afterPng:readFileSync(visibleShot.path), bounds:canvasBounds,
+    viewportWidth:canvasBounds.viewportWidth, viewportHeight:canvasBounds.viewportHeight,
+    minimumPixels:500,
+  });
   Object.assign(lastEvidence.localLiquidLiveHost, {
+    firstWaterScreenshot:firstShot.path,
     visibleWaterScreenshot:visibleShot.path,
     visibleWaterPixelCount:pngPixels.visibleWaterPixelCount,
+    visibleWaterChangedPixelCount:changedPixels.changedWaterPixelCount,
     sampledCanvasPixels:pngPixels.sampledPixels,
+    changedSampledCanvasPixels:changedPixels.sampledPixels,
   });
   if (pngPixels.visibleWaterPixelCount < pngPixels.minimumPixels) {
     throw new Error('local-water live host produced too few blue/cyan canvas pixels to prove visible water: '
       + JSON.stringify({canvasBounds,pngPixels}));
+  }
+  if (changedPixels.changedWaterPixelCount < changedPixels.minimumPixels) {
+    throw new Error('local-water live host changed too few water-colored canvas pixels to distinguish moving liquid from stationary cyan support: '
+      + JSON.stringify({canvasBounds,changedPixels}));
   }
 }
 

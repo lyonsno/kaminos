@@ -68,3 +68,34 @@ export function countVisibleWaterPixels({ png, bounds, viewportWidth, viewportHe
   }
   return { visibleWaterPixelCount, sampledPixels: (right - left) * (bottom - top), minimumPixels, imageWidth:decoded.width, imageHeight:decoded.height };
 }
+
+export function countChangedVisibleWaterPixels({beforePng, afterPng, bounds, viewportWidth, viewportHeight, minimumPixels = 100}) {
+  const before = decodeScreenshotPngRgb(beforePng), after = decodeScreenshotPngRgb(afterPng);
+  if (before.width !== after.width || before.height !== after.height || before.channels !== after.channels) {
+    throw new Error('Before/after screenshots do not share one pixel extent');
+  }
+  const scaleX = before.width / viewportWidth, scaleY = before.height / viewportHeight;
+  const left = Math.max(0, Math.floor(bounds.x * scaleX));
+  const top = Math.max(0, Math.floor(bounds.y * scaleY));
+  const right = Math.min(before.width, Math.ceil((bounds.x + bounds.width) * scaleX));
+  const bottom = Math.min(before.height, Math.ceil((bounds.y + bounds.height) * scaleY));
+  if (right <= left || bottom <= top) throw new Error('Screenshot viewport bounds do not intersect its pixel extent');
+  const waterMask = (pixels, offset) => {
+    const red = pixels[offset], green = pixels[offset + 1], blue = pixels[offset + 2];
+    return blue >= 95 && green >= 80 && blue - red >= 18 && green - red >= 12;
+  };
+  let changedWaterPixelCount = 0;
+  for (let y = top; y < bottom; y++) {
+    for (let x = left; x < right; x++) {
+      const offset = (y * before.width + x) * before.channels;
+      const beforeWater = waterMask(before.pixels, offset), afterWater = waterMask(after.pixels, offset);
+      const maxChannelDelta = Math.max(
+        Math.abs(before.pixels[offset] - after.pixels[offset]),
+        Math.abs(before.pixels[offset + 1] - after.pixels[offset + 1]),
+        Math.abs(before.pixels[offset + 2] - after.pixels[offset + 2]),
+      );
+      if ((beforeWater || afterWater) && (beforeWater !== afterWater || maxChannelDelta >= 12)) changedWaterPixelCount++;
+    }
+  }
+  return {changedWaterPixelCount, sampledPixels:(right-left)*(bottom-top), minimumPixels, imageWidth:before.width, imageHeight:before.height};
+}

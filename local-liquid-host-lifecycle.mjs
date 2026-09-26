@@ -4,6 +4,7 @@ export function createGenerationBoundLocalLiquidHostMount({
   setHost,
   createHost,
   onFailure = () => {},
+  onMounted = () => {},
 }) {
   if (typeof getGeneration !== 'function' || typeof getHost !== 'function'
     || typeof setHost !== 'function' || typeof createHost !== 'function') {
@@ -35,6 +36,16 @@ export function createGenerationBoundLocalLiquidHostMount({
         if (getHost()) {
           host.dispose?.();
           return true;
+        }
+        try {
+          onMounted(host, generation);
+        } catch (error) {
+          host.dispose?.();
+          throw error;
+        }
+        if (getGeneration() !== generation) {
+          host.dispose?.();
+          return false;
         }
         setHost(host);
         return true;

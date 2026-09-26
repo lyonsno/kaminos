@@ -429,9 +429,9 @@ assert.match(persistence, /renderHandoffSchema:\s*record\.renderHandoffSchema/, 
 assert.match(persistence, /\['glb', 'pbr', 'splat', 'image'\]\.includes\(type\)/, 'scene persistence treats API-backed splat and image placeholders as reloadable scene objects');
 assert.match(persistence, /type === 'image'[\s\S]*source\.startsWith\('\/api\/'\)/, 'scene persistence treats API-backed image planes as reloadable');
 assert.match(persistence, /export function getSceneGroupRecords/, 'scene persistence exposes group records for restore planning and tests');
-assert.match(index, /await loadSceneObjects\(objectRecords,\s*restorePlan\.activeObjectId,\s*restorePlan\.groups,\s*restorePlan\.activeGroupId,\s*restorePlan\.localLiquid\)/, 'scene load restores objects, groups, and the authored liquid domain before applying active selection');
+assert.match(index, /await sceneLoadRequests\.awaitStage\(loadRequestId,\s*loadSceneObjects\(objectRecords,\s*restorePlan\.activeObjectId,\s*restorePlan\.groups,\s*restorePlan\.activeGroupId,\s*restorePlan\.localLiquid/, 'scene load restores objects, groups, and authored liquid only while its async restore request remains current');
 assert.match(index, /restorePlan\.groups/, 'scene load restores authored group membership from the restore plan');
-assert.match(index, /catch \(e\) \{[\s\S]*clearScene\(\);[\s\S]*throw e;[\s\S]*\}/, 'scene object loading clears partial restore residue before failing loudly');
+assert.match(index, /catch \(e\) \{[\s\S]*clearScene\(loadRequestId === null \? \{\} : \{loadRequestId\}\);[\s\S]*throw e;[\s\S]*\}/, 'current scene object loading clears partial restore residue before failing loudly without clearing a newer request');
 assert.match(persistence, /sceneObjectToLegacyModel/, 'scene load keeps backward compatibility with single-model Kaminos scenes');
 assert.match(index, /addSceneObjectFromSource/, 'multi-object loading reuses the same source restoration route for each object');
 assert.match(index, /registerSceneObject\(model,[\s\S]*source:/, 'GLB load registers source identity for persistence');
@@ -443,13 +443,13 @@ assert.match(index, /window\.saveScene\s*=[\s\S]*?if \(sceneSaveIsBlocked\(\)\) 
 assert.match(index, /window\.saveSceneAs\s*=[\s\S]*?if \(sceneSaveIsBlocked\(\)\) return false;/, 'Save As refuses to write after a failed scene restore');
 assert.match(index, /if \(sceneIsEmpty\(\)\) return;/, 'keyboard save uses the shared empty-scene guard');
 assert.match(index, /setInfo\(localLiquidFailure \? `Scene loaded; water host unavailable: \$\{localLiquidFailure\}` : 'Volume scene loaded'\)/, 'volume-only loads succeed while surfacing a missing liquid host');
-assert.match(index, /if \(objectRecords\.length > 0\) \{[\s\S]*\} else \{\s*clearScene\(\);[\s\S]*\}/, 'volume-only scene loads clear stale object state');
+assert.match(index, /if \(objectRecords\.length > 0\) \{[\s\S]*\} else \{\s*clearScene\(\{loadRequestId\}\);[\s\S]*\}/, 'volume-only scene loads clear stale object state under their current request');
 assert.match(index, /setVolumePrimitivesState\(restorePlan\.volumePrimitives\);[\s\S]*if \(hasVolumePrimitiveScene \|\| activeSceneComposition\)/, 'object-only scene loads clear stale volume primitive state');
 assert.match(index, /const previousSceneFile = currentSceneFile/, 'scene load preserves previous save target until restore succeeds');
 assert.match(index, /const previousVolumePrimitiveState = getVolumePrimitiveState\(\)/, 'scene load snapshots previous volume state before restore mutations');
 assert.match(index, /claimLoadedSceneFile\(file\)/, 'scene load claims current scene file only after successful restore');
 assert.match(index, /function assertSceneObjectsReloadable\(/, 'scene load preflights object reloadability before mutating scene state');
-assert.match(index, /assertSceneObjectsReloadable\(objectRecords\);[\s\S]*setInfo\('Loading scene\.\.\.'\);[\s\S]*await loadSceneObjects\(objectRecords,[\s\S]*setVolumePrimitivesState\(restorePlan\.volumePrimitives\);/, 'scene load defers volume mutation until object restore succeeds');
+assert.match(index, /assertSceneObjectsReloadable\(objectRecords\);[\s\S]*setInfo\('Loading scene\.\.\.'\);[\s\S]*await sceneLoadRequests\.awaitStage\(loadRequestId, loadSceneObjects\(objectRecords,[\s\S]*setVolumePrimitivesState\(restorePlan\.volumePrimitives\);/, 'scene load defers volume mutation until its current object restore succeeds');
 assert.match(index, /catch \(e\) \{[\s\S]*setVolumePrimitivesState\(previousVolumePrimitiveState\);[\s\S]*sceneSaveBlockedByFailedRestore = true;[\s\S]*currentSceneFile = null;[\s\S]*Scene load failed/, 'failed actual object restore rolls volume back and breaks overwrite ownership');
 assert.doesNotMatch(index, /if \(!data\.version \|\| \(!data\.model\?\.source && !hasVolumePrimitiveScene\)\)/, 'scene validation must not reject object-only multi-object scenes');
 

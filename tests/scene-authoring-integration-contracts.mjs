@@ -42,7 +42,7 @@ test('clearing resets scene history while typed water objects join chronological
   const removalIndex = removeSource.indexOf('sceneObjects.splice(index, 1)');
   assert.ok(admissionIndex >= 0 && admissionIndex < removalIndex, 'membership history admission must succeed before the scene object is removed');
   assert.match(removeSource, /catch \(error\) \{ setInfo\(error\.message\); return false; \}/, 'a rejected admission must leave a visible reason and preserve scene membership');
-  assert.match(html, /function clearScene\(\) \{\s*scenePlacementTools\?\.clear\(\);\s*for \(const editId of sceneMembershipEditTargets\) scenePlacementTools\.edits\.unregister\(editId\);\s*sceneMembershipEditTargets\.clear\(\);\s*sceneMutationToken\+\+;/);
+  assert.match(html, /function clearScene\(\{loadRequestId = null\} = \{\}\) \{\s*if \(loadRequestId === null \|\| !sceneLoadRequests\.isCurrent\(loadRequestId\)\) sceneLoadRequests\.invalidate\(\);\s*scenePlacementTools\?\.clear\(\);\s*for \(const editId of sceneMembershipEditTargets\) scenePlacementTools\.edits\.unregister\(editId\);\s*sceneMembershipEditTargets\.clear\(\);\s*sceneMutationToken\+\+;/, 'clear invalidates in-flight loads while preserving history reset and matching scene-load ownership');
   assert.match(html, /if \(id !== activeSceneObjectId\) scenePlacementTools\?\.selectionChanged\(\);/);
   assert.match(html, /historyScope: document\.getElementById\('scene-object-list'\)/);
   assert.match(editTools, /const neutralPageFocus = document\.activeElement === document\.body/);
