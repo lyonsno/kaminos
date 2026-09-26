@@ -2,6 +2,15 @@ import {createWebGpuForegroundService} from './webgpu-inference-kit/src/core.js'
 
 export const sharedGpuBufferRequirements = {};
 
+export function judgeForegroundRebindPixels(before, after) {
+  const errors = [];
+  for (const [phase, sample] of [['before', before], ['after', after]]) {
+    if (!sample || sample.sampledPixels !== 2304) errors.push(`${phase} ordinary-flame pixel sample is missing`);
+    else if (sample.litPixels < 16 || sample.coloredPixels < 16) errors.push(`${phase} ordinary-flame canvas is blank or partial`);
+  }
+  return errors;
+}
+
 export function judgeForegroundRebind(result) {
   const errors = [];
   if (result?.sameDevice !== true) errors.push('providers did not borrow the host device');
@@ -48,6 +57,25 @@ export async function mountComposition({prototype, sharedGpu, host} = {}) {
     const state = prototype.debugState();
     return {active: state.active, error: state.error ?? null, frameCount: state.frameCount, simStepCount: state.simStepCount};
   };
+  function sampleCanvas() {
+    const source = prototype.canvasElement?.();
+    if (!source?.width || !source.height) return null;
+    const target = document.createElement('canvas');
+    target.width = 48;
+    target.height = 48;
+    const context2d = target.getContext('2d', {willReadFrequently: true});
+    context2d.drawImage(source, 0, 0, 48, 48);
+    const pixels = context2d.getImageData(0, 0, 48, 48).data;
+    let litPixels = 0;
+    let coloredPixels = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
+      const high = Math.max(r, g, b), low = Math.min(r, g, b);
+      if (a > 8 && high > 24) litPixels++;
+      if (a > 8 && high > 24 && high - low > 12) coloredPixels++;
+    }
+    return {sourceWidth: source.width, sourceHeight: source.height, sampledPixels: 2304, litPixels, coloredPixels};
+  }
   function bind(routeId) {
     prototype.setForegroundOpportunityRequester(request => {
       const handle = services[routeId].request({
@@ -83,6 +111,7 @@ export async function mountComposition({prototype, sharedGpu, host} = {}) {
     status: 'mounted',
     sameDevice: true,
     routes: ['a', 'b'],
+    sampleCanvas,
     async run() {
       if (probe.status !== 'mounted') throw new Error('foreground rebind probe already started');
       probe.status = 'running';

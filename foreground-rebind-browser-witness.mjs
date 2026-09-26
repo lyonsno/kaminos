@@ -3,6 +3,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {verifyAuthoringServer} from './scene-authoring-witness-identity.mjs';
+import {judgeForegroundRebindPixels} from './foreground-rebind-probe.mjs';
 
 const args = process.argv.slice(2);
 const arg = name => args[args.indexOf(name) + 1];
@@ -83,13 +84,18 @@ try {
     throw new Error(`authored kiln scene did not restore: ${JSON.stringify(report.sceneEvidence)}`);
   }
   await page.screenshot({path: path.join(out, 'before.png')});
+  report.visualBefore = await page.evaluate(() => window.__foregroundRebindProbe.sampleCanvas()); save();
   report.phase = 'a-b-a'; save();
   report.result = await page.evaluate(() => Promise.race([
     window.__foregroundRebindProbe.run(),
     new Promise((_, reject) => setTimeout(() => reject(new Error('A-B-A ordinary-frame progress watchdog expired')), 45000)),
   ])); save();
   await page.screenshot({path: path.join(out, 'after.png')});
+  report.visualAfter = await page.evaluate(() => window.__foregroundRebindProbe.sampleCanvas()); save();
   if (report.result.errors?.length) throw new Error(`foreground rebind failed: ${report.result.errors.join('; ')}`);
+  const pixelErrors = judgeForegroundRebindPixels(report.visualBefore, report.visualAfter);
+  if (pixelErrors.length) throw new Error(`ordinary flame presentation failed: ${pixelErrors.join('; ')}`);
+  if (report.events.length) throw new Error(`browser reported errors: ${JSON.stringify(report.events)}`);
   report.phase = 'completed'; report.ok = true; save();
 } catch (error) {
   report.failure = {phase: report.phase, message: String(error?.message || error)};

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {judgeForegroundRebind} from '../foreground-rebind-probe.mjs';
+import {judgeForegroundRebind, judgeForegroundRebindPixels} from '../foreground-rebind-probe.mjs';
 
 const good = {
   sameDevice: true,
@@ -20,4 +20,7 @@ assert.match(judgeForegroundRebind({...good, sameDevice: false}).join(' '), /dev
 assert.match(judgeForegroundRebind({...good, phases: good.phases.slice(0, 2)}).join(' '), /A-B-A/);
 assert.match(judgeForegroundRebind({...good, phases: good.phases.map((phase, index) => index !== 1 ? phase : {...phase, receipts: phase.receipts.map(r => ({...r, submissions: []}))})}).join(' '), /submission/);
 assert.match(judgeForegroundRebind({...good, final: {active: false, error: 'lost'}}).join(' '), /renderer/);
+assert.deepEqual(judgeForegroundRebindPixels({sampledPixels: 2304, litPixels: 200, coloredPixels: 150}, {sampledPixels: 2304, litPixels: 220, coloredPixels: 170}), []);
+assert.match(judgeForegroundRebindPixels({sampledPixels: 2304, litPixels: 0, coloredPixels: 0}, {sampledPixels: 2304, litPixels: 220, coloredPixels: 170}).join(' '), /blank/);
+assert.match(judgeForegroundRebindPixels({sampledPixels: 2304, litPixels: 200, coloredPixels: 150}, null).join(' '), /missing/);
 console.log('foreground rebind evidence judge rejects false closure');
