@@ -84,6 +84,11 @@ assert.match(selectiveRoles, /fluidFrontRead:[\s\S]*?binding: 16,[\s\S]*?sidecar
   'selective-head fluid/front read must bind the solid texture');
 assert.match(selectiveRoles, /sidecar:[\s\S]*?binding: 16,[\s\S]*?splat:/,
   'selective-head sidecar read must bind the solid texture');
+const emissiveBuilder = readFileSync(new URL('../volume-emissive-transport.mjs', import.meta.url), 'utf8');
+assert.match(emissiveBuilder, /seedInputs[\s\S]*?binding: 16, resource: sceneSolidTextureView/,
+  'auto-layout emissive seed must bind the shared solid texture');
+assert.ok(shader.indexOf('installSceneSolidTexture();\n    emissiveLightField = createEmissiveLightField') >= 0,
+  'solid texture must exist before emissive seed bind groups are created');
 
 const ring = {family: 'ring', sourceLaw: 'shallow-primary', origin: [0, -0.5, 0],
   axis: [0, 1, 0], supportAxis: [1, 0, 0], radius: .08, extent: .45,

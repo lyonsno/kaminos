@@ -12159,8 +12159,8 @@ export function createKaminosVolumePrototype({
       };
     }
     ensureNonRidgeOpticalCaptureBuffers();
-    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
     installSceneSolidTexture();
+    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers, sceneSolidTextureView);
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)} ${index}`,
