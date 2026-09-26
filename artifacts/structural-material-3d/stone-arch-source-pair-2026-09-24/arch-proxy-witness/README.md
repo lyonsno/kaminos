@@ -64,6 +64,19 @@ that verifies route, load, contact, source, and accepted-path identity survive
 in the failure receipt. Report-specific captures preserve the original
 five-frame report unchanged.
 
+After Kaminos commit `464c077dc2a4870dcec23723c457d1d009a3a963`, the exact
+committed page and smoke runner were replayed at
+`http://127.0.0.1:8424/structural-material-arch-geometry.html`. The
+[committed-head report](arch-history-consumer-smoke-2026-09-26-committed-464c077d.json)
+passes 49/49 with no failed checks and retains all six report-specific PNGs,
+including the injected accepted-state/presentation-failure receipt. The
+serialized `node --test --test-concurrency=1 tests/structural-material-arch-*.mjs`
+run passes 19/19. Fresh ordinary and wrong-object reviews of
+`32177de9899b0755b7f5b7e7e3d496fd0dd0f546..464c077dc2a4870dcec23723c457d1d009a3a963`
+found no material defect or wrong-object finding; their durable returns are
+recorded in the owning project session state. Reviewers independently caution
+that passing receipts do not settle live injury legibility.
+
 The browser route is `http://127.0.0.1:8424/structural-material-arch-geometry.html`.
 The [browser smoke report](arch-history-consumer-smoke-2026-09-26.json) records
 the effective route, exact source hash, state snapshots, camera-pose stability,
