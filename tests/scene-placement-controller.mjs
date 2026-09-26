@@ -77,6 +77,23 @@ test('selected scene object accepts G after sidebar selection leaves neutral pag
  emit(f.document,'keydown',{key:'g'});
  assert.equal(f.tools.state().modal,null,'a focused non-viewport control still owns its keys');
 });
+test('sidebar-started move waits for the pointer to enter the viewport before applying motion',()=>{
+ const f=fixture();
+ f.document.body=new Element();f.document.activeElement=f.document.body;
+ f.viewport.contains=element=>element===f.viewport;
+ f.viewport.rect={left:400,top:0,right:1200,bottom:600,width:800,height:600};
+ emit(f.document,'pointermove',{clientX:100,clientY:300});
+ emit(f.document,'keydown',{key:'g'});
+ assert.equal(f.tools.state().modal?.operation,'translate');
+ emit(f.document,'pointermove',{clientX:300,clientY:300});
+ assert.deepEqual(f.pose.position,[0,0,0],'moving within the sidebar must not transform the object');
+ emit(f.document,'pointermove',{clientX:500,clientY:300});
+ assert.deepEqual(f.pose.position,[0,0,0],'crossing into the viewport must establish a new anchor');
+ emit(f.document,'pointermove',{clientX:550,clientY:300});
+ assert.notDeepEqual(f.pose.position,[0,0,0],'movement inside the viewport must still transform the object');
+ f.tools.finish(false);
+ assert.deepEqual(f.pose.position,[0,0,0],'Escape/cancel restores the starting pose');
+});
 test('blur, selection and clear abort every native gizmo owner before rollback',()=>{
  for(const boundary of ['blur','selectionChanged','clear']){
   const f=fixture();f.beginDrag();assert.ok(f.tools.state().active);
