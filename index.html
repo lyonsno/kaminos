@@ -3299,11 +3299,15 @@ function toggleFingerFluidInspectionPause() {
   } else if (!localLiquidInspectionRequested()) {
     fingerFluidBenchSimulationPaused = !fingerFluidBenchSimulationPaused;
   }
+  window._kaminosDirty?.();
   updateFingerFluidInspectionControls();
 }
 function setFingerFluidInspectionView(view) {
   if (localLiquidInspectionActive()) {
     localLiquidHost.setInspectionView(view === 'particles' ? 'particles' : 'surface');
+    // A frozen host stops requesting continuous frames. Invalidate once so
+    // the selected diagnostic view is presented without advancing particles.
+    window._kaminosDirty?.();
     updateFingerFluidInspectionControls();
     return;
   }
@@ -3315,6 +3319,7 @@ function setFingerFluidInspectionView(view) {
   if (!localLiquidInspectionRequested()) {
     fingerFluidBenchInteractiveRendererMode = resolveFingerFluidRendererMode(rendererMode);
   }
+  window._kaminosDirty?.();
   updateFingerFluidInspectionControls();
 }
 function showLocalLiquidSourceStatus() {
@@ -3369,6 +3374,7 @@ window.kaminosLocalLiquidReadAnchors=anchors=>{
 document.getElementById('local-liquid-pause').onclick=()=>{
   if(!localLiquidHost)return;
   const paused=localLiquidHost.setPaused(!localLiquidHost.paused);
+  window._kaminosDirty?.();
   document.getElementById('local-liquid-pause').textContent=paused?'Resume water':'Freeze water';
   document.getElementById('local-liquid-pause').setAttribute('aria-pressed',String(paused));
   updateFingerFluidInspectionControls();
