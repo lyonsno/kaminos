@@ -1482,7 +1482,7 @@ assert.match(core, /let bonfireVisibleFireCarrierBirth = bonfirePrimaryVisibleFr
 assert.match(core, /seedBonfireFlameSourceRelief/, 'bonfire initial flame seed must name source-band relief instead of seeding broad source flame directly');
 assert.doesNotMatch(core, /data\[i \+ 8\] = source \* 0\.90;/, 'bonfire initial flame storage must not seed a smooth source plug as source * 0.90');
 assert.match(core, /bonfireFlameStorageSourceRelief/, 'bonfire live flame storage needs its own stricter source-band relief instead of reusing broad visible-source relief');
-assert.match(core, /flame = flame \* mix\(1\.0, max\(0\.08, bonfireFlameStorageSourceRelief\)/, 'bonfire flame retention must use the stricter flame storage source relief');
+assert.match(core, /flame = flame \* (?:stepRate\()?mix\(1\.0, max\(0\.08, bonfireFlameStorageSourceRelief\)/, 'bonfire flame retention must use the stricter flame storage source relief');
 assert.match(core, /bonfireRenderedFireEdgeCarrier/, 'bonfire raymarch emission needs a named edge carrier so storage relief does not flatten visible fire edges');
 assert.match(core, /let bonfireVisibleEmission = bonfireRenderedFireEdgeCarrier/, 'bonfire visible emission must start from the rendered edge carrier before broad body emission');
 assert.match(core, /seedBonfireSourceY = isBonfireInitialScene \? 0\.62 : -0\.74/, 'bonfire initial fluid seed must use the same source Y as the live bonfire solver');
@@ -1496,7 +1496,7 @@ assert.match(core, /data\[i \+ 10\]\s*=\s*source \* seedVisibleFireCarrier/, 'bo
 assert.match(core, /bonfireFrontAuthoredVisibleFireBirth/, 'bonfire visible-fire carrier birth is authored from front/contact/topology evidence');
 assert.match(core, /bonfireVisibleFireCarrierBirth/, 'bonfire visible-fire carrier storage has a clear macro-fire birth name');
 assert.match(core, /bonfireVisibleFireCarrierBirth[\s\S]*bonfireFrontAuthoredVisibleFireBirth/, 'visible-fire carrier storage must route through front-authored birth');
-assert.match(core, /flameDetail = flameDetail \* mix\(1\.0,[\s\S]*bonfireVisibleSourcePlugRelief/, 'existing visible-fire carrier storage must be source-relief damped before new front-authored birth can win');
+assert.match(core, /flameDetail = flameDetail \* (?:stepRate\()?mix\(1\.0,[\s\S]*bonfireVisibleSourcePlugRelief/, 'existing visible-fire carrier storage must be source-relief damped before new front-authored birth can win');
 assert.match(core, /bonfireVisibleSourcePlugRelief/, 'bonfire visible flame storage has a named relief gate for the smooth source plug');
 assert.match(core, /bonfireFlameStorageBirth[\s\S]*bonfireVisibleSourcePlugRelief/, 'bonfire flame storage applies visible source-plug relief instead of retaining a smooth lower body');
 assert.match(core, /bonfireFireLickSourceBirth[\s\S]*bonfireVisibleSourcePlugRelief/, 'bonfire fire-lick source birth applies visible source-plug relief before feeding storage');
