@@ -25,6 +25,12 @@ export function flameDomainTranslationForPose(value) {
   return [x, y - defaultFlameEmitterPose().position[1], z];
 }
 
+export function flameDomainTranslationForAcceptedPose(value, currentTranslation) {
+  return flamePoseInDomain(value, currentTranslation)
+    ? [...currentTranslation]
+    : flameDomainTranslationForPose(value);
+}
+
 export function flamePoseInDomain(value, translation) {
   const pose = normalizeFlameEmitterPose(value);
   if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
@@ -32,6 +38,13 @@ export function flamePoseInDomain(value, translation) {
   }
   const [x, y, z] = pose.position.map((component, index) => component - translation[index]);
   return Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1;
+}
+
+export function normalizeFlameDomainTranslation(translation) {
+  if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
+    throw new Error('Flame domain translation requires three finite coordinates');
+  }
+  return [...translation];
 }
 
 export function flamePoseToDomain(value, translation) {

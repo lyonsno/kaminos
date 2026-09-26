@@ -20,7 +20,8 @@ export function getPivotViewState(camera, point, width, height) {
 
 export function installScenePlacementTools({
   viewport, camera, controls, gizmo, selected, read, write, object, refresh,
-  allowed = () => true, busy = () => false, frameSelected = () => {}, settled = () => {},
+  allowed = () => true, busy = () => false, frameSelected = () => {},
+  settled = () => {}, captureContext = () => null,
 }) {
   const hud = document.createElement('div');
   hud.id = 'scene-edit-hud';
@@ -45,7 +46,8 @@ export function installScenePlacementTools({
     gizmo.enabled = prior.gizmo;
     gizmo.getHelper().visible = prior.helper;
   };
-  const edits = createSceneEdits({ read, write, settled, changed: () => { refresh(); draw(); }, admit: () => {
+  const edits = createSceneEdits({ read, write, settled, captureContext,
+    changed: () => { refresh(); draw(); }, admit: () => {
     if (!allowed()) throw new Error('Finish preview or correction before editing placement');
     if (busy()) throw new Error('Wait for the current authoring action before editing placement');
   } });

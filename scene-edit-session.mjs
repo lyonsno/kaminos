@@ -13,7 +13,8 @@ export function checkedPose(pose) {
   return result;
 }
 
-export function createSceneEdits({ read, write, changed = () => {}, settled = () => {}, admit = () => {} }) {
+export function createSceneEdits({ read, write, changed = () => {}, settled = () => {},
+  captureContext = () => null, admit = () => {} }) {
   let active = null;
   let past = [];
   let future = [];
@@ -35,7 +36,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   function begin(id, label = 'Transform') {
     admit();
     if (active) throw new Error('A scene edit is already active');
-    active = { id, label, before: get(id) };
+    active = { id, label, before: get(id), beforeContext: clone(captureContext(id)) };
     notify();
     return state();
   }
@@ -55,7 +56,9 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     const after = get(active.id);
     const entry = { ...active, after };
     if (JSON.stringify(entry.before) !== JSON.stringify(after)) {
-      settled({ operation: 'commit', id: entry.id, before: clone(entry.before), after: clone(after) });
+      settled({ operation: 'commit', id: entry.id, before: clone(entry.before), after: clone(after),
+        beforeContext: clone(entry.beforeContext) });
+      entry.afterContext = clone(captureContext(entry.id));
       past.push(entry);
       future = [];
     }
@@ -93,7 +96,9 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     put(entry.id, clone(entry[key]));
     try {
       settled({ operation: key === 'before' ? 'undo' : 'redo', id: entry.id,
-        before: clone(previous), after: clone(entry[key]) });
+        before: clone(previous), after: clone(entry[key]),
+        beforeContext: clone(entry[key === 'before' ? 'afterContext' : 'beforeContext']),
+        afterContext: clone(entry[`${key}Context`]) });
     } catch (error) {
       put(entry.id, previous);
       throw error;

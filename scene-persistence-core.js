@@ -1,5 +1,6 @@
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
-import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose } from './scene-flame-emitter.mjs';
+import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
+  flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 export const SCENE_VERSION = 5;
@@ -122,6 +123,14 @@ export function planSceneRestore(data) {
   const flameSources = objects.filter(record => record.type === FLAME_EMITTER_TYPE);
   if (flameSources.length > 1) throw new Error('The current flame domain supports one authored source');
   if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');
+  const flameDomainTranslation = flameSources.length
+    ? (data.flameDomainTranslation === undefined
+      ? flameDomainTranslationForPose(flameSources[0].transform)
+      : normalizeFlameDomainTranslation(data.flameDomainTranslation))
+    : null;
+  if (flameSources.length && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation)) {
+    throw new Error('Saved flame source lies outside its authored simulation domain');
+  }
   const groups = getSceneGroupRecords(data, objects);
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
@@ -137,6 +146,7 @@ export function planSceneRestore(data) {
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
+    flameDomainTranslation,
   };
 }
 
@@ -149,6 +159,7 @@ export function buildSceneDocument({
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   composition = null,
+  flameDomainTranslation = undefined,
   capture = null,
   camera = null,
   environment = null,
@@ -160,6 +171,15 @@ export function buildSceneDocument({
   const sceneGroups = getSceneGroupRecords({ groups }, sceneObjects);
   const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || sceneObjects[0] || null;
   const activeGroup = sceneGroups.find(group => group.id === activeGroupId) || null;
+  const flameSource = sceneObjects.find(object => object.type === FLAME_EMITTER_TYPE);
+  const authoredFlameDomain = flameSource
+    ? (flameDomainTranslation === undefined
+      ? flameDomainTranslationForPose(flameSource.transform)
+      : normalizeFlameDomainTranslation(flameDomainTranslation))
+    : null;
+  if (flameSource && !flamePoseInDomain(flameSource.transform, authoredFlameDomain)) {
+    throw new Error('Flame source lies outside its authored simulation domain');
+  }
   const document = {
     schema: SCENE_SCHEMA,
     version: SCENE_VERSION,
@@ -175,6 +195,7 @@ export function buildSceneDocument({
     } : null,
     provenance: cloneJson(provenance),
     composition: normalizeComposition(composition),
+    ...(flameSource ? { flameDomainTranslation: authoredFlameDomain } : {}),
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),

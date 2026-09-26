@@ -3267,7 +3267,7 @@ import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolve
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
-  updateFlameEmitterSupportOutline, flameDomainTranslationForPose,
+  updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
   flamePoseInDomain, flamePoseToDomain } from './scene-flame-emitter.mjs';
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
@@ -5210,8 +5210,8 @@ function setFlameDomainTranslation(next) {
   return true;
 }
 
-function settleFlameDomainForPose(pose) {
-  const next = flameDomainTranslationForPose(pose);
+function settleFlameDomainForPose(pose, targetDomain = null) {
+  const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation);
   const previous = [...flameDomainTranslation];
   if (!setFlameDomainTranslation(next)) return false;
   try {
@@ -10676,8 +10676,10 @@ async function initScene() {
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
     frameSelected: window.kaminosFrameSelected,
+    captureContext: id => id === FLAME_EMITTER_ID ? [...flameDomainTranslation] : null,
     settled: event => {
-      if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after);
+      if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after,
+        event.operation === 'commit' ? null : event.afterContext);
     },
   });
   window.kaminosSceneEdits = scenePlacementTools.edits;
@@ -26305,6 +26307,7 @@ function buildSceneData(capture = null) {
       ground: { visible: groundPlane.visible, height: groundPlane.position.y },
     },
     volumePrimitives: getVolumePrimitiveState(),
+    flameDomainTranslation: [...flameDomainTranslation],
     postprocessing: {
       ao: {
         enabled: document.getElementById('ao-toggle').checked,
@@ -26728,6 +26731,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
   const previousSceneFile = currentSceneFile;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
+  const previousFlameDomainTranslation = [...flameDomainTranslation];
   sceneSaveBlockedByFailedRestore = true;
   const text = await file.text();
   let data;
@@ -26820,11 +26824,12 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 
   const restoredFlame = objectRecords.find(record => record.type === FLAME_EMITTER_TYPE);
   setFlameDomainTranslation(restoredFlame
-    ? flameDomainTranslationForPose(restoredFlame.transform) : [0, 0, 0]);
+    ? restorePlan.flameDomainTranslation : [0, 0, 0]);
   if (objectRecords.length > 0) {
     try {
       await loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId);
     } catch (e) {
+      setFlameDomainTranslation(previousFlameDomainTranslation);
       setVolumePrimitivesState(previousVolumePrimitiveState);
       sceneSaveBlockedByFailedRestore = true;
       currentSceneFile = null;
