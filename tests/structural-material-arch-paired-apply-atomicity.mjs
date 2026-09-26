@@ -58,7 +58,11 @@ for (let click = 0; click < 3; click += 1) {
     load,
   })), 1, { threshold: 0.04 }).map(update => update.state);
 }
-const acceptedBeforeFailure = accepted;
+const acceptedBeforeFailure = accepted.map(state => ({
+  state,
+  connectivityEpoch: state.connectivityEpoch,
+  brokenBondCount: state.bonds.filter(bond => !bond.alive).length,
+}));
 assert.throws(
   () => stageArchSurfaceBatch(accepted.map(state => ({
     profile,
@@ -68,21 +72,23 @@ assert.throws(
   })), 1, { threshold: 0.04 }),
   /did not converge/,
 );
-assert.strictEqual(accepted, acceptedBeforeFailure,
-  'a failed second-view solve must return no partially accepted batch');
-assert.equal(accepted[0].connectivityEpoch, 3);
-assert.equal(accepted[1].connectivityEpoch, 3);
+for (let index = 0; index < accepted.length; index += 1) {
+  assert.strictEqual(accepted[index], acceptedBeforeFailure[index].state,
+    'failed staging must not replace an accepted state');
+  assert.equal(accepted[index].connectivityEpoch, acceptedBeforeFailure[index].connectivityEpoch);
+  assert.equal(accepted[index].bonds.filter(bond => !bond.alive).length, acceptedBeforeFailure[index].brokenBondCount);
+}
 
 const page = readFileSync('structural-material-arch-geometry.html', 'utf8');
 const applyStart = page.indexOf("document.getElementById('apply').addEventListener('click'");
 const applyEnd = page.indexOf("document.getElementById('reset').addEventListener('click'");
 assert.ok(applyStart >= 0 && applyEnd > applyStart, 'Apply handler must remain locatable');
 const applyHandler = page.slice(applyStart, applyEnd);
-assert.match(applyHandler, /stageArchSurfaceBatch\([\s\S]*acceptStagedArchSurfaceBatch\(/,
-  'Apply must stage both solver and projected-mesh candidates before accepting either');
+assert.match(applyHandler, /runArchSurfaceApply\(/,
+  'the live Apply handler must use the exercised shared transaction boundary');
 assert.doesNotMatch(applyHandler, /applyState\(viewers\.continuous, force\)[\s\S]*applyState\(viewers\.joints, force\)/,
   'Apply must not commit the continuous mesh before the radial-joint solve succeeds');
-assert.match(applyHandler, /acceptStagedArchSurfaceBatch\(/,
-  'paired geometry updates must cross one explicit acceptance boundary after staging');
+assert.match(page, /accept: acceptArchSurfaceBatch/,
+  'the page must route staged candidates through the tested atomic mesh acceptance');
 
 console.log('structural arch paired apply atomicity contracts passed');

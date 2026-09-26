@@ -57,6 +57,114 @@ export function stageArchSurfaceBatch(views, displayGain, fractureOptions = {}) 
   });
 }
 
+export function summarizeArchSurfaceUpdate(update) {
+  const {
+    authority,
+    brokenBondCount,
+    componentCount,
+    connectivityEpoch,
+    contact,
+    contactDepthMode,
+    contactLayer,
+    force,
+    interiorMode,
+    loadedNodeCount,
+    mappedStructuralNodeCount,
+    maxDisplayedVertexDisplacement,
+    maxRawVertexDisplacement,
+    route,
+    sourceGlbSha256,
+    startingConnectivityEpoch,
+    surfaceVertexCount,
+  } = update;
+  return {
+    route,
+    authority,
+    sourceGlbSha256,
+    interiorMode,
+    contact: { ...contact, contactDepthMode, contactLayer },
+    force,
+    loadedNodeCount,
+    startingConnectivityEpoch,
+    connectivityEpoch,
+    brokenBondCount,
+    componentCount,
+    mappedStructuralNodeCount,
+    surfaceVertexCount,
+    maxRawVertexDisplacement,
+    maxDisplayedVertexDisplacement,
+  };
+}
+
+export function acceptArchSurfaceBatch(entries, updates, { beforeWrite = () => {} } = {}) {
+  if (!Array.isArray(entries) || !Array.isArray(updates) || entries.length !== updates.length) {
+    throw new Error('arch surface acceptance requires a complete staged batch');
+  }
+  const previous = entries.map(({ viewer }) => ({
+    viewer,
+    state: viewer.state,
+    projection: viewer.projection,
+    positions: viewer.mesh.geometry.getAttribute('position').array.slice(),
+  }));
+  try {
+    for (let index = 0; index < entries.length; index += 1) {
+      const { viewer } = entries[index];
+      const geometry = viewer.mesh.geometry;
+      const display = geometry.getAttribute('position');
+      beforeWrite(index, viewer, updates[index]);
+      display.array.set(updates[index].displayPositions);
+      display.needsUpdate = true;
+      geometry.computeVertexNormals();
+      geometry.computeBoundingSphere();
+    }
+  } catch (error) {
+    const rollbackErrors = [];
+    for (const snapshot of previous) {
+      const geometry = snapshot.viewer.mesh.geometry;
+      const display = geometry.getAttribute('position');
+      try {
+        display.array.set(snapshot.positions);
+        display.needsUpdate = true;
+        geometry.computeVertexNormals();
+        geometry.computeBoundingSphere();
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      } finally {
+        snapshot.viewer.state = snapshot.state;
+        snapshot.viewer.projection = snapshot.projection;
+      }
+    }
+    if (rollbackErrors.length) {
+      throw new AggregateError([error, ...rollbackErrors], 'arch surface acceptance failed and rollback was incomplete');
+    }
+    throw error;
+  }
+  for (let index = 0; index < entries.length; index += 1) {
+    entries[index].viewer.state = updates[index].state;
+    entries[index].viewer.projection = updates[index].projection;
+  }
+}
+
+export function runArchSurfaceApply({ prepare, stage, accept, present, reportFailure, reportPresentationFailure }) {
+  let entries;
+  let updates;
+  try {
+    entries = prepare();
+    updates = stage(entries);
+    accept(entries, updates);
+  } catch (error) {
+    reportFailure?.(error);
+    return { status: 'rejected', error };
+  }
+  try {
+    present(updates);
+    return { status: 'accepted', updates };
+  } catch (error) {
+    reportPresentationFailure?.(error, updates);
+    return { status: 'accepted-presentation-failed', error, updates };
+  }
+}
+
 function nearestOccupiedCells(profile) {
   const occupied = [];
   for (let index = 0; index < profile.occupancy.length; index += 1) {

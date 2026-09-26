@@ -112,6 +112,9 @@
     const { buildArchStructuralProxy } = core;
     const {
       stageArchSurfaceBatch,
+      acceptArchSurfaceBatch,
+      runArchSurfaceApply,
+      summarizeArchSurfaceUpdate,
       resolveArchCameraFacingLayer,
     } = surface;
 
@@ -233,86 +236,65 @@
       };
     }
 
-    function acceptStagedArchSurfaceBatch(entries, updates) {
-      const previous = entries.map(({ viewer }) => ({
-        viewer,
-        state: viewer.state,
-        projection: viewer.projection,
-        positions: viewer.mesh.geometry.getAttribute('position').array.slice(),
-      }));
-      try {
-        for (let index = 0; index < entries.length; index += 1) {
-          const { viewer } = entries[index];
-          const geometry = viewer.mesh.geometry;
-          const display = geometry.getAttribute('position');
-          display.array.set(updates[index].displayPositions);
-          display.needsUpdate = true;
-          geometry.computeVertexNormals();
-          geometry.computeBoundingSphere();
-        }
-      } catch (error) {
-        for (const snapshot of previous) {
-          const geometry = snapshot.viewer.mesh.geometry;
-          const display = geometry.getAttribute('position');
-          display.array.set(snapshot.positions);
-          display.needsUpdate = true;
-          snapshot.viewer.state = snapshot.state;
-          snapshot.viewer.projection = snapshot.projection;
-          geometry.computeVertexNormals();
-          geometry.computeBoundingSphere();
-        }
-        throw error;
-      }
-      for (let index = 0; index < entries.length; index += 1) {
-        entries[index].viewer.state = updates[index].state;
-        entries[index].viewer.projection = updates[index].projection;
-      }
-    }
-
     function formatResult(result) {
       return `loaded ${result.loadedNodeCount} nodes at (${result.contact.column}, ${result.contact.row}) · ${result.brokenBondCount} broken bonds · ${result.componentCount} components · raw surface motion ${result.maxRawVertexDisplacement.toFixed(5)} · display ${result.maxDisplayedVertexDisplacement.toFixed(5)}`;
     }
 
     document.getElementById('apply').addEventListener('click', () => {
       if (!ready) return;
-      try {
-        const force = Number(forceInput.value);
-        const entries = [
-          prepareView(viewers.continuous, force),
-          prepareView(viewers.joints, force),
-        ];
-        const updates = stageArchSurfaceBatch(entries, DISPLAY_GAIN, { threshold: THRESHOLD });
-        acceptStagedArchSurfaceBatch(entries, updates);
-        const [continuous, joints] = updates;
-        document.getElementById('continuous-readout').textContent = formatResult(continuous);
-        document.getElementById('joints-readout').textContent = formatResult(joints);
-        status.textContent = 'CPU spring proxy · accepted connectivity retained · displacement recomputed per load';
-        receipt.textContent = JSON.stringify({
-          requestedPageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
-          effectivePageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
-          effectiveMeshRoute: continuous.route,
-          effectiveMeshAuthority: continuous.authority,
-          effectiveSolverRoute: viewers.continuous.base.solverAuthority,
-          contact: {
-            ...CONTACT,
-            mode: 'camera-facing-surface',
-            side: continuous.contactLayer === viewers.continuous.base.layers - 1 ? '+z' : '-z',
-            layer: continuous.contactLayer,
-          },
-          force,
-          fractureThreshold: THRESHOLD,
-          displayGain: DISPLAY_GAIN,
-          stateRetention: 'accepted connectivity and event history; displacement recomputed per Apply',
-          sourceGlbSha256: continuous.sourceGlbSha256,
-          continuous,
-          radialJointCounterfactual: joints,
-          limitation: 'Display-gained mesh displacement consumes proxy state; this witness does not establish source-true masonry or solver-derived cut surfaces.',
-        });
-        render();
-      } catch (error) {
-        status.textContent = `Load failed: ${error.message}`;
-        receipt.textContent = `No new state accepted. ${error.stack || error.message}`;
-      }
+      runArchSurfaceApply({
+        prepare: () => {
+          const force = Number(forceInput.value);
+          return [
+            prepareView(viewers.continuous, force),
+            prepareView(viewers.joints, force),
+          ];
+        },
+        stage: entries => stageArchSurfaceBatch(entries, DISPLAY_GAIN, { threshold: THRESHOLD }),
+        accept: acceptArchSurfaceBatch,
+        present: updates => {
+          const [continuous, joints] = updates;
+          document.getElementById('continuous-readout').textContent = formatResult(continuous);
+          document.getElementById('joints-readout').textContent = formatResult(joints);
+          status.textContent = 'CPU spring proxy · accepted connectivity retained · displacement recomputed per load';
+          receipt.textContent = JSON.stringify({
+            result: 'accepted',
+            requestedPageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
+            effectivePageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
+            effectiveMeshRoute: continuous.route,
+            effectiveMeshAuthority: continuous.authority,
+            effectiveSolverRoute: viewers.continuous.base.solverAuthority,
+            contact: {
+              ...CONTACT,
+              mode: 'camera-facing-surface',
+              side: continuous.contactLayer === viewers.continuous.base.layers - 1 ? '+z' : '-z',
+              layer: continuous.contactLayer,
+            },
+            force,
+            fractureThreshold: THRESHOLD,
+            displayGain: DISPLAY_GAIN,
+            stateRetention: 'accepted connectivity and event history; displacement recomputed per Apply',
+            sourceGlbSha256: continuous.sourceGlbSha256,
+            continuous: summarizeArchSurfaceUpdate(continuous),
+            radialJointCounterfactual: summarizeArchSurfaceUpdate(joints),
+            limitation: 'Display-gained mesh displacement consumes proxy state; this witness does not establish source-true masonry or solver-derived cut surfaces.',
+          });
+          render();
+        },
+        reportFailure: error => {
+          status.textContent = `Load failed: ${error.message}`;
+          receipt.textContent = `No new state accepted. ${error.message}`;
+        },
+        reportPresentationFailure: (error, updates) => {
+          status.textContent = `State accepted; presentation failed: ${error.message}`;
+          receipt.textContent = JSON.stringify({
+            result: 'accepted-presentation-failed',
+            error: error.message,
+            continuous: summarizeArchSurfaceUpdate(updates[0]),
+            radialJointCounterfactual: summarizeArchSurfaceUpdate(updates[1]),
+          });
+        },
+      });
     });
 
     document.getElementById('reset').addEventListener('click', () => {
