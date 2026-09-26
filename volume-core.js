@@ -17682,6 +17682,23 @@ export function createKaminosVolumePrototype({
   let foregroundRequester = null;
   let foregroundPending = null;
   let foregroundSequence = 0;
+  let foregroundAdmissionPaused = false;
+  let foregroundDrainWaiters = [];
+
+  function pauseForegroundAdmission() {
+    foregroundAdmissionPaused = true;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    if (!foregroundPending) return Promise.resolve();
+    return new Promise(resolve => foregroundDrainWaiters.push(resolve));
+  }
+
+  function resumeForegroundAdmission() {
+    foregroundAdmissionPaused = false;
+    if (state.active && !selectiveHeadLiveCapturePaused && !foregroundPending) {
+      raf = requestAnimationFrame(render);
+    }
+  }
 
   function setForegroundOpportunityRequester(requester) {
     if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
@@ -17695,7 +17712,7 @@ export function createKaminosVolumePrototype({
   function render(now) {
     if (!foregroundRequester) return renderOrdinaryFrame(now);
     raf = 0;
-    if (!state.active || selectiveHeadLiveCapturePaused || foregroundPending) return;
+    if (!state.active || selectiveHeadLiveCapturePaused || foregroundAdmissionPaused || foregroundPending) return;
     const requestId = `ordinary-flame-frame-${++foregroundSequence}`;
     const requester = foregroundRequester;
     // Reserve before invoking the requester, which may service synchronously.
@@ -17730,7 +17747,10 @@ export function createKaminosVolumePrototype({
       emitStatus({phase: 'foreground-frame-error', error: state.error});
     }).finally(() => {
       foregroundPending = null;
-      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      const waiters = foregroundDrainWaiters;
+      foregroundDrainWaiters = [];
+      for (const resolve of waiters) resolve();
+      if (!foregroundAdmissionPaused && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     });
   }
 
@@ -24484,6 +24504,8 @@ export function createKaminosVolumePrototype({
       }
     },
     setForegroundOpportunityRequester,
+    pauseForegroundAdmission,
+    resumeForegroundAdmission,
     foregroundGpuContext() {
       return {device, queue: device?.queue, active: state.active, renderer: boundarySplatRequested() || browserResidualCanApply() ? 'alternate-volume' : 'ordinary-volume', productFrameOwner};
     },

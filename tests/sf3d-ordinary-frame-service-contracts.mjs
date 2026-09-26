@@ -10,6 +10,7 @@ const state = {active: true, frameCount: 0, simStepCount: 0};
 const make = new Function('state','device','requestAnimationFrame','cancelAnimationFrame','renderOrdinaryFrame','canvas','emitStatus','performance', `
 let foregroundRequester = null, foregroundPending = null, foregroundSequence = 0, raf = 0;
 let selectiveHeadLiveCapturePaused = false;
+let foregroundAdmissionPaused = false, foregroundDrainWaiters = [];
 const productFrameOwner = 'prototype';
 const boundarySplatRequested = () => false, browserResidualCanApply = () => false;
 ${wrapper}
