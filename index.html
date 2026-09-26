@@ -3264,6 +3264,9 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig } from './volume-core.js?v=flame-doctor-confinement-0925';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
+import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
+  defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle } from './scene-flame-emitter.mjs';
+let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 import {
   VOLUME_EMITTER_INLET_PROFILES,
   VOLUME_EMITTER_SOURCE_LAWS,
@@ -5126,6 +5129,46 @@ function identitySceneTransform() {
   };
 }
 
+function ensureAuthoredFlameEmitter(metadata = {}) {
+  if (!scene || !isFireLightFieldRoute() || !applyFlameEmitterPose) return null;
+  let entry = sceneObjects.find(record => record.id === FLAME_EMITTER_ID);
+  const analytic = window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode === 'analytic-fixed';
+  if (!entry && analytic) {
+    const previous = activeSceneObjectId;
+    const object = createFlameEmitterHandle(THREE);
+    applySceneObjectTransformState(object, flameEmitterPose);
+    scene.add(object);
+    entry = registerSceneObject(object, { ...metadata, id: FLAME_EMITTER_ID,
+      type: FLAME_EMITTER_TYPE, source: FLAME_EMITTER_SOURCE,
+      fileName: 'Flame source', label: metadata.label || 'Flame source' });
+    if (previous && previous !== FLAME_EMITTER_ID) setActiveSceneObject(previous);
+  }
+  if (entry) {
+    entry.object.visible = analytic;
+    applySceneObjectTransformState(entry.object, flameEmitterPose);
+  }
+  return entry?.object || null;
+}
+
+function writeAuthoredFlameEmitterPose(value) {
+  const next = normalizeFlameEmitterPose(value);
+  if (!applyFlameEmitterPose) throw new Error('The ordinary flame source is not mounted');
+  if (window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode !== 'analytic-fixed') {
+    throw new Error('Choose an analytic flame emitter before placing its source');
+  }
+  applyFlameEmitterPose(next);
+  flameEmitterPose = next;
+  ensureAuthoredFlameEmitter();
+}
+
+window.kaminosFlameEmitterState = () => ({
+  registered: sceneObjects.some(record => record.id === FLAME_EMITTER_ID),
+  pose: structuredClone(flameEmitterPose),
+  domain: 'fixed-world-aligned-volume',
+  source: window.__kaminosVolumeEmitterReceipt?.compilerReceipt?.descriptor || null,
+  effectiveMode: window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode || null,
+});
+
 function cloneTransformState(transform = {}) {
   const identity = identitySceneTransform();
   return {
@@ -6190,7 +6233,7 @@ function renderSceneObjectRow(record, options = {}) {
       </span>
       <span class="scene-object-actions">
         <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
-        <button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>
+        ${record.type === FLAME_EMITTER_TYPE ? '' : `<button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>`}
       </span>
     </div>
   `;
@@ -6714,7 +6757,9 @@ document.querySelector('[data-scene-group-create]')?.addEventListener('click', (
 function applyAuthoredScenePose(id, transform = {}) {
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
-  if (entry.type === 'splat') {
+  if (entry.type === FLAME_EMITTER_TYPE) {
+    writeAuthoredFlameEmitterPose(transform);
+  } else if (entry.type === 'splat') {
     setSceneObjectSceneTransform(entry, transform);
     applySplatCorrectionToRecord(entry);
   } else {
@@ -6726,7 +6771,14 @@ function applyAuthoredScenePose(id, transform = {}) {
 }
 
 window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
-  if (scenePlacementTools) scenePlacementTools.edits.apply(id, transform, 'Set scene object pose');
+  if (scenePlacementTools) {
+    const edits = scenePlacementTools.edits, wasActive = !!edits.state().active;
+    try { edits.apply(id, transform, 'Set scene object pose'); }
+    catch (error) {
+      if (!wasActive && edits.state().active) edits.cancel();
+      throw error;
+    }
+  }
   else applyAuthoredScenePose(id, transform);
   return window.kaminosSceneObjectDebugState().find(record => record.id === id);
 };
@@ -9514,6 +9566,10 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
 };
 
 window.removeSceneObject = function(id) {
+  if (id === FLAME_EMITTER_ID) {
+    setInfo('Use flame flow to turn off this source; its simulation domain stays in the scene');
+    return false;
+  }
   scenePlacementTools?.finish(false);
   scenePlacementTools?.edits.discard(entry => entry.id === id);
   const index = sceneObjects.findIndex(obj => obj.id === id);
@@ -10440,6 +10496,17 @@ async function initScene() {
     } else {
       const entry = selectedSceneObjectEntry();
       if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);
+      if (entry?.type === FLAME_EMITTER_TYPE) {
+        const pose = sceneObjectTransformState(entry.object);
+        if (JSON.stringify(pose) !== JSON.stringify(flameEmitterPose)) {
+          try { writeAuthoredFlameEmitterPose(pose); }
+          catch (error) {
+            applySceneObjectTransformState(entry.object, flameEmitterPose);
+            scenePlacementTools?.finish(false);
+            setInfo(error.message);
+          }
+        }
+      }
     }
     updateTransformInspector();
   });
@@ -10768,6 +10835,7 @@ function clearScene() {
   sceneMutationToken++;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
+    if (entry.type === FLAME_EMITTER_TYPE) continue;
     scene.remove(entry.object);
     disposeObjectTree(entry.object);
   }
@@ -10780,7 +10848,7 @@ function clearScene() {
     scene.remove(currentMesh);
     disposeObjectTree(currentMesh);
   }
-  sceneObjects = [];
+  sceneObjects = sceneObjects.filter(entry => entry.type === FLAME_EMITTER_TYPE);
   sceneGroups = [];
   activeSceneObjectId = null;
   activeSceneGroupId = null;
@@ -21806,7 +21874,7 @@ async function initKaminosVolumeRoute() {
     }
   }
   let volumeEmitterRuntimeFrame = 0;
-  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot) {
+  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose) {
     const family = document.getElementById('emitter-assay-family').value;
     if (routeExternalEmitters && family !== 'cluster') {
       throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
@@ -21829,11 +21897,15 @@ async function initKaminosVolumeRoute() {
       timestampMs,
       frameId,
       externalRequest,
+      ...(family !== 'cluster' ? { emitterPose: pose } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     renderVolumeEmitterReceipt(receipt);
+    if (receipt.effective.emitterPose) flameEmitterPose = structuredClone(receipt.effective.emitterPose);
+    ensureAuthoredFlameEmitter();
     return receipt;
   }
+  applyFlameEmitterPose = pose => applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls(), pose);
   if (params.get('promoted_fire_parity') === '1') {
     volumePrototype.setSelectiveHeadLiveCapturePaused(true);
   }
@@ -26001,6 +26073,11 @@ function readNumberControl(id, fallback = 0) {
 
 async function addSceneObjectFromSource(record) {
   if (!record?.source) throw new Error('Scene object missing source');
+  if (record.type === FLAME_EMITTER_TYPE) {
+    const object = ensureAuthoredFlameEmitter(record);
+    if (!object) throw new Error('The saved analytic flame source is not mounted');
+    return object;
+  }
   if (record.type === 'pbr' && isReloadableSceneObjectRecord(record)) {
     const files = await loadDemoFiles(record.source);
     if (!files) throw new Error(`Scene object "${record.fileName || record.id}" demo source "${record.source}" is not readable`);
@@ -26053,6 +26130,8 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
         if (entry?.type === 'splat') {
           setSceneObjectSceneTransform(entry, record.sceneTransform || record.transform);
           applySplatCorrectionToRecord(entry);
+        } else if (entry?.type === FLAME_EMITTER_TYPE) {
+          applyAuthoredScenePose(entry.id, record.transform);
         } else {
           applySceneObjectTransformState(object, record.transform);
         }
@@ -26242,9 +26321,14 @@ window.captureComposition = () => withAuthoringAction(async () => {
   const assertUnchanged = await collectSceneComposition();
   const helper = transformControls?.getHelper();
   const visible = helper?.visible;
+  const emitterHandle = sceneObjects.find(entry => entry.id === FLAME_EMITTER_ID)?.object;
+  const emitterVisible = emitterHandle?.visible;
   let data;
   try {
     if (helper) helper.visible = false;
+    if (emitterHandle) emitterHandle.visible = false;
+    scenePlacementTools?.suspendVisuals(true);
+    selectionFeedback?.suspend(true);
     window._kaminosDirty?.();
     // The second callback samples after both render loops have had a turn.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -26260,6 +26344,9 @@ window.captureComposition = () => withAuthoringAction(async () => {
     data = buildSceneData(capture);
   } finally {
     if (helper) helper.visible = visible;
+    if (emitterHandle) emitterHandle.visible = emitterVisible;
+    scenePlacementTools?.suspendVisuals(false);
+    selectionFeedback?.suspend(false);
     window._kaminosDirty?.();
   }
   if (!await saveToServer(data, null)) throw new Error('Capture was not saved');
@@ -26563,6 +26650,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     return;
   }
   activeSceneComposition = restorePlan.composition;
+  if (activeSceneComposition && !objectRecords.some(record => record.type === FLAME_EMITTER_TYPE)) {
+    writeAuthoredFlameEmitterPose(defaultFlameEmitterPose());
+  }
   setAnnularBurner(activeSceneComposition?.burner || null);
 
   setInfo('Loading scene...');

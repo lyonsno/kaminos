@@ -50,11 +50,12 @@ export function burnerSource(receipt) {
     || !(support.tubeRadius > 0) || !Number.isFinite(support.tubeRadius)
     || !(descriptor.sourceDepth > 0) || !Number.isFinite(descriptor.sourceDepth)
     || !(descriptor.strength >= 0) || !Number.isFinite(descriptor.strength)) return null;
-  if (support.axis.some((n, i) => Math.abs(n - [0, 1, 0][i]) > 1e-6)) return null;
+  const axisLength = Math.hypot(...support.axis);
+  if (Math.abs(axisLength - 1) > 1e-6) return null;
   // Shallow injection intersects the torus with a slab; legacy injection uses the full torus.
   const axialHalfExtent = descriptor.sourceLaw === 'shallow-primary'
     ? Math.min(support.tubeRadius, descriptor.sourceDepth * 0.5) : support.tubeRadius;
-  return { origin: [...support.origin], radius: support.radius, width: support.tubeRadius,
+  return { origin: [...support.origin], axis: [...support.axis], radius: support.radius, width: support.tubeRadius,
     strength: descriptor.strength, sourceDepth: descriptor.sourceDepth,
     sourceLaw: descriptor.sourceLaw, axialHalfExtent };
 }
@@ -145,7 +146,11 @@ export function createAnnularBurner(THREE, mergeGeometries, value) {
       group.visible = !!source;
       const seconds = lastTime === null ? 0 : (now - lastTime) / 1000;
       lastTime = now;
-      if (source) group.position.set(source.origin[0], source.origin[1] - source.axialHalfExtent - 0.003, source.origin[2]);
+      if (source) {
+        const axis = new THREE.Vector3(...source.axis);
+        group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+        group.position.fromArray(source.origin).addScaledVector(axis, -source.axialHalfExtent - 0.003);
+      }
       for (const channel of channels) {
         const target = active ? burnerActivation(channel.radius, source) : 0;
         channel.heat = coolBurner(channel.heat, target, seconds, recipe.coolingSeconds);

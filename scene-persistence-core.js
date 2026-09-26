@@ -1,4 +1,5 @@
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
+import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose } from './scene-flame-emitter.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 export const SCENE_VERSION = 5;
@@ -11,6 +12,9 @@ function cloneJson(value) {
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
   const id = String(record.id || record.fileName || record.source || 'object');
+  if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
+    throw new Error('Unsupported flame source identity');
+  }
   return {
     id,
     source: record.source ?? null,
@@ -19,7 +23,7 @@ function normalizeSceneObjectRecord(record) {
     label: record.label ?? record.fileName ?? id,
     groupId: record.groupId ?? null,
     createdAt: record.createdAt ?? null,
-    transform: cloneJson(record.transform ?? {
+    transform: record.type === FLAME_EMITTER_TYPE ? normalizeFlameEmitterPose(record.transform) : cloneJson(record.transform ?? {
       position: [0, 0, 0],
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
@@ -104,6 +108,7 @@ export function sceneDocumentIsLoadable(data) {
 export function isReloadableSceneObjectRecord(record) {
   const type = record?.type || 'glb';
   const source = record?.source;
+  if (type === FLAME_EMITTER_TYPE) return record.id === FLAME_EMITTER_ID && source === FLAME_EMITTER_SOURCE;
   if (!['glb', 'pbr', 'splat', 'image'].includes(type) || typeof source !== 'string') return false;
   if (type === 'pbr') return source.startsWith('demos/');
   if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
@@ -114,6 +119,9 @@ export function isReloadableSceneObjectRecord(record) {
 export function planSceneRestore(data) {
   if (!sceneDocumentIsLoadable(data)) throw new Error('Invalid scene format');
   const objects = getSceneObjectRecords(data);
+  const flameSources = objects.filter(record => record.type === FLAME_EMITTER_TYPE);
+  if (flameSources.length > 1) throw new Error('The current flame domain supports one authored source');
+  if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');
   const groups = getSceneGroupRecords(data, objects);
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
