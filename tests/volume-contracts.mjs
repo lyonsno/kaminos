@@ -1395,7 +1395,7 @@ assert.doesNotMatch(core, /let tallPlumeFireSurvival = mix\(1\.0, smoothstep\(0\
 assert.match(core, /tallPlumeFireTopFade/, 'tall-plume fire uses a named fire top fade instead of inheriting the old low heat ceiling');
 assert.match(core, /tallPlumeHeatTopFade/, 'tall-plume heat uses a named heat top fade separate from fire survival');
 assert.doesNotMatch(core, /let heatTopFade = 1\.0 - smoothstep\(mix\(0\.42, 0\.62, plumeHeight01\), 0\.960, p\.y\);/, 'tall-plume flame cutoff must not be directly owned by the old low heat top fade');
-assert.match(core, /flame = flame \* mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\);/, 'visible flame must use the fire-specific top fade');
+assert.match(core, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/, 'visible flame must use the fire-specific top fade');
 assert.match(core, /fuelMean/, 'sim readback reports mean fuel evidence');
 assert.match(core, /reactionMean/, 'sim readback reports fuel/heat reaction evidence');
 assert.match(core, /fuelConsumptionMean/, 'sim readback reports reaction fuel consumption evidence');

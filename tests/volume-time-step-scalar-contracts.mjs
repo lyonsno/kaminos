@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+
+// Time step, scalar half (flame-doctor slice 4b). Slice 4 put dt on the
+// velocity side only; fuel consumption, heat-to-smoke conversion, the per-step
+// decays of every transported channel and the boundary sponges stayed per step,
+// so at low Speed a parcel burned out where it stood (Noah, 2026-09-26: it
+// "settles", "won't catch enough to rise"). Under the same `uniform` mode every
+// per-step multiplicative survival becomes rate^dt and every additive reaction
+// increment carries dt; `max()` births are floors and stay. A vertical profile
+// (mean vertical velocity, heat, smoke per height slab) joins the residual probe
+// so "vertical velocity grows with height" can be read as a curve.
+
+const core = await import('../volume-core.js');
+const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+function wgslFunction(name) {
+  const start = source.indexOf(`\nfn ${name}(`);
+  assert.notEqual(start, -1, `production helper ${name} exists`);
+  return source.slice(start, source.indexOf('\n}', start) + 2);
+}
+function mainKernel() {
+  const start = source.indexOf('\nfn cs(@builtin(global_invocation_id) gid: vec3<u32>) {');
+  assert.notEqual(start, -1, 'main sim kernel is located');
+  const end = source.indexOf('\n@compute', start + 10);
+  return source.slice(start, end === -1 ? undefined : end);
+}
+
+test('stepRate turns an authored per-step survival into rate^dt only under the uniform step', () => {
+  const helper = wgslFunction('stepRate');
+  assert.match(helper, /u\.reserved_source_extension_2\.z > 0\.5/, 'reads the time-step mode');
+  assert.match(helper, /select\(rate, pow\(max\(rate, 0\.0\), timeStepScale\(\)\), uniformStep\)/, 'legacy returns the authored rate untouched; uniform raises it to dt');
+  // The CPU model of the same law: half a step keeps sqrt of the survival.
+  const model = (rate, dt, uniform) => (uniform ? Math.pow(Math.max(rate, 0), dt) : rate);
+  assert.equal(model(0.938, 3.4, false), 0.938);
+  assert.ok(Math.abs(model(0.938, 0.5, true) - Math.sqrt(0.938)) < 1e-12);
+  assert.equal(model(0.938, 1, true), 0.938);
+  assert.equal(model(1, 0.25, true), 1);
+});
+
+test('every per-step decay of a transported channel goes through stepRate', () => {
+  const main = mainKernel();
+  const decays = [
+    ['smoke', 'material.x', '0.990'], ['heat', 'material.y', '0.982'], ['fuel', 'material.z', '0.990'], ['materialDetail', 'material.w', '0.970'],
+    ['flame', 'fireLayer.x', '0.938'], ['ember', 'fireLayer.y', '0.952'], ['visibleFireCarrier', 'fireLayer.z', '0.922'], ['combustionFront', 'fireLayer.w', '0.930'],
+    ['microSmoke', 'microLayer.x', '0.972'], ['interfaceShred', 'microLayer.y', '0.948'], ['fireLick', 'microLayer.z', '0.902'], ['emberFleck', 'microLayer.w', '0.934'],
+  ];
+  for (const [name, slot, rate] of decays) {
+    const escaped = slot.replace('.', '\\.');
+    assert.match(main, new RegExp(`var ${name} = ${escaped} \\* stepRate\\(${rate.replace('.', '\\.')}\\);`), `${name} decays by stepRate(${rate})`);
+    assert.doesNotMatch(main, new RegExp(`var ${name} = ${escaped} \\* ${rate.replace('.', '\\.')};`), `${name} no longer decays by a bare per-step factor`);
+  }
+  assert.match(main, /var combustionFrontTopology = sampleFrontField\(backCell\) \* stepRate\(0\.936\);/, 'the transported front topology decays on the same law');
+});
+
+test('reaction, conversion and consumption increments carry dt; max() births stay as floors', () => {
+  const main = mainKernel();
+  assert.match(main, /let columnSmokeTransport = mix\(max\(smoke \+ smokeFromHeat \* timeStep, columnSmokeBirthForScene\)/, 'heat-to-smoke conversion is a rate');
+  assert.match(main, /let bonfireSmokeTransport = min\(1\.65, smoke \+ bonfireAdvectedSmokeBirth \* timeStep\);/, 'the Bonfire smoke birth is a rate');
+  assert.match(main, /smoke = smoke \+ tallPlumeReactionSmokeBirth \* timeStep;/, 'reaction smoke is a rate');
+  assert.match(main, /heat = heat \+ \(tallPlumeFuelHeatReaction \* mix\(0\.0, 0\.16, tallPlumeScene\) \+ tallPlumePilotReaction \* 0\.030\) \* timeStep;/, 'reaction heat release is a rate');
+  assert.match(main, /fuel = max\(fuel - \(heat \* 0\.018 \+ fuelConsumption\) \* timeStep, 0\.0\);/, 'fuel consumption is a rate');
+  assert.match(main, /heat = max\(heat, mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\)\);/, 'heat birth remains a floor');
+  assert.match(main, /fuel = max\(fuel, mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\)\);/, 'fuel injection remains a floor');
+});
+
+test('boundary sponges, height survival and quench attenuations are per-step survivals and follow stepRate', () => {
+  const main = mainKernel();
+  assert.match(main, /flame = flame \* stepRate\(tallPlumeFireSurvival\);\s*\n\s*ember = ember \* stepRate\(tallPlumeFireSurvival\);/, 'flame height survival');
+  assert.match(main, /smoke = smoke \* stepRate\(mix\(0\.42, 1\.0, wallFade\) \* mix\(0\.72, 1\.0, smokeTopFade\)\);/, 'smoke sponge');
+  assert.match(main, /heat = heat \* stepRate\(mix\(0\.30, 1\.0, wallFade\) \* mix\(0\.16, 1\.0, heatTopFade\)\);/, 'heat sponge');
+  assert.match(main, /fuel = fuel \* stepRate\(mix\(0\.20, 1\.0, wallFade\) \* mix\(0\.58, 1\.0, heatTopFade\)\);/, 'fuel sponge');
+  assert.match(main, /materialDetail = materialDetail \* stepRate\(mix\(0\.22, 1\.0, wallFade\)\);/, 'material detail sponge');
+  assert.match(main, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/, 'flame sponge');
+  assert.match(main, /ember = ember \* stepRate\(mix\(0\.18, 1\.0, wallFade\) \* mix\(0\.16, 1\.0, smokeTopFade\)\);/, 'ember sponge');
+  for (const [name, rate] of [['heat', '0.025'], ['fuel', '0.030'], ['flame', '0.025'], ['ember', '0.025']]) {
+    assert.match(main, new RegExp(`${name} = ${name} \\* stepRate\\(1\\.0 - localQuenchSuppression \\* ${rate.replace('.', '\\.')}\\);`), `${name} quench attenuation`);
+  }
+});
+
+test('the resolver, receipt and help say the scalar rates follow the step', () => {
+  assert.equal(core.resolveTimeStepConfig({ speed: 2, advectionScheme: 'maccormack' }).effective.scalarRates, 'per-step');
+  assert.equal(core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'maccormack' }).effective.scalarRates, 'per-time');
+  assert.doesNotMatch(index, /scalar reaction and decay rates remain per step in both modes/, 'the help no longer names the half-step limit');
+  assert.match(index, /decays, reaction, conversion and the boundary sponges follow the same step/, 'the help states the scalar law');
+});
+
+test('the residual probe carries a vertical profile of mean vertical velocity, heat and smoke per height slab', () => {
+  assert.equal(core.PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, 16, 'four vec4 partials per workgroup: compact, wide, vorticity, profile');
+  const reduce = source.slice(source.indexOf('fn pressureResidualReduce('), source.indexOf('fn csPressureResidualBefore('));
+  assert.match(reduce, /let partialIndex = 4u \* \(/, 'partial stride is four vec4');
+  assert.match(reduce, /pressureResidualPartials\[partialIndex \+ 3u\] = vec4<f32>\(verticalVelocitySum, heatSum, smokeSum, 0\.0\);/, 'profile partial written by the before pass');
+  assert.match(reduce, /verticalVelocity = readSlot\(vec3<i32>\(gid\), 0u\)\.y;/, 'vertical velocity sampled from the carried field');
+  assert.match(source, /profile: \{\s*identity: 'height-profile-before-projection-v0',/, 'CPU reduction exports the profile');
+  assert.match(source, /verticalVelocityMean: profileVerticalVelocity\.map\(/, 'per-slab means are exported');
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /heightProfile: s\.pressureSolver\?\.residual\?\.profile \?\? null/, 'the arm capture records the profile');
+});

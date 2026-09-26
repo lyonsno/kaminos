@@ -52,8 +52,10 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   // transport_controls.x = 0 selects the legacy scheme, so this exercises the
   // first-order branch that the common-gas switch routes.
   const u = {reserved_source_extension_2:{y:enabled ? 1 : 0}, transport_controls:{x:0}};
-  // timeStep is 1 under the legacy time-step mode this block is exercised in.
+  // timeStep is 1 and stepRate is the identity under the legacy time-step
+  // mode this block is exercised in.
   const timeStep = 1;
+  const stepRate = rate => rate;
   const thermalAdvectionRiseDirection = 1, fireLayerRiseDirection = 1, microdetailRiseDirection = 1;
   const readSlot = () => vec(0.4,heat,0.3,0.2);
   const sampleFluidSlot = (p,slot) => {calls.push({slot,p:[p.x,p.y,p.z]}); return vec(0.4,heat,0.3,0.2);};
