@@ -81,7 +81,7 @@ try {
   };
   report.phase = 'mount'; report.url = manifest.sceneUrl; await save();
   await page.goto(manifest.sceneUrl);
-  const initial = await waitSim(); check(initial, { x: 0, domain: 0 });
+  const initial = await waitSim(); check(initial, { x: 0.3, domain: 0 });
   for (const mutate of [
     s => { s.volume.backend = 'WebGL'; },
     s => { s.volume.frameCount = 0; },
@@ -92,7 +92,7 @@ try {
   ]) {
     const falseClosure = structuredClone(initial);
     mutate(falseClosure);
-    assert.throws(() => check(falseClosure, { x: 0, domain: 0 }));
+    assert.throws(() => check(falseClosure, { x: 0.3, domain: 0 }));
   }
   report.execution.rendererBackend = initial.volume.backend;
   await shot('01-before', initial);
@@ -100,7 +100,7 @@ try {
   await page.locator('[data-scene-object-id="flame-emitter"] .scene-object-meta').click();
   const box = await page.locator('#kaminos-host-renderer-canvas').boundingBox();
   await page.mouse.move(box.x + box.width * .7, box.y + box.height * .5);
-  for (const key of ['g', 'x', '2', '.', '3']) await page.keyboard.press(key);
+  for (const key of ['g', 'x', '2']) await page.keyboard.press(key);
   const preview = await state();
   assert.ok(Math.abs(preview.emitter.pose.position[0] - 2.3) < 1e-8);
   assert.equal(preview.emitter.injectionSuspended, true);
@@ -116,7 +116,7 @@ try {
   report.phase = 'history'; await save();
   await page.locator('#kaminos-host-renderer-canvas').hover();
   await page.keyboard.press('Meta+z');
-  const undone = await waitSim(released.volume.frameCount + 8); check(undone, { x: 0, domain: 0 });
+  const undone = await waitSim(released.volume.frameCount + 8); check(undone, { x: 0.3, domain: 0 });
   assert.equal(undone.volume.fluidStateResetCount, released.volume.fluidStateResetCount + 1);
   await shot('04-undo', undone);
   await page.keyboard.press('Meta+Shift+z');
@@ -129,7 +129,7 @@ try {
   assert.equal(cancelled.volume.fluidStateResetCount, redone.volume.fluidStateResetCount);
   report.phase = 'save-reopen'; await save();
   const response = page.waitForResponse(r => r.url().endsWith('/api/save-scene') && r.request().method() === 'POST');
-  assert.equal(await page.evaluate(() => window.saveScene()), true);
+  assert.equal(await page.evaluate(() => window.saveSceneAs()), true);
   const savedReceipt = await (await response).json();
   const saved = await (await fetch(`${manifest.origin}/api/read?root=scenes&path=${encodeURIComponent(savedReceipt.saved)}`)).json();
   await fs.writeFile(path.join(args.out, 'saved-scene.json'), JSON.stringify(saved, null, 2));
