@@ -1542,8 +1542,8 @@ export const PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES = 120;
 // resolve are bounded too.
 export const PRESSURE_RESIDUAL_MAP_TIMEOUT_MS = 5000;
 const PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR = 'pressure-residual-map-timeout';
-// Three vec4 partials per workgroup: compact divergence, wide divergence, vorticity (enstrophy sum, max |omega|).
-export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 12;
+// Four vec4 partials per workgroup: compact divergence, wide divergence, vorticity (enstrophy sum, max |omega|), height profile (sum vertical velocity, heat, smoke).
+export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 16;
 const PRESSURE_SOLVER_VALUES = Object.freeze([PRESSURE_SOLVER_LEGACY, PRESSURE_SOLVER_CONVERGED, PRESSURE_SOLVER_CONVERGED_OPEN_TOP]);
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
@@ -2377,8 +2377,9 @@ export function resolveConfinementConfig(controls = {}, options = {}) {
 // aware, and the split per-layer scalar transport (legacy, or undamped without
 // Common gas transport) carries fixed backtraces, so the uniform step is defined
 // only where the scheme is non-legacy AND the common-gas characteristic is in
-// effect (undamped + Common gas, or a MacCormack scheme). Scalar reaction and
-// decay rates remain per-step in both modes.
+// effect (undamped + Common gas, or a MacCormack scheme). Scalar rates follow
+// the step too (stepRate / timeStep at their sites): decays, sponges, quench
+// attenuations as rate^dt, reaction increments x dt; max() births are floors.
 export const TIME_STEP_IDENTITY = 'time-step-mode-v0';
 export const TIME_STEP_MODE_VALUES = Object.freeze(['legacy', 'uniform']);
 const TIME_STEP_MODE_LEGACY = 'legacy';
@@ -2431,6 +2432,7 @@ export function resolveTimeStepConfig(controls = {}) {
         backtraceScale: transportBacktraceScaleForSpeed(speed),
         emitterIncrement: 'per-step-increment',
         incrementScale: 1,
+        scalarRates: 'per-step',
         reason,
       },
     };
@@ -2446,6 +2448,7 @@ export function resolveTimeStepConfig(controls = {}) {
       backtraceScale: transportBacktraceScaleForSpeed(TIME_STEP_REFERENCE_SPEED) * dtScale,
       emitterIncrement: 'per-step-increment',
       incrementScale: dtScale,
+      scalarRates: 'per-time',
       reason,
     },
   };
@@ -2805,6 +2808,9 @@ var<workgroup> pressureResidualWideSum: array<f32, 64>;
 var<workgroup> pressureResidualWideMax: array<f32, 64>;
 var<workgroup> pressureResidualEnstrophySum: array<f32, 64>;
 var<workgroup> pressureResidualVorticityMax: array<f32, 64>;
+var<workgroup> pressureResidualVerticalVelocitySum: array<f32, 64>;
+var<workgroup> pressureResidualHeatSum: array<f32, 64>;
+var<workgroup> pressureResidualSmokeSum: array<f32, 64>;
 @group(1) @binding(1) var<storage, read_write> irradianceDst: array<vec4<f32>>;
 @group(1) @binding(2) var<storage, read> irradianceSrc: array<vec4<f32>>;
 @group(1) @binding(3) var irradianceAtlasOut: texture_storage_2d<rgba16float, write>;
@@ -2978,6 +2984,15 @@ fn dynamicsSpeed() -> f32 {
 
 fn dynamicsBacktraceScale() -> f32 {
   return transportBacktraceScale(dynamicsSpeed()) * timeStepScale();
+}
+
+// Scalar rates on the time step: an authored per-step survival (a decay,
+// sponge or quench factor) becomes rate^dt under the uniform step and stays
+// exactly the authored factor under legacy. Additive reaction increments are
+// multiplied by timeStep at their sites; max() births are floors and are not.
+fn stepRate(rate: f32) -> f32 {
+  let uniformStep = u.reserved_source_extension_2.z > 0.5;
+  return select(rate, pow(max(rate, 0.0), timeStepScale()), uniformStep);
 }
 
 fn transportVelocityDamping() -> f32 {
@@ -3749,6 +3764,9 @@ fn pressureResidualReduce(
   var wide = 0.0;
   var enstrophy = 0.0;
   var vorticity = 0.0;
+  var verticalVelocity = 0.0;
+  var heatValue = 0.0;
+  var smokeValue = 0.0;
   if (all(gid < vec3<u32>(GRID, GRID_Y, GRID))) {
     compact = abs(divergenceCompactAtCell(vec3<i32>(gid)));
     wide = abs(divergenceAtCell(vec3<i32>(gid)));
@@ -3758,6 +3776,11 @@ fn pressureResidualReduce(
       let omega = curlAtCell(vec3<i32>(gid));
       enstrophy = dot(omega, omega);
       vorticity = sqrt(enstrophy);
+      // Height profile: per-workgroup sums the CPU folds into per-slab means.
+      verticalVelocity = readSlot(vec3<i32>(gid), 0u).y;
+      let material = readSlot(vec3<i32>(gid), 1u);
+      heatValue = material.y;
+      smokeValue = material.x;
     }
   }
   pressureResidualSum[localIndex] = compact;
@@ -3766,6 +3789,9 @@ fn pressureResidualReduce(
   pressureResidualWideMax[localIndex] = wide;
   pressureResidualEnstrophySum[localIndex] = enstrophy;
   pressureResidualVorticityMax[localIndex] = vorticity;
+  pressureResidualVerticalVelocitySum[localIndex] = verticalVelocity;
+  pressureResidualHeatSum[localIndex] = heatValue;
+  pressureResidualSmokeSum[localIndex] = smokeValue;
   workgroupBarrier();
   if (localIndex != 0u) {
     return;
@@ -3776,6 +3802,9 @@ fn pressureResidualReduce(
   var widePeak = 0.0;
   var enstrophySum = 0.0;
   var vorticityPeak = 0.0;
+  var verticalVelocitySum = 0.0;
+  var heatSum = 0.0;
+  var smokeSum = 0.0;
   for (var i = 0u; i < 64u; i = i + 1u) {
     sum = sum + pressureResidualSum[i];
     peak = max(peak, pressureResidualMax[i]);
@@ -3783,8 +3812,11 @@ fn pressureResidualReduce(
     widePeak = max(widePeak, pressureResidualWideMax[i]);
     enstrophySum = enstrophySum + pressureResidualEnstrophySum[i];
     vorticityPeak = max(vorticityPeak, pressureResidualVorticityMax[i]);
+    verticalVelocitySum = verticalVelocitySum + pressureResidualVerticalVelocitySum[i];
+    heatSum = heatSum + pressureResidualHeatSum[i];
+    smokeSum = smokeSum + pressureResidualSmokeSum[i];
   }
-  let partialIndex = 3u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
+  let partialIndex = 4u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
   let previousCompact = pressureResidualPartials[partialIndex];
   let previousWide = pressureResidualPartials[partialIndex + 1u];
   if (afterProjection) {
@@ -3794,6 +3826,7 @@ fn pressureResidualReduce(
     pressureResidualPartials[partialIndex] = vec4<f32>(sum, peak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 1u] = vec4<f32>(wideSum, widePeak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 2u] = vec4<f32>(enstrophySum, vorticityPeak, 0.0, 0.0);
+    pressureResidualPartials[partialIndex + 3u] = vec4<f32>(verticalVelocitySum, heatSum, smokeSum, 0.0);
   }
 }
 
@@ -4749,7 +4782,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
     }
   }
-  var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
+  var combustionFrontTopology = sampleFrontField(backCell) * stepRate(0.936);
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
     let diffuseMaterial = (
@@ -4803,19 +4836,19 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let velTransported = advected.xyz * transportVelocityDamping();
   var vel = velTransported;
-  var smoke = material.x * 0.990;
-  var heat = material.y * 0.982;
-  var fuel = material.z * 0.990;
-  var materialDetail = material.w * 0.970;
-  var flame = fireLayer.x * 0.938;
-  var ember = fireLayer.y * 0.952;
-  var visibleFireCarrier = fireLayer.z * 0.922;
+  var smoke = material.x * stepRate(0.990);
+  var heat = material.y * stepRate(0.982);
+  var fuel = material.z * stepRate(0.990);
+  var materialDetail = material.w * stepRate(0.970);
+  var flame = fireLayer.x * stepRate(0.938);
+  var ember = fireLayer.y * stepRate(0.952);
+  var visibleFireCarrier = fireLayer.z * stepRate(0.922);
   var flameDetail = visibleFireCarrier;
-  var combustionFront = fireLayer.w * 0.930;
-  var microSmoke = microLayer.x * 0.972;
-  var interfaceShred = microLayer.y * 0.948;
-  var fireLick = microLayer.z * 0.902;
-  var emberFleck = microLayer.w * 0.934;
+  var combustionFront = fireLayer.w * stepRate(0.930);
+  var microSmoke = microLayer.x * stepRate(0.972);
+  var interfaceShred = microLayer.y * stepRate(0.948);
+  var fireLick = microLayer.z * stepRate(0.902);
+  var emberFleck = microLayer.w * stepRate(0.934);
 
   let sourceCenter = p - u.primitive_source.xyz;
   let radial = length(p.xz);
@@ -5538,8 +5571,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     ),
     canonicalSmokeCapacity
   );
-  let columnSmokeTransport = mix(max(smoke + smokeFromHeat, columnSmokeBirthForScene), canonicalSmokeTransport, canonicalPlumeScene);
-  let bonfireSmokeTransport = min(1.65, smoke + bonfireAdvectedSmokeBirth);
+  let columnSmokeTransport = mix(max(smoke + smokeFromHeat * timeStep, columnSmokeBirthForScene), canonicalSmokeTransport, canonicalPlumeScene);
+  let bonfireSmokeTransport = min(1.65, smoke + bonfireAdvectedSmokeBirth * timeStep);
   smoke = mix(columnSmokeTransport, bonfireSmokeTransport, bonfireScene);
   smoke = max(smoke, externalInjection.material.x * 0.76);
   let columnHeatBirth = source * 0.74 + emberRing * 0.18;
@@ -5582,9 +5615,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeFuelHeatReaction = tallPlumeScene * max(tallPlumeLiveReaction, tallPlumePilotReaction);
   let fuelConsumption = tallPlumeFuelHeatReaction * (0.012 + inputFlow * 0.010 + fireLickAmount * 0.002) + tallPlumePilotReaction * 0.006;
   let tallPlumeReactionSmokeBirth = tallPlumeScene * (fuelConsumption * 0.74 + smokeFromHeat * 0.10 + tallPlumePilotReaction * 0.045);
-  smoke = smoke + tallPlumeReactionSmokeBirth;
-  heat = heat + tallPlumeFuelHeatReaction * mix(0.0, 0.16, tallPlumeScene) + tallPlumePilotReaction * 0.030;
-  fuel = max(fuel - heat * 0.018 - fuelConsumption, 0.0);
+  // Reaction increments are rates: they carry the time step (1.0 under legacy).
+  smoke = smoke + tallPlumeReactionSmokeBirth * timeStep;
+  heat = heat + (tallPlumeFuelHeatReaction * mix(0.0, 0.16, tallPlumeScene) + tallPlumePilotReaction * 0.030) * timeStep;
+  fuel = max(fuel - (heat * 0.018 + fuelConsumption) * timeStep, 0.0);
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
@@ -5844,8 +5878,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     1.0
   );
   let tallPlumeFireSurvival = mix(1.0, tallPlumeFlameHeightSurvival, tallPlumeScene);
-  flame = flame * tallPlumeFireSurvival;
-  ember = ember * tallPlumeFireSurvival;
+  flame = flame * stepRate(tallPlumeFireSurvival);
+  ember = ember * stepRate(tallPlumeFireSurvival);
   flameDetail = flameDetail * tallPlumeFireSurvival;
   visibleFireCarrier = flameDetail;
   combustionFront = combustionFront * tallPlumeFireSurvival;
@@ -5876,12 +5910,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeFireTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.72, 0.90, plumeHeight01)), expandedTopY - 0.005, p.y);
   let heatTopFade = mix(legacyHeatTopFade, tallPlumeHeatTopFade, tallPlumeScene);
   let fireTopFade = mix(legacyHeatTopFade, tallPlumeFireTopFade, tallPlumeScene);
-  smoke = smoke * mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade);
-  heat = heat * mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade);
-  fuel = fuel * mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade);
-  materialDetail = materialDetail * mix(0.22, 1.0, wallFade);
-  flame = flame * mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade);
-  ember = ember * mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade);
+  smoke = smoke * stepRate(mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade));
+  heat = heat * stepRate(mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade));
+  fuel = fuel * stepRate(mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade));
+  materialDetail = materialDetail * stepRate(mix(0.22, 1.0, wallFade));
+  flame = flame * stepRate(mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
+  ember = ember * stepRate(mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade));
   flameDetail = flameDetail * mix(0.10, 1.0, wallFade);
   combustionFront = combustionFront * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade);
   combustionFrontTopology = combustionFrontTopology * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade);
@@ -5943,10 +5977,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     quenchDst[sourceLastContactTickIndex] = sourceLastContactTick;
   }
   let localQuenchSuppression = smoothstep(0.08, 0.55, persistentQuench);
-  heat = heat * (1.0 - localQuenchSuppression * 0.025);
-  fuel = fuel * (1.0 - localQuenchSuppression * 0.030);
-  flame = flame * (1.0 - localQuenchSuppression * 0.025);
-  ember = ember * (1.0 - localQuenchSuppression * 0.025);
+  heat = heat * stepRate(1.0 - localQuenchSuppression * 0.025);
+  fuel = fuel * stepRate(1.0 - localQuenchSuppression * 0.030);
+  flame = flame * stepRate(1.0 - localQuenchSuppression * 0.025);
+  ember = ember * stepRate(1.0 - localQuenchSuppression * 0.025);
   flameDetail = flameDetail * (1.0 - localQuenchSuppression * 0.035);
   combustionFront = combustionFront * (1.0 - localQuenchSuppression * 0.032);
   combustionFrontTopology = combustionFrontTopology * (1.0 - localQuenchSuppression * 0.028);
@@ -14536,10 +14570,22 @@ export function createKaminosVolumePrototype({
       };
       let enstrophySum = 0;
       let vorticityPeak = 0;
+      // Height profile: fold the per-workgroup sums by the workgroup's y index
+      // into per-slab means (each slab is four cell rows across the whole x-z plane).
+      const workgroupsX = Math.ceil(grid / 4);
+      const workgroupsY = Math.ceil(gridHeightForSize(grid) / 4);
+      const slabCells = grid * grid * 4;
+      const profileVerticalVelocity = new Array(workgroupsY).fill(0);
+      const profileHeat = new Array(workgroupsY).fill(0);
+      const profileSmoke = new Array(workgroupsY).fill(0);
       for (let i = 0; i < workgroupCount; i += 1) {
         const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP + 8;
         enstrophySum += partials[at];
         vorticityPeak = Math.max(vorticityPeak, partials[at + 1]);
+        const slab = Math.floor(i / workgroupsX) % workgroupsY;
+        profileVerticalVelocity[slab] += partials[at + 4];
+        profileHeat[slab] += partials[at + 5];
+        profileSmoke[slab] += partials[at + 6];
       }
       const residual = {
         identity: 'pressure-divergence-residual-probe-v1',
@@ -14558,6 +14604,14 @@ export function createKaminosVolumePrototype({
           enstrophyMean: enstrophySum / cells,
           enstrophySum,
           maxAbs: vorticityPeak,
+        },
+        profile: {
+          identity: 'height-profile-before-projection-v0',
+          slabRows: 4,
+          slabs: workgroupsY,
+          verticalVelocityMean: profileVerticalVelocity.map(sum => sum / slabCells),
+          heatMean: profileHeat.map(sum => sum / slabCells),
+          smokeMean: profileSmoke.map(sum => sum / slabCells),
         },
         measuredAtMs: Number(performance.now().toFixed(3)),
       };
