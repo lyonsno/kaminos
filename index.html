@@ -15522,6 +15522,18 @@ function volumeBasinPromotionStatus(message, failed = false) {
   state.classList.toggle('present', !failed);
 }
 
+// The loaded basin's report: what was requested, what loaded, and anything the
+// server changed to make it load on this branch.
+function activeVolumeSettingsPresetStatus() {
+  const receipt = activeVolumeSettingsPresetReceipt;
+  if (!receipt) return { text: '', warning: false };
+  const projection = describeVolumeSettingsPresetProjection(receipt.serverProjection);
+  return {
+    text: `${receipt.label || receipt.presetId} | requested ${receipt.requestedPresetRef} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projection.text ? ` | ${projection.text}` : ''}`,
+    warning: projection.warning,
+  };
+}
+
 async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
   const select = document.getElementById('settings-preset-select');
   try {
@@ -15532,7 +15544,7 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     volumeSettingsPresetIndex = index;
     const unavailable = index.unavailableEntries || [];
     if (select) {
-      const previous = selectedPresetId || select.value;
+      const previous = selectedPresetId || activeVolumeSettingsPresetReceipt?.presetId || select.value;
       select.replaceChildren();
       if (!index.entries.length) {
         select.add(new Option(unavailable.length ? 'No compatible presets' : 'No saved presets', ''));
@@ -15555,9 +15567,10 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         select.add(option);
       }
     }
+    const active = activeVolumeSettingsPresetStatus();
     volumeSettingsPresetStatus(
-      `${index.entries.length} presets${unavailable.length ? ` | ${unavailable.length} unavailable on this version` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
-      unavailable.length > 0,
+      `${active.text ? `${active.text} || ` : ''}${index.entries.length} presets${unavailable.length ? ` | ${unavailable.length} unavailable on this version` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      active.warning || unavailable.length > 0,
     );
     return index;
   } catch (error) {
@@ -21165,11 +21178,7 @@ async function admitVolumeSettingsPresetRoute(params) {
   activeVolumeSettingsPresetReceipt = receipt;
   window.__kaminosVolumeSettingsPresetReceipt = receipt;
   document.getElementById('settings-preset-label').value = receipt.label || receipt.presetId;
-  const projectionSummary = describeVolumeSettingsPresetProjection(receipt.serverProjection);
-  volumeSettingsPresetStatus(
-    `${receipt.label || receipt.presetId} | requested ${requestedPresetId} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projectionSummary.text ? ` | ${projectionSummary.text}` : ''}`,
-    projectionSummary.warning,
-  );
+  volumeSettingsPresetStatus(activeVolumeSettingsPresetStatus().text, activeVolumeSettingsPresetStatus().warning);
   return receipt;
 }
 
