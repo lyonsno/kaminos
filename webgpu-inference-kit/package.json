@@ -29,6 +29,8 @@
     "./examples/render-plus-inference": "./examples/render-plus-inference.mjs"
   },
   "scripts": {
+    "test:handoff": "node --test tests/foreground-route-handoff-contracts.mjs",
+    "pretest": "npm run test:handoff",
     "test:entrypoints": "node --experimental-vm-modules tests/package-entrypoints-contracts.mjs && node tests/weight-representation-contracts.mjs",
     "test:parity-browser": "node tests/parity-primitives-browser-smoke.mjs",
     "test:render-browser": "node tests/render-plus-inference-browser.mjs",

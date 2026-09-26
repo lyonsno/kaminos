@@ -1,4 +1,5 @@
 export { createWebGpuLinearShader } from './linear-kernel.js';
+export { createWebGpuForegroundRouteHandoff } from './foreground-route-handoff.js';
 
 export {
   assertAuthoritativeRouteReceipt,
