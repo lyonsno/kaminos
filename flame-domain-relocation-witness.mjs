@@ -120,10 +120,10 @@ try {
   const box = await page.locator('#kaminos-host-renderer-canvas').boundingBox();
   await page.mouse.move(box.x + box.width * .7, box.y + box.height * .5);
   for (const key of ['g', 'x', '2']) await page.keyboard.press(key);
-  await waitBurner(2.3);
   const preview = await state();
   assert.ok(Math.abs(preview.emitter.pose.position[0] - 2.3) < 1e-8);
   assert.equal(preview.emitter.injectionSuspended, true);
+  assert.equal(preview.burner.effective, false);
   assert.deepEqual(preview.emitter.domainTranslation, [0, 0, 0]);
   assert.equal(preview.volume.fluidStateResetCount, initial.volume.fluidStateResetCount);
   await shot('02-preview-outside', preview);
