@@ -73,6 +73,10 @@ export function prepareNavigationGeometry(root) {
     const geometry = object.geometry;
     if (!geometry?.getAttribute('position') || geometry.getAttribute('position').isInterleavedBufferAttribute) return;
     let entry = depthIndexes.get(geometry);
+    if (entry?.status === 'failed') {
+      depthIndexes.delete(geometry);
+      entry = null;
+    }
     if (!entry) {
       const position = geometry.getAttribute('position');
       const index = geometry.index;
@@ -81,7 +85,7 @@ export function prepareNavigationGeometry(root) {
       depthIndexes.set(geometry, entry);
       entry.promise = buildNavigationIndex(geometry).then(result => {
         if (depthIndexes.get(geometry) !== entry) return false;
-        if (geometry.getAttribute('position') !== position || (index !== null && geometry.index !== index)
+        if (geometry.getAttribute('position') !== position || geometry.index !== index
           || position.version !== positionVersion || index?.version !== indexVersion) {
           throw new Error('navigation geometry changed during indexing');
         }
@@ -133,7 +137,7 @@ export function navigationPivot(camera, target, ndc, roots) {
   cast.near = camera.near / cosine;
   cast.far = camera.far / cosine;
   const meshes = new Set();
-  let indexing = false;
+  let indexing = false, failed = false;
   for (const root of roots.filter(Boolean)) {
     root.updateWorldMatrix(true, true);
     // A supplied child can have an invisible parent outside the supplied roots.
@@ -141,12 +145,16 @@ export function navigationPivot(camera, target, ndc, roots) {
     for (let p = root; p; p = p.parent) if (!p.visible) visible = false;
     if (visible) root.traverseVisible(o => {
       if (o.isMesh && o.layers.test(camera.layers)) {
-        if (depthIndexes.get(o.geometry)?.status === 'building') indexing = true;
+        const materials = Array.isArray(o.material) ? o.material : [o.material];
+        if (!materials.some(material => material?.visible && (!material.transparent || material.opacity > 0))) return;
+        const state = depthIndexes.get(o.geometry)?.status;
+        if (state === 'building') indexing = true;
+        else if (state === 'failed') failed = true;
         else meshes.add(o);
       }
     });
   }
-  const candidates = (indexing ? [] : [...meshes]).filter(mesh => {
+  const candidates = [...meshes].filter(mesh => {
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     return materials.some(material => material?.visible && (!material.transparent || material.opacity > 0));
   });
@@ -161,7 +169,7 @@ export function navigationPivot(camera, target, ndc, roots) {
   });
   const plane = new Plane().setFromNormalAndCoplanarPoint(forward, target);
   const point = hit?.point || cast.ray.intersectPlane(plane, new Vector3()) || target.clone();
-  return {point, source: hit ? 'mesh-surface' : indexing ? 'indexing-depth' : 'retained-depth', object: hit?.object.name || null};
+  return {point, source: hit ? 'mesh-surface' : indexing ? 'indexing-depth' : failed ? 'index-failed-depth' : 'retained-depth', object: hit?.object.name || null};
 }
 
 export function adoptNavigationDepth(camera, target, point) {

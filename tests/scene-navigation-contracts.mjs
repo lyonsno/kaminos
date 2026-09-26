@@ -71,6 +71,39 @@ test('a winding edit invalidates the old surface index before rebuilding',async(
  await invalidateNavigationGeometry(mesh);
  assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'retained-depth');
 });
+test('a topology change during indexing cannot attach a stale tree',async()=>{
+ const geometry=new THREE.PlaneGeometry(2,2,12,12).toNonIndexed();
+ const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
+ const build=prepareNavigationGeometry(mesh);
+ geometry.setIndex(Array.from({length:geometry.getAttribute('position').count},(_,i)=>i).reverse());
+ await build;
+ assert.equal(!!geometry.boundsTree,false,'the old triangle layout must not be attached');
+});
+test('a building mesh does not hide a different visible surface',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3(),root=new THREE.Group();
+ const slow=new THREE.Mesh(new THREE.PlaneGeometry(4,4,12,12),new THREE.MeshBasicMaterial());
+ slow.position.z=5;
+ const surface=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial());
+ surface.position.z=4;root.add(slow,surface);
+ const build=prepareNavigationGeometry(slow);
+ const hit=navigationPivot(c,target,new THREE.Vector2(),[root]);
+ assert.equal(hit.source,'mesh-surface');
+ near(hit.point,new THREE.Vector3(0,0,4));
+ await build;
+});
+test('a failed index does not reinstate dense raw raycasts and preparation can retry',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3();
+ const geometry=new THREE.PlaneGeometry(2,2,12,12);
+ const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
+ const build=prepareNavigationGeometry(mesh);
+ geometry.getAttribute('position').needsUpdate=true;
+ await build;
+ assert.equal(geometry.boundsTree ?? null,null);
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'index-failed-depth');
+ await prepareNavigationGeometry(mesh);
+ assert.ok(geometry.boundsTree,'a later explicit preparation retries the failed index');
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'mesh-surface');
+});
 test('pan follows pointer displacement at working depth and large framing has no old distance wall',()=>{
  const c=cameraAt(),target=new THREE.Vector3(),point=new THREE.Vector3(0,0,6);
  adoptNavigationDepth(c,target,point);const before=point.clone().project(c);
