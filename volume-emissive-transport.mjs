@@ -67,21 +67,10 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = allocate('emissive material coefficients', cells);
-  const directions = allocate('axis-or-oblique directional incident radiance', cells*EMISSIVE_LIGHT_DIRECTIONS.length);
+  const directions = allocate('axis directional incident radiance', cells*6);
   const incident = allocate('single-scattering mean incident radiance', cells);
-  const stepStride = 256;
-  const stepBuffer = device.createBuffer({
-    label: 'oblique emissive slab step',
-    size: EMISSIVE_LIGHT_GRID * stepStride,
-    usage: GPUBufferUsage.UNIFORM,
-    mappedAtCreation: true,
-  });
-  const stepWords = new Uint32Array(stepBuffer.getMappedRange());
-  for (let step = 0; step < EMISSIVE_LIGHT_GRID; step++) stepWords[step * stepStride / 4] = step;
-  stepBuffer.unmap();
   const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
   const seed = pipeline('seedEmissiveLight'), sweep = pipeline('sweepEmissiveLight'), resolve = pipeline('resolveEmissiveLight');
-  const obliqueSweep = pipeline('sweepObliqueEmissiveLight'), obliqueResolve = pipeline('resolveObliqueEmissiveLight');
   const group = (pipe, index, buffers) => device.createBindGroup({
     layout: pipe.getBindGroupLayout(index),
     entries: buffers.map(([binding, buffer, offset, size]) => ({
@@ -94,26 +83,51 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   const sweepOutput = group(sweep,3,[[2,directions]]);
   const resolveInput = group(resolve,0,[[14,directions]]);
   const resolveOutput = group(resolve,3,[[3,incident]]);
-  const obliqueSweepInput = group(obliqueSweep,0,[[0,uniformBuffer],[13,coefficients]]);
-  const obliqueSweepOutputs = Array.from({ length: EMISSIVE_LIGHT_GRID }, (_, step) => (
-    group(obliqueSweep,3,[[2,directions],[4,stepBuffer,step*stepStride,16]])
-  ));
-  const obliqueResolveInput = group(obliqueResolve,0,[[14,directions]]);
-  const obliqueResolveOutput = group(obliqueResolve,3,[[3,incident]]);
+  let obliqueState = null;
+  function ensureObliqueState() {
+    if (obliqueState) return obliqueState;
+    const obliqueDirections = allocate('oblique directional incident radiance', cells*EMISSIVE_LIGHT_DIRECTIONS.length);
+    const stepStride = 256;
+    const stepBuffer = device.createBuffer({
+      label: 'oblique emissive slab step',
+      size: EMISSIVE_LIGHT_GRID * stepStride,
+      usage: GPUBufferUsage.UNIFORM,
+      mappedAtCreation: true,
+    });
+    const stepWords = new Uint32Array(stepBuffer.getMappedRange());
+    for (let step = 0; step < EMISSIVE_LIGHT_GRID; step++) stepWords[step * stepStride / 4] = step;
+    stepBuffer.unmap();
+    const sweep = pipeline('sweepObliqueEmissiveLight');
+    const resolve = pipeline('resolveObliqueEmissiveLight');
+    obliqueState = {
+      directions: obliqueDirections,
+      stepBuffer,
+      sweep,
+      resolve,
+      sweepInput: group(sweep,0,[[0,uniformBuffer],[13,coefficients]]),
+      sweepOutputs: Array.from({ length: EMISSIVE_LIGHT_GRID }, (_, step) => (
+        group(sweep,3,[[2,obliqueDirections],[4,stepBuffer,step*stepStride,16]])
+      )),
+      resolveInput: group(resolve,0,[[14,obliqueDirections]]),
+      resolveOutput: group(resolve,3,[[3,incident]]),
+    };
+    return obliqueState;
+  }
   return {
     incident,
     encode(encoder, sourceIndex, timestampWrites, mode = EMISSIVE_LIGHT_MODE_AXES) {
       const transport = resolveEmissiveLightTransport(mode);
+      const oblique = transport === EMISSIVE_LIGHT_MODE_OBLIQUE ? ensureObliqueState() : null;
       const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });
       pass.setPipeline(seed); pass.setBindGroup(0,seedInputs[sourceIndex]); pass.setBindGroup(3,seedOutput);
       pass.dispatchWorkgroups(EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4);
       if (transport === EMISSIVE_LIGHT_MODE_OBLIQUE) {
-        pass.setPipeline(obliqueSweep); pass.setBindGroup(0,obliqueSweepInput);
+        pass.setPipeline(oblique.sweep); pass.setBindGroup(0,oblique.sweepInput);
         for (let step = 0; step < EMISSIVE_LIGHT_GRID; step++) {
-          pass.setBindGroup(3,obliqueSweepOutputs[step]);
+          pass.setBindGroup(3,oblique.sweepOutputs[step]);
           pass.dispatchWorkgroups(Math.ceil(EMISSIVE_LIGHT_DIRECTIONS.length*EMISSIVE_LIGHT_GRID**2/64));
         }
-        pass.setPipeline(obliqueResolve); pass.setBindGroup(0,obliqueResolveInput); pass.setBindGroup(3,obliqueResolveOutput);
+        pass.setPipeline(oblique.resolve); pass.setBindGroup(0,oblique.resolveInput); pass.setBindGroup(3,oblique.resolveOutput);
       } else {
         pass.setPipeline(sweep); pass.setBindGroup(0,sweepInput); pass.setBindGroup(3,sweepOutput);
         pass.dispatchWorkgroups(Math.ceil(6*EMISSIVE_LIGHT_GRID**2/64));
@@ -122,7 +136,10 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
       pass.dispatchWorkgroups(Math.ceil(cells/64));
       pass.end();
     },
-    destroy() { coefficients.destroy(); directions.destroy(); incident.destroy(); stepBuffer.destroy(); },
+    destroy() {
+      coefficients.destroy(); directions.destroy(); incident.destroy();
+      obliqueState?.directions.destroy(); obliqueState?.stepBuffer.destroy();
+    },
   };
 }
 

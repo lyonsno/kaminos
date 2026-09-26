@@ -21765,7 +21765,12 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
   }
   if (params.has('volume_emissive_light_transport')) {
-    setVolumeControlValue('volume-emissive-light-transport', params.get('volume_emissive_light_transport'));
+    const lightTransport = params.get('volume_emissive_light_transport');
+    if (['axes', 'oblique'].includes(lightTransport)) {
+      setVolumeControlValue('volume-emissive-light-transport', lightTransport);
+    } else {
+      console.warn(`Unsupported smoke lighting route value: ${lightTransport}; using six axes`);
+    }
   }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));

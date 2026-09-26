@@ -18,6 +18,7 @@ assert.deepEqual(control?.allowedValues, ['axes', 'oblique']);
 assert.equal(control?.additiveDefault, 'axes');
 assert.match(html, /id="volume-emissive-light-transport"/);
 assert.match(html, /getElementById\('volume-emissive-light-transport'\)\.addEventListener\('input', syncControls\)/);
+assert.match(html, /if \(\['axes', 'oblique'\]\.includes\(lightTransport\)\)/);
 assert.match(core, /emissiveLightField\.encode\(encoder, currentFluid, [^\n]*lightTransport/);
 assert.equal(resolveEmissiveLightTransport(undefined), 'axes');
 assert.equal(resolveEmissiveLightTransport('oblique'), 'oblique');
@@ -57,12 +58,19 @@ assert.match(EMISSIVE_TRANSPORT_WGSL, /samplePreviousOutgoing\(direction/);
 const priorUsage = globalThis.GPUBufferUsage;
 globalThis.GPUBufferUsage = { STORAGE: 1, UNIFORM: 2 };
 try {
+  const buffers = [];
   const device = {
-    createBuffer: ({ size }) => ({ getMappedRange: () => new ArrayBuffer(size), unmap() {}, destroy() {} }),
+    createBuffer: ({ size, label }) => {
+      const buffer = { size, label, getMappedRange: () => new ArrayBuffer(size), unmap() {}, destroy() {} };
+      buffers.push(buffer);
+      return buffer;
+    },
     createComputePipeline: ({ compute }) => ({ name: compute.entryPoint, getBindGroupLayout: () => ({}) }),
     createBindGroup: ({ entries }) => entries,
   };
   const field = createEmissiveLightField(device, {}, {}, [{}, {}], [{}, {}]);
+  assert.equal(buffers.find(buffer => buffer.label === 'axis directional incident radiance')?.size, 6 * EMISSIVE_LIGHT_GRID ** 3 * 16);
+  assert.equal(buffers.some(buffer => buffer.label === 'oblique directional incident radiance'), false);
   const encode = mode => {
     const pipelines = [];
     const dispatches = [];
@@ -77,6 +85,10 @@ try {
   };
   assert.deepEqual(encode('axes').pipelines, ['seedEmissiveLight', 'sweepEmissiveLight', 'resolveEmissiveLight']);
   const oblique = encode('oblique');
+  assert.equal(buffers.find(buffer => buffer.label === 'oblique directional incident radiance')?.size, EMISSIVE_LIGHT_DIRECTIONS.length * EMISSIVE_LIGHT_GRID ** 3 * 16);
+  const bufferCount = buffers.length;
+  encode('oblique');
+  assert.equal(buffers.length, bufferCount, 'reusing oblique mode must not reallocate GPU buffers');
   assert.equal(oblique.pipelines.filter(name => name === 'sweepObliqueEmissiveLight').length, 1);
   assert.equal(oblique.dispatches.length, EMISSIVE_LIGHT_GRID + 2);
   assert.equal(oblique.pipelines.at(-1), 'resolveObliqueEmissiveLight');
