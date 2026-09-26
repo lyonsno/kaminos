@@ -241,7 +241,11 @@ export function installScenePlacementTools({
       else if (/^[0-9.\-]$/.test(event.key)) modal.numeric += event.key;
       modal.snap = event.ctrlKey; modal.precise = event.shiftKey; preview(); return;
     }
-    if (!(hover || viewport.contains(document.activeElement)) || !allowed() || busy()) return;
+    // Selecting an object from the scene list leaves focus on the document
+    // body. Its transform keys should work without a second viewport hover;
+    // focused sidebar controls still retain their own keyboard input.
+    const neutralPageFocus = document.activeElement === document.body;
+    if (!(hover || viewport.contains(document.activeElement) || neutralPageFocus) || !allowed() || busy()) return;
     if ((event.ctrlKey || event.metaKey) && key === 'z') { steal(event); try { event.shiftKey ? edits.redo() : edits.undo(); } catch (error) { hud.textContent = error.message; } return; }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (key === 'f' || event.code === 'NumpadDecimal') { steal(event); frameSelected(); draw(); return; }
