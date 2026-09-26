@@ -6,6 +6,7 @@ const shaderSource = readFileSync(new URL('../finger-fluid-webgpu-core.js', impo
 const browserSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const lambda = shaderSource.match(/fn compute_density_lambda[\s\S]*?(?=@compute @workgroup_size\([^\n]+\)\nfn solve_position_delta)/)?.[0] ?? '';
 const delta = shaderSource.match(/fn solve_position_delta[\s\S]*?(?=@compute @workgroup_size\([^\n]+\)\nfn apply_position_delta)/)?.[0] ?? '';
+const topology = shaderSource.match(/fn measure_neighbor_topology[\s\S]*?(?=@compute @workgroup_size\([^\n]+\)\nfn compute_material_tracer_diffusion)/)?.[0] ?? '';
 
 assert.match(shaderSource, /fn density_neighbor_cell_might_contribute\(position: vec3<f32>, neighborCell: vec3<i32>, radiusScale: f32\) -> bool/, 'the candidate-cell predicate is in the actual compute shader');
 assert.match(shaderSource, /if \(params\.refinementControl\.y != 0u \|\| params\.refinementControl\.w == 0u\) \{ return true; \}/, 'adaptive refinement and the baseline comparison bypass the uniform-volume cull');
@@ -16,6 +17,7 @@ assert.match(shaderSource, /select\(cellMax \+ cellPadding, max\(cellMax \+ cell
 for (const [name, stage] of [['lambda', lambda], ['correction', delta]]) {
   assert.match(stage, /if \(!density_neighbor_cell_might_contribute\(position, neighborCell, selfRadiusScale\)\) \{ continue; \}[\s\S]*atomicLoad\(&cellHeads\[cellIndex\(neighborCell\)\]\)/, `${name} skips irrelevant cells before following the linked list`);
 }
+assert.match(topology, /if \(!density_neighbor_cell_might_contribute\(position, neighborCell, 1\.0\)\) \{ continue; \}[\s\S]*atomicLoad\(&cellHeads\[cellIndex\(neighborCell\)\]\)/, 'four-neighbor topology skips cells beyond its fixed support radius before following the linked list');
 assert.match(shaderSource, /view\.setUint32\(188, safeDensityCellRejection \? 1 : 0, true\)/, 'effective route selection reaches the shader uniform');
 assert.ok(browserSource.includes("params.get('finger_fluid_density_cell_rejection')"), 'the browser route exposes the comparison switch');
 assert.ok(browserSource.includes('densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection'), 'the browser forwards the effective switch to the solver');

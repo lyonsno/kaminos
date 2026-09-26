@@ -7225,6 +7225,7 @@ fn measure_neighbor_topology(@builtin(global_invocation_id) gid: vec3<u32>) {
       for (var x = -1; x <= 1; x = x + 1) {
         let neighborCell = baseCell + vec3<i32>(x, y, z);
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        if (!density_neighbor_cell_might_contribute(position, neighborCell, 1.0)) { continue; }
         var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
         while (current >= 0) {
           let neighborIndex = u32(current);
