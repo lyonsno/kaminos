@@ -91,6 +91,37 @@ test('a failed asynchronous restore leaves the membership history available to r
   assert.deepEqual(edits.state(), { active: null, undoCount: 1, redoCount: 0, replaying: false });
 });
 
+test('membership removal can preflight history admission before mutating the scene', () => {
+  const editId = '@scene-membership:kiln';
+  const before = { id: 'kiln', source: '/api/ingest-mesh/kiln.glb', type: 'glb' };
+  let member = clone(before);
+  let canEdit = false;
+  const edits = createSceneEdits({
+    read: () => null,
+    write: () => {},
+    admit: () => { if (!canEdit) throw new Error('Finish preview or correction before editing placement'); },
+  });
+  edits.register(editId, {
+    allowMissing: true,
+    read: () => clone(member),
+    check: value => value === null ? null : structuredClone(value),
+    write: value => { member = clone(value); },
+  });
+
+  assert.throws(() => {
+    edits.assertCanRecordApplied(editId);
+    member = null;
+    edits.recordApplied(editId, before, null, 'Remove kiln');
+  }, /Finish preview or correction/);
+  assert.deepEqual(member, before, 'the scene must not lose its object when the history edit is rejected');
+
+  canEdit = true;
+  edits.assertCanRecordApplied(editId);
+  member = null;
+  assert.equal(edits.recordApplied(editId, before, null, 'Remove kiln'), true);
+  assert.equal(edits.state().undoCount, 1);
+});
+
 test('clearing scene history is rejected while asynchronous membership replay is pending', async () => {
   let member = { id: 'generated-chair', source: '/api/ingest-mesh/chair.glb', type: 'glb' };
   let completeWrite;
