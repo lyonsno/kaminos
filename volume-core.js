@@ -2433,6 +2433,7 @@ export function resolveTimeStepConfig(controls = {}) {
         emitterIncrement: 'per-step-increment',
         incrementScale: 1,
         scalarRates: 'per-step',
+        scalarExceptions: null,
         reason,
       },
     };
@@ -2449,6 +2450,9 @@ export function resolveTimeStepConfig(controls = {}) {
       emitterIncrement: 'per-step-increment',
       incrementScale: dtScale,
       scalarRates: 'per-time',
+      // What deliberately stays per step under uniform: max() birth floors and
+      // the canonical scene's 0/1 selector masks.
+      scalarExceptions: 'max-birth-floors-and-canonical-scene-masks',
       reason,
     },
   };
@@ -5572,9 +5576,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalSmokeCapacity = mix(2.2, 0.88 - canonicalPlumeBodyBalance, canonicalPlumeScene);
   let canonicalSmokeTransport = min(
     max(
-      smoke * (0.968 - canonicalCenterlineRelief * 0.16 * canonicalCenterlineGain - canonicalPlumeBodyBalance * 0.10)
-        + smokeFromHeat * 0.18
-        + canonicalScalarSpread * canonicalSpreadGain * (0.12 - canonicalBroadBodyRelief * canonicalBodyBalanceGain * 0.035),
+      smoke * stepRate(0.968 - canonicalCenterlineRelief * 0.16 * canonicalCenterlineGain - canonicalPlumeBodyBalance * 0.10)
+        + smokeFromHeat * 0.18 * timeStep
+        + canonicalScalarSpread * canonicalSpreadGain * (0.12 - canonicalBroadBodyRelief * canonicalBodyBalanceGain * 0.035) * timeStep,
       canonicalSmokeBirth
     ),
     canonicalSmokeCapacity
@@ -5640,12 +5644,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let columnMaterialDetailBirth = (source + emberRing + smokeFromHeat * 3.2) * (0.30 + 0.36 * bonfireDetailBreakup);
   let bonfireMaterialDetailBirth = (bonfireDetailBirthCarrier + emberRing * 0.04) * (0.10 + 0.10 * bonfireDetailBreakup + 0.06 * bonfireTongues + bonfireSmokeDetailCurlFold * 0.08);
   let oracleMaterialBirth = oracleActivityMaterialBirth(oracleActivityCue, clamp(u.oracle_activity_controls.w, 0.0, 3.0), heat, smoke, flame, source);
-  materialDetail = mix(max(materialDetail, columnMaterialDetailBirth), min(2.6, materialDetail + bonfireMaterialDetailBirth), bonfireScene);
+  materialDetail = mix(max(materialDetail, columnMaterialDetailBirth), min(2.6, materialDetail + bonfireMaterialDetailBirth * timeStep), bonfireScene);
   materialDetail = max(materialDetail, oracleMaterialBirth * 0.34);
   materialDetail = max(materialDetail, externalInjection.material.w * 0.90);
   let columnMicroSmokeBirth = (source * 0.22 + smokeFromHeat * 0.64 + materialDetail * 0.18) * microAmount * (0.44 + 0.38 * bonfireDetailBreakup);
   let bonfireMicroSmokeBirth = (bonfireAdvectedSmokeBirth * 0.22 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.08 + materialDetail * 0.054 + bonfireInterfaceBirth * 0.15 + smoke * 0.038) * microAmount * (0.10 + 0.08 * bonfireDetailBreakup + 0.06 * bonfireTongues + 0.05 * bonfireLayeredBreakup + bonfireSmokeDetailCurlFold * 0.09);
-  microSmoke = mix(max(microSmoke, columnMicroSmokeBirth), min(2.4, microSmoke + bonfireMicroSmokeBirth), bonfireScene);
+  microSmoke = mix(max(microSmoke, columnMicroSmokeBirth), min(2.4, microSmoke + bonfireMicroSmokeBirth * timeStep), bonfireScene);
   microSmoke = max(microSmoke, oracleMaterialBirth * 0.18);
   microSmoke = max(microSmoke, externalInjection.micro.x);
   let interfaceSourceTerm = mix(source * 0.30, source * 0.08 + bonfireInterfaceBirth * 0.54 + smokeFromHeat * 0.32, bonfireScene);
@@ -5657,7 +5661,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireCombustion.z * (0.24 + bonfireTongues * 0.16)
       + bonfireCombustion.w * 0.11
   );
-  fireLick = fireLick * mix(1.0, max(0.18, bonfireVisibleSourcePlugRelief), bonfireScene);
+  fireLick = fireLick * stepRate(mix(1.0, max(0.18, bonfireVisibleSourcePlugRelief), bonfireScene));
   let bonfireFireLickSourceBirth = clamp((bonfireFrontContactRadiance * 0.42 + bonfireRadianceBirth * 0.34 + bonfireCombustionFrontBirth * 0.14 + bonfireTopologyTransfer * 0.62) * bonfireVisibleSourcePlugRelief, 0.0, 2.6);
   let fireLickSourceBirth = mix(fireBirth, bonfireFireLickSourceBirth, bonfireScene);
   fireLick = max(fireLick, lickBirth.x + fireLickSourceBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.28 + bonfireLiftedFireStructure * bonfireScene * 0.10 + bonfireBroadSupportSmokeSource * bonfireScene * 0.008 + bonfireTopologyLickBirth);
@@ -5689,12 +5693,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     ),
     tallPlumeScene
   );
-  fireLick = fireLick * tallPlumeFuelReactionGate + tallPlumeFuelHeatReaction * fireLickOperatorGain * 0.16;
+  fireLick = fireLick * stepRate(tallPlumeFuelReactionGate) + tallPlumeFuelHeatReaction * fireLickOperatorGain * 0.16 * timeStep;
   fireLick = max(fireLick, externalInjection.micro.z);
   emberFleck = max(emberFleck, lickBirth.w + emberRing * 0.18 + interfaceShred * 0.10);
   emberFleck = max(emberFleck, externalInjection.micro.w);
   materialDetail = max(materialDetail, microSmoke * 0.25 + interfaceShred * 0.38);
-  flame = flame * mix(1.0, max(0.08, bonfireFlameStorageSourceRelief), bonfireScene);
+  flame = flame * stepRate(mix(1.0, max(0.08, bonfireFlameStorageSourceRelief), bonfireScene));
   let columnFlameStorageBirth = fireBirth * (1.18 + 0.18 * bonfireTongues * bonfireScene) + heat * fuel * 0.060 + fireLick * 0.48;
   let tallPlumeRawSourceFireRelief = mix(1.0, tallPlumeReactionContour * mix(1.0, 0.35, tallPlumeAboveSource), tallPlumeScene);
   let tallPlumeReactionBoundFlameStorageBirth = (
@@ -5738,7 +5742,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + combustionFront * 0.12
   ) * tallPlumeFuelReactionGate;
   let columnReactionBoundFlameDetailBirth = mix(columnFlameDetailBirth, tallPlumeReactionBoundFlameDetailBirth, tallPlumeScene);
-  flameDetail = flameDetail * mix(1.0, max(0.12, bonfireVisibleSourcePlugRelief), bonfireScene);
+  flameDetail = flameDetail * stepRate(mix(1.0, max(0.12, bonfireVisibleSourcePlugRelief), bonfireScene));
   visibleFireCarrier = flameDetail;
   let bonfireVisibleFireFrontGate = clamp(
     max(
@@ -5888,22 +5892,22 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeFireSurvival = mix(1.0, tallPlumeFlameHeightSurvival, tallPlumeScene);
   flame = flame * stepRate(tallPlumeFireSurvival);
   ember = ember * stepRate(tallPlumeFireSurvival);
-  flameDetail = flameDetail * tallPlumeFireSurvival;
+  flameDetail = flameDetail * stepRate(tallPlumeFireSurvival);
   visibleFireCarrier = flameDetail;
-  combustionFront = combustionFront * tallPlumeFireSurvival;
-  fireLick = fireLick * tallPlumeFireSurvival;
-  emberFleck = emberFleck * tallPlumeFireSurvival;
+  combustionFront = combustionFront * stepRate(tallPlumeFireSurvival);
+  fireLick = fireLick * stepRate(tallPlumeFireSurvival);
+  emberFleck = emberFleck * stepRate(tallPlumeFireSurvival);
   let canonicalSurvivingMinimalFireBirth = canonicalMinimalFireBirth * tallPlumeMinimalFireBirthSurvival;
   flame = max(flame, canonicalSurvivingMinimalFireBirth * 1.04);
   ember = max(ember, canonicalSurvivingMinimalFireBirth * 0.36);
   flameDetail = max(flameDetail, canonicalSurvivingMinimalFireBirth * 0.42);
 
   let bonfireFireCeiling = mix(1.0, smoothstep(bonfireSourceY - 0.68, bonfireSourceY - 0.08, p.y), bonfireScene);
-  flame = flame * bonfireFireCeiling;
-  ember = ember * mix(1.0, max(0.24, bonfireFireCeiling), bonfireScene);
-  flameDetail = flameDetail * bonfireFireCeiling;
-  combustionFront = combustionFront * bonfireFireCeiling;
-  fireLick = fireLick * mix(1.0, max(0.18, bonfireFireCeiling), bonfireScene);
+  flame = flame * stepRate(bonfireFireCeiling);
+  ember = ember * stepRate(mix(1.0, max(0.24, bonfireFireCeiling), bonfireScene));
+  flameDetail = flameDetail * stepRate(bonfireFireCeiling);
+  combustionFront = combustionFront * stepRate(bonfireFireCeiling);
+  fireLick = fireLick * stepRate(mix(1.0, max(0.18, bonfireFireCeiling), bonfireScene));
 
   // Keep the original lower and side walls, but move the upper fade to the
   // expanded domain ceiling. The old symmetric abs(y) wall would suppress
@@ -5924,13 +5928,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   materialDetail = materialDetail * stepRate(mix(0.22, 1.0, wallFade));
   flame = flame * stepRate(mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   ember = ember * stepRate(mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade));
-  flameDetail = flameDetail * mix(0.10, 1.0, wallFade);
-  combustionFront = combustionFront * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade);
-  combustionFrontTopology = combustionFrontTopology * mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade);
-  microSmoke = microSmoke * mix(0.20, 1.0, wallFade) * mix(0.50, 1.0, smokeTopFade);
-  interfaceShred = interfaceShred * mix(0.18, 1.0, wallFade);
-  fireLick = fireLick * mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade);
-  emberFleck = emberFleck * mix(0.15, 1.0, wallFade);
+  flameDetail = flameDetail * stepRate(mix(0.10, 1.0, wallFade));
+  combustionFront = combustionFront * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
+  combustionFrontTopology = combustionFrontTopology * stepRate(mix(0.10, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
+  microSmoke = microSmoke * stepRate(mix(0.20, 1.0, wallFade) * mix(0.50, 1.0, smokeTopFade));
+  interfaceShred = interfaceShred * stepRate(mix(0.18, 1.0, wallFade));
+  fireLick = fireLick * stepRate(mix(0.10, 1.0, wallFade) * mix(0.10, 1.0, fireTopFade));
+  emberFleck = emberFleck * stepRate(mix(0.15, 1.0, wallFade));
+  // Scene masks (0/1 selectors), not rates: the explicit exceptions to stepRate,
+  // together with the max() birth floors.
   let canonicalProofCarrierMask = 1.0 - canonicalPlumeScene;
   fuel = fuel * canonicalProofCarrierMask;
   materialDetail = materialDetail * canonicalProofCarrierMask;
@@ -5989,11 +5995,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fuel = fuel * stepRate(1.0 - localQuenchSuppression * 0.030);
   flame = flame * stepRate(1.0 - localQuenchSuppression * 0.025);
   ember = ember * stepRate(1.0 - localQuenchSuppression * 0.025);
-  flameDetail = flameDetail * (1.0 - localQuenchSuppression * 0.035);
-  combustionFront = combustionFront * (1.0 - localQuenchSuppression * 0.032);
-  combustionFrontTopology = combustionFrontTopology * (1.0 - localQuenchSuppression * 0.028);
-  fireLick = fireLick * (1.0 - localQuenchSuppression * 0.035);
-  emberFleck = emberFleck * (1.0 - localQuenchSuppression * 0.020);
+  flameDetail = flameDetail * stepRate(1.0 - localQuenchSuppression * 0.035);
+  combustionFront = combustionFront * stepRate(1.0 - localQuenchSuppression * 0.032);
+  combustionFrontTopology = combustionFrontTopology * stepRate(1.0 - localQuenchSuppression * 0.028);
+  fireLick = fireLick * stepRate(1.0 - localQuenchSuppression * 0.035);
+  emberFleck = emberFleck * stepRate(1.0 - localQuenchSuppression * 0.020);
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);

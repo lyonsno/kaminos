@@ -80,6 +80,43 @@ test('boundary sponges, height survival and quench attenuations are per-step sur
   }
 });
 
+test('review of 9d669e36: every stored channel\'s per-step survival and every additive birth carry the step; only floors and scene masks are exempt', () => {
+  const main = mainKernel();
+  // Survival on the stored fire, front and detail channels.
+  for (const name of ['flameDetail', 'combustionFront', 'fireLick', 'emberFleck']) {
+    assert.match(main, new RegExp(`${name} = ${name} \\* stepRate\\(tallPlumeFireSurvival\\);`), `${name} height survival`);
+  }
+  // Sponges on the remaining channels.
+  assert.match(main, /flameDetail = flameDetail \* stepRate\(mix\(0\.10, 1\.0, wallFade\)\);/);
+  assert.match(main, /combustionFront = combustionFront \* stepRate\(mix\(0\.10, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/);
+  assert.match(main, /combustionFrontTopology = combustionFrontTopology \* stepRate\(mix\(0\.10, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/);
+  assert.match(main, /microSmoke = microSmoke \* stepRate\(mix\(0\.20, 1\.0, wallFade\) \* mix\(0\.50, 1\.0, smokeTopFade\)\);/);
+  assert.match(main, /interfaceShred = interfaceShred \* stepRate\(mix\(0\.18, 1\.0, wallFade\)\);/);
+  assert.match(main, /fireLick = fireLick \* stepRate\(mix\(0\.10, 1\.0, wallFade\) \* mix\(0\.10, 1\.0, fireTopFade\)\);/);
+  assert.match(main, /emberFleck = emberFleck \* stepRate\(mix\(0\.15, 1\.0, wallFade\)\);/);
+  // Quench on the remaining channels.
+  for (const [name, rate] of [['flameDetail', '0.035'], ['combustionFront', '0.032'], ['combustionFrontTopology', '0.028'], ['fireLick', '0.035'], ['emberFleck', '0.020']]) {
+    assert.match(main, new RegExp(`${name} = ${name} \\* stepRate\\(1\\.0 - localQuenchSuppression \\* ${rate.replace('.', '\\.')}\\);`), `${name} quench attenuation`);
+  }
+  // Canonical smoke path: survival and two additive terms.
+  assert.match(main, /smoke \* stepRate\(0\.968 - canonicalCenterlineRelief \* 0\.16 \* canonicalCenterlineGain - canonicalPlumeBodyBalance \* 0\.10\)\s*\n\s*\+ smokeFromHeat \* 0\.18 \* timeStep\s*\n\s*\+ canonicalScalarSpread \* canonicalSpreadGain \* \(0\.12 - canonicalBroadBodyRelief \* canonicalBodyBalanceGain \* 0\.035\) \* timeStep,/, 'canonical smoke transport follows the law');
+  // Bonfire additive births and per-step attenuations.
+  assert.match(main, /materialDetail \+ bonfireMaterialDetailBirth \* timeStep\)/);
+  assert.match(main, /microSmoke \+ bonfireMicroSmokeBirth \* timeStep\)/);
+  assert.match(main, /fireLick = fireLick \* stepRate\(tallPlumeFuelReactionGate\) \+ tallPlumeFuelHeatReaction \* fireLickOperatorGain \* 0\.16 \* timeStep;/);
+  assert.match(main, /flame = flame \* stepRate\(bonfireFireCeiling\);/);
+  assert.match(main, /flameDetail = flameDetail \* stepRate\(mix\(1\.0, max\(0\.12, bonfireVisibleSourcePlugRelief\), bonfireScene\)\);/);
+  // Generic: no bare per-step survival of these forms remains in the main kernel.
+  const channels = 'smoke|heat|fuel|flame|ember|materialDetail|flameDetail|combustionFront|combustionFrontTopology|microSmoke|interfaceShred|fireLick|emberFleck';
+  assert.doesNotMatch(main, new RegExp(`^\\s*(${channels}) = \\1 \\* mix\\(0\\.\\d+, 1\\.0, wallFade\\)`, 'm'), 'no bare wall sponge remains');
+  assert.doesNotMatch(main, new RegExp(`^\\s*(${channels}) = \\1 \\* tallPlumeFireSurvival;`, 'm'), 'no bare height survival remains');
+  assert.doesNotMatch(main, new RegExp(`^\\s*(${channels}) = \\1 \\* \\(1\\.0 - localQuenchSuppression`, 'm'), 'no bare quench attenuation remains');
+  assert.doesNotMatch(main, new RegExp(`^\\s*(${channels}) = \\1 \\* (bonfireFireCeiling|mix\\(1\\.0, max\\()`, 'm'), 'no bare Bonfire attenuation remains');
+  // The explicit exceptions: canonical 0/1 scene masks and max() floors.
+  assert.match(main, /fuel = fuel \* canonicalProofCarrierMask;/, 'canonical scene masks stay as selectors');
+  assert.equal(core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'maccormack' }).effective.scalarExceptions, 'max-birth-floors-and-canonical-scene-masks');
+});
+
 test('the resolver, receipt and help say the scalar rates follow the step', () => {
   assert.equal(core.resolveTimeStepConfig({ speed: 2, advectionScheme: 'maccormack' }).effective.scalarRates, 'per-step');
   assert.equal(core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'maccormack' }).effective.scalarRates, 'per-time');
