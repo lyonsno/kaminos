@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { validateVolumeSettingsPresetIndex } from '../volume-settings-preset-contract.mjs';
+import { describeVolumeSettingsPresetProjection, validateVolumeSettingsPresetIndex } from '../volume-settings-preset-contract.mjs';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const refresh = source.match(/async function refreshVolumeSettingsPresetList\([^]*?\n\}/)?.[0];
@@ -18,7 +18,7 @@ const mixed = {
   storePath: '/observed-store', entries: [available], unavailableEntries: [unavailable],
 };
 
-async function render(index, selected = '') {
+async function render(index, selected = '', active = null) {
   const select = {
     options: [], value: selected,
     replaceChildren(...options) { this.options = options; },
@@ -31,6 +31,9 @@ async function render(index, selected = '') {
     Option: class { constructor(text, value) { this.text = text; this.value = value; this.disabled = false; } },
     fetch: async () => ({ ok: true, json: async () => index }),
     validateVolumeSettingsPresetIndex,
+    describeVolumeSettingsPresetProjection,
+    activeVolumeSettingsPresetReceipt: active?.receipt || null,
+    activeVolumeSettingsPresetStatus: () => active?.status || { text: '', warning: false },
     volumeSettingsPresetStatus: (...args) => statuses.push(args),
   });
   await vm.runInContext(`${refresh}\nrefreshVolumeSettingsPresetList()`, context);
@@ -46,6 +49,22 @@ assert.match(blocked.text, /unavailable/i);
 assert.ok(blocked.title.includes(unavailable.error), 'tooltip explains the exact incompatibility');
 assert.match(mixedView.statuses.at(-1)[0], /1 unavailable/i);
 assert.equal(mixedView.statuses.at(-1)[1], true, 'partial availability is visibly distinct from full success');
+
+// The index loads concurrently with route admission: a loaded basin stays
+// selected and its report, including any cross-branch warning, survives.
+const carried = { alias: 'ridge-kiln', label: 'Ridge kiln', presetId: `vsp-${'c'.repeat(64)}`,
+  carriedControls: [{ axis: 'basin', id: 'volume-ridge-radius-cells', param: 'volume_ridge_radius_cells', value: 2 }] };
+const loadedView = await render({ ...mixed, entries: [available, carried], unavailableEntries: [] }, '', {
+  receipt: { presetId: carried.presetId },
+  status: { text: 'Ridge kiln | carries 1 control from another branch: volume-ridge-radius-cells', warning: true },
+});
+assert.equal(loadedView.select.value, carried.presetId, 'the picker selects the loaded basin');
+assert.match(loadedView.statuses.at(-1)[0], /^Ridge kiln \| carries 1 control from another branch[\s\S]*\|\| 2 presets/);
+assert.equal(loadedView.statuses.at(-1)[1], true, 'a cross-branch basin keeps the status in its warning state');
+const carriedOption = loadedView.select.options.find(option => option.value === carried.presetId);
+assert.match(carriedOption.text, /from another branch/);
+assert.match(carriedOption.title, /volume-ridge-radius-cells/);
+assert.doesNotMatch(loadedView.select.options.find(option => option.value === available.presetId).text, /another branch/);
 
 const emptyView = await render({ ...mixed, entries: [] });
 assert.equal(emptyView.select.value, '');

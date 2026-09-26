@@ -87,7 +87,15 @@ assert.deepEqual(describeVolumeSettingsPresetProjection(exact.serverProjection),
 // The page reports the projection when it admits a basin, and the picker
 // marks basins that carry controls or had values replaced.
 const admit = index.slice(index.indexOf('async function admitVolumeSettingsPresetRoute('), index.indexOf('function reportKaminosVolumeRouteInitFailure('));
-assert.match(admit, /describeVolumeSettingsPresetProjection\(receipt\.serverProjection\)/, 'admission describes the server projection');
-assert.match(admit, /volumeSettingsPresetStatus\([\s\S]*projectionSummary\.text[\s\S]*projectionSummary\.warning/, 'admission status shows it and warns');
+assert.match(admit, /volumeSettingsPresetStatus\(activeVolumeSettingsPresetStatus\(\)\.text, activeVolumeSettingsPresetStatus\(\)\.warning\)/,
+  'admission status shows the loaded basin and its projection, and warns');
+const statusFn = index.slice(index.indexOf('function activeVolumeSettingsPresetStatus('), index.indexOf('async function refreshVolumeSettingsPresetList('));
+assert.match(statusFn, /describeVolumeSettingsPresetProjection\(receipt\.serverProjection\)/, 'the loaded-basin status describes the server projection');
+// The picker index loads concurrently with route admission; its status must
+// not erase the loaded basin's report, and it selects the loaded basin.
+const refresh = index.slice(index.indexOf('async function refreshVolumeSettingsPresetList('), index.indexOf('async function saveVolumeSettingsPreset('));
+assert.match(refresh, /const previous = selectedPresetId \|\| activeVolumeSettingsPresetReceipt\?\.presetId \|\| select\.value;/, 'the picker selects the loaded basin');
+assert.match(refresh, /const active = activeVolumeSettingsPresetStatus\(\);/, 'the index status keeps the loaded basin report');
+assert.match(refresh, /active\.warning \|\| unavailable\.length > 0/, 'a projected basin keeps the status in its warning state');
 assert.match(index, /entry\.carriedControls\?\.length \|\| entry\.unsupportedValuesDefaulted\?\.length/, 'the picker marks basins projected across branches');
 console.log('volume settings projection receipt contracts passed');
