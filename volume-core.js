@@ -1361,8 +1361,8 @@ function volumeStorageBufferRequestBytes(gridSize, cellCapacity = null) {
   );
 }
 
-function irradianceLatticeBufferBytes(irradianceGridSize = DEFAULT_FIRE_IRRADIANCE_GRID_SIZE) {
-  return irradianceGridSize * irradianceGridSize * irradianceGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
+function irradianceLatticeBufferBytes(irradianceGridSize = DEFAULT_FIRE_IRRADIANCE_GRID_SIZE, irradianceGridHeight = irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER) {
+  return irradianceGridSize * irradianceGridHeight * irradianceGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
 function normalizeFireIrradianceGridSize(value) {
@@ -4318,20 +4318,21 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
 // Fire irradiance light field: a compact world-space RGB lattice seeded from
 // the same advancing fluid state and emission law as the visible raymarch
 // flame. Identity: fire-irradiance-lattice-32-same-state-rgb-v0. The lattice
-// spans the [-1,1]^3 world cube: the lower cube of the tall raymarch domain.
+// spans the full tall raymarch domain with equal world-space cell pitch.
 const IRRADIANCE_TILES_X: u32 = 8u;
+override IRRADIANCE_GRID_Y: u32 = 64u;
 
 fn irradianceIndex(cell: vec3<u32>) -> u32 {
-  return cell.x + cell.y * IRRADIANCE_GRID + cell.z * IRRADIANCE_GRID * IRRADIANCE_GRID;
+  return cell.x + cell.y * IRRADIANCE_GRID + cell.z * IRRADIANCE_GRID * IRRADIANCE_GRID_Y;
 }
 
 @compute @workgroup_size(4, 4, 4)
 fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(IRRADIANCE_GRID))) {
+  if (gid.x >= IRRADIANCE_GRID || gid.y >= IRRADIANCE_GRID_Y || gid.z >= IRRADIANCE_GRID) {
     return;
   }
-  let brickStart = vec3<u32>(floor(vec3<f32>(gid) * f32(GRID) / f32(IRRADIANCE_GRID)));
-  let brickEnd = max(brickStart + vec3<u32>(1), vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1)) * f32(GRID) / f32(IRRADIANCE_GRID))));
+  let brickStart = vec3<u32>(floor(vec3<f32>(gid) * vec3<f32>(GRID, GRID_Y, GRID) / vec3<f32>(IRRADIANCE_GRID, IRRADIANCE_GRID_Y, IRRADIANCE_GRID)));
+  let brickEnd = max(brickStart + vec3<u32>(1), vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1)) * vec3<f32>(GRID, GRID_Y, GRID) / vec3<f32>(IRRADIANCE_GRID, IRRADIANCE_GRID_Y, IRRADIANCE_GRID))));
   let radianceGain = max(u.radiance_controls.x, 0.0);
   let glowGain = max(u.radiance_controls.z, 0.0);
   var accum = vec3<f32>(0.0);
@@ -4363,7 +4364,7 @@ fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   for (var z = brickStart.z; z < min(brickEnd.z, GRID); z = z + 1u) {
-    for (var y = brickStart.y; y < min(brickEnd.y, GRID); y = y + 1u) {
+  for (var y = brickStart.y; y < min(brickEnd.y, GRID_Y); y = y + 1u) {
       for (var x = brickStart.x; x < min(brickEnd.x, GRID); x = x + 1u) {
         let c = vec3<i32>(vec3<u32>(x, y, z));
         let velocityDensity = readSlot(c, 0u);
@@ -4388,22 +4389,22 @@ fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csIrradiancePropagate(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(IRRADIANCE_GRID))) {
+  if (gid.x >= IRRADIANCE_GRID || gid.y >= IRRADIANCE_GRID_Y || gid.z >= IRRADIANCE_GRID) {
     return;
   }
   let cell = vec3<i32>(gid);
-  let bound = i32(IRRADIANCE_GRID);
+  let boundXz = i32(IRRADIANCE_GRID);
   // Six axis neighbors, fully unrolled (dynamic vector indexing is
   // pathologically slow on Metal). Out-of-lattice neighbors contribute zero:
   // the open boundary lets light dilute toward the box faces instead of
   // reflecting inward.
   var neighborSum = vec4<f32>(0.0);
   if (cell.x > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(1, 0, 0)))]; }
-  if (cell.x < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(1, 0, 0)))]; }
+  if (cell.x < boundXz - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(1, 0, 0)))]; }
   if (cell.y > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(0, 1, 0)))]; }
-  if (cell.y < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(0, 1, 0)))]; }
+  if (cell.y < i32(IRRADIANCE_GRID_Y) - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(0, 1, 0)))]; }
   if (cell.z > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(0, 0, 1)))]; }
-  if (cell.z < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(0, 0, 1)))]; }
+  if (cell.z < boundXz - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(0, 0, 1)))]; }
   let center = irradianceSrc[irradianceIndex(gid)];
   irradianceDst[irradianceIndex(gid)] = center * 0.55 + neighborSum * (0.60 / 6.0);
 }
@@ -4412,18 +4413,18 @@ fn csIrradiancePropagate(@builtin(global_invocation_id) gid: vec3<u32>) {
 fn csIrradianceResolve(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tilesY = (IRRADIANCE_GRID + IRRADIANCE_TILES_X - 1u) / IRRADIANCE_TILES_X;
   let atlasWidth = IRRADIANCE_GRID * IRRADIANCE_TILES_X;
-  let atlasHeight = IRRADIANCE_GRID * tilesY;
+  let atlasHeight = IRRADIANCE_GRID_Y * tilesY;
   if (gid.x >= atlasWidth || gid.y >= atlasHeight) {
     return;
   }
   let tileX = gid.x / IRRADIANCE_GRID;
-  let tileY = gid.y / IRRADIANCE_GRID;
+  let tileY = gid.y / IRRADIANCE_GRID_Y;
   let slice = tileY * IRRADIANCE_TILES_X + tileX;
   if (slice >= IRRADIANCE_GRID) {
     textureStore(irradianceAtlasOut, vec2<i32>(gid.xy), vec4<f32>(0.0));
     return;
   }
-  let cell = vec3<u32>(gid.x % IRRADIANCE_GRID, gid.y % IRRADIANCE_GRID, slice);
+  let cell = vec3<u32>(gid.x % IRRADIANCE_GRID, gid.y % IRRADIANCE_GRID_Y, slice);
   textureStore(irradianceAtlasOut, vec2<i32>(gid.xy), irradianceSrc[irradianceIndex(cell)]);
 }
 
@@ -4439,7 +4440,7 @@ var<workgroup> irradianceReduceColor: array<vec3<f32>, 64>;
 
 @compute @workgroup_size(64)
 fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
-  let cellCount = IRRADIANCE_GRID * IRRADIANCE_GRID * IRRADIANCE_GRID;
+  let cellCount = IRRADIANCE_GRID * IRRADIANCE_GRID_Y * IRRADIANCE_GRID;
   var lumSum = 0.0;
   var posSum = vec3<f32>(0.0);
   var colorSum = vec3<f32>(0.0);
@@ -4448,8 +4449,8 @@ fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
     let lum = dot(max(sample.rgb, vec3<f32>(0.0)), vec3<f32>(0.2126, 0.7152, 0.0722));
     let cell = vec3<f32>(
       f32(i % IRRADIANCE_GRID),
-      f32((i / IRRADIANCE_GRID) % IRRADIANCE_GRID),
-      f32(i / (IRRADIANCE_GRID * IRRADIANCE_GRID))
+      f32((i / IRRADIANCE_GRID) % IRRADIANCE_GRID_Y),
+      f32(i / (IRRADIANCE_GRID * IRRADIANCE_GRID_Y))
     );
     lumSum = lumSum + lum;
     posSum = posSum + cell * lum;
@@ -4473,7 +4474,11 @@ fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
     let totalLum = irradianceReduceLum[0];
     let centroidUvw = select(
       vec3<f32>(0.5),
-      (irradianceReducePos[0] / max(totalLum, 1e-6) + vec3<f32>(0.5)) / f32(IRRADIANCE_GRID),
+      vec3<f32>(
+        (irradianceReducePos[0].x / max(totalLum, 1e-6) + 0.5) / f32(IRRADIANCE_GRID),
+        (irradianceReducePos[0].y / max(totalLum, 1e-6) + 0.5) / f32(IRRADIANCE_GRID_Y),
+        (irradianceReducePos[0].z / max(totalLum, 1e-6) + 0.5) / f32(IRRADIANCE_GRID)
+      ),
       totalLum > 1e-5
     );
     let colorTotal = irradianceReduceColor[0];
@@ -14629,7 +14634,8 @@ export function createKaminosVolumePrototype({
     const key = `${gridSize}x${gridHeight}:${irradianceGridSize}`;
     if (irradianceResourcesKey === key && irradianceSeedPipeline && irradianceAtlasTexture) return true;
     destroyFireIrradianceResources();
-    const latticeBytes = irradianceLatticeBufferBytes(irradianceGridSize);
+    const irradianceGridHeight = irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+    const latticeBytes = irradianceLatticeBufferBytes(irradianceGridSize, irradianceGridHeight);
     irradianceLatticeBuffers = [0, 1].map(index => device.createBuffer({
       label: `kaminos ${FIRE_IRRADIANCE_LATTICE_IDENTITY} lattice ${index}`,
       size: latticeBytes,
@@ -14640,7 +14646,7 @@ export function createKaminosVolumePrototype({
       label: `kaminos ${FIRE_IRRADIANCE_ATLAS_IDENTITY} atlas`,
       size: {
         width: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
-        height: irradianceGridSize * atlasTilesY,
+        height: irradianceGridHeight * atlasTilesY,
         depthOrArrayLayers: 1,
       },
       format: 'rgba16float',
@@ -14677,24 +14683,24 @@ export function createKaminosVolumePrototype({
         { binding: 4, resource: metaView },
       ],
     }));
-    const irradiancePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, IRRADIANCE_GRID: irradianceGridSize };
+    const irradiancePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, IRRADIANCE_GRID: irradianceGridSize, IRRADIANCE_GRID_Y: irradianceGridHeight };
     irradianceSeedPipeline = device.createComputePipeline({
-      label: `kaminos fire irradiance seed ${gridSize}x${gridHeight}x${gridSize} to ${irradianceGridSize}^3`,
+      label: `kaminos fire irradiance seed ${gridSize}x${gridHeight}x${gridSize} to ${irradianceGridSize}x${irradianceGridHeight}x${irradianceGridSize}`,
       layout: irradiancePipelineLayout,
       compute: { module: shader, entryPoint: 'csIrradianceSeed', constants: irradiancePipelineConstants },
     });
     irradiancePropagatePipeline = device.createComputePipeline({
-      label: `kaminos fire irradiance propagate ${irradianceGridSize}^3`,
+      label: `kaminos fire irradiance propagate ${irradianceGridSize}x${irradianceGridHeight}x${irradianceGridSize}`,
       layout: irradiancePipelineLayout,
       compute: { module: shader, entryPoint: 'csIrradiancePropagate', constants: irradiancePipelineConstants },
     });
     irradianceResolvePipeline = device.createComputePipeline({
-      label: `kaminos fire irradiance resolve ${irradianceGridSize}^3 atlas`,
+      label: `kaminos fire irradiance resolve ${irradianceGridSize}x${irradianceGridHeight}x${irradianceGridSize} atlas`,
       layout: irradiancePipelineLayout,
       compute: { module: shader, entryPoint: 'csIrradianceResolve', constants: irradiancePipelineConstants },
     });
     irradianceAnalyticPipeline = device.createComputePipeline({
-      label: `kaminos fire irradiance far-field reduce ${irradianceGridSize}^3`,
+      label: `kaminos fire irradiance far-field reduce ${irradianceGridSize}x${irradianceGridHeight}x${irradianceGridSize}`,
       layout: irradiancePipelineLayout,
       compute: { module: shader, entryPoint: 'csIrradianceAnalytic', constants: irradiancePipelineConstants },
     });
@@ -14722,6 +14728,7 @@ export function createKaminosVolumePrototype({
     }
     const readBindGroup = options.readBindGroup || boundarySidecarReadBindGroups[currentFluid];
     const latticeWorkgroups = Math.ceil(irradianceGridSize / 4);
+    const latticeWorkgroupsY = Math.ceil((irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER) / 4);
     const seedPass = encoder.beginComputePass({
       label: 'kaminos fire irradiance seed pass',
       ...(options.seedTimestampWrites ? { timestampWrites: options.seedTimestampWrites } : {}),
@@ -14729,7 +14736,7 @@ export function createKaminosVolumePrototype({
     seedPass.setPipeline(irradianceSeedPipeline);
     seedPass.setBindGroup(0, readBindGroup);
     seedPass.setBindGroup(1, irradianceBindGroups[0]);
-    seedPass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroups, latticeWorkgroups);
+    seedPass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroupsY, latticeWorkgroups);
     seedPass.end();
     const propagatePass = encoder.beginComputePass({
       label: `kaminos ${FIRE_IRRADIANCE_PROPAGATION_IDENTITY} pass`,
@@ -14739,7 +14746,7 @@ export function createKaminosVolumePrototype({
     propagatePass.setBindGroup(0, readBindGroup);
     for (let round = 0; round < FIRE_IRRADIANCE_PROPAGATION_ROUNDS; round += 1) {
       propagatePass.setBindGroup(1, irradianceBindGroups[(round + 1) % 2]);
-      propagatePass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroups, latticeWorkgroups);
+      propagatePass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroupsY, latticeWorkgroups);
     }
     propagatePass.end();
     // With an even round count the final lattice lives in buffer 0, which is
@@ -14755,7 +14762,7 @@ export function createKaminosVolumePrototype({
     const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
     resolvePass.dispatchWorkgroups(
       Math.ceil((irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X) / 8),
-      Math.ceil((irradianceGridSize * atlasTilesY) / 8),
+      Math.ceil((irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER * atlasTilesY) / 8),
       1
     );
     resolvePass.end();
@@ -14790,12 +14797,11 @@ export function createKaminosVolumePrototype({
       tilesX: FIRE_IRRADIANCE_ATLAS_TILES_X,
       tilesY: atlasTilesY,
       atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
-      atlasHeight: irradianceGridSize * atlasTilesY,
-      // The lattice covers the lower unit cube of the tall raymarch domain;
-      // emission above world y = 1 is outside the light field and far field.
+      atlasHeight: irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER * atlasTilesY,
+      gridY: irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER,
       worldMin: [-1, -1, -1],
-      worldMax: [1, 1, 1],
-      worldBoundsAuthority: 'lower-unit-cube-of-tall-raymarch-domain-v0',
+      worldMax: [1, -1 + 2 * gridHeight / gridSize, 1],
+      worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1',
       raymarchWorldMax: [1, -1 + 2 * gridHeight / gridSize, 1],
       generation: irradianceAtlasGeneration,
       builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
