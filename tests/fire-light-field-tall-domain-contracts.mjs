@@ -10,10 +10,14 @@ const receiver = page.slice(page.indexOf('function createFireLightFieldReceiverP
 
 assert.match(producer, /IRRADIANCE_GRID_Y/);
 assert.match(producer, /gid\.y\s*>=\s*IRRADIANCE_GRID_Y/);
-assert.match(producer, /vec3<f32>\(f32\(GRID\), f32\(GRID_Y\), f32\(GRID\)\)/,
-  'WGSL brick dimensions convert unsigned grid constants to floats explicitly');
-assert.match(producer, /vec3<f32>\(f32\(IRRADIANCE_GRID\), f32\(IRRADIANCE_GRID_Y\), f32\(IRRADIANCE_GRID\)\)/,
-  'WGSL brick divisors convert unsigned light-grid constants to floats explicitly');
+for (const expression of ['brickStart', 'brickEnd']) {
+  const brick = producer.match(new RegExp(`let ${expression} = [^\\n]+`))?.[0];
+  assert.ok(brick, `WGSL ${expression} expression exists`);
+  assert.match(brick, /vec3<f32>\(f32\(GRID\), f32\(GRID_Y\), f32\(GRID\)\)/,
+    `WGSL ${expression} dimensions convert unsigned grid constants to floats explicitly`);
+  assert.match(brick, /vec3<f32>\(f32\(IRRADIANCE_GRID\), f32\(IRRADIANCE_GRID_Y\), f32\(IRRADIANCE_GRID\)\)/,
+    `WGSL ${expression} divisors convert unsigned light-grid constants to floats explicitly`);
+}
 assert.match(field, /worldMax:\s*\[1, -1 \+ 2 \* gridHeight \/ gridSize, 1\]/);
 assert.match(field, /gridY:\s*irradianceGridSize\s*\*\s*VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER/);
 assert.match(resources, /const atlasWidth = irradianceGridSize \* FIRE_IRRADIANCE_ATLAS_TILES_X;/);
