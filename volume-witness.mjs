@@ -2424,6 +2424,16 @@ async function main() {
         sourceAtAdmission, expectedSource);
       phase = 'frame-only-capture';
       const report = await captureFrameOnly(ws, partialControlledStepFrames, source);
+      phase = 'frame-only-postcapture-collision';
+      const postcaptureEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: '({ receipt: window.__kaminosVolumeSettingsPresetReceipt || null, state: window.__kaminosVolumePrototype?.debugState?.() || null })',
+        returnByValue: true,
+      });
+      const postcaptureSource = admitFrameOnlySource(url, postcaptureEval.result.value?.receipt,
+        postcaptureEval.result.value?.state, sourceAtAdmission, expectedSource);
+      assert.equal(postcaptureSource.sceneFile, source.sceneFile, 'captured scene route changed');
+      assert.deepEqual(postcaptureSource.sceneCollision, source.sceneCollision,
+        'effective scene collision changed during frame capture');
       phase = 'frame-only-postcapture-source';
       const sourceAfterCapture = await frameOnlyServingSource();
       assert.deepEqual(sourceAfterCapture, sourceBeforeLoad, 'serving source changed during capture');

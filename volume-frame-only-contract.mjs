@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
+import { assertEffectiveSceneCollision } from './volume-scene-solid.mjs';
 
 const NATIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const PRESET_AUTHORITY = 'shared-volume-settings-preset-v2';
 const IMAGE_AUTHORITY = 'gpu-presentation-texture-rgba8-readback-frozen-sim-state';
 
 export function admitFrameOnlySource(route, receipt, state, servingSource, expectedSource) {
-  const params = new URL(route).searchParams;
+  const parsedRoute = new URL(route);
+  const params = parsedRoute.searchParams;
+  const sceneHash = new URLSearchParams(parsedRoute.hash.slice(1));
+  if (sceneHash.has('scene')) {
+    assert.equal(sceneHash.get('authoring'), '1', 'authored scene route was not mounted');
+  }
+  const requestedCollision = sceneHash.get('volume_collision');
+  assert.ok(requestedCollision === null || requestedCollision === 'kiln',
+    'unsupported scene collision route');
+  if (requestedCollision === 'kiln') {
+    assert.ok(sceneHash.has('scene'), 'kiln collision lacks an authored scene route');
+    assertEffectiveSceneCollision(state?.sceneCollision, 'kiln');
+  }
   const requested = params.get('settings_preset');
   assert.match(requested || '', /^vsp-[0-9a-f]{64}$/, 'frame-only capture requires an immutable saved preset');
   assert.equal(params.get('settings_preset_authority'), PRESET_AUTHORITY, 'preset route authority mismatch');
@@ -21,7 +34,9 @@ export function admitFrameOnlySource(route, receipt, state, servingSource, expec
   assert.equal(servingSource?.dirty, false, 'serving source is dirty');
   return { requestedPresetId: requested, presetId: receipt.presetId, contentHash: receipt.contentHash,
     sourcePresetAuthority: receipt.sourcePresetAuthority, effectiveRoute: state.effectiveRoute,
-    backend: state.backend, initialSimStepCount: state.simStepCount, servingSource };
+    backend: state.backend, initialSimStepCount: state.simStepCount, servingSource,
+    sceneFile: sceneHash.get('scene') || null,
+    sceneCollision: requestedCollision === 'kiln' ? state.sceneCollision : null };
 }
 
 export function verifyFrameOnlyReadback(capture, sample, expectedSimStepCount) {
