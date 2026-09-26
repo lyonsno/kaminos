@@ -76,7 +76,10 @@ const presentationFailure = runArchSurfaceApply({
 assert.equal(presentationFailure.status, 'accepted-presentation-failed');
 assert.equal(committed, true);
 assert.equal(visibleReceipt, 'accepted-presentation-failed:injected render failure');
-assert.match(readFileSync('structural-material-arch-assumptions.html', 'utf8'), /runArchSurfaceApply/,
+const pageSource = readFileSync('structural-material-arch-assumptions.html', 'utf8');
+assert.ok(pageSource.includes('runArchSurfaceApply'),
   'the browser must use the same accepted-versus-presentation-failed transaction boundary');
+assert.ok(pageSource.includes('Radial joints are an authored counterfactual, not source truth'),
+  'the operator-facing comparison must distinguish the authored interior prior from asset evidence');
 
 console.log('structural arch assumption mesh consumer contracts passed');

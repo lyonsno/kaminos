@@ -38,7 +38,7 @@
   </style>
 </head>
 <body>
-  <header><h1>Arch response</h1><span class="subhead">Same TRELLIS mesh · one matched load · four explicit structural assumptions</span></header>
+  <header><h1>Arch response</h1><span class="subhead">Same TRELLIS mesh · one matched load · four explicit structural assumptions · Radial joints are an authored counterfactual, not source truth</span></header>
   <main>
     <div class="controls">
       <span class="subhead">Crown load 0.15 proxy units · contact (0.35, 0.20) · shared display magnification ×48</span>
@@ -157,7 +157,7 @@
               claimCeiling:consumer.ARCH_ASSUMPTION_CLAIM_CEILING,
             };
             status.textContent = 'Matched load accepted · local CPU proxy · camera independent';
-            receipt.textContent = `Profile ${profileSha256.slice(0, 12)} verified · embedded source ${first.sourceGlbSha256.slice(0, 12)} matches exact GLB · four mesh consumers · ×48 display magnification · no collision or dynamics`;
+            receipt.textContent = `Profile ${profileSha256.slice(0, 12)} verified · embedded source ${first.sourceGlbSha256.slice(0, 12)} matches exact GLB · radial joints are an authored counterfactual, not source truth · ×48 display magnification · no collision or dynamics`;
             document.getElementById('reset').disabled = false;
             document.getElementById('replay').disabled = false;
             updates.forEach((update, index) => {
