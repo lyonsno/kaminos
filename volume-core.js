@@ -6,7 +6,7 @@ import {
   normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
-import { packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
+import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
@@ -2818,6 +2818,24 @@ fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
+  if (sceneSolidEnabled()) {
+    var weighted = 0.0;
+    var weightSum = 0.0;
+    for (var dz = 0; dz < 2; dz = dz + 1) {
+      for (var dy = 0; dy < 2; dy = dy + 1) {
+        for (var dx = 0; dx < 2; dx = dx + 1) {
+          let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+          if (sceneSolidAt(sampleCell)) { continue; }
+          let weight = select(1.0 - f.x, f.x, dx == 1)
+            * select(1.0 - f.y, f.y, dy == 1)
+            * select(1.0 - f.z, f.z, dz == 1);
+          weighted = weighted + readFrontField(sampleCell) * weight;
+          weightSum = weightSum + weight;
+        }
+      }
+    }
+    return select(0.0, weighted / max(weightSum, 1e-12), weightSum > 0.0);
+  }
   let c000 = readFrontField(i0 + vec3<i32>(0, 0, 0));
   let c100 = readFrontField(i0 + vec3<i32>(1, 0, 0));
   let c010 = readFrontField(i0 + vec3<i32>(0, 1, 0));
@@ -2839,6 +2857,24 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
+  if (sceneSolidEnabled()) {
+    var weighted = vec4<f32>(0.0);
+    var weightSum = 0.0;
+    for (var dz = 0; dz < 2; dz = dz + 1) {
+      for (var dy = 0; dy < 2; dy = dy + 1) {
+        for (var dx = 0; dx < 2; dx = dx + 1) {
+          let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+          if (sceneSolidAt(sampleCell)) { continue; }
+          let weight = select(1.0 - f.x, f.x, dx == 1)
+            * select(1.0 - f.y, f.y, dy == 1)
+            * select(1.0 - f.z, f.z, dz == 1);
+          weighted = weighted + readSlot(sampleCell, slot) * weight;
+          weightSum = weightSum + weight;
+        }
+      }
+    }
+    return weighted / max(weightSum, 1e-12);
+  }
   let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
   let c100 = readSlot(i0 + vec3<i32>(1, 0, 0), slot);
   let c010 = readSlot(i0 + vec3<i32>(0, 1, 0), slot);
@@ -2865,6 +2901,24 @@ fn samplePredictSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
+  if (sceneSolidEnabled()) {
+    var weighted = vec4<f32>(0.0);
+    var weightSum = 0.0;
+    for (var dz = 0; dz < 2; dz = dz + 1) {
+      for (var dy = 0; dy < 2; dy = dy + 1) {
+        for (var dx = 0; dx < 2; dx = dx + 1) {
+          let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+          if (sceneSolidAt(sampleCell)) { continue; }
+          let weight = select(1.0 - f.x, f.x, dx == 1)
+            * select(1.0 - f.y, f.y, dy == 1)
+            * select(1.0 - f.z, f.z, dz == 1);
+          weighted = weighted + readPredictSlot(sampleCell, slot) * weight;
+          weightSum = weightSum + weight;
+        }
+      }
+    }
+    return weighted / max(weightSum, 1e-12);
+  }
   let c000 = readPredictSlot(i0 + vec3<i32>(0, 0, 0), slot);
   let c100 = readPredictSlot(i0 + vec3<i32>(1, 0, 0), slot);
   let c010 = readPredictSlot(i0 + vec3<i32>(0, 1, 0), slot);
@@ -2892,6 +2946,23 @@ struct SlotExtrema {
 fn slotExtrema(cellCenter: vec3<f32>, slot: u32) -> SlotExtrema {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
+  if (sceneSolidEnabled()) {
+    var found = false;
+    var lo = vec4<f32>(0.0);
+    var hi = vec4<f32>(0.0);
+    for (var dz = 0; dz < 2; dz = dz + 1) {
+      for (var dy = 0; dy < 2; dy = dy + 1) {
+        for (var dx = 0; dx < 2; dx = dx + 1) {
+          let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+          if (sceneSolidAt(sampleCell)) { continue; }
+          let value = readSlot(sampleCell, slot);
+          if (!found) { lo = value; hi = value; found = true; }
+          else { lo = min(lo, value); hi = max(hi, value); }
+        }
+      }
+    }
+    return SlotExtrema(lo, hi);
+  }
   var lo = readSlot(i0, slot);
   var hi = lo;
   for (var dz = 0; dz < 2; dz = dz + 1) {
@@ -10747,7 +10818,7 @@ export function createKaminosVolumePrototype({
     try {
       const revision = sceneSolidRevision(source.object, productTransform);
       const emitterBoundsRevision = `${analyticEmitterDispatch.cellMin.join(',')}/${analyticEmitterDispatch.cellExtent.join(',')}`;
-      key = `${gridSize}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}`;
+      key = `${gridSize}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}:${analyticEmitterDescriptorSignature}`;
       if (key === sceneSolidRevisionKey) return;
       const started = performance.now();
       const extraction = trianglesFromSceneObject(source.object, productTransform);
@@ -10764,12 +10835,12 @@ export function createKaminosVolumePrototype({
           }
         }
       }
-      // The dispatch box is conservative, not the emitter's actual SDF support.
-      // Some overlap is expected when fuel burns at a kiln surface; injection
-      // skips solid cells in the shader. A wholly occluded dispatch is not a
-      // usable source and must not appear as a successful collision exercise.
-      if (sourceBounds.active && sourceBoundsSolidCells === sourceBounds.cellCount) {
-        throw new Error('authored-solid-occludes-emitter-dispatch');
+      // Match the shader's signed-distance chemistry gate at cell centers;
+      // open cells in the conservative dispatch box are not enough to fuel gas.
+      const sourceSupport = countEmitterChemicalSupport(
+        analyticEmitterDescriptor, sourceBounds, field.cells, gridSize);
+      if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) {
+        throw new Error('authored-solid-occludes-emitter-source-support');
       }
       installSceneSolidTexture(field);
       rebuildSceneSolidBindingViews();
@@ -10784,6 +10855,7 @@ export function createKaminosVolumePrototype({
         blockedFaceCount: field.blockedFaceCount,
         sourceBoundsSolidCells,
         sourceBoundsCellCount: sourceBounds.cellCount,
+        sourceSupport,
         residentBytes: field.cells.byteLength,
         rebuildMs: Number((performance.now() - started).toFixed(3)),
         rebuildStep: state.simStepCount,
@@ -10860,6 +10932,7 @@ export function createKaminosVolumePrototype({
         entries: [
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
+          { binding: 16, resource: sceneSolidTextureView },
         ],
       }),
       sidecar: device.createBindGroup({
@@ -10869,6 +10942,7 @@ export function createKaminosVolumePrototype({
           { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
+          { binding: 16, resource: sceneSolidTextureView },
         ],
       }),
       splat: device.createBindGroup({
@@ -12226,6 +12300,7 @@ export function createKaminosVolumePrototype({
 
   async function ensureGpu() {
     if (gpuInitialized) return;
+    state.gpuInitStage = 'adapter';
     if (!navigator.gpu) {
       throw new Error('WebGPU unavailable');
     }
@@ -12287,6 +12362,7 @@ export function createKaminosVolumePrototype({
       if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
       device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     }
+    state.gpuInitStage = 'device';
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
@@ -12333,6 +12409,7 @@ export function createKaminosVolumePrototype({
       addressModeV: 'clamp-to-edge',
     });
     shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: WGSL });
+    state.gpuInitStage = 'fluid-shader-compilation';
     const compilationInfo = await shader.getCompilationInfo();
     const compilationErrors = compilationInfo.messages.filter(message => message.type === 'error');
     if (compilationErrors.length > 0) {
@@ -12341,6 +12418,7 @@ export function createKaminosVolumePrototype({
         .join('\n');
       throw new Error(`WGSL compilation failed:\n${detail}`);
     }
+    state.gpuInitStage = 'fluid-shader-compiled';
     analyticEmitterInjectionShader = device.createShaderModule({
       label: 'kaminos bounded analytic emitter injection wgsl',
       code: ANALYTIC_EMITTER_INJECTION_WGSL,
@@ -12490,6 +12568,7 @@ export function createKaminosVolumePrototype({
         { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
       ],
     });
+    state.gpuInitStage = 'fluid-layout-created';
     analyticEmitterInjectionBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos bounded analytic emitter injection bind group layout',
       entries: [
@@ -12740,6 +12819,7 @@ export function createKaminosVolumePrototype({
       bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     device.pushErrorScope('validation');
+    state.gpuInitStage = 'fluid-rebuild';
     rebuildFluidState(controlsSnapshot.resolution);
     if (gridSize === 160) {
       selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
@@ -12751,10 +12831,12 @@ export function createKaminosVolumePrototype({
       state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
     }
     const pipelineError = await device.popErrorScope();
+    state.gpuInitStage = 'fluid-rebuild-validated';
     if (pipelineError) {
       throw new Error(`fluid pipeline validation: ${pipelineError.message || String(pipelineError)}`);
     }
     gpuInitialized = true;
+    state.gpuInitStage = 'initialized';
     state.backend = `WebGPU:${adapter?.info?.vendor || (configuredSharedGpuContext?.device ? 'shared-device' : 'adapter')}`;
     emitStatus({ phase: 'gpu-ready' });
   }

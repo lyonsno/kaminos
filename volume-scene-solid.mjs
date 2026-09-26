@@ -2,6 +2,98 @@ export function solidFieldIndex(grid, x, y, z) {
   return x + grid * (y + 2 * grid * z);
 }
 
+export function assertEffectiveSceneCollision(receipt, expectedSourceId) {
+  const requireCondition = (condition, message) => { if (!condition) throw new Error(message); };
+  requireCondition(receipt?.requested === true, 'scene collision was not requested');
+  requireCondition(receipt?.effective === 'mesh-voxel-solid', 'authored mesh collision is not effective');
+  requireCondition(receipt?.sourceId === expectedSourceId, 'scene collision source identity mismatch');
+  requireCondition(typeof receipt?.geometryRevision === 'string' && receipt.geometryRevision.length > 0,
+    'scene collision geometry/transform revision missing');
+  requireCondition(receipt?.triangleCount > 0 && receipt?.solidCellCount > 0 && receipt?.blockedFaceCount > 0,
+    'authored scene collider has no occupied and blocking geometry');
+  requireCondition(receipt?.sourceSupport?.fluidSupportCells > 0,
+    'actual emitter signed-distance support is fully occluded');
+  return receipt;
+}
+
+// Mirror the emitter shader's signed-distance chemistry gate at cell centers.
+// The dispatch box alone is deliberately wider than the actual fuel source.
+export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, grid) {
+  if (!dispatch?.active || !descriptor || !(solidCells instanceof Uint8Array)
+    || solidCells.length !== 2 * grid * grid * grid) {
+    return {boundsFluidCells: 0, sourceSupportCells: 0, fluidSupportCells: 0, solidSupportCells: 0};
+  }
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const sub = (a, b) => a.map((v, i) => v - b[i]);
+  const mul = (a, scalar) => a.map(v => v * scalar);
+  const length = a => Math.hypot(...a);
+  const axis = descriptor.axis;
+  const origin = descriptor.origin;
+  const radius = descriptor.radius;
+  const extent = descriptor.extent;
+  const sourceDepth = descriptor.sourceDepth;
+  const secondary = [
+    axis[1] * descriptor.supportAxis[2] - axis[2] * descriptor.supportAxis[1],
+    axis[2] * descriptor.supportAxis[0] - axis[0] * descriptor.supportAxis[2],
+    axis[0] * descriptor.supportAxis[1] - axis[1] * descriptor.supportAxis[0],
+  ];
+  const boxDistance = dimensions => length(dimensions.map(v => Math.max(v, 0)))
+    + Math.min(Math.max(...dimensions), 0);
+  let boundsFluidCells = 0;
+  let sourceSupportCells = 0;
+  let fluidSupportCells = 0;
+  let solidSupportCells = 0;
+  for (let z = dispatch.cellMin[2]; z < dispatch.cellMin[2] + dispatch.cellExtent[2]; z++) {
+    for (let y = dispatch.cellMin[1]; y < dispatch.cellMin[1] + dispatch.cellExtent[1]; y++) {
+      for (let x = dispatch.cellMin[0]; x < dispatch.cellMin[0] + dispatch.cellExtent[0]; x++) {
+        const solid = solidCells[solidFieldIndex(grid, x, y, z)] !== 0;
+        if (!solid) boundsFluidCells++;
+        const p = [(x + .5) * 2 / grid - 1, (y + .5) * 2 / grid - 1, (z + .5) * 2 / grid - 1];
+        const relative = sub(p, origin);
+        const axial = dot(relative, axis);
+        const planar = sub(relative, mul(axis, axial));
+        let geometryDistance;
+        switch (descriptor.family) {
+          case 'ring':
+            geometryDistance = Math.hypot(length(planar) - extent, axial) - radius;
+            break;
+          case 'ribbon':
+            geometryDistance = boxDistance([
+              Math.abs(dot(relative, descriptor.supportAxis)) - extent * .5,
+              Math.abs(axial) - radius * .42,
+              Math.abs(dot(relative, secondary)) - radius,
+            ]);
+            break;
+          case 'nozzle': {
+            const centeredAxial = axial - extent * .5;
+            geometryDistance = boxDistance([length(sub(relative, mul(axis, axial))) - radius,
+              Math.abs(centeredAxial) - extent * .5]);
+            break;
+          }
+          case 'wick': {
+            const t = Math.max(0, Math.min(1, (axial + extent * .5) / extent));
+            geometryDistance = length(sub(relative, mul(axis, -extent * .5 + t * extent))) - radius;
+            break;
+          }
+          default:
+            throw new Error(`unsupported emitter support family: ${descriptor.family}`);
+        }
+        const inletDistance = descriptor.family === 'nozzle'
+          ? Math.max(-axial, axial - sourceDepth)
+          : Math.abs(axial) - sourceDepth * .5;
+        const sourceDistance = descriptor.sourceLaw === 'shallow-primary'
+          ? Math.max(geometryDistance, inletDistance) : geometryDistance;
+        // shader: 1 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, sourceDistance)
+        if (!(sourceDistance < 1 / grid) || !(descriptor.strength > 0)) continue;
+        sourceSupportCells++;
+        if (solid) solidSupportCells++;
+        else fluidSupportCells++;
+      }
+    }
+  }
+  return {boundsFluidCells, sourceSupportCells, fluidSupportCells, solidSupportCells};
+}
+
 function visibleInScene(object) {
   for (let current = object; current; current = current.parent) {
     if (current.visible === false) return false;
