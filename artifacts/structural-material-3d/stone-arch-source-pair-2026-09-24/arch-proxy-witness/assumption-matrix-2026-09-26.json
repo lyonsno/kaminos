@@ -1,0 +1,96 @@
+{
+  "schema": "kaminos.structural-material.arch-assumption-mesh-consumer-report.v0",
+  "status": "passed-narrow-claim",
+  "phase": "desktop-mesh-consumer-observed",
+  "claim": "one exact TRELLIS mesh receives distinct mapped displacements for a matched non-fracturing load under four explicit contact/interior assumptions",
+  "claimCeiling": [
+    "this establishes sensitivity of the current expressive proxy and mesh consumer, not source-true contact or construction",
+    "the radial-joint interior is an authored counterfactual, not a source-asset fact",
+    "the force uses uncalibrated proxy units; the CPU linear-spring route is not an engineering-exact masonry prediction",
+    "display magnification is 48 and does not feed back into the solver",
+    "no fracture surface, gravity, collision, detached-body dynamics, GPU solver, sound, or mobile pass is established"
+  ],
+  "source": {
+    "glb": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb",
+    "glbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+    "profile": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-surface-depth-profile.json",
+    "profileSha256": "c0f00a56608e11d9b38c1c4b020b272bf34f5f3b9bb5ad51599a3aad5e41699f",
+    "sameMeshCopies": 4
+  },
+  "configuration": {
+    "forceProxyUnits": 0.15,
+    "contact": { "x": 0.35, "y": 0.2, "patchRadius": 0.032 },
+    "mappedCell": { "column": 40, "row": 27 },
+    "resolution": { "columns": 48, "rows": 36 },
+    "layers": 3,
+    "fractureThreshold": 0.04,
+    "iterations": 1200,
+    "displayMagnification": 48,
+    "forceSweep": [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5],
+    "forceSelection": "0.15 is the highest sampled load with zero broken bonds in all four cases; jointed camera-facing contact first breaks one bond at 0.20"
+  },
+  "cases": [
+    {
+      "interior": "continuous",
+      "contact": "through-thickness",
+      "loadedNodes": 24,
+      "brokenBonds": 0,
+      "components": 1,
+      "rawMappedMotion": 0.001959,
+      "displayedMotion": 0.09404
+    },
+    {
+      "interior": "continuous",
+      "contact": "camera-facing-surface",
+      "loadedNodes": 8,
+      "brokenBonds": 0,
+      "components": 1,
+      "rawMappedMotion": 0.003121,
+      "displayedMotion": 0.1498
+    },
+    {
+      "interior": "radial-voussoir-joints-counterfactual",
+      "contact": "through-thickness",
+      "loadedNodes": 24,
+      "brokenBonds": 0,
+      "components": 1,
+      "rawMappedMotion": 0.002168,
+      "displayedMotion": 0.10407
+    },
+    {
+      "interior": "radial-voussoir-joints-counterfactual",
+      "contact": "camera-facing-surface",
+      "loadedNodes": 8,
+      "brokenBonds": 0,
+      "components": 1,
+      "rawMappedMotion": 0.003404,
+      "displayedMotion": 0.16338
+    }
+  ],
+  "route": {
+    "requestedUrl": "http://127.0.0.1:8424/structural-material-arch-assumptions.html",
+    "effectivePageRoute": "kaminos.structural-material.arch-assumption-mesh-consumer.v0",
+    "effectiveMeshRoute": "kaminos.structural-material.trellis-arch-surface.v0",
+    "effectiveSolverRoute": "shear-regularized-linear-spring-pcg-v0",
+    "solverBackend": "local CPU",
+    "browserVisualBackend": "Chrome 154.0.8037.57 headless software WebGL for capture only",
+    "fallback": false
+  },
+  "capture": {
+    "path": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/assumption-matrix-desktop.png",
+    "sha256": "8098829c4f7503a76519d1d122a5fe1ad73a6705bcf7e7695d9c21b515c15d7a",
+    "dimensions": { "width": 1440, "height": 1100 },
+    "inspection": "all four source-matched arch meshes and readouts visible without overlap; slight surface-shape differences remain restrained"
+  },
+  "sourceFilesSha256": {
+    "structural-material-arch-assumptions.html": "9281760d546397821213dca7eee0a1de7fb049d4ce73002ebb01018d6969b56e",
+    "structural-material-arch-assumption-consumer.mjs": "25089b9c5147ffd680158888cf00acc25d512c4ac33f9db7d6886a1cabb57ea0",
+    "structural-material-arch-geometry-sidecar.js": "a6581d51bd9c408df2e88f1e680861c636de4492214d56bdcb58ddf476a29526",
+    "structural-material-arch-core.js": "9d78a4622ed1edbfb133a2fd17bc817326575c65be8910bd9880e3425dc6e335"
+  },
+  "tests": {
+    "focused": "node --test tests/structural-material-arch-assumption-consumer-contracts.mjs passed",
+    "suite": "node --test --test-concurrency=1 tests/structural-material-arch-*.mjs did not close: existing browser-startup deadline contract failed twice with the same assertion; exact failure is recorded in session output, not attributed to this consumer slice"
+  },
+  "mobile": "two headless 390x844 captures remained at the loading state and were discarded; mobile behavior is unverified"
+}

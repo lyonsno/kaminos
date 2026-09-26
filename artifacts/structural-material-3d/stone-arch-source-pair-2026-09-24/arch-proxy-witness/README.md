@@ -1,6 +1,69 @@
 # Projected Arch Structural Witness
 
-## Current Checkpoint: Matched History Reaches The TRELLIS Consumer
+## Current Checkpoint: Contact And Interior Assumptions Reach The Mesh
+
+The 2026-09-26 four-way consumer witness holds the TRELLIS GLB, projected
+profile, contact coordinate `(0.35, 0.20)`, load `0.15`, and mesh mapping fixed.
+It crosses through-depth versus camera-facing contact with continuous versus
+authored radial-joint interiors, then applies each state to a separate copy of
+the exact same mesh. The profile/GLB SHA-256 is
+`c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5`.
+
+| Interior / contact | Loaded nodes | Broken bonds | Raw mapped motion | Displayed motion (`x48`) |
+| --- | ---: | ---: | ---: | ---: |
+| Continuous / through-depth | 24 | 0 | `0.001959` | `0.09404` |
+| Continuous / camera-facing | 8 | 0 | `0.003121` | `0.14980` |
+| Radial joints / through-depth | 24 | 0 | `0.002168` | `0.10407` |
+| Radial joints / camera-facing | 8 | 0 | `0.003404` | `0.16338` |
+
+The selected `0.15` is the highest tested force in the small sweep
+`0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50` that left all four states
+unbroken; at `0.20`, the jointed camera-facing case first broke a bond. Thus
+this comparison observes elastic-response sensitivity before crack topology
+diverges. Face-only loading addresses 8 nodes rather than 24 and raises peak
+mapped motion by about 59% for the continuous interior. The radial-joint prior
+raises that motion by about 11% through-depth and 9% at the face. The numbers
+come from the same surface consumer, not a screen-space decoration. A shared
+display magnification of `48` makes the modest raw differences inspectable; it
+does not feed back into the solver.
+
+This establishes that the geometry consumer responds differently to these
+two modeling assumptions. It does **not** decide which contact or hidden
+interior is true for the TRELLIS arch, validate stone mechanics, or establish
+transfer to another asset. The radial joints remain an explicit
+counterfactual. The side-by-side shapes remain close even at the declared
+magnification, so the operator should judge whether this is enough visible
+evidence to choose a material representation. Two attempted headless mobile
+captures stayed at the initial loading state and are not admitted as responsive
+evidence; mobile behavior remains unverified.
+
+The interactive route is `http://127.0.0.1:8424/structural-material-arch-assumptions.html`.
+The [inspected desktop capture](assumption-matrix-desktop.png) is 1440 x 1100;
+it shows all four mesh copies, accepted same-location load, zero broken bonds,
+and per-case consumer readouts. Its SHA-256 is
+`8098829c4f7503a76519d1d122a5fe1ad73a6705bcf7e7695d9c21b515c15d7a`. Chrome
+was run headless with software WebGL only for this visual smoke; the measured
+structural route is local CPU `shear-regularized-linear-spring-pcg-v0`, not
+WebGPU. No latency or performance claim is made. The complete route, source,
+configuration, per-case values, capture hash, and evidence limits are in the
+[matched-assumption report](assumption-matrix-2026-09-26.json).
+
+Replay the deterministic contract and visual route:
+
+```sh
+node --test tests/structural-material-arch-assumption-consumer-contracts.mjs
+
+node --test --test-concurrency=1 tests/structural-material-arch-*.mjs
+
+'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
+  --headless=new --no-sandbox --disable-gpu --enable-webgl \
+  --use-gl=angle --use-angle=swiftshader --hide-scrollbars \
+  --window-size=1440,1100 --virtual-time-budget=30000 \
+  --screenshot=/tmp/assumption-matrix.png \
+  http://127.0.0.1:8424/structural-material-arch-assumptions.html
+```
+
+## Prior Checkpoint: Matched History Reaches The TRELLIS Consumer
 
 The 2026-09-26 assay isolates the source-intended continuous interior instead
 of letting the radial-joint counterfactual veto or confound the result. It
