@@ -5,6 +5,7 @@ import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from '
 import { createSceneLoadRequests } from '../scene-load-generation.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const overlapWitness = readFileSync(new URL('../tools/scene-object-publication-overlap-witness.mjs', import.meta.url), 'utf8');
 
 test('a delayed splat object from a superseded scene is disposed before scene membership publication', async () => {
   const requests = createSceneLoadRequests();
@@ -82,4 +83,15 @@ test('direct splat imports bind publication to the scene mutation generation', (
     'the final synchronous publication gate must reject imports superseded by a newer scene mutation');
   assert.match(importer, /if \(!importIsCurrent\(\)\) return null/,
     'a stale direct import must stop after asynchronous correction instead of decoding/publishing into a newer scene');
+});
+
+test('direct-import browser overlap witness proves B loaded before releasing A', () => {
+  assert.match(overlapWitness, /const bLabel = 'Race B water emitter'/,
+    'scene B needs an identity different from the emitter still visible in scene A');
+  const bCompletionCheck = overlapWitness.indexOf('assert.equal(bState.objects[0]?.label,bLabel');
+  const releaseOldImport = overlapWitness.indexOf("phase='release-old-direct-splat-A'");
+  assert.ok(bCompletionCheck >= 0 && bCompletionCheck < releaseOldImport,
+    'the witness must fail closed on A’s still-visible label before releasing the paused import');
+  assert.match(overlapWitness, /releaseOrder:\{sceneBCompletionLabel:bState\.objects\[0\]\?\.label,assertedBeforePlyRelease:true\}/,
+    'the raw report must preserve the B-specific completion evidence before PLY release');
 });
