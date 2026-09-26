@@ -14787,11 +14787,13 @@ export function createKaminosVolumePrototype({
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     }));
     const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    const atlasWidth = irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X;
+    const atlasHeight = irradianceGridHeight * atlasTilesY;
     irradianceAtlasTexture = device.createTexture({
       label: `kaminos ${FIRE_IRRADIANCE_ATLAS_IDENTITY} atlas`,
       size: {
-        width: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
-        height: irradianceGridHeight * atlasTilesY,
+        width: atlasWidth,
+        height: atlasHeight,
         depthOrArrayLayers: 1,
       },
       format: 'rgba16float',
@@ -14853,7 +14855,7 @@ export function createKaminosVolumePrototype({
     irradianceAtlasGeneration += 1;
     state.fireLightFieldGrid = irradianceGridSize;
     state.fireLightFieldBytes = latticeBytes * 2
-      + irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X * irradianceGridSize * atlasTilesY * 8;
+      + atlasWidth * atlasHeight * 8;
     return true;
   }
 
