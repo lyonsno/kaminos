@@ -1920,7 +1920,7 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize, gridHeigh
   };
 }
 
-export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds, options = {}) {
+export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds) {
   floats.fill(0);
   if (!descriptor || !dispatch.active) return;
   const familyMode = ANALYTIC_EMITTER_FAMILY_MODE[descriptor.family] || 0;
@@ -1950,18 +1950,10 @@ export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, 
   floats[23] = descriptor.edgeEntrainment;
   floats[24] = ANALYTIC_EMITTER_INLET_PROFILE_MODE[descriptor.inletProfile] || 0;
   floats[25] = descriptor.momentumLinked ? 0 : 1;
-  // The inlet velocity is an imposed per-step displacement, so the uniform
-  // time step scales it; entrainment multiplies a transported velocity and
-  // already carries the factor.
-  floats[26] = descriptor.effectiveInletVelocity * (Number.isFinite(options.inletVelocityScale) ? options.inletVelocityScale : 1);
+  floats[26] = descriptor.effectiveInletVelocity;
   floats[27] = descriptor.shearWidthCells;
   words.set([...dispatch.cellMin, dispatch.grid], 28);
   words.set([...dispatch.cellExtent, 0], 32);
-  // Uniform time step: magnitude bound for the injected velocity; 0 keeps the legacy clamp.
-  floats[36] = Number.isFinite(options.emitterVelocityBound) && options.emitterVelocityBound > 0 ? options.emitterVelocityBound : 0;
-  floats[37] = 0;
-  floats[38] = 0;
-  floats[39] = 0;
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -2365,13 +2357,18 @@ export function resolveConfinementConfig(controls = {}, options = {}) {
 // buoyancy and the advection backtrace but not the inlet velocity, the edge
 // entrainment, thermal expansion or confinement, so lowering it changes the
 // regime rather than the rate. `uniform` reads every authored coefficient at
-// TIME_STEP_REFERENCE_SPEED and multiplies the transport distance, every
-// per-step velocity increment and the emitter inlet velocity by
-// Speed / reference, so at the reference the two modes coincide exactly and
-// away from it Speed only changes how far the same dynamics advance per step.
-// The legacy per-layer transport carries its own speed-dependent lifts, so the
-// uniform step is defined only on the common-gas characteristic. Scalar
-// reaction and decay rates remain per-step in both modes.
+// TIME_STEP_REFERENCE_SPEED and multiplies the transport distance and every
+// per-step velocity increment by Speed / reference, so at the reference the two
+// modes coincide exactly and away from it Speed only changes how far the same
+// dynamics advance per step. Unit convention: the stored field and the emitter
+// inlet are velocities; a step displaces by velocity x backtrace scale, so the
+// inlet boundary velocity is not scaled (its displacement already follows the
+// backtrace) and the emitter clamp is untouched in both modes. The legacy
+// scheme's fixed clamp and 0.982 per-step damping are not time-step aware and
+// the legacy per-layer transport carries its own speed-dependent lifts, so the
+// uniform step is defined only on the non-legacy schemes (undamped, MacCormack),
+// which all ride the common-gas characteristic. Scalar reaction and decay rates
+// remain per-step in both modes.
 export const TIME_STEP_IDENTITY = 'time-step-mode-v0';
 export const TIME_STEP_MODE_VALUES = Object.freeze(['legacy', 'uniform']);
 const TIME_STEP_MODE_LEGACY = 'legacy';
@@ -2395,9 +2392,9 @@ export function resolveTimeStepConfig(controls = {}) {
   const requested = { identity: TIME_STEP_IDENTITY, timeStep: requestedMode, speed, advectionScheme: transport.scheme, commonCharacteristic: transport.commonCharacteristic };
   let mode = TIME_STEP_MODE_VALUES.includes(requestedMode) ? requestedMode : TIME_STEP_MODE_LEGACY;
   let reason = mode === requestedMode ? null : `unknown time step mode ${requestedMode}; using legacy`;
-  if (mode === TIME_STEP_MODE_UNIFORM && !transport.commonCharacteristic) {
+  if (mode === TIME_STEP_MODE_UNIFORM && transport.scheme === TRANSPORT_SCHEME_LEGACY) {
     mode = TIME_STEP_MODE_LEGACY;
-    reason = 'uniform time step requires the common-gas characteristic (enable Common gas transport or a MacCormack scheme); using legacy';
+    reason = 'uniform time step requires a non-legacy Advection scheme (undamped or MacCormack): the legacy scheme keeps a fixed velocity clamp and 0.982 per-step damping that are not time-step aware; using legacy';
   }
   if (mode === TIME_STEP_MODE_LEGACY) {
     return {
@@ -2408,7 +2405,7 @@ export function resolveTimeStepConfig(controls = {}) {
         dtScale: 1,
         dynamicsSpeed: speed,
         backtraceScale: transportBacktraceScaleForSpeed(speed),
-        inletVelocityScale: 1,
+        inletVelocity: 'boundary-velocity-unscaled',
         reason,
       },
     };
@@ -2422,7 +2419,7 @@ export function resolveTimeStepConfig(controls = {}) {
       dtScale,
       dynamicsSpeed: TIME_STEP_REFERENCE_SPEED,
       backtraceScale: transportBacktraceScaleForSpeed(TIME_STEP_REFERENCE_SPEED) * dtScale,
-      inletVelocityScale: dtScale,
+      inletVelocity: 'boundary-velocity-unscaled',
       reason,
     },
   };
@@ -2939,8 +2936,9 @@ fn transportBacktraceScale(speed: f32) -> f32 {
 }
 
 // Time-step mode. Under uniform mode the authored coefficients see the reference
-// Speed and the requested Speed becomes a factor on transport distance, on
-// every per-step velocity increment and on the emitter inlet velocity.
+// Speed and the requested Speed becomes a factor on transport distance and on
+// every per-step velocity increment; boundary velocities (the emitter inlet)
+// are not scaled, their displacement already follows the backtrace.
 fn timeStepScale() -> f32 {
   let uniformStep = u.reserved_source_extension_2.z > 0.5;
   let reference = max(0.1, u.reserved_source_extension_2.w);
@@ -7372,8 +7370,6 @@ struct AnalyticEmitterInjectionUniforms {
   inlet_controls: vec4<f32>,
   cell_min_grid: vec4<u32>,
   cell_extent: vec4<u32>,
-  // .x velocity magnitude bound under the uniform time step (0 = legacy per-component clamp).
-  time_step_controls: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> emitter: AnalyticEmitterInjectionUniforms;
@@ -7530,18 +7526,11 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
     let transportedAxialSpeed = max(0.0, dot(previousVelocityDensity.xyz, axis));
     entrainmentVelocity = -apertureNormal * transportedAxialSpeed * edgeWeight * max(0.0, emitter.transport.w);
   }
-  let injectedRaw = previousVelocityDensity.xyz + axialVelocity + entrainmentVelocity;
-  // Legacy: the fixed per-component clamp every saved basin was authored under
-  // (it already caps an inlet velocity above 0.52). Uniform time step: bound
-  // the magnitude the way the transport step does, so the dt-scaled inlet
-  // velocity survives injection instead of being cut back to the legacy cap.
-  var injectedVelocity = clamp(injectedRaw, vec3<f32>(-0.34), vec3<f32>(0.52));
-  let uniformVelocityBound = emitter.time_step_controls.x;
-  if (uniformVelocityBound > 0.0) {
-    let safe = clamp(injectedRaw, vec3<f32>(-64.0), vec3<f32>(64.0));
-    let magnitude = length(safe);
-    injectedVelocity = select(safe, safe * (uniformVelocityBound / max(magnitude, 0.00001)), magnitude > uniformVelocityBound);
-  }
+  let injectedVelocity = clamp(
+    previousVelocityDensity.xyz + axialVelocity + entrainmentVelocity,
+    vec3<f32>(-0.34),
+    vec3<f32>(0.52)
+  );
   material.x = max(material.x, chemistry.x * chemistryWeight * 0.76);
   material.y = max(material.y, chemistry.y * chemistryWeight * 0.92);
   material.z = max(material.z, chemistry.z * chemistryWeight * 0.72);
@@ -9394,7 +9383,7 @@ export function createKaminosVolumePrototype({
     transport: { ...resolveTransportConfig(controlsSnapshot), uniform: null, predictorBufferBytes: 0 },
     transportPredictorPasses: 0,
     confinement: { ...resolveConfinementConfig(controlsSnapshot, { epsilonOverride: null }), uniform: null, confinementEpsilonOverride: null },
-    timeStep: { ...resolveTimeStepConfig(controlsSnapshot), uniform: null, packedInletVelocity: null },
+    timeStep: { ...resolveTimeStepConfig(controlsSnapshot), uniform: null, inletVelocityPacked: null },
     tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
     tallPlumePressureIterationTarget: 0,
     pressureStrategy: normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene),
@@ -9794,7 +9783,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatShader = null;
   let uniformBuffer = null;
   let analyticEmitterInjectionUniformBuffer = null;
-  const analyticEmitterInjectionUniformData = new ArrayBuffer(40 * Float32Array.BYTES_PER_ELEMENT);
+  const analyticEmitterInjectionUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
   const analyticEmitterInjectionUniformFloats = new Float32Array(analyticEmitterInjectionUniformData);
   const analyticEmitterInjectionUniformWords = new Uint32Array(analyticEmitterInjectionUniformData);
   let volumePresentationControlsBuffer = null;
@@ -13724,10 +13713,6 @@ export function createKaminosVolumePrototype({
       analyticEmitterDescriptor,
       analyticEmitterDispatch,
       renderPhaseTimeMs * 0.001,
-      {
-        inletVelocityScale: timeStepConfig.effective.inletVelocityScale,
-        emitterVelocityBound: timeStepConfig.effective.mode === 'uniform' ? TRANSPORT_MAX_BACKTRACE_CELLS / timeStepConfig.effective.backtraceScale : 0,
-      },
     );
     device.queue.writeBuffer(
       analyticEmitterInjectionUniformBuffer,
@@ -13863,8 +13848,9 @@ export function createKaminosVolumePrototype({
     state.timeStep = {
       ...timeStepConfig,
       uniform: { mode: uniforms[354], referenceSpeed: uniforms[355] },
-      packedInletVelocity: analyticEmitterDispatch?.active ? analyticEmitterInjectionUniformFloats[26] : null,
-      emitterVelocityBound: analyticEmitterInjectionUniformFloats[36],
+      // The emitter inlet velocity is a boundary velocity: it is packed unscaled
+      // in both modes and its per-step displacement follows the backtrace.
+      inletVelocityPacked: analyticEmitterDispatch?.active ? analyticEmitterInjectionUniformFloats[26] : null,
     };
     state.pressureSolver = {
       ...resolvePressureSolverConfig(controlsSnapshot),

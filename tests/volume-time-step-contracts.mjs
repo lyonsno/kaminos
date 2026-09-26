@@ -7,8 +7,12 @@ import { test } from 'node:test';
 // expansion or confinement, so lowering it changes the regime (injected
 // momentum wins, the plume sloshes) instead of the rate. The opt-in `uniform`
 // mode reads every authored coefficient at a reference Speed and scales the
-// transport distance, every per-step velocity increment and the emitter inlet
-// velocity by the same factor, so Speed becomes a rate multiplier.
+// transport distance and every per-step velocity increment by the same factor,
+// so Speed becomes a rate multiplier. Boundary velocities (the emitter inlet)
+// are not scaled: their displacement per step already follows the backtrace.
+// Review of 5cd8232d (GPT-6 Sol, 2026-09-26) caught the first version scaling
+// the inlet as well (dt-squared displacement) and replacing the emitter clamp
+// under uniform (modes differed at Speed 1); both are contracts below.
 
 const core = await import('../volume-core.js');
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
@@ -38,7 +42,7 @@ test('resolveTimeStepConfig keeps the legacy law by default', () => {
   assert.equal(legacy.effective.dtScale, 1);
   assert.equal(legacy.effective.dynamicsSpeed, 3.4);
   near(legacy.effective.backtraceScale, 2.55 + 0.55 * 3.4);
-  assert.equal(legacy.effective.inletVelocityScale, 1);
+  assert.equal(legacy.effective.inletVelocity, 'boundary-velocity-unscaled');
   assert.equal(legacy.effective.reason, null);
   const unknown = core.resolveTimeStepConfig({ timeStep: 'bogus', speed: 1 });
   assert.equal(unknown.effective.mode, 'legacy');
@@ -51,20 +55,23 @@ test('uniform mode makes Speed a rate multiplier on one shared characteristic', 
   near(uniform.effective.dtScale, 3.4);
   assert.equal(uniform.effective.dynamicsSpeed, 1, 'authored coefficients are read at the reference Speed');
   near(uniform.effective.backtraceScale, (2.55 + 0.55) * 3.4, 1e-9);
-  near(uniform.effective.inletVelocityScale, 3.4);
+  assert.equal(uniform.effective.inletVelocity, 'boundary-velocity-unscaled', 'the inlet boundary velocity is not scaled by dt');
   assert.equal(uniform.effective.reason, null);
   const atReference = core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 1, advectionScheme: 'maccormack' });
   near(atReference.effective.backtraceScale, core.resolveTimeStepConfig({ speed: 1, advectionScheme: 'maccormack' }).effective.backtraceScale, 1e-12);
   assert.equal(atReference.effective.dtScale, 1, 'at the reference Speed uniform and legacy coincide');
   const half = core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 0.5, advectionScheme: 'maccormack' });
   near(half.effective.backtraceScale, uniform.effective.backtraceScale * (0.5 / 3.4), 1e-9);
-  // Legacy per-layer transport carries its own speed-dependent lifts, so the
-  // uniform step is only defined on the common-gas characteristic.
-  const split = core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'legacy', commonGasTransport: false });
-  assert.equal(split.effective.mode, 'legacy');
-  assert.match(split.effective.reason, /common-gas characteristic/);
-  const commonLegacy = core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'legacy', commonGasTransport: true });
-  assert.equal(commonLegacy.effective.mode, 'uniform');
+  // The legacy scheme keeps a fixed velocity clamp and 0.982 per-step damping
+  // that are not time-step aware (and its per-layer lifts carry their own speed
+  // terms), so uniform is defined only on the non-legacy schemes — with or
+  // without the common-gas switch.
+  for (const commonGasTransport of [false, true]) {
+    const legacyScheme = core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'legacy', commonGasTransport });
+    assert.equal(legacyScheme.effective.mode, 'legacy');
+    assert.match(legacyScheme.effective.reason, /non-legacy Advection scheme/);
+  }
+  assert.equal(core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'undamped' }).effective.mode, 'uniform');
 });
 
 test('the shader reads coefficients at the dynamics speed and scales transport, increments and bounds by one factor', () => {
@@ -93,9 +100,8 @@ test('the shader reads coefficients at the dynamics speed and scales transport, 
   assert.doesNotMatch(predictor, /transportBacktraceScale\(speed\)/, 'the predictor no longer reads the raw speed backtrace');
 });
 
-test('the emitter inlet velocity carries the dt factor and the receipt names it', () => {
-  const floats = new Float32Array(40); const words = new Uint32Array(floats.buffer);
-  assert.match(source, /new ArrayBuffer\(40 \* Float32Array\.BYTES_PER_ELEMENT\)/, 'the emitter uniform grew by one vec4 for the time-step bound');
+test('the emitter inlet is a boundary velocity: packed unscaled, clamped as before, so the modes coincide at Speed 1', () => {
+  const floats = new Float32Array(36); const words = new Uint32Array(floats.buffer);
   const descriptor = {
     family: 'ring', inletProfile: 'edge-entrained', momentumLinked: false, effectiveInletVelocity: 0.74, shearWidthCells: 0.5, edgeEntrainment: 1.62,
     origin: [0, -0.9, 0], axis: [0, 1, 0], supportAxis: [1, 0, 0], radius: 0.3, extent: [0, 0, 0], strength: 1, velocitySpeed: 0, transportSpeed: 0,
@@ -103,19 +109,14 @@ test('the emitter inlet velocity carries the dt factor and the receipt names it'
   };
   const dispatch = { cellMin: [0, 0, 0], cellExtent: [1, 1, 1], grid: 64, workgroups: [1, 1, 1], active: true, cellCount: 1, family: 'ring' };
   core.writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, 0);
-  near(floats[26], Math.fround(0.74), 0, 'default packing is unchanged');
-  core.writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, 0, { inletVelocityScale: 3.4 });
-  near(floats[26], Math.fround(0.74 * 3.4), 1e-6, 'uniform mode scales the packed inlet velocity');
-  assert.equal(floats[36], 0, 'without a bound option the emitter keeps the legacy clamp');
-  core.writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, 0, { inletVelocityScale: 3.4, emitterVelocityBound: 0.76 });
-  near(floats[36], Math.fround(0.76), 1e-7, 'the uniform-mode magnitude bound is packed at float 36');
+  near(floats[26], Math.fround(0.74), 0, 'the packed inlet velocity is the descriptor value in every mode');
+  assert.equal(core.writeAnalyticEmitterInjectionUniform.length, 5, 'the packer takes no time-step option');
+  assert.doesNotMatch(source, /inletVelocityScale/, 'no inlet scaling path remains');
+  assert.match(source, /new ArrayBuffer\(36 \* Float32Array\.BYTES_PER_ELEMENT\)/, 'the emitter uniform is unchanged');
   const injection = source.slice(source.indexOf('struct AnalyticEmitterInjectionUniforms'), source.indexOf('material.x = max(material.x, chemistry.x * chemistryWeight * 0.76);'));
-  assert.match(injection, /time_step_controls: vec4<f32>,/, 'the emitter uniform declares the time-step controls');
-  assert.match(injection, /var injectedVelocity = clamp\(injectedRaw, vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)\);/, 'the legacy per-component clamp is unchanged');
-  assert.match(injection, /if \(uniformVelocityBound > 0\.0\)[^]*?magnitude > uniformVelocityBound/, 'under the uniform step the injected velocity is bounded by magnitude instead');
-  assert.match(source, /emitterVelocityBound: timeStepConfig\.effective\.mode === 'uniform' \? TRANSPORT_MAX_BACKTRACE_CELLS \/ timeStepConfig\.effective\.backtraceScale : 0,/, 'the bound is the transport bound at the effective backtrace');
-  assert.match(source, /writeAnalyticEmitterInjectionUniform\([^;]*\{\s*inletVelocityScale: timeStepConfig\.effective\.inletVelocityScale,/, 'the frame packer passes the dt factor');
-  assert.match(source, /state\.timeStep = \{\s*\.\.\.timeStepConfig,\s*uniform: \{ mode: uniforms\[354\], referenceSpeed: uniforms\[355\] \},\s*packedInletVelocity: [^]*?emitterVelocityBound: analyticEmitterInjectionUniformFloats\[36\],/, 'runtime receipt records the packed values and the emitter bound');
+  assert.doesNotMatch(injection, /time_step_controls/, 'the emitter kernel has no time-step member');
+  assert.match(injection, /let injectedVelocity = clamp\(\s*previousVelocityDensity\.xyz \+ axialVelocity \+ entrainmentVelocity,\s*vec3<f32>\(-0\.34\),\s*vec3<f32>\(0\.52\)\s*\);/, 'the emitter clamp is the authored one in both modes');
+  assert.match(source, /state\.timeStep = \{\s*\.\.\.timeStepConfig,\s*uniform: \{ mode: uniforms\[354\], referenceSpeed: uniforms\[355\] \},[^]*?inletVelocityPacked: /, 'runtime receipt records the packed mode, reference and the unscaled inlet');
   assert.equal((source.match(/^\s*timeStep: state\.timeStep,$/gm) || []).length, 2, 'debugState exports the receipt on both routes');
 });
 

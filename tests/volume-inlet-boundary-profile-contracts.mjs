@@ -118,12 +118,12 @@ assert.match(injectionShader, /let transportedAxialSpeed = max\(0\.0, dot\(previ
 assert.match(injectionShader, /entrainmentVelocity = -apertureNormal \* transportedAxialSpeed \* edgeWeight \* max\(0\.0, emitter\.transport\.w\);/, 'edge entrainment points inward along the analytic source normal');
 assert.doesNotMatch(injectionShader, /sin\(|cos\(|hash|random/i, 'the inlet-profile pass contains no periodic or random forcing');
 assert.doesNotMatch(injectionShader, /fluid\[(?!base(?: \+ [123]u)?\])/, 'the inlet-profile pass does not read neighboring fluid cells');
-assert.match(coreSource, /new ArrayBuffer\(40 \* Float32Array\.BYTES_PER_ELEMENT\)/, 'the expanded analytic emitter uniform owns ten aligned vec4 slots');
-assert.match(coreSource, /floats\[23\] = descriptor\.edgeEntrainment;[\s\S]*?floats\[24\] = ANALYTIC_EMITTER_INLET_PROFILE_MODE\[descriptor\.inletProfile\][\s\S]*?floats\[25\] = descriptor\.momentumLinked \? 0 : 1;[\s\S]*?floats\[26\] = descriptor\.effectiveInletVelocity \* \(Number\.isFinite\(options\.inletVelocityScale\) \? options\.inletVelocityScale : 1\);[\s\S]*?floats\[27\] = descriptor\.shearWidthCells;[\s\S]*?words\.set\(\[\.\.\.dispatch\.cellMin, dispatch\.grid\], 28\);[\s\S]*?words\.set\(\[\.\.\.dispatch\.cellExtent, 0\], 32\);/, 'CPU uniform packing carries the descriptor-authoritative effective inlet velocity at the inlet-controls boundary');
+assert.match(coreSource, /new ArrayBuffer\(36 \* Float32Array\.BYTES_PER_ELEMENT\)/, 'the expanded analytic emitter uniform owns nine aligned vec4 slots');
+assert.match(coreSource, /floats\[23\] = descriptor\.edgeEntrainment;[\s\S]*?floats\[24\] = ANALYTIC_EMITTER_INLET_PROFILE_MODE\[descriptor\.inletProfile\][\s\S]*?floats\[25\] = descriptor\.momentumLinked \? 0 : 1;[\s\S]*?floats\[26\] = descriptor\.effectiveInletVelocity;[\s\S]*?floats\[27\] = descriptor\.shearWidthCells;[\s\S]*?words\.set\(\[\.\.\.dispatch\.cellMin, dispatch\.grid\], 28\);[\s\S]*?words\.set\(\[\.\.\.dispatch\.cellExtent, 0\], 32\);/, 'CPU uniform packing carries the descriptor-authoritative effective inlet velocity at the inlet-controls boundary');
 assert.match(injectionShader, /transport: vec4<f32>,\s+inlet_controls: vec4<f32>,\s+cell_min_grid: vec4<u32>,\s+cell_extent: vec4<u32>,/, 'WGSL reads the same aligned uniform layout written by JavaScript');
 
 assert.equal(typeof volumeCore.writeAnalyticEmitterInjectionUniform, 'function', 'the production uniform writer is directly contractable');
-const directSnapshotUniformData = new ArrayBuffer(40 * Float32Array.BYTES_PER_ELEMENT);
+const directSnapshotUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
 const directSnapshotUniformFloats = new Float32Array(directSnapshotUniformData);
 const directSnapshotUniformWords = new Uint32Array(directSnapshotUniformData);
 volumeCore.writeAnalyticEmitterInjectionUniform(
