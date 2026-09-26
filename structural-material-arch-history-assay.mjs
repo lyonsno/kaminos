@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runArchHistoryAssay } from './structural-material-arch-depth-assay.mjs';
 
@@ -30,8 +30,9 @@ export function runArchHistoryAssayCli(sourceArgument, outputArgument) {
     outputPath,
     lastTrustworthyEvidence: `source path ${sourcePath} and output path ${outputPath} accepted; source not yet read`,
   };
-  writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`);
   try {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`);
     report.phase = 'read-source-and-run-matched-history';
     const sourceBytes = readFileSync(sourcePath);
     report.lastTrustworthyEvidence = `source read (${sourceBytes.length} bytes; sha256 ${sha256(sourceBytes)}); matched-history assay not yet complete`;

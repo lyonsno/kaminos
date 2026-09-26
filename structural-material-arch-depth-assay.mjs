@@ -452,6 +452,9 @@ function displacementSummary(state) {
   return {
     peakDisplacement: Math.max(...magnitudes),
     rmsDisplacement: Math.sqrt(magnitudes.reduce((sum, value) => sum + value * value, 0) / magnitudes.length),
+    requestedForce: state.load.requestedForce,
+    contact: state.load.contact,
+    contactCells: state.load.contactCells,
     contactTravel: state.load.travel,
     residual: state.load.relativeResidual,
     componentCount: state.components.length,
@@ -568,8 +571,8 @@ export function runArchHistoryAssay(sourcePath) {
       damaged: damagedResponse,
       travelDelta,
       relativeTravelDelta,
-      sameContactAndForce: intactLater.load.requestedForce === damagedLater.load.requestedForce &&
-        JSON.stringify(intactLater.load.contactCells) === JSON.stringify(damagedLater.load.contactCells),
+      sameContactAndForce: intactResponse.requestedForce === damagedResponse.requestedForce &&
+        JSON.stringify(intactResponse.contactCells) === JSON.stringify(damagedResponse.contactCells),
     },
     unloaded: { damaged: displacementSummary(unloaded) },
     adjudication: {
