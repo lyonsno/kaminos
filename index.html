@@ -474,6 +474,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .scene-name-input { width: 100%; min-width: 0; background: transparent; border: 1px solid transparent; color: inherit; font-size: 11px; font-weight: 600; padding: 2px 3px; border-radius: 4px; outline: none; }
 .scene-name-input:focus { background: #181818; border-color: #1976d2; color: #fff; }
 .scene-object-chip { font: 9px 'SF Mono', monospace; color: #8fc7d6; border: 1px solid #28414a; background: #102025; border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
+.scene-object-chip.paused { color: #ffc36d; border-color: #76552a; background: #312315; }
 .scene-object-actions { display: flex; align-items: center; gap: 6px; }
 .scene-object-remove { width: 20px; height: 20px; border: 1px solid #3a2a2a; border-radius: 4px; background: #221818; color: #b98585; cursor: pointer; font-size: 13px; line-height: 16px; }
 .scene-object-remove:hover { background: #321f1f; color: #f0b0b0; border-color: #674040; }
@@ -5183,22 +5184,34 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
 
 function writeAuthoredFlameEmitterPose(value) {
   const next = normalizeFlameEmitterPose(value);
+  const wasSuspended = flameEmitterInjectionSuspended;
   if (!applyFlameEmitterPose) throw new Error('The ordinary flame source is not mounted');
   if (window.__kaminosVolumeEmitterReceipt?.effective?.family === 'cluster') {
     throw new Error('Choose an analytic flame emitter before placing its source');
   }
-  try {
-    applyFlameEmitterPose(next, { sourceEnabled: true });
-    if (flameEmitterInjectionSuspended) setInfo('Flame source returned to the current simulation domain');
-    flameEmitterInjectionSuspended = false;
-  } catch (error) {
-    if (!/generated emitter support exceeds volume-local analytic bounds/.test(error?.message || '')) throw error;
+  const [x, y, z] = next.position;
+  const originInsideGrid = Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1;
+  if (originInsideGrid) {
+    try {
+      applyFlameEmitterPose(next, { sourceEnabled: true });
+      flameEmitterInjectionSuspended = false;
+    } catch (error) {
+      if (!/generated emitter support exceeds volume-local analytic bounds/.test(error?.message || '')) throw error;
+      applyFlameEmitterPose(next, { sourceEnabled: false });
+      flameEmitterInjectionSuspended = true;
+    }
+  } else {
     applyFlameEmitterPose(next, { sourceEnabled: false });
-    if (!flameEmitterInjectionSuspended) setInfo('Flame source outside support: injection paused; drag continues');
     flameEmitterInjectionSuspended = true;
   }
   flameEmitterPose = next;
   ensureAuthoredFlameEmitter();
+  if (wasSuspended !== flameEmitterInjectionSuspended) {
+    setInfo(flameEmitterInjectionSuspended
+      ? 'Flame source outside current grid: injection paused; drag continues'
+      : 'Flame source returned to the current simulation grid');
+    renderSceneObjectList();
+  }
 }
 
 window.kaminosFlameEmitterState = () => ({
@@ -6122,7 +6135,8 @@ function updateTransformInspector() {
   }
   if (!entry) return;
 
-  document.getElementById('transform-inspector-name').textContent = entry.label || entry.fileName || entry.id;
+  document.getElementById('transform-inspector-name').textContent = (entry.label || entry.fileName || entry.id)
+    + (entry.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended ? ' · injection paused' : '');
   document.getElementById('transform-inspector-id').textContent = entry.id;
   const transform = entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
   const values = {
@@ -6266,6 +6280,7 @@ function renderSceneObjectRow(record, options = {}) {
   const label = sceneObjectDisplayLabel(record);
   const typeLabel = record.type || 'object';
   const reloadability = sceneObjectReloadabilityLabel(record);
+  const pausedFlame = record.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended;
   const source = record.source || 'no source';
   return `
     <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
@@ -6275,6 +6290,7 @@ function renderSceneObjectRow(record, options = {}) {
       </span>
       <span class="scene-object-actions">
         <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
+        ${pausedFlame ? '<span class="scene-object-chip paused">injection paused</span>' : ''}
         ${record.type === FLAME_EMITTER_TYPE ? '' : `<button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>`}
       </span>
     </div>

@@ -132,6 +132,16 @@ try {
   const redone=await state();assertFrame(redone);assertPose(redone.emitter.pose,outside.emitter.pose,'outside redo pose');
   for(const key of ['g','x','1','Escape'])await page.keyboard.press(key);
   assertPose((await state()).emitter.pose,outside.emitter.pose,'outside cancel pose');
+  await page.locator('#kaminos-host-renderer-canvas').hover();await page.evaluate(()=>document.activeElement?.blur());
+  await page.keyboard.press('Meta+z');
+  assertPose((await state()).emitter.pose,report.aimed.emitter.pose,'return inside before lower-face move');
+  for(const key of ['g','y','-','0','.','5','4','Enter'])await page.keyboard.press(key);
+  report.belowGrid=await state();assertFrame(report.belowGrid);
+  assert.ok(report.belowGrid.emitter.pose.position[1]<-1);
+  assert.equal(report.belowGrid.emitter.injectionSuspended,true);
+  assert.equal(report.belowGrid.receipt.requested.sourceEnabled,false);
+  assert.equal(report.belowGrid.volume.fluidStateResetCount,report.aimed.volume.fluidStateResetCount);
+  await shot('06-below-grid');
   report.phase='save-reopen';await save();
   report.beforeSave=await state();const responsePromise=page.waitForResponse(response=>response.url().endsWith('/api/save-scene') && response.request().method()==='POST');
   assert.equal(await page.evaluate(()=>window.saveScene()),true);
@@ -144,7 +154,7 @@ try {
   report.reopened=await waitFrame(120);assert.notEqual(report.reopened.timeOrigin,report.beforeSave.timeOrigin);
   assertPose(report.reopened.emitter.pose,report.beforeSave.emitter.pose,'reopened pose');
   assert.equal(report.reopened.history.undoCount,0);assert.equal(report.reopened.emitter.injectionSuspended,true);
-  await shot('06-reopened-outside');
+  await shot('07-reopened-below-grid');
   assert.deepEqual(report.errors,[],'page errors require inspection');
   assert.deepEqual(report.console.filter(x=>x.type==='error'),[],'console errors require inspection');
   report.status='passed';report.phase='complete';

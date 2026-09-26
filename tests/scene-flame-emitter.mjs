@@ -50,7 +50,7 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
       if(sourceEnabled && next.position[0]>1.5)throw Error('generated emitter support exceeds volume-local analytic bounds [-1.5, 1.5]');
     },
     window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'analytic-fixed'}}},
-    ensureAuthoredFlameEmitter:()=>{},setInfo:()=>{},
+    ensureAuthoredFlameEmitter:()=>{},setInfo:()=>{},renderSceneObjectList:()=>{},
     get flameEmitterPose(){return pose;},set flameEmitterPose(next){pose=next;},
     get flameEmitterInjectionSuspended(){return suspended;},set flameEmitterInjectionSuspended(next){suspended=next;}};
   vm.runInNewContext(html.slice(start,end)+'\nthis.writeFlame=writeAuthoredFlameEmitterPose;',context);
@@ -58,10 +58,16 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
   assert.doesNotThrow(()=>context.writeFlame(far));
   assert.equal(pose.position[0],2);
   assert.equal(suspended,true);
-  assert.deepEqual(calls.map(call=>[call.x,call.sourceEnabled]),[[2,true],[2,false]]);
+  assert.deepEqual(calls.map(call=>[call.x,call.sourceEnabled]),[[2,false]]);
   context.writeFlame({...pose,position:[0,-.76,0]});
   assert.equal(suspended,false);
   assert.equal(calls.at(-1).sourceEnabled,true);
+  context.writeFlame({...pose,position:[1.1,-.76,0]});
+  assert.equal(suspended,true,'crossing the actual x/z grid edge must pause before analytic ±1.5 validation');
+  assert.equal(calls.at(-1).sourceEnabled,false);
+  context.writeFlame({...pose,position:[0,-1.3,0]});
+  assert.equal(suspended,true,'crossing the lower grid face must pause even though analytic validation accepts it');
+  assert.equal(calls.at(-1).sourceEnabled,false);
 });
 
 test('a legacy cluster composition reopens without placing an analytic source', () => {
