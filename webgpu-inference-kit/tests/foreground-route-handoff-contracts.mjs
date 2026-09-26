@@ -7,6 +7,10 @@ test('one renderer requester survives A-B-A handoff and drains prior frames', as
   const device = { queue: { submit() {} } };
   const events = [];
   const pending = new Map();
+  let releaseIdle;
+  let idleStarted;
+  const idleGate = new Promise(resolve => { releaseIdle = resolve; });
+  const idleRunning = new Promise(resolve => { idleStarted = resolve; });
   function producer(routeId) {
     return {
       routeId, device, queue: device.queue,
@@ -29,17 +33,26 @@ test('one renderer requester survives A-B-A handoff and drains prior frames', as
   await Promise.resolve();
   assert.equal(switched, false);
   assert.equal(handoff.snapshot().routeId, null);
-  const interim = handoff.request({ requestId: 'interim', run() {} });
+  const interim = handoff.request({ requestId: 'interim', async run(opportunity) {
+    idleStarted();
+    await idleGate;
+    opportunity.submit([{}]);
+    return { status: 'submitted' };
+  } });
+  await idleRunning;
   assert.equal(events.includes('model-b:interim'), false);
   pending.get('first')({ status: 'completed' });
   await first.completion;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(switched, false, 'the next model must wait for idle frames admitted during handoff');
+  releaseIdle();
+  assert.equal((await interim.completion).status, 'completed');
   await switching;
   assert.equal(handoff.snapshot().routeId, 'model-b');
   const second = handoff.request({ requestId: 'second', run() {} });
   assert.deepEqual(events, ['model-a:first', 'model-b:second']);
   second.cancel();
   await second.completion;
-  await interim.completion;
   await handoff.activate(a);
   const third = handoff.request({ requestId: 'third', run() {} });
   pending.get('third')({ status: 'completed' });
@@ -49,7 +62,7 @@ test('one renderer requester survives A-B-A handoff and drains prior frames', as
   assert.throws(() => handoff.request({ requestId: 'after', run() {} }), /disposed/);
 });
 
-test('failed provider request leaves the stable requester usable', async () => {
+test('provider exception leaves the router switchable; host restart remains external', async () => {
   assert.equal(typeof core.createWebGpuForegroundRouteHandoff, 'function');
   const device = { queue: { submit() {} } };
   const handoff = core.createWebGpuForegroundRouteHandoff({ device });

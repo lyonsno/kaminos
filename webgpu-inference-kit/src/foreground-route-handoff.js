@@ -2,7 +2,10 @@ import { createWebGpuForegroundService } from './foreground-opportunity.js';
 
 /**
  * Keep a renderer's foreground requester stable while sequential producers
- * take turns on the same device. Callback completion is not GPU completion.
+ * take turns on the same device. Await activate() before the next model encode:
+ * it drains outgoing and transition-idle callbacks, not GPU execution. The
+ * application still owns model draining, resource release, and restarting a
+ * renderer that stopped after a failed foreground callback.
  */
 export function createWebGpuForegroundRouteHandoff({ device, queue = device?.queue, idleRouteId = 'application.foreground-idle' } = {}) {
   if (!device || typeof device !== 'object' || queue !== device.queue || typeof queue?.submit !== 'function') {
@@ -46,9 +49,16 @@ export function createWebGpuForegroundRouteHandoff({ device, queue = device?.que
     const outgoing = active;
     active = null;
     const draining = [...(pending.get(outgoing) || [])];
-    transition = Promise.allSettled(draining).then(() => {
-      if (!disposal) active = next;
-    });
+    transition = (async () => {
+      await Promise.allSettled(draining);
+      if (disposal) return;
+      // New frames used the idle service while the outgoing provider drained.
+      // Divert future requests first, then settle that exact idle prefix before
+      // the next model is allowed to encode.
+      const idlePrefix = [...(pending.get(null) || [])];
+      active = next;
+      await Promise.allSettled(idlePrefix);
+    })();
     try { await transition; }
     finally { transition = null; }
   }
