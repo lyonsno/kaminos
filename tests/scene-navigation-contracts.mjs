@@ -15,7 +15,7 @@ test('viewport reserves LMB for selection and leaves navigation buttons to the m
   assert.equal(controls.maxDistance,Infinity,'authored geometry framing must not hit the old ten-unit wall');
 });
 
-const {navigationPivot,adoptNavigationDepth,orbitCamera,panCamera,zoomCamera,installSceneNavigation} = await import('../scene-navigation.mjs');
+const {navigationPivot,prepareNavigationGeometry,invalidateNavigationGeometry,adoptNavigationDepth,orbitCamera,panCamera,zoomCamera,installSceneNavigation} = await import('../scene-navigation.mjs');
 const {frameObjects,frameObject,frameSceneObjectRecord,sceneObjectsForFraming}=await import('../scene-frame-selected.mjs');
 const near=(a,b,message='vectors agree')=>assert.ok(a.distanceTo(b)<1e-8,`${message}: ${a.toArray()} vs ${b.toArray()}`);
 function cameraAt(z=10){const c=new THREE.PerspectiveCamera(40,4/3,.01,100);c.position.set(0,0,z);c.lookAt(0,0,0);c.updateMatrixWorld(true);return c;}
@@ -47,6 +47,29 @@ test('depth samples unselected transformed visible triangles; empty space retain
  const miss=navigationPivot(c,target,new THREE.Vector2(.8,.2),[surface]);
  assert.equal(miss.source,'retained-depth');assert.equal(miss.point.z,5);assert.notEqual(miss.point.x,0);
  adoptNavigationDepth(c,target,miss.point);near(target,new THREE.Vector3(0,0,5));
+});
+test('prepared dense geometry keeps exact surface depth without changing the rendered index',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3(),root=new THREE.Group();
+ const geometry=new THREE.PlaneGeometry(4,4,200,200);
+ const index=Array.from(geometry.index.array);
+ const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());mesh.position.z=4;root.add(mesh);
+ const expected=navigationPivot(c,target,new THREE.Vector2(),[root]);
+ await prepareNavigationGeometry(root);
+ assert.ok(geometry.boundsTree,'dense mesh has a reusable triangle index');
+ assert.deepEqual(Array.from(geometry.index.array),index,'preparation cannot reorder render triangles');
+ const actual=navigationPivot(c,target,new THREE.Vector2(),[root]);
+ near(actual.point,expected.point);
+ assert.equal(actual.source,'mesh-surface');
+});
+test('a winding edit invalidates the old surface index before rebuilding',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3(),mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());
+ await prepareNavigationGeometry(mesh);
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'mesh-surface');
+ const index=mesh.geometry.index;
+ for(let i=0;i<index.count;i+=3){const a=index.array[i+1];index.array[i+1]=index.array[i+2];index.array[i+2]=a;}
+ index.needsUpdate=true;
+ await invalidateNavigationGeometry(mesh);
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'retained-depth');
 });
 test('pan follows pointer displacement at working depth and large framing has no old distance wall',()=>{
  const c=cameraAt(),target=new THREE.Vector3(),point=new THREE.Vector3(0,0,6);

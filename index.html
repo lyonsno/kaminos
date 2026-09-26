@@ -3921,6 +3921,7 @@ let fingerFluidBenchState = createFingerFluidBenchState({
 window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 let sceneObjects = [];
+let sceneNavigation = null;
 let sceneImportStatus = null;
 let sceneGroups = [];
 let activeSceneObjectId = null;
@@ -6506,6 +6507,7 @@ function registerSceneObject(object, metadata = {}) {
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
+  sceneNavigation?.prepare(object);
   if (metadata.groupLabel) {
     createSceneGroupForObjects([id], metadata.groupLabel, {
       source: metadata.groupSource ?? metadata.source,
@@ -10484,18 +10486,23 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object), groundPlane],
+    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object),
+      ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : []), groundPlane],
     frameAll: () => { frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); markDirty(); },
     frameSelected: () => { if (frameSceneObjectRecord(sceneObjects.find(entry => entry.id === activeSceneObjectId), camera, controls)) markDirty(); },
     blocked: () => transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
   });
+  sceneNavigation = navigation;
+  for (const entry of sceneObjects) navigation.prepare(entry.object);
+  if (currentMesh && !sceneObjects.some(entry => entry.object === currentMesh)) navigation.prepare(currentMesh);
   navigationInput.addEventListener('change', () => {
     try { localStorage.setItem('kaminos.navigationInput', navigationInput.value); } catch {}
     updateNavigationHint(''); navigationInput.blur(); markDirty();
   });
   window.kaminosNavigationState = navigation.state;
+  window.kaminosNavigationIndexState = navigation.indexState;
   window.kaminosFrameSelected = () => {
     const entry = sceneObjects.find(item => item.id === activeSceneObjectId);
     const changed = frameSceneObjectRecord(entry, camera, controls); if (changed) markDirty(); return changed;
@@ -10993,6 +11000,7 @@ async function showGLB(file, options = {}) {
           label: metadata.label ?? metadata.fileName ?? glbFileName,
         };
         currentMesh = model;
+        sceneNavigation?.prepare(model);
         if (transformControls) {
           transformControls.attach(model);
           transformControls.visible = true;
@@ -23946,6 +23954,7 @@ window.reverseWinding = function() {
       }
     }
   });
+  sceneNavigation?.invalidate(currentMesh);
   setInfo('Winding order reversed');
 };
 
@@ -24114,6 +24123,7 @@ window.cullSmallFaces = function() {
       }
     }
   });
+  sceneNavigation?.invalidate(currentMesh);
   setInfo(`Culled ${totalRemoved} debris triangles (< 5% median area)`);
 };
 

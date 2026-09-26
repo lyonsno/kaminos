@@ -1,7 +1,126 @@
-import {Vector2, Vector3, Quaternion, Plane, Raycaster} from './lib/three.core.js';
+import {BufferAttribute, Vector2, Vector3, Quaternion, Plane, Raycaster} from './lib/three.core.js';
+import {MeshBVH, acceleratedRaycast} from './node_modules/three-mesh-bvh/build/index.module.js';
 
 const Y = new Vector3(0, 1, 0);
 const finite = v => v.toArray().every(Number.isFinite);
+const depthIndexes = new WeakMap();
+const originalRaycasts = new WeakMap();
+const jobs = new Map();
+let worker = null, nextJobId = 0;
+
+function indexWorker() {
+  if (!globalThis.Worker) return null;
+  if (worker) return worker;
+  worker = new Worker(new URL('./navigation-bvh.worker.bundle.mjs', import.meta.url), {type: 'module'});
+  worker.onmessage = ({data}) => {
+    const job = jobs.get(data.id);
+    if (!job) return;
+    jobs.delete(data.id);
+    data.error ? job.reject(new Error(data.error)) : job.resolve(data);
+  };
+  worker.onerror = error => {
+    for (const job of jobs.values()) job.reject(new Error(error.message || 'navigation index worker failed'));
+    jobs.clear();
+    worker.terminate();
+    worker = null;
+  };
+  return worker;
+}
+
+function buildNavigationIndex(geometry) {
+  const position = geometry.getAttribute('position');
+  const index = geometry.index;
+  let builder;
+  try { builder = indexWorker(); }
+  catch (error) { return Promise.reject(error); }
+  if (!builder) return globalThis.document
+    ? Promise.reject(new Error('navigation index worker unavailable'))
+    : Promise.resolve(new MeshBVH(geometry, {indirect: true}));
+  const id = ++nextJobId;
+  return new Promise((resolve, reject) => {
+    jobs.set(id, {resolve, reject});
+    const positionCopy = position.array.slice(), indexCopy = index?.array.slice() || null;
+    try {
+      builder.postMessage({id, position: positionCopy, index: indexCopy,
+        groups: geometry.groups.map(({start, count, materialIndex}) => ({start, count, materialIndex}))},
+      [positionCopy.buffer, indexCopy?.buffer].filter(Boolean));
+    } catch (error) {
+      jobs.delete(id);
+      reject(error);
+    }
+  });
+}
+
+function useIndexedRaycast(mesh) {
+  if (!originalRaycasts.has(mesh)) originalRaycasts.set(mesh, {
+    own: Object.hasOwn(mesh, 'raycast'), method: mesh.raycast,
+  });
+  mesh.raycast = acceleratedRaycast;
+}
+
+function restoreRaycast(mesh) {
+  const original = originalRaycasts.get(mesh);
+  if (!original) return;
+  if (original.own) mesh.raycast = original.method;
+  else delete mesh.raycast;
+  originalRaycasts.delete(mesh);
+}
+
+export function prepareNavigationGeometry(root) {
+  const pending = [];
+  root.traverse(object => {
+    if (!object.isMesh || object.isSkinnedMesh || object.morphTargetInfluences?.length) return;
+    const geometry = object.geometry;
+    if (!geometry?.getAttribute('position') || geometry.getAttribute('position').isInterleavedBufferAttribute) return;
+    let entry = depthIndexes.get(geometry);
+    if (!entry) {
+      const position = geometry.getAttribute('position');
+      const index = geometry.index;
+      const positionVersion = position.version, indexVersion = index?.version;
+      entry = {status: 'building', meshes: new Set(), promise: null, error: null};
+      depthIndexes.set(geometry, entry);
+      entry.promise = buildNavigationIndex(geometry).then(result => {
+        if (depthIndexes.get(geometry) !== entry) return false;
+        if (geometry.getAttribute('position') !== position || (index !== null && geometry.index !== index)
+          || position.version !== positionVersion || index?.version !== indexVersion) {
+          throw new Error('navigation geometry changed during indexing');
+        }
+        let tree = result;
+        if (result?.roots) {
+          if (!geometry.index) geometry.setIndex(new BufferAttribute(result.index, 1));
+          tree = MeshBVH.deserialize(result, geometry, {setIndex: false});
+        }
+        geometry.boundsTree = tree;
+        entry.status = 'indexed';
+        for (const mesh of entry.meshes) useIndexedRaycast(mesh);
+        return true;
+      }).catch(error => {
+        entry.status = 'failed';
+        entry.error = error.message;
+        console.error('Navigation depth indexing failed:', error);
+        return false;
+      });
+    }
+    entry.meshes.add(object);
+    if (entry.status === 'indexed') useIndexedRaycast(object);
+    pending.push(entry.promise);
+  });
+  return Promise.all(pending);
+}
+
+export function invalidateNavigationGeometry(root) {
+  root.traverse(object => {
+    if (!object.isMesh || !object.geometry) return;
+    const geometry = object.geometry;
+    const entry = depthIndexes.get(geometry);
+    if (!entry) return;
+    depthIndexes.delete(geometry);
+    entry.status = 'invalidated';
+    geometry.boundsTree = null;
+    for (const mesh of entry.meshes) restoreRaycast(mesh);
+  });
+  return prepareNavigationGeometry(root);
+}
 
 // Visible triangles only: a splat's bounds or the flame's simulation box are
 // not surfaces. The caller supplies authored geometry, burner and ground.
@@ -14,23 +133,35 @@ export function navigationPivot(camera, target, ndc, roots) {
   cast.near = camera.near / cosine;
   cast.far = camera.far / cosine;
   const meshes = new Set();
+  let indexing = false;
   for (const root of roots.filter(Boolean)) {
     root.updateWorldMatrix(true, true);
     // A supplied child can have an invisible parent outside the supplied roots.
     let visible = true;
     for (let p = root; p; p = p.parent) if (!p.visible) visible = false;
     if (visible) root.traverseVisible(o => {
-      if (o.isMesh && o.layers.test(camera.layers)) meshes.add(o);
+      if (o.isMesh && o.layers.test(camera.layers)) {
+        if (depthIndexes.get(o.geometry)?.status === 'building') indexing = true;
+        else meshes.add(o);
+      }
     });
   }
-  const hit = cast.intersectObjects([...meshes], false).find(hit => {
+  const candidates = (indexing ? [] : [...meshes]).filter(mesh => {
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    return materials.some(material => material?.visible && (!material.transparent || material.opacity > 0));
+  });
+  cast.firstHitOnly = candidates.every(mesh => {
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    return materials.every(material => material?.visible && (!material.transparent || material.opacity > 0));
+  });
+  const hit = cast.intersectObjects(candidates, false).find(hit => {
     const material = Array.isArray(hit.object.material)
       ? hit.object.material[hit.face.materialIndex] : hit.object.material;
     return material?.visible && (!material.transparent || material.opacity > 0);
   });
   const plane = new Plane().setFromNormalAndCoplanarPoint(forward, target);
   const point = hit?.point || cast.ray.intersectPlane(plane, new Vector3()) || target.clone();
-  return {point, source: hit ? 'mesh-surface' : 'retained-depth', object: hit?.object.name || null};
+  return {point, source: hit ? 'mesh-surface' : indexing ? 'indexing-depth' : 'retained-depth', object: hit?.object.name || null};
 }
 
 export function adoptNavigationDepth(camera, target, point) {
@@ -210,6 +341,17 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     if (action) {take(e); action(); changed();}
   }, true);
   return {
+    prepare: prepareNavigationGeometry,
+    invalidate: invalidateNavigationGeometry,
+    indexState: () => {
+      const geometries = new Set();
+      for (const root of roots().filter(Boolean)) root.traverse(object => {
+        if (object.isMesh && object.geometry) geometries.add(object.geometry);
+      });
+      const result = {indexed: 0, building: 0, failed: 0, unprepared: 0};
+      for (const geometry of geometries) result[depthIndexes.get(geometry)?.status || 'unprepared']++;
+      return result;
+    },
     state: () => ({gesture:gesture?.mode || null, inputMode:inputMode(), depth:lastDepth, position:camera.position.toArray(), target:controls.target.toArray(), up:camera.up.toArray(), near:camera.near, far:camera.far, fov:camera.fov, projection:'perspective', autoDepth:true, zoomToMouse:false}),
     cancel: () => finish(true),
     dispose: () => {finish(true); for (const dispose of disposers) dispose();},

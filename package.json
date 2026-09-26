@@ -2,8 +2,16 @@
   "name": "kaminos",
   "private": true,
   "type": "module",
+  "scripts": {
+    "build:navigation-worker": "esbuild navigation-bvh.worker.mjs --bundle --minify --format=esm --platform=browser --alias:three=./lib/three.core.js --outfile=navigation-bvh.worker.bundle.mjs"
+  },
   "dependencies": {
     "@kaminos/fluid-webgpu": "https://raw.githubusercontent.com/lyonsno/kaminos/9a119c12778f34bb691df301addc89973913390e/artifacts/fluid/kaminos-fluid-webgpu-0.3.0.tgz",
-    "@kaminos/webgpu-inference-kit": "^0.1.6"
+    "@kaminos/webgpu-inference-kit": "^0.1.6",
+    "three-mesh-bvh": "0.8.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "three": "0.171.0"
   }
 }
