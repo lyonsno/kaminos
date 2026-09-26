@@ -43,8 +43,12 @@ assert.notDeepEqual(secondAccepted.bonds, repeatedFromIntact.bonds,
 const page = readFileSync('structural-material-arch-geometry.html', 'utf8');
 assert.match(page, /const startingState = viewer\.state \?\? viewer\.base;/,
   'Apply must select the last accepted state, falling back to intact only before the first load');
-assert.match(page, /advanceArchSurfaceState\(startingState,/,
-  'Apply must pass its selected starting state into the structural transaction');
+assert.match(page, /state: startingState,/,
+  'Apply must stage from the selected accepted state, falling back to intact only before the first load');
+assert.match(page, /const updates = stageArchSurfaceBatch\([\s\S]*acceptStagedArchSurfaceBatch\(entries, updates\)/,
+  'both structural projections must stage before either is accepted');
+assert.match(page, /positions: viewer\.mesh\.geometry\.getAttribute\('position'\)\.array\.slice\(\)/,
+  'paired mesh acceptance must retain rollback positions until both render buffers update');
 assert.match(page, /stateRetention: 'accepted connectivity and event history; displacement recomputed per Apply'/,
   'the receipt must distinguish retained topology from recomputed elastic displacement');
 assert.match(page, /viewer\.state = viewer\.base;/,

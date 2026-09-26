@@ -20,6 +20,43 @@ export function advanceArchSurfaceState(state, load, fractureOptions = {}) {
   return fractureArchStructuralProxy(solveArchStructuralForce(state, load), fractureOptions);
 }
 
+export function stageArchSurfaceBatch(views, displayGain, fractureOptions = {}) {
+  if (!Array.isArray(views) || views.length === 0) throw new Error('arch surface batch requires views');
+  finite(displayGain, 'display gain');
+  if (displayGain < 0) throw new Error('display gain must not be negative');
+
+  return views.map(({ profile, state, sourcePositions, load }) => {
+    const nextState = advanceArchSurfaceState(state, load, fractureOptions);
+    const projection = projectArchStructuralStateToSurface(profile, nextState, sourcePositions);
+    const displayPositions = new Float32Array(sourcePositions.length);
+    for (let index = 0; index < displayPositions.length; index += 1) {
+      displayPositions[index] = sourcePositions[index] + projection.rawDisplacements[index] * displayGain;
+    }
+    return {
+      state: nextState,
+      projection,
+      displayPositions,
+      force: load.force,
+      startingConnectivityEpoch: state.connectivityEpoch,
+      loadedNodeCount: nextState.load.loadedNodeCount,
+      contact: nextState.load.contact,
+      contactLayer: nextState.load.contactLayer,
+      brokenBondCount: projection.brokenBondIds.length,
+      componentCount: projection.componentCount,
+      maxRawVertexDisplacement: projection.maxRawVertexDisplacement,
+      maxDisplayedVertexDisplacement: projection.maxRawVertexDisplacement * displayGain,
+      mappedStructuralNodeCount: projection.mappedStructuralNodeCount,
+      surfaceVertexCount: projection.surfaceVertexCount,
+      route: projection.route,
+      authority: projection.authority,
+      sourceGlbSha256: projection.sourceGlbSha256,
+      interiorMode: projection.interiorMode,
+      contactDepthMode: projection.contactDepthMode,
+      connectivityEpoch: projection.connectivityEpoch,
+    };
+  });
+}
+
 function nearestOccupiedCells(profile) {
   const occupied = [];
   for (let index = 0; index < profile.occupancy.length; index += 1) {

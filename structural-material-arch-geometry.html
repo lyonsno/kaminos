@@ -111,8 +111,7 @@
     const { GLTFLoader } = loaderModule;
     const { buildArchStructuralProxy } = core;
     const {
-      advanceArchSurfaceState,
-      projectArchStructuralStateToSurface,
+      stageArchSurfaceBatch,
       resolveArchCameraFacingLayer,
     } = surface;
 
@@ -212,55 +211,62 @@
       viewers[label] = { root, mesh: meshes[0], base, interiorMode };
     }
 
-    function applyState(viewer, force) {
+    function prepareView(viewer, force) {
       const startingState = viewer.state ?? viewer.base;
-      const startingConnectivityEpoch = startingState.connectivityEpoch;
       const contactLayer = resolveArchCameraFacingLayer(
         camera.position.z,
         controls.target.z,
         startingState.layers,
       );
-      const state = advanceArchSurfaceState(startingState, {
-        ...CONTACT,
-        force,
-        contactDepthMode: 'camera-facing-surface',
-        contactLayer,
-        iterations: 600,
-      }, { threshold: THRESHOLD });
-      const projection = projectArchStructuralStateToSurface(
-        profiles.profile,
-        state,
-        viewer.mesh.userData.archBasePositions,
-      );
-      const display = viewer.mesh.geometry.getAttribute('position');
-      const raw = projection.rawDisplacements;
-      for (let index = 0; index < raw.length; index += 1) {
-        display.array[index] = viewer.mesh.userData.archBasePositions[index] + raw[index] * DISPLAY_GAIN;
-      }
-      display.needsUpdate = true;
-      viewer.mesh.geometry.computeVertexNormals();
-      viewer.mesh.geometry.computeBoundingSphere();
-      viewer.state = state;
-      viewer.projection = projection;
       return {
-        force,
-        startingConnectivityEpoch,
-        loadedNodeCount: state.load.loadedNodeCount,
-        contact: state.load.contact,
-        contactLayer: state.load.contactLayer,
-        brokenBondCount: projection.brokenBondIds.length,
-        componentCount: projection.componentCount,
-        maxRawVertexDisplacement: projection.maxRawVertexDisplacement,
-        maxDisplayedVertexDisplacement: projection.maxRawVertexDisplacement * DISPLAY_GAIN,
-        mappedStructuralNodeCount: projection.mappedStructuralNodeCount,
-        surfaceVertexCount: projection.surfaceVertexCount,
-        route: projection.route,
-        authority: projection.authority,
-        sourceGlbSha256: projection.sourceGlbSha256,
-        interiorMode: projection.interiorMode,
-        contactDepthMode: projection.contactDepthMode,
-        connectivityEpoch: projection.connectivityEpoch,
+        viewer,
+        profile: profiles.profile,
+        state: startingState,
+        sourcePositions: viewer.mesh.userData.archBasePositions,
+        load: {
+          ...CONTACT,
+          force,
+          contactDepthMode: 'camera-facing-surface',
+          contactLayer,
+          iterations: 600,
+        },
       };
+    }
+
+    function acceptStagedArchSurfaceBatch(entries, updates) {
+      const previous = entries.map(({ viewer }) => ({
+        viewer,
+        state: viewer.state,
+        projection: viewer.projection,
+        positions: viewer.mesh.geometry.getAttribute('position').array.slice(),
+      }));
+      try {
+        for (let index = 0; index < entries.length; index += 1) {
+          const { viewer } = entries[index];
+          const geometry = viewer.mesh.geometry;
+          const display = geometry.getAttribute('position');
+          display.array.set(updates[index].displayPositions);
+          display.needsUpdate = true;
+          geometry.computeVertexNormals();
+          geometry.computeBoundingSphere();
+        }
+      } catch (error) {
+        for (const snapshot of previous) {
+          const geometry = snapshot.viewer.mesh.geometry;
+          const display = geometry.getAttribute('position');
+          display.array.set(snapshot.positions);
+          display.needsUpdate = true;
+          snapshot.viewer.state = snapshot.state;
+          snapshot.viewer.projection = snapshot.projection;
+          geometry.computeVertexNormals();
+          geometry.computeBoundingSphere();
+        }
+        throw error;
+      }
+      for (let index = 0; index < entries.length; index += 1) {
+        entries[index].viewer.state = updates[index].state;
+        entries[index].viewer.projection = updates[index].projection;
+      }
     }
 
     function formatResult(result) {
@@ -271,8 +277,13 @@
       if (!ready) return;
       try {
         const force = Number(forceInput.value);
-        const continuous = applyState(viewers.continuous, force);
-        const joints = applyState(viewers.joints, force);
+        const entries = [
+          prepareView(viewers.continuous, force),
+          prepareView(viewers.joints, force),
+        ];
+        const updates = stageArchSurfaceBatch(entries, DISPLAY_GAIN, { threshold: THRESHOLD });
+        acceptStagedArchSurfaceBatch(entries, updates);
+        const [continuous, joints] = updates;
         document.getElementById('continuous-readout').textContent = formatResult(continuous);
         document.getElementById('joints-readout').textContent = formatResult(joints);
         status.textContent = 'CPU spring proxy · accepted connectivity retained · displacement recomputed per load';
