@@ -8,3 +8,12 @@ export function publishSceneObjectIfCurrent({object, isCurrent = () => true, pub
   publish(object);
   return true;
 }
+
+export function createSceneObjectPublicationGuard({getMutationToken, isCurrent}) {
+  if (typeof getMutationToken !== 'function') {
+    throw new TypeError('Scene object publication guard requires a mutation-token reader');
+  }
+  const mutationToken = getMutationToken();
+  return () => getMutationToken() === mutationToken
+    && (typeof isCurrent !== 'function' || isCurrent());
+}

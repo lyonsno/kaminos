@@ -3277,7 +3277,7 @@ import { defaultLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMIT
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
-import { publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
+import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -25494,11 +25494,15 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
     if (typeof options.isCurrent === 'function' && !options.isCurrent()) return null;
   }
   if (shouldClearSceneForImport(options)) clearScene();
+  const importIsCurrent = createSceneObjectPublicationGuard({
+    getMutationToken: () => sceneMutationToken,
+    isCurrent: options.isCurrent,
+  });
   let metadata = greenroomSplatMetadata(display, fileName, url, options.metadata || {});
   const correction = metadata.splat?.correction
     ? normalizeSplatCorrection(metadata.splat.correction)
     : await fetchSplatAssetCorrection(metadata.splat);
-  if (typeof options.isCurrent === 'function' && !options.isCurrent()) return null;
+  if (!importIsCurrent()) return null;
   if (correction) {
     metadata = {
       ...metadata,
@@ -25522,7 +25526,7 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
   let record = null;
   const published = publishSceneObjectIfCurrent({
     object,
-    isCurrent: options.isCurrent,
+    isCurrent: importIsCurrent,
     discard: disposeObjectTree,
     publish: value => {
       scene.add(value);
