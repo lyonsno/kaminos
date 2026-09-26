@@ -67,6 +67,21 @@ test('scene load and save wait for an asynchronous history replay to finish', ()
   assert.match(html, /function sceneSaveIsBlocked\(\) \{[\s\S]*?scenePlacementTools\?\.edits\.state\(\)\.replaying[\s\S]*?Wait for the current scene history action to finish/);
 });
 
+test('Burner control commits share scene undo and restore through the live flame setters', () => {
+  assert.match(html, /import \{ installSceneControlHistory \} from '\.\/scene-control-history\.mjs'/);
+  assert.match(editTools, /historyScopes = \[\]/);
+  assert.match(editTools, /inHistoryScope\(event\.target\)/);
+  assert.match(html, /edits\.register\('@burner-controls'/);
+  assert.match(html, /controls: document\.querySelectorAll\('#burner-enabled, #burner-controls input'\)/);
+  assert.match(html, /function restoreBurnerControlHistoryState\(value\) \{[\s\S]*?setAnnularBurner\(next\.recipe\);[\s\S]*?dispatchEvent\(new Event\('input', \{ bubbles: true \}\)\)/);
+  assert.match(html, /historyScopes: \[document\.getElementById\('burner-enabled'\)\.parentElement, document\.getElementById\('burner-controls'\)\]/);
+  const composition = html.slice(html.indexOf('async function collectSceneComposition()'), html.indexOf('async function withAuthoringAction('));
+  const settings = html.slice(html.indexOf('function buildVolumeSettingsPreset('), html.indexOf('function isCompositionAuthoring('));
+  assert.match(settings, /inputRadius: parseFloat\(document\.getElementById\('volume-input-radius'\)\.value\)/);
+  assert.match(settings, /flowRate: parseFloat\(document\.getElementById\('volume-flow-rate'\)\.value\)/);
+  assert.match(composition, /burnerRecipe/);
+});
+
 test('selection feedback hides untrustworthy offscreen pivots and names the recovery cue', () => {
   assert.match(html, /\.scene-object-row\.active \{ background: #29251f; border-color: #a97837; color: #fff; \}/);
   assert.match(editTools, /export function getPivotViewState/);

@@ -21,7 +21,7 @@ export function getPivotViewState(camera, point, width, height) {
 export function installScenePlacementTools({
   viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, frameSelected = () => {},
-  settled = () => {}, captureContext = () => null,
+  settled = () => {}, captureContext = () => null, historyScopes = [],
 }) {
   const hud = document.createElement('div');
   hud.id = 'scene-edit-hud';
@@ -58,6 +58,8 @@ export function installScenePlacementTools({
     modal: modal ? { operation: modal.operation, axis: modal.axis, frame: modal.frame, plane: modal.plane, numeric: modal.numeric, snapping: modal.snap } : null,
   });
   const isText = target => !!target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+  const inHistoryScope = target => historyScopes.some(scope => scope === target || scope?.contains?.(target));
+  const isSceneControl = target => target?.tagName === 'INPUT' && ['range', 'checkbox', 'color'].includes(target.type);
   const steal = event => { event.preventDefault(); event.stopImmediatePropagation(); };
   const pose = () => read(selected());
   const viewAxis = () => camera.getWorldDirection(new Vector3()).negate();
@@ -254,8 +256,15 @@ export function installScenePlacementTools({
     if (gizmoEditing && event.key === 'Escape') { steal(event); finish(false); return; }
     if (field && event.key === 'Escape') { steal(event); const input = field.input; finish(false); input.blur(); refresh(); return; }
     if (field && event.key === 'Enter') { steal(event); const input = field.input; finish(true); input.blur(); return; }
-    if (isText(event.target)) return;
     const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && key === 'z' && inHistoryScope(event.target) && isSceneControl(event.target)) {
+      if (!allowed() || busy()) return;
+      steal(event);
+      try { event.shiftKey ? edits.redo() : edits.undo(); }
+      catch (error) { hud.textContent = error.message; }
+      return;
+    }
+    if (isText(event.target)) return;
     if (modal) {
       steal(event);
       if (event.key === 'Escape') { finish(false); return; }
