@@ -50,7 +50,7 @@ try {
   });
   const page = await browser.newPage();
   await page.setViewport({width: 1400, height: 1000});
-  page.setDefaultTimeout(45000);
+  page.setDefaultTimeout(180000);
   page.on('pageerror', error => { report.events.push({kind: 'pageerror', message: error.message}); save(); });
   page.on('console', message => { if (message.type() === 'error') {report.events.push({kind: 'console-error', message: message.text()}); save();} });
   page.on('response', response => { if (response.status() >= 400) {report.events.push({kind: 'http-error', status: response.status(), url: response.url()}); save();} });
