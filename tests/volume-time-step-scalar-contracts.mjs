@@ -114,7 +114,42 @@ test('review of 9d669e36: every stored channel\'s per-step survival and every ad
   assert.doesNotMatch(main, new RegExp(`^\\s*(${channels}) = \\1 \\* (bonfireFireCeiling|mix\\(1\\.0, max\\()`, 'm'), 'no bare Bonfire attenuation remains');
   // The explicit exceptions: canonical 0/1 scene masks and max() floors.
   assert.match(main, /fuel = fuel \* canonicalProofCarrierMask;/, 'canonical scene masks stay as selectors');
-  assert.equal(core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'maccormack' }).effective.scalarExceptions, 'max-birth-floors-and-canonical-scene-masks');
+  assert.equal(core.resolveTimeStepConfig({ timeStep: 'uniform', speed: 2, advectionScheme: 'maccormack' }).effective.scalarExceptions, 'max-birth-floors-and-scene-selector-masks');
+});
+
+test('review of 57b45f72: relaxation blends and the wall velocity sponge follow the step; scene selectors and floors are the only exceptions', () => {
+  const main = mainKernel();
+  // A relaxation blend x = mix(x, target, w) keeps (1 - w) of the deviation per
+  // step; under the uniform step the weight becomes 1 - (1 - w)^dt.
+  const helper = wgslFunction('stepBlend');
+  assert.match(helper, /return 1\.0 - stepRate\(1\.0 - weight\);/, 'stepBlend is the complement of stepRate');
+  const model = (w, dt, uniform) => (uniform ? 1 - Math.pow(1 - w, dt) : w);
+  assert.equal(model(0.044, 0.25, false), 0.044);
+  assert.ok(Math.abs(model(0.044, 1, true) - 0.044) < 1e-12, 'a whole step blends the authored weight');
+  assert.ok(Math.abs(model(0.044, 0.5, true) - (1 - Math.sqrt(1 - 0.044))) < 1e-12);
+  assert.ok(model(0.044, 0.1, true) < 0.0046 && model(0.044, 0.1, true) > 0.0044, 'a tenth of a step blends about a tenth of the weight');
+  // The Bonfire scene's explicit diffusion and symmetry blends.
+  assert.match(main, /material = mix\(material, diffuseMaterial, stepBlend\(bonfireTurbulentDiffusionMix\)\);/);
+  assert.match(main, /fireLayer = mix\(fireLayer, diffuseFireLayer, stepBlend\(bonfireTurbulentDiffusionMix \* 0\.55\)\);/);
+  assert.match(main, /microLayer = mix\(microLayer, diffuseMicroLayer, stepBlend\(bonfireTurbulentDiffusionMix \* 0\.90\)\);/);
+  assert.match(main, /combustionFrontTopology = mix\(combustionFrontTopology, diffuseFrontTopology, stepBlend\(bonfireTurbulentDiffusionMix \* 0\.42\)\);/);
+  assert.match(main, /material = mix\(material, symmetricMaterial, stepBlend\(bonfireScalarSymmetryBlend\)\);/);
+  assert.match(main, /fireLayer = mix\(fireLayer, symmetricFireLayer, stepBlend\(bonfireScalarSymmetryBlend \* 0\.70\)\);/);
+  assert.match(main, /microLayer = mix\(microLayer, symmetricMicroLayer, stepBlend\(bonfireScalarSymmetryBlend \* 0\.82\)\);/);
+  assert.match(main, /combustionFrontTopology = mix\(combustionFrontTopology, symmetricFrontTopology, stepBlend\(bonfireScalarSymmetryBlend \* 0\.38\)\);/);
+  // Generic: no relaxation blend of a stored layer or channel toward a target
+  // remains with a bare per-step weight (a blend whose first argument is the
+  // channel itself; scene selectors mix two candidates and are not caught).
+  const relaxable = 'material|fireLayer|microLayer|smoke|heat|fuel|flame|ember|materialDetail|flameDetail|combustionFront|combustionFrontTopology|microSmoke|interfaceShred|fireLick|emberFleck';
+  assert.doesNotMatch(main, new RegExp(`^\\s*(${relaxable}) = mix\\(\\1, [^,]+, (?!stepBlend\\()`, 'm'), 'no bare relaxation blend remains');
+  // The wall sponge on velocity is written after the increment law's line, so
+  // it takes the rate law directly.
+  assert.match(main, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, wallFade\)\);/, 'the wall velocity sponge is a per-step survival');
+  assert.doesNotMatch(main, /vel = vel \* mix\(0\.55, 1\.0, wallFade\);/, 'no bare wall velocity sponge remains');
+  // The remaining per-step operations are 0/1 selectors and floors.
+  assert.match(main, /smoke = mix\(columnSmokeTransport, bonfireSmokeTransport, bonfireScene\);/, 'Bonfire scene selector stays a selector');
+  assert.match(main, /vel\.y = mix\(max\(vel\.y, -0\.015\), vel\.y, bonfireScene\);/, 'the vertical velocity floor stays a floor');
+  assert.match(index, /Bonfire scene's diffusion and symmetry blends and the wall velocity sponge follow the same step/, 'the help names the blends and the wall velocity sponge');
 });
 
 test('the resolver, receipt and help say the scalar rates follow the step', () => {
