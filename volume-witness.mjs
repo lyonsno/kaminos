@@ -9,6 +9,7 @@ import { retiredRaymarchControlReceiptPayload } from './volume-core.js';
 import { assessControlledStepSequence } from './volume-controlled-step-sequence-contract.mjs';
 import { admitFrameOnlySource, verifyFrameOnlyReadback } from './volume-frame-only-contract.mjs';
 import { pressureTierDispatchEvidence } from './volume-pressure-tier-witness-contract.mjs';
+import { assertEffectiveSceneCollision } from './volume-scene-solid.mjs';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -2472,6 +2473,12 @@ async function main() {
     assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'wrong effective route');
     assert.equal(state.prototypeIdentity, 'kaminos-volume-prototype-v0', 'wrong prototype identity');
     assert.equal(state.active, true, 'volume route is not active');
+    if (args.has('--expect-scene-collision')) {
+      const expectedCollision = String(args.get('--expect-scene-collision'));
+      assert.equal(new URLSearchParams(new URL(url).hash.slice(1)).get('volume_collision'), expectedCollision,
+        'requested route does not address the expected authored collider');
+      assertEffectiveSceneCollision(state.sceneCollision, expectedCollision);
+    }
     const bridgeEval = await wsRequest(ws, 'Runtime.evaluate', {
       expression: 'window.__kaminosVolumeBridge?.debugState?.()',
       returnByValue: true,
