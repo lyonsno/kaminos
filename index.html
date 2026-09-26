@@ -11023,8 +11023,9 @@ function setFingerFluidPyroCompositionPilotEnabled(enabled) {
 function advanceFingerFluidPyroCompositionSource(stepCount) {
   if (fingerFluidPyroCompositionState.effectiveRoute !== 'same-device-liquid-contact-pyro-near-field-v0') return;
   if (!fingerFluidPyroCompositionSourceTrajectoryEnabled) return;
+  if (!volumePrototype || !Number.isFinite(stepCount)) return;
   const linear = Math.max(0, Math.min(1,
-    (Number(stepCount) - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP)
+    (stepCount - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP)
       / (FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP - FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP),
   ));
   const progress = linear * linear * (3 - 2 * linear);
@@ -11037,7 +11038,7 @@ function advanceFingerFluidPyroCompositionSource(stepCount) {
   if (!updated) return;
   fingerFluidPyroCompositionState.sourcePrimitivePosition = [...updated.transform.position];
   fingerFluidPyroCompositionState.sourceTrajectoryProgress = progress;
-  fingerFluidPyroCompositionState.sourceTrajectoryStep = Number(stepCount);
+  fingerFluidPyroCompositionState.sourceTrajectoryStep = stepCount;
 }
 
 function setFingerFluidPyroCompositionSourcePosition(position) {
@@ -11735,7 +11736,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   const gpuState = applyFingerFluidAnalyticCarrierRuntimeEvidence(
     fingerFluidBenchSolver.getDebugState(),
   );
-  advanceFingerFluidPyroCompositionSource(volumePrototype.debugState().simStepCount);
+  advanceFingerFluidPyroCompositionSource(volumePrototype?.debugState?.()?.simStepCount);
   gpuState.requestedColorMode = fingerFluidBenchConfig.requestedColorMode;
   gpuState.effectiveColorMode = gpuState.colorMode;
   gpuState.requestedTruthScene = fingerFluidBenchConfig.requestedTruthScene;

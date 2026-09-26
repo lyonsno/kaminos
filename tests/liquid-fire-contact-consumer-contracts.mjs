@@ -24,6 +24,19 @@ const extractWgslFunctionBody = (source, name) => {
   }
   assert.fail(`${name} has an unterminated body`);
 };
+const extractJsFunctionBody = (source, name) => {
+  const declaration = source.indexOf(`function ${name}(`);
+  assert.notEqual(declaration, -1, `JavaScript declares ${name}`);
+  const opening = source.indexOf('{', declaration);
+  assert.notEqual(opening, -1, `${name} has a body`);
+  let depth = 0;
+  for (let index = opening; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') depth -= 1;
+    if (depth === 0) return source.slice(opening + 1, index);
+  }
+  assert.fail(`${name} has an unterminated body`);
+};
 
 assert.equal(consumer.LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA, 'kaminos.pyro-liquid-contact-consumer.v0');
 assert.equal(consumer.LIQUID_FIRE_CONTACT_SOURCE_SCHEMA, 'kaminos.liquid-fire-contact-descriptor.v1');
@@ -329,7 +342,59 @@ assert.match(indexSource, /FINGER_FLUID_PYRO_SOURCE_DRY_POSITION\s*=\s*\[0\.65,\
 assert.match(indexSource, /FINGER_FLUID_PYRO_SOURCE_WET_POSITION\s*=\s*\[0\.54,\s*-0\.81,\s*0\.29\]/, 'the trajectory ends inside the mature stable support neighborhood observed by full-population GPU diagnostics');
 assert.match(indexSource, /FINGER_FLUID_PYRO_SOURCE_WET_POSITION_PROVENANCE\s*=\s*'step-238-stable-contact-record-v0'/, 'the authored contact endpoint preserves the diagnostic evidence that selected it');
 assert.match(compositionActivationSource, /sourceWetPositionProvenance:\s*FINGER_FLUID_PYRO_SOURCE_WET_POSITION_PROVENANCE/, 'composition state exposes the effective wet endpoint provenance to the witness');
-assert.match(indexSource, /advanceFingerFluidPyroCompositionSource\(volumePrototype\.debugState\(\)\.simStepCount\)/, 'the Pyro simulation clock drives source geometry in the same domain as flame maturity');
+const benchFrameSource = indexSource.match(/function drawFingerFluidBenchFrame\([\s\S]*?\n\}/)?.[0] || '';
+const pyroAdvanceArgument = benchFrameSource.match(/advanceFingerFluidPyroCompositionSource\(([^;\n]+)\);/)?.[1] || '';
+assert.notEqual(pyroAdvanceArgument, '', 'the bench frame advances its authored Pyro source from the Pyro simulation clock');
+const advanceFromOptionalVolume = new Function(
+  'volumePrototype',
+  'advanceFingerFluidPyroCompositionSource',
+  `return advanceFingerFluidPyroCompositionSource(${pyroAdvanceArgument});`,
+);
+let observedPyroStep = 'not-called';
+assert.doesNotThrow(
+  () => advanceFromOptionalVolume(null, step => { observedPyroStep = step; }),
+  'a liquid-only frame can advance when the optional Pyro volume has not been created',
+);
+assert.equal(observedPyroStep, undefined, 'a missing Pyro volume produces no source-trajectory clock sample');
+const pyroAdvanceBody = extractJsFunctionBody(indexSource, 'advanceFingerFluidPyroCompositionSource');
+const makePyroAdvance = new Function(
+  'fingerFluidPyroCompositionState',
+  'fingerFluidPyroCompositionSourceTrajectoryEnabled',
+  'volumePrototype',
+  'FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP',
+  'FINGER_FLUID_PYRO_SOURCE_MOTION_END_STEP',
+  'FINGER_FLUID_PYRO_SOURCE_DRY_POSITION',
+  'FINGER_FLUID_PYRO_SOURCE_WET_POSITION',
+  `return function advanceFingerFluidPyroCompositionSource(stepCount) { ${pyroAdvanceBody} };`,
+);
+const pyroStateForMissingClock = {
+  effectiveRoute: 'same-device-liquid-contact-pyro-near-field-v0',
+  sourcePrimitiveId: 'source-under-test',
+  sourceTrajectoryProgress: null,
+};
+let invalidClockTransformCalls = 0;
+const volumeForInvalidClock = {
+  updateVolumePrimitiveTransform(_id, { position }) {
+    invalidClockTransformCalls += 1;
+    return { transform: { position } };
+  },
+};
+makePyroAdvance(
+  pyroStateForMissingClock,
+  true,
+  volumeForInvalidClock,
+  220,
+  230,
+  [0.65, -0.35, 0.51],
+  [0.54, -0.81, 0.29],
+)(undefined);
+assert.equal(invalidClockTransformCalls, 0, 'missing Pyro clock data cannot write a NaN source transform');
+assert.equal(pyroStateForMissingClock.sourceTrajectoryProgress, null, 'missing clock data leaves authored trajectory state unchanged');
+assert.doesNotThrow(
+  () => makePyroAdvance(pyroStateForMissingClock, true, null, 220, 230, [0.65, -0.35, 0.51], [0.54, -0.81, 0.29])(230),
+  'Pyro source advancement tolerates its volume disappearing between setup and a frame',
+);
+assert.match(indexSource, /FINGER_FLUID_PYRO_SOURCE_MOTION_START_STEP\s*=\s*220/, 'the authored trajectory stays tied to the Pyro simulation clock');
 assert.match(indexSource, /volumePrototype\.updateVolumePrimitiveTransform\([\s\S]*position/, 'the burner trajectory moves the live source without rebuilding the established Pyro field');
 assert.match(indexSource, /kaminosFingerFluidPyroCompositionDebugState/, 'composition exposes cheap live state without forcing a GPU readback');
 assert.match(volumeSource, /setSimulationPaused\(paused\)/, 'Pyro exposes a compute-only pause that leaves composed rendering active');
