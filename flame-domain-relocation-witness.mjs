@@ -128,6 +128,7 @@ try {
   assert.equal(adjusted.volume.fluidStateResetCount, released.volume.fluidStateResetCount,
     'small accepted move within the relocated grid must keep the evolving field');
   assert.ok(adjusted.volume.simStepCount > released.volume.simStepCount);
+  assert.equal(adjusted.sceneInfo, 'Flame source moved within the current grid; the field continues');
   await shot('04-adjusted-inside-relocated-grid', adjusted);
   report.phase = 'history'; await save();
   await page.locator('#kaminos-host-renderer-canvas').hover();

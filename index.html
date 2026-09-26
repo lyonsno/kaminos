@@ -5213,7 +5213,10 @@ function setFlameDomainTranslation(next) {
 function settleFlameDomainForPose(pose, targetDomain = null) {
   const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation);
   const previous = [...flameDomainTranslation];
-  if (!setFlameDomainTranslation(next)) return false;
+  if (!setFlameDomainTranslation(next)) {
+    setInfo('Flame source moved within the current grid; the field continues');
+    return false;
+  }
   try {
     writeAuthoredFlameEmitterPose(pose);
   } catch (error) {
