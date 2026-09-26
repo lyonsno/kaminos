@@ -5130,9 +5130,19 @@ function identitySceneTransform() {
 }
 
 function ensureAuthoredFlameEmitter(metadata = {}) {
-  if (!scene || !isFireLightFieldRoute() || !applyFlameEmitterPose) return null;
   let entry = sceneObjects.find(record => record.id === FLAME_EMITTER_ID);
-  const analytic = window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode === 'analytic-fixed';
+  const analytic = !!scene && isFireLightFieldRoute() && !!applyFlameEmitterPose
+    && window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode === 'analytic-fixed';
+  if (entry && !analytic) {
+    scenePlacementTools?.finish(false);
+    scenePlacementTools?.edits.discard(edit => edit.id === FLAME_EMITTER_ID);
+    if (activeSceneObjectId === FLAME_EMITTER_ID) clearActiveSceneObjectSelection();
+    scene.remove(entry.object);
+    disposeObjectTree(entry.object);
+    sceneObjects = sceneObjects.filter(record => record.id !== FLAME_EMITTER_ID);
+    renderSceneObjectList();
+    return null;
+  }
   if (!entry && analytic) {
     const previous = activeSceneObjectId;
     const object = createFlameEmitterHandle(THREE);
@@ -5143,10 +5153,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
       fileName: 'Flame source', label: metadata.label || 'Flame source' });
     if (previous && previous !== FLAME_EMITTER_ID) setActiveSceneObject(previous);
   }
-  if (entry) {
-    entry.object.visible = analytic;
-    applySceneObjectTransformState(entry.object, flameEmitterPose);
-  }
+  if (entry) applySceneObjectTransformState(entry.object, flameEmitterPose);
   return entry?.object || null;
 }
 
@@ -10836,7 +10843,6 @@ function clearScene() {
   sceneMutationToken++;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
-    if (entry.type === FLAME_EMITTER_TYPE) continue;
     scene.remove(entry.object);
     disposeObjectTree(entry.object);
   }
@@ -10849,7 +10855,7 @@ function clearScene() {
     scene.remove(currentMesh);
     disposeObjectTree(currentMesh);
   }
-  sceneObjects = sceneObjects.filter(entry => entry.type === FLAME_EMITTER_TYPE);
+  sceneObjects = [];
   sceneGroups = [];
   activeSceneObjectId = null;
   activeSceneGroupId = null;
@@ -26651,7 +26657,10 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
   activeSceneComposition = restorePlan.composition;
   if (activeSceneComposition && !objectRecords.some(record => record.type === FLAME_EMITTER_TYPE)) {
-    writeAuthoredFlameEmitterPose(defaultFlameEmitterPose());
+    flameEmitterPose = defaultFlameEmitterPose();
+    if (window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode === 'analytic-fixed') {
+      applyFlameEmitterPose?.(flameEmitterPose);
+    }
   }
   setAnnularBurner(activeSceneComposition?.burner || null);
 
@@ -26711,6 +26720,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     }
   } else {
     clearScene();
+  }
+  if (activeSceneComposition && window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode === 'analytic-fixed') {
+    ensureAuthoredFlameEmitter();
   }
 
   // The pinned basin is already mounted. Reapplying identical primitives would
