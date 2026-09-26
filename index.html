@@ -21822,6 +21822,14 @@ async function initKaminosVolumeRoute() {
     // through its descriptor; seating the host device here would refuse it.
     sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
     getSceneDepth: isFireLightFieldRoute() ? () => ordinarySceneDepthProvider?.() ?? null : null,
+    // The kiln is an explicit authored-solid experiment. Its exact registered
+    // mesh and world transform, not its bounding box or camera depth, feed the
+    // volume solver when the scene route requests volume_collision=kiln.
+    getSceneCollision: () => {
+      if (new URLSearchParams(window.location.hash.slice(1)).get('volume_collision') !== 'kiln') return null;
+      const entry = sceneObjects.find(record => record.id === 'kiln' && record.type === 'glb');
+      return { requested: true, id: 'kiln', object: entry?.object ?? null };
+    },
   });
   if (isFireLightFieldRoute()) {
     // Fire-to-scene lighting needs the live Three scene visible under the

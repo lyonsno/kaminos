@@ -6,6 +6,7 @@ import {
   normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
+import { packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
@@ -2695,6 +2696,7 @@ struct NonRidgeOpticalCaptureRow {
 // inside the per-stage storage-buffer limit.
 @group(3) @binding(1) var<storage, read_write> fluidPredict: array<vec4<f32>>;
 @group(1) @binding(1) var productSceneDepth: texture_depth_2d;
+@group(0) @binding(16) var sceneSolidCells: texture_3d<u32>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
 // Per workgroup: [compact: sum|div|, max|div| before, sum, max after], [wide: same]; reduced on the CPU.
@@ -2743,6 +2745,49 @@ fn clampCell(c: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1)));
 }
 
+fn sceneSolidEnabled() -> bool {
+  return textureDimensions(sceneSolidCells).x == GRID;
+}
+
+fn insideGrid(c: vec3<i32>) -> bool {
+  return all(c >= vec3<i32>(0)) && all(c < vec3<i32>(i32(GRID), i32(GRID_Y), i32(GRID)));
+}
+
+fn sceneSolidAt(c: vec3<i32>) -> bool {
+  return sceneSolidEnabled() && insideGrid(c) && textureLoad(sceneSolidCells, c, 0).x != 0u;
+}
+
+fn sceneFaceOpen(c: vec3<i32>, axis: u32) -> bool {
+  if (sceneSolidAt(c)) { return false; }
+  var adjacent = c;
+  adjacent[axis] = adjacent[axis] + 1;
+  return !sceneSolidAt(adjacent);
+}
+
+// Exact voxel traversal of the characteristic. If it enters an authored
+// solid, preserve the fluid-side cell rather than sampling through the wall.
+fn sceneClipCharacteristic(cell: vec3<f32>, destination: vec3<f32>) -> vec3<f32> {
+  if (!sceneSolidEnabled()) { return destination; }
+  let delta = destination - cell;
+  var voxel = vec3<i32>(floor(cell));
+  let destinationVoxel = vec3<i32>(floor(destination));
+  let direction = vec3<i32>(sign(delta));
+  let safeDelta = select(delta, vec3<f32>(1.0), abs(delta) < vec3<f32>(1e-8));
+  let boundary = vec3<f32>(voxel + select(vec3<i32>(0), vec3<i32>(1), direction > vec3<i32>(0)));
+  var nextT = select((boundary - cell) / safeDelta, vec3<f32>(1e30), direction == vec3<i32>(0));
+  let stepT = select(abs(vec3<f32>(1.0) / safeDelta), vec3<f32>(1e30), direction == vec3<i32>(0));
+  for (var step = 0u; step < GRID + GRID_Y + GRID; step = step + 1u) {
+    if (all(voxel == destinationVoxel)) { break; }
+    let t = min(nextT.x, min(nextT.y, nextT.z));
+    if (t > 1.0) { break; }
+    let crossing = nextT <= vec3<f32>(t + 1e-6);
+    voxel = voxel + select(vec3<i32>(0), direction, crossing);
+    nextT = nextT + select(vec3<f32>(0.0), stepT, crossing);
+    if (sceneSolidAt(voxel)) { return cell + delta * max(0.0, t - 1e-4); }
+  }
+  return destination;
+}
+
 fn worldToCell(p: vec3<f32>) -> vec3<f32> {
   return vec3<f32>((p.x * 0.5 + 0.5) * f32(GRID), (p.y + 1.0) * (0.5 * f32(GRID)), (p.z * 0.5 + 0.5) * f32(GRID));
 }
@@ -2756,10 +2801,12 @@ fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
 }
 
 fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  if (sceneSolidAt(c)) { return vec4<f32>(0.0); }
   return fluidSrc[slotIndex(c, slot)];
 }
 
 fn readFrontField(c: vec3<i32>) -> f32 {
+  if (sceneSolidAt(c)) { return 0.0; }
   return frontSrc[index3(clampCell(c))];
 }
 
@@ -2810,6 +2857,7 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
 }
 
 fn readPredictSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  if (sceneSolidAt(c)) { return vec4<f32>(0.0); }
   return fluidPredict[slotIndex(c, slot)];
 }
 
@@ -3263,6 +3311,7 @@ fn pressureSolverOpenTop() -> bool {
 // except the top face when the open-top option lets buoyant gas leave; that
 // stored flux is then corrected by the forward pressure gradient like any other.
 fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
+  if (sceneSolidAt(c) || !sceneFaceOpen(c, axis)) { return 0.0; }
   if (c[axis] < 0) {
     return 0.0;
   }
@@ -3276,9 +3325,20 @@ fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
 }
 
 fn divergenceCompactAtCell(c: vec3<i32>) -> f32 {
+  if (sceneSolidAt(c)) { return 0.0; }
   return (compactFaceVelocity(c, 0u) - compactFaceVelocity(c - vec3<i32>(1, 0, 0), 0u))
     + (compactFaceVelocity(c, 1u) - compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u))
     + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
+}
+
+fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
+  if (!sceneSolidEnabled()) { return vec2<f32>(0.0); }
+  let solidHere = sceneSolidAt(c);
+  let velocity = fluidSrc[slotIndex(c, 0u)].xyz;
+  let x = select(0.0, abs(velocity.x), solidHere != sceneSolidAt(c + vec3<i32>(1, 0, 0)));
+  let y = select(0.0, abs(velocity.y), solidHere != sceneSolidAt(c + vec3<i32>(0, 1, 0)));
+  let z = select(0.0, abs(velocity.z), solidHere != sceneSolidAt(c + vec3<i32>(0, 0, 1)));
+  return vec2<f32>(x + y + z, max(x, max(y, z)));
 }
 
 fn proceduralReceiverActivityCue(c: vec3<i32>) -> f32 {
@@ -3538,6 +3598,20 @@ fn pressureRedBlackUpdate(previous: f32, neighborPressure: f32, div: f32, omega:
   return previous + (gaussSeidel - previous) * omega;
 }
 
+fn pressureRedBlackUpdateMasked(previous: f32, neighborPressure: f32, div: f32, degree: f32, omega: f32) -> f32 {
+  let gaussSeidel = select(previous, (neighborPressure - div) / max(degree, 1.0), degree > 0.0);
+  return previous + (gaussSeidel - previous) * omega;
+}
+
+fn pressureStencilNeighbor(c: vec3<i32>, offset: vec3<i32>) -> vec2<f32> {
+  let neighbor = c + offset;
+  if (neighbor.y >= i32(GRID_Y) && offset.y > 0 && pressureSolverOpenTop()) {
+    return vec2<f32>(0.0, 1.0);
+  }
+  if (!insideGrid(neighbor) || sceneSolidAt(neighbor)) { return vec2<f32>(0.0); }
+  return vec2<f32>(pressureNeighborInPlace(neighbor), 1.0);
+}
+
 fn pressureRedBlackSweep(gid: vec3<u32>, parity: u32) {
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
@@ -3550,15 +3624,34 @@ fn pressureRedBlackSweep(gid: vec3<u32>, parity: u32) {
   let c = vec3<i32>(gid);
   let idx = index3(gid);
   let cell = pressureDst[idx];
-  let neighborPressure =
-    pressureNeighborInPlace(c + vec3<i32>(-1, 0, 0)) +
-    pressureNeighborInPlace(c + vec3<i32>( 1, 0, 0)) +
-    pressureNeighborInPlace(c + vec3<i32>(0, -1, 0)) +
-    pressureNeighborInPlace(c + vec3<i32>(0,  1, 0)) +
-    pressureNeighborInPlace(c + vec3<i32>(0, 0, -1)) +
-    pressureNeighborInPlace(c + vec3<i32>(0, 0,  1));
+  if (sceneSolidAt(c)) {
+    pressureDst[idx] = vec4<f32>(0.0);
+    return;
+  }
+  var stencil = vec2<f32>(0.0);
+  if (sceneSolidEnabled()) {
+    stencil =
+      pressureStencilNeighbor(c, vec3<i32>(-1, 0, 0)) +
+      pressureStencilNeighbor(c, vec3<i32>( 1, 0, 0)) +
+      pressureStencilNeighbor(c, vec3<i32>(0, -1, 0)) +
+      pressureStencilNeighbor(c, vec3<i32>(0,  1, 0)) +
+      pressureStencilNeighbor(c, vec3<i32>(0, 0, -1)) +
+      pressureStencilNeighbor(c, vec3<i32>(0, 0,  1));
+  } else {
+    stencil = vec2<f32>(
+      pressureNeighborInPlace(c + vec3<i32>(-1, 0, 0)) +
+      pressureNeighborInPlace(c + vec3<i32>( 1, 0, 0)) +
+      pressureNeighborInPlace(c + vec3<i32>(0, -1, 0)) +
+      pressureNeighborInPlace(c + vec3<i32>(0,  1, 0)) +
+      pressureNeighborInPlace(c + vec3<i32>(0, 0, -1)) +
+      pressureNeighborInPlace(c + vec3<i32>(0, 0,  1)), 6.0);
+  }
   let omega = clamp(u.pressure_solver_controls.z, 1.0, 1.95);
-  pressureDst[idx] = vec4<f32>(cell.x, pressureRedBlackUpdate(cell.y, neighborPressure, cell.x, omega), 0.0, 0.0);
+  let nextPressure = select(
+    pressureRedBlackUpdate(cell.y, stencil.x, cell.x, omega),
+    pressureRedBlackUpdateMasked(cell.y, stencil.x, cell.x, stencil.y, omega),
+    sceneSolidEnabled());
+  pressureDst[idx] = vec4<f32>(cell.x, nextPressure, 0.0, 0.0);
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -3567,6 +3660,10 @@ fn csDivergencePressureWarm(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let idx = index3(gid);
+  if (sceneSolidAt(vec3<i32>(gid))) {
+    pressureDst[idx] = vec4<f32>(0.0);
+    return;
+  }
   // Fresh compact divergence in .x; last step's pressure in .y is the warm start.
   pressureDst[idx] = vec4<f32>(divergenceCompactAtCell(vec3<i32>(gid)), pressureDst[idx].y, 0.0, 0.0);
 }
@@ -3589,6 +3686,11 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   let idx = index3(gid);
   let base = idx * SLOTS_PER_CELL;
   let c = vec3<i32>(gid);
+  if (sceneSolidAt(c)) {
+    frontDst[idx] = 0.0;
+    for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) { fluidDst[base + slot] = vec4<f32>(0.0); }
+    return;
+  }
   // Forward gradient: the adjoint of the compact backward divergence.
   let pressureHere = pressureNeighborRead(c);
   let pressureGradient = vec3<f32>(
@@ -3600,6 +3702,9 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   frontDst[idx] = frontSrc[idx];
   let projectionGain = clamp(u.pressure_solver_controls.w, 0.0, 1.0);
   var correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
+  if (!sceneFaceOpen(c, 0u)) { correctedVelocity.x = 0.0; }
+  if (!sceneFaceOpen(c, 1u)) { correctedVelocity.y = 0.0; }
+  if (!sceneFaceOpen(c, 2u)) { correctedVelocity.z = 0.0; }
   // Closed walls carry no flux: the upper face of the last cell on each axis is
   // a wall unless it is the open top.
   let lastCell = i32(GRID) - 1;
@@ -3632,14 +3737,26 @@ fn pressureResidualReduce(
   var enstrophy = 0.0;
   var vorticity = 0.0;
   if (all(gid < vec3<u32>(GRID, GRID_Y, GRID))) {
-    compact = abs(divergenceCompactAtCell(vec3<i32>(gid)));
-    wide = abs(divergenceAtCell(vec3<i32>(gid)));
     if (!afterProjection) {
+      if (!sceneSolidAt(vec3<i32>(gid))) {
+        compact = abs(divergenceCompactAtCell(vec3<i32>(gid)));
+        wide = abs(divergenceAtCell(vec3<i32>(gid)));
+      }
       // Enstrophy of the carried field before projection: the quantity a
       // confinement level is calibrated against.
-      let omega = curlAtCell(vec3<i32>(gid));
-      enstrophy = dot(omega, omega);
-      vorticity = sqrt(enstrophy);
+      if (!sceneSolidAt(vec3<i32>(gid))) {
+        let omega = curlAtCell(vec3<i32>(gid));
+        enstrophy = dot(omega, omega);
+        vorticity = sqrt(enstrophy);
+      }
+    } else {
+      if (!sceneSolidAt(vec3<i32>(gid))) {
+        compact = abs(divergenceCompactAtCell(vec3<i32>(gid)));
+        wide = abs(divergenceAtCell(vec3<i32>(gid)));
+      }
+      let blocked = blockedSceneFaceFluxAtCell(vec3<i32>(gid));
+      enstrophy = blocked.x;
+      vorticity = blocked.y;
     }
   }
   pressureResidualSum[localIndex] = compact;
@@ -3672,6 +3789,8 @@ fn pressureResidualReduce(
   if (afterProjection) {
     pressureResidualPartials[partialIndex] = vec4<f32>(previousCompact.x, previousCompact.y, sum, peak);
     pressureResidualPartials[partialIndex + 1u] = vec4<f32>(previousWide.x, previousWide.y, wideSum, widePeak);
+    let previousAux = pressureResidualPartials[partialIndex + 2u];
+    pressureResidualPartials[partialIndex + 2u] = vec4<f32>(previousAux.x, previousAux.y, enstrophySum, vorticityPeak);
   } else {
     pressureResidualPartials[partialIndex] = vec4<f32>(sum, peak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 1u] = vec4<f32>(wideSum, widePeak, 0.0, 0.0);
@@ -4490,6 +4609,10 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let idx = index3(gid);
   let base = idx * SLOTS_PER_CELL;
+  if (sceneSolidAt(vec3<i32>(gid))) {
+    for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) { fluidPredict[base + slot] = vec4<f32>(0.0); }
+    return;
+  }
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let prev = fluidSrc[base];
   let speed = u.fire_smoke_curl_speed.w;
@@ -4501,7 +4624,7 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let bonfireAdvectionLateralDamping = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
-  let backCell = cell - advectVelocity * transportBacktraceScale(speed);
+  let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * transportBacktraceScale(speed));
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
     fluidPredict[base + slot] = sampleFluidSlot(backCell, slot);
   }
@@ -4526,6 +4649,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let base = idx * SLOTS_PER_CELL;
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
+  if (sceneSolidAt(cellI)) {
+    quenchDst[idx] = 0u;
+    frontDst[idx] = 0.0;
+    for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) { fluidDst[base + slot] = vec4<f32>(0.0); }
+    return;
+  }
   let p = cellToWorld(cell);
   let prev = fluidSrc[base];
   let speed = u.fire_smoke_curl_speed.w;
@@ -4593,7 +4722,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backtraceScale = transportBacktraceScale(speed);
-  let backCell = cell - advectVelocity * backtraceScale;
+  let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
   let macCormack = u.transport_controls.x > 1.5;
   let macCormackScalars = u.transport_controls.x > 2.5;
   // Shared characteristic for gas-carried state (Sexy Fireman's common-gas
@@ -4605,7 +4734,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var fireLayer = vec4<f32>(0.0);
   var microLayer = vec4<f32>(0.0);
   if (macCormack) {
-    let forwardCell = cell + advectVelocity * backtraceScale;
+    let forwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
     advected = macCormackSlot(cellI, idx, backCell, forwardCell, 0u);
     if (macCormackScalars) {
       material = macCormackSlot(cellI, idx, backCell, forwardCell, 1u);
@@ -7276,6 +7405,7 @@ struct AnalyticEmitterInjectionUniforms {
 
 @group(0) @binding(0) var<uniform> emitter: AnalyticEmitterInjectionUniforms;
 @group(0) @binding(1) var<storage, read_write> fluid: array<vec4<f32>>;
+@group(0) @binding(2) var emitterSceneSolidCells: texture_3d<u32>;
 
 fn cellIndex(c: vec3<u32>) -> u32 {
   return c.x + c.y * GRID + c.z * GRID * GRID_Y;
@@ -7351,6 +7481,8 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   if (any(localId >= emitter.cell_extent.xyz)) { return; }
   let cell = emitter.cell_min_grid.xyz + localId;
   if (any(cell >= vec3<u32>(GRID, GRID_Y, GRID))) { return; }
+  if (textureDimensions(emitterSceneSolidCells).x == GRID
+    && textureLoad(emitterSceneSolidCells, vec3<i32>(cell), 0).x != 0u) { return; }
   let p = cellToWorld(vec3<f32>(cell) + vec3<f32>(0.5));
   let familyMode = u32(max(0.0, floor(emitter.origin_mode.w + 0.5)));
   if (familyMode == 0u) { return; }
@@ -8850,6 +8982,7 @@ export function createKaminosVolumePrototype({
   onStatus,
   sharedGpuContext = null,
   getSceneDepth = null,
+  getSceneCollision = null,
   transparentCanvas = false,
   productFrameOwner = 'prototype',
   externalDevice = null,
@@ -8949,6 +9082,7 @@ export function createKaminosVolumePrototype({
     routeIdentity: ROUTE_IDENTITY,
     requestedRoute: 'kaminos_volume_smoke=1',
     effectiveRoute: ROUTE_IDENTITY,
+    sceneCollision: { requested: false, effective: 'off', sourceId: null, reason: null, grid: null, solidCellCount: 0 },
     productFrameOwner,
     productFrameIdentity: productFrameOwner === 'caller'
       ? 'product-frame-smoke-raymarch-under-splats-v0'
@@ -9557,6 +9691,36 @@ export function createKaminosVolumePrototype({
   let computePipeline = null;
   let transportPredictPipeline = null;
   let transportPredictBindGroupLayout = null;
+  let sceneSolidTexture = null;
+  let sceneSolidTextureView = null;
+  let sceneSolidRevisionKey = null;
+  let sceneSolidCellsCpu = null;
+
+  function installSceneSolidTexture(field = null) {
+    if (!device) return;
+    const oldTexture = sceneSolidTexture;
+    const size = field ? [gridSize, gridHeight, gridSize] : [1, 1, 1];
+    const texture = device.createTexture({
+      label: field ? `kaminos scene solid ${gridShapeLabel(gridSize)}` : 'kaminos scene solid disabled',
+      size,
+      dimension: '3d',
+      format: 'r8uint',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    if (field) {
+      const packed = packSolidTextureRows(field.cells, gridSize);
+      device.queue.writeTexture({texture}, packed.data,
+        {bytesPerRow: packed.bytesPerRow, rowsPerImage: packed.rowsPerImage},
+        {width: gridSize, height: gridHeight, depthOrArrayLayers: gridSize});
+    } else {
+      device.queue.writeTexture({texture}, new Uint8Array([0]),
+        {bytesPerRow: 1, rowsPerImage: 1}, {width: 1, height: 1, depthOrArrayLayers: 1});
+    }
+    sceneSolidTexture = texture;
+    sceneSolidTextureView = texture.createView();
+    sceneSolidCellsCpu = field?.cells ?? null;
+    oldTexture?.destroy();
+  }
   let transportPipelineLayout = null;
   let transportPredictBindGroup = null;
   let analyticEmitterInjectionPipeline = null;
@@ -9638,6 +9802,7 @@ export function createKaminosVolumePrototype({
   let pressureResidualCopyPending = false;
   let pressureResidualCopyStep = 0;
   let pressureResidualCopyFrame = 0;
+  let pressureResidualCopyFluidCells = 0;
   let pressureResidualMapPending = false;
   let pressureResidualMapStartedFrame = 0;
   let pressureResidualMapGeneration = 0;
@@ -10306,6 +10471,11 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    sceneSolidTexture?.destroy();
+    sceneSolidTexture = null;
+    sceneSolidTextureView = null;
+    sceneSolidRevisionKey = null;
+    sceneSolidCellsCpu = null;
     emissiveLightField?.destroy();
     emissiveLightField = null;
     selectiveHeadLiveRuntime?.destroy();
@@ -10442,6 +10612,7 @@ export function createKaminosVolumePrototype({
         { binding: 13, resource: { buffer: quenchRead } },
         { binding: 14, resource: { buffer: quenchWrite } },
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
+        { binding: 16, resource: sceneSolidTextureView },
       ],
     });
   }
@@ -10511,6 +10682,123 @@ export function createKaminosVolumePrototype({
           }),
         ]
       : [];
+  }
+
+  function rebuildSceneSolidBindingViews() {
+    if (!device || !sceneSolidTextureView || fluidBuffers.length !== 2 || frontBuffers.length !== 2) return;
+    rebuildFluidBindGroups();
+    analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
+      label: `kaminos scene-solid emitter injection ${gridShapeLabel(gridSize)} ${index}`,
+      layout: analyticEmitterInjectionBindGroupLayout,
+      entries: [
+        {binding: 0, resource: {buffer: analyticEmitterInjectionUniformBuffer}},
+        {binding: 1, resource: {buffer}},
+        {binding: 2, resource: sceneSolidTextureView},
+      ],
+    }));
+    fluidFrontReadBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
+      label: `kaminos scene-solid fluid-front read ${gridShapeLabel(gridSize)} ${index}`,
+      layout: fluidFrontReadBindGroupLayout,
+      entries: [
+        {binding: 1, resource: {buffer}},
+        {binding: 7, resource: {buffer: frontBuffers[index]}},
+        {binding: 16, resource: sceneSolidTextureView},
+      ],
+    }));
+    boundarySidecarReadBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
+      label: `kaminos scene-solid boundary-sidecar read ${gridShapeLabel(gridSize)} ${index}`,
+      layout: boundarySidecarReadBindGroupLayout,
+      entries: [
+        {binding: 0, resource: {buffer: uniformBuffer}},
+        {binding: 1, resource: {buffer}},
+        {binding: 7, resource: {buffer: frontBuffers[index]}},
+        {binding: 16, resource: sceneSolidTextureView},
+      ],
+    }));
+    rebuildSelectiveHeadLiveBindGroups();
+  }
+
+  function refreshSceneCollision() {
+    if (!device || typeof getSceneCollision !== 'function') return;
+    const source = getSceneCollision();
+    const requested = source?.requested === true;
+    const sourceId = requested ? String(source.id || '') : null;
+    const solver = resolvePressureSolverConfig(controlsSnapshot).effective;
+    const transport = resolveTransportConfig(controlsSnapshot).effective;
+    const reason = !requested ? null
+      : !sourceId || !source?.object ? 'missing-authored-scene-object'
+      : solver.solver !== PRESSURE_SOLVER_CONVERGED || solver.dispatch === 'disabled' || solver.projection !== 'full'
+        ? `unsupported-pressure-regime:${solver.solver}:${solver.projection}`
+      : !transport.commonCharacteristic ? `unsupported-transport-regime:${transport.scheme}`
+      : null;
+    if (reason || !requested) {
+      const key = `${requested}:${sourceId}:${reason}`;
+      if (sceneSolidRevisionKey !== key) {
+        if (sceneSolidCellsCpu) {
+          installSceneSolidTexture();
+          rebuildSceneSolidBindingViews();
+        }
+        sceneSolidRevisionKey = key;
+      }
+      state.sceneCollision = {requested, effective: 'off', sourceId, reason, grid: gridSize, solidCellCount: 0};
+      return;
+    }
+    let key = null;
+    try {
+      const revision = sceneSolidRevision(source.object, productTransform);
+      const emitterBoundsRevision = `${analyticEmitterDispatch.cellMin.join(',')}/${analyticEmitterDispatch.cellExtent.join(',')}`;
+      key = `${gridSize}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}`;
+      if (key === sceneSolidRevisionKey) return;
+      const started = performance.now();
+      const extraction = trianglesFromSceneObject(source.object, productTransform);
+      const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
+      if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
+      const sourceBounds = analyticEmitterDispatch;
+      let sourceBoundsSolidCells = 0;
+      if (sourceBounds.active) {
+        for (let z = sourceBounds.cellMin[2]; z < sourceBounds.cellMin[2] + sourceBounds.cellExtent[2]; z++) {
+          for (let y = sourceBounds.cellMin[1]; y < sourceBounds.cellMin[1] + sourceBounds.cellExtent[1]; y++) {
+            for (let x = sourceBounds.cellMin[0]; x < sourceBounds.cellMin[0] + sourceBounds.cellExtent[0]; x++) {
+              sourceBoundsSolidCells += field.cells[x + gridSize * (y + gridHeight * z)] ? 1 : 0;
+            }
+          }
+        }
+      }
+      // The dispatch box is conservative, not the emitter's actual SDF support.
+      // Some overlap is expected when fuel burns at a kiln surface; injection
+      // skips solid cells in the shader. A wholly occluded dispatch is not a
+      // usable source and must not appear as a successful collision exercise.
+      if (sourceBounds.active && sourceBoundsSolidCells === sourceBounds.cellCount) {
+        throw new Error('authored-solid-occludes-emitter-dispatch');
+      }
+      installSceneSolidTexture(field);
+      rebuildSceneSolidBindingViews();
+      sceneSolidRevisionKey = key;
+      state.sceneCollision = {
+        requested: true, effective: 'mesh-voxel-solid', sourceId, reason: null,
+        geometryRevision: revision, grid: gridSize,
+        triangleCount: extraction.triangles.length,
+        surfaceCellCount: field.surfaceCellCount,
+        interiorCellCount: field.interiorCellCount,
+        solidCellCount: field.surfaceCellCount + field.interiorCellCount,
+        blockedFaceCount: field.blockedFaceCount,
+        sourceBoundsSolidCells,
+        sourceBoundsCellCount: sourceBounds.cellCount,
+        residentBytes: field.cells.byteLength,
+        rebuildMs: Number((performance.now() - started).toFixed(3)),
+        rebuildStep: state.simStepCount,
+      };
+    } catch (error) {
+      if (sceneSolidCellsCpu) {
+        installSceneSolidTexture();
+        rebuildSceneSolidBindingViews();
+      }
+      sceneSolidRevisionKey = key;
+      state.sceneCollision = {
+        requested: true, effective: 'off', sourceId,
+        reason: error?.message || String(error), grid: gridSize, solidCellCount: 0,
+      };
+    }
   }
 
   function fluidBindGroup(fluidIndex = currentFluid, quenchIndex = currentQuench) {
@@ -11798,6 +12086,7 @@ export function createKaminosVolumePrototype({
     }
     ensureNonRidgeOpticalCaptureBuffers();
     emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
+    installSceneSolidTexture();
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)} ${index}`,
@@ -11805,6 +12094,7 @@ export function createKaminosVolumePrototype({
       entries: [
         { binding: 0, resource: { buffer: analyticEmitterInjectionUniformBuffer } },
         { binding: 1, resource: { buffer } },
+        { binding: 2, resource: sceneSolidTextureView },
       ],
     }));
     fluidFrontReadBindGroups = [
@@ -11814,6 +12104,7 @@ export function createKaminosVolumePrototype({
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
+          { binding: 16, resource: sceneSolidTextureView },
         ],
       }),
       device.createBindGroup({
@@ -11822,6 +12113,7 @@ export function createKaminosVolumePrototype({
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
+          { binding: 16, resource: sceneSolidTextureView },
         ],
       }),
     ];
@@ -11833,6 +12125,7 @@ export function createKaminosVolumePrototype({
           { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
+          { binding: 16, resource: sceneSolidTextureView },
         ],
       }),
       device.createBindGroup({
@@ -11842,6 +12135,7 @@ export function createKaminosVolumePrototype({
           { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
+          { binding: 16, resource: sceneSolidTextureView },
         ],
       }),
     ];
@@ -12193,6 +12487,7 @@ export function createKaminosVolumePrototype({
         { binding: 15, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
         { binding: 13, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
       ],
     });
     analyticEmitterInjectionBindGroupLayout = device.createBindGroupLayout({
@@ -12208,6 +12503,7 @@ export function createKaminosVolumePrototype({
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'storage' },
         },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
       ],
     });
     productRaymarchDepthBindGroupLayout = device.createBindGroupLayout({
@@ -12244,6 +12540,7 @@ export function createKaminosVolumePrototype({
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
         },
+        { binding: 16, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
       ],
     });
     fluidFrontReadBindGroupLayout = device.createBindGroupLayout({
@@ -12259,6 +12556,7 @@ export function createKaminosVolumePrototype({
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
         },
+        { binding: 16, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
       ],
     });
     boundarySidecarWriteBindGroupLayout = device.createBindGroupLayout({
@@ -14211,6 +14509,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeSim(encoder, options = {}) {
+    refreshSceneCollision();
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
     if (transportConfig.effective.predictorPass) {
@@ -14336,6 +14635,7 @@ export function createKaminosVolumePrototype({
     pressureResidualCopyPending = true;
     pressureResidualCopyStep = state.simStepCount;
     pressureResidualCopyFrame = state.frameCount;
+    pressureResidualCopyFluidCells = gridCellCount(gridSize) - (state.sceneCollision?.effective === 'mesh-voxel-solid' ? state.sceneCollision.solidCellCount : 0);
     pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
   }
 
@@ -14349,6 +14649,7 @@ export function createKaminosVolumePrototype({
     const workgroupCount = pressureResidualWorkgroupCount;
     const step = pressureResidualCopyStep;
     const grid = gridSize;
+    const fluidCells = pressureResidualCopyFluidCells;
     const solver = pressureResidualCopySolver;
     let timeoutTimer = null;
     try {
@@ -14384,17 +14685,21 @@ export function createKaminosVolumePrototype({
           maxAfter = Math.max(maxAfter, partials[at + 3]);
         }
         return {
-          before: { meanAbs: sumBefore / cells, maxAbs: maxBefore },
-          after: { meanAbs: sumAfter / cells, maxAbs: maxAfter },
+          before: { meanAbs: sumBefore / Math.max(1, fluidCells), maxAbs: maxBefore },
+          after: { meanAbs: sumAfter / Math.max(1, fluidCells), maxAbs: maxAfter },
           meanReduction: sumAfter > 0 ? sumBefore / sumAfter : null,
         };
       };
       let enstrophySum = 0;
       let vorticityPeak = 0;
+      let blockedFaceAbsSum = 0;
+      let blockedFaceMaxAbs = 0;
       for (let i = 0; i < workgroupCount; i += 1) {
         const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP + 8;
         enstrophySum += partials[at];
         vorticityPeak = Math.max(vorticityPeak, partials[at + 1]);
+        blockedFaceAbsSum += partials[at + 2];
+        blockedFaceMaxAbs = Math.max(blockedFaceMaxAbs, partials[at + 3]);
       }
       const residual = {
         identity: 'pressure-divergence-residual-probe-v1',
@@ -14402,15 +14707,18 @@ export function createKaminosVolumePrototype({
         step,
         grid,
         cells,
+        fluidCells,
+        solidCells: cells - fluidCells,
         workgroups: workgroupCount,
         solver,
         // compact: backward divergence the converged solve targets; wide: the
         // legacy 2h central divergence. Both are measured on the same fields.
         compact: reduceOperator(0),
         wide: reduceOperator(4),
+        blockedFaceFlux: { sumAbs: blockedFaceAbsSum, maxAbs: blockedFaceMaxAbs },
         vorticity: {
           identity: 'enstrophy-before-projection-v0',
-          enstrophyMean: enstrophySum / cells,
+          enstrophyMean: enstrophySum / Math.max(1, fluidCells),
           enstrophySum,
           maxAbs: vorticityPeak,
         },
