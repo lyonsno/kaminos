@@ -67,14 +67,14 @@ try {
       assert.ok(Math.abs(s.light.worldMin[0] - (domain - 1)) < 1e-8);
     }
   };
-  const waitSim = async (minimumFrame = 0, requireMounted = false) => {
-    await page.waitForFunction(({ minimumFrame, requireMounted }) => {
+  const waitSim = async (minimumFrame = 0, requireMounted = false, minimumSteps = 20) => {
+    await page.waitForFunction(({ minimumFrame, requireMounted, minimumSteps }) => {
       const v = window.__kaminosVolumePrototype?.debugState?.();
       const mounted = document.getElementById('info-bar')?.textContent === 'Scene loaded: 2 objects'
         && window.kaminosSceneObjectDebugState?.().some(object => object.id === 'kiln');
-      return v?.error || ((!requireMounted || mounted) && v?.simStepCount > 20 && v?.frameCount > minimumFrame
+      return v?.error || ((!requireMounted || mounted) && v?.simStepCount > minimumSteps && v?.frameCount > minimumFrame
         && window.kaminosFlameEmitterState?.().registered);
-    }, { minimumFrame, requireMounted }, { timeout: 120000 });
+    }, { minimumFrame, requireMounted, minimumSteps }, { timeout: 120000 });
     return state();
   };
   const shot = async (name, s) => {
@@ -159,7 +159,7 @@ try {
   assert.deepEqual(saved.flameDomainTranslation, [2.3, 0, 0]);
   report.reopenUrl = compositionRestoreUrl(saved.composition, savedReceipt.saved, manifest.origin);
   await page.goto('about:blank'); await page.goto(report.reopenUrl);
-  const reopened = await waitSim(0, true); check(reopened, { x: 2.4, domain: 2.3 });
+  const reopened = await waitSim(0, true, 60); check(reopened, { x: 2.4, domain: 2.3 });
   assert.equal(reopened.sceneInfo, 'Scene loaded: 2 objects');
   assert.notEqual(reopened.timeOrigin, secondRedo.timeOrigin);
   assert.equal(reopened.history.undoCount, 0);
