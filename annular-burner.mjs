@@ -141,7 +141,7 @@ export function createAnnularBurner(THREE, mergeGeometries, value) {
   let state = { effective: false, reason: 'ring-emitter-unavailable', recipe };
   return {
     group, recipe,
-    update(receipt, active, now) {
+    update(receipt, active, now, domainTranslation = [0, 0, 0]) {
       const source = burnerSource(receipt);
       group.visible = !!source;
       const seconds = lastTime === null ? 0 : (now - lastTime) / 1000;
@@ -149,7 +149,11 @@ export function createAnnularBurner(THREE, mergeGeometries, value) {
       if (source) {
         const axis = new THREE.Vector3(...source.axis);
         group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
-        group.position.fromArray(source.origin).addScaledVector(axis, -source.axialHalfExtent - 0.003);
+        group.position.set(
+          source.origin[0] + domainTranslation[0],
+          source.origin[1] + domainTranslation[1],
+          source.origin[2] + domainTranslation[2],
+        ).addScaledVector(axis, -source.axialHalfExtent - 0.003);
       }
       for (const channel of channels) {
         const target = active ? burnerActivation(channel.radius, source) : 0;

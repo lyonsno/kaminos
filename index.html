@@ -26578,7 +26578,8 @@ function setAnnularBurner(value) {
 
 function updateAnnularBurnerFrame(now) {
   if (!annularBurner) return;
-  const state = annularBurner.update(window.__kaminosVolumeEmitterReceipt, !!volumePrototype?.debugState?.().active, now);
+  const state = annularBurner.update(window.__kaminosVolumeEmitterReceipt,
+    !!volumePrototype?.debugState?.().active, now, flameDomainTranslation);
   const status = document.getElementById('burner-status');
   const message = burnerError || (state.reason === 'ring-emitter-unavailable' ? 'No compatible ring emitter' : state.reason === 'emitter-outside-bed' ? 'Flame footprint extends beyond the bed' : '');
   if (status.textContent !== message && !document.activeElement?.id?.startsWith('burner-')) status.textContent = message;
