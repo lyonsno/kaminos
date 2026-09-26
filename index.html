@@ -6501,14 +6501,34 @@ function syncLocalLiquidHostEmitters() {
 async function mountLocalLiquidHost() {
   if (!localLiquidSetup || localLiquidLoading) return;
   if (localLiquidHost) return true;
-  localLiquidFailure = sharedGpu?.device
-    ? 'Current liquid host admission requires the canonical moving-Hill support contact provider; the retained analytic basin only provides static render geometry'
-    : 'Water requires Kaminos shared WebGPU device';
-  setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
-  return false;
+  localLiquidLoading = true;
+  localLiquidFailure = null;
+  try {
+    const {createLocalLiquidHost} = await import('./local-liquid-host.mjs');
+    localLiquidHost = await createLocalLiquidHost({
+      renderer,
+      scene,
+      camera,
+      pipeline: renderPipeline,
+      device: sharedGpu?.device,
+      setup: localLiquidSetup,
+      emitters: localLiquidEmitterRecords(),
+    });
+    setInfo('Local water mounted on the retained analytical basin. The solver restarts from its saved authored setup.');
+    window._kaminosDirty?.();
+    return true;
+  } catch (error) {
+    localLiquidFailure = error.message || String(error);
+    setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
+    return false;
+  } finally {
+    localLiquidLoading = false;
+  }
 }
 
-window.kaminosLocalLiquidState = () => ({
+window.kaminosLocalLiquidState = () => {
+  const hostState = localLiquidHost?.state() || null;
+  return ({
   requestedRoute: localLiquidSetup ? 'kaminos/finger-fluid/local-analytic-host-frame-v0' : null,
   effectiveRoute: localLiquidHost?.state().effectiveRoute || null,
   backend: renderer?.backend?.constructor?.name || null,
@@ -6517,8 +6537,13 @@ window.kaminosLocalLiquidState = () => ({
   failure: localLiquidFailure,
   setup: localLiquidSetup ? structuredClone(localLiquidSetup) : null,
   emitters: localLiquidEmitterRecords(),
-  lastFrame: localLiquidHost?.state().lastFrame || null,
-});
+  lastFrame: hostState?.lastFrame || null,
+  solver: hostState?.solver || null,
+  hostFrameCompositionEvidence: hostState?.solver?.hostFrameCompositionEvidence || null,
+  presentationEvidence: hostState?.solver?.presentationEvidence || null,
+  supportContact: hostState?.solver?.supportContact || null,
+  });
+};
 
 async function addLocalLiquidEmitter() {
   const count = sceneObjects.filter(entry => entry.type === LOCAL_LIQUID_EMITTER_TYPE).length;

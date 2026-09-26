@@ -173,8 +173,8 @@ assert.match(
 );
 assert.match(
   source,
-  /const externalCameraSnapshot = requestedExternalCamera[\s\S]*validateFingerFluidExternalCamera\(requestedExternalCamera, expectedExtent\)[\s\S]*safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE[\s\S]*!externalCameraSnapshot[\s\S]*is required for moving_hill_consumer presentation/,
-  'moving-Hill presentation must fail loudly rather than deriving a private orbit camera',
+  /const externalCameraSnapshot = requestedExternalCamera[\s\S]*validateFingerFluidExternalCamera\(requestedExternalCamera, expectedExtent\)[\s\S]*safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE \|\| localAnalyticHostComposition[\s\S]*!externalCameraSnapshot[\s\S]*is required for \$\{localAnalyticHostComposition \? 'local_analytic_consumer' : 'moving_hill_consumer'\} presentation/,
+  'both composed host modes must fail loudly rather than deriving a private orbit camera',
 );
 assert.match(
   source,

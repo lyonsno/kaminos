@@ -980,6 +980,99 @@ async function runSaveLoadRoundtripScenario(ws) {
   `, { timeoutMs: 60000 });
 }
 
+async function runLocalLiquidLiveHostScenario(ws) {
+  phase = 'scenario-local-liquid-live-host';
+  lastEvidence.localLiquidLiveHost = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      let state = window.kaminosLocalLiquidState?.() || null;
+      if (!state?.setup) {
+        const button = document.getElementById('scene-add-water-emitter');
+        if (!button) throw new Error('Water Emitter scene-object action is missing');
+        button.click();
+      }
+      for (let i = 0; i < 160; i++) {
+        await wait(125);
+        state = window.kaminosLocalLiquidState?.() || null;
+        if (state?.lastFrame?.frameId) break;
+      }
+      if (!state) throw new Error('Kaminos local-water state probe is unavailable');
+      const firstFrameId = state.lastFrame?.frameId || null;
+      await wait(8000);
+      state = window.kaminosLocalLiquidState?.() || state;
+      const requestedRoute = state.requestedRoute;
+      if (state.backend !== 'WebGPUBackend') {
+        throw new Error('local-water smoke used an unexpected renderer backend: ' + JSON.stringify(state));
+      }
+      if (state.mounted !== true || state.effectiveRoute !== requestedRoute) {
+        throw new Error('local-water host did not mount on its requested effective route: ' + JSON.stringify(state));
+      }
+      if (state.failure || !state.lastFrame || state.lastFrame.submittedByHost !== true || state.lastFrame.presentedByHost !== true) {
+        throw new Error('local-water frame was not submitted and presented by the current host: ' + JSON.stringify(state));
+      }
+      if (state.lastFrame.route !== requestedRoute || !state.lastFrame.frameId) {
+        throw new Error('local-water final frame has stale or substituted route identity: ' + JSON.stringify(state.lastFrame));
+      }
+      const rows = [...document.querySelectorAll('[data-scene-object-id]')];
+      const emitterIds = state.emitters.map(emitter => emitter.id);
+      if (emitterIds.length !== 1 || !rows.some(row => emitterIds.includes(row.dataset.sceneObjectId))) {
+        throw new Error('live local-water source is not one visible authored scene object: ' + JSON.stringify({emitterIds, rows:rows.map(row=>row.dataset.sceneObjectId)}));
+      }
+      const solver = state.solver || {};
+      if (!Number.isSafeInteger(solver.stepCount) || solver.stepCount < 1) {
+        throw new Error('local-water host mounted but the solver did not advance: ' + JSON.stringify({lastFrame:state.lastFrame,stepCount:solver.stepCount}));
+      }
+      const sceneParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+      let savedFile = sceneParams.get('scene') || null;
+      if (!savedFile) {
+        const before = await (await fetch('/api/browse?root=scenes&path=')).json();
+        if (before.error) throw new Error('local-water scene listing failed: ' + before.error);
+        const previous = new Set((before.entries || []).filter(entry=>entry.name.endsWith('.json')).map(entry=>entry.name));
+        await window.saveSceneAs();
+        for (let i = 0; i < 120; i++) {
+          const after = await (await fetch('/api/browse?root=scenes&path=')).json();
+          if (after.error) throw new Error('local-water saved-scene listing failed: ' + after.error);
+          const created=(after.entries || []).filter(entry=>entry.name.endsWith('.json')&&!previous.has(entry.name));
+          if (created.length===1) {savedFile=created[0].name;break;}
+          await wait(125);
+        }
+        if (!savedFile) throw new Error('local-water save did not create exactly one scene document');
+      }
+      const savedRead=await (await fetch('/api/read?root=scenes&path='+encodeURIComponent(savedFile))).json();
+      if (savedRead.error) throw new Error('local-water saved scene read failed: '+savedRead.error);
+      if (savedRead.localLiquid?.schema !== state.setup.schema || savedRead.objects?.length !== 1
+        || savedRead.objects[0]?.id !== state.emitters[0]?.id) {
+        throw new Error('local-water scene document did not preserve the mounted setup and emitter identity: '
+          +JSON.stringify({savedFile,localLiquid:savedRead.localLiquid,objects:savedRead.objects?.map(object=>({id:object.id,type:object.type}))}));
+      }
+      return {
+        requestedRoute,
+        effectiveRoute:state.effectiveRoute,
+        backend:state.backend,
+        mounted:state.mounted,
+        failure:state.failure,
+        emitterIds,
+        lastFrame:state.lastFrame,
+        firstFrameId,
+        solverStepCount:solver.stepCount,
+        liveInlets:solver.liveInlets || null,
+        particleDrawCount:solver.particleDrawCount ?? null,
+        screenSpaceSurfaceRenderFrameCount:solver.screenSpaceSurfaceRenderFrameCount ?? null,
+        screenSpaceRefractionRenderFrameCount:solver.screenSpaceRefractionRenderFrameCount ?? null,
+        hostFrameComposition:solver.hostFrameComposition ?? null,
+        hostFrameEvidence:solver.hostFrameCompositionEvidence ?? null,
+        supportContact:solver.supportContact ?? null,
+        presentation:solver.presentationEvidence ?? null,
+        savedFile,
+        savedSceneUrl:location.origin+location.pathname+'#authoring=1&scene='+encodeURIComponent(savedFile),
+        savedSetupSchema:savedRead.localLiquid.schema,
+        sceneRows:rows.map(row=>row.dataset.sceneObjectId),
+        info:document.getElementById('info-bar')?.textContent?.trim() || null,
+      };
+    })()
+  `, {timeoutMs:60000});
+}
+
 async function runTransformInspectorScenario(ws) {
   phase = 'scenario-transform-inspector';
   lastEvidence.transformInspector = await evaluate(ws, `
@@ -5069,6 +5162,8 @@ try {
     await runSelectedDeleteShortcutScenario(ws);
   } else if (scenario === 'save-load-roundtrip') {
     await runSaveLoadRoundtripScenario(ws);
+  } else if (scenario === 'local-liquid-live-host') {
+    await runLocalLiquidLiveHostScenario(ws);
   } else if (scenario === 'transform-inspector') {
     await runTransformInspectorScenario(ws);
   } else if (scenario === 'object-groups-roundtrip') {

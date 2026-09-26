@@ -13,6 +13,9 @@ const witness = readFileSync(witnessPath, 'utf8');
 const indexHtml = readFileSync(indexPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
+assert.match(witness, /local-liquid-live-host/, 'browser witness supports a current-host local-liquid smoke route');
+assert.match(witness, /effectiveRoute !== requestedRoute/, 'local-liquid smoke rejects requested-route-only success');
+assert.match(witness, /submittedByHost !== true[\s\S]*presentedByHost !== true/, 'local-liquid smoke requires a submitted and presented current host frame');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
 assert.match(witness, /mesh-asset-link/, 'witness supports a direct GLB asset smoke-link scenario');
 assert.match(witness, /modal-pivot-visibility/, 'witness supports a registered-mesh front/behind-camera pivot visibility scenario');
