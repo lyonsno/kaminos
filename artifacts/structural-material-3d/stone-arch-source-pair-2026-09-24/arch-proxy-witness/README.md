@@ -1,6 +1,53 @@
 # Projected Arch Structural Witness
 
-## Current Checkpoint: Contact And Interior Sensitivity
+## Current Checkpoint: Continuous-Arch Matched History
+
+The 2026-09-26 assay isolates the source-intended continuous interior instead
+of letting the radial-joint counterfactual veto or confound the result. It
+uses the same intact TRELLIS GLB (SHA-256
+`c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5`), a
+three-layer surface-envelope proxy, and a through-thickness contact patch at
+`(0.35, 0.20)`. Sequential loads `0.25, 0.50, 0.75, 1.00, 1.25, 1.50`
+produce 40 located bond breaks across two connectivity epochs while the graph
+remains one component. The same later load `0.50` is then solved once from the
+intact graph and once through that broken connectivity.
+
+| Later response | Intact history | After prior cracking |
+| --- | ---: | ---: |
+| Contact travel at force `0.50` | `0.005370` | `0.008413` |
+| Peak nodal displacement | `0.007194` | `0.010615` |
+| Broken bonds | `0` | `40` |
+| Connected components | `1` | `1` |
+
+The later contact and force are identical; crown travel increases by
+`0.003043` (`56.7%`) after the located crack history. A zero-force solve of
+the damaged graph returns exact zero displacement while retaining all 40
+broken bonds. This is evidence that connectivity history changes the loaded
+response of this expressive proxy. It is **not** a residual visible scar:
+each solve uses fixed reference geometry. No calibrated stone behavior,
+permanent shape change, detached motion, GPU execution, or audio is claimed.
+
+The machine-readable event ledger, per-step loads, response summaries, source
+identity, effective CPU route, and implementation hashes are in the
+[matched-history report](matched-history-continuous-2026-09-26.json). Replay:
+
+```sh
+node structural-material-arch-history-assay.mjs \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb \
+  artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/matched-history-continuous-2026-09-26.json
+
+node --test tests/structural-material-arch-*.mjs
+```
+
+**Next consumer slice:** let an operator compare intact and cracked connectivity
+under the same later contact, then release the load. The current visual page
+does not yet exercise this matched-history pair; its mesh mapping also has no
+residual-set model, so an unloaded visual scar would be dishonest. First show
+the loaded displacement/connectivity delta on the same arch, then decide
+whether adding an explicit residual-deformation state is necessary for the
+intended material grammar.
+
+## Earlier Checkpoint: Contact And Interior Sensitivity
 
 The 2026-09-25 CPU sensitivity assay holds the intact TRELLIS source fixed
 (SHA-256 `c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5`)
@@ -204,15 +251,18 @@ Other limits matter for the next decision:
 - Material-derived event energy exists in the ledger, but there is no acoustic
   playback in this slice.
 
-## Next Cut
+## Assumption-Sensitivity Finding
 
-The first bounded CPU comparison has now been run. It demonstrates an
-assumption-sensitive local response, not the asset's true material behavior:
-the authored radial-joint interior reverses the controlled-notch crack-count
-contrast under both tested contact-depth rules, while every case reaches the
-same broad terminal category. Neither the open TRELLIS surface nor this proxy
-selects the true interior or load contact. Do not convert this sensitivity
-result into a GPU-parity or mesh-destruction claim.
+The broader CPU comparison demonstrates an assumption-sensitive local
+response, not the asset's true material behavior: the authored radial-joint
+interior reverses the controlled-notch crack-count contrast under both tested
+contact-depth rules, while every case reaches the same broad terminal category.
+Neither the open TRELLIS surface nor this proxy selects the true interior or
+load contact. The continuous-only matched-history result above isolates one
+interior hypothesis and shows that its own broken connectivity changes later
+loaded response; it still does not establish source-true stone behavior or an
+unloaded visible wound. Do not convert these CPU results into GPU-parity or
+mesh-destruction claims.
 
 Next, inspect the actual arch mesh and source-image evidence for construction
 clues and surface/contact geometry, while keeping inferred internal joints

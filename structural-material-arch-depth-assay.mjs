@@ -371,6 +371,7 @@ export function runArchDepthAssay(sourcePath, options = {}) {
     'structural-material-arch-core.js',
     'structural-material-arch-profile.mjs',
     'structural-material-arch-depth-assay.mjs',
+    'structural-material-arch-history-assay.mjs',
   ];
   return {
     schema: 'kaminos.structural-material.arch-depth-assay.v0',
@@ -440,6 +441,143 @@ export function runArchDepthAssay(sourcePath, options = {}) {
       interpretation: depthAwareContrast.some(result => result.responseDistinguishable)
         ? 'same-source controlled shoulder removal changes the depth-envelope proxy damage history under matched crown force; this supports geometry-conditioned behavior of the expressive proxy, not calibrated stone prediction'
         : 'controlled shoulder-notch effect is not resolved in the depth-envelope proxy at this rasterization and force ladder',
+    },
+  };
+}
+
+function displacementSummary(state) {
+  const magnitudes = state.nodes.map(node => Math.hypot(
+    node.displacement.x, node.displacement.y, node.displacement.z,
+  ));
+  return {
+    peakDisplacement: Math.max(...magnitudes),
+    rmsDisplacement: Math.sqrt(magnitudes.reduce((sum, value) => sum + value * value, 0) / magnitudes.length),
+    contactTravel: state.load.travel,
+    residual: state.load.relativeResidual,
+    componentCount: state.components.length,
+    brokenBondCount: state.bonds.filter(bond => !bond.alive).length,
+  };
+}
+
+export function runArchHistoryAssay(sourcePath) {
+  const sourceBytes = readFileSync(sourcePath);
+  const profile = buildArchProfileFromGlb(sourcePath, settings.resolution.columns,
+    settings.resolution.rows, settings.sharedBounds);
+  const graphOptions = { layers: 3, depthMode: 'surface-envelope', interiorMode: 'continuous' };
+  const base = buildArchStructuralProxy(profile, graphOptions);
+  const contact = { x: 0.35, y: 0.2 };
+  const loadOptions = {
+    ...contact,
+    patchRadius: 0.032,
+    contactDepthMode: 'through-thickness',
+    iterations: 1200,
+  };
+  const threshold = 0.04;
+  let damaged = base;
+  const priorLoads = [];
+  const priorTransition = [];
+  for (const force of [0.25, 0.5, 0.75, 1, 1.25, 1.5]) {
+    const solved = solveArchStructuralForce(damaged, { ...loadOptions, force });
+    const fractured = fractureArchStructuralProxy(solved, { threshold });
+    const newEvents = fractured.events.slice(damaged.events.length);
+    priorLoads.push({
+      requestedForce: force,
+      contact: solved.load.contact,
+      contactCells: solved.load.contactCells,
+      travel: solved.load.travel,
+      relativeResidual: solved.load.relativeResidual,
+      newBondEvents: newEvents.length,
+      connectivityEpoch: fractured.connectivityEpoch,
+    });
+    priorTransition.push(...newEvents.map(event => ({
+      ...event,
+      requestedForce: force,
+      connectivityEpoch: fractured.connectivityEpoch,
+    })));
+    damaged = fractured;
+    if (damaged.components.length !== 1) {
+      throw new Error('prior transition unexpectedly separated the continuous arch');
+    }
+  }
+
+  const laterForce = 0.5;
+  const intactLater = solveArchStructuralForce(base, { ...loadOptions, force: laterForce });
+  const damagedLater = solveArchStructuralForce(damaged, { ...loadOptions, force: laterForce });
+  const unloaded = solveArchStructuralForce(damaged, { ...loadOptions, force: 0 });
+  const intactResponse = displacementSummary(intactLater);
+  const damagedResponse = displacementSummary(damagedLater);
+  const travelDelta = damagedResponse.contactTravel - intactResponse.contactTravel;
+  const relativeTravelDelta = travelDelta / Math.abs(intactResponse.contactTravel);
+  const implementationPaths = [
+    'structural-material-arch-core.js',
+    'structural-material-arch-profile.mjs',
+    'structural-material-arch-depth-assay.mjs',
+    'structural-material-arch-history-assay.mjs',
+  ];
+  const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  const dirtyPaths = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' })
+    .split('\n').filter(Boolean).map(line => line.slice(3));
+  return {
+    schema: 'kaminos.structural-material.arch-matched-history.v0',
+    status: 'passed',
+    claim: 'a located prior crack transition changes the same continuous arch proxy response to a matched later load',
+    claimCeiling: [
+      'same open TRELLIS GLB supplies silhouette and surface depth envelope; continuous three-layer interior is an explicit reconstruction',
+      'local Node.js CPU shear-regularized linear-spring PCG in normalized proxy units; not calibrated stone prediction',
+      'load history persists through broken connectivity, while each solve uses fixed reference geometry',
+      'zero-force solve returns to reference geometry; no residual deformation, plasticity, inertial motion, collision, surface separation, sound, or GPU execution is modeled',
+    ],
+    route: {
+      requested: 'local Node.js CPU experiment',
+      effective: 'local Node.js CPU / shear-regularized linear-spring PCG',
+      fallback: false,
+      node: process.version,
+      sourceRevision,
+      sourceDirtyPaths: dirtyPaths,
+      implementationSha256: Object.fromEntries(implementationPaths.map(path =>
+        [path, sha256(readFileSync(resolve(root, path)))])),
+    },
+    source: {
+      path: sourcePath,
+      sha256: sha256(sourceBytes),
+      profileSourceSha256: profile.source.sha256,
+      sameSource: profile.source.sha256 === sha256(sourceBytes),
+    },
+    proxy: {
+      interiorMode: base.interiorMode,
+      depthMode: base.depthMode,
+      nodes: base.nodes.length,
+      bonds: base.bonds.length,
+      componentsAtRest: base.components.length,
+      contact: loadOptions,
+      fractureThreshold: threshold,
+    },
+    priorLoads,
+    priorTransition: {
+      eventCount: priorTransition.length,
+      bondEvents: priorTransition,
+      connectivityEpoch: damaged.connectivityEpoch,
+      brokenBondCount: damaged.bonds.filter(bond => !bond.alive).length,
+      componentCount: damaged.components.length,
+    },
+    matchedLaterLoad: {
+      requestedForce: laterForce,
+      contact: intactLater.load.contact,
+      contactCells: intactLater.load.contactCells,
+      intact: intactResponse,
+      damaged: damagedResponse,
+      travelDelta,
+      relativeTravelDelta,
+      sameContactAndForce: intactLater.load.requestedForce === damagedLater.load.requestedForce &&
+        JSON.stringify(intactLater.load.contactCells) === JSON.stringify(damagedLater.load.contactCells),
+    },
+    unloaded: { damaged: displacementSummary(unloaded) },
+    adjudication: {
+      historyChangesLaterResponse: Math.abs(relativeTravelDelta) >= 0.02,
+      residualDisplacementAfterUnload: displacementSummary(unloaded).peakDisplacement,
+      interpretation: Math.abs(relativeTravelDelta) >= 0.02
+        ? 'the prior connectivity transition measurably changes the same proxy response under a matched later load; unload returns to reference geometry, so this is stiffness history rather than a lasting visible scar'
+        : 'the prior connectivity transition did not produce a meaningful matched-load response delta at this contact and resolution',
     },
   };
 }
