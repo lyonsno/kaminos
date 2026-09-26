@@ -118,7 +118,7 @@ assert.match(index, /pyro_contrast_warm_cap_small_flame_0702/, 'Volume tab pins 
 assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the operator-found Pyro material bonfire family basin by stable route identity');
 assert.match(index, /exploding_jellow_fireball_motherfucker_0706/, 'Volume tab pins the operator-found exploding jellow fireball Pyro look by stable route identity');
 assert.match(index, /pyro_flow_small_bonfire_gamut_0707/, 'Volume tab pins the operator-found Pyro Flow small-bonfire gamut basin by stable route identity');
-assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'boundary_fire_bonfire_a_la_ruffles_0709'/, 'bare smoke routes default to the operator-found Boundary Fire Bonfire_a_la_ruffles basin');
+assert.match(index, /DEFAULT_VOLUME_SMOKE_BASIN_URL\s*=\s*'\.\/artifacts\/default-basin\/cheap-blast-furnace\.json'/, 'bare smoke routes default to the committed cheap-blast-furnace basin export');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionLiveView:\s*'boundary_fire'/, 'Boundary Fire Bonfire_a_la_ruffles basin activates boundary-fire as the default live fire view');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*boundarySidecarSource:\s*'baked'[\s\S]*boundarySidecarBlur:\s*1\.00[\s\S]*boundarySidecarWidth:\s*2\.00[\s\S]*boundarySidecarRidge:\s*2\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin uses the promoted baked sidecar reconstruction path');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireRidge:\s*1\.28[\s\S]*reactionBoundaryFireRidgeCut:\s*0\.10[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted ridge and luma values');
@@ -241,7 +241,7 @@ assert.match(captureReplayEvidenceBody, /writeRgbaPng\(out,\s*nativeFrame\.width
 assert.doesNotMatch(captureReplayEvidenceBody, /Page\.captureScreenshot/, 'Capture replay must not substitute a browser screenshot for native renderer pixels');
 assert.match(captureReplayEvidenceBody, /gpu-frame-texture-rgba8-readback/, 'Capture replay report names native GPU frame readback authority');
 assert.doesNotMatch(index, /BUILT_IN_VOLUME_LOOK_LIBRARY/, 'Retired partial look-library aliases are removed from the operator runtime');
-assert.match(index, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'bare smoke routes apply the current Pyro basin when no explicit scene or preset is routed');
+assert.match(index, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*!params\.has\('settings_preset'\)[\s\S]*await applyDefaultVolumeSmokeBasin\(params\)/, 'bare smoke routes apply the default basin when no explicit scene, tall preset, or settings preset is routed');
 assert.match(index, /id="volume-boundary-sidecar-source"/, 'Boundary Fire tuning exposes a live/baked sidecar source selector');
 assert.match(index, /volume_boundary_sidecar_source/, 'Basin URLs preserve the boundary sidecar source control');
 assert.match(index, /id="volume-boundary-sidecar-view"/, 'Boundary Fire tuning exposes a primary-view sidecar channel selector');
@@ -252,7 +252,7 @@ assert.match(index, /id="volume-boundary-sidecar-width"/, 'Boundary Fire tuning 
 assert.match(index, /id="volume-boundary-sidecar-ridge"/, 'Boundary Fire tuning exposes a baked ridge gain control');
 assert.match(index, /boundarySidecarSource/, 'Volume controls carry the boundary sidecar source into the renderer');
 assert.match(index, /boundarySidecarView/, 'Volume controls carry the sidecar channel debug view into the renderer');
-assert.match(index, /!routeVolumeScene\s*\|\|\s*routeVolumeScene === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the Pyro basin instead of plain tall-plume mechanics');
+assert.match(index, /!params\.get\('volume_scene'\)\s*\|\|\s*params\.get\('volume_scene'\) === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the default basin instead of plain tall-plume mechanics');
 assert.match(index, /routeVolumeScene && !\(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume'\)/, 'explicit tall_plume route must not immediately overwrite the Pyro basin with the plain scene preset');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*resolution:\s*96/, 'Pyro material bonfire basin keeps a conservative default grid while preserving the look controls');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*fire:\s*0\.00/, 'Pyro material bonfire basin lets Pyro own the visible flame instead of stacking old stock fire');
@@ -1809,8 +1809,8 @@ assert.match(witness, /pyro_material_bonfire_family_0702/, 'witness recognizes t
 assert.match(witness, /exploding_jellow_fireball_motherfucker_0706/, 'witness recognizes the 2026-07-06 operator-found exploding jellow fireball Pyro basin');
 assert.match(witness, /pyro_flow_small_bonfire_gamut_0707/, 'witness recognizes the 2026-07-07 operator-found Pyro Flow small-bonfire gamut basin');
 assert.match(witness, /boundary_fire_bonfire_a_la_ruffles_0709/, 'witness recognizes the 2026-07-09 operator-found Boundary Fire Bonfire_a_la_ruffles basin');
-assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'boundary_fire_bonfire_a_la_ruffles_0709'/, 'witness mirrors the bare smoke route default Boundary Fire Bonfire_a_la_ruffles basin');
-assert.match(witness, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'witness expects bare smoke routes to boot into the default Pyro basin');
+assert.match(witness, /DEFAULT_VOLUME_SMOKE_BASIN_PATH = new URL\('\.\/artifacts\/default-basin\/cheap-blast-furnace\.json'/, 'witness mirrors the bare smoke route default basin from the same committed export');
+assert.match(witness, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*defaultVolumeBasin \? volumeBasinScenePreset\(/, 'witness expects bare smoke routes to boot into the default basin');
 assert.match(witness, /!routeParams\.has\('volume_scene'\)\s*\|\|\s*routeParams\.get\('volume_scene'\) === 'tall_plume'/, 'witness expects explicit tall_plume smoke routes to preserve the default Pyro basin');
 assert.match(witness, /expectedDetailScaleArtifactQuarantine/, 'witness verifies the tall-plume detail-scale artifact quarantine state');
 assert.match(witness, /detailScaleArtifactQuarantine/, 'witness records the effective detail-scale artifact quarantine state');
