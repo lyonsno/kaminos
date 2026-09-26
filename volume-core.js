@@ -6,7 +6,7 @@ import {
   normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
-import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
+import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, EMISSIVE_LIGHT_DIRECTIONS, resolveEmissiveLightTransport, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
@@ -13667,6 +13667,9 @@ export function createKaminosVolumePrototype({
       paletteAuthority: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-reference-planck-power-plus-approximate-reaction-spectrum' : 'thermal-lut-plus-clean-palette-no-pyro-repaint') : 'legacy',
       whiteBalanceKelvin: whiteKelvin,
       material: physicalColorMode === 2 ? { thermalControl: 'hot-soot-optical-density', smokeExtinction: uniforms[EMISSIVE_UNIFORM_OFFSET], scatteringAlbedo: uniforms[EMISSIVE_UNIFORM_OFFSET+1], ambientRadiance: uniforms[EMISSIVE_UNIFORM_OFFSET+2] } : null,
+      lightTransportRequested: resolveEmissiveLightTransport(controlsSnapshot.emissiveLightTransport),
+      lightTransportEffective: physicalColorEffective && physicalColorMode === 2
+        ? resolveEmissiveLightTransport(controlsSnapshot.emissiveLightTransport) : 'inactive',
     };
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
@@ -17375,8 +17378,9 @@ export function createKaminosVolumePrototype({
       drawPipeline = ordinaryDepthPipelines.get(basePipeline);
     }
     if (uniforms[368] > 1.5) {
-      emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
-      state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
+      const lightTransport = resolveEmissiveLightTransport(controlsSnapshot.emissiveLightTransport);
+      emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites, lightTransport);
+      state.physicalColor.incidentLight = { model: lightTransport === 'oblique' ? 'twenty-four-direction-cubic-short-characteristics-v1' : 'six-direction-single-scattering-v1', directions: lightTransport === 'oblique' ? EMISSIVE_LIGHT_DIRECTIONS.length : 6, grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
     }
     const pass = encoder.beginRenderPass({
       label,
@@ -17404,7 +17408,7 @@ export function createKaminosVolumePrototype({
     const readback = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     try {
       const encoder = device.createCommandEncoder({ label: 'same-state emissive lighting cost' });
-      emissiveLightField.encode(encoder, currentFluid, { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 });
+      emissiveLightField.encode(encoder, currentFluid, { querySet: query, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 }, resolveEmissiveLightTransport(controlsSnapshot.emissiveLightTransport));
       encoder.resolveQuerySet(query,0,2,resolved,0);
       encoder.copyBufferToBuffer(resolved,0,readback,0,16);
       device.queue.submit([encoder.finish()]);

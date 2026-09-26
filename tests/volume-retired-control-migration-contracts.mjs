@@ -149,12 +149,15 @@ legacySolverArtifact.preset.route = legacySolverRoute.href;
 legacySolverArtifact.controlCount = 211;
 legacySolverArtifact.preset.controlCount = 211;
 const legacySolverReceipt = validateVolumeSettingsPresetDocument(legacySolverArtifact, legacySolverArtifact.presetId, schema);
-assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, flameDoctorControls.map(control => control.key));
+assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds,
+  [...flameDoctorControls.map(control => control.key), 'volume-emissive-light-transport']);
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver'].value, 'legacy', 'a 211-control basin keeps the legacy Jacobi solver');
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver-iterations'].value, 60);
 assert.equal(legacySolverReceipt.preset.domControls['volume-advection-scheme'].value, 'legacy', 'a 211-control basin keeps legacy damped transport');
 assert.equal(legacySolverReceipt.presetRoute.searchParams.get('volume_advection_scheme'), 'legacy');
 assert.equal(legacySolverReceipt.preset.domControls['volume-confinement'].value, 'curl-slider', 'a 211-control basin keeps the Curl-driven confinement law');
+assert.equal(legacySolverReceipt.preset.domControls['volume-emissive-light-transport'].value, 'axes',
+  'a 211-control basin keeps six-axis smoke lighting');
 assert.equal(legacySolverReceipt.preset.domControls[commonGasTransport.key].value, false, 'the 211-control basin keeps its stored common gas value');
 assert.equal(legacySolverReceipt.preset.controlCount, schema.controlCount);
 const enabledTransportArtifact = currentPresetArtifact();

@@ -1598,6 +1598,14 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <span class="slider-val" id="volume-physical-mode-val">0</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Smoke lighting</span>
+        <select id="volume-emissive-light-transport" class="select-input" data-volume-settings-param="volume_emissive_light_transport">
+          <option value="axes">Six axes</option>
+          <option value="oblique">Oblique</option>
+        </select>
+        <span class="slider-val" id="volume-emissive-light-transport-val">axes</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Material law</span>
         <select id="volume-physical-material-law" class="select-input"><option value="0">Original mixed carriers (replay)</option><option value="1">Transported heat + soot</option></select>
         <span class="slider-val" id="volume-physical-material-law-val">0</span>
@@ -15353,6 +15361,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ['boundarySplatMode', 'volume_boundary_splat_mode'],
+  ['emissiveLightTransport', 'volume_emissive_light_transport'],
   ['boundarySplatFeatureCapture', 'volume_boundary_splat_feature_capture'],
   ['flowKernelDescriptorCapture', 'volume_flow_kernel_descriptor_capture'],
   ['reactionBoundaryFireCleanColor', 'volume_reaction_boundary_fire_clean_color'],
@@ -20333,6 +20342,7 @@ function readVolumeControls() {
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
     ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
+    emissiveLightTransport: document.getElementById('volume-emissive-light-transport').value,
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked,
@@ -20680,6 +20690,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-shell-inspect-mode-val').textContent = c.shellInspectMode;
   const physicalBoundaryColor = c.physicalColorMode > 0 && c.fireRenderMode === 'inspect' && c.shellInspectMode === 'boundary_fire';
   document.getElementById('volume-physical-mode-val').textContent = c.physicalColorMode > 0 ? (physicalBoundaryColor ? (c.physicalColorMode === 1 ? 'active' : 'requested') : 'inactive route') : 'legacy';
+  document.getElementById('volume-emissive-light-transport-val').textContent = c.emissiveLightTransport;
   document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? 'Hot soot density' : 'Thermal emission';
   document.getElementById('volume-physical-temperature-label').textContent = c.physicalColorMode === 2 ? 'Peak soot K' : 'Thermal K';
   syncVolumeCockpitModeAvailability(document, c, volumePrototype?.debugState?.()?.physicalColor);
@@ -21752,6 +21763,9 @@ async function initKaminosVolumeRoute() {
   }
   if (params.has('volume_boundary_splat_mode')) {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
+  }
+  if (params.has('volume_emissive_light_transport')) {
+    setVolumeControlValue('volume-emissive-light-transport', params.get('volume_emissive_light_transport'));
   }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
@@ -22987,6 +23001,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
   }
+  document.getElementById('volume-emissive-light-transport').addEventListener('change', syncControls);
   for (const id of ['volume-exposure', 'volume-reaction-boundary-fire-clean-color', 'volume-reaction-boundary-fire-soot-color']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);

@@ -45,18 +45,48 @@ for (const [nm, x, y, z] of CIE_1931_2DEG) {
 const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => sum + v*reactionXYZ[i], 0)));
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
 export const EMISSIVE_LIGHT_GRID = 32;
+const cubicDirectionMinor = 1 / Math.sqrt(8);
+const cubicDirectionMajor = Math.sqrt(3) / 2;
+export const EMISSIVE_LIGHT_DIRECTIONS = Object.freeze(Array.from({ length: 24 }, (_, variant) => {
+  const majorAxis = Math.floor(variant / 8);
+  const signs = variant % 8;
+  const direction = [cubicDirectionMinor, cubicDirectionMinor, cubicDirectionMinor];
+  direction[majorAxis] = cubicDirectionMajor;
+  for (let axis = 0; axis < 3; axis++) if (signs & (1 << axis)) direction[axis] *= -1;
+  return Object.freeze(direction);
+}));
+export const EMISSIVE_LIGHT_MODE_AXES = 'axes';
+export const EMISSIVE_LIGHT_MODE_OBLIQUE = 'oblique';
+export function resolveEmissiveLightTransport(value) {
+  if (value == null || value === EMISSIVE_LIGHT_MODE_AXES) return EMISSIVE_LIGHT_MODE_AXES;
+  if (value === EMISSIVE_LIGHT_MODE_OBLIQUE) return EMISSIVE_LIGHT_MODE_OBLIQUE;
+  throw new Error(`unsupported emissive light transport: ${value}`);
+}
 
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = allocate('emissive material coefficients', cells);
-  const directions = allocate('six-direction incident radiance', cells*6);
+  const directions = allocate('axis-or-oblique directional incident radiance', cells*EMISSIVE_LIGHT_DIRECTIONS.length);
   const incident = allocate('single-scattering mean incident radiance', cells);
+  const stepStride = 256;
+  const stepBuffer = device.createBuffer({
+    label: 'oblique emissive slab step',
+    size: EMISSIVE_LIGHT_GRID * stepStride,
+    usage: GPUBufferUsage.UNIFORM,
+    mappedAtCreation: true,
+  });
+  const stepWords = new Uint32Array(stepBuffer.getMappedRange());
+  for (let step = 0; step < EMISSIVE_LIGHT_GRID; step++) stepWords[step * stepStride / 4] = step;
+  stepBuffer.unmap();
   const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
   const seed = pipeline('seedEmissiveLight'), sweep = pipeline('sweepEmissiveLight'), resolve = pipeline('resolveEmissiveLight');
+  const obliqueSweep = pipeline('sweepObliqueEmissiveLight'), obliqueResolve = pipeline('resolveObliqueEmissiveLight');
   const group = (pipe, index, buffers) => device.createBindGroup({
     layout: pipe.getBindGroupLayout(index),
-    entries: buffers.map(([binding, buffer]) => ({ binding, resource: { buffer } })),
+    entries: buffers.map(([binding, buffer, offset, size]) => ({
+      binding, resource: { buffer, ...(offset === undefined ? {} : { offset, size }) },
+    })),
   });
   const seedInputs = fluidBuffers.map((buffer, i) => group(seed,0,[[0,uniformBuffer],[1,buffer],[7,frontBuffers[i]]]));
   const seedOutput = group(seed,3,[[1,coefficients]]);
@@ -64,19 +94,35 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   const sweepOutput = group(sweep,3,[[2,directions]]);
   const resolveInput = group(resolve,0,[[14,directions]]);
   const resolveOutput = group(resolve,3,[[3,incident]]);
+  const obliqueSweepInput = group(obliqueSweep,0,[[0,uniformBuffer],[13,coefficients]]);
+  const obliqueSweepOutputs = Array.from({ length: EMISSIVE_LIGHT_GRID }, (_, step) => (
+    group(obliqueSweep,3,[[2,directions],[4,stepBuffer,step*stepStride,16]])
+  ));
+  const obliqueResolveInput = group(obliqueResolve,0,[[14,directions]]);
+  const obliqueResolveOutput = group(obliqueResolve,3,[[3,incident]]);
   return {
     incident,
-    encode(encoder, sourceIndex, timestampWrites) {
+    encode(encoder, sourceIndex, timestampWrites, mode = EMISSIVE_LIGHT_MODE_AXES) {
+      const transport = resolveEmissiveLightTransport(mode);
       const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });
       pass.setPipeline(seed); pass.setBindGroup(0,seedInputs[sourceIndex]); pass.setBindGroup(3,seedOutput);
       pass.dispatchWorkgroups(EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4);
-      pass.setPipeline(sweep); pass.setBindGroup(0,sweepInput); pass.setBindGroup(3,sweepOutput);
-      pass.dispatchWorkgroups(Math.ceil(6*EMISSIVE_LIGHT_GRID**2/64));
-      pass.setPipeline(resolve); pass.setBindGroup(0,resolveInput); pass.setBindGroup(3,resolveOutput);
+      if (transport === EMISSIVE_LIGHT_MODE_OBLIQUE) {
+        pass.setPipeline(obliqueSweep); pass.setBindGroup(0,obliqueSweepInput);
+        for (let step = 0; step < EMISSIVE_LIGHT_GRID; step++) {
+          pass.setBindGroup(3,obliqueSweepOutputs[step]);
+          pass.dispatchWorkgroups(Math.ceil(EMISSIVE_LIGHT_DIRECTIONS.length*EMISSIVE_LIGHT_GRID**2/64));
+        }
+        pass.setPipeline(obliqueResolve); pass.setBindGroup(0,obliqueResolveInput); pass.setBindGroup(3,obliqueResolveOutput);
+      } else {
+        pass.setPipeline(sweep); pass.setBindGroup(0,sweepInput); pass.setBindGroup(3,sweepOutput);
+        pass.dispatchWorkgroups(Math.ceil(6*EMISSIVE_LIGHT_GRID**2/64));
+        pass.setPipeline(resolve); pass.setBindGroup(0,resolveInput); pass.setBindGroup(3,resolveOutput);
+      }
       pass.dispatchWorkgroups(Math.ceil(cells/64));
       pass.end();
     },
-    destroy() { coefficients.destroy(); directions.destroy(); incident.destroy(); },
+    destroy() { coefficients.destroy(); directions.destroy(); incident.destroy(); stepBuffer.destroy(); },
   };
 }
 
@@ -149,13 +195,59 @@ fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
 }
 const LIGHT_GRID: u32 = ${EMISSIVE_LIGHT_GRID}u;
 const LIGHT_CELLS: u32 = LIGHT_GRID*LIGHT_GRID*LIGHT_GRID;
+const OBLIQUE_DIRECTIONS: u32 = ${EMISSIVE_LIGHT_DIRECTIONS.length}u;
+const OBLIQUE_BASIS = array<vec3<f32>,${EMISSIVE_LIGHT_DIRECTIONS.length}>(
+${EMISSIVE_LIGHT_DIRECTIONS.map(direction => `  vec3<f32>(${direction.map(value => value.toFixed(12)).join(',')})`).join(',\n')}
+);
 @group(0) @binding(13) var<storage,read> emissiveCoefficients: array<vec4<f32>>;
 @group(0) @binding(14) var<storage,read> emissiveDirections: array<vec4<f32>>;
 @group(0) @binding(15) var<storage,read> emissiveIncident: array<vec4<f32>>;
 @group(3) @binding(1) var<storage,read_write> emissiveCoefficientsDst: array<vec4<f32>>;
 @group(3) @binding(2) var<storage,read_write> emissiveDirectionsDst: array<vec4<f32>>;
 @group(3) @binding(3) var<storage,read_write> emissiveIncidentDst: array<vec4<f32>>;
+@group(3) @binding(4) var<uniform> emissiveSweepStep: vec4<u32>;
 fn lightIndex(c: vec3<u32>) -> u32 { return c.x+LIGHT_GRID*(c.y+LIGHT_GRID*c.z); }
+fn obliqueMajorAxis(direction: u32) -> u32 {
+  let magnitude = abs(OBLIQUE_BASIS[direction]);
+  if (magnitude.x >= magnitude.y && magnitude.x >= magnitude.z) { return 0u; }
+  if (magnitude.y >= magnitude.z) { return 1u; }
+  return 2u;
+}
+fn obliqueMajorComponent(direction: u32) -> f32 {
+  let d = OBLIQUE_BASIS[direction]; let axis = obliqueMajorAxis(direction);
+  if (axis == 0u) { return d.x; }
+  if (axis == 1u) { return d.y; }
+  return d.z;
+}
+fn obliqueCell(direction: u32, column: u32, step: u32) -> vec3<u32> {
+  let along = select(step,LIGHT_GRID-1u-step,obliqueMajorComponent(direction)<0.0);
+  let a = column%LIGHT_GRID; let b = column/LIGHT_GRID;
+  let axis = obliqueMajorAxis(direction);
+  if (axis == 0u) { return vec3<u32>(along,a,b); }
+  if (axis == 1u) { return vec3<u32>(a,along,b); }
+  return vec3<u32>(a,b,along);
+}
+fn samplePreviousOutgoing(direction: u32, p: vec3<f32>, halfDs: f32) -> vec3<f32> {
+  let base = vec3<i32>(floor(p)); let w = fract(p);
+  let ambient = vec3<f32>(u.emissive_material.z);
+  var sum = vec3<f32>(0.0);
+  for (var z=0u;z<2u;z++) { for (var y=0u;y<2u;y++) { for (var x=0u;x<2u;x++) {
+    let weight = select(1.0-w.x,w.x,x==1u)*select(1.0-w.y,w.y,y==1u)*select(1.0-w.z,w.z,z==1u);
+    if (weight>0.0) {
+      let sampleCell = base+vec3<i32>(i32(x),i32(y),i32(z));
+      if (any(sampleCell<vec3<i32>(0)) || any(sampleCell>=vec3<i32>(i32(LIGHT_GRID)))) {
+        sum += ambient*weight;
+      } else {
+        let sampleIndex = lightIndex(vec3<u32>(sampleCell));
+        let center = emissiveDirectionsDst[direction*LIGHT_CELLS+sampleIndex].rgb;
+        let material = emissiveCoefficients[sampleIndex];
+        let outgoing = center*exp(-material.w*halfDs)+material.rgb*emissionIntegral(material.w,halfDs);
+        sum += outgoing*weight;
+      }
+    }
+  } } }
+  return sum;
+}
 fn incidentAt(p: vec3<f32>) -> vec3<f32> {
   let q = clamp((p*0.5+vec3<f32>(0.5))*f32(LIGHT_GRID)-vec3<f32>(0.5),vec3<f32>(0.0),vec3<f32>(f32(LIGHT_GRID)-1.001));
   let c = vec3<u32>(floor(q)); let w = fract(q);
@@ -209,6 +301,34 @@ fn resolveEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
   if(id.x>=LIGHT_CELLS) { return; }
   var light = vec3<f32>(0.0);
   for(var direction=0u;direction<6u;direction++) { light += emissiveDirections[direction*LIGHT_CELLS+id.x].rgb/6.0; }
+  emissiveIncidentDst[id.x] = vec4<f32>(light,1.0);
+}
+@compute @workgroup_size(64)
+fn sweepObliqueEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
+  let plane = LIGHT_GRID*LIGHT_GRID;
+  if (id.x>=OBLIQUE_DIRECTIONS*plane) { return; }
+  let step = emissiveSweepStep.x;
+  if (step>=LIGHT_GRID) { return; }
+  let direction = id.x/plane; let column = id.x%plane;
+  let d = OBLIQUE_BASIS[direction]; let dominant = abs(obliqueMajorComponent(direction));
+  let c = obliqueCell(direction,column,step); let index = lightIndex(c);
+  let halfDs = (1.0/f32(LIGHT_GRID))/dominant;
+  let material = emissiveCoefficients[index];
+  var incoming = vec3<f32>(u.emissive_material.z);
+  if (step>0u) {
+    let previousPosition = vec3<f32>(c)-d/dominant;
+    incoming = samplePreviousOutgoing(direction,previousPosition,halfDs);
+  }
+  let center = incoming*exp(-material.w*halfDs)+material.rgb*emissionIntegral(material.w,halfDs);
+  emissiveDirectionsDst[direction*LIGHT_CELLS+index] = vec4<f32>(center,0.0);
+}
+@compute @workgroup_size(64)
+fn resolveObliqueEmissiveLight(@builtin(global_invocation_id) id: vec3<u32>) {
+  if (id.x>=LIGHT_CELLS) { return; }
+  var light = vec3<f32>(0.0);
+  for (var direction=0u;direction<OBLIQUE_DIRECTIONS;direction++) {
+    light += emissiveDirections[direction*LIGHT_CELLS+id.x].rgb/f32(OBLIQUE_DIRECTIONS);
+  }
   emissiveIncidentDst[id.x] = vec4<f32>(light,1.0);
 }
 `;
