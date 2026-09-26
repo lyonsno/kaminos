@@ -22065,6 +22065,12 @@ async function initKaminosVolumeRoute() {
     'volume-input-radius',
     'volume-flow-rate',
     'volume-speed',
+    // The emitter compiler reads the time-step dynamics Speed, which the mode
+    // and the admitting transport controls decide; a stale descriptor across
+    // a mode switch would carry the wrong Speed into the packed increments.
+    'volume-time-step',
+    'volume-advection-scheme',
+    'volume-common-gas-transport',
   ]);
   const syncControls = event => {
     if (event?.target?.id === 'volume-render-scale' && event.isTrusted === true) adoptVolumeRenderScaleSliderValue();

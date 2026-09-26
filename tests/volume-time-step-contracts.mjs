@@ -157,6 +157,13 @@ test('the momentum-linked inlet is sized at the dynamics Speed, so under uniform
   const runtime = readFileSync(new URL('../volume-emitter-runtime.mjs', import.meta.url), 'utf8');
   assert.match(runtime, /finiteNumber\(controls\.emitterTransportSpeed \?\? controls\.speed \?\? 1, 'controls\.emitterTransportSpeed'\)/, 'the emitter runtime reads the dynamics Speed first');
   assert.match(index, /applyVolumeEmitterFamilyRuntime\(\{\s*prototype: volumePrototype,\s*family,\s*controls: emitterCompilerControls\(controlsSnapshot\),/, 'the cockpit compile path passes the controls through the helper');
+  // The ladder at ce5ca4b2 caught a stale descriptor: switching the time-step
+  // mode did not recompile the emitter, so uniform ran with a descriptor
+  // compiled under legacy at the requested Speed.
+  const morphology = index.slice(index.indexOf('const emitterMorphologyControls = new Set(['), index.indexOf(']);', index.indexOf('const emitterMorphologyControls = new Set([')));
+  for (const id of ['volume-speed', 'volume-time-step', 'volume-advection-scheme', 'volume-common-gas-transport']) {
+    assert.match(morphology, new RegExp(`'${id}',`), `${id} edits recompile the emitter so the compiled transport Speed follows the effective time-step mode`);
+  }
   assert.match(source, /transportSpeed: analyticEmitterDescriptor\?\.transportSpeed \?\? null,\s*momentumLinked: analyticEmitterDescriptor\?\.momentumLinked \?\? null,/, 'the receipt names the Speed the compiler saw and the link state');
 });
 
