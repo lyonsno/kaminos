@@ -2,9 +2,9 @@ import {createWebGpuForegroundService} from './webgpu-inference-kit/src/core.js'
 
 export const sharedGpuBufferRequirements = {};
 
-export function judgeForegroundRebindPixels(before, after) {
+export function judgeForegroundRebindPixels(before, after, middle) {
   const errors = [];
-  for (const [phase, sample] of [['before', before], ['after', after]]) {
+  for (const [phase, sample] of [['before', before], ['b', middle], ['after', after]]) {
     if (!sample || sample.sampledPixels !== 2304) errors.push(`${phase} ordinary-flame pixel sample is missing`);
     else if (sample.litPixels < 16 || sample.coloredPixels < 16) errors.push(`${phase} ordinary-flame canvas is blank or partial`);
   }
@@ -122,7 +122,7 @@ export async function mountComposition({prototype, sharedGpu, host} = {}) {
           const before = snapshot();
           const start = receipts[routeId].length;
           await waitForFrames(routeId, start);
-          phases.push({routeId, before, after: snapshot(), receipts: receipts[routeId].slice(start)});
+          phases.push({routeId, before, after: snapshot(), visual: sampleCanvas(), receipts: receipts[routeId].slice(start)});
         }
         const result = {sameDevice: true, phases, final: snapshot()};
         result.errors = judgeForegroundRebind(result);
