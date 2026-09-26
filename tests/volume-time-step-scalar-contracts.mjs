@@ -136,4 +136,6 @@ test('the residual probe carries a vertical profile of mean vertical velocity, h
   assert.match(source, /verticalVelocityMean: profileVerticalVelocity\.map\(/, 'per-slab means are exported');
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /heightProfile: s\.pressureSolver\?\.residual\?\.profile \?\? null/, 'the arm capture records the profile');
+  assert.match(capture, /--settle-steps/, 'the capture can settle by simulation steps so arms at different dt reach equal simulated time');
+  assert.match(capture, /did not reach \$\{settleSteps\} settle steps within/, 'a step-settled arm that runs out of wall time fails instead of reporting a short arm');
 });
