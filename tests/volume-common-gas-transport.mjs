@@ -39,7 +39,7 @@ const helpers = ['transportBacktraceScale', 'thermalAdvection', 'fireLayerAdvect
 // inside the main sim kernel rather than at the first occurrence in the file.
 const mainKernelStart = core.indexOf('\nfn cs(@builtin(global_invocation_id) gid: vec3<u32>) {');
 assert.notEqual(mainKernelStart, -1, 'main sim kernel is located');
-const mainStart = core.indexOf('  let backtraceScale = transportBacktraceScale(speed);', mainKernelStart);
+const mainStart = core.indexOf('  let backtraceScale = transportBacktraceScale(speed)', mainKernelStart);
 const mainEnd = core.indexOf('  if (bonfireScene > 0.5)', mainStart);
 assert.ok(mainStart >= 0 && mainEnd > mainStart, 'production advection block is located');
 const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
@@ -52,6 +52,8 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   // transport_controls.x = 0 selects the legacy scheme, so this exercises the
   // first-order branch that the common-gas switch routes.
   const u = {reserved_source_extension_2:{y:enabled ? 1 : 0}, transport_controls:{x:0}};
+  // timeStep is 1 under the legacy time-step mode this block is exercised in.
+  const timeStep = 1;
   const thermalAdvectionRiseDirection = 1, fireLayerRiseDirection = 1, microdetailRiseDirection = 1;
   const readSlot = () => vec(0.4,heat,0.3,0.2);
   const sampleFluidSlot = (p,slot) => {calls.push({slot,p:[p.x,p.y,p.z]}); return vec(0.4,heat,0.3,0.2);};

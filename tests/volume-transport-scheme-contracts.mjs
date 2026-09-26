@@ -91,7 +91,7 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
     assert.match(write, /boundVelocity\(/, `every velocity write goes through boundVelocity: ${write.trim()}`);
   }
   assert.doesNotMatch(source, /var vel = advected\.xyz \* 0\.982;/, 'per-step velocity damping is no longer unconditional');
-  assert.match(source, /var vel = advected\.xyz \* transportVelocityDamping\(\);/, 'velocity damping goes through the scheme-aware helper');
+  assert.match(source, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'velocity damping goes through the scheme-aware helper');
   const damping = wgslFunction('transportVelocityDamping');
   assert.match(damping, /0\.982/, 'legacy damping constant is preserved for the legacy scheme');
   const main = source.slice(source.indexOf('\nfn cs(@builtin(global_invocation_id)'), source.indexOf('struct RaymarchResult'));

@@ -109,7 +109,7 @@ assert.match(
 );
 assert.match(
   injectionShader,
-  /let injectedVelocity = clamp\([\s\S]*?let candidateVelocityDensity = vec4<f32>\(injectedVelocity, injectedDensity\);[\s\S]*?\$\{VOLUME_EMITTER_FIELD_COMMIT_WGSL\}[\s\S]*?fluid\[base\] = committedVelocityDensity;/,
+  /var injectedVelocity = clamp\(injectedRaw, [\s\S]*?let candidateVelocityDensity = vec4<f32>\(injectedVelocity, injectedDensity\);[\s\S]*?\$\{VOLUME_EMITTER_FIELD_COMMIT_WGSL\}[\s\S]*?fluid\[base\] = committedVelocityDensity;/,
   'the bounded source write consumes the law-selected density contract through the shared field policy',
 );
 assert.match(core, /function encodeAnalyticEmitterInjection\(encoder\)/, 'fixed morphology owns a separate encoder boundary');

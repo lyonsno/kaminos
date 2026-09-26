@@ -2640,6 +2640,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <span class="slider-help">Curl slider is the law every saved basin was authored under: Curl sets the vorticity-confinement amount (0.034 + Curl × 0.044, concentrated in smoke and heat) and the thermal-expansion gain (0.048 + Curl × 0.019). Calibrated replaces both with one small confinement epsilon per Advection scheme, applied uniformly, with thermal expansion held at its Curl-0 baseline (0.048). The epsilon values are provisional choices from the 2026-09-25 enstrophy sweep on one basin: under MacCormack velocity the domain-mean enstrophy did not distinguish 0.010 from zero and rose only near 0.1, and the first-order sweep showed no response to epsilon; legacy and MacCormack-all inherit those values unmeasured. The sweep did not isolate what part of the authored Curl law raises enstrophy (it also changes expansion and weighting), so this is a reversible comparison candidate for the live ladder, not a demonstrated physical level. Off removes confinement. Under Calibrated or Off the Curl slider no longer drives confinement or expansion (it still feeds the procedural detail forces and Bonfire terms while those are on).</span>
     <div class="slider-row">
+      <span class="slider-label">Time step</span>
+      <select id="volume-time-step" class="select-input" data-volume-settings-param="volume_time_step">
+        <option value="legacy" selected>Legacy (Speed scales buoyancy and backtrace)</option>
+        <option value="uniform">Uniform (Speed is a time step)</option>
+      </select>
+      <span class="slider-val" id="volume-time-step-val">legacy</span>
+    </div>
+    <span class="slider-help">Legacy is the law every saved basin was authored under: Speed scales buoyancy and the advection backtrace but not the inlet velocity, edge entrainment, thermal expansion or confinement, so lowering Speed lets the injected momentum win and the plume sloshes instead of rising slower. Uniform reads every authored coefficient at Speed 1 and multiplies the transport distance, every per-step velocity increment and the emitter inlet velocity by Speed, so Speed changes the rate of the same dynamics; at Speed 1 the two modes are identical. Uniform needs the shared gas characteristic (Common gas transport or a MacCormack scheme); scalar reaction and decay rates remain per step in both modes.</span>
+    <div class="slider-row">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pressure-tier-overlay-val">0.00</span>
@@ -3262,7 +3271,7 @@ import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, 
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig } from './volume-core.js?v=flame-doctor-confinement-0925';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig } from './volume-core.js?v=flame-doctor-time-step-0926';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -15345,6 +15354,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
   ['advectionScheme', 'volume_advection_scheme'],
   ['confinement', 'volume_confinement'],
+  ['timeStep', 'volume_time_step'],
   ['pressureTierOverlay', 'volume_pressure_tier_overlay'],
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
@@ -20581,6 +20591,7 @@ function readVolumeControls() {
     pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
     advectionScheme: document.getElementById('volume-advection-scheme').value,
     confinement: document.getElementById('volume-confinement').value,
+    timeStep: document.getElementById('volume-time-step').value,
     pressureTierOverlay: parseFloat(document.getElementById('volume-pressure-tier-overlay').value),
     pressureTierLowerMax: parseFloat(document.getElementById('volume-pressure-tier-lower-max').value),
     pressureTierHeroMin: parseFloat(document.getElementById('volume-pressure-tier-hero-min').value),
@@ -20805,6 +20816,11 @@ function updateVolumeControlLabels() {
     document.getElementById('volume-curl-val').textContent = confinementConfig.effective.curlDrives
       ? c.curl.toFixed(2)
       : `${c.curl.toFixed(2)} · not driving confinement/expansion (${confinementModeName})`;
+    const timeStepConfig = resolveTimeStepConfig(c);
+    const timeStepEffective = timeStepConfig.effective;
+    document.getElementById('volume-time-step-val').textContent = timeStepEffective.mode === 'uniform'
+      ? `uniform · dt ×${timeStepEffective.dtScale.toFixed(2)} of Speed ${timeStepEffective.referenceSpeed} · backtrace ${timeStepEffective.backtraceScale.toFixed(2)} cells per unit velocity · inlet ×${timeStepEffective.inletVelocityScale.toFixed(2)}`
+      : `legacy · buoyancy and backtrace follow Speed ${timeStepEffective.dynamicsSpeed.toFixed(2)}; inlet, entrainment, expansion and confinement do not${timeStepEffective.reason ? ` (${timeStepEffective.reason})` : ''}`;
   }
   const pressureTierControls = normalizeVolumePressureTierControls(c);
   if (pressureTierControls.lowerMax !== c.pressureTierLowerMax) setVolumeControlValue('volume-pressure-tier-lower-max', pressureTierControls.lowerMax.toFixed(2));
@@ -21801,6 +21817,7 @@ async function initKaminosVolumeRoute() {
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-confinement', 'volume_confinement'],
+    ['volume-time-step', 'volume_time_step'],
     ['volume-fine-breakup-localization', 'volume_fine_breakup_localization'],
     ['volume-common-gas-transport', 'volume_common_gas_transport'],
   ]) {
@@ -22097,6 +22114,7 @@ async function initKaminosVolumeRoute() {
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
     'volume-confinement',
+    'volume-time-step',
     'volume-common-gas-transport',
   ]) {
     document.getElementById(id).addEventListener('input', syncControls);

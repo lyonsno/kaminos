@@ -1920,7 +1920,7 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize, gridHeigh
   };
 }
 
-export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds) {
+export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, dispatch, timeSeconds, options = {}) {
   floats.fill(0);
   if (!descriptor || !dispatch.active) return;
   const familyMode = ANALYTIC_EMITTER_FAMILY_MODE[descriptor.family] || 0;
@@ -1950,10 +1950,18 @@ export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, 
   floats[23] = descriptor.edgeEntrainment;
   floats[24] = ANALYTIC_EMITTER_INLET_PROFILE_MODE[descriptor.inletProfile] || 0;
   floats[25] = descriptor.momentumLinked ? 0 : 1;
-  floats[26] = descriptor.effectiveInletVelocity;
+  // The inlet velocity is an imposed per-step displacement, so the uniform
+  // time step scales it; entrainment multiplies a transported velocity and
+  // already carries the factor.
+  floats[26] = descriptor.effectiveInletVelocity * (Number.isFinite(options.inletVelocityScale) ? options.inletVelocityScale : 1);
   floats[27] = descriptor.shearWidthCells;
   words.set([...dispatch.cellMin, dispatch.grid], 28);
   words.set([...dispatch.cellExtent, 0], 32);
+  // Uniform time step: magnitude bound for the injected velocity; 0 keeps the legacy clamp.
+  floats[36] = Number.isFinite(options.emitterVelocityBound) && options.emitterVelocityBound > 0 ? options.emitterVelocityBound : 0;
+  floats[37] = 0;
+  floats[38] = 0;
+  floats[39] = 0;
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -2353,6 +2361,73 @@ export function resolveConfinementConfig(controls = {}, options = {}) {
   };
 }
 
+// Time step (flame-doctor slice 4). Speed was never a time step: it scales
+// buoyancy and the advection backtrace but not the inlet velocity, the edge
+// entrainment, thermal expansion or confinement, so lowering it changes the
+// regime rather than the rate. `uniform` reads every authored coefficient at
+// TIME_STEP_REFERENCE_SPEED and multiplies the transport distance, every
+// per-step velocity increment and the emitter inlet velocity by
+// Speed / reference, so at the reference the two modes coincide exactly and
+// away from it Speed only changes how far the same dynamics advance per step.
+// The legacy per-layer transport carries its own speed-dependent lifts, so the
+// uniform step is defined only on the common-gas characteristic. Scalar
+// reaction and decay rates remain per-step in both modes.
+export const TIME_STEP_IDENTITY = 'time-step-mode-v0';
+export const TIME_STEP_MODE_VALUES = Object.freeze(['legacy', 'uniform']);
+const TIME_STEP_MODE_LEGACY = 'legacy';
+const TIME_STEP_MODE_UNIFORM = 'uniform';
+export const TIME_STEP_REFERENCE_SPEED = 1;
+const TRANSPORT_BACKTRACE_BASE_CELLS = 2.55;
+const TRANSPORT_BACKTRACE_SPEED_CELLS = 0.55;
+
+export function transportBacktraceScaleForSpeed(speed) {
+  return TRANSPORT_BACKTRACE_BASE_CELLS + speed * TRANSPORT_BACKTRACE_SPEED_CELLS;
+}
+
+export function timeStepModeUniformValue(mode) {
+  return mode === TIME_STEP_MODE_UNIFORM ? 1 : 0;
+}
+
+export function resolveTimeStepConfig(controls = {}) {
+  const requestedMode = controls.timeStep == null ? TIME_STEP_MODE_LEGACY : String(controls.timeStep);
+  const speed = Number.isFinite(Number(controls.speed)) ? Math.max(0.1, Number(controls.speed)) : TIME_STEP_REFERENCE_SPEED;
+  const transport = resolveTransportConfig(controls).effective;
+  const requested = { identity: TIME_STEP_IDENTITY, timeStep: requestedMode, speed, advectionScheme: transport.scheme, commonCharacteristic: transport.commonCharacteristic };
+  let mode = TIME_STEP_MODE_VALUES.includes(requestedMode) ? requestedMode : TIME_STEP_MODE_LEGACY;
+  let reason = mode === requestedMode ? null : `unknown time step mode ${requestedMode}; using legacy`;
+  if (mode === TIME_STEP_MODE_UNIFORM && !transport.commonCharacteristic) {
+    mode = TIME_STEP_MODE_LEGACY;
+    reason = 'uniform time step requires the common-gas characteristic (enable Common gas transport or a MacCormack scheme); using legacy';
+  }
+  if (mode === TIME_STEP_MODE_LEGACY) {
+    return {
+      requested,
+      effective: {
+        mode,
+        referenceSpeed: TIME_STEP_REFERENCE_SPEED,
+        dtScale: 1,
+        dynamicsSpeed: speed,
+        backtraceScale: transportBacktraceScaleForSpeed(speed),
+        inletVelocityScale: 1,
+        reason,
+      },
+    };
+  }
+  const dtScale = speed / TIME_STEP_REFERENCE_SPEED;
+  return {
+    requested,
+    effective: {
+      mode,
+      referenceSpeed: TIME_STEP_REFERENCE_SPEED,
+      dtScale,
+      dynamicsSpeed: TIME_STEP_REFERENCE_SPEED,
+      backtraceScale: transportBacktraceScaleForSpeed(TIME_STEP_REFERENCE_SPEED) * dtScale,
+      inletVelocityScale: dtScale,
+      reason,
+    },
+  };
+}
+
 function tallPlumePressureIterationStrategy(scene, pressureIterations) {
   return normalizeVolumeScene(scene) === 'tall_plume' && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
@@ -2627,6 +2702,7 @@ struct Uniforms {
   // .x fixed-source dephase; .y confinement mode (0 curl-slider, 1 calibrated, 2 off); .z calibrated confinement epsilon; .w thermal expansion amount.
   reserved_source_extension_0: vec4<f32>,
   detail_force_isolation: vec4<f32>,
+  // .x fine-breakup localization; .y common-gas transport; .z time-step mode (0 legacy, 1 uniform); .w time-step reference speed.
   reserved_source_extension_2: vec4<f32>,
   pressure_solver_controls: vec4<f32>,
   transport_controls: vec4<f32>,
@@ -2862,13 +2938,31 @@ fn transportBacktraceScale(speed: f32) -> f32 {
   return 2.55 + speed * 0.55;
 }
 
+// Time-step mode. Under uniform mode the authored coefficients see the reference
+// Speed and the requested Speed becomes a factor on transport distance, on
+// every per-step velocity increment and on the emitter inlet velocity.
+fn timeStepScale() -> f32 {
+  let uniformStep = u.reserved_source_extension_2.z > 0.5;
+  let reference = max(0.1, u.reserved_source_extension_2.w);
+  return select(1.0, u.fire_smoke_curl_speed.w / reference, uniformStep);
+}
+
+fn dynamicsSpeed() -> f32 {
+  let uniformStep = u.reserved_source_extension_2.z > 0.5;
+  return select(u.fire_smoke_curl_speed.w, max(0.1, u.reserved_source_extension_2.w), uniformStep);
+}
+
+fn dynamicsBacktraceScale() -> f32 {
+  return transportBacktraceScale(dynamicsSpeed()) * timeStepScale();
+}
+
 fn transportVelocityDamping() -> f32 {
   // Legacy multiplies the advected velocity by 0.982 every step; the
   // low-dissipation schemes do not.
   return select(1.0, 0.982, u.transport_controls.x < 0.5);
 }
 
-fn boundVelocity(v: vec3<f32>, speed: f32) -> vec3<f32> {
+fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
   if (u.transport_controls.x < 0.5) {
     return clamp(v, vec3<f32>(-0.34), vec3<f32>(0.52));
   }
@@ -2876,7 +2970,7 @@ fn boundVelocity(v: vec3<f32>, speed: f32) -> vec3<f32> {
   // cells, symmetric in every direction. Semi-Lagrangian transport is stable
   // at any step; this keeps the trilinear footprint local and catches blow-ups.
   let safe = clamp(v, vec3<f32>(-64.0), vec3<f32>(64.0));
-  let maxSpeed = max(0.05, u.transport_controls.z) / transportBacktraceScale(speed);
+  let maxSpeed = max(0.05, u.transport_controls.z) / dynamicsBacktraceScale();
   let magnitude = length(safe);
   if (magnitude > maxSpeed) {
     return safe * (maxSpeed / magnitude);
@@ -3475,7 +3569,7 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
   let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
-  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity, u.fire_smoke_curl_speed.w), density);
+  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), density);
   fluidDst[base + 1u] = material;
   fluidDst[base + 2u] = fireLayer;
   fluidDst[base + 3u] = microLayer;
@@ -3508,7 +3602,7 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
   let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
-  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity, u.fire_smoke_curl_speed.w), density);
+  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), density);
   fluidDst[base + 1u] = material;
   fluidDst[base + 2u] = fireLayer;
   fluidDst[base + 3u] = microLayer;
@@ -3614,7 +3708,7 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   // The legacy per-component velocity bound is retained; the residual probe
   // measures divergence after it, so anything it reintroduces is visible.
-  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity, u.fire_smoke_curl_speed.w), velocityDensity.w);
+  fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), velocityDensity.w);
   fluidDst[base + 1u] = fluidSrc[base + 1u];
   fluidDst[base + 2u] = fluidSrc[base + 2u];
   fluidDst[base + 3u] = fluidSrc[base + 3u];
@@ -4501,7 +4595,7 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let bonfireAdvectionLateralDamping = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
-  let backCell = cell - advectVelocity * transportBacktraceScale(speed);
+  let backCell = cell - advectVelocity * dynamicsBacktraceScale();
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
     fluidPredict[base + slot] = sampleFluidSlot(backCell, slot);
   }
@@ -4528,7 +4622,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cellI = vec3<i32>(gid);
   let p = cellToWorld(cell);
   let prev = fluidSrc[base];
-  let speed = u.fire_smoke_curl_speed.w;
+  let requestedSpeed = u.fire_smoke_curl_speed.w;
+  let speed = dynamicsSpeed();
+  let timeStep = timeStepScale();
   let curl = u.fire_smoke_curl_speed.z;
   let inputRadius = max(0.04, u.source_controls.x);
   let rawInputFlow = max(0.0, u.source_controls.y);
@@ -4592,7 +4688,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
-  let backtraceScale = transportBacktraceScale(speed);
+  let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = cell - advectVelocity * backtraceScale;
   let macCormack = u.transport_controls.x > 1.5;
   let macCormackScalars = u.transport_controls.x > 2.5;
@@ -4681,7 +4777,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     microLayer = mix(microLayer, symmetricMicroLayer, bonfireScalarSymmetryBlend * 0.82);
     combustionFrontTopology = mix(combustionFrontTopology, symmetricFrontTopology, bonfireScalarSymmetryBlend * 0.38);
   }
-  var vel = advected.xyz * transportVelocityDamping();
+  let velTransported = advected.xyz * transportVelocityDamping();
+  var vel = velTransported;
   var smoke = material.x * 0.990;
   var heat = material.y * 0.982;
   var fuel = material.z * 0.990;
@@ -5372,6 +5469,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
   vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004);
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
+  // Uniform time step: every per-step velocity increment above scales with dt
+  // (1.0 under the legacy mode).
+  vel = velTransported + (vel - velTransported) * timeStep;
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
   let tallPlumeDirectSmokeBirthGain = mix(1.0, 0.18, tallPlumeScene);
@@ -5831,7 +5931,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
-  fluidDst[base] = vec4<f32>(boundVelocity(vel, speed), density);
+  fluidDst[base] = vec4<f32>(boundVelocity(vel), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
   fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
@@ -7272,6 +7372,8 @@ struct AnalyticEmitterInjectionUniforms {
   inlet_controls: vec4<f32>,
   cell_min_grid: vec4<u32>,
   cell_extent: vec4<u32>,
+  // .x velocity magnitude bound under the uniform time step (0 = legacy per-component clamp).
+  time_step_controls: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> emitter: AnalyticEmitterInjectionUniforms;
@@ -7428,11 +7530,18 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
     let transportedAxialSpeed = max(0.0, dot(previousVelocityDensity.xyz, axis));
     entrainmentVelocity = -apertureNormal * transportedAxialSpeed * edgeWeight * max(0.0, emitter.transport.w);
   }
-  let injectedVelocity = clamp(
-    previousVelocityDensity.xyz + axialVelocity + entrainmentVelocity,
-    vec3<f32>(-0.34),
-    vec3<f32>(0.52)
-  );
+  let injectedRaw = previousVelocityDensity.xyz + axialVelocity + entrainmentVelocity;
+  // Legacy: the fixed per-component clamp every saved basin was authored under
+  // (it already caps an inlet velocity above 0.52). Uniform time step: bound
+  // the magnitude the way the transport step does, so the dt-scaled inlet
+  // velocity survives injection instead of being cut back to the legacy cap.
+  var injectedVelocity = clamp(injectedRaw, vec3<f32>(-0.34), vec3<f32>(0.52));
+  let uniformVelocityBound = emitter.time_step_controls.x;
+  if (uniformVelocityBound > 0.0) {
+    let safe = clamp(injectedRaw, vec3<f32>(-64.0), vec3<f32>(64.0));
+    let magnitude = length(safe);
+    injectedVelocity = select(safe, safe * (uniformVelocityBound / max(magnitude, 0.00001)), magnitude > uniformVelocityBound);
+  }
   material.x = max(material.x, chemistry.x * chemistryWeight * 0.76);
   material.y = max(material.y, chemistry.y * chemistryWeight * 0.92);
   material.z = max(material.z, chemistry.z * chemistryWeight * 0.72);
@@ -9285,6 +9394,7 @@ export function createKaminosVolumePrototype({
     transport: { ...resolveTransportConfig(controlsSnapshot), uniform: null, predictorBufferBytes: 0 },
     transportPredictorPasses: 0,
     confinement: { ...resolveConfinementConfig(controlsSnapshot, { epsilonOverride: null }), uniform: null, confinementEpsilonOverride: null },
+    timeStep: { ...resolveTimeStepConfig(controlsSnapshot), uniform: null, packedInletVelocity: null },
     tallPlumePressureIterationStrategy: TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE,
     tallPlumePressureIterationTarget: 0,
     pressureStrategy: normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene),
@@ -9684,7 +9794,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatShader = null;
   let uniformBuffer = null;
   let analyticEmitterInjectionUniformBuffer = null;
-  const analyticEmitterInjectionUniformData = new ArrayBuffer(36 * Float32Array.BYTES_PER_ELEMENT);
+  const analyticEmitterInjectionUniformData = new ArrayBuffer(40 * Float32Array.BYTES_PER_ELEMENT);
   const analyticEmitterInjectionUniformFloats = new Float32Array(analyticEmitterInjectionUniformData);
   const analyticEmitterInjectionUniformWords = new Uint32Array(analyticEmitterInjectionUniformData);
   let volumePresentationControlsBuffer = null;
@@ -13605,12 +13715,19 @@ export function createKaminosVolumePrototype({
     uniforms[361] = transportConfig.effective.velocityDamping;
     uniforms[362] = transportConfig.effective.velocityBound.kind === 'backtrace-cells' ? transportConfig.effective.velocityBound.maxCells : 0;
     uniforms[363] = transportConfig.effective.correctionWeight ?? 0;
+    const timeStepConfig = resolveTimeStepConfig(controlsSnapshot);
+    uniforms[354] = timeStepModeUniformValue(timeStepConfig.effective.mode);
+    uniforms[355] = timeStepConfig.effective.referenceSpeed;
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,
       analyticEmitterDescriptor,
       analyticEmitterDispatch,
       renderPhaseTimeMs * 0.001,
+      {
+        inletVelocityScale: timeStepConfig.effective.inletVelocityScale,
+        emitterVelocityBound: timeStepConfig.effective.mode === 'uniform' ? TRANSPORT_MAX_BACKTRACE_CELLS / timeStepConfig.effective.backtraceScale : 0,
+      },
     );
     device.queue.writeBuffer(
       analyticEmitterInjectionUniformBuffer,
@@ -13742,6 +13859,12 @@ export function createKaminosVolumePrototype({
       ...confinementConfig,
       uniform: { mode: uniforms[345], confinementAmount: uniforms[346], thermalExpansionAmount: uniforms[347] },
       confinementEpsilonOverride: confinementEpsilonOverride,
+    };
+    state.timeStep = {
+      ...timeStepConfig,
+      uniform: { mode: uniforms[354], referenceSpeed: uniforms[355] },
+      packedInletVelocity: analyticEmitterDispatch?.active ? analyticEmitterInjectionUniformFloats[26] : null,
+      emitterVelocityBound: analyticEmitterInjectionUniformFloats[36],
     };
     state.pressureSolver = {
       ...resolvePressureSolverConfig(controlsSnapshot),
@@ -21917,6 +22040,7 @@ export function createKaminosVolumePrototype({
         pressureSolver: state.pressureSolver,
         transport: state.transport,
         confinement: state.confinement,
+        timeStep: state.timeStep,
         gasTransport: state.gasTransport,
         tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
         visibleDetailOverlayGain: state.visibleDetailOverlayGain,
@@ -22298,6 +22422,7 @@ export function createKaminosVolumePrototype({
       pressureSolver: state.pressureSolver,
       transport: state.transport,
       confinement: state.confinement,
+      timeStep: state.timeStep,
       gasTransport: state.gasTransport,
       tallPlumeDetailFrequencySource: state.tallPlumeDetailFrequencySource,
       visibleDetailOverlayGain: state.visibleDetailOverlayGain,
