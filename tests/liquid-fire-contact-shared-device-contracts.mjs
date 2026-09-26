@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-// The finger-fluid -> Pyro liquid-contact route hands the volume a descriptor
-// on the fluid solver's own GPUDevice, and the prototype refuses descriptors
-// from any other configured shared device. The host's kiln shared device must
-// therefore not be seated on the volume for that route. This evaluates the
-// real index.html wiring and the real prototype (stubbed DOM, no GPU).
+// The finger-fluid -> Pyro liquid-contact route borrows the kiln host's
+// GPUDevice. The prototype refuses contact descriptors from any other device.
+// This evaluates the real index.html wiring and prototype (stubbed DOM, no GPU).
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const routeStart = html.indexOf('async function initKaminosVolumeRoute()');
 const constructAt = html.indexOf('volumePrototype = createKaminosVolumePrototype({', routeStart);
@@ -32,25 +30,28 @@ globalThis.ResizeObserver = class { observe() {} disconnect() {} };
 const { createKaminosVolumePrototype } = await import('../volume-core.js');
 const hostShared = { identity: 'kaminos-three-volume-shared-webgpu-device-v0', device: { queue: { submit() {} } } };
 hostShared.queue = hostShared.device.queue;
-const solverDevice = { queue: { submit() {} } };
-const bindSolverDescriptor = sharedGpuContext => {
+const unrelatedDevice = { queue: { submit() {} } };
+const bindSolverDescriptor = (sharedGpuContext, descriptorDevice) => {
   const prototype = createKaminosVolumePrototype({ THREE: stub(), viewport: stub(), camera: stub(), controls: stub(),
     getControls: () => ({}), onStatus: () => {}, sharedGpuContext });
   try {
-    prototype.setLiquidFireContactDescriptor({ device: solverDevice, queue: solverDevice.queue });
+    prototype.setLiquidFireContactDescriptor({ device: descriptorDevice, queue: descriptorDevice.queue });
     return 'admitted';
   } catch (error) {
     return error.message;
   }
 };
 
-assert.match(bindSolverDescriptor(hostShared), /conflicts with the configured shared GPUDevice/,
-  'control: a volume seated on the host device refuses the solver device');
-const compositionResult = bindSolverDescriptor(contextFor(true, hostShared));
+assert.equal(contextFor(true, hostShared), hostShared,
+  'liquid-contact composition seats Pyro on the kiln host device');
+assert.match(bindSolverDescriptor(contextFor(true, hostShared), unrelatedDevice),
+  /conflicts with the configured shared GPUDevice/,
+  'a contact descriptor from another device fails before schema validation');
+const compositionResult = bindSolverDescriptor(contextFor(true, hostShared), hostShared.device);
 // The fake descriptor is not schema-valid, so reaching schema validation is the
 // proof that the device check admitted the solver device.
 assert.match(compositionResult, /Liquid fire contact descriptor schema mismatch/,
-  `liquid-contact composition must reach descriptor validation on the solver device, got: ${compositionResult}`);
+  `liquid-contact composition must reach descriptor validation on the host device, got: ${compositionResult}`);
 assert.equal(contextFor(false, hostShared), hostShared, 'ordinary and kiln routes keep the one host shared device');
 
 // The published fire light-field bounds are computed on every receiver poll.
