@@ -26621,7 +26621,9 @@ for (const [id, sourceId] of [['radius', 'volume-input-radius'], ['flow', 'volum
     number.value = source.value;
   };
 }
-window.kaminosBurnerState = () => annularBurner?.debugState() || { effective: false, recipe: burnerRecipe, reason: 'disabled' };
+window.kaminosBurnerState = () => annularBurner
+  ? { ...annularBurner.debugState(), worldPosition: annularBurner.group.position.toArray() }
+  : { effective: false, recipe: burnerRecipe, reason: 'disabled' };
 window.kaminosSetBurner = value => {
   if (value && (!isFireLightFieldRoute() || !burnerSource(window.__kaminosVolumeEmitterReceipt))) throw new Error('Annular bed requires an ordinary ring-flame composition');
   return setAnnularBurner(value);

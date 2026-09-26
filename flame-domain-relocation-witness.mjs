@@ -36,6 +36,7 @@ try {
   const state = () => page.evaluate(() => ({
     volume: window.__kaminosVolumePrototype?.debugState?.(),
     emitter: window.kaminosFlameEmitterState?.(),
+    burner: window.kaminosBurnerState?.(),
     receipt: window.__kaminosVolumeEmitterReceipt,
     history: window.kaminosSceneEdits?.state?.(),
     light: window.__kaminosVolumePrototype?.fireIrradianceLightField?.(),
@@ -52,6 +53,9 @@ try {
     assert.equal(s.volume.ordinarySceneDepth.effective, true);
     assert.deepEqual(s.sceneObjects?.map(object => object.id).sort(), ['flame-emitter', 'kiln']);
     assert.ok(Math.abs(s.emitter.pose.position[0] - x) < 1e-8);
+    assert.equal(s.burner?.effective, true);
+    assert.ok(Math.abs(s.burner.worldPosition[0] - x) < 0.02,
+      `burner must stay with the authored source: source x=${x}, burner x=${s.burner.worldPosition[0]}`);
     assert.ok(Math.abs(s.emitter.domainTranslation[0] - domain) < 1e-8);
     assert.deepEqual(s.volume.ordinaryDomainTranslation, s.emitter.domainTranslation);
     assert.equal(s.emitter.injectionSuspended, suspended);
