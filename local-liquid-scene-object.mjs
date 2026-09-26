@@ -16,6 +16,8 @@ export function createLocalLiquidEmitterSceneRecord({
   transform,
   settings = { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: 1200 },
   label = 'Water emitter',
+  fileName = label,
+  groupId = null,
   createdAt = new Date().toISOString(),
 } = {}) {
   if (typeof id !== 'string' || !id.trim()) throw new Error('Water emitter requires a stable scene object id');
@@ -25,9 +27,9 @@ export function createLocalLiquidEmitterSceneRecord({
     id,
     source: LOCAL_LIQUID_EMITTER_SOURCE,
     type: LOCAL_LIQUID_EMITTER_TYPE,
-    fileName: label,
+    fileName,
     label,
-    groupId: null,
+    groupId,
     createdAt,
     transform: pose,
     localLiquidEmitter: emitter,
@@ -45,7 +47,19 @@ export function createLocalLiquidEmitterObject(THREE, input) {
   if (!THREE?.Group || !THREE?.Mesh || !THREE?.CylinderGeometry || !THREE?.MeshStandardMaterial) {
     throw new Error('Water emitter scene objects require the current host Three.js constructors');
   }
-  const record = createLocalLiquidEmitterSceneRecord(input);
+  const savedRecord = input?.type === LOCAL_LIQUID_EMITTER_TYPE
+    || input?.source === LOCAL_LIQUID_EMITTER_SOURCE
+    || Object.hasOwn(input || {}, 'localLiquidEmitter');
+  if (savedRecord && !isLocalLiquidEmitterSceneRecord(input)) {
+    throw new Error('Malformed authored water emitter scene object; stable id, type, and source identity are required');
+  }
+  if (savedRecord && (!input.localLiquidEmitter || typeof input.localLiquidEmitter !== 'object')) {
+    throw new Error(`Authored water emitter "${input.id}" is missing its saved settings`);
+  }
+  const record = createLocalLiquidEmitterSceneRecord({
+    ...input,
+    settings: savedRecord ? input.localLiquidEmitter : input?.settings,
+  });
   const object = new THREE.Group();
   object.name = record.label;
   object.position.fromArray(record.transform.position);
@@ -100,6 +114,8 @@ export function normalizeLocalLiquidSceneDocument(document) {
     transform: record.transform,
     settings: record.localLiquidEmitter,
     label: record.label,
+    fileName: record.fileName,
+    groupId: record.groupId,
     createdAt: record.createdAt,
   }));
   if (emitters.length && !setup) {
