@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
@@ -91,7 +91,10 @@ async function snapshot() {
       camera: window.__archHistoryCamera?.() ?? null,
       intactText: text('intact-readout'),
       damagedText: text('damaged-readout'),
+      intactPath: text('intact-history-path'),
+      damagedPath: text('damaged-history-path'),
       receipt: window.__archHistoryReceipt?.() ?? {},
+      receiptText: text('receipt'),
       buttons: Object.fromEntries(['damage-history','apply','unload','reset'].map(id => [id, document.getElementById(id).disabled])),
       controls: Object.fromEntries(['.force','#damage-history','#apply','#unload','#reset','#status'].map(selector => {
         const rect = document.querySelector(selector).getBoundingClientRect();
@@ -110,7 +113,7 @@ async function capture(name) {
   const width = bytes.readUInt32BE(16);
   const height = bytes.readUInt32BE(20);
   check(`${name}: screenshot matches viewport`, width === state.viewport.width && height === state.viewport.height, { width, height, viewport: state.viewport });
-  const path = resolve(dirname(reportPath), `${name}.png`);
+  const path = resolve(dirname(reportPath), `${basename(reportPath, '.json')}-${name}.png`);
   writeFileSync(path, bytes);
   report.captures[name] = {
     path,
@@ -230,6 +233,29 @@ try {
     applied.receipt.damaged.maxDisplayedVertexDisplacement !== applied.receipt.intact.maxDisplayedVertexDisplacement, applied.receipt);
   check('matched apply preserves camera', JSON.stringify(history.camera) === JSON.stringify(applied.camera), { before: history.camera, after: applied.camera });
   await capture('matched-load');
+
+  await evaluate(`(() => { const input=document.getElementById('force'); input.value='1.5'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  const higherLoad = await click('apply');
+  check('later slider force is recorded as a new accepted comparison history',
+    higherLoad.receipt.acceptedLoadPath?.length === 2 && higherLoad.receipt.acceptedLoadPath.at(-1).force === 1.5 &&
+    higherLoad.intactPath.includes('1.50') && higherLoad.damagedPath.includes('1.50'), higherLoad);
+  await capture('evolving-load-path');
+  await evaluate(`(() => { const input=document.getElementById('force'); input.value='0.5'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  const repeatedLoad = await click('apply');
+  check('returning to the same force remains visibly distinct from the original fixed-history frame',
+    repeatedLoad.receipt.acceptedLoadPath?.length === 3 && repeatedLoad.receipt.acceptedLoadPath.at(-1).force === 0.5 &&
+    repeatedLoad.receipt.acceptedLoadPath.at(-1).intactBrokenBondCount >= applied.receipt.intact.brokenBondCount &&
+    repeatedLoad.receipt.acceptedLoadPath.at(-1).damagedBrokenBondCount >= applied.receipt.damaged.brokenBondCount &&
+    repeatedLoad.receiptText?.includes('load path:'), repeatedLoad);
+
+  await click('reset');
+  const resetHistory = await click('damage-history');
+  await evaluate(`(() => { const input=document.getElementById('force'); input.value='0.5'; input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+  const fixedReplay = await click('apply');
+  check('reset and replay restores the fixed 0.50 matched-history comparison',
+    fixedReplay.receipt.acceptedLoadPath?.length === 1 && fixedReplay.receipt.force === 0.5 &&
+    fixedReplay.receipt.damaged.brokenBondCount === 40 && fixedReplay.receipt.intact.brokenBondCount === 0,
+    { resetHistory, fixedReplay: fixedReplay.receipt });
 
   report.phase = 'unload';
   const unloaded = await click('unload');

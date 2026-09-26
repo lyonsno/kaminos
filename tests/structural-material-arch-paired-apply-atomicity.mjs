@@ -80,15 +80,29 @@ for (let index = 0; index < accepted.length; index += 1) {
 }
 
 const page = readFileSync('structural-material-arch-geometry.html', 'utf8');
-const applyStart = page.indexOf('function applyPair(force, label)');
+const applyStart = page.indexOf('function applyPair(force, label,');
 const applyEnd = page.indexOf("document.getElementById('damage-history').addEventListener('click'");
 assert.ok(applyStart >= 0 && applyEnd > applyStart, 'Apply handler must remain locatable');
 const applyHandler = page.slice(applyStart, applyEnd);
 assert.match(applyHandler, /runArchSurfaceApply\(/,
   'the live Apply handler must use the exercised shared transaction boundary');
-assert.match(applyHandler, /prepareView\(viewers\.intact, force\)[\s\S]*prepareView\(viewers\.damaged, force\)/,
+assert.match(applyHandler, /prepareView\(viewers\.intact, force, startingIntact\)[\s\S]*prepareView\(viewers\.damaged, force, startingDamaged\)/,
   'the intact and damaged histories must stage as one paired transaction');
 assert.match(page, /accept: acceptArchSurfaceBatch/,
   'the page must route staged candidates through the tested atomic mesh acceptance');
+
+const historyHandlerStart = page.indexOf("document.getElementById('damage-history').addEventListener('click'");
+const applyButtonStart = page.indexOf("document.getElementById('apply').addEventListener('click'");
+const historyHandler = page.slice(historyHandlerStart, applyButtonStart);
+assert.match(historyHandler, /const candidateHistory = buildArchDamageHistory\(viewers\.damaged\.base\)/,
+  'history construction must remain a proposed candidate until paired presentation accepts');
+assert.match(historyHandler, /applyPair\(0,[\s\S]*damagedState: candidateHistory\.state[\s\S]*transaction\.status === 'accepted'[\s\S]*damageHistory = candidateHistory/,
+  'the first paired mesh presentation must stage the candidate and commit its identity only after acceptance');
+assert.doesNotMatch(historyHandler, /viewers\.damaged\.state\s*=\s*candidateHistory\.state/,
+  'a rejected first presentation must not leave hidden damaged solver state behind');
+assert.match(page, /acceptedLoadPath/,
+  'later slider loads must retain an explicit identity for the evolving comparison history');
+assert.match(page, /load path:/,
+  'the current accepted load path must be visible beside the paired result');
 
 console.log('structural arch paired apply atomicity contracts passed');

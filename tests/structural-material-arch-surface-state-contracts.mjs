@@ -42,10 +42,10 @@ assert.notDeepEqual(secondAccepted.bonds, repeatedFromIntact.bonds,
 
 const page = readFileSync('structural-material-arch-geometry.html', 'utf8');
 const historyConsumer = readFileSync('structural-material-arch-history-consumer.mjs', 'utf8');
-assert.match(page, /const startingState = viewer\.state \?\? viewer\.base;/,
-  'Apply must select the last accepted state, falling back to intact only before the first load');
-assert.match(page, /state: startingState,/,
-  'Apply must stage from the selected accepted state, falling back to intact only before the first load');
+assert.match(page, /function prepareView\(viewer, force, state = viewer\.state \?\? viewer\.base\)/,
+  'Apply must default to the last accepted state while allowing an uncommitted candidate to be staged');
+assert.match(page, /state,\s*sourcePositions: viewer\.mesh\.userData\.archBasePositions,/,
+  'Apply must pass the selected accepted or proposed state into the staged transaction');
 assert.match(page, /runArchSurfaceApply\(/,
   'the page Apply control must use the shared staged transaction');
 const sidecar = readFileSync('structural-material-arch-geometry-sidecar.js', 'utf8');
