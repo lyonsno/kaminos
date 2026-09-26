@@ -41,6 +41,10 @@ for (let index = 0; index < argv.length; index += 1) {
 }
 const [url, outDir, armsArg, settleArg] = positional;
 const settleMs = Number(settleArg || flags.get('--settle-ms') || 12000);
+// --settle-steps N settles each arm until the simulation has advanced N steps
+// (equal simulated time across time-step modes when N is chosen as T / dt),
+// with settleMs then acting as a wall-clock cap that fails the arm if reached.
+const settleSteps = flags.has('--settle-steps') ? Number(flags.get('--settle-steps')) : null;
 const expectedRepoRoot = flags.has('--expected-repo-root') ? resolve(String(flags.get('--expected-repo-root'))) : null;
 const expectedCommit = flags.has('--expected-commit') ? String(flags.get('--expected-commit')) : null;
 const fault = String(flags.get('--fault') || '');
@@ -51,7 +55,7 @@ const report = {
   status: 'running',
   failurePhase: 'argument-validation',
   failure: null,
-  requested: { url, outDir, arms: armsArg, settleMs, expectedRepoRoot, expectedCommit, fault: fault || null },
+  requested: { url, outDir, arms: armsArg, settleMs, settleSteps, expectedRepoRoot, expectedCommit, fault: fault || null },
   effective: { source: null, sourceVerified: false },
   admitted: null,
   arms: [],
@@ -186,16 +190,19 @@ try {
     report.failurePhase = `arm-${arm.name}-settle`;
     const t0 = Date.now(); const s0 = after.simStepCount;
     const samples = [];
+    let settledBySteps = false;
     while (Date.now() - t0 < settleMs) {
       await sleep(Math.min(2000, Math.max(50, settleMs - (Date.now() - t0))));
       const probe = await evaluate(stateExpr);
       if (!probe) break;
       samples.push({ tMs: Date.now() - t0, simStepCount: probe.simStepCount, residualStep: probe.residual?.step ?? null, enstrophyMean: probe.vorticity?.enstrophyMean ?? null, vorticityMax: probe.vorticity?.maxAbs ?? null, compactAfterMeanAbs: probe.residual?.compactAfter?.meanAbs ?? null, error: probe.error ?? null });
+      if (settleSteps !== null && probe.simStepCount - s0 >= settleSteps) { settledBySteps = true; break; }
     }
+    if (settleSteps !== null && !settledBySteps) fail(report.failurePhase, `arm ${arm.name} did not reach ${settleSteps} settle steps within the ${settleMs} ms wall cap`);
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, afterSwitch: after, samples, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();
