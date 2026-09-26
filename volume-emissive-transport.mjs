@@ -46,7 +46,7 @@ const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => su
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
 export const EMISSIVE_LIGHT_GRID = 32;
 
-export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers, sceneSolidTextureView) {
+export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = allocate('emissive material coefficients', cells);
@@ -54,13 +54,11 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   const incident = allocate('single-scattering mean incident radiance', cells);
   const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
   const seed = pipeline('seedEmissiveLight'), sweep = pipeline('sweepEmissiveLight'), resolve = pipeline('resolveEmissiveLight');
-  const group = (pipe, index, buffers, extraEntries = []) => device.createBindGroup({
+  const group = (pipe, index, buffers) => device.createBindGroup({
     layout: pipe.getBindGroupLayout(index),
-    entries: [...buffers.map(([binding, buffer]) => ({ binding, resource: { buffer } })), ...extraEntries],
+    entries: buffers.map(([binding, buffer]) => ({ binding, resource: { buffer } })),
   });
-  const seedInputs = fluidBuffers.map((buffer, i) => group(seed, 0,
-    [[0, uniformBuffer], [1, buffer], [7, frontBuffers[i]]],
-    [{binding: 16, resource: sceneSolidTextureView}]));
+  const seedInputs = fluidBuffers.map((buffer, i) => group(seed,0,[[0,uniformBuffer],[1,buffer],[7,frontBuffers[i]]]));
   const seedOutput = group(seed,3,[[1,coefficients]]);
   const sweepInput = group(sweep,0,[[0,uniformBuffer],[13,coefficients]]);
   const sweepOutput = group(sweep,3,[[2,directions]]);

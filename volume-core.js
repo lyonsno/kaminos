@@ -2801,12 +2801,10 @@ fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
 }
 
 fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
-  if (sceneSolidAt(c)) { return vec4<f32>(0.0); }
   return fluidSrc[slotIndex(c, slot)];
 }
 
 fn readFrontField(c: vec3<i32>) -> f32 {
-  if (sceneSolidAt(c)) { return 0.0; }
   return frontSrc[index3(clampCell(c))];
 }
 
@@ -2815,6 +2813,28 @@ fn readQuenchField(c: vec3<i32>) -> f32 {
 }
 
 fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  let c000 = readFrontField(i0 + vec3<i32>(0, 0, 0));
+  let c100 = readFrontField(i0 + vec3<i32>(1, 0, 0));
+  let c010 = readFrontField(i0 + vec3<i32>(0, 1, 0));
+  let c110 = readFrontField(i0 + vec3<i32>(1, 1, 0));
+  let c001 = readFrontField(i0 + vec3<i32>(0, 0, 1));
+  let c101 = readFrontField(i0 + vec3<i32>(1, 0, 1));
+  let c011 = readFrontField(i0 + vec3<i32>(0, 1, 1));
+  let c111 = readFrontField(i0 + vec3<i32>(1, 1, 1));
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
+}
+
+fn sampleFrontFieldMasked(cellCenter: vec3<f32>) -> f32 {
+  if (!sceneSolidEnabled()) { return sampleFrontField(cellCenter); }
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
@@ -2836,14 +2856,21 @@ fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
     }
     return select(0.0, weighted / max(weightSum, 1e-12), weightSum > 0.0);
   }
-  let c000 = readFrontField(i0 + vec3<i32>(0, 0, 0));
-  let c100 = readFrontField(i0 + vec3<i32>(1, 0, 0));
-  let c010 = readFrontField(i0 + vec3<i32>(0, 1, 0));
-  let c110 = readFrontField(i0 + vec3<i32>(1, 1, 0));
-  let c001 = readFrontField(i0 + vec3<i32>(0, 0, 1));
-  let c101 = readFrontField(i0 + vec3<i32>(1, 0, 1));
-  let c011 = readFrontField(i0 + vec3<i32>(0, 1, 1));
-  let c111 = readFrontField(i0 + vec3<i32>(1, 1, 1));
+  return 0.0;
+}
+
+fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
+  let c100 = readSlot(i0 + vec3<i32>(1, 0, 0), slot);
+  let c010 = readSlot(i0 + vec3<i32>(0, 1, 0), slot);
+  let c110 = readSlot(i0 + vec3<i32>(1, 1, 0), slot);
+  let c001 = readSlot(i0 + vec3<i32>(0, 0, 1), slot);
+  let c101 = readSlot(i0 + vec3<i32>(1, 0, 1), slot);
+  let c011 = readSlot(i0 + vec3<i32>(0, 1, 1), slot);
+  let c111 = readSlot(i0 + vec3<i32>(1, 1, 1), slot);
   let x00 = mix(c000, c100, f.x);
   let x10 = mix(c010, c110, f.x);
   let x01 = mix(c001, c101, f.x);
@@ -2853,7 +2880,8 @@ fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
   return mix(y0, y1, f.z);
 }
 
-fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+fn sampleFluidSlotMasked(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  if (!sceneSolidEnabled()) { return sampleFluidSlot(cellCenter, slot); }
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
@@ -2875,25 +2903,10 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
     }
     return weighted / max(weightSum, 1e-12);
   }
-  let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
-  let c100 = readSlot(i0 + vec3<i32>(1, 0, 0), slot);
-  let c010 = readSlot(i0 + vec3<i32>(0, 1, 0), slot);
-  let c110 = readSlot(i0 + vec3<i32>(1, 1, 0), slot);
-  let c001 = readSlot(i0 + vec3<i32>(0, 0, 1), slot);
-  let c101 = readSlot(i0 + vec3<i32>(1, 0, 1), slot);
-  let c011 = readSlot(i0 + vec3<i32>(0, 1, 1), slot);
-  let c111 = readSlot(i0 + vec3<i32>(1, 1, 1), slot);
-  let x00 = mix(c000, c100, f.x);
-  let x10 = mix(c010, c110, f.x);
-  let x01 = mix(c001, c101, f.x);
-  let x11 = mix(c011, c111, f.x);
-  let y0 = mix(x00, x10, f.y);
-  let y1 = mix(x01, x11, f.y);
-  return mix(y0, y1, f.z);
+  return vec4<f32>(0.0);
 }
 
 fn readPredictSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
-  if (sceneSolidAt(c)) { return vec4<f32>(0.0); }
   return fluidPredict[slotIndex(c, slot)];
 }
 
@@ -4012,7 +4025,7 @@ fn bonfireReferenceConfinementForce(c: vec3<i32>, smoke: f32, heat: f32, flame: 
 fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, flame: f32, microdetailRiseDirection: f32) -> vec4<f32> {
   let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055) * microdetailRiseDirection, 0.0);
   let backCell = cell - (velocity + lift) * (1.44 + speed * 0.28);
-  return sampleFluidSlot(backCell, 3u);
+  return sampleFluidSlotMasked(backCell, 3u);
 }
 
 fn interfaceShreddingForce(c: vec3<i32>, amount: f32, heat: f32, smoke: f32, flame: f32, carriedShred: f32) -> vec3<f32> {
@@ -4269,7 +4282,7 @@ fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> Externa
 fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, thermalAdvectionRiseDirection: f32) -> vec4<f32> {
   let thermalLift = vec3<f32>(0.0, clamp(localHeat, 0.0, 1.7) * (0.24 + speed * 0.055) * thermalAdvectionRiseDirection, 0.0);
   let backCell = cell - (velocity + thermalLift) * (2.30 + speed * 0.46);
-  return sampleFluidSlot(backCell, 1u);
+  return sampleFluidSlotMasked(backCell, 1u);
 }
 
 fn thermalBuoyancyForce(heat: f32, smoke: f32, fuel: f32, speed: f32) -> vec3<f32> {
@@ -4304,7 +4317,7 @@ fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
 fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
   let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13) * fireLayerRiseDirection, 0.0);
   let backCell = cell - (velocity + fastLift) * (1.82 + speed * 0.34);
-  return sampleFluidSlot(backCell, 2u);
+  return sampleFluidSlotMasked(backCell, 2u);
 }
 
 fn gridLine(p: vec3<f32>) -> f32 {
@@ -4697,7 +4710,7 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * transportBacktraceScale(speed));
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
-    fluidPredict[base + slot] = sampleFluidSlot(backCell, slot);
+    fluidPredict[base + slot] = sampleFluidSlotMasked(backCell, slot);
   }
 }
 
@@ -4812,16 +4825,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       fireLayer = macCormackSlot(cellI, idx, backCell, forwardCell, 2u);
       microLayer = macCormackSlot(cellI, idx, backCell, forwardCell, 3u);
     } else {
-      material = sampleFluidSlot(backCell, 1u);
-      fireLayer = sampleFluidSlot(backCell, 2u);
-      microLayer = sampleFluidSlot(backCell, 3u);
+      material = sampleFluidSlotMasked(backCell, 1u);
+      fireLayer = sampleFluidSlotMasked(backCell, 2u);
+      microLayer = sampleFluidSlotMasked(backCell, 3u);
     }
   } else {
-    advected = sampleFluidSlot(backCell, 0u);
+    advected = sampleFluidSlotMasked(backCell, 0u);
     if (commonGasTransport) {
-      material = sampleFluidSlot(backCell, 1u);
-      fireLayer = sampleFluidSlot(backCell, 2u);
-      microLayer = sampleFluidSlot(backCell, 3u);
+      material = sampleFluidSlotMasked(backCell, 1u);
+      fireLayer = sampleFluidSlotMasked(backCell, 2u);
+      microLayer = sampleFluidSlotMasked(backCell, 3u);
     } else {
       let localMaterial = readSlot(cellI, 1u);
       material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
@@ -4829,7 +4842,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
     }
   }
-  var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
+  var combustionFrontTopology = sampleFrontFieldMasked(backCell) * 0.936;
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
     let diffuseMaterial = (
@@ -12160,7 +12173,7 @@ export function createKaminosVolumePrototype({
     }
     ensureNonRidgeOpticalCaptureBuffers();
     installSceneSolidTexture();
-    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers, sceneSolidTextureView);
+    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)} ${index}`,
