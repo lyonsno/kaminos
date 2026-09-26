@@ -64,6 +64,19 @@ test('modal pivot warning tells the author to end the gesture before using F',()
  emit(f.document,'keydown',{key:'f'});assert.equal(f.frames,0,'F cannot frame while the modal key handler owns the gesture');
  assert.ok(f.tools.state().active);f.tools.finish(false);emit(f.document,'keydown',{key:'f'});assert.equal(f.frames,1,'F frames after the edit has ended');
 });
+test('selected scene object accepts G after sidebar selection leaves neutral page focus',()=>{
+ const f=fixture();
+ f.document.body=new Element();
+ f.document.activeElement=f.document.body;
+ f.viewport.contains=element=>element===f.viewport;
+ emit(f.document,'keydown',{key:'g'});
+ assert.equal(f.tools.state().modal?.operation,'translate',
+   'a selected object should not require an extra viewport hover after choosing its scene row');
+ f.tools.finish(false);
+ f.document.activeElement=new Element();
+ emit(f.document,'keydown',{key:'g'});
+ assert.equal(f.tools.state().modal,null,'a focused non-viewport control still owns its keys');
+});
 test('blur, selection and clear abort every native gizmo owner before rollback',()=>{
  for(const boundary of ['blur','selectionChanged','clear']){
   const f=fixture();f.beginDrag();assert.ok(f.tools.state().active);
