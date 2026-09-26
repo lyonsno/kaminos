@@ -14554,7 +14554,9 @@ const TALL_PLUME_OPERATOR_PRESETS = {
   },
 };
 
-const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'boundary_fire_bonfire_a_la_ruffles_0709';
+// Bare kaminos_volume_smoke routes boot into this committed basin export
+// (grid 64, cheap ray budget). The ruffles tall preset stays available by name.
+const DEFAULT_VOLUME_SMOKE_BASIN_URL = './artifacts/default-basin/cheap-blast-furnace.json';
 
 const CANONICAL_VOLUME_MACRO_PRESETS = {
   macro_foothold_0621: {
@@ -15181,6 +15183,47 @@ function applyVolumeScenePreset(scene, options = {}) {
   }
   activeCanonicalVolumeMacroPreset = '';
   return normalizedScene;
+}
+
+// Applies the committed default basin with its exact saved values (unlike the
+// in-code operator presets, which round numbers). Controls added to the page
+// after the export keep their page defaults, as a server schema projection does.
+async function applyDefaultVolumeSmokeBasin(routeParams) {
+  const response = await fetch(DEFAULT_VOLUME_SMOKE_BASIN_URL, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`default volume basin unavailable: ${response.status}`);
+  const artifact = await response.json();
+  const preset = artifact?.preset;
+  if (artifact?.identity !== 'kaminos-volume-settings-preset-artifact-v2'
+    || !/^vsp-[0-9a-f]{64}$/.test(String(artifact?.presetId || ''))
+    || artifact.contentHash !== `sha256:${artifact.presetId.slice(4)}`
+    || !preset?.domControls) {
+    throw new Error('default volume basin artifact identity is invalid');
+  }
+  // A basin is its route: parameters the page reads with hard fallbacks (such
+  // as emitter family) take the basin's value unless the URL sets them.
+  const basinParams = new Set(['domControls', 'rendererControls', 'presentationControls']
+    .flatMap(axis => Object.values(preset[axis] || {}).map(descriptor => descriptor?.param).filter(Boolean)));
+  for (const [key, value] of new URL(preset.route, 'http://basin.invalid').searchParams) {
+    if (basinParams.has(key) && !routeParams.has(key)) routeParams.set(key, value);
+  }
+  applyVolumeScenePreset(preset.domControls['volume-scene']?.value || 'tall_plume', { keepBudgetPreset: true });
+  const missing = [];
+  let applied = 0;
+  for (const controls of [preset.domControls, preset.rendererControls || {}]) {
+    for (const [id, descriptor] of Object.entries(controls)) {
+      if (id === 'volume-scene') continue;
+      if (id !== 'volume-render-scale' && !document.getElementById(id)) {
+        missing.push(id);
+        continue;
+      }
+      setVolumeControlValue(id, Object.hasOwn(descriptor, 'rawValue') ? descriptor.rawValue : descriptor.value);
+      applied += 1;
+    }
+  }
+  activeCanonicalVolumeMacroPreset = '';
+  const receipt = { presetId: artifact.presetId, label: artifact.initialLabel || null, source: DEFAULT_VOLUME_SMOKE_BASIN_URL, applied, missing };
+  window.__kaminosDefaultVolumeSmokeBasin = receipt;
+  return receipt;
 }
 
 function applyTallPlumeOperatorPreset(name, options = {}) {
@@ -21256,6 +21299,15 @@ function reportKaminosVolumeRouteInitFailure(error) {
 async function initKaminosVolumeRoute() {
   if (compositionSetupError) throw compositionSetupError;
   const params = new URLSearchParams(window.location.search);
+  // Bare smoke routes boot into the committed default basin. Settings-preset
+  // routes carry their own complete basin and must not inherit this one.
+  const shouldApplyDefaultVolumeSmokeTallPreset =
+    params.get('kaminos_volume_smoke') === '1' &&
+    !params.has('settings_preset') &&
+    (!params.get('volume_scene') || params.get('volume_scene') === 'tall_plume') &&
+    !params.get('volume_tall_preset') &&
+    !params.get('volume_canonical_preset');
+  if (shouldApplyDefaultVolumeSmokeTallPreset) await applyDefaultVolumeSmokeBasin(params);
   await admitVolumeSettingsPresetRoute(params);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
@@ -21270,14 +21322,6 @@ async function initKaminosVolumeRoute() {
   const routeVolumeScene = params.get('volume_scene');
   const routeTallPlumeOperatorPreset = params.get('volume_tall_preset');
   const routeCanonicalMacroPreset = params.get('volume_canonical_preset');
-  const shouldApplyDefaultVolumeSmokeTallPreset =
-    params.get('kaminos_volume_smoke') === '1' &&
-    (!routeVolumeScene || routeVolumeScene === 'tall_plume') &&
-    !routeTallPlumeOperatorPreset &&
-    !routeCanonicalMacroPreset;
-  if (shouldApplyDefaultVolumeSmokeTallPreset) {
-    applyTallPlumeOperatorPreset(DEFAULT_VOLUME_SMOKE_TALL_PRESET, { keepBudgetPreset: true });
-  }
   if (routeVolumeScene && !(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume')) {
     applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
   }
