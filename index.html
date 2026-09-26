@@ -9794,6 +9794,10 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const metaTextureNode = texture(metaExternalTexture);
   const isolateMix = uniform(isFireLightFieldIsolateRoute(routeParams) ? 1.0 : 0.0);
   const atlasGrid = uniform(32.0);
+  const atlasGridY = uniform(64.0);
+  const fieldWorldMin = uniform(new THREE.Vector3(-1, -1, -1));
+  const fieldWorldMax = uniform(new THREE.Vector3(1, 3, 1));
+  const fieldCellPitch = uniform(2.0 / 32.0);
   const atlasTilesX = uniform(8.0);
   const atlasTexelSize = uniform(new THREE.Vector2(1 / 256, 1 / 128));
 
@@ -9808,21 +9812,20 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const viewPositionNode = getViewPosition(viewportUV, depthSampleNode, sceneProjectionMatrixInverse);
   const worldPositionNode = sceneCameraWorldMatrix.mul(vec4(viewPositionNode, 1.0)).xyz;
 
-  // Trilinear sample of the 32^3 lattice through its 2D tile atlas. The
-  // lattice spans the [-1,1]^3 world cube, the lower cube of the tall raymarch box.
+  // Trilinear sample of the rectangular equal-pitch lattice through its 2D tile atlas.
   const sampleLatticeAt = (positionNode) => {
-    const uvw = positionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+    const uvw = positionNode.sub(fieldWorldMin).div(fieldWorldMax.sub(fieldWorldMin)).clamp(vec3(0.0), vec3(1.0));
     const sliceCoord = uvw.z.mul(atlasGrid).sub(0.5);
     const slice0 = floor(sliceCoord).clamp(float(0.0), atlasGrid.sub(1.0));
     const slice1 = slice0.add(1.0).clamp(float(0.0), atlasGrid.sub(1.0));
     const sliceMix = sliceCoord.sub(slice0).clamp(0.0, 1.0);
-    const inTileTexel = uvw.xy.mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+    const inTileTexel = vec2(uvw.x.mul(atlasGrid), uvw.y.mul(atlasGridY)).clamp(vec2(0.5), vec2(atlasGrid, atlasGridY).sub(0.5));
     const atlasUvForSlice = (sliceIndex) => {
       const tileX = mod(sliceIndex, atlasTilesX);
       const tileY = floor(sliceIndex.div(atlasTilesX));
       return vec2(
         tileX.mul(atlasGrid).add(inTileTexel.x),
-        tileY.mul(atlasGrid).add(inTileTexel.y)
+        tileY.mul(atlasGridY).add(inTileTexel.y)
       ).mul(atlasTexelSize);
     };
     return mix(
@@ -9831,7 +9834,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
       sliceMix
     );
   };
-  const latticeUvw = worldPositionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+  const latticeUvw = worldPositionNode.sub(fieldWorldMin).div(fieldWorldMax.sub(fieldWorldMin)).clamp(vec3(0.0), vec3(1.0));
   const latticeSample = sampleLatticeAt(worldPositionNode);
 
   // Directional shading: the irradiance field's luminance gradient points
@@ -9841,7 +9844,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   // which lit surfaces by screen orientation instead of the fire-to-surface
   // vector (operator-reported as proximity glow with no above/below response).
   const lumaWeights = vec3(0.2126, 0.7152, 0.0722);
-  const gradientEps = float(2.0 / 32.0);
+  const gradientEps = fieldCellPitch;
   const lumaAt = (positionNode) => sampleLatticeAt(positionNode).rgb.dot(lumaWeights);
   const latticeGradient = vec3(
     lumaAt(worldPositionNode.add(vec3(gradientEps, 0.0, 0.0))).sub(lumaAt(worldPositionNode.sub(vec3(gradientEps, 0.0, 0.0)))),
@@ -9853,7 +9856,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 
   // Outside the lattice box, attenuate continuously with exterior distance so
   // nearby receivers keep light while the far scene falls off.
-  const exteriorNode = worldPositionNode.abs().sub(vec3(1.0)).max(vec3(0.0));
+  const exteriorNode = fieldWorldMin.sub(worldPositionNode).max(worldPositionNode.sub(fieldWorldMax)).max(vec3(0.0));
   const exteriorDistance = exteriorNode.length();
   const exteriorFalloff = float(1.0).div(
     exteriorDistance.mul(exteriorDistance).mul(3.0).add(exteriorDistance.mul(1.5)).add(1.0)
@@ -9883,7 +9886,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   // so side walls and out-of-box geometry receive real fire light.
   const metaCore = metaTextureNode.sample(vec2(0.25, 0.5));
   const metaColor = metaTextureNode.sample(vec2(0.75, 0.5));
-  const fireCenterWorld = metaCore.xyz.mul(2.0).sub(vec3(1.0));
+  const fireCenterWorld = fieldWorldMin.add(metaCore.xyz.mul(fieldWorldMax.sub(fieldWorldMin)));
   const fireShadow = createFireLightFieldShadow({renderer,scene,
     sourceNode:fireCenterWorld,receiverNode:worldPositionNode,normalNode:worldNormalNode,
     requested:routeParams.get('volume_light_field_shadows') === '1'});
@@ -9942,11 +9945,11 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     outputNode = vec4(primaryHit, altHit, backgroundMask.mul(0.5), 1.0);
   } else if (debugView === 'slab') {
     // Exercise the exact tile/trilinear math over a fixed mid-depth slab.
-    const slabTexel = vec2(viewportUV.x, float(1.0).sub(viewportUV.y)).mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+    const slabTexel = vec2(viewportUV.x.mul(atlasGrid), float(1.0).sub(viewportUV.y).mul(atlasGridY)).clamp(vec2(0.5), vec2(atlasGrid, atlasGridY).sub(0.5));
     const slabSliceCoord = float(0.5).mul(atlasGrid).sub(0.5);
     const slabSlice0 = floor(slabSliceCoord);
     const slabTile = vec2(mod(slabSlice0, atlasTilesX), floor(slabSlice0.div(atlasTilesX)));
-    const slabUv = slabTile.mul(atlasGrid).add(slabTexel).mul(atlasTexelSize);
+    const slabUv = vec2(slabTile.x.mul(atlasGrid).add(slabTexel.x), slabTile.y.mul(atlasGridY).add(slabTexel.y)).mul(atlasTexelSize);
     outputNode = vec4(atlasTextureNode.sample(slabUv).rgb.mul(4.0), 1.0);
   }
 
@@ -10038,6 +10041,10 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
         passState.adoptionKey = adoptionKey;
         passState.farFieldIdentity = lightField.farFieldIdentity ?? null;
         atlasGrid.value = lightField.grid;
+        atlasGridY.value = lightField.gridY;
+        fieldWorldMin.value.set(...lightField.worldMin);
+        fieldWorldMax.value.set(...lightField.worldMax);
+        fieldCellPitch.value = (lightField.worldMax[0] - lightField.worldMin[0]) / lightField.grid;
         atlasTilesX.value = lightField.tilesX;
         atlasTexelSize.value.set(1 / lightField.atlasWidth, 1 / lightField.atlasHeight);
       }
