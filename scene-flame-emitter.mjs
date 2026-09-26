@@ -37,5 +37,12 @@ export function createFlameEmitterHandle(THREE) {
     depthWrite: false, toneMapped: false});
   group.add(new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), material));
   group.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.22, 0xffb54d, 0.05, 0.025));
+  const outlineMaterial = new THREE.MeshBasicMaterial({color: 0xffb54d, depthWrite: false,
+    toneMapped: false, side: THREE.DoubleSide});
+  for (const rotation of [[0, 0, 0], [Math.PI / 2, 0, 0], [0, Math.PI / 2, 0]]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.0025, 4, 32), outlineMaterial);
+    ring.rotation.set(...rotation);
+    group.add(ring);
+  }
   return group;
 }

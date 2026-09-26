@@ -19,12 +19,19 @@ function assertFrame(observed) {
   assert.equal(volume.active,true);assert.equal(volume.error,null);assert.match(volume.backend,/WebGPU/);
   assert.ok(volume.frameCount>0);assert.ok(volume.simStepCount>0);
   assert.equal(volume.ordinarySceneDepth.effective,true);
-  assert.equal(emitter.registered,true);assert.equal(emitter.effectiveMode,'analytic-fixed');
+  assert.equal(emitter.registered,true);
   assert.equal(emitter.domain,'fixed-world-aligned-volume');
-  assert.equal(emitter.source.coordinateSpace,'volume-local');
-  assert.deepEqual(emitter.source.origin,emitter.pose.position);
-  assert.equal(volume.analyticEmitterFrameId,emitter.source.frameId);
-  assert.equal(volume.analyticEmitterDispatchActive,true);
+  if(emitter.injectionSuspended) {
+    assert.equal(emitter.effectiveMode,'off');
+    assert.equal(emitter.source,null);
+    assert.equal(volume.analyticEmitterDispatchActive,false);
+  } else {
+    assert.equal(emitter.effectiveMode,'analytic-fixed');
+    assert.equal(emitter.source.coordinateSpace,'volume-local');
+    assert.deepEqual(emitter.source.origin,emitter.pose.position);
+    assert.equal(volume.analyticEmitterFrameId,emitter.source.frameId);
+    assert.equal(volume.analyticEmitterDispatchActive,true);
+  }
   assert.equal(observed.receipt.fallbackUsed,false);
 }
 function assertPose(actual,expected,label='pose') {
@@ -106,14 +113,25 @@ try {
   assert.ok(Math.abs(report.aimed.emitter.source.axis[0]+Math.sin(Math.PI/9))<1e-9);
   assert.ok(Math.abs(report.aimed.emitter.pose.scale[0]-1.1)<1e-9);
   assert.equal(report.aimed.volume.fluidStateResetCount,before.volume.fluidStateResetCount,'aim/scale/undo/cancel must preserve fluid state');
-  report.invalidMove=await page.evaluate(()=>{
-    const before=window.kaminosFlameEmitterState(),history=window.kaminosSceneEdits.state();let error;
-    try{window.kaminosSetSceneObjectTransform('flame-emitter',{position:[99,0,0]});}catch(e){error=e.message;}
-    return {before,after:window.kaminosFlameEmitterState(),historyBefore:history,historyAfter:window.kaminosSceneEdits.state(),error};
-  });
-  assert.match(report.invalidMove.error,/bounds/);assertPose(report.invalidMove.after.pose,report.invalidMove.before.pose,'rejected move pose');
-  assert.deepEqual(report.invalidMove.historyAfter,report.invalidMove.historyBefore,'rejected source placement must not strand a transaction');
   await waitFrame(report.aimed.volume.frameCount+30);await shot('04-aimed');
+  report.phase='out-of-grid-gesture';await save();
+  await page.locator('#kaminos-host-renderer-canvas').hover();
+  for(const key of ['g','x','2','Enter'])await page.keyboard.press(key);
+  const outside=await state();assertFrame(outside);
+  assert.equal(outside.emitter.injectionSuspended,true);
+  assert.ok(outside.emitter.pose.position[0]>1.5);
+  assert.equal(outside.volume.fluidStateResetCount,report.aimed.volume.fluidStateResetCount);
+  await waitFrame(outside.volume.frameCount+30);
+  report.outside=await state();assertFrame(report.outside);
+  assert.ok(report.outside.volume.simStepCount>outside.volume.simStepCount,'old field must keep evolving while source is parked outside');
+  await shot('05-outside-grid');
+  await page.locator('#kaminos-host-renderer-canvas').hover();await page.evaluate(()=>document.activeElement?.blur());
+  await page.keyboard.press('Meta+z');
+  const backInside=await state();assertFrame(backInside);assertPose(backInside.emitter.pose,report.aimed.emitter.pose,'outside undo pose');
+  await page.keyboard.press('Meta+Shift+z');
+  const redone=await state();assertFrame(redone);assertPose(redone.emitter.pose,outside.emitter.pose,'outside redo pose');
+  for(const key of ['g','x','1','Escape'])await page.keyboard.press(key);
+  assertPose((await state()).emitter.pose,outside.emitter.pose,'outside cancel pose');
   report.phase='save-reopen';await save();
   report.beforeSave=await state();const responsePromise=page.waitForResponse(response=>response.url().endsWith('/api/save-scene') && response.request().method()==='POST');
   assert.equal(await page.evaluate(()=>window.saveScene()),true);
@@ -125,7 +143,8 @@ try {
   await page.goto('about:blank');await page.goto(report.reopenUrl);
   report.reopened=await waitFrame(120);assert.notEqual(report.reopened.timeOrigin,report.beforeSave.timeOrigin);
   assertPose(report.reopened.emitter.pose,report.beforeSave.emitter.pose,'reopened pose');
-  assert.equal(report.reopened.history.undoCount,0);await shot('05-reopened');
+  assert.equal(report.reopened.history.undoCount,0);assert.equal(report.reopened.emitter.injectionSuspended,true);
+  await shot('06-reopened-outside');
   assert.deepEqual(report.errors,[],'page errors require inspection');
   assert.deepEqual(report.console.filter(x=>x.type==='error'),[],'console errors require inspection');
   report.status='passed';report.phase='complete';
