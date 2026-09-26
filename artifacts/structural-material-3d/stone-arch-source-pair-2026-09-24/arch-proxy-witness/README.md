@@ -6,8 +6,12 @@ The 2026-09-26 four-way consumer witness holds the TRELLIS GLB, projected
 profile, contact coordinate `(0.35, 0.20)`, load `0.15`, and mesh mapping fixed.
 It crosses through-depth versus camera-facing contact with continuous versus
 authored radial-joint interiors, then applies each state to a separate copy of
-the exact same mesh. The profile/GLB SHA-256 is
-`c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5`.
+the exact same mesh. The GLB payload SHA-256 is
+`c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5`; the
+profile JSON payload SHA-256 is
+`c0f00a56608e11d9b38c1c4b020b272bf34f5f3b9bb5ad51599a3aad5e41699f`. The
+consumer verifies both byte identities independently and verifies that the
+profile's embedded source digest matches the exact GLB payload.
 
 | Interior / contact | Loaded nodes | Broken bonds | Raw mapped motion | Displayed motion (`x48`) |
 | --- | ---: | ---: | ---: | ---: |

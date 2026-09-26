@@ -5,6 +5,7 @@ import {
 } from './structural-material-arch-geometry-sidecar.js';
 
 export const ARCH_ASSUMPTION_CONSUMER_SCHEMA = 'kaminos.structural-material.arch-assumption-mesh-consumer.v0';
+export const ARCH_ASSUMPTION_PROFILE_SHA256 = 'c0f00a56608e11d9b38c1c4b020b272bf34f5f3b9bb5ad51599a3aad5e41699f';
 export const ARCH_ASSUMPTION_CASES = Object.freeze([
   Object.freeze({ interiorMode: 'continuous', contactDepthMode: 'through-thickness' }),
   Object.freeze({ interiorMode: 'continuous', contactDepthMode: 'camera-facing-surface' }),
@@ -14,6 +15,20 @@ export const ARCH_ASSUMPTION_CASES = Object.freeze([
 
 const CONTACT = Object.freeze({ x: 0.35, y: 0.2, patchRadius: 0.032 });
 const FRACTURE_THRESHOLD = 0.04;
+
+async function sha256(bytes) {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+export async function verifyArchAssumptionProfileAndGlb(profileBytes, glbBytes, expectedProfileSha256 = ARCH_ASSUMPTION_PROFILE_SHA256) {
+  const profileSha256 = await sha256(profileBytes);
+  if (profileSha256 !== expectedProfileSha256) throw new Error(`profile payload SHA-256 mismatch: ${profileSha256} != ${expectedProfileSha256}`);
+  const glbSha256 = await sha256(glbBytes);
+  const profile = JSON.parse(new TextDecoder().decode(profileBytes));
+  if (profile.source?.sha256 !== glbSha256) throw new Error(`embedded GLB source SHA-256 mismatch: ${profile.source?.sha256} != ${glbSha256}`);
+  return { profile, profileSha256, glbSha256 };
+}
 export const ARCH_ASSUMPTION_CLAIM_CEILING = Object.freeze([
   'all four cases use one exact source mesh, profile, contact coordinate, force, and projection route',
   'camera-facing-surface is one inferred maximum-Z proxy layer, not triangle collision or measured pressure',

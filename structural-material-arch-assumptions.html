@@ -93,6 +93,7 @@
       const viewers = [];
       let sourcePositions = null;
       let profile = null;
+      let profileSha256 = null;
       let accepted = false;
       let latestReceipt = {};
       window.__archAssumptionReceipt = () => latestReceipt;
@@ -133,36 +134,62 @@
         viewers.push({ root, mesh:meshes[0], assumption });
       }
       function applyMatchedLoad() {
-        const entries = viewers.map(viewer => ({
-          viewer,
-          profile,
-          state: viewer.base,
-          sourcePositions: viewer.mesh.userData.archBasePositions,
-          load: { x:0.35, y:0.2, patchRadius:0.032, force:0.15, contactDepthMode:viewer.assumption.contactDepthMode, iterations:1200 },
-        }));
-        const updates = surface.stageArchSurfaceBatch(entries, 48, { threshold:0.04 });
-        surface.acceptArchSurfaceBatch(entries, updates);
-        accepted = true;
-        updates.forEach((update, index) => {
-          viewers[index].state = update.state;
-          document.querySelectorAll('#readouts section .readout')[index].textContent =
-            `Loaded ${update.loadedNodeCount} nodes at (${update.contact.column}, ${update.contact.row}) · ${update.brokenBondCount} broken · ${update.componentCount} component(s) · raw mesh motion ${update.maxRawVertexDisplacement.toFixed(6)} · display ${update.maxDisplayedVertexDisplacement.toFixed(5)}`;
+        const transaction = surface.runArchSurfaceApply({
+          prepare:() => viewers.map(viewer => ({
+            viewer,
+            profile,
+            state:viewer.base,
+            sourcePositions:viewer.mesh.userData.archBasePositions,
+            load:{ x:0.35, y:0.2, patchRadius:0.032, force:0.15, contactDepthMode:viewer.assumption.contactDepthMode, iterations:1200 },
+          })),
+          stage:entries => surface.stageArchSurfaceBatch(entries, 48, { threshold:0.04 }),
+          accept:surface.acceptArchSurfaceBatch,
+          present:updates => {
+            accepted = true;
+            const first = updates[0];
+            latestReceipt = {
+              result:'accepted', requestedPageRoute, effectivePageRoute:requestedPageRoute,
+              effectiveSolverRoute:first.state.solverAuthority,
+              effectiveMeshRoute:first.route, effectiveMeshAuthority:first.authority,
+              sourceGlbSha256:first.sourceGlbSha256, profileSha256, force:0.15,
+              contact:{ x:0.35, y:0.2, patchRadius:0.032 }, displayGain:48, fractureThreshold:0.04,
+              cases:updates.map(update => ({ interiorMode:update.interiorMode, contactDepthMode:update.contactDepthMode, loadedNodeCount:update.loadedNodeCount, brokenBondCount:update.brokenBondCount, componentCount:update.componentCount, rawMotion:update.maxRawVertexDisplacement, displayedMotion:update.maxDisplayedVertexDisplacement, mappedStructuralNodeCount:update.mappedStructuralNodeCount, surfaceVertexCount:update.surfaceVertexCount })),
+              claimCeiling:consumer.ARCH_ASSUMPTION_CLAIM_CEILING,
+            };
+            status.textContent = 'Matched load accepted · local CPU proxy · camera independent';
+            receipt.textContent = `Profile ${profileSha256.slice(0, 12)} verified · embedded source ${first.sourceGlbSha256.slice(0, 12)} matches exact GLB · four mesh consumers · ×48 display magnification · no collision or dynamics`;
+            document.getElementById('reset').disabled = false;
+            document.getElementById('replay').disabled = false;
+            updates.forEach((update, index) => {
+              document.querySelectorAll('#readouts section .readout')[index].textContent =
+                `Loaded ${update.loadedNodeCount} nodes at (${update.contact.column}, ${update.contact.row}) · ${update.brokenBondCount} broken · ${update.componentCount} component(s) · raw mesh motion ${update.maxRawVertexDisplacement.toFixed(6)} · display ${update.maxDisplayedVertexDisplacement.toFixed(5)}`;
+            });
+            render();
+          },
+          reportFailure:error => {
+            latestReceipt = { result:'rejected', requestedPageRoute, effectivePageRoute:requestedPageRoute, sourceGlbSha256:profile.source.sha256, profileSha256, errorName:error.name || 'Error', error:error.message || String(error) };
+            status.textContent = `Load rejected · ${error.message || String(error)}`;
+            receipt.textContent = JSON.stringify(latestReceipt);
+          },
+          reportPresentationFailure:(error, updates) => {
+            accepted = true;
+            const first = updates[0];
+            latestReceipt = {
+              result:'accepted-presentation-failed', requestedPageRoute, effectivePageRoute:requestedPageRoute,
+              effectiveSolverRoute:first.state.solverAuthority, effectiveMeshRoute:first.route,
+              sourceGlbSha256:first.sourceGlbSha256, profileSha256, force:0.15,
+              contact:{ x:0.35, y:0.2, patchRadius:0.032 },
+              cases:updates.map(update => ({ interiorMode:update.interiorMode, contactDepthMode:update.contactDepthMode, brokenBondCount:update.brokenBondCount, componentCount:update.componentCount })),
+              errorName:error.name || 'Error', presentationError:error.message || String(error),
+              claimCeiling:consumer.ARCH_ASSUMPTION_CLAIM_CEILING,
+            };
+            status.textContent = 'Structural state accepted · presentation failed';
+            receipt.textContent = JSON.stringify(latestReceipt);
+            document.getElementById('reset').disabled = false;
+            document.getElementById('replay').disabled = false;
+          },
         });
-        const first = updates[0];
-        latestReceipt = {
-          result:'accepted', requestedPageRoute, effectivePageRoute:requestedPageRoute,
-          effectiveSolverRoute:first.state.solverAuthority,
-          effectiveMeshRoute:first.route, effectiveMeshAuthority:first.authority,
-          sourceGlbSha256:first.sourceGlbSha256, force:0.15, contact:{ x:0.35, y:0.2, patchRadius:0.032 },
-          displayGain:48, fractureThreshold:0.04,
-          cases:updates.map((update, index) => ({ interiorMode:update.interiorMode, contactDepthMode:update.contactDepthMode, loadedNodeCount:update.loadedNodeCount, brokenBondCount:update.brokenBondCount, componentCount:update.componentCount, rawMotion:update.maxRawVertexDisplacement, displayedMotion:update.maxDisplayedVertexDisplacement, mappedStructuralNodeCount:update.mappedStructuralNodeCount, surfaceVertexCount:update.surfaceVertexCount })),
-          claimCeiling:consumer.ARCH_ASSUMPTION_CLAIM_CEILING,
-        };
-        status.textContent = 'Matched load accepted · local CPU proxy · camera independent';
-        receipt.textContent = `Exact GLB/profile hash match ${first.sourceGlbSha256.slice(0, 12)} · four mesh consumers · ×48 display magnification · jointed interior is counterfactual, not source truth · no collision or dynamics`;
-        document.getElementById('reset').disabled = false;
-        document.getElementById('replay').disabled = false;
-        render();
+        return transaction;
       }
       function reset() {
         viewers.forEach((viewer, index) => {
@@ -188,13 +215,13 @@
       const profileUrl = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-surface-depth-profile.json';
       const glbUrl = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb';
       const [profileResponse, sourceResponse] = await Promise.all([
-        fetch(profileUrl, { cache:'no-store' }).then(response => { if (!response.ok) throw new Error(`profile request returned ${response.status}`); return response.json(); }),
+        fetch(profileUrl, { cache:'no-store' }).then(response => { if (!response.ok) throw new Error(`profile request returned ${response.status}`); return response.arrayBuffer(); }),
         fetch(glbUrl, { cache:'no-store' }).then(response => { if (!response.ok) throw new Error(`GLB request returned ${response.status}`); return response.arrayBuffer(); }),
       ]);
-      profile = profileResponse;
+      const verifiedSource = await consumer.verifyArchAssumptionProfileAndGlb(profileResponse, sourceResponse);
+      profile = verifiedSource.profile;
+      profileSha256 = verifiedSource.profileSha256;
       if (profile.source?.kind !== 'trellis-glb' || profile.depthSource?.kind !== 'triangle-barycentric-z-envelope-v0' || profile.depthEnvelope?.length !== profile.columns * profile.rows) throw new Error('source profile identity or depth-envelope contract mismatch');
-      const sourceHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', sourceResponse))].map(value => value.toString(16).padStart(2, '0')).join('');
-      if (sourceHash !== profile.source.sha256) throw new Error(`GLB/profile hash mismatch: ${sourceHash} != ${profile.source.sha256}`);
       const gltf = await new GLTFLoader().parseAsync(sourceResponse, new URL('.', new URL(glbUrl, location.href)).href);
       const assumptions = consumer.ARCH_ASSUMPTION_CASES;
       assumptions.forEach((assumption, index) => prepareModel(gltf.scene, index, assumption));
@@ -202,8 +229,8 @@
       viewers.forEach((viewer, index) => { viewer.base = core.buildArchStructuralProxy(profile, { layers:3, depthMode:'surface-envelope', interiorMode:assumptions[index].interiorMode, radialJointCount:9, jointStiffnessRatio:0.35, jointStrength:0.025 }); });
       if (viewers.some(viewer => viewer.mesh.userData.archBasePositions.length !== sourcePositions.length)) throw new Error('matched mesh copies have different source vertex counts');
       status.textContent = `Loaded exact TRELLIS source · ${profile.source.sha256.slice(0, 12)} · four CPU proxy states`;
-      latestReceipt = { requestedPageRoute, effectivePageRoute:requestedPageRoute, effectiveMesh:glbUrl, effectiveProfile:profileUrl, sourceGlbSha256:profile.source.sha256, effectiveSolverRoute:viewers[0].base.solverAuthority, cases:assumptions };
-      receipt.textContent = `TRELLIS source ${profile.source.sha256.slice(0, 12)} · exact profile hash match · four matched states · no load applied`;
+      latestReceipt = { result:'loaded-no-load', requestedPageRoute, effectivePageRoute:requestedPageRoute, effectiveMesh:glbUrl, effectiveProfile:profileUrl, sourceGlbSha256:verifiedSource.glbSha256, profileSha256, effectiveSolverRoute:viewers[0].base.solverAuthority, cases:assumptions };
+      receipt.textContent = `Profile payload ${profileSha256.slice(0, 12)} verified · embedded source ${verifiedSource.glbSha256.slice(0, 12)} matches exact GLB · four matched states · no load applied`;
       resize();
       applyMatchedLoad();
     } catch (error) {

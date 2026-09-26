@@ -15,6 +15,7 @@
     "glbSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
     "profile": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-history-surface-depth-profile.json",
     "profileSha256": "c0f00a56608e11d9b38c1c4b020b272bf34f5f3b9bb5ad51599a3aad5e41699f",
+    "identityCheck": "profile payload bytes are pinned by profileSha256; embedded profile.source.sha256 is independently checked against the fetched GLB payload digest",
     "sameMeshCopies": 4
   },
   "configuration": {
@@ -78,18 +79,18 @@
   },
   "capture": {
     "path": "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/assumption-matrix-desktop.png",
-    "sha256": "8098829c4f7503a76519d1d122a5fe1ad73a6705bcf7e7695d9c21b515c15d7a",
+    "sha256": "878f2a64cd68a72d6290d0400784c39a11420bae9d9277c6a1b02f3a3a6f5e23",
     "dimensions": { "width": 1440, "height": 1100 },
-    "inspection": "all four source-matched arch meshes and readouts visible without overlap; slight surface-shape differences remain restrained"
+    "inspection": "all four source-matched arch meshes, readouts, and distinct GLB/profile digest labels visible without overlap; slight surface-shape differences remain restrained"
   },
   "sourceFilesSha256": {
-    "structural-material-arch-assumptions.html": "9281760d546397821213dca7eee0a1de7fb049d4ce73002ebb01018d6969b56e",
-    "structural-material-arch-assumption-consumer.mjs": "25089b9c5147ffd680158888cf00acc25d512c4ac33f9db7d6886a1cabb57ea0",
+    "structural-material-arch-assumptions.html": "bdad0d60433bbc464089ab640199fe7c0c1c79b5803f7b1f040d16bf4e66f5aa",
+    "structural-material-arch-assumption-consumer.mjs": "1619a2ba15876c7d63e1a32c278bd35ae831d2eda7fed41bca3af5337d9b958a",
     "structural-material-arch-geometry-sidecar.js": "a6581d51bd9c408df2e88f1e680861c636de4492214d56bdcb58ddf476a29526",
     "structural-material-arch-core.js": "9d78a4622ed1edbfb133a2fd17bc817326575c65be8910bd9880e3425dc6e335"
   },
   "tests": {
-    "focused": "node --test tests/structural-material-arch-assumption-consumer-contracts.mjs passed",
+    "focused": "node --test tests/structural-material-arch-assumption-consumer-contracts.mjs passed after exact profile-payload pin and accepted-presentation-failure coverage",
     "suite": "node --test --test-concurrency=1 tests/structural-material-arch-*.mjs did not close: existing browser-startup deadline contract failed twice with the same assertion; exact failure is recorded in session output, not attributed to this consumer slice"
   },
   "mobile": "two headless 390x844 captures remained at the loading state and were discarded; mobile behavior is unverified"
