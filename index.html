@@ -10124,13 +10124,14 @@ async function initScene() {
   } catch (error) {
     sharedGpu = null;
     sharedGpuFailureReason = String(error?.message || error);
-    if (requiresSharedDevice) {
+    if (requiresSharedDevice || fingerFluidPyroCompositionRequested()) {
       compositionSetupError = error;
       Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: sharedGpuFailureReason});
       throw error;
     }
     console.warn('Kaminos shared WebGPU device unavailable; falling back to independent devices:', sharedGpuFailureReason);
   }
+  if (fingerFluidPyroCompositionRequested() && !sharedGpu?.device) throw new Error('finger-fluid-pyro-shared-device-unavailable');
   if (samHostConfig?.mounted) {
     const { createWebGpuDeviceRequest, createWebGpuInferenceSession } = await import('./webgpu-inference-kit/src/core.js');
     let adapter = sharedGpu?.adapter || null;
@@ -12877,6 +12878,7 @@ async function startFingerFluidBench() {
     updateFingerFluidBenchReadout();
     fingerFluidBenchSolverPromise = createWebGPUFingerFluidSolver({
       canvas,
+      webgpuDevice: fingerFluidPyroCompositionRequested() ? sharedGpu.device : null,
       particleCount: fingerFluidBenchConfig.effectiveParticleCount,
       fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
@@ -21774,9 +21776,7 @@ async function initKaminosVolumeRoute() {
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
     transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute(),
-    // The finger-fluid liquid-contact route adopts the fluid solver's device
-    // through its descriptor; seating the host device here would refuse it.
-    sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
+    sharedGpuContext: sharedGpu,
     getSceneDepth: isFireLightFieldRoute() ? () => ordinarySceneDepthProvider?.() ?? null : null,
   });
   if (isFireLightFieldRoute()) {
