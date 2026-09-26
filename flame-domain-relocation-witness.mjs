@@ -81,6 +81,12 @@ try {
     }, { minimumFrame, requireMounted, minimumSteps }, { timeout: 120000 });
     return state();
   };
+  const waitBurner = async x => {
+    await page.waitForFunction(x => {
+      const burner = window.kaminosBurnerState?.();
+      return burner?.effective && Math.abs(burner.worldPosition?.[0] - x) < 0.02;
+    }, x, { timeout: 120000 });
+  };
   const shot = async (name, s) => {
     const image = path.join(args.out, `${name}.png`);
     await page.screenshot({ path: image });
@@ -91,7 +97,8 @@ try {
   };
   report.phase = 'mount'; report.url = manifest.sceneUrl; await save();
   await page.goto(manifest.sceneUrl);
-  const initial = await waitSim(0, true); check(initial, { x: 0.3, domain: 0 });
+  await waitSim(0, true); await waitBurner(0.3);
+  const initial = await state(); check(initial, { x: 0.3, domain: 0 });
   assert.equal(initial.sceneInfo, 'Scene loaded: 2 objects');
   for (const mutate of [
     s => { s.volume.backend = 'WebGL'; },
@@ -113,6 +120,7 @@ try {
   const box = await page.locator('#kaminos-host-renderer-canvas').boundingBox();
   await page.mouse.move(box.x + box.width * .7, box.y + box.height * .5);
   for (const key of ['g', 'x', '2']) await page.keyboard.press(key);
+  await waitBurner(2.3);
   const preview = await state();
   assert.ok(Math.abs(preview.emitter.pose.position[0] - 2.3) < 1e-8);
   assert.equal(preview.emitter.injectionSuspended, true);
@@ -121,14 +129,16 @@ try {
   await shot('02-preview-outside', preview);
   report.phase = 'release'; await save();
   await page.keyboard.press('Enter');
-  const released = await waitSim(preview.volume.frameCount + 8); check(released, { x: 2.3, domain: 2.3 });
+  await waitSim(preview.volume.frameCount + 8); await waitBurner(2.3);
+  const released = await state(); check(released, { x: 2.3, domain: 2.3 });
   assert.equal(released.volume.fluidStateResetCount, initial.volume.fluidStateResetCount + 1);
   assert.equal(released.volume.fluidStateResetReason, 'authored-flame-domain-relocation');
   await shot('03-released-plume', released);
   report.phase = 'continued-edit'; await save();
   await page.locator('#kaminos-host-renderer-canvas').hover();
   for (const key of ['g', 'x', '0', '.', '1', 'Enter']) await page.keyboard.press(key);
-  const adjusted = await waitSim(released.volume.frameCount + 8); check(adjusted, { x: 2.4, domain: 2.3 });
+  await waitSim(released.volume.frameCount + 8); await waitBurner(2.4);
+  const adjusted = await state(); check(adjusted, { x: 2.4, domain: 2.3 });
   assert.equal(adjusted.volume.fluidStateResetCount, released.volume.fluidStateResetCount,
     'small accepted move within the relocated grid must keep the evolving field');
   assert.ok(adjusted.volume.simStepCount > released.volume.simStepCount);
@@ -137,17 +147,21 @@ try {
   report.phase = 'history'; await save();
   await page.locator('#kaminos-host-renderer-canvas').hover();
   await page.keyboard.press('Meta+z');
-  const firstUndo = await waitSim(adjusted.volume.frameCount + 8); check(firstUndo, { x: 2.3, domain: 2.3 });
+  await waitSim(adjusted.volume.frameCount + 8); await waitBurner(2.3);
+  const firstUndo = await state(); check(firstUndo, { x: 2.3, domain: 2.3 });
   assert.equal(firstUndo.volume.fluidStateResetCount, adjusted.volume.fluidStateResetCount);
   await page.keyboard.press('Meta+z');
-  const undone = await waitSim(firstUndo.volume.frameCount + 8); check(undone, { x: 0.3, domain: 0 });
+  await waitSim(firstUndo.volume.frameCount + 8); await waitBurner(0.3);
+  const undone = await state(); check(undone, { x: 0.3, domain: 0 });
   assert.equal(undone.volume.fluidStateResetCount, firstUndo.volume.fluidStateResetCount + 1);
   await shot('05-undo-outside-move', undone);
   await page.keyboard.press('Meta+Shift+z');
-  const redone = await waitSim(undone.volume.frameCount + 8); check(redone, { x: 2.3, domain: 2.3 });
+  await waitSim(undone.volume.frameCount + 8); await waitBurner(2.3);
+  const redone = await state(); check(redone, { x: 2.3, domain: 2.3 });
   assert.equal(redone.volume.fluidStateResetCount, undone.volume.fluidStateResetCount + 1);
   await page.keyboard.press('Meta+Shift+z');
-  const secondRedo = await waitSim(redone.volume.frameCount + 8); check(secondRedo, { x: 2.4, domain: 2.3 });
+  await waitSim(redone.volume.frameCount + 8); await waitBurner(2.4);
+  const secondRedo = await state(); check(secondRedo, { x: 2.4, domain: 2.3 });
   assert.equal(secondRedo.volume.fluidStateResetCount, redone.volume.fluidStateResetCount);
   await shot('06-redo-both-edits', secondRedo);
   for (const key of ['g', 'x', '0', '.', '5', 'Escape']) await page.keyboard.press(key);
@@ -164,7 +178,8 @@ try {
   assert.deepEqual(saved.flameDomainTranslation, [2.3, 0, 0]);
   report.reopenUrl = compositionRestoreUrl(saved.composition, savedReceipt.saved, manifest.origin);
   await page.goto('about:blank'); await page.goto(report.reopenUrl);
-  const reopened = await waitSim(0, true, 60); check(reopened, { x: 2.4, domain: 2.3 });
+  await waitSim(0, true, 60); await waitBurner(2.4);
+  const reopened = await state(); check(reopened, { x: 2.4, domain: 2.3 });
   assert.equal(reopened.sceneInfo, 'Scene loaded: 2 objects');
   assert.notEqual(reopened.timeOrigin, secondRedo.timeOrigin);
   assert.equal(reopened.history.undoCount, 0);
