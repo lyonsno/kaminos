@@ -56,7 +56,7 @@ test('calibrated mode takes its epsilon from the scheme table, not from Curl, an
   assert.match(core.CONFINEMENT_CALIBRATION_STATUS, /provisional/, 'the status names the table a provisional choice, not a demonstrated physical level');
   assert.doesNotMatch(source, /only compensates the scheme's numerical loss/, 'source text no longer claims demonstrated loss compensation');
   assert.doesNotMatch(index, /injects no authored curl energy/, 'help text no longer claims isolated injection');
-  assert.ok(core.CONFINEMENT_CALIBRATED_EPSILON['maccormack-velocity'] < core.CONFINEMENT_CALIBRATED_EPSILON.legacy, 'a second-order scheme needs less numerical-loss compensation than first-order');
+  assert.ok(core.CONFINEMENT_CALIBRATED_EPSILON['maccormack-velocity'] < core.CONFINEMENT_CALIBRATED_EPSILON.legacy, 'the provisional table orders the second-order schemes below first-order');
 });
 
 test('off mode removes confinement and keeps the decoupled expansion baseline', () => {
@@ -135,5 +135,7 @@ test('the arm capture records confinement and enstrophy in its receipt', () => {
   assert.match(capture, /observed !== Math\.fround\(Number\(value\)\)/, 'the packed epsilon is compared as float32 against the request');
   assert.match(capture, /null override: packed epsilon/, 'a null override must return to the table value in calibrated mode');
   assert.match(capture, /stale residual: probe step/, 'an arm needs a residual probe newer than its switch');
-  assert.match(capture, /\['arm-error', 'packed-epsilon', 'stale-residual'\]/, 'both new failure paths have fault cases');
+  assert.match(capture, /\['arm-error', 'packed-epsilon', 'stale-residual', 'null-mode-drift'\]/, 'every failure path has a fault case');
+  assert.match(capture, /effectiveMismatches\(arm, end, expectedMode\)/, 'the expected confinement mode is carried across arms');
+  assert.match(capture, /confinement mode drifted: expected/, 'an override-only arm must end in the expected mode');
 });

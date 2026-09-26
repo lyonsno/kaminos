@@ -25,7 +25,8 @@
 // synthetic renderer error into the first arm; `--fault packed-epsilon` perturbs
 // the observed packed epsilon so the shader-facing comparison must fail;
 // `--fault stale-residual` demands a residual probe newer than any step so the
-// freshness check must fail.
+// freshness check must fail; `--fault null-mode-drift` makes a null-override arm
+// observe `off` so the expected-mode check must fail.
 
 import { spawn } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -64,7 +65,7 @@ const fail = (phase, message) => { throw new PhaseFailure(phase, message); };
 
 if (!url || !outDir || !armsArg) fail('argument-validation', 'usage: <url> <outDir> "<arm>;<arm>" [settleMs] --expected-repo-root <dir> --expected-commit <sha>');
 if (!expectedRepoRoot || !expectedCommit) { report.failure = 'expected repo root and commit are required so the capture cannot pass on an unintended server'; writeReport(); console.error(report.failure); process.exit(1); }
-const FAULTS = ['arm-error', 'packed-epsilon', 'stale-residual'];
+const FAULTS = ['arm-error', 'packed-epsilon', 'stale-residual', 'null-mode-drift'];
 if (fault && !FAULTS.includes(fault)) { report.failure = `unknown fault ${fault}; known: ${FAULTS.join(', ')}`; writeReport(); console.error(report.failure); process.exit(1); }
 const arms = armsArg.split(';').map(a => { const [name, ...pairs] = a.split(','); return { name, set: pairs.map(p => p.split('=')) }; });
 mkdirSync(outDir, { recursive: true });
@@ -78,7 +79,9 @@ const errors = report.browserErrors;
 // Requested control value -> the effective receipt it must produce. Controls
 // without an effective receipt are checked at the DOM only.
 const solverExpectation = { legacy: { solver: 'legacy' }, converged: { solver: 'converged', openTop: false }, 'converged-open-top': { solver: 'converged', openTop: true } };
-function effectiveMismatches(arm, end) {
+// `expectedMode` is the last requested confinement mode (or the admitted one), so
+// an arm that only changes the override cannot complete in a different mode.
+function effectiveMismatches(arm, end, expectedMode) {
   const mismatches = [];
   for (const [cid, value] of arm.set) {
     if (cid === 'volume-advection-scheme' && end.transport?.scheme !== value) mismatches.push(`scheme requested ${value}, effective ${end.transport?.scheme}`);
@@ -94,8 +97,13 @@ function effectiveMismatches(arm, end) {
       // this comparison can fail.
       const packed = end.confinementUniform?.confinementAmount;
       const observed = fault === 'packed-epsilon' ? (Number(packed) || 0) + 1 : packed;
+      const observedMode = fault === 'null-mode-drift' ? 'off' : end.confinement?.mode;
+      const packedMode = { 'curl-slider': 0, calibrated: 1, off: 2 }[expectedMode];
+      if (!expectedMode) mismatches.push('override requested but no confinement mode has been requested or admitted');
+      else if (observedMode !== expectedMode) mismatches.push(`confinement mode drifted: expected ${expectedMode} (last requested or admitted), observed ${observedMode}`);
+      else if (fault !== 'null-mode-drift' && end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement mode ${expectedMode} expected but uniform slot 345 holds ${end.confinementUniform?.mode}`);
       if (value === 'null') {
-        if (end.confinement?.mode === 'calibrated') {
+        if (expectedMode === 'calibrated') {
           if (end.confinement?.calibration?.source !== 'table') mismatches.push(`null override requested but calibration source is ${end.confinement?.calibration?.source}`);
           if (observed !== Math.fround(Number(end.confinement?.calibration?.epsilon))) mismatches.push(`null override: packed epsilon ${observed} is not the table value ${end.confinement?.calibration?.epsilon}`);
         }
@@ -150,6 +158,7 @@ try {
   report.admitted = admitted;
   writeReport();
 
+  let expectedMode = admitted.confinement?.mode ?? null;
   for (const arm of arms) {
     report.failurePhase = `arm-${arm.name}-switch`;
     const applied = [];
@@ -163,6 +172,7 @@ try {
         continue;
       }
       if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);
+      if (cid === 'volume-confinement') expectedMode = value;
       const domValue = await setControl(cid, value);
       applied.push([cid, value, domValue]);
       if (domValue !== value) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, `control ${cid} requested ${value} but the DOM holds ${JSON.stringify(domValue)}`); }
@@ -192,7 +202,7 @@ try {
     // after the switch; `stale-residual` makes that impossible to prove the check.
     const freshnessFloor = fault === 'stale-residual' ? Number.POSITIVE_INFINITY : s0;
     if (!(end.residual?.step > freshnessFloor)) fail(report.failurePhase, `stale residual: probe step ${end.residual?.step ?? 'none'} is not newer than the required floor ${freshnessFloor} (arm switch at step ${s0}${fault === 'stale-residual' ? ', fault stale-residual' : ''}); the arm's enstrophy is not its own measurement`);
-    const mismatches = effectiveMismatches(arm, end);
+    const mismatches = effectiveMismatches(arm, end, expectedMode);
     if (mismatches.length) fail(report.failurePhase, `effective state does not match arm ${arm.name}: ${mismatches.join('; ')}`);
     report.failurePhase = `arm-${arm.name}-capture`;
     const shot = await call('Page.captureScreenshot', { format: 'png' });
