@@ -4449,8 +4449,8 @@ fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (gid.x >= IRRADIANCE_GRID || gid.y >= IRRADIANCE_GRID_Y || gid.z >= IRRADIANCE_GRID) {
     return;
   }
-  let brickStart = vec3<u32>(floor(vec3<f32>(gid) * vec3<f32>(GRID, GRID_Y, GRID) / vec3<f32>(IRRADIANCE_GRID, IRRADIANCE_GRID_Y, IRRADIANCE_GRID)));
-  let brickEnd = max(brickStart + vec3<u32>(1), vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1)) * vec3<f32>(GRID, GRID_Y, GRID) / vec3<f32>(IRRADIANCE_GRID, IRRADIANCE_GRID_Y, IRRADIANCE_GRID))));
+  let brickStart = vec3<u32>(floor(vec3<f32>(gid) * vec3<f32>(f32(GRID), f32(GRID_Y), f32(GRID)) / vec3<f32>(f32(IRRADIANCE_GRID), f32(IRRADIANCE_GRID_Y), f32(IRRADIANCE_GRID))));
+  let brickEnd = max(brickStart + vec3<u32>(1), vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1)) * vec3<f32>(f32(GRID), f32(GRID_Y), f32(GRID)) / vec3<f32>(f32(IRRADIANCE_GRID), f32(IRRADIANCE_GRID_Y), f32(IRRADIANCE_GRID)))));
   let radianceGain = max(u.radiance_controls.x, 0.0);
   let glowGain = max(u.radiance_controls.z, 0.0);
   var accum = vec3<f32>(0.0);
