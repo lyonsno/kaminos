@@ -3277,6 +3277,7 @@ import { defaultLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMIT
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
+import { publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -25490,12 +25491,14 @@ function greenroomSplatMetadata(display, fileName, url, metadata = {}) {
 async function greenroomImportSplat(url, fileName, display, options = {}) {
   if (greenroomPreviewIsActive()) {
     await restoreAuthoredSceneFromPreview({ silent: true });
+    if (typeof options.isCurrent === 'function' && !options.isCurrent()) return null;
   }
   if (shouldClearSceneForImport(options)) clearScene();
   let metadata = greenroomSplatMetadata(display, fileName, url, options.metadata || {});
   const correction = metadata.splat?.correction
     ? normalizeSplatCorrection(metadata.splat.correction)
     : await fetchSplatAssetCorrection(metadata.splat);
+  if (typeof options.isCurrent === 'function' && !options.isCurrent()) return null;
   if (correction) {
     metadata = {
       ...metadata,
@@ -25516,14 +25519,23 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
     applySceneObjectTransformState(object, composeSplatObjectPivotTransform(sceneTransform, splat.correction));
     applySplatVisualRootOffsetForObject(object, sceneTransform, splat.correction);
   }
-  scene.add(object);
-  const record = registerSceneObject(object, {
-    ...metadata,
-    splat,
-    type: 'splat',
-    sceneTransform,
-    renderHandoffSchema: RENDER_HANDOFF_SCHEMA,
+  let record = null;
+  const published = publishSceneObjectIfCurrent({
+    object,
+    isCurrent: options.isCurrent,
+    discard: disposeObjectTree,
+    publish: value => {
+      scene.add(value);
+      record = registerSceneObject(value, {
+        ...metadata,
+        splat,
+        type: 'splat',
+        sceneTransform,
+        renderHandoffSchema: RENDER_HANDOFF_SCHEMA,
+      });
+    },
   });
+  if (!published) return null;
   applySplatCorrectionToRecord(record, splat.correction);
   currentMesh = object;
   if (transformControls) {
@@ -26362,7 +26374,7 @@ function readNumberControl(id, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-async function addSceneObjectFromSource(record) {
+async function addSceneObjectFromSource(record, loadRequestId = null) {
   if (!record?.source) throw new Error('Scene object missing source');
   if (record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE) {
     const { object } = createLocalLiquidEmitterObject(THREE, record);
@@ -26392,6 +26404,7 @@ async function addSceneObjectFromSource(record) {
       }, {
         clear: false,
         metadata: record,
+        isCurrent: loadRequestId === null ? undefined : () => sceneLoadRequests.isCurrent(loadRequestId),
       });
     }
     return showGLB(record.source, {
@@ -26418,7 +26431,7 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   const loaded = [];
   try {
     for (const record of records) {
-      const object = await addSceneObjectFromSource(record);
+      const object = await addSceneObjectFromSource(record, loadRequestId);
       if (loadRequestId !== null && !sceneLoadRequests.isCurrent(loadRequestId)) return false;
       if (record.transform) {
         const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
