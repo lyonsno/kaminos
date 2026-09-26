@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   createLocalLiquidEmitterObject,
   createLocalLiquidEmitterSceneRecord,
+  localLiquidRuntimeSourceState,
 } from '../local-liquid-scene-object.mjs';
+import { defaultLocalLiquidSetup } from '../local-liquid-setup.mjs';
 
 class Vec3 {
   fromArray(values) { this.values = [...values]; }
@@ -60,4 +62,15 @@ test('a saved water emitter without settings cannot rehydrate as a default sourc
   });
   delete saved.localLiquidEmitter;
   assert.throws(() => createLocalLiquidEmitterObject(THREE, saved), /missing its saved settings/i);
+});
+
+test('removing the final emitter emits an empty inlet update while retaining the scene domain', () => {
+  const state = localLiquidRuntimeSourceState({
+    objects: [],
+    localLiquid: defaultLocalLiquidSetup(),
+  }, 7);
+  assert.equal(state.participation, 'authored-domain-present');
+  assert.deepEqual(state.domain, defaultLocalLiquidSetup());
+  assert.equal(state.inletPacket.packet_id, 'kaminos-authored-liquid-7');
+  assert.deepEqual(state.inletPacket.emitters, []);
 });

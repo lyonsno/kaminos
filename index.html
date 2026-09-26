@@ -765,6 +765,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <h2>Scene Objects</h2>
     <div class="panel">
       <div class="scene-object-tools">
+        <button type="button" class="btn" id="scene-add-water-emitter">Add Water Emitter</button>
         <button type="button" class="btn" data-scene-group-create>Create Group</button>
       </div>
       <div id="scene-import-status" class="scene-import-status" role="status" aria-live="polite" hidden>
@@ -3272,6 +3273,8 @@ import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
+import { defaultLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
+import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState } from './local-liquid-scene-object.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import {
   VOLUME_EMITTER_INLET_PROFILES,
@@ -3922,6 +3925,11 @@ let fingerFluidBenchState = createFingerFluidBenchState({
 window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 let sceneObjects = [];
+let localLiquidSetup = null;
+let localLiquidHost = null;
+let localLiquidLoading = false;
+let localLiquidFailure = null;
+let localLiquidGeneration = 0;
 const sceneMembershipEditTargets = new Set();
 let sceneImportStatus = null;
 let sceneGroups = [];
@@ -6469,6 +6477,79 @@ function handleViewportDoubleClick(event) {
   enterSplatCorrectionMode(record.id);
 }
 
+function localLiquidEmitterRecords() {
+  return sceneObjects.filter(entry => entry.type === LOCAL_LIQUID_EMITTER_TYPE).map(entry => ({
+    id: entry.id,
+    type: entry.type,
+    transform: sceneObjectTransformState(entry.object),
+    localLiquidEmitter: structuredClone(entry.localLiquidEmitter),
+  }));
+}
+
+function syncLocalLiquidHostEmitters() {
+  if (!localLiquidHost || !localLiquidSetup) return;
+  const state = localLiquidRuntimeSourceState({ objects: sceneObjects.map(entry => ({
+    id: entry.id,
+    type: entry.type,
+    source: entry.source,
+    transform: sceneObjectTransformState(entry.object),
+    localLiquidEmitter: entry.localLiquidEmitter,
+  })), localLiquid: localLiquidSetup });
+  localLiquidHost.setEmitters(state.emitters);
+}
+
+async function mountLocalLiquidHost() {
+  if (!localLiquidSetup || localLiquidLoading) return;
+  if (localLiquidHost) return true;
+  localLiquidFailure = sharedGpu?.device
+    ? 'Current liquid host admission requires the canonical moving-Hill support contact provider; the retained analytic basin only provides static render geometry'
+    : 'Water requires Kaminos shared WebGPU device';
+  setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
+  return false;
+}
+
+window.kaminosLocalLiquidState = () => ({
+  requestedRoute: localLiquidSetup ? 'kaminos/finger-fluid/local-analytic-host-frame-v0' : null,
+  effectiveRoute: localLiquidHost?.state().effectiveRoute || null,
+  backend: renderer?.backend?.constructor?.name || null,
+  mounted: Boolean(localLiquidHost),
+  loading: localLiquidLoading,
+  failure: localLiquidFailure,
+  setup: localLiquidSetup ? structuredClone(localLiquidSetup) : null,
+  emitters: localLiquidEmitterRecords(),
+  lastFrame: localLiquidHost?.state().lastFrame || null,
+});
+
+async function addLocalLiquidEmitter() {
+  const count = sceneObjects.filter(entry => entry.type === LOCAL_LIQUID_EMITTER_TYPE).length;
+  if (count >= LOCAL_LIQUID_EMITTER_CAPACITY) {
+    setInfo(`The local water host supports ${LOCAL_LIQUID_EMITTER_CAPACITY} emitters per scene`);
+    return;
+  }
+  localLiquidSetup ||= defaultLocalLiquidSetup();
+  const id = makeSceneObjectId(LOCAL_LIQUID_EMITTER_TYPE);
+  const record = createLocalLiquidEmitterSceneRecord({
+    id,
+    transform: { position: [-0.35, 0.4, -1.65], rotation: [Math.atan2(0.25, 1), 0, 0], scale: [1, 1, 1] },
+    settings: { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: 1200 },
+  });
+  const { object } = createLocalLiquidEmitterObject(THREE, record);
+  scene.add(object);
+  registerSceneObject(object, record);
+  try {
+    if (!recordSceneObjectInsertion(id)) throw new Error('Water emitter has no scene membership history target');
+    const mounted = await mountLocalLiquidHost();
+    if (mounted) setInfo('Added Water Emitter. Use the scene move/rotate/scale tools; Undo removes it.');
+  } catch (error) {
+    setInfo(`Water emitter added; live water host unavailable: ${error.message}`);
+  }
+  window._kaminosDirty?.();
+}
+
+document.getElementById('scene-add-water-emitter')?.addEventListener('click', () => {
+  addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
+});
+
 function registerSceneObject(object, metadata = {}) {
   sceneSaveBlockedByFailedRestore = false;
   const id = String(metadata.id || makeSceneObjectId(metadata.type || 'object'));
@@ -6490,6 +6571,7 @@ function registerSceneObject(object, metadata = {}) {
     renderCapabilities: metadata.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
     sceneTransform,
+    localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -6505,6 +6587,7 @@ function registerSceneObject(object, metadata = {}) {
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
     sceneTransform: record.sceneTransform,
+    localLiquidEmitter: record.localLiquidEmitter,
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
@@ -6725,18 +6808,38 @@ document.querySelector('[data-scene-group-create]')?.addEventListener('click', (
 function applyAuthoredScenePose(id, transform = {}) {
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
+  if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) normalizeLocalLiquidEmitter(entry.localLiquidEmitter, transform);
   if (entry.type === 'splat') {
     setSceneObjectSceneTransform(entry, transform);
     applySplatCorrectionToRecord(entry);
   } else {
     applySceneObjectTransformState(entry.object, transform);
   }
+  if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   updateTransformInspector();
   window._kaminosDirty?.();
   return window.kaminosSceneObjectDebugState().find(record => record.id === id);
 }
 
+function validateLiveLocalLiquidEmitterPose(entry) {
+  if (entry?.type !== LOCAL_LIQUID_EMITTER_TYPE) return true;
+  try {
+    normalizeLocalLiquidEmitter(entry.localLiquidEmitter, sceneObjectTransformState(entry.object));
+    return true;
+  } catch (error) {
+    // TransformControls edits the object directly. If a constrained emitter
+    // pose becomes invalid during a gizmo drag, restore the accepted pose
+    // before scene history reads and commits it.
+    const accepted = scenePlacementTools?.edits.state().active?.before;
+    if (accepted) applySceneObjectTransformState(entry.object, accepted);
+    setInfo(error.message);
+    return false;
+  }
+}
+
 window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
+  const entry = sceneObjects.find(item => item.id === id);
+  if (entry?.type === LOCAL_LIQUID_EMITTER_TYPE) normalizeLocalLiquidEmitter(entry.localLiquidEmitter, transform);
   if (scenePlacementTools) scenePlacementTools.edits.apply(id, transform, 'Set scene object pose');
   else applyAuthoredScenePose(id, transform);
   return window.kaminosSceneObjectDebugState().find(record => record.id === id);
@@ -9533,7 +9636,7 @@ function sceneObjectMembershipSnapshot(id) {
   if (index < 0) return null;
   const entry = sceneObjects[index];
   const record = serializeSceneObject(entry);
-  if (record.type !== 'glb' || !isReloadableSceneObjectRecord(record)) return null;
+  if (!isReloadableSceneObjectRecord(record)) return null;
   return {
     record,
     index,
@@ -9547,7 +9650,7 @@ function sceneObjectMembershipSnapshot(id) {
 function checkedSceneObjectMembership(value, id) {
   if (value == null) return null;
   if (!value || typeof value !== 'object' || !value.record || value.record.id !== id
-      || value.record.type !== 'glb' || !isReloadableSceneObjectRecord(value.record)
+      || !isReloadableSceneObjectRecord(value.record)
       || !Number.isInteger(value.index) || value.index < 0 || !Array.isArray(value.groups)
       || value.groups.some(group => !group || typeof group.id !== 'string'
         || !Number.isInteger(group.groupIndex) || group.groupIndex < 0
@@ -9590,6 +9693,7 @@ async function restoreSceneObjectMembership(snapshot) {
   sceneObjects.splice(sceneObjects.indexOf(entry), 1);
   sceneObjects.splice(Math.min(index, sceneObjects.length), 0, entry);
   restoreSceneObjectGroups(entry, groups);
+  if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   if (selection.groupId && sceneGroups.some(group => group.id === selection.groupId)) {
     setActiveSceneGroup(selection.groupId);
   } else if (selection.objectId && sceneObjects.some(record => record.id === selection.objectId)) {
@@ -9643,6 +9747,7 @@ function removeSceneObjectInternal(id, { recordHistory = true } = {}) {
   }
   if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
   const [entry] = sceneObjects.splice(index, 1);
+  if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   if (hybridSplatOverlayState.objectId === entry.id) {
     stopHybridSplatOverlay({ silent: true });
   }
@@ -10572,6 +10677,7 @@ async function initScene() {
     } else {
       const entry = selectedSceneObjectEntry();
       if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);
+      if (entry?.type === LOCAL_LIQUID_EMITTER_TYPE && validateLiveLocalLiquidEmitterPose(entry)) syncLocalLiquidHostEmitters();
     }
     updateTransformInspector();
   });
@@ -10673,7 +10779,17 @@ async function initScene() {
     const t0 = performance.now();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
-    renderPipeline.render();
+    if (localLiquidHost) {
+      try { localLiquidHost.render(); }
+      catch (error) {
+        console.error('Local water frame failed', error);
+        localLiquidFailure = String(error?.message || error);
+        localLiquidHost.dispose();
+        localLiquidHost = null;
+        renderPipeline.render();
+        setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
+      }
+    } else renderPipeline.render();
     sceneFrameCount++;
     const frameMs = performance.now() - t0;
     fpsFrames++;
@@ -10703,8 +10819,9 @@ async function initScene() {
     const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const localWaterActive = localLiquidHost && !localLiquidHost.paused;
 
-    if (!foregroundServiceActive && mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
+    if (!foregroundServiceActive && mainRendererNeeded && (needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
       if (!sceneRenderedForVolume) renderSceneFrame();
       sceneRenderedForVolume = false;
 
@@ -10906,6 +11023,11 @@ function clearScene() {
   for (const editId of sceneMembershipEditTargets) scenePlacementTools.edits.unregister(editId);
   sceneMembershipEditTargets.clear();
   sceneMutationToken++;
+  localLiquidGeneration++;
+  localLiquidHost?.dispose();
+  localLiquidHost = null;
+  localLiquidSetup = null;
+  localLiquidFailure = null;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
     scene.remove(entry.object);
@@ -26189,6 +26311,7 @@ function serializeSceneObject(entry) {
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
+    localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
   };
 }
 
@@ -26200,6 +26323,12 @@ function readNumberControl(id, fallback = 0) {
 
 async function addSceneObjectFromSource(record) {
   if (!record?.source) throw new Error('Scene object missing source');
+  if (record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE) {
+    const { object } = createLocalLiquidEmitterObject(THREE, record);
+    scene.add(object);
+    registerSceneObject(object, record);
+    return object;
+  }
   if (record.type === 'pbr' && isReloadableSceneObjectRecord(record)) {
     const files = await loadDemoFiles(record.source);
     if (!files) throw new Error(`Scene object "${record.fileName || record.id}" demo source "${record.source}" is not readable`);
@@ -26241,8 +26370,9 @@ function assertSceneObjectsReloadable(records) {
   }
 }
 
-async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null) {
+async function loadSceneObjects(records, activeId, groups = [], activeGroupId = null, liquidSetup = null) {
   clearScene();
+  localLiquidSetup = liquidSetup;
   const loaded = [];
   try {
     for (const record of records) {
@@ -26265,6 +26395,7 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
     clearScene();
     throw e;
   }
+  if (localLiquidSetup) await mountLocalLiquidHost();
   setSceneGroupsFromRecords(groups, activeGroupId);
   if (activeGroupId && sceneGroups.some(group => group.id === activeGroupId)) {
     setActiveSceneGroup(activeGroupId);
@@ -26287,6 +26418,7 @@ function buildSceneData(capture = null) {
     activeGroupId: activeSceneGroupId,
     provenance,
     composition: activeSceneComposition,
+    localLiquid: localLiquidSetup,
     capture,
     camera: {
       position: camera.position.toArray(),
@@ -26649,7 +26781,7 @@ async function saveToServer(sceneData, filename) {
 
 function sceneIsEmpty() {
   const persistableFlame = isFireLightFieldRoute() && volumePrototype?.debugState?.()?.active;
-  return sceneObjects.length === 0 && volumePrimitives.length === 0 && !persistableFlame;
+  return sceneObjects.length === 0 && volumePrimitives.length === 0 && !persistableFlame && !localLiquidSetup;
 }
 
 function sceneSaveIsBlocked() {
@@ -26818,7 +26950,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 
   if (objectRecords.length > 0) {
     try {
-      await loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId);
+      await loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid);
     } catch (e) {
       setVolumePrimitivesState(previousVolumePrimitiveState);
       sceneSaveBlockedByFailedRestore = true;
@@ -26828,6 +26960,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     }
   } else {
     clearScene();
+    localLiquidSetup = restorePlan.localLiquid;
+    if (localLiquidSetup) await mountLocalLiquidHost();
   }
 
   // The pinned basin is already mounted. Reapplying identical primitives would
@@ -26938,9 +27072,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
-    setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}`);
+    setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);
   } else {
-    setInfo('Volume scene loaded');
+    setInfo(localLiquidFailure ? `Scene loaded; water host unavailable: ${localLiquidFailure}` : 'Volume scene loaded');
   }
 }
 

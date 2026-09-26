@@ -30,19 +30,13 @@ function fixture(){
    beginDrag(){emit(viewport,'pointerdown',{pointerId:7,button:0});viewport.setPointerCapture(7);gizmo.dragging=true;controls.enabled=false;gizmo.dispatchEvent({type:'mouseDown'});pose.position[0]=2;},
    lateMove(){if(gizmo.dragging)pose.position[0]=9;gizmo.pointerUp();}};
 }
-test('sidebar history scope permits undo without enabling viewport transform shortcuts',()=>{
- const f=fixture(),historyScope=new Element();let pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},frames=0;
- f.viewport.contains=()=>false;
- const scoped=installScenePlacementTools({viewport:f.viewport,historyScope,camera:new PerspectiveCamera(45,4/3,.1,100),controls:f.controls,gizmo:f.gizmo,
-  selected:()=> 'kiln',read:()=>structuredClone(pose),write:(_,next)=>pose=structuredClone(next),object:()=>({userData:{kaminosSceneObject:{label:'kiln'}},updateWorldMatrix(){}}),refresh(){},frameSelected:()=>frames++});
- scoped.edits.apply('kiln',{position:[2,0,0]});
- emit(historyScope,'pointerdown',{button:0,pointerId:1});
- emit(f.document,'keydown',{key:'g'});
- assert.equal(scoped.state().modal,null,'a list click must not enable viewport-only G/R/S shortcuts');
- emit(f.document,'keydown',{key:'f'});
- assert.equal(frames,0,'a list click must not enable viewport-only F framing');
+test('scene history undo remains available after sidebar selection returns focus to the page',()=>{
+ const f=fixture();
+ f.document.body=new Element();f.document.activeElement=f.document.body;
+ f.tools.edits.apply('kiln',{position:[2,0,0]});
  emit(f.document,'keydown',{key:'z',ctrlKey:true});
- assert.deepEqual(pose.position,[0,0,0],'the same sidebar scope must continue to permit scene-history undo');
+ assert.deepEqual(f.pose.position,[0,0,0],'page-focused undo must restore the authored scene pose');
+ assert.equal(f.frames,0,'undo must not also frame the selected object');
 });
 
 test('pivot projection distinguishes visible, behind-camera, and off-viewport objects',()=>{
