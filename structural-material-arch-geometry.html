@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="kaminos-visual-consumer-authority" content="trellis-glb-to-persistent-arch-state-displacement-v0">
+  <title>Arch Surface Consumer</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+      font: 14px/1.4 system-ui, sans-serif;
+      color: #e7ecea;
+      background: #0a1012;
+      --line: #334145;
+      --muted: #a5b2b0;
+      --mint: #91c8b1;
+      --gold: #e3bc70;
+      --red: #f26f5b;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header { height: 50px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--line); background: #151e21; }
+    h1 { margin: 0; font-size: 15px; font-weight: 630; }
+    .identity, .subhead, .readout, .receipt { color: var(--muted); font-size: 12px; }
+    main { max-width: 1500px; margin: 0 auto; padding: 14px 16px 24px; }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .force { min-width: 320px; display: grid; grid-template-columns: auto minmax(130px, 1fr) 38px; align-items: center; gap: 10px; }
+    label { color: var(--muted); font-size: 12px; }
+    input[type="range"] { width: 100%; accent-color: var(--gold); }
+    output { font-variant-numeric: tabular-nums; }
+    button { height: 34px; padding: 0 12px; color: inherit; background: #202b2f; border: 1px solid #526267; border-radius: 5px; font: inherit; cursor: pointer; }
+    button:hover { background: #2b393d; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+    .route { margin-left: auto; text-align: right; }
+    .stage { width: 100%; height: min(68vh, 720px); min-height: 390px; display: block; background: #080d0f; border: 1px solid #293538; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; }
+    section { padding: 12px 12px 8px 0; }
+    section + section { border-left: 1px solid var(--line); padding: 12px 0 8px 12px; }
+    h2 { margin: 0; font-size: 14px; font-weight: 620; }
+    .continuous h2 { color: var(--mint); }
+    .joints h2 { color: var(--gold); }
+    .readout { margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .receipt { padding-top: 10px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+    @media (max-width: 720px) {
+      header { padding: 0 12px; }
+      main { padding: 10px 12px 18px; }
+      .identity { display: none; }
+      .force { min-width: 0; width: 100%; }
+      .route { margin-left: 0; width: 100%; text-align: left; }
+      .stage { height: 58vh; min-height: 340px; }
+      .pair { grid-template-columns: 1fr; }
+      section, section + section { padding: 10px 0; border-left: 0; }
+      section + section { border-top: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Arch surface</h1>
+    <span class="identity">TRELLIS GLB · structural state consumer · source-intended continuous body</span>
+  </header>
+  <main>
+    <div class="controls">
+      <div class="force">
+        <label for="force">Crown load · proxy units</label>
+        <input id="force" type="range" min="0.1" max="1.5" step="0.05" value="0.75">
+        <output id="force-value" for="force">0.75</output>
+      </div>
+      <button id="apply">Apply load</button>
+      <button id="reset">Reset</button>
+      <div class="route readout" id="status">Loading source mesh and structural profile</div>
+    </div>
+    <canvas id="view" class="stage" aria-label="Two views of the same TRELLIS arch under two structural interior assumptions"></canvas>
+    <div class="pair">
+      <section class="continuous">
+        <h2>Continuous interior</h2>
+        <div class="subhead">Source-intended structural recipe · camera-facing crown contact</div>
+        <div class="readout" id="continuous-readout">Waiting for source mesh</div>
+      </section>
+      <section class="joints">
+        <h2>Radial-joint counterfactual</h2>
+        <div class="subhead">Authored comparison prior · same geometry, load and contact layer</div>
+        <div class="readout" id="joints-readout">Waiting for source mesh</div>
+      </section>
+    </div>
+    <div class="receipt" id="receipt">Requested surface route: TRELLIS GLB to persistent arch state. No solver event applied.</div>
+  </main>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { buildArchStructuralProxy, solveArchStructuralForce, fractureArchStructuralProxy } from './structural-material-arch-core.js';
+    import { projectArchStructuralStateToSurface } from './structural-material-arch-geometry-sidecar.js';
+
+    const PROFILE_URL = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-surface-depth-profile.json';
+    const GLB_URL = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/trellis-intact/output.glb';
+    const DISPLAY_GAIN = 8;
+    const CONTACT = { x: -0.05, y: 0.29, patchRadius: 0.032 };
+    const THRESHOLD = 0.04;
+    const forceInput = document.getElementById('force');
+    const forceOutput = document.getElementById('force-value');
+    const status = document.getElementById('status');
+    const receipt = document.getElementById('receipt');
+    const profiles = {};
+    const viewers = {};
+    let ready = false;
+
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('view'), antialias: true, alpha: false });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#080d0f');
+    scene.add(new THREE.HemisphereLight('#e8f0ee', '#4b5147', 2.0));
+    const keyLight = new THREE.DirectionalLight('#fff2d4', 3.2);
+    keyLight.position.set(-2.5, 3.8, 4.5);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight('#b7d9d2', 1.3);
+    fillLight.position.set(3.2, 1.0, -2.4);
+    scene.add(fillLight);
+
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.01, 30);
+    camera.position.set(0.25, 0.32, 3.55);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0.02, 0);
+    controls.enableDamping = false;
+    controls.addEventListener('change', render);
+
+    const makeFloor = () => {
+      const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.2, 2.5),
+        new THREE.MeshStandardMaterial({ color: '#313a3c', roughness: 0.9, metalness: 0.02 }),
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -0.355;
+      scene.add(floor);
+    };
+    makeFloor();
+
+    function render() {
+      renderer.render(scene, camera);
+    }
+
+    function resize() {
+      const width = renderer.domElement.clientWidth;
+      const height = renderer.domElement.clientHeight;
+      if (!width || !height) return;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      render();
+    }
+
+    function prepareModel(sourceScene, x, interiorMode, label) {
+      const root = sourceScene.clone(true);
+      const meshes = [];
+      root.traverse(object => {
+        if (!object.isMesh) return;
+        object.geometry = object.geometry.clone();
+        object.material = Array.isArray(object.material)
+          ? object.material.map(material => material.clone())
+          : object.material.clone();
+        const position = object.geometry.getAttribute('position');
+        if (!position) throw new Error(`${label} source mesh has no position attribute`);
+        object.userData.archBasePositions = Float32Array.from(position.array);
+        meshes.push(object);
+      });
+      if (meshes.length !== 1) throw new Error(`expected one source mesh, received ${meshes.length}`);
+      root.position.x = x;
+      root.scale.setScalar(0.92);
+      scene.add(root);
+      const base = buildArchStructuralProxy(profiles.profile, {
+        layers: 3,
+        depthMode: 'surface-envelope',
+        interiorMode,
+      });
+      viewers[label] = { root, mesh: meshes[0], base, interiorMode };
+    }
+
+    function applyState(viewer, force) {
+      const solved = solveArchStructuralForce(viewer.base, {
+        ...CONTACT,
+        force,
+        contactDepthMode: 'camera-facing-surface',
+        iterations: 600,
+      });
+      const state = fractureArchStructuralProxy(solved, { threshold: THRESHOLD });
+      const projection = projectArchStructuralStateToSurface(
+        profiles.profile,
+        state,
+        viewer.mesh.userData.archBasePositions,
+      );
+      const display = viewer.mesh.geometry.getAttribute('position');
+      const raw = projection.rawDisplacements;
+      for (let index = 0; index < raw.length; index += 1) {
+        display.array[index] = viewer.mesh.userData.archBasePositions[index] + raw[index] * DISPLAY_GAIN;
+      }
+      display.needsUpdate = true;
+      viewer.mesh.geometry.computeVertexNormals();
+      viewer.mesh.geometry.computeBoundingSphere();
+      viewer.state = state;
+      viewer.projection = projection;
+      return {
+        force,
+        loadedNodeCount: state.load.loadedNodeCount,
+        contact: state.load.contact,
+        brokenBondCount: projection.brokenBondIds.length,
+        componentCount: projection.componentCount,
+        maxRawVertexDisplacement: projection.maxRawVertexDisplacement,
+        maxDisplayedVertexDisplacement: projection.maxRawVertexDisplacement * DISPLAY_GAIN,
+        mappedStructuralNodeCount: projection.mappedStructuralNodeCount,
+        surfaceVertexCount: projection.surfaceVertexCount,
+        route: projection.route,
+        authority: projection.authority,
+        sourceGlbSha256: projection.sourceGlbSha256,
+        interiorMode: projection.interiorMode,
+        contactDepthMode: projection.contactDepthMode,
+        connectivityEpoch: projection.connectivityEpoch,
+      };
+    }
+
+    function formatResult(result) {
+      return `loaded ${result.loadedNodeCount} nodes at (${result.contact.column}, ${result.contact.row}) · ${result.brokenBondCount} broken bonds · ${result.componentCount} components · raw surface motion ${result.maxRawVertexDisplacement.toFixed(5)} · display ${result.maxDisplayedVertexDisplacement.toFixed(5)}`;
+    }
+
+    document.getElementById('apply').addEventListener('click', () => {
+      if (!ready) return;
+      try {
+        const force = Number(forceInput.value);
+        const continuous = applyState(viewers.continuous, force);
+        const joints = applyState(viewers.joints, force);
+        document.getElementById('continuous-readout').textContent = formatResult(continuous);
+        document.getElementById('joints-readout').textContent = formatResult(joints);
+        status.textContent = 'CPU spring proxy · same TRELLIS mesh · paired interior assumptions';
+        receipt.textContent = JSON.stringify({
+          requestedPageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
+          effectivePageRoute: 'kaminos.structural-material.arch-surface-consumer.v0',
+          effectiveMeshRoute: continuous.route,
+          effectiveMeshAuthority: continuous.authority,
+          effectiveSolverRoute: viewers.continuous.base.solverAuthority,
+          contact: { ...CONTACT, mode: 'camera-facing-surface' },
+          force,
+          fractureThreshold: THRESHOLD,
+          displayGain: DISPLAY_GAIN,
+          sourceGlbSha256: continuous.sourceGlbSha256,
+          continuous,
+          radialJointCounterfactual: joints,
+          limitation: 'Display-gained mesh displacement consumes proxy state; this witness does not establish source-true masonry or solver-derived cut surfaces.',
+        });
+        render();
+      } catch (error) {
+        status.textContent = `Load failed: ${error.message}`;
+        receipt.textContent = `No new state accepted. ${error.stack || error.message}`;
+      }
+    });
+
+    document.getElementById('reset').addEventListener('click', () => {
+      if (!ready) return;
+      for (const viewer of Object.values(viewers)) {
+        const position = viewer.mesh.geometry.getAttribute('position');
+        position.array.set(viewer.mesh.userData.archBasePositions);
+        position.needsUpdate = true;
+        viewer.mesh.geometry.computeVertexNormals();
+        viewer.mesh.geometry.computeBoundingSphere();
+        viewer.state = viewer.base;
+        viewer.projection = null;
+      }
+      document.getElementById('continuous-readout').textContent = 'No load applied';
+      document.getElementById('joints-readout').textContent = 'No load applied';
+      status.textContent = 'Profiles loaded · no load applied';
+      receipt.textContent = 'Same TRELLIS geometry restored from its source vertices. No solver event applied.';
+      render();
+    });
+    forceInput.addEventListener('input', () => {
+      forceOutput.value = Number(forceInput.value).toFixed(2);
+    });
+    window.addEventListener('resize', resize);
+
+    try {
+      const [profileResponse, sourceResponse] = await Promise.all([
+        fetch(PROFILE_URL, { cache: 'no-store' }).then(response => {
+          if (!response.ok) throw new Error(`profile request returned ${response.status}`);
+          return response.json();
+        }),
+        fetch(GLB_URL, { cache: 'no-store' }).then(response => {
+          if (!response.ok) throw new Error(`GLB request returned ${response.status}`);
+          return response.arrayBuffer();
+        }),
+      ]);
+      profiles.profile = profileResponse;
+      if (profiles.profile.source?.kind !== 'trellis-glb' ||
+          profiles.profile.depthSource?.kind !== 'triangle-barycentric-z-envelope-v0' ||
+          profiles.profile.depthEnvelope?.length !== profiles.profile.columns * profiles.profile.rows) {
+        throw new Error('source profile identity or depth-envelope contract mismatch');
+      }
+      if (!profiles.profile.source.sha256) throw new Error('source profile has no GLB hash');
+      const sourceHash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', sourceResponse))]
+        .map(value => value.toString(16).padStart(2, '0')).join('');
+      if (sourceHash !== profiles.profile.source.sha256) {
+        throw new Error(`GLB/profile hash mismatch: ${sourceHash} != ${profiles.profile.source.sha256}`);
+      }
+      const gltf = await new GLTFLoader().parseAsync(sourceResponse, new URL('.', new URL(GLB_URL, location.href)).href);
+      prepareModel(gltf.scene, -0.56, 'continuous', 'continuous');
+      prepareModel(gltf.scene, 0.56, 'radial-voussoir-joints', 'joints');
+      ready = true;
+      status.textContent = `Loaded exact TRELLIS source · ${profiles.profile.source.sha256.slice(0, 12)} · CPU structural proxy`;
+      document.getElementById('continuous-readout').textContent = 'No load applied';
+      document.getElementById('joints-readout').textContent = 'No load applied';
+      receipt.textContent = JSON.stringify({
+        requestedMesh: GLB_URL,
+        effectiveMesh: GLB_URL,
+        sourceGlbSha256: profiles.profile.source.sha256,
+        requestedProfile: PROFILE_URL,
+        effectiveProfile: PROFILE_URL,
+        effectiveMeshRoute: 'kaminos.structural-material.trellis-arch-surface.v0',
+        effectiveSolverRoute: 'shear-regularized-linear-spring-pcg-v0',
+        interiorProfiles: ['continuous', 'radial-voussoir-joints'],
+        contactMode: 'camera-facing-surface',
+        displayGain: DISPLAY_GAIN,
+      });
+      resize();
+      render();
+    } catch (error) {
+      status.textContent = `Load failed: ${error.message}`;
+      receipt.textContent = error.stack || error.message;
+      throw error;
+    }
+  </script>
+</body>
+</html>

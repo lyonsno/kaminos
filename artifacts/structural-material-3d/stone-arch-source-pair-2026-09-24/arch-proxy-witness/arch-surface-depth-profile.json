@@ -1,0 +1,5859 @@
+{
+  "columns": 48,
+  "rows": 36,
+  "occupancy": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+  ],
+  "bounds": {
+    "min": [
+      -0.4906616806983948,
+      -0.37511369585990906
+    ],
+    "max": [
+      0.4867357313632965,
+      0.37382110953330994
+    ]
+  },
+  "depthEnvelope": [
+    {
+      "minZ": -0.0342072339314948,
+      "maxZ": 0.07697297667726924
+    },
+    {
+      "minZ": -0.03718708414003584,
+      "maxZ": 0.17728930649545643
+    },
+    {
+      "minZ": -0.039223810008927426,
+      "maxZ": 0.18108884674877626
+    },
+    {
+      "minZ": -0.041879529898858,
+      "maxZ": 0.1800340493355065
+    },
+    {
+      "minZ": -0.041222280350630976,
+      "maxZ": 0.17830865025739837
+    },
+    {
+      "minZ": -0.025688447748384233,
+      "maxZ": 0.1766494116337062
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.05568508070822539,
+      "maxZ": 0.0055571595911629666
+    },
+    {
+      "minZ": 0.13877191280190093,
+      "maxZ": 0.13877191280190093
+    },
+    {
+      "minZ": 0.13961504001162237,
+      "maxZ": 0.13961504001162237
+    },
+    {
+      "minZ": 0.13844709430262267,
+      "maxZ": 0.13844709430262267
+    },
+    {
+      "minZ": 0.13756166277631307,
+      "maxZ": 0.13756166277631307
+    },
+    {
+      "minZ": 0.1363700019524771,
+      "maxZ": 0.1363700019524771
+    },
+    {
+      "minZ": 0.1355661001053229,
+      "maxZ": 0.1355661001053229
+    },
+    {
+      "minZ": 0.13445620745630382,
+      "maxZ": 0.13445620745630382
+    },
+    {
+      "minZ": 0.13345102066561326,
+      "maxZ": 0.13345102066561326
+    },
+    {
+      "minZ": 0.13219680337944867,
+      "maxZ": 0.13219680337944867
+    },
+    {
+      "minZ": 0.12785026208507266,
+      "maxZ": 0.12785026208507266
+    },
+    {
+      "minZ": -0.02392061330631698,
+      "maxZ": 0.11163774155481133
+    },
+    {
+      "minZ": -0.035873619832050674,
+      "maxZ": 0.0763763154477046
+    },
+    {
+      "minZ": -0.038312101007240966,
+      "maxZ": 0.17214842353137852
+    },
+    {
+      "minZ": -0.04078074892734733,
+      "maxZ": 0.18116322968417845
+    },
+    {
+      "minZ": -0.04259863219851279,
+      "maxZ": 0.17955698636229595
+    },
+    {
+      "minZ": -0.04406299664993226,
+      "maxZ": 0.17810510683084435
+    },
+    {
+      "minZ": -0.037739454263416156,
+      "maxZ": 0.17628571727228892
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1553734075021914,
+      "maxZ": 0.025092386990261784
+    },
+    {
+      "minZ": -0.1718724076277564,
+      "maxZ": 0.13931298735938813
+    },
+    {
+      "minZ": -0.1730056537703779,
+      "maxZ": 0.13937865338041797
+    },
+    {
+      "minZ": -0.17429425577190585,
+      "maxZ": 0.13843241697566766
+    },
+    {
+      "minZ": -0.17549143092254743,
+      "maxZ": 0.13728833965528167
+    },
+    {
+      "minZ": -0.17689259044175049,
+      "maxZ": 0.13647649196142517
+    },
+    {
+      "minZ": -0.1780380723977376,
+      "maxZ": 0.1351948043431133
+    },
+    {
+      "minZ": -0.17952423817350796,
+      "maxZ": 0.13435996794994653
+    },
+    {
+      "minZ": -0.1803222365076791,
+      "maxZ": 0.13348947485620488
+    },
+    {
+      "minZ": -0.18147597010679822,
+      "maxZ": 0.13248542111768025
+    },
+    {
+      "minZ": -0.18178983372345336,
+      "maxZ": 0.13127566651969996
+    },
+    {
+      "minZ": -0.03735152043233362,
+      "maxZ": 0.13027352440263895
+    },
+    {
+      "minZ": -0.036958325614810834,
+      "maxZ": 0.07360684150680637
+    },
+    {
+      "minZ": -0.03895907798860698,
+      "maxZ": 0.18093853350786954
+    },
+    {
+      "minZ": -0.04104966970592482,
+      "maxZ": 0.18069241129287694
+    },
+    {
+      "minZ": -0.04323875395092656,
+      "maxZ": 0.17932762212818734
+    },
+    {
+      "minZ": -0.038513884372283376,
+      "maxZ": 0.17791271924186877
+    },
+    {
+      "minZ": -0.028536800179144915,
+      "maxZ": 0.17658350224982547
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.15385841098569136,
+      "maxZ": 0.033888459279735744
+    },
+    {
+      "minZ": -0.17115625597483675,
+      "maxZ": 0.13953293669292668
+    },
+    {
+      "minZ": -0.17220540468643458,
+      "maxZ": 0.13940402448020087
+    },
+    {
+      "minZ": -0.1740296735274285,
+      "maxZ": 0.1383781371535084
+    },
+    {
+      "minZ": -0.17443538120140414,
+      "maxZ": 0.13720866534435094
+    },
+    {
+      "minZ": -0.17609963939837986,
+      "maxZ": 0.13638718473711997
+    },
+    {
+      "minZ": -0.17731641514617202,
+      "maxZ": 0.1354338018382682
+    },
+    {
+      "minZ": -0.1785092873020977,
+      "maxZ": 0.13440047826472823
+    },
+    {
+      "minZ": -0.1797261576568025,
+      "maxZ": 0.13332502040561775
+    },
+    {
+      "minZ": -0.1806072540983225,
+      "maxZ": 0.13242069311103988
+    },
+    {
+      "minZ": -0.18148824637895844,
+      "maxZ": 0.1313711984097179
+    },
+    {
+      "minZ": -0.03482287374347582,
+      "maxZ": 0.13032556349298274
+    },
+    {
+      "minZ": -0.038620993265583575,
+      "maxZ": 0.07327597407418783
+    },
+    {
+      "minZ": -0.040336644818857875,
+      "maxZ": 0.18136639999246262
+    },
+    {
+      "minZ": -0.041395599814713135,
+      "maxZ": 0.1800782583535917
+    },
+    {
+      "minZ": -0.04086526350406472,
+      "maxZ": 0.17907316814327495
+    },
+    {
+      "minZ": -0.04328557398654242,
+      "maxZ": 0.1776785428795951
+    },
+    {
+      "minZ": -0.027835520139024614,
+      "maxZ": 0.17621417315465834
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.16017834765715724,
+      "maxZ": 0.04285306020661256
+    },
+    {
+      "minZ": -0.17021846848124447,
+      "maxZ": 0.13930335314072884
+    },
+    {
+      "minZ": -0.17183405109942965,
+      "maxZ": 0.13933660921279328
+    },
+    {
+      "minZ": -0.17295056418649069,
+      "maxZ": 0.13817840874876047
+    },
+    {
+      "minZ": -0.17413868837035668,
+      "maxZ": 0.13706196677903926
+    },
+    {
+      "minZ": -0.17468780647540133,
+      "maxZ": 0.1364674486579373
+    },
+    {
+      "minZ": -0.17617395803409694,
+      "maxZ": 0.13524484778499482
+    },
+    {
+      "minZ": -0.17768519348746717,
+      "maxZ": 0.13440539810642493
+    },
+    {
+      "minZ": -0.17886459729038368,
+      "maxZ": 0.13341895942177365
+    },
+    {
+      "minZ": -0.18002437576832367,
+      "maxZ": 0.1324065215634541
+    },
+    {
+      "minZ": -0.1808588621903615,
+      "maxZ": 0.13137957086824614
+    },
+    {
+      "minZ": -0.02934595880739276,
+      "maxZ": 0.130315668894472
+    },
+    {
+      "minZ": -0.03916141216015294,
+      "maxZ": 0.06643697930386634
+    },
+    {
+      "minZ": -0.04314832196036146,
+      "maxZ": 0.18146496431519163
+    },
+    {
+      "minZ": -0.04484846656418374,
+      "maxZ": 0.18002409352943682
+    },
+    {
+      "minZ": -0.04624553856074634,
+      "maxZ": 0.1788169760046568
+    },
+    {
+      "minZ": -0.04444855720255684,
+      "maxZ": 0.1774469958860111
+    },
+    {
+      "minZ": -0.029581944751332363,
+      "maxZ": 0.176010981226674
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1624090852761014,
+      "maxZ": 0.04959585726341986
+    },
+    {
+      "minZ": -0.16989621698231322,
+      "maxZ": 0.13923448045019782
+    },
+    {
+      "minZ": -0.17108944427155962,
+      "maxZ": 0.13796542756241
+    },
+    {
+      "minZ": -0.1723203826091338,
+      "maxZ": 0.1377916555800924
+    },
+    {
+      "minZ": -0.1726564483393894,
+      "maxZ": 0.1364186686222648
+    },
+    {
+      "minZ": -0.17458316757032927,
+      "maxZ": 0.1361671489472152
+    },
+    {
+      "minZ": -0.1756187453854421,
+      "maxZ": 0.13532248051273738
+    },
+    {
+      "minZ": -0.17599273199477164,
+      "maxZ": 0.13423650619011065
+    },
+    {
+      "minZ": -0.17840297903576452,
+      "maxZ": 0.13332064500690718
+    },
+    {
+      "minZ": -0.17916318857086402,
+      "maxZ": 0.13253175931991337
+    },
+    {
+      "minZ": -0.17989838619025636,
+      "maxZ": 0.13121289568600858
+    },
+    {
+      "minZ": -0.020802232661879656,
+      "maxZ": 0.13020741556501675
+    },
+    {
+      "minZ": -0.040880240710614815,
+      "maxZ": 0.06809735185478157
+    },
+    {
+      "minZ": -0.043124462766445326,
+      "maxZ": 0.18135289214887654
+    },
+    {
+      "minZ": -0.046503933576406295,
+      "maxZ": 0.17988873861586335
+    },
+    {
+      "minZ": -0.047089884482768754,
+      "maxZ": 0.17858254616844046
+    },
+    {
+      "minZ": -0.04535719712451901,
+      "maxZ": 0.1770565074196351
+    },
+    {
+      "minZ": -0.03834068714211175,
+      "maxZ": 0.1757645347418344
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.16218671079138494,
+      "maxZ": 0.05767829643560548
+    },
+    {
+      "minZ": -0.16918810975415688,
+      "maxZ": 0.1395120960700756
+    },
+    {
+      "minZ": -0.17057363943170062,
+      "maxZ": 0.13924076519619671
+    },
+    {
+      "minZ": -0.17152564537780468,
+      "maxZ": 0.138612196124021
+    },
+    {
+      "minZ": -0.17286773087415047,
+      "maxZ": 0.13698488383861548
+    },
+    {
+      "minZ": -0.17373978317324215,
+      "maxZ": -0.17373978317324215
+    },
+    {
+      "minZ": -0.17429962702589824,
+      "maxZ": 0.13528144844029522
+    },
+    {
+      "minZ": -0.17633412904330953,
+      "maxZ": 0.1342776961929985
+    },
+    {
+      "minZ": -0.17696314142799618,
+      "maxZ": 0.13332913134790408
+    },
+    {
+      "minZ": -0.17877282136812092,
+      "maxZ": 0.13249666805908544
+    },
+    {
+      "minZ": -0.17917843051401827,
+      "maxZ": 0.13142764224222717
+    },
+    {
+      "minZ": -0.01591868307665647,
+      "maxZ": 0.13036096487157506
+    },
+    {
+      "minZ": -0.04251674735088022,
+      "maxZ": 0.05973125719570065
+    },
+    {
+      "minZ": -0.04601606556817905,
+      "maxZ": 0.1812208000629821
+    },
+    {
+      "minZ": -0.048037512298581456,
+      "maxZ": 0.17961234421397815
+    },
+    {
+      "minZ": -0.047610830074206474,
+      "maxZ": 0.17847773669253528
+    },
+    {
+      "minZ": -0.05108500210537385,
+      "maxZ": 0.17692004211626502
+    },
+    {
+      "minZ": -0.04460429962722132,
+      "maxZ": 0.17561441768351513
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.16203043094973718,
+      "maxZ": 0.06561594936769172
+    },
+    {
+      "minZ": -0.1687117022859999,
+      "maxZ": 0.13954168971259884
+    },
+    {
+      "minZ": -0.16944520434520072,
+      "maxZ": 0.13931158629335105
+    },
+    {
+      "minZ": -0.17103338244055238,
+      "maxZ": 0.13565995142913484
+    },
+    {
+      "minZ": -0.17222028894815156,
+      "maxZ": 0.13565411485547937
+    },
+    {
+      "minZ": 0.12949576947514996,
+      "maxZ": 0.12949576947514996
+    },
+    {
+      "minZ": -0.174019908956749,
+      "maxZ": 0.13495625861568505
+    },
+    {
+      "minZ": -0.1750401029277219,
+      "maxZ": 0.1344883183516811
+    },
+    {
+      "minZ": -0.1764490342864662,
+      "maxZ": 0.13313108256115927
+    },
+    {
+      "minZ": -0.17678117288879638,
+      "maxZ": 0.13248754135693583
+    },
+    {
+      "minZ": -0.17874098962153362,
+      "maxZ": 0.13105071592702636
+    },
+    {
+      "minZ": -0.017296919280403014,
+      "maxZ": 0.13058222098213815
+    },
+    {
+      "minZ": -0.04443414975910235,
+      "maxZ": 0.0610860359827763
+    },
+    {
+      "minZ": -0.04433878819089643,
+      "maxZ": 0.18100151865795513
+    },
+    {
+      "minZ": -0.04823220088637578,
+      "maxZ": 0.17937771675698808
+    },
+    {
+      "minZ": -0.04991394639640721,
+      "maxZ": 0.1776100524100856
+    },
+    {
+      "minZ": -0.05286465657024912,
+      "maxZ": 0.17662156993312805
+    },
+    {
+      "minZ": -0.0454018221632659,
+      "maxZ": 0.1755683098933909
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1608646499490202,
+      "maxZ": 0.06911483503441661
+    },
+    {
+      "minZ": -0.16818707698491953,
+      "maxZ": 0.13929923155961324
+    },
+    {
+      "minZ": -0.1694307170016147,
+      "maxZ": 0.13920641552804874
+    },
+    {
+      "minZ": -0.17064165745884058,
+      "maxZ": 0.13845113133659684
+    },
+    {
+      "minZ": -0.1715778964117049,
+      "maxZ": 0.13678984259112548
+    },
+    {
+      "minZ": -0.17252904017536608,
+      "maxZ": 0.13588629578206327
+    },
+    {
+      "minZ": -0.17332536705671928,
+      "maxZ": 0.13537721592996255
+    },
+    {
+      "minZ": -0.17460905120699752,
+      "maxZ": 0.13414565775498513
+    },
+    {
+      "minZ": -0.17569746533209157,
+      "maxZ": 0.13262618903330398
+    },
+    {
+      "minZ": -0.176416475704608,
+      "maxZ": 0.13267253987572453
+    },
+    {
+      "minZ": -0.17780787756672695,
+      "maxZ": 0.1312807742799794
+    },
+    {
+      "minZ": -0.003952326128701447,
+      "maxZ": 0.1308043670705399
+    },
+    {
+      "minZ": -0.04506718858779778,
+      "maxZ": 0.06133564913741369
+    },
+    {
+      "minZ": -0.04716927458945006,
+      "maxZ": 0.1810039105261839
+    },
+    {
+      "minZ": -0.05112490587906854,
+      "maxZ": 0.1792426510181626
+    },
+    {
+      "minZ": -0.05130595610686503,
+      "maxZ": 0.17774472300613195
+    },
+    {
+      "minZ": -0.05464357071674956,
+      "maxZ": 0.1763282766443017
+    },
+    {
+      "minZ": -0.04574786246676204,
+      "maxZ": 0.17544596194109907
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.16257632321197787,
+      "maxZ": 0.07198999716124467
+    },
+    {
+      "minZ": -0.16750855248664864,
+      "maxZ": 0.13913456438077543
+    },
+    {
+      "minZ": -0.1687155608673363,
+      "maxZ": 0.13908607856708852
+    },
+    {
+      "minZ": -0.16855530797775947,
+      "maxZ": 0.1380899100268664
+    },
+    {
+      "minZ": -0.1703111539211653,
+      "maxZ": 0.13625465397817244
+    },
+    {
+      "minZ": -0.17180514541155137,
+      "maxZ": 0.1361648756600901
+    },
+    {
+      "minZ": -0.17279834571594682,
+      "maxZ": 0.13573007156801528
+    },
+    {
+      "minZ": -0.17296296525900845,
+      "maxZ": 0.134160243689763
+    },
+    {
+      "minZ": -0.17475657597187622,
+      "maxZ": 0.13362643391866716
+    },
+    {
+      "minZ": -0.17600077676471082,
+      "maxZ": 0.13274105761190325
+    },
+    {
+      "minZ": -0.17703341839693656,
+      "maxZ": 0.13175731145136296
+    },
+    {
+      "minZ": -0.004103264356030898,
+      "maxZ": 0.13078831494480886
+    },
+    {
+      "minZ": -0.044586886802935904,
+      "maxZ": 0.05730958191418488
+    },
+    {
+      "minZ": -0.04915388570078341,
+      "maxZ": 0.1802972725848381
+    },
+    {
+      "minZ": -0.051102907206987666,
+      "maxZ": 0.17910431373481314
+    },
+    {
+      "minZ": -0.05297320319535702,
+      "maxZ": -0.052841895046925526
+    },
+    {
+      "minZ": -0.05437005866929325,
+      "maxZ": 0.17530461534369804
+    },
+    {
+      "minZ": -0.04499378674244442,
+      "maxZ": 0.17532395310335838
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1605010956790615,
+      "maxZ": 0.07310010898818356
+    },
+    {
+      "minZ": -0.16679507988521497,
+      "maxZ": 0.1388147321987774
+    },
+    {
+      "minZ": -0.16800023839778241,
+      "maxZ": 0.13890824554708955
+    },
+    {
+      "minZ": -0.16882778133684745,
+      "maxZ": 0.13793548420385532
+    },
+    {
+      "minZ": -0.17005577683253112,
+      "maxZ": 0.13705723042054047
+    },
+    {
+      "minZ": -0.17076928215512194,
+      "maxZ": 0.13658482911789194
+    },
+    {
+      "minZ": -0.17237827843500408,
+      "maxZ": 0.13548918025971912
+    },
+    {
+      "minZ": -0.1734856191145102,
+      "maxZ": 0.1340455626056845
+    },
+    {
+      "minZ": -0.17457851756431522,
+      "maxZ": 0.1337625409362408
+    },
+    {
+      "minZ": -0.17551675249019935,
+      "maxZ": 0.13264404716326428
+    },
+    {
+      "minZ": -0.17634630981101945,
+      "maxZ": 0.13160689819296936
+    },
+    {
+      "minZ": -0.0009630642776707614,
+      "maxZ": 0.13070710555790815
+    },
+    {
+      "minZ": -0.04749989152786075,
+      "maxZ": 0.056218309315042674
+    },
+    {
+      "minZ": -0.05072313133239806,
+      "maxZ": 0.1799476287256536
+    },
+    {
+      "minZ": -0.051973804721291414,
+      "maxZ": 0.17847983876893594
+    },
+    {
+      "minZ": -0.054505354235785404,
+      "maxZ": 0.17664144296641363
+    },
+    {
+      "minZ": -0.05631859852323787,
+      "maxZ": 0.17463200314588234
+    },
+    {
+      "minZ": -0.04830073647909717,
+      "maxZ": 0.17521135251033682
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1607453801169259,
+      "maxZ": 0.07404119116871634
+    },
+    {
+      "minZ": -0.16601715504910533,
+      "maxZ": 0.13847528763372413
+    },
+    {
+      "minZ": -0.16707541329453418,
+      "maxZ": 0.13881551850934895
+    },
+    {
+      "minZ": -0.1683012666997807,
+      "maxZ": 0.13787963820433657
+    },
+    {
+      "minZ": -0.16970081295388312,
+      "maxZ": 0.13702471484000184
+    },
+    {
+      "minZ": -0.17047634811743892,
+      "maxZ": 0.13628477212123166
+    },
+    {
+      "minZ": -0.17139248931867973,
+      "maxZ": 0.13527877403771102
+    },
+    {
+      "minZ": -0.17270374449793705,
+      "maxZ": 0.1347958423160353
+    },
+    {
+      "minZ": -0.17352858626904716,
+      "maxZ": 0.13353004818942396
+    },
+    {
+      "minZ": -0.17507434848500453,
+      "maxZ": 0.13282962568615211
+    },
+    {
+      "minZ": -0.17579291555076254,
+      "maxZ": 0.13150263883127922
+    },
+    {
+      "minZ": 0.0036993287430764554,
+      "maxZ": 0.13073902270848098
+    },
+    {
+      "minZ": -0.04987115236812258,
+      "maxZ": 0.03561004369324665
+    },
+    {
+      "minZ": -0.05151079093565978,
+      "maxZ": 0.17962814418359724
+    },
+    {
+      "minZ": -0.05442112763288389,
+      "maxZ": 0.17807134620520837
+    },
+    {
+      "minZ": -0.055087101325503145,
+      "maxZ": 0.1759461457417556
+    },
+    {
+      "minZ": -0.057838088910120815,
+      "maxZ": 0.1753079427224053
+    },
+    {
+      "minZ": -0.04956404643250424,
+      "maxZ": 0.1746773768855601
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1617288728186948,
+      "maxZ": 0.07516091545510155
+    },
+    {
+      "minZ": -0.16549476920817302,
+      "maxZ": 0.13880285880849247
+    },
+    {
+      "minZ": -0.1666052842012028,
+      "maxZ": 0.13869629247345522
+    },
+    {
+      "minZ": -0.16775553338645827,
+      "maxZ": 0.13768349601176877
+    },
+    {
+      "minZ": -0.16834385866905446,
+      "maxZ": 0.1367326651582439
+    },
+    {
+      "minZ": -0.16994244156692323,
+      "maxZ": 0.13606207406231996
+    },
+    {
+      "minZ": -0.17057510797948497,
+      "maxZ": 0.13501068065891503
+    },
+    {
+      "minZ": -0.1720728294371467,
+      "maxZ": 0.1341644190648133
+    },
+    {
+      "minZ": -0.17302792044630466,
+      "maxZ": 0.13322481723330906
+    },
+    {
+      "minZ": -0.17424834541930076,
+      "maxZ": 0.13242214922436435
+    },
+    {
+      "minZ": -0.17527186924495491,
+      "maxZ": 0.13136169732175618
+    },
+    {
+      "minZ": 0.012339337313857612,
+      "maxZ": 0.13072497561573831
+    },
+    {
+      "minZ": -0.05107144763572348,
+      "maxZ": 0.05910293286712022
+    },
+    {
+      "minZ": -0.05358124378585243,
+      "maxZ": 0.1794503220927547
+    },
+    {
+      "minZ": -0.055858756374390625,
+      "maxZ": 0.17796207621242852
+    },
+    {
+      "minZ": -0.05741242204949919,
+      "maxZ": 0.17643323011367673
+    },
+    {
+      "minZ": -0.05884223748460085,
+      "maxZ": 0.17540999688001732
+    },
+    {
+      "minZ": -0.05043196202766775,
+      "maxZ": 0.17425135360185678
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.16036531346962202,
+      "maxZ": 0.076400245781986
+    },
+    {
+      "minZ": -0.1645623850457702,
+      "maxZ": 0.13890246255972014
+    },
+    {
+      "minZ": -0.16582416497340413,
+      "maxZ": 0.1384407537809882
+    },
+    {
+      "minZ": -0.16689627154972347,
+      "maxZ": 0.1372811169605779
+    },
+    {
+      "minZ": -0.16778574293206466,
+      "maxZ": 0.13676410580774234
+    },
+    {
+      "minZ": -0.1684541643314449,
+      "maxZ": 0.13572531936007057
+    },
+    {
+      "minZ": -0.16987133031009907,
+      "maxZ": 0.13488813061867647
+    },
+    {
+      "minZ": -0.1710198697758426,
+      "maxZ": 0.13381615349116682
+    },
+    {
+      "minZ": -0.17236667768022212,
+      "maxZ": 0.13300935588490664
+    },
+    {
+      "minZ": -0.17378146577587594,
+      "maxZ": 0.1318677599295019
+    },
+    {
+      "minZ": -0.17453588916281895,
+      "maxZ": 0.1311679937722585
+    },
+    {
+      "minZ": 0.019201460298761436,
+      "maxZ": 0.13034411491663123
+    },
+    {
+      "minZ": -0.051086126296289745,
+      "maxZ": 0.054748936898888434
+    },
+    {
+      "minZ": -0.05476696159796071,
+      "maxZ": 0.17932224480307557
+    },
+    {
+      "minZ": -0.05710683755212953,
+      "maxZ": 0.17741864569718896
+    },
+    {
+      "minZ": -0.05855982734750193,
+      "maxZ": 0.1763513578809291
+    },
+    {
+      "minZ": -0.06172765011395125,
+      "maxZ": 0.17502017629848152
+    },
+    {
+      "minZ": -0.051666157904580054,
+      "maxZ": 0.1736566674041476
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.15968280225626624,
+      "maxZ": 0.07583707825002217
+    },
+    {
+      "minZ": -0.16377489984272908,
+      "maxZ": 0.13862915326186964
+    },
+    {
+      "minZ": -0.1649528816638554,
+      "maxZ": 0.13829199066044573
+    },
+    {
+      "minZ": -0.16616360575051037,
+      "maxZ": 0.13716101901946004
+    },
+    {
+      "minZ": -0.16633558378876512,
+      "maxZ": 0.1363364084322257
+    },
+    {
+      "minZ": -0.16835988442569813,
+      "maxZ": 0.13576918577850228
+    },
+    {
+      "minZ": -0.169057384659529,
+      "maxZ": 0.13456944209718566
+    },
+    {
+      "minZ": -0.17050644493932784,
+      "maxZ": 0.13343086734722884
+    },
+    {
+      "minZ": -0.17101215508505008,
+      "maxZ": 0.13233042219560862
+    },
+    {
+      "minZ": -0.17289893792238148,
+      "maxZ": 0.13161598590337018
+    },
+    {
+      "minZ": -0.1740049947922742,
+      "maxZ": 0.1307170232521652
+    },
+    {
+      "minZ": 0.02942880968813153,
+      "maxZ": 0.13010588408291557
+    },
+    {
+      "minZ": -0.05304144971322392,
+      "maxZ": 0.05290300592863778
+    },
+    {
+      "minZ": -0.05617819799623133,
+      "maxZ": 0.17885363297153062
+    },
+    {
+      "minZ": -0.05876388632941272,
+      "maxZ": 0.177204899533157
+    },
+    {
+      "minZ": -0.0605873788305022,
+      "maxZ": 0.17571030058133408
+    },
+    {
+      "minZ": -0.06295784388734445,
+      "maxZ": 0.1745178385150601
+    },
+    {
+      "minZ": -0.051539466363640256,
+      "maxZ": 0.17315969298569434
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.15999781221449033,
+      "maxZ": 0.07293303076140054
+    },
+    {
+      "minZ": -0.16276525669338965,
+      "maxZ": 0.13883899339928707
+    },
+    {
+      "minZ": -0.16434019059146937,
+      "maxZ": 0.1378364700595012
+    },
+    {
+      "minZ": -0.165416202430277,
+      "maxZ": 0.1367764805798014
+    },
+    {
+      "minZ": -0.1662141566427961,
+      "maxZ": 0.1361751020504075
+    },
+    {
+      "minZ": -0.16808589472154528,
+      "maxZ": 0.13511638506135815
+    },
+    {
+      "minZ": -0.16873736571867098,
+      "maxZ": 0.13393744588015916
+    },
+    {
+      "minZ": 0.13305954650688231,
+      "maxZ": 0.13305954650688231
+    },
+    {
+      "minZ": -0.1711195389381575,
+      "maxZ": 0.13222375614251142
+    },
+    {
+      "minZ": -0.1721264634188065,
+      "maxZ": 0.1311220850886345
+    },
+    {
+      "minZ": -0.1731972643811269,
+      "maxZ": 0.13035032286420542
+    },
+    {
+      "minZ": 0.030863751518633117,
+      "maxZ": 0.12937632314197836
+    },
+    {
+      "minZ": -0.05536637203961644,
+      "maxZ": 0.04955141343962182
+    },
+    {
+      "minZ": -0.05787913416129005,
+      "maxZ": 0.17836242304946964
+    },
+    {
+      "minZ": -0.06013883061539814,
+      "maxZ": 0.17630945764469177
+    },
+    {
+      "minZ": -0.06208183091118484,
+      "maxZ": 0.17538890444202931
+    },
+    {
+      "minZ": -0.06404133062654119,
+      "maxZ": 0.17419331891750778
+    },
+    {
+      "minZ": -0.053018977994783514,
+      "maxZ": 0.17295674075235268
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.15914823116573362,
+      "maxZ": 0.08634782013594637
+    },
+    {
+      "minZ": -0.16203341427112133,
+      "maxZ": 0.13854269971841057
+    },
+    {
+      "minZ": -0.16302043857774484,
+      "maxZ": 0.13743467269967213
+    },
+    {
+      "minZ": -0.1641859297953404,
+      "maxZ": 0.13644939047951712
+    },
+    {
+      "minZ": -0.16599600084046057,
+      "maxZ": 0.13559085692622372
+    },
+    {
+      "minZ": -0.16697566903555255,
+      "maxZ": 0.13457021146026907
+    },
+    {
+      "minZ": -0.1686187050691432,
+      "maxZ": 0.13342929865501588
+    },
+    {
+      "minZ": -0.1689809894046072,
+      "maxZ": 0.13287081944058882
+    },
+    {
+      "minZ": -0.17043044529611978,
+      "maxZ": 0.13189449847479107
+    },
+    {
+      "minZ": -0.17165601460557625,
+      "maxZ": 0.13104917477109335
+    },
+    {
+      "minZ": -0.1726721240189733,
+      "maxZ": 0.13000607425238983
+    },
+    {
+      "minZ": 0.04260260236932844,
+      "maxZ": 0.12928133674855347
+    },
+    {
+      "minZ": -0.056756181428133934,
+      "maxZ": 0.0476295254378843
+    },
+    {
+      "minZ": -0.05927658509808309,
+      "maxZ": 0.1782289759279727
+    },
+    {
+      "minZ": -0.061853659548494574,
+      "maxZ": 0.17610449522293015
+    },
+    {
+      "minZ": -0.06394225823220637,
+      "maxZ": 0.1750266361990669
+    },
+    {
+      "minZ": -0.0661044437389611,
+      "maxZ": 0.1736957694911124
+    },
+    {
+      "minZ": -0.0638579226529831,
+      "maxZ": 0.17245473728706454
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.15794483881298466,
+      "maxZ": 0.10216271305874447
+    },
+    {
+      "minZ": -0.1618456639532126,
+      "maxZ": 0.13824604090605935
+    },
+    {
+      "minZ": -0.1628662752070552,
+      "maxZ": 0.13712261703258988
+    },
+    {
+      "minZ": -0.1635758875503352,
+      "maxZ": 0.13632399840512494
+    },
+    {
+      "minZ": -0.16548809239240708,
+      "maxZ": 0.13511103460464183
+    },
+    {
+      "minZ": -0.16598768581735254,
+      "maxZ": 0.13443974924577232
+    },
+    {
+      "minZ": -0.1679598490792433,
+      "maxZ": 0.13332335633837059
+    },
+    {
+      "minZ": -0.16855529490145812,
+      "maxZ": 0.13240663943689682
+    },
+    {
+      "minZ": -0.16975912665116533,
+      "maxZ": 0.13143449332913723
+    },
+    {
+      "minZ": -0.171044222731665,
+      "maxZ": 0.130309989605306
+    },
+    {
+      "minZ": -0.17220397075680488,
+      "maxZ": 0.12945067512862876
+    },
+    {
+      "minZ": 0.04758993216591844,
+      "maxZ": 0.12805944211583886
+    },
+    {
+      "minZ": -0.05751633606185551,
+      "maxZ": 0.04469304935218614
+    },
+    {
+      "minZ": -0.06037024854767354,
+      "maxZ": 0.17788520901675076
+    },
+    {
+      "minZ": -0.06260648484985648,
+      "maxZ": 0.17602711979800087
+    },
+    {
+      "minZ": -0.06510526642730853,
+      "maxZ": 0.1746560724269868
+    },
+    {
+      "minZ": -0.06729849744918884,
+      "maxZ": 0.1731854058927505
+    },
+    {
+      "minZ": -0.06963315480527699,
+      "maxZ": 0.171867176470064
+    },
+    {
+      "minZ": 0.07556229628724564,
+      "maxZ": 0.09884755522584979
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1592955204316786,
+      "maxZ": 0.12074992476517686
+    },
+    {
+      "minZ": -0.16046365300629797,
+      "maxZ": 0.1377325768065265
+    },
+    {
+      "minZ": -0.162390039269121,
+      "maxZ": 0.13675510835710408
+    },
+    {
+      "minZ": -0.16335214629738642,
+      "maxZ": 0.13567508915705606
+    },
+    {
+      "minZ": -0.16460291197683544,
+      "maxZ": 0.13457897721245554
+    },
+    {
+      "minZ": -0.16587687067638,
+      "maxZ": 0.13392303916991707
+    },
+    {
+      "minZ": -0.16711749719423505,
+      "maxZ": 0.1324318979619597
+    },
+    {
+      "minZ": -0.16798943242169762,
+      "maxZ": 0.1315716498050258
+    },
+    {
+      "minZ": -0.16927149663763558,
+      "maxZ": 0.13086210497385173
+    },
+    {
+      "minZ": -0.17044252511487284,
+      "maxZ": 0.1298587950761548
+    },
+    {
+      "minZ": -0.1714089042370868,
+      "maxZ": 0.1289875181260214
+    },
+    {
+      "minZ": 0.056604633416665266,
+      "maxZ": 0.1283903429779918
+    },
+    {
+      "minZ": -0.0555115553859767,
+      "maxZ": 0.03514736277074965
+    },
+    {
+      "minZ": -0.06134236009584462,
+      "maxZ": 0.177735652241387
+    },
+    {
+      "minZ": -0.0637031366600326,
+      "maxZ": 0.17561128860925723
+    },
+    {
+      "minZ": -0.06646652511158034,
+      "maxZ": 0.1745625236699458
+    },
+    {
+      "minZ": -0.06881839297297362,
+      "maxZ": 0.17284189897251664
+    },
+    {
+      "minZ": -0.0711287501916735,
+      "maxZ": 0.17145681191738116
+    },
+    {
+      "minZ": -0.05920181203831634,
+      "maxZ": 0.16944604992362883
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.10199744483296087,
+      "maxZ": 0.047931260428248204
+    },
+    {
+      "minZ": -0.1590537430048396,
+      "maxZ": 0.13581189693555576
+    },
+    {
+      "minZ": -0.16028841598220764,
+      "maxZ": 0.13697063797442918
+    },
+    {
+      "minZ": -0.16096146844923584,
+      "maxZ": 0.13632448888584986
+    },
+    {
+      "minZ": -0.16331028776738488,
+      "maxZ": 0.13486602308597023
+    },
+    {
+      "minZ": -0.1642078180621372,
+      "maxZ": 0.1319869363995909
+    },
+    {
+      "minZ": -0.1653524010095518,
+      "maxZ": 0.13257176930499995
+    },
+    {
+      "minZ": -0.16638544299121377,
+      "maxZ": 0.13213409148202238
+    },
+    {
+      "minZ": -0.16748107371317633,
+      "maxZ": 0.13110900459359956
+    },
+    {
+      "minZ": -0.16823638389643192,
+      "maxZ": 0.13030007241566358
+    },
+    {
+      "minZ": -0.1696195651940026,
+      "maxZ": 0.12929866473224333
+    },
+    {
+      "minZ": -0.16995680338359664,
+      "maxZ": 0.128540821280692
+    },
+    {
+      "minZ": 0.06222608193801479,
+      "maxZ": 0.12641203621207447
+    },
+    {
+      "minZ": -0.04824589716169308,
+      "maxZ": 0.03455585207063445
+    },
+    {
+      "minZ": -0.0625478384176388,
+      "maxZ": 0.17561939505704496
+    },
+    {
+      "minZ": -0.06509525103922165,
+      "maxZ": 0.1755140667094932
+    },
+    {
+      "minZ": -0.06730565170340616,
+      "maxZ": 0.17416167480039768
+    },
+    {
+      "minZ": -0.06950093872685817,
+      "maxZ": 0.17243155246339625
+    },
+    {
+      "minZ": -0.07246353893037288,
+      "maxZ": 0.17094152426874898
+    },
+    {
+      "minZ": -0.0746095579447291,
+      "maxZ": 0.16966907342676668
+    },
+    {
+      "minZ": 0.046976217406222424,
+      "maxZ": 0.11324325117460632
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.14847478324931604,
+      "maxZ": 0.10205683971801391
+    },
+    {
+      "minZ": -0.15833430161427448,
+      "maxZ": 0.13733268935029047
+    },
+    {
+      "minZ": -0.15930798380028363,
+      "maxZ": 0.1366029779785414
+    },
+    {
+      "minZ": -0.1600713986578302,
+      "maxZ": 0.13510312101970232
+    },
+    {
+      "minZ": -0.16214526290553272,
+      "maxZ": 0.13253560669638054
+    },
+    {
+      "minZ": -0.163684963177689,
+      "maxZ": 0.13272676056659605
+    },
+    {
+      "minZ": -0.16451275267018933,
+      "maxZ": 0.13199908785482056
+    },
+    {
+      "minZ": -0.16583996895516617,
+      "maxZ": 0.13140454569798782
+    },
+    {
+      "minZ": -0.16705165408475744,
+      "maxZ": 0.13043527988818335
+    },
+    {
+      "minZ": -0.16820534668670278,
+      "maxZ": 0.12945334884752674
+    },
+    {
+      "minZ": -0.169092094823387,
+      "maxZ": 0.12862788667645403
+    },
+    {
+      "minZ": -0.16742017287538616,
+      "maxZ": 0.12803705232402662
+    },
+    {
+      "minZ": 0.07450833577212074,
+      "maxZ": 0.12585570551847192
+    },
+    {
+      "minZ": -0.05362766683483783,
+      "maxZ": 0.027576617806959983
+    },
+    {
+      "minZ": -0.06354281894221595,
+      "maxZ": 0.16240447816461928
+    },
+    {
+      "minZ": -0.06615635717546295,
+      "maxZ": 0.17527895909261465
+    },
+    {
+      "minZ": -0.06850813022054583,
+      "maxZ": 0.17343266929999396
+    },
+    {
+      "minZ": -0.07125201393440407,
+      "maxZ": 0.1718649193916834
+    },
+    {
+      "minZ": -0.07375850023398461,
+      "maxZ": 0.17036565787541594
+    },
+    {
+      "minZ": -0.07598740969858464,
+      "maxZ": 0.1689413183489278
+    },
+    {
+      "minZ": -0.06831850349235752,
+      "maxZ": 0.16768549823001871
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.05551894370686418,
+      "maxZ": 0.0544314579497686
+    },
+    {
+      "minZ": -0.15620213353865608,
+      "maxZ": 0.13509759914132805
+    },
+    {
+      "minZ": -0.15750424113234446,
+      "maxZ": 0.13663835731075152
+    },
+    {
+      "minZ": -0.15915811049769185,
+      "maxZ": 0.13576756144295496
+    },
+    {
+      "minZ": -0.16028231220556302,
+      "maxZ": 0.13439029225680163
+    },
+    {
+      "minZ": -0.16127952888923644,
+      "maxZ": 0.132901167752574
+    },
+    {
+      "minZ": -0.16288977627968781,
+      "maxZ": 0.13231219354866347
+    },
+    {
+      "minZ": -0.1640518343956198,
+      "maxZ": 0.13143991519590337
+    },
+    {
+      "minZ": -0.16535782752999428,
+      "maxZ": 0.13081930090571353
+    },
+    {
+      "minZ": -0.16660762801334683,
+      "maxZ": 0.12977203247134633
+    },
+    {
+      "minZ": -0.16759040647564832,
+      "maxZ": 0.1288420594366408
+    },
+    {
+      "minZ": -0.16849147322930563,
+      "maxZ": 0.1281436896174954
+    },
+    {
+      "minZ": -0.1684050877925243,
+      "maxZ": 0.12747715809834914
+    },
+    {
+      "minZ": 0.08276866952955014,
+      "maxZ": 0.12474302256247516
+    },
+    {
+      "minZ": -0.049847446221165936,
+      "maxZ": 0.026797038975454525
+    },
+    {
+      "minZ": -0.0646063534852514,
+      "maxZ": 0.1468454202089092
+    },
+    {
+      "minZ": -0.06691331173346804,
+      "maxZ": 0.17464461709621296
+    },
+    {
+      "minZ": -0.06949400622202523,
+      "maxZ": 0.17301067797728029
+    },
+    {
+      "minZ": -0.07206506060496637,
+      "maxZ": 0.1713427910707703
+    },
+    {
+      "minZ": -0.07494028896364369,
+      "maxZ": 0.16988172090783898
+    },
+    {
+      "minZ": -0.07713837546571824,
+      "maxZ": 0.16815698475819763
+    },
+    {
+      "minZ": -0.07980965218778215,
+      "maxZ": 0.16677505972901815
+    },
+    {
+      "minZ": -0.056890259461861666,
+      "maxZ": 0.16567763319482892
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1454913866082248,
+      "maxZ": 0.11068597351086386
+    },
+    {
+      "minZ": -0.15549459057268655,
+      "maxZ": 0.1367481624833292
+    },
+    {
+      "minZ": -0.1561104909668279,
+      "maxZ": 0.13593921900129724
+    },
+    {
+      "minZ": -0.15797984781129498,
+      "maxZ": 0.13476420841514042
+    },
+    {
+      "minZ": -0.1584100300745621,
+      "maxZ": 0.1336128359216318
+    },
+    {
+      "minZ": -0.1604083065022592,
+      "maxZ": 0.13286446239138425
+    },
+    {
+      "minZ": -0.1620201091070222,
+      "maxZ": 0.13191595692490987
+    },
+    {
+      "minZ": -0.16296072282519294,
+      "maxZ": 0.13101578945228673
+    },
+    {
+      "minZ": -0.1645285015236314,
+      "maxZ": 0.12972660379074888
+    },
+    {
+      "minZ": -0.16569622830272518,
+      "maxZ": 0.1293229184587411
+    },
+    {
+      "minZ": -0.16681804923880342,
+      "maxZ": 0.1285613970527415
+    },
+    {
+      "minZ": -0.1680255314157317,
+      "maxZ": 0.12796000070852373
+    },
+    {
+      "minZ": -0.16870304999427893,
+      "maxZ": 0.12682888217964775
+    },
+    {
+      "minZ": 0.09465944059399112,
+      "maxZ": 0.12424944827412475
+    },
+    {
+      "minZ": -0.048733936062352226,
+      "maxZ": -0.0008867744203442233
+    },
+    {
+      "minZ": -0.06576369327913519,
+      "maxZ": 0.12925315676305243
+    },
+    {
+      "minZ": -0.06810517803297511,
+      "maxZ": 0.1646760686379582
+    },
+    {
+      "minZ": -0.07099777131120752,
+      "maxZ": 0.17201666809256616
+    },
+    {
+      "minZ": -0.07341665535643452,
+      "maxZ": 0.17106163036223865
+    },
+    {
+      "minZ": -0.07581055383563434,
+      "maxZ": 0.16933804971526506
+    },
+    {
+      "minZ": -0.07844728552176981,
+      "maxZ": 0.16791859895066327
+    },
+    {
+      "minZ": -0.08114492614735383,
+      "maxZ": 0.16642947991506923
+    },
+    {
+      "minZ": -0.08264349825657713,
+      "maxZ": 0.16461285260462133
+    },
+    {
+      "minZ": -0.0544761308347404,
+      "maxZ": 0.16336924990825336
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.1035317514426548,
+      "maxZ": 0.09549441486369367
+    },
+    {
+      "minZ": -0.15292609097058843,
+      "maxZ": 0.13683048075392937
+    },
+    {
+      "minZ": -0.15475872114152772,
+      "maxZ": 0.13623024182162682
+    },
+    {
+      "minZ": -0.1559674770700708,
+      "maxZ": 0.13469534232113867
+    },
+    {
+      "minZ": -0.1572412263300641,
+      "maxZ": 0.13392513855973548
+    },
+    {
+      "minZ": -0.15811326467991924,
+      "maxZ": 0.13308171773037814
+    },
+    {
+      "minZ": -0.15974065021178935,
+      "maxZ": 0.1324164327437639
+    },
+    {
+      "minZ": -0.16000241252419975,
+      "maxZ": 0.1311717471648754
+    },
+    {
+      "minZ": -0.16277152482415258,
+      "maxZ": 0.13044712868833647
+    },
+    {
+      "minZ": -0.16387113302005965,
+      "maxZ": 0.12906484613865632
+    },
+    {
+      "minZ": -0.1647896808756868,
+      "maxZ": 0.1286916299473819
+    },
+    {
+      "minZ": -0.1663911199362143,
+      "maxZ": 0.1278558456003415
+    },
+    {
+      "minZ": -0.16726624009222615,
+      "maxZ": 0.12692208017140336
+    },
+    {
+      "minZ": -0.16842227951253,
+      "maxZ": 0.12615791604171417
+    },
+    {
+      "minZ": 0.09817017598658795,
+      "maxZ": 0.10530808890013703
+    },
+    null,
+    {
+      "minZ": -0.06626173009974248,
+      "maxZ": 0.024020647834625323
+    },
+    {
+      "minZ": -0.06916230763832015,
+      "maxZ": 0.14725804907304824
+    },
+    {
+      "minZ": -0.07160343789777053,
+      "maxZ": 0.17116497803653868
+    },
+    {
+      "minZ": -0.07436845595964409,
+      "maxZ": 0.17004811006674048
+    },
+    {
+      "minZ": -0.07683009735879397,
+      "maxZ": 0.16835384408396242
+    },
+    {
+      "minZ": -0.07966966191276266,
+      "maxZ": 0.1671631459058661
+    },
+    {
+      "minZ": -0.08181322854789252,
+      "maxZ": 0.16548832167604244
+    },
+    {
+      "minZ": -0.08415342098498266,
+      "maxZ": 0.16419880761975097
+    },
+    {
+      "minZ": -0.08490838651036398,
+      "maxZ": 0.1628145929594947
+    },
+    {
+      "minZ": -0.061943257527562995,
+      "maxZ": 0.16119062226112946
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.07528477152210611,
+      "maxZ": 0.08861791281048947
+    },
+    {
+      "minZ": -0.14309036741760212,
+      "maxZ": 0.13619513536316472
+    },
+    {
+      "minZ": -0.15271231466195578,
+      "maxZ": 0.13635133011216408
+    },
+    {
+      "minZ": -0.15379850073757786,
+      "maxZ": 0.13514764188879208
+    },
+    {
+      "minZ": -0.15517500848087779,
+      "maxZ": 0.13438435411920596
+    },
+    {
+      "minZ": -0.1564212666643398,
+      "maxZ": 0.133380987913496
+    },
+    {
+      "minZ": -0.15737211703524828,
+      "maxZ": 0.1326902524153586
+    },
+    {
+      "minZ": -0.1588692745661974,
+      "maxZ": 0.13127133966249388
+    },
+    {
+      "minZ": -0.16046440881340127,
+      "maxZ": 0.13061640576365832
+    },
+    {
+      "minZ": -0.1617314150964332,
+      "maxZ": 0.12960935715075858
+    },
+    {
+      "minZ": -0.16314970188392955,
+      "maxZ": 0.12893018821471736
+    },
+    {
+      "minZ": -0.1641912111197365,
+      "maxZ": 0.1279460993662845
+    },
+    {
+      "minZ": -0.1652051722694077,
+      "maxZ": 0.1270744329478557
+    },
+    {
+      "minZ": -0.16689533294006414,
+      "maxZ": 0.1257973670417335
+    },
+    {
+      "minZ": -0.15695789603672605,
+      "maxZ": 0.12272379581664297
+    },
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.07001502393822322,
+      "maxZ": 0.052509263023596944
+    },
+    {
+      "minZ": -0.07279163709776998,
+      "maxZ": 0.16513765300797972
+    },
+    {
+      "minZ": -0.07541283764283999,
+      "maxZ": 0.16924448929700225
+    },
+    {
+      "minZ": -0.07809249849125018,
+      "maxZ": 0.16786788144501974
+    },
+    {
+      "minZ": -0.08082535073422961,
+      "maxZ": 0.16654646731535058
+    },
+    {
+      "minZ": -0.08156159907414416,
+      "maxZ": 0.16502000265745276
+    },
+    {
+      "minZ": -0.0824872017623558,
+      "maxZ": 0.16363520552639896
+    },
+    {
+      "minZ": -0.08821670659576777,
+      "maxZ": 0.16214848697591513
+    },
+    {
+      "minZ": -0.08996678616735196,
+      "maxZ": 0.1605140895101352
+    },
+    {
+      "minZ": -0.07349863753117361,
+      "maxZ": 0.1592849839505613
+    },
+    {
+      "minZ": 0.06153589939452654,
+      "maxZ": 0.11173869699363734
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.06613360590209787,
+      "maxZ": 0.09144809412296906
+    },
+    {
+      "minZ": -0.1430800181964274,
+      "maxZ": 0.13699144800366747
+    },
+    {
+      "minZ": -0.15013037100514154,
+      "maxZ": 0.13635530932735931
+    },
+    {
+      "minZ": -0.1516026644800212,
+      "maxZ": 0.13532524719496278
+    },
+    {
+      "minZ": -0.1531255520582543,
+      "maxZ": 0.13427192977031738
+    },
+    {
+      "minZ": -0.15325798229871784,
+      "maxZ": 0.1331057035012628
+    },
+    {
+      "minZ": -0.15565754520902667,
+      "maxZ": 0.13238582295809456
+    },
+    {
+      "minZ": -0.15667875257078906,
+      "maxZ": 0.1315634239908591
+    },
+    {
+      "minZ": -0.1565935068640917,
+      "maxZ": 0.13055915885697328
+    },
+    {
+      "minZ": -0.1599881128127501,
+      "maxZ": 0.12966956020267467
+    },
+    {
+      "minZ": -0.16100165789276827,
+      "maxZ": 0.12895737537740667
+    },
+    {
+      "minZ": -0.16234157003143015,
+      "maxZ": 0.12817979619122102
+    },
+    {
+      "minZ": -0.16343940655778585,
+      "maxZ": 0.12714645347328546
+    },
+    {
+      "minZ": -0.16459610415239495,
+      "maxZ": 0.12625638068733724
+    },
+    {
+      "minZ": -0.16404033819889868,
+      "maxZ": 0.12159921978265228
+    },
+    {
+      "minZ": -0.14803993595184772,
+      "maxZ": -0.08175414747253201
+    },
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.0738107156714206,
+      "maxZ": 0.07648402569042859
+    },
+    {
+      "minZ": -0.07646468483593347,
+      "maxZ": 0.16850333528227995
+    },
+    {
+      "minZ": -0.07926050335003086,
+      "maxZ": 0.16734142629827312
+    },
+    {
+      "minZ": -0.08185915794791918,
+      "maxZ": 0.16578740887739712
+    },
+    {
+      "minZ": -0.0831725621240052,
+      "maxZ": 0.16406805765926427
+    },
+    {
+      "minZ": -0.08667265576443373,
+      "maxZ": 0.1625044364436851
+    },
+    {
+      "minZ": -0.08869687679139825,
+      "maxZ": 0.16131498758929824
+    },
+    {
+      "minZ": -0.09103663715629423,
+      "maxZ": 0.15989981298818434
+    },
+    {
+      "minZ": -0.09317995250233399,
+      "maxZ": 0.1585249557522777
+    },
+    {
+      "minZ": -0.0930929838325184,
+      "maxZ": 0.15727859343861486
+    },
+    {
+      "minZ": -0.04565598073512479,
+      "maxZ": 0.1543912599232948
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.06815482972946742,
+      "maxZ": 0.111475343491591
+    },
+    {
+      "minZ": -0.13875582556480143,
+      "maxZ": 0.1373445035387056
+    },
+    {
+      "minZ": -0.14858941534576392,
+      "maxZ": 0.13644113043994918
+    },
+    {
+      "minZ": -0.14969715962028418,
+      "maxZ": 0.13540158692719403
+    },
+    {
+      "minZ": -0.15038192171247233,
+      "maxZ": 0.13444989821100423
+    },
+    {
+      "minZ": -0.15247056271188655,
+      "maxZ": 0.13354541165851563
+    },
+    {
+      "minZ": -0.1533012472698842,
+      "maxZ": 0.13248943273945446
+    },
+    {
+      "minZ": -0.1541070726582513,
+      "maxZ": 0.13166491815807974
+    },
+    {
+      "minZ": -0.15526298362889374,
+      "maxZ": 0.1306846037273364
+    },
+    {
+      "minZ": -0.1535856841916993,
+      "maxZ": 0.1298474259125756
+    },
+    {
+      "minZ": -0.15922240631319493,
+      "maxZ": 0.12892383055996806
+    },
+    {
+      "minZ": -0.16018910646516327,
+      "maxZ": 0.1283295234688703
+    },
+    {
+      "minZ": -0.1612782775888184,
+      "maxZ": 0.12712161351628154
+    },
+    {
+      "minZ": -0.16261326543290255,
+      "maxZ": 0.12635811614520598
+    },
+    {
+      "minZ": -0.16414191906554682,
+      "maxZ": 0.10602491929732424
+    },
+    {
+      "minZ": -0.15481134075611763,
+      "maxZ": -0.12891431739607442
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.07754567969181003,
+      "maxZ": 0.09243824159336747
+    },
+    {
+      "minZ": -0.08043466369293582,
+      "maxZ": 0.1668823064031356
+    },
+    {
+      "minZ": -0.08265667767673077,
+      "maxZ": 0.16496323955951697
+    },
+    {
+      "minZ": -0.08531390879216014,
+      "maxZ": 0.16353167654576564
+    },
+    {
+      "minZ": -0.08765582138876676,
+      "maxZ": 0.16150009692982992
+    },
+    {
+      "minZ": -0.09007437557156137,
+      "maxZ": 0.1605148912064418
+    },
+    {
+      "minZ": -0.09278028392169851,
+      "maxZ": 0.15922648300526593
+    },
+    {
+      "minZ": -0.09479152288826678,
+      "maxZ": 0.15761735339568156
+    },
+    {
+      "minZ": -0.09735556495220336,
+      "maxZ": 0.1567400805878152
+    },
+    {
+      "minZ": -0.098565863034146,
+      "maxZ": 0.15530220758725544
+    },
+    {
+      "minZ": -0.09106828208907014,
+      "maxZ": 0.15390521026226983
+    },
+    {
+      "minZ": -0.047204697755288134,
+      "maxZ": 0.14672149264267376
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.012757769044379436,
+      "maxZ": 0.10722239720677922
+    },
+    {
+      "minZ": -0.10789376114207995,
+      "maxZ": 0.1372628966066698
+    },
+    {
+      "minZ": -0.1447869701609429,
+      "maxZ": 0.1370703017064352
+    },
+    {
+      "minZ": -0.14645200059773192,
+      "maxZ": 0.13629731449426394
+    },
+    {
+      "minZ": -0.14791085601479517,
+      "maxZ": 0.13546837557497798
+    },
+    {
+      "minZ": -0.14910039993447433,
+      "maxZ": 0.13434667530225275
+    },
+    {
+      "minZ": -0.15027257490597934,
+      "maxZ": 0.13356711389847642
+    },
+    {
+      "minZ": -0.1515445852184984,
+      "maxZ": 0.1329053648785668
+    },
+    {
+      "minZ": -0.15231703703469257,
+      "maxZ": 0.13174746485659908
+    },
+    {
+      "minZ": -0.15367853883261962,
+      "maxZ": 0.13083385899283007
+    },
+    {
+      "minZ": -0.15520735226598653,
+      "maxZ": 0.1297952456545482
+    },
+    {
+      "minZ": -0.15440755833984504,
+      "maxZ": 0.12885000858931442
+    },
+    {
+      "minZ": -0.15822724385118367,
+      "maxZ": 0.12827121269715172
+    },
+    {
+      "minZ": -0.15954175100243995,
+      "maxZ": 0.12714477107968908
+    },
+    {
+      "minZ": -0.16035148455391196,
+      "maxZ": 0.1265161716426504
+    },
+    {
+      "minZ": -0.16155717536901315,
+      "maxZ": 0.09276334451386933
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.07632536734518477,
+      "maxZ": -0.05483685942831486
+    },
+    {
+      "minZ": -0.08144473259802233,
+      "maxZ": 0.09343862933185762
+    },
+    {
+      "minZ": -0.08360617135314931,
+      "maxZ": 0.1643471448217449
+    },
+    {
+      "minZ": -0.08638219670668643,
+      "maxZ": 0.16312755712611904
+    },
+    {
+      "minZ": -0.08859602158507437,
+      "maxZ": 0.16149920655766145
+    },
+    {
+      "minZ": -0.0905883399467741,
+      "maxZ": 0.15986104872325818
+    },
+    {
+      "minZ": -0.09322973170337606,
+      "maxZ": 0.15872752807964188
+    },
+    {
+      "minZ": -0.09579251743447258,
+      "maxZ": 0.15722835659785303
+    },
+    {
+      "minZ": -0.09814110380470226,
+      "maxZ": 0.15599050609581494
+    },
+    {
+      "minZ": -0.10075659813231269,
+      "maxZ": 0.15445949662725517
+    },
+    {
+      "minZ": -0.10052078504467987,
+      "maxZ": 0.15330106637806634
+    },
+    {
+      "minZ": -0.10398044423374059,
+      "maxZ": 0.15192796640585732
+    },
+    {
+      "minZ": -0.10239329394986697,
+      "maxZ": 0.15041440043904808
+    },
+    {
+      "minZ": -0.08895902473824036,
+      "maxZ": 0.147889495373039
+    },
+    {
+      "minZ": -0.04289883279382384,
+      "maxZ": 0.12729096422582709
+    },
+    {
+      "minZ": 0.030981201808837698,
+      "maxZ": 0.10136723951835612
+    },
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": 0.059261857523327605,
+      "maxZ": 0.07731148225211425
+    },
+    {
+      "minZ": 0.006636010735161022,
+      "maxZ": 0.10851221862703127
+    },
+    {
+      "minZ": -0.05008943456861234,
+      "maxZ": 0.13256458757764125
+    },
+    {
+      "minZ": -0.09398372521931803,
+      "maxZ": 0.13903996135231633
+    },
+    {
+      "minZ": -0.1386625278683981,
+      "maxZ": 0.13823712427647242
+    },
+    {
+      "minZ": -0.14390085847473866,
+      "maxZ": 0.13705194293390324
+    },
+    {
+      "minZ": -0.1450682112015617,
+      "maxZ": 0.13625061452058818
+    },
+    {
+      "minZ": -0.1465527301980439,
+      "maxZ": 0.13508652327138576
+    },
+    {
+      "minZ": -0.1475714379513626,
+      "maxZ": 0.13437148341798744
+    },
+    {
+      "minZ": -0.14886752433292805,
+      "maxZ": 0.1336229811306047
+    },
+    {
+      "minZ": -0.14991098094883548,
+      "maxZ": 0.13275006050811303
+    },
+    {
+      "minZ": -0.15118915079501583,
+      "maxZ": 0.13165715387457955
+    },
+    {
+      "minZ": -0.15215516276564522,
+      "maxZ": 0.13073427041099492
+    },
+    {
+      "minZ": -0.1532231857065055,
+      "maxZ": 0.12974032465673915
+    },
+    {
+      "minZ": -0.1543451743055748,
+      "maxZ": 0.1289196531647948
+    },
+    {
+      "minZ": -0.15581484381477878,
+      "maxZ": 0.12822706802666203
+    },
+    {
+      "minZ": -0.1571013283810834,
+      "maxZ": 0.12699834221015308
+    },
+    {
+      "minZ": -0.15820999596601676,
+      "maxZ": 0.12627890339148679
+    },
+    {
+      "minZ": -0.15985253624780837,
+      "maxZ": 0.07033763610332074
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.07993658579846025,
+      "maxZ": -0.049279540144155476
+    },
+    {
+      "minZ": -0.08507365539462591,
+      "maxZ": 0.08410390307216165
+    },
+    {
+      "minZ": -0.08718892966578022,
+      "maxZ": 0.16205737538530116
+    },
+    {
+      "minZ": -0.08948323513875887,
+      "maxZ": 0.160887831583405
+    },
+    {
+      "minZ": -0.0918436598485665,
+      "maxZ": 0.15936825995320847
+    },
+    {
+      "minZ": -0.09382672953520343,
+      "maxZ": 0.15800390976480108
+    },
+    {
+      "minZ": -0.09671801685835943,
+      "maxZ": 0.15685611416199832
+    },
+    {
+      "minZ": -0.09906424475401888,
+      "maxZ": 0.15533681436133417
+    },
+    {
+      "minZ": -0.10131207796289608,
+      "maxZ": 0.15388223807356224
+    },
+    {
+      "minZ": -0.10381410492835802,
+      "maxZ": 0.15213976133542975
+    },
+    {
+      "minZ": -0.10565258453597375,
+      "maxZ": 0.1510375906238911
+    },
+    {
+      "minZ": -0.10707933602843787,
+      "maxZ": 0.14957426199755777
+    },
+    {
+      "minZ": -0.1095349467785382,
+      "maxZ": 0.1482638563444706
+    },
+    {
+      "minZ": -0.10762644522865515,
+      "maxZ": 0.14698146795812816
+    },
+    {
+      "minZ": -0.09361000219054923,
+      "maxZ": 0.14538717016898983
+    },
+    {
+      "minZ": -0.07218114119907933,
+      "maxZ": 0.14485179316468855
+    },
+    {
+      "minZ": -0.04812568852766468,
+      "maxZ": 0.1438291208470241
+    },
+    {
+      "minZ": -0.045305407332241164,
+      "maxZ": 0.14266547751094855
+    },
+    {
+      "minZ": -0.05219023635914778,
+      "maxZ": 0.14057278449240637
+    },
+    {
+      "minZ": -0.06826305553771389,
+      "maxZ": 0.14104286881302236
+    },
+    {
+      "minZ": -0.12305172956336402,
+      "maxZ": 0.1403321184625092
+    },
+    {
+      "minZ": -0.1358367538974229,
+      "maxZ": 0.13906210982803097
+    },
+    {
+      "minZ": -0.13923839852916658,
+      "maxZ": 0.13776715435855788
+    },
+    {
+      "minZ": -0.1424421646874855,
+      "maxZ": 0.13698190152799067
+    },
+    {
+      "minZ": -0.14369194367597388,
+      "maxZ": 0.1362209663958702
+    },
+    {
+      "minZ": -0.1445775208355697,
+      "maxZ": 0.1352100360447321
+    },
+    {
+      "minZ": -0.1456861685896561,
+      "maxZ": 0.13440151301491357
+    },
+    {
+      "minZ": -0.14692849231196173,
+      "maxZ": 0.13344016592276353
+    },
+    {
+      "minZ": -0.14697643871366853,
+      "maxZ": 0.13276317485181666
+    },
+    {
+      "minZ": -0.1493515832207868,
+      "maxZ": 0.13160434806497476
+    },
+    {
+      "minZ": -0.15040201965371103,
+      "maxZ": 0.13073755486428906
+    },
+    {
+      "minZ": -0.1517449674161374,
+      "maxZ": 0.1298460722417383
+    },
+    {
+      "minZ": -0.15264271068504587,
+      "maxZ": 0.12880393726045114
+    },
+    {
+      "minZ": -0.15384263452396688,
+      "maxZ": 0.12803388135921015
+    },
+    {
+      "minZ": -0.1551369698258363,
+      "maxZ": 0.12699618145499678
+    },
+    {
+      "minZ": -0.15635005245067518,
+      "maxZ": 0.12419670687472135
+    },
+    {
+      "minZ": -0.15718730664292258,
+      "maxZ": 0.03618227246874013
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.08017120057931663,
+      "maxZ": -0.061513172663156195
+    },
+    {
+      "minZ": -0.08565009762984128,
+      "maxZ": 0.06396496048319739
+    },
+    {
+      "minZ": -0.09045795259003692,
+      "maxZ": 0.16020155870297723
+    },
+    {
+      "minZ": -0.09252624190538042,
+      "maxZ": 0.1587329873848353
+    },
+    {
+      "minZ": -0.09494778764244702,
+      "maxZ": 0.15719544517653491
+    },
+    {
+      "minZ": -0.0973589665445946,
+      "maxZ": 0.15601892823892125
+    },
+    {
+      "minZ": -0.0997943048292324,
+      "maxZ": 0.15417470605668465
+    },
+    {
+      "minZ": -0.1021253203413,
+      "maxZ": 0.15308729290502623
+    },
+    {
+      "minZ": -0.10479983839608507,
+      "maxZ": 0.1517525897507886
+    },
+    {
+      "minZ": -0.10553337417068256,
+      "maxZ": 0.15030221805271787
+    },
+    {
+      "minZ": -0.1091190053666139,
+      "maxZ": 0.1486153212077362
+    },
+    {
+      "minZ": -0.11096368811836974,
+      "maxZ": 0.14753733016353687
+    },
+    {
+      "minZ": -0.11252292411815758,
+      "maxZ": 0.14580446576161873
+    },
+    {
+      "minZ": -0.10471299304666012,
+      "maxZ": 0.1445616830951962
+    },
+    {
+      "minZ": -0.0961921531843685,
+      "maxZ": 0.14444004932136117
+    },
+    {
+      "minZ": -0.09555145675111003,
+      "maxZ": 0.14357968763594078
+    },
+    {
+      "minZ": -0.09780053803029874,
+      "maxZ": 0.14060607231673727
+    },
+    {
+      "minZ": -0.10309534914421252,
+      "maxZ": 0.14108091744521145
+    },
+    {
+      "minZ": -0.11244832622887634,
+      "maxZ": 0.14089575917532357
+    },
+    {
+      "minZ": -0.133656332597131,
+      "maxZ": 0.1393418760124927
+    },
+    {
+      "minZ": -0.13919056059760943,
+      "maxZ": 0.1382252647302942
+    },
+    {
+      "minZ": -0.14010770457415875,
+      "maxZ": 0.1373396143710178
+    },
+    {
+      "minZ": -0.14192149844112753,
+      "maxZ": 0.13622510672662866
+    },
+    {
+      "minZ": -0.1428368749306799,
+      "maxZ": 0.1353395839258269
+    },
+    {
+      "minZ": -0.14431124300499648,
+      "maxZ": 0.1343707315711068
+    },
+    {
+      "minZ": -0.14530577561187816,
+      "maxZ": 0.13339890398086937
+    },
+    {
+      "minZ": -0.14615452534338763,
+      "maxZ": 0.132535665251874
+    },
+    {
+      "minZ": -0.14040433491217272,
+      "maxZ": 0.13155397637133834
+    },
+    {
+      "minZ": -0.14860265327519895,
+      "maxZ": 0.13041242778587553
+    },
+    {
+      "minZ": -0.15016381309491034,
+      "maxZ": 0.1294956551623036
+    },
+    {
+      "minZ": -0.15135612593512882,
+      "maxZ": 0.12847964672634352
+    },
+    {
+      "minZ": -0.1520415313686854,
+      "maxZ": 0.12785674105367928
+    },
+    {
+      "minZ": -0.15337850569147,
+      "maxZ": 0.12694181212582248
+    },
+    {
+      "minZ": -0.15470099727213593,
+      "maxZ": 0.1261282631939507
+    },
+    {
+      "minZ": -0.15421361420754684,
+      "maxZ": 0.0015920573009883256
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.08976429622558128,
+      "maxZ": 0.03520675928581682
+    },
+    {
+      "minZ": -0.09310373039355985,
+      "maxZ": 0.15305567493472966
+    },
+    {
+      "minZ": -0.09589832575075066,
+      "maxZ": 0.1564844478539119
+    },
+    {
+      "minZ": -0.09839227147177393,
+      "maxZ": 0.15597992085401963
+    },
+    {
+      "minZ": -0.100693401841815,
+      "maxZ": 0.1540604234481245
+    },
+    {
+      "minZ": -0.10305802248678558,
+      "maxZ": 0.15225293137053647
+    },
+    {
+      "minZ": -0.10534255881300733,
+      "maxZ": 0.15114836402041423
+    },
+    {
+      "minZ": -0.10753667990042567,
+      "maxZ": 0.14937101703934302
+    },
+    {
+      "minZ": -0.109018558001083,
+      "maxZ": 0.14780889668461034
+    },
+    {
+      "minZ": -0.11192320620251592,
+      "maxZ": 0.14669609196265396
+    },
+    {
+      "minZ": -0.11337794702943624,
+      "maxZ": 0.14570519153726935
+    },
+    {
+      "minZ": -0.11399671942602846,
+      "maxZ": 0.1438992270236568
+    },
+    {
+      "minZ": -0.11559039151737785,
+      "maxZ": 0.1444330937292281
+    },
+    {
+      "minZ": -0.12003852809826288,
+      "maxZ": 0.14220998966025947
+    },
+    {
+      "minZ": -0.12195327536201114,
+      "maxZ": 0.1410876467647755
+    },
+    {
+      "minZ": -0.12462575823014524,
+      "maxZ": 0.14064906794014484
+    },
+    {
+      "minZ": -0.1261807288124578,
+      "maxZ": 0.13971243845800937
+    },
+    {
+      "minZ": -0.13365518799341924,
+      "maxZ": 0.13832132897817695
+    },
+    {
+      "minZ": -0.13842751247423837,
+      "maxZ": 0.1374377359299823
+    },
+    {
+      "minZ": -0.14020203692584093,
+      "maxZ": 0.1364921037528425
+    },
+    {
+      "minZ": -0.14116040283604162,
+      "maxZ": 0.13569615326031473
+    },
+    {
+      "minZ": -0.14226871050135437,
+      "maxZ": 0.13434773485963775
+    },
+    {
+      "minZ": -0.14353314040861512,
+      "maxZ": 0.13324451473337548
+    },
+    {
+      "minZ": -0.14461126098442878,
+      "maxZ": 0.13251670146512534
+    },
+    {
+      "minZ": -0.14535898683691673,
+      "maxZ": 0.13164492237837924
+    },
+    {
+      "minZ": -0.1405255949147636,
+      "maxZ": 0.1303596673593516
+    },
+    {
+      "minZ": -0.1465499711191986,
+      "maxZ": 0.12916957953211777
+    },
+    {
+      "minZ": -0.14940426227703502,
+      "maxZ": 0.12812096369734202
+    },
+    {
+      "minZ": -0.15047256125671277,
+      "maxZ": 0.12791625964309275
+    },
+    {
+      "minZ": -0.15165750193462893,
+      "maxZ": 0.12676909596186967
+    },
+    {
+      "minZ": -0.1522773102938027,
+      "maxZ": 0.12186105639963302
+    },
+    {
+      "minZ": -0.15337864454239625,
+      "maxZ": -0.037878164272897794
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.0899156577993988,
+      "maxZ": -0.0072291245159473196
+    },
+    {
+      "minZ": -0.09664463877713035,
+      "maxZ": 0.09658196215979126
+    },
+    {
+      "minZ": -0.09928071088809662,
+      "maxZ": 0.15480088824685975
+    },
+    {
+      "minZ": -0.1015789363061192,
+      "maxZ": 0.15296858385919151
+    },
+    {
+      "minZ": -0.10366874262588405,
+      "maxZ": 0.15151643151842115
+    },
+    {
+      "minZ": -0.10577207048512852,
+      "maxZ": 0.15004208862170226
+    },
+    {
+      "minZ": -0.10765249370246602,
+      "maxZ": 0.14856057822722807
+    },
+    {
+      "minZ": -0.11022434161838285,
+      "maxZ": 0.14724401710197615
+    },
+    {
+      "minZ": -0.1126782099617237,
+      "maxZ": 0.1455959895057246
+    },
+    {
+      "minZ": -0.11441412914781274,
+      "maxZ": 0.1451265101888453
+    },
+    {
+      "minZ": -0.11713787238752137,
+      "maxZ": 0.14335190340595336
+    },
+    {
+      "minZ": -0.11828772176916529,
+      "maxZ": -0.11828772176916529
+    },
+    {
+      "minZ": -0.12107033272411263,
+      "maxZ": 0.14243214257236525
+    },
+    {
+      "minZ": -0.12284288140964716,
+      "maxZ": 0.14039579751702375
+    },
+    {
+      "minZ": -0.12546874313747458,
+      "maxZ": 0.13989682529807668
+    },
+    {
+      "minZ": -0.12873722113719832,
+      "maxZ": 0.13808618062582412
+    },
+    {
+      "minZ": -0.13647198249110618,
+      "maxZ": 0.13772221657621675
+    },
+    {
+      "minZ": -0.13806244204108056,
+      "maxZ": 0.13657661751717343
+    },
+    {
+      "minZ": -0.13951807475759437,
+      "maxZ": 0.13547867224129104
+    },
+    {
+      "minZ": -0.14031984999228259,
+      "maxZ": 0.13457573098061207
+    },
+    {
+      "minZ": -0.14167972409305835,
+      "maxZ": 0.13335053338541963
+    },
+    {
+      "minZ": -0.1425217714458273,
+      "maxZ": 0.13269451672753613
+    },
+    {
+      "minZ": -0.14429187713238795,
+      "maxZ": 0.13145785722393494
+    },
+    {
+      "minZ": -0.14486853989173099,
+      "maxZ": 0.13033484933974315
+    },
+    {
+      "minZ": -0.14622680443591268,
+      "maxZ": 0.12932963585209187
+    },
+    {
+      "minZ": -0.1486056532373756,
+      "maxZ": 0.1284162387648881
+    },
+    {
+      "minZ": -0.14885256974969963,
+      "maxZ": 0.12782139199261128
+    },
+    {
+      "minZ": -0.14984052541778262,
+      "maxZ": 0.12670547593847556
+    },
+    {
+      "minZ": -0.1514805581660357,
+      "maxZ": 0.03074553233956371
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.09420063682204419,
+      "maxZ": 0.027256051245513814
+    },
+    {
+      "minZ": -0.10174383594596423,
+      "maxZ": 0.14103002815361926
+    },
+    {
+      "minZ": -0.10425119062655977,
+      "maxZ": 0.1507855637869037
+    },
+    {
+      "minZ": -0.10598666505109629,
+      "maxZ": 0.14930281341016255
+    },
+    {
+      "minZ": -0.1088438135458587,
+      "maxZ": 0.14779580783284668
+    },
+    {
+      "minZ": -0.11110094044618517,
+      "maxZ": 0.14645332590431592
+    },
+    {
+      "minZ": -0.11294710558427865,
+      "maxZ": 0.14529891334450118
+    },
+    {
+      "minZ": -0.11547269650758857,
+      "maxZ": 0.1446020189140001
+    },
+    {
+      "minZ": -0.11766683292986052,
+      "maxZ": 0.14381733769680588
+    },
+    {
+      "minZ": -0.12011372714569032,
+      "maxZ": 0.1428201218749652
+    },
+    {
+      "minZ": -0.1218118006416441,
+      "maxZ": 0.1406538872314264
+    },
+    {
+      "minZ": -0.12416472086759872,
+      "maxZ": 0.1397290083459461
+    },
+    {
+      "minZ": -0.1264355219886403,
+      "maxZ": 0.139044763707719
+    },
+    {
+      "minZ": -0.13482782980584107,
+      "maxZ": 0.1379743626400175
+    },
+    {
+      "minZ": -0.13644164417799665,
+      "maxZ": 0.136875216981584
+    },
+    {
+      "minZ": -0.1373819351525884,
+      "maxZ": 0.13575666565738484
+    },
+    {
+      "minZ": -0.13867777147947585,
+      "maxZ": 0.13480268488362931
+    },
+    {
+      "minZ": -0.14003138938287635,
+      "maxZ": 0.13357114534189407
+    },
+    {
+      "minZ": -0.1412457122962019,
+      "maxZ": 0.1327129796146576
+    },
+    {
+      "minZ": -0.1422517745654859,
+      "maxZ": 0.1317199482498334
+    },
+    {
+      "minZ": -0.14371882514483955,
+      "maxZ": 0.13018654252131956
+    },
+    {
+      "minZ": -0.14439113278140342,
+      "maxZ": 0.12963405261809124
+    },
+    {
+      "minZ": -0.1452002796307495,
+      "maxZ": 0.12883874140576027
+    },
+    {
+      "minZ": -0.14713243616051574,
+      "maxZ": 0.12826122401108989
+    },
+    {
+      "minZ": -0.1480570985385867,
+      "maxZ": 0.07588350884160146
+    },
+    {
+      "minZ": -0.14377251229335605,
+      "maxZ": -0.024098158950460906
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.10045639374270446,
+      "maxZ": 0.034410418540158645
+    },
+    {
+      "minZ": -0.10244565189821889,
+      "maxZ": 0.12811118845291009
+    },
+    {
+      "minZ": -0.10820240509389364,
+      "maxZ": 0.14721976026199377
+    },
+    {
+      "minZ": -0.11162619955036392,
+      "maxZ": 0.14589766145310842
+    },
+    {
+      "minZ": -0.11366296523695295,
+      "maxZ": 0.14482737038371996
+    },
+    {
+      "minZ": -0.11650121948407104,
+      "maxZ": 0.1440021187703674
+    },
+    {
+      "minZ": -0.11779284015049993,
+      "maxZ": 0.14284788074053079
+    },
+    {
+      "minZ": -0.120497725444117,
+      "maxZ": 0.14010393867081056
+    },
+    {
+      "minZ": -0.12279481014218611,
+      "maxZ": 0.13868642664987385
+    },
+    {
+      "minZ": -0.1243707945800163,
+      "maxZ": 0.13864147645448796
+    },
+    {
+      "minZ": -0.12735794519479757,
+      "maxZ": 0.13810960800648592
+    },
+    {
+      "minZ": -0.132555035057555,
+      "maxZ": 0.1369181656653769
+    },
+    {
+      "minZ": -0.13566838795186165,
+      "maxZ": 0.13580654689675759
+    },
+    {
+      "minZ": -0.13636469832079615,
+      "maxZ": 0.13531421923087458
+    },
+    {
+      "minZ": -0.13755141244913466,
+      "maxZ": 0.13390522396375595
+    },
+    {
+      "minZ": -0.1394475785708292,
+      "maxZ": 0.13278812626378783
+    },
+    {
+      "minZ": -0.14027624410321002,
+      "maxZ": 0.13186323428207444
+    },
+    {
+      "minZ": -0.14180360172796844,
+      "maxZ": 0.13076917838259305
+    },
+    {
+      "minZ": -0.14308011551890593,
+      "maxZ": 0.1295082788631855
+    },
+    {
+      "minZ": -0.1418353348087969,
+      "maxZ": 0.12630260319864178
+    },
+    {
+      "minZ": -0.14334949848471043,
+      "maxZ": 0.05315643581677619
+    },
+    {
+      "minZ": -0.14249039506779537,
+      "maxZ": -0.013269754954125124
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.10213019928198025,
+      "maxZ": -0.0025691914709047455
+    },
+    {
+      "minZ": -0.11138928038400664,
+      "maxZ": 0.05812822829313728
+    },
+    {
+      "minZ": -0.11375406657089651,
+      "maxZ": 0.1418712447359574
+    },
+    {
+      "minZ": -0.11545564045494816,
+      "maxZ": 0.14338858604440405
+    },
+    {
+      "minZ": -0.11818215474112917,
+      "maxZ": 0.14212053680394465
+    },
+    {
+      "minZ": -0.12076834898818467,
+      "maxZ": 0.14115619454861067
+    },
+    {
+      "minZ": -0.12315640011167263,
+      "maxZ": 0.13964454907074655
+    },
+    {
+      "minZ": -0.1254876406825502,
+      "maxZ": 0.13736797845287912
+    },
+    {
+      "minZ": -0.1268189646738306,
+      "maxZ": 0.13705573536911497
+    },
+    {
+      "minZ": -0.12972188080435254,
+      "maxZ": 0.13621802973370245
+    },
+    {
+      "minZ": -0.13557430697512365,
+      "maxZ": 0.13508465261945762
+    },
+    {
+      "minZ": -0.1360310592986467,
+      "maxZ": 0.1340783018116717
+    },
+    {
+      "minZ": -0.13716235883178055,
+      "maxZ": 0.13295391241894022
+    },
+    {
+      "minZ": -0.13860494608097865,
+      "maxZ": 0.13219477302666388
+    },
+    {
+      "minZ": -0.13956895065809002,
+      "maxZ": 0.1305447975757499
+    },
+    {
+      "minZ": -0.1408041569553894,
+      "maxZ": 0.09481939664655734
+    },
+    {
+      "minZ": -0.14202576489681742,
+      "maxZ": 0.01437034163812739
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {
+      "minZ": -0.11445151726208357,
+      "maxZ": -0.0000049841771200317846
+    },
+    {
+      "minZ": -0.12081797785464221,
+      "maxZ": 0.03129941551066522
+    },
+    {
+      "minZ": -0.12381983162275464,
+      "maxZ": 0.0568396741153543
+    },
+    {
+      "minZ": -0.12529176551084759,
+      "maxZ": 0.06993080010539471
+    },
+    {
+      "minZ": -0.12709049922627583,
+      "maxZ": 0.07651169184528551
+    },
+    {
+      "minZ": -0.1292092413146022,
+      "maxZ": 0.07480672397197526
+    },
+    {
+      "minZ": -0.13308702955170681,
+      "maxZ": 0.05906969107464886
+    },
+    {
+      "minZ": -0.1336025348530256,
+      "maxZ": 0.03774465010057534
+    },
+    {
+      "minZ": -0.13532625898373643,
+      "maxZ": 0.008947437459362622
+    },
+    {
+      "minZ": -0.13345584276245692,
+      "maxZ": -0.017932063594619237
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "depthBounds": {
+    "min": [
+      -0.4906616806983948,
+      -0.37511369585990906,
+      -0.18198086321353912
+    ],
+    "max": [
+      0.4867357313632965,
+      0.37382110953330994,
+      0.18187007308006287
+    ]
+  },
+  "depthSource": {
+    "kind": "triangle-barycentric-z-envelope-v0"
+  },
+  "meshTopology": {
+    "uniqueEdges": 392040,
+    "boundaryEdges": 155628,
+    "manifoldInteriorEdges": 236412,
+    "nonManifoldEdges": 0,
+    "edgeIncidenceClosed": false
+  },
+  "source": {
+    "kind": "trellis-glb",
+    "sha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5"
+  },
+  "extraction": "triangle-xy-occupancy-and-barycentric-z-envelope-cell-centers-v1"
+}
