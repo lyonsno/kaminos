@@ -50,9 +50,21 @@ test('depth samples unselected transformed visible triangles; empty space retain
 });
 test('ground is visible but cannot set authored-mesh navigation depth',()=>{
  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
- const roots=source.slice(source.indexOf('    roots: () => [...sceneObjects.filter('),source.indexOf('    frameAll:',source.indexOf('    roots: () => [...sceneObjects.filter(')));
+ const roots=source.slice(source.indexOf('    roots: () => [...sceneObjects.filter('),source.indexOf('    occluders:',source.indexOf('    roots: () => [...sceneObjects.filter(')));
  assert.ok(roots.includes('sceneObjects.filter(entry => entry.type !== \'splat\')'));
  assert.ok(!roots.includes('groundPlane'),'ground belongs in the rendered scene, not the navigation depth candidates');
+ assert.ok(source.includes('occluders: () => groundPlane ? [groundPlane] : []'));
+});
+test('visible ground occludes authored geometry below it without setting depth',()=>{
+ const c=new THREE.PerspectiveCamera(40,1,.01,100);c.position.set(0,3,5);c.lookAt(0,-1,0);c.updateMatrixWorld(true);
+ const ground=new THREE.Mesh(new THREE.CircleGeometry(5,64),new THREE.MeshBasicMaterial());
+ ground.rotation.x=-Math.PI/2;ground.position.y=-.85;
+ const buried=new THREE.Mesh(new THREE.BoxGeometry(1,.5,1),new THREE.MeshBasicMaterial());buried.position.y=-1.5;
+ const target=new THREE.Vector3(0,0,0);
+ const pivot=navigationPivot(c,target,new THREE.Vector2(0,-.35),[buried],{occluders:[ground]});
+ assert.equal(pivot.source,'retained-depth');near(pivot.point,target);
+ ground.visible=false;
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(0,-.35),[buried],{occluders:[ground]}).source,'mesh-surface');
 });
 test('prepared dense geometry keeps exact surface depth without changing the rendered index',async()=>{
  const c=cameraAt(),target=new THREE.Vector3(),root=new THREE.Group();
@@ -219,6 +231,20 @@ test('empty-space trackpad orbit retains the current pivot and distance, includi
   assert.ok(Math.abs(f.c.position.distanceTo(pivot)-radius)<1e-8,'orbit must not become wheel zoom');
   assert.equal(e.defaultPrevented,true);assert.equal(f.nav.state().gesture,null);assert.equal(f.canvas.captures.size,0);
  }
+});
+test('an off-center mesh hit remains the orbit pivot after the next empty-space packet',()=>{
+ const surface=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial());surface.position.z=5;
+ const f=fixture({inputMode:()=> 'trackpad',roots:()=>[surface]});
+ const point=new THREE.Vector3(.8,.2,5),screen=point.clone().project(f.c);
+ emit(f.canvas,'wheel',{deltaX:0,deltaY:0,deltaMode:0,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
+ assert.equal(f.nav.state().depth.source,'mesh-surface');
+ const retained=new THREE.Vector3(...f.nav.state().depth.point);
+ surface.visible=false;
+ const before=retained.clone().project(f.c);
+ emit(f.canvas,'wheel',{deltaX:20,deltaY:0,deltaMode:0,clientX:40,clientY:40});
+ assert.equal(f.nav.state().depth.source,'retained-depth');
+ near(new THREE.Vector3(...f.nav.state().depth.point),retained);
+ near(retained.clone().project(f.c),before,'miss must keep orbiting around last real surface point');
 });
 test('Shift glide pans with content motion, while Cmd/Ctrl glide zooms along the view axis',()=>{
  const f=fixture({inputMode:()=> 'trackpad'}),q=f.c.quaternion.clone(),point=new THREE.Vector3();

@@ -128,7 +128,7 @@ export function invalidateNavigationGeometry(root) {
 
 // Visible triangles only: a splat's bounds or the flame's simulation box are
 // not surfaces. The caller supplies authored geometry and burner meshes.
-export function navigationPivot(camera, target, ndc, roots) {
+export function navigationPivot(camera, target, ndc, roots, {retainedPivot = target, occluders = []} = {}) {
   camera.updateMatrixWorld(true);
   const cast = new Raycaster();
   cast.setFromCamera(ndc, camera);
@@ -158,16 +158,27 @@ export function navigationPivot(camera, target, ndc, roots) {
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     return materials.some(material => material?.visible && (!material.transparent || material.opacity > 0));
   });
+  const visibleOccluders = occluders.filter(mesh => mesh?.visible && mesh.layers.test(camera.layers));
+  for (const mesh of visibleOccluders) mesh.updateWorldMatrix(true, true);
   cast.firstHitOnly = candidates.every(mesh => {
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     return materials.every(material => material?.visible && (!material.transparent || material.opacity > 0));
   });
-  const hit = cast.intersectObjects(candidates, false).find(hit => {
+  const first = cast.intersectObjects(candidates, false).find(hit => {
     const material = Array.isArray(hit.object.material)
       ? hit.object.material[hit.face.materialIndex] : hit.object.material;
     return material?.visible && (!material.transparent || material.opacity > 0);
   });
-  const point = hit?.point || target.clone();
+  let hit = first;
+  if (hit && visibleOccluders.length) {
+    const blockerCast = new Raycaster();
+    blockerCast.ray.copy(cast.ray);
+    blockerCast.near = cast.near;
+    blockerCast.far = hit.distance;
+    blockerCast.firstHitOnly = true;
+    if (blockerCast.intersectObjects(visibleOccluders, false).some(blocker => blocker.distance <= hit.distance)) hit = null;
+  }
+  const point = hit?.point || retainedPivot.clone();
   return {point, source: hit ? 'mesh-surface' : indexing ? 'indexing-depth' : failed ? 'index-failed-depth' : 'retained-depth', object: hit?.object.name || null};
 }
 
@@ -235,20 +246,22 @@ const modeFor = e => e.shiftKey ? 'pan' : e.ctrlKey || e.metaKey ? 'dolly' : 'or
 const take = e => { e.preventDefault(); e.stopImmediatePropagation(); };
 
 export function installSceneNavigation({canvas, viewport, camera, controls, roots, frameAll, frameSelected = () => {}, gizmo = null,
+  occluders = () => [],
   inputMode = () => 'mouse', blocked = () => false, status = () => {}, document = globalThis.document, window = globalThis.window}) {
-  let gesture = null, hover = false, lastDepth = null;
+  let gesture = null, hover = false, lastDepth = null, workingPivot = null, workingTarget = controls.target.clone();
   const listen = (node, type, fn, options) => {
     node.addEventListener(type, fn, options);
     disposers.push(() => node.removeEventListener(type, fn, options));
   };
   const disposers = [];
   const permitted = () => controls.enabled && !blocked();
-  const changed = () => { controls.minDistance = camera.near * 2; controls.update(); camera.updateMatrixWorld(true); };
+  const changed = () => { controls.minDistance = camera.near * 2; controls.update(); camera.updateMatrixWorld(true); workingTarget.copy(controls.target); };
   const sample = e => {
+    if (!controls.target.equals(workingTarget)) workingPivot = null;
     const rect = canvas.getBoundingClientRect();
     const ndc = new Vector2(2 * (e.clientX - rect.left) / rect.width - 1, 1 - 2 * (e.clientY - rect.top) / rect.height);
-    const pivot = navigationPivot(camera, controls.target, ndc, roots());
-    if (pivot.source === 'mesh-surface') adoptNavigationDepth(camera, controls.target, pivot.point);
+    const pivot = navigationPivot(camera, controls.target, ndc, roots(), {retainedPivot:workingPivot || controls.target, occluders:occluders()});
+    if (pivot.source === 'mesh-surface' && adoptNavigationDepth(camera, controls.target, pivot.point)) workingPivot = pivot.point.clone();
     lastDepth = {point:pivot.point.toArray(), source:pivot.source, object:pivot.object};
     return pivot.point;
   };
@@ -257,7 +270,7 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     if (!gesture) return;
     const old = gesture;
     gesture = null;
-    if (cancel) {camera.position.copy(old.before.position); controls.target.copy(old.before.target); camera.up.copy(old.before.up); changed();}
+    if (cancel) {camera.position.copy(old.before.position); controls.target.copy(old.before.target); camera.up.copy(old.before.up); workingPivot = old.beforePivot; changed();}
     if (canvas.hasPointerCapture(old.pointerId)) canvas.releasePointerCapture(old.pointerId);
     if (old.gizmo) {gizmo.enabled = old.gizmo.enabled; gizmo.getHelper().visible = old.gizmo.visible;}
     controls.dispatchEvent({type:'end'});
@@ -271,8 +284,8 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     // this canvas handler. Otherwise RMB and MMB share the same navigation.
     take(e);
     if (gesture || !permitted()) return;
-    const before = pose(), pivot = sample(e);
-    gesture = {pointerId:e.pointerId, x:e.clientX, y:e.clientY, mode:modeFor(e), pivot, before};
+    const before = pose(), beforePivot = workingPivot?.clone() || null, pivot = sample(e);
+    gesture = {pointerId:e.pointerId, x:e.clientX, y:e.clientY, mode:modeFor(e), pivot, before, beforePivot};
     if (gizmo) {
       gesture.gizmo = {enabled:gizmo.enabled, visible:gizmo.getHelper().visible};
       gizmo.enabled = false; gizmo.axis = null; gizmo.getHelper().visible = false;
@@ -289,7 +302,7 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     if (mode !== gesture.mode) {gesture.mode = mode; gesture.pivot = sample(e);}
     const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
     if (mode === 'orbit') orbitCamera(camera, controls.target, gesture.pivot, -dx * .005, -dy * .005);
-    else if (mode === 'pan') panCamera(camera, controls.target, dx, dy, canvas.clientHeight);
+    else if (mode === 'pan') {const eye=camera.position.clone();panCamera(camera, controls.target, dx, dy, canvas.clientHeight);workingPivot?.add(camera.position.clone().sub(eye));}
     else zoomCamera(camera, controls.target, Math.exp(dy * .01));
     gesture.x = e.clientX; gesture.y = e.clientY;
     changed();
@@ -316,7 +329,7 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     // Scroll deltas describe content displacement opposite to pointer motion.
     // Each packet completes immediately; no click, capture or idle timer needed.
     if (mode === 'orbit') orbitCamera(camera, controls.target, pivot, dx * .005, dy * .005);
-    else if (mode === 'pan') panCamera(camera, controls.target, -dx, -dy, canvas.clientHeight);
+    else if (mode === 'pan') {const eye=camera.position.clone();panCamera(camera, controls.target, -dx, -dy, canvas.clientHeight);workingPivot?.add(camera.position.clone().sub(eye));}
     else zoomCamera(camera, controls.target, Math.exp(dy * .0015));
     changed();
   }, {capture:true, passive:false});
@@ -333,8 +346,10 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     else if (code === 'Numpad7') action = () => viewCamera(camera, controls.target, new Vector3(0,sign,0));
     else if ((e.ctrlKey || e.shiftKey) && ['Numpad4','Numpad6','Numpad8','Numpad2'].includes(code)) action = () => {
       const pixels = canvas.clientHeight * .1;
+      const eye = camera.position.clone();
       panCamera(camera, controls.target, code === 'Numpad4' ? pixels : code === 'Numpad6' ? -pixels : 0,
         code === 'Numpad8' ? pixels : code === 'Numpad2' ? -pixels : 0, canvas.clientHeight);
+      workingPivot?.add(camera.position.clone().sub(eye));
     };
     else if (!e.ctrlKey && ['Numpad4','Numpad6','Numpad8','Numpad2','Numpad9'].includes(code)) action = () => {
       const step = Math.PI / 12;
@@ -343,8 +358,8 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
         code === 'Numpad8' ? -step : code === 'Numpad2' ? step : 0);
     };
     else if (!e.ctrlKey && ['NumpadAdd','NumpadSubtract'].includes(code)) action = () => zoomCamera(camera, controls.target, code === 'NumpadAdd' ? 1/1.2 : 1.2);
-    else if (!e.ctrlKey && code === 'Home') action = frameAll;
-    else if (!e.ctrlKey && !e.shiftKey && (e.key.toLowerCase() === 'f' || code === 'NumpadDecimal')) action = frameSelected;
+    else if (!e.ctrlKey && code === 'Home') action = () => {frameAll(); workingPivot = null;};
+    else if (!e.ctrlKey && !e.shiftKey && (e.key.toLowerCase() === 'f' || code === 'NumpadDecimal')) action = () => {frameSelected(); workingPivot = null;};
     if (action) {take(e); action(); changed();}
   }, true);
   return {

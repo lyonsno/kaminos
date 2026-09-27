@@ -10488,6 +10488,7 @@ async function initScene() {
     gizmo: transformControls,
     roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object),
       ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
+    occluders: () => groundPlane ? [groundPlane] : [],
     frameAll: () => { frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); markDirty(); },
     frameSelected: () => { if (frameSceneObjectRecord(sceneObjects.find(entry => entry.id === activeSceneObjectId), camera, controls)) markDirty(); },
     blocked: () => transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
