@@ -19,6 +19,8 @@ assert.match(app, /onIntermediateTriplane/);
 assert.match(app, /intermediateStageIds:\s*\['block-0-fuse-out',\s*'block-1-fuse-out'\]/);
 assert.match(app, /decodeSf3dPreviewMesh/);
 assert.match(app, /replaceGeometry/);
+assert.match(app, /requestPaint\(\)/);
+assert.doesNotMatch(app, /setAnimationLoop/);
 assert.match(app, /result\.vertices/);
 assert.match(bundle, /decodeSf3dPreviewMesh/);
 console.log('Kaminos Learn tab mounts real SF3D stage geometry');

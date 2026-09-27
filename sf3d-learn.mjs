@@ -23,6 +23,17 @@ let inputUrl = null;
 let outputUrl = null;
 let running = false;
 let renderer = null;
+let viewerInitialized = false;
+let paintQueued = false;
+
+function requestPaint() {
+  if (!viewerInitialized || paintQueued) return;
+  paintQueued = true;
+  requestAnimationFrame(() => {
+    paintQueued = false;
+    renderer.render(scene, camera);
+  });
+}
 
 const scene = new Scene();
 scene.background = new Color('#e9eeea');
@@ -48,6 +59,7 @@ function placeCamera() {
   const cp = Math.cos(pitch);
   camera.position.set(target.x + distance * cp * Math.cos(yaw), target.y + distance * cp * Math.sin(yaw), target.z + distance * Math.sin(pitch));
   camera.lookAt(target);
+  requestPaint();
 }
 placeCamera();
 
@@ -58,6 +70,7 @@ function resize() {
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height, false);
+  requestPaint();
 }
 
 async function initViewer() {
@@ -65,9 +78,10 @@ async function initViewer() {
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   viewer.append(renderer.domElement);
   await renderer.init();
+  viewerInitialized = true;
   resize();
   new ResizeObserver(resize).observe(viewer);
-  renderer.setAnimationLoop(() => renderer.render(scene, camera));
+  requestPaint();
 }
 
 let drag = null;
@@ -107,6 +121,7 @@ function replaceGeometry(vertices, faces, label) {
   $('learn-view-empty').hidden = true;
   $('learn-view-label').textContent = label;
   $('learn-mesh-count').textContent = `${vertices.length / 3} vertices / ${faces.length / 3} faces`;
+  requestPaint();
 }
 
 function markStage(stageId, state, elapsedMs = null) {
