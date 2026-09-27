@@ -91,6 +91,20 @@ def main():
             else:
                 raise AssertionError(f"a relative shared basin store must be refused: {relative}")
 
+    # The import tool refuses a relative library path and names an invalid setting.
+    with tempfile.TemporaryDirectory(prefix="kaminos-import-args-") as temporary:
+        for args, env_value, expected in (
+            (["--shared-basin-store", "relative-library", temporary], None, "absolute path"),
+            ([temporary], "relative-library", "invalid"),
+        ):
+            env = {key: value for key, value in __import__("os").environ.items() if key != "KAMINOS_SHARED_BASIN_STORE"}
+            if env_value is not None:
+                env["KAMINOS_SHARED_BASIN_STORE"] = env_value
+            result = subprocess.run([sys.executable, str(ROOT / "import-basin-stores.py"), *args],
+                                    cwd=temporary, env=env, capture_output=True, text=True)
+            assert result.returncode == 2 and expected in result.stderr, (args, result.returncode, result.stderr)
+            assert not (Path(temporary) / "relative-library").exists(), "nothing is created at a relative path"
+
     # Harness servers given their own settings store stay out of the operator's
     # library unless they name one explicitly.
     for spawner in ("volume-full-support-cockpit-session.mjs", "volume-live-full-support-optics-session.mjs"):

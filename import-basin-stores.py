@@ -24,7 +24,11 @@ def main(argv):
     while arguments:
         argument = arguments.pop(0)
         if argument == "--shared-basin-store" and arguments:
-            shared = serve._volume_settings_store_path(arguments.pop(0))
+            try:
+                shared = serve._shared_basin_store_path(arguments.pop(0))
+            except ValueError as error:
+                print(f"import-basin-stores: {error}", file=sys.stderr)
+                return 2
         elif argument == "--stores-file" and arguments:
             stores.extend(line.strip() for line in Path(arguments.pop(0)).read_text().splitlines() if line.strip())
         elif argument.startswith("-"):
@@ -32,6 +36,9 @@ def main(argv):
             return 2
         else:
             stores.append(argument)
+    if shared is None and serve.SHARED_BASIN_STORE_ERROR and "--shared-basin-store" not in argv:
+        print(f"import-basin-stores: KAMINOS_SHARED_BASIN_STORE is invalid: {serve.SHARED_BASIN_STORE_ERROR}", file=sys.stderr)
+        return 2
     if shared is None:
         print("import-basin-stores: the shared basin library is disabled (KAMINOS_SHARED_BASIN_STORE)", file=sys.stderr)
         return 2

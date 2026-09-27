@@ -1141,11 +1141,17 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "updatedAt": written_at,
             "source": dict(source or {}),
         }
+        alias_held = None
         if publish_alias:
-            _append_volume_settings_alias_history(
-                store, alias, _volume_settings_label_history_row(alias_document, written_at, source)
+            alias_held = _volume_settings_label_hold(
+                store, _volume_settings_alias_document(store, alias), preset_id, normalized_payload, schema
             )
-            _atomic_write_json(alias_path, alias_document)
+            history_row = _volume_settings_label_history_row(alias_document, written_at, source)
+            if alias_held:
+                history_row["held"] = alias_held
+            _append_volume_settings_alias_history(store, alias, history_row)
+            if alias_held is None:
+                _atomic_write_json(alias_path, alias_document)
     preset_url = f"/volume-settings-preset.html?preset={preset_id}"
     return {
         "ok": True,
@@ -1168,6 +1174,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "rendererControlCount": len(normalized_payload.get("rendererControls") or {}),
             "presentationControlCount": len(normalized_payload.get("presentationControls") or {}),
             "idempotent": idempotent,
+            "aliasHeld": alias_held,
         },
         "schemaProjection": schema_projection,
         "presetUrl": preset_url,
@@ -1306,13 +1313,15 @@ def list_volume_settings_presets(store_path, schema=None):
     current_by_alias = {entry["alias"]: entry["presetId"] for entry in entries}
     current_by_alias.update({entry["alias"]: entry["presetId"] for entry in unavailable_entries})
     earlier_versions = []
+    invalid_history_rows = []
     history_dir = store / "alias-history"
     for history_path in sorted(history_dir.glob("*.jsonl")) if history_dir.exists() else []:
         alias = history_path.stem
         latest_rows = {}
-        for row in _read_volume_settings_alias_history(store, alias):
-            if isinstance(row.get("presetId"), str):
-                latest_rows[row["presetId"]] = row
+        rows, invalid_rows = _scan_volume_settings_alias_history(store, alias)
+        invalid_history_rows.extend(invalid_rows)
+        for row in rows:
+            latest_rows[row["presetId"]] = row
         for preset_id, row in latest_rows.items():
             if preset_id == current_by_alias.get(alias):
                 continue
@@ -1338,13 +1347,14 @@ def list_volume_settings_presets(store_path, schema=None):
                 "contentHash": document["contentHash"],
                 "publishedAt": row.get("publishedAt"),
                 "source": row.get("source") or {},
-                "reason": "superseded-label",
+                # A held save is a version the label did not follow.
+                "reason": "held-label" if row.get("held") else "superseded-label",
                 "carriedControls": projection.get("carriedControls") or [],
                 "unsupportedValuesDefaulted": projection.get("unsupportedValuesDefaulted") or [],
             })
-    entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
-    earlier_versions.sort(key=lambda entry: (entry.get("publishedAt") or "", entry["alias"]), reverse=True)
-    unavailable_entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
+    entries.sort(key=lambda entry: (_volume_settings_timestamp(entry.get("updatedAt")), entry["alias"]), reverse=True)
+    earlier_versions.sort(key=lambda entry: (_volume_settings_timestamp(entry.get("publishedAt")), entry["alias"]), reverse=True)
+    unavailable_entries.sort(key=lambda entry: (_volume_settings_timestamp(entry.get("updatedAt")), entry["alias"]), reverse=True)
     return {
         "identity": "kaminos-volume-settings-preset-index-v1",
         "storePath": str(store),
@@ -1356,6 +1366,7 @@ def list_volume_settings_presets(store_path, schema=None):
         "earlierVersions": earlier_versions,
         "unavailableEntries": unavailable_entries,
         "invalidAliases": invalid_aliases,
+        "invalidHistoryRows": invalid_history_rows,
     }
 
 
@@ -1395,13 +1406,18 @@ def _volume_settings_alias_document(store, alias):
     return document
 
 
+def _volume_settings_timestamp(value):
+    """A stored timestamp for ordering; anything but an ISO string sorts as unknown."""
+    return value if isinstance(value, str) else ""
+
+
 def _volume_settings_newer_alias(current, candidate):
     """A label follows its latest publication; the same basin in two stores keeps the first."""
     if current is None:
         return True
     return (
         candidate.get("presetId") != current.get("presetId")
-        and (candidate.get("updatedAt") or "") > (current.get("updatedAt") or "")
+        and _volume_settings_timestamp(candidate.get("updatedAt")) > _volume_settings_timestamp(current.get("updatedAt"))
     )
 
 
@@ -1417,28 +1433,49 @@ def _volume_settings_label_history_row(alias_document, published_at=None, source
     }
 
 
-def _read_volume_settings_alias_history(store, alias):
+def _scan_volume_settings_alias_history(store, alias):
+    """Label-history rows plus the rows that cannot be used (reported, never fatal)."""
     path = store / "alias-history" / f"{alias}.jsonl"
+    rows = []
+    invalid = []
     if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        return rows, invalid
+    for number, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as error:
+            invalid.append({"alias": alias, "path": str(path), "line": number, "error": str(error)})
+            continue
+        if not isinstance(row, dict) or not isinstance(row.get("presetId"), str) or not re.fullmatch(r"vsp-[0-9a-f]{64}", row["presetId"]):
+            invalid.append({"alias": alias, "path": str(path), "line": number, "error": "label history row is not a basin version"})
+            continue
+        rows.append(row)
+    return rows, invalid
+
+
+def _read_volume_settings_alias_history(store, alias):
+    return _scan_volume_settings_alias_history(store, alias)[0]
 
 
 def _append_volume_settings_alias_history(store, alias, row):
     """Append-only label log: re-pointing a label never erases where it pointed."""
     path = store / "alias-history" / f"{alias}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        # A store that predates label history: keep the pointer being replaced.
-        current = _volume_settings_alias_document(store, alias)
-        if current is not None and current.get("presetId") != row["presetId"]:
-            with path.open("a") as handle:
-                handle.write(json.dumps(_volume_settings_label_history_row(current), sort_keys=True) + "\n")
-    if path.exists():
-        for line in path.read_text().splitlines():
-            existing = json.loads(line)
-            if existing.get("presetId") == row["presetId"] and existing.get("publishedAt") == row["publishedAt"]:
-                return False
+    existing_rows = _read_volume_settings_alias_history(store, alias)
+    # Keep the pointer being replaced whenever the log lacks it: stores that
+    # predate label history, and re-points by writers that do not keep it.
+    current = _volume_settings_alias_document(store, alias)
+    if (
+        current is not None
+        and current.get("presetId") != row["presetId"]
+        and not any(existing.get("presetId") == current.get("presetId") for existing in existing_rows)
+    ):
+        with path.open("a") as handle:
+            handle.write(json.dumps(_volume_settings_label_history_row(current), sort_keys=True) + "\n")
+    if any(existing.get("presetId") == row["presetId"] and existing.get("publishedAt") == row["publishedAt"] for existing in existing_rows):
+        return False
     with path.open("a") as handle:
         handle.write(json.dumps(row, sort_keys=True) + "\n")
         handle.flush()
@@ -1453,6 +1490,50 @@ def _volume_settings_raw_control_keys(payload):
         if isinstance(controls, dict):
             keys.update(controls)
     return keys
+
+
+def _volume_settings_label_hold(store, current_alias, new_preset_id, new_payload, schema):
+    """Why a label must stay on its current basin rather than move to a new one, or None.
+
+    The writer's schema must represent the current basin exactly: a label never
+    moves onto a copy made by a branch that carried some of the current basin's
+    controls out, or replaced option values it does not offer.
+    """
+    if not current_alias or current_alias.get("presetId") == new_preset_id:
+        return None
+    current_path = store / "presets" / f"{current_alias['presetId']}.json"
+    if not current_path.exists():
+        return None
+    current_payload = _read_json_object(current_path, "artifact").get("preset") or {}
+    try:
+        _normalized, projection = normalize_volume_settings_preset_payload(
+            current_payload, schema, tolerate_foreign_controls=True
+        )
+    except ValueError:
+        projection = None
+    if projection is not None:
+        carried = [entry["id"] for entry in projection.get("carriedControls") or []]
+        replaced = [entry["id"] for entry in projection.get("unsupportedValuesDefaulted") or []]
+        if not carried and not replaced:
+            return None
+        return {
+            "reason": "would-drop-controls" if carried else "would-replace-values",
+            "controls": sorted(carried or replaced),
+            "currentPresetId": current_alias["presetId"],
+        }
+    # The current basin does not load on this schema at all; hold only if the
+    # new basin lacks controls the current one has.
+    return _volume_settings_dropped_controls_hold(current_alias, current_payload, new_payload, schema)
+
+
+def _volume_settings_dropped_controls_hold(current_alias, current_payload, new_payload, schema):
+    retired = {descriptor["key"] for descriptor in schema.get("retiredControls") or []}
+    dropped = (
+        _volume_settings_raw_control_keys(current_payload) - _volume_settings_raw_control_keys(new_payload) - retired
+    )
+    if not dropped:
+        return None
+    return {"reason": "would-drop-controls", "controls": sorted(dropped), "currentPresetId": current_alias["presetId"]}
 
 
 def _publish_volume_settings_artifact_locked(store, document, label, published_at, source, schema, move_alias_only_forward=False):
@@ -1474,7 +1555,31 @@ def _publish_volume_settings_artifact_locked(store, document, label, published_a
         "updatedAt": published_at,
         "source": dict(source or {}),
     }
-    history_appended = _append_volume_settings_alias_history(store, alias, {
+    current_alias = _volume_settings_alias_document(store, alias)
+    alias_held = None
+    alias_kept_live = False
+    if not move_alias_only_forward:
+        # A live save: the label follows it unless this branch cannot
+        # represent the basin the label points at now.
+        alias_held = _volume_settings_label_hold(store, current_alias, preset_id, document.get("preset") or {}, schema)
+        move = alias_held is None and (current_alias or {}).get("presetId") != preset_id
+    elif current_alias and current_alias.get("presetId") != preset_id and "importedFrom" not in (current_alias.get("source") or {}):
+        # An import never moves a label a live save set; the version is kept.
+        alias_kept_live = True
+        move = False
+    else:
+        move = _volume_settings_newer_alias(current_alias, alias_document)
+        if move and current_alias:
+            # Between imported pointers the importer's schema cannot judge the
+            # writers' option values, so only dropped controls hold a label.
+            current_path = store / "presets" / f"{current_alias['presetId']}.json"
+            if current_path.exists():
+                alias_held = _volume_settings_dropped_controls_hold(
+                    current_alias, _read_json_object(current_path, "artifact").get("preset") or {},
+                    document.get("preset") or {}, schema,
+                )
+            move = alias_held is None
+    history_row = {
         "identity": "kaminos-volume-settings-preset-alias-history-v1",
         "alias": alias,
         "label": label,
@@ -1482,39 +1587,19 @@ def _publish_volume_settings_artifact_locked(store, document, label, published_a
         "contentHash": document["contentHash"],
         "publishedAt": published_at,
         "source": dict(source or {}),
-    })
-    alias_moved = False
-    alias_held = None
-    current_alias = _volume_settings_alias_document(store, alias)
-    if not move_alias_only_forward and current_alias and current_alias.get("presetId") != preset_id:
-        # A branch that lacks some of the current basin's controls must not
-        # take its label: the version is kept and listed, the label stays.
-        current_path = store / "presets" / f"{current_alias['presetId']}.json"
-        if current_path.exists():
-            retired = {descriptor["key"] for descriptor in schema.get("retiredControls") or []}
-            dropped = (
-                _volume_settings_raw_control_keys(_read_json_object(current_path, "artifact").get("preset") or {})
-                - _volume_settings_raw_control_keys(document.get("preset") or {})
-                - retired
-            )
-            if dropped:
-                alias_held = {
-                    "reason": "would-drop-controls",
-                    "controls": sorted(dropped),
-                    "currentPresetId": current_alias["presetId"],
-                }
-    if alias_held is None and (
-        not move_alias_only_forward and (current_alias or {}).get("presetId") != preset_id
-        or _volume_settings_newer_alias(current_alias, alias_document)
-    ):
+    }
+    if alias_held:
+        history_row["held"] = alias_held
+    history_appended = _append_volume_settings_alias_history(store, alias, history_row)
+    if move:
         _atomic_write_json(store / "aliases" / f"{alias}.json", alias_document)
-        alias_moved = True
     return {
         "presetId": preset_id,
         "alias": alias,
         "created": created,
-        "aliasMoved": alias_moved,
+        "aliasMoved": move,
         "aliasHeld": alias_held,
+        "aliasKeptLive": alias_kept_live,
         "historyAppended": history_appended,
     }
 
@@ -1633,7 +1718,9 @@ def list_volume_settings_presets_layered(layers, schema=None):
             key = (entry["alias"], entry["presetId"])
             if entry.get("version") == "earlier" and key not in current_keys and key not in earlier:
                 unavailable.setdefault(key, {**entry, "storeRole": role, "storePath": listing["storePath"]})
-    ordering = lambda entry: (entry.get("updatedAt") or entry.get("publishedAt") or "", entry["alias"])
+    ordering = lambda entry: (
+        _volume_settings_timestamp(entry.get("updatedAt")) or _volume_settings_timestamp(entry.get("publishedAt")), entry["alias"]
+    )
     strip = lambda entry: {key: value for key, value in entry.items() if key != "available"}
     return {
         **listings[0][1],
@@ -1643,6 +1730,9 @@ def list_volume_settings_presets_layered(layers, schema=None):
         "unavailableEntries": sorted((strip(entry) for entry in unavailable.values()), key=ordering, reverse=True),
         "invalidAliases": [
             {**entry, "storeRole": role} for role, listing in listings for entry in listing.get("invalidAliases") or []
+        ],
+        "invalidHistoryRows": [
+            {**entry, "storeRole": role} for role, listing in listings for entry in listing.get("invalidHistoryRows") or []
         ],
     }
 
@@ -1662,6 +1752,8 @@ def import_volume_settings_stores(shared_store_path, store_paths, schema=None):
         "presetsImported": 0,
         "presetsAlreadyPresent": 0,
         "aliasesMoved": 0,
+        "aliasesHeld": 0,
+        "aliasesKeptLive": 0,
         "aliasHistoryRowsAppended": 0,
         "skipped": [],
     }
@@ -1711,6 +1803,8 @@ def import_volume_settings_stores(shared_store_path, store_paths, schema=None):
                     report["skipped"].append({"path": str(alias_path), "reason": "invalid-alias", "error": str(error)})
                     continue
                 report["aliasesMoved"] += int(result["aliasMoved"])
+                report["aliasesHeld"] += int(result["aliasHeld"] is not None)
+                report["aliasesKeptLive"] += int(result["aliasKeptLive"])
                 report["aliasHistoryRowsAppended"] += int(result["historyAppended"])
             history_dir = source_store / "alias-history"
             for history_path in sorted(history_dir.glob("*.jsonl")) if history_dir.exists() else []:

@@ -234,12 +234,29 @@ export function describeVolumeSettingsLibraryPublication(publication) {
   const held = publication.aliasHeld;
   if (held) {
     return {
-      text: `in library ${publication.storePath} as a version; label "${publication.label}" kept on ${String(held.currentPresetId).slice(0, 16)} `
-        + `because this branch lacks ${(held.controls || []).join(', ')}; save under a new label to publish it by name`,
+      text: `in library ${publication.storePath} as a version; ${describeVolumeSettingsLabelHold(held, publication.label)}`,
       warning: true,
     };
   }
   return { text: `in library ${publication.storePath}`, warning: false };
+}
+
+function describeVolumeSettingsLabelHold(held, label) {
+  const why = held.reason === 'would-replace-values'
+    ? `does not offer the saved value of ${(held.controls || []).join(', ')}`
+    : `lacks ${(held.controls || []).join(', ')}`;
+  return `label "${label}" kept on ${String(held.currentPresetId).slice(0, 16)} because this branch ${why}; `
+    + 'save under a new label to name this version';
+}
+
+// The whole outcome of a save or promotion for its status line: where the
+// basin went, and whether a label stayed on a basin this branch cannot hold.
+export function describeVolumeSettingsSaveOutcome(result) {
+  const library = describeVolumeSettingsLibraryPublication(result?.sharedPublication);
+  const localHold = result?.effective?.aliasHeld;
+  if (!localHold || result?.sharedPublication?.aliasHeld) return library;
+  const hold = describeVolumeSettingsLabelHold(localHold, result.effective.label);
+  return { text: library.text ? `${library.text} | ${hold}` : hold, warning: true };
 }
 
 export function validateVolumeSettingsPresetDocument(document, requestedPresetRef = null, rawSchema = null) {

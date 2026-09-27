@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   describeVolumeSettingsLibraryPublication,
   describeVolumeSettingsPresetProjection,
+  describeVolumeSettingsSaveOutcome,
   validateVolumeSettingsPresetDocument,
   volumeSettingsPresetLabelReuseBlock,
 } from '../volume-settings-preset-contract.mjs';
@@ -121,9 +122,29 @@ const held = describeVolumeSettingsLibraryPublication({ published: true, storePa
   aliasHeld: { reason: 'would-drop-controls', controls: ['volume-ridge-radius-cells'], currentPresetId: `vsp-${'9'.repeat(64)}` } });
 assert.equal(held.warning, true);
 assert.match(held.text, /in library \/lib as a version; label "kiln" kept on vsp-999999999999 because this branch lacks volume-ridge-radius-cells/);
+// A save held in the server's own store (library off, or the store is the
+// library) is reported just like a library hold.
+const localHold = describeVolumeSettingsSaveOutcome({
+  effective: { label: 'kiln', aliasHeld: { reason: 'would-replace-values', controls: ['volume-mode'], currentPresetId: `vsp-${'8'.repeat(64)}` } },
+  sharedPublication: { published: false, reason: 'shared basin library disabled' },
+});
+assert.equal(localHold.warning, true);
+assert.match(localHold.text, /library off \| label "kiln" kept on vsp-888888888888 because this branch does not offer the saved value of volume-mode/);
+assert.deepEqual(describeVolumeSettingsSaveOutcome({ effective: { label: 'kiln', aliasHeld: null },
+  sharedPublication: { published: true, storePath: '/lib', aliasHeld: null } }), { text: 'in library /lib', warning: false });
+const libraryHeld = describeVolumeSettingsSaveOutcome({ effective: { label: 'kiln', aliasHeld: held ? { reason: 'would-drop-controls', controls: ['x'], currentPresetId: `vsp-${'9'.repeat(64)}` } : null },
+  sharedPublication: { published: true, storePath: '/lib', label: 'kiln',
+    aliasHeld: { reason: 'would-drop-controls', controls: ['volume-ridge-radius-cells'], currentPresetId: `vsp-${'9'.repeat(64)}` } } });
+assert.equal((libraryHeld.text.match(/kept on/g) || []).length, 1, 'one hold is reported once');
 const save = index.slice(index.indexOf('async function saveVolumeSettingsPreset('), index.indexOf('function buildVolumeBasinPromotionEffectiveState('));
 assert.match(save, /const reuseBlock = volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label\);\s*if \(reuseBlock\) throw new Error\(reuseBlock\);/,
   'save refuses to reuse a cross-branch basin label before writing');
-assert.match(save, /const library = describeVolumeSettingsLibraryPublication\(result\.sharedPublication\);/);
-assert.match(save, /library\.text \? ` \| \$\{library\.text\}` : ''\}`,\s*library\.warning,/, 'the save status shows the library outcome and warns');
+assert.match(save, /const outcome = describeVolumeSettingsSaveOutcome\(result\);/);
+assert.match(save, /outcome\.text \? ` \| \$\{outcome\.text\}` : ''\}`,\s*outcome\.warning,/, 'the save status shows the library outcome and warns');
+// Promotion export publishes to the library too: same guard, same report.
+const promote = index.slice(index.indexOf('async function exportBasinPromotionPackage('), index.indexOf('let activeVolumeBasinDriveRecorder'));
+assert.match(promote, /const reuseBlock = volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label\);\s*if \(reuseBlock\) throw new Error\(reuseBlock\);/,
+  'promotion refuses to reuse a cross-branch basin label');
+assert.match(promote, /const outcome = describeVolumeSettingsSaveOutcome\(\{ effective: result\.settingsPreset, sharedPublication: result\.sharedPublication \}\);/);
+assert.match(promote, /outcome\.text \? ` \| \$\{outcome\.text\}` : ''\}`, outcome\.warning\);/, 'the promotion status shows the library outcome and warns');
 console.log('volume settings projection receipt contracts passed');
