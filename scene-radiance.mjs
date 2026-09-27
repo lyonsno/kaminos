@@ -11,12 +11,17 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
   const position=uniform(new THREE.Vector3(...source.position));
   const intensity=uniform(new THREE.Vector3(...source.intensity));
   const shadow=createFireLightFieldShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true});
-  const tauExternal=new THREE.ExternalTexture();
-  tauExternal.is3DTexture=true; tauExternal.image={width:32,height:64,depth:32};
-  tauExternal.format=THREE.RedFormat; tauExternal.type=THREE.FloatType;
-  tauExternal.colorSpace=THREE.NoColorSpace;
-  tauExternal.minFilter=THREE.NearestFilter;tauExternal.magFilter=THREE.NearestFilter;
-  tauExternal.generateMipmaps=false;
+  function wrapTau(texture=null,dimensions=[32,64,32]) {
+    const external=new THREE.ExternalTexture(texture);
+    external.is3DTexture=true;
+    const [width,height,depth]=dimensions;external.image={width,height,depth};
+    external.format=THREE.RedFormat;external.type=THREE.FloatType;
+    external.colorSpace=THREE.NoColorSpace;
+    external.minFilter=THREE.NearestFilter;external.magFilter=THREE.NearestFilter;
+    external.generateMipmaps=false;
+    return external;
+  }
+  let tauExternal=wrapTau();
   const tauNode=texture3D(tauExternal);
   const cubeNode=cubeTexture(shadow.resource().colorTexture);
   const mediumFn=wgslFn(SCENE_MEDIUM_LOOKUP_WGSL);
@@ -53,9 +58,11 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       // ExternalTexture's backend handle is immutable after initialization.
       // Dispose only its wrapper on a fluid rebuild, never the producer texture.
       if(tauExternal.sourceTexture) releaseTauWrapper();
-      tauExternal.sourceTexture=field.medium.texture;
-      const [width,height,depth]=field.medium.dimensions;
-      tauExternal.image={width,height,depth};tauExternal.needsUpdate=true;
+      // A new wrapper identity also invalidates Three's cached sampled-texture
+      // binding. Reusing the wrapper retained a destroyed pre-replay texture
+      // in the first native consumer run (native-006).
+      tauExternal=wrapTau(field.medium.texture,field.medium.dimensions);
+      tauNode.value=tauExternal;
     }
     scene.updateMatrixWorld(true);
     const key=[...source.position];
