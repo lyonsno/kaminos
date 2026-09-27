@@ -5220,7 +5220,8 @@ function setFlameDomainTranslation(next) {
 }
 
 function settleFlameDomainForPose(pose, targetDomain = null) {
-  const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation);
+  const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
+    { injectionSuspended: flameEmitterInjectionSuspended });
   const previous = [...flameDomainTranslation];
   if (!setFlameDomainTranslation(next)) {
     setInfo('Flame source moved within the current grid; the field continues');
@@ -5232,7 +5233,9 @@ function settleFlameDomainForPose(pose, targetDomain = null) {
     setFlameDomainTranslation(previous);
     throw error;
   }
-  setInfo('Flame grid moved to the released source; the field restarted there');
+  setInfo(flameEmitterInjectionSuspended
+    ? 'Flame source support still exceeds the relocated grid: injection paused'
+    : 'Flame grid moved to the released source; the field restarted there');
   return true;
 }
 
@@ -5261,7 +5264,7 @@ function writeAuthoredFlameEmitterPose(value) {
   ensureAuthoredFlameEmitter();
   if (wasSuspended !== flameEmitterInjectionSuspended) {
     setInfo(flameEmitterInjectionSuspended
-      ? 'Flame source outside current grid: injection paused; drag continues'
+      ? 'Flame source support outside current grid: injection paused; drag continues'
       : 'Flame source returned to the current simulation grid');
     renderSceneObjectList();
   }

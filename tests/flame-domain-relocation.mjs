@@ -13,6 +13,9 @@ assert.deepEqual(flamePoseToDomain(pose([2.3, -1.3, 0.4]), [2.3, -0.54, 0.4]).po
 assert.deepEqual(flameDomainTranslationForAcceptedPose(pose([2.4, -0.76, 0]), [2.3, 0, 0]),
   [2.3, 0, 0], 'an accepted tweak inside the relocated grid keeps the evolving field');
 assert.deepEqual(flameDomainTranslationForAcceptedPose(pose([0.3, -0.76, 0]), [2.3, 0, 0]), [0, 0, 0]);
+assert.deepEqual(flameDomainTranslationForAcceptedPose(pose([0.7, -0.76, 0]), [0, 0, 0],
+  { injectionSuspended: true }), [0.7, 0, 0],
+  'a ring whose footprint exceeds analytic bounds must recenter on release even while its center is inside the grid');
 
 let current = pose([0, -0.76, 0]);
 const events = [];

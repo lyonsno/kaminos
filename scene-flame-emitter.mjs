@@ -25,7 +25,11 @@ export function flameDomainTranslationForPose(value) {
   return [x, y - defaultFlameEmitterPose().position[1], z];
 }
 
-export function flameDomainTranslationForAcceptedPose(value, currentTranslation) {
+export function flameDomainTranslationForAcceptedPose(value, currentTranslation, { injectionSuspended = false } = {}) {
+  if (injectionSuspended) {
+    const pose = normalizeFlameEmitterPose(value);
+    return [pose.position[0], pose.position[1] - defaultFlameEmitterPose().position[1], pose.position[2]];
+  }
   return flamePoseInDomain(value, currentTranslation)
     ? [...currentTranslation]
     : flameDomainTranslationForPose(value);
