@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
 const args = process.argv.slice(2);
@@ -14,10 +15,12 @@ const chromePath = value('--chrome', '/Applications/Google Chrome.app/Contents/M
 const width = Number(value('--width', '1440'));
 const height = Number(value('--height', '900'));
 const deepLink = args.includes('--deep-link');
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+const expectedHostSha256 = value('--expected-host-sha256', sha256(fs.readFileSync(new URL('../index.html', import.meta.url))));
 fs.mkdirSync(outputDir, { recursive: true });
 const reportPath = path.join(outputDir, 'report.json');
 const report = { schema: 'kaminos.sf3d-learn-browser.v0', phase: 'preflight', ok: false,
-  requested: { baseUrl, width, height, deepLink }, effective: { baseUrl, puppeteerPath, chromePath }, events: [] };
+  requested: { baseUrl, width, height, deepLink, expectedHostSha256 }, effective: { baseUrl, puppeteerPath, chromePath }, events: [] };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 write();
 let browser;
@@ -35,7 +38,11 @@ try {
   page.on('requestfailed', request => report.events.push({ type: 'request-failed', url: request.url(), reason: request.failure()?.errorText }));
   page.on('response', response => { if (response.status() >= 400) report.events.push({ type: 'http-error', url: response.url(), status: response.status() }); });
   report.phase = 'host-tab'; write();
-  await page.goto(`${baseUrl}/${deepLink ? '?tab=learn' : ''}`, { waitUntil: 'domcontentloaded' });
+  const hostResponse = await page.goto(`${baseUrl}/${deepLink ? '?tab=learn' : ''}`, { waitUntil: 'domcontentloaded' });
+  const servedHostSha256 = hostResponse ? sha256(await hostResponse.buffer()) : null;
+  report.effective.servedHostSha256 = servedHostSha256;
+  write();
+  if (servedHostSha256 !== expectedHostSha256) throw new Error('served Kaminos host does not match the reviewed index.html');
   await page.waitForSelector('[data-tab="learn"]');
   if (!deepLink) await page.click('[data-tab="learn"]');
   await page.waitForFunction(() => document.querySelector('#learn-viewport-frame')?.contentDocument?.querySelector('#learn-viewer canvas'));

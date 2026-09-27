@@ -6,12 +6,14 @@ const host = read('../index.html');
 const page = read('../sf3d-learn.html');
 const app = read('../sf3d-learn.mjs');
 const bundle = read('../lib/sf3d/sf3d-learn-producer.js');
+const witness = read('./sf3d-learn-browser-witness.mjs');
 
 assert.match(host, /data-tab="learn"/);
 assert.match(host, /id="tab-learn"/);
 assert.match(host, /id="learn-viewport-frame"/);
 assert.match(host, /tabName === 'learn'/);
 assert.match(host, /initialViewerParams\.get\('tab'\) === 'learn'\) setActiveTab\('learn'\)/);
+assert.match(witness, /servedHostSha256 !== expectedHostSha256/);
 assert.match(host, /body\.learn-active #viewport > :not\(#learn-operator-panel\)/);
 assert.match(page, /id="learn-viewer"/);
 assert.match(page, /id="learn-run"/);
