@@ -30,6 +30,8 @@ assert.match(app, /releaseFailure\s*=\s*error/);
 assert.match(app, /if \(running \|\| releaseFailure \|\| selectionPending \|\| releasePromise\) return/);
 assert.match(app, /selectionToken\s*\+=\s*1/);
 assert.match(app, /const probe = new Image\(\)/);
+assert.match(app, /function setStatus\(message\)[\s\S]*learn-view-empty/);
+assert.match(app, /matchMedia\('\(max-width: 760px\)'\)\.matches\) viewer\.scrollIntoView/);
 assert.match(host, /kaminos-learn-run-state/);
 assert.match(host, /kaminos-learn-active/);
 assert.match(host, /@media \(max-width: 760px\)[\s\S]*body\.learn-active \{ flex-direction: column/);

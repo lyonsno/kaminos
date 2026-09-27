@@ -19,6 +19,11 @@ const errorBox = $('learn-error');
 const viewer = $('learn-viewer');
 const stageIds = ['block-0-fuse-out', 'block-1-fuse-out', 'final'];
 
+function setStatus(message) {
+  status.textContent = message;
+  if (!mesh) $('learn-view-empty').textContent = message;
+}
+
 let producer = null;
 let mesh = null;
 let inputUrl = null;
@@ -182,12 +187,12 @@ async function releaseModel() {
     releasePromise = oldProducer.dispose().completion;
     await releasePromise;
     producer = null;
-    status.textContent = mesh ? 'Mesh retained; model released' : 'Model released';
+    setStatus(mesh ? 'Mesh retained; model released' : 'Model released');
   } catch (error) {
     releaseFailure = error;
     errorBox.textContent = `Model release failed: ${error?.message || error}. Reload this page before generating again.`;
     errorBox.hidden = false;
-    status.textContent = 'Model release failed';
+    setStatus('Model release failed');
     reloadButton.hidden = false;
   } finally {
     releasePromise = null;
@@ -225,7 +230,7 @@ input.addEventListener('change', async () => {
     inputUrl = nextUrl;
     if (oldUrl) URL.revokeObjectURL(oldUrl);
     $('learn-source-name').textContent = file.name;
-    status.textContent = 'Image loaded';
+    setStatus('Image loaded');
     errorBox.hidden = true;
   } catch {
     URL.revokeObjectURL(nextUrl);
@@ -251,6 +256,7 @@ runButton.addEventListener('click', async () => {
   input.disabled = true;
   resolutionSelect.disabled = true;
   resetStages();
+  if (matchMedia('(max-width: 760px)').matches) viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const started = performance.now();
   const resolution = Number(resolutionSelect.value);
   try {
@@ -258,26 +264,26 @@ runButton.addEventListener('click', async () => {
     if (viewerError) throw viewerError;
     if (releasePromise) await releasePromise;
     if (!producer) {
-      status.textContent = 'Loading SF3D model';
+      setStatus('Loading SF3D model');
       producer = await createSf3dProducer({
         weightsUrl: './lib/sf3d/weights.bin',
         onWeightsProgress: (received, total) => {
-          status.textContent = total ? `Loading SF3D model ${Math.round(received / total * 100)}%` : 'Loading SF3D model';
+          setStatus(total ? `Loading SF3D model ${Math.round(received / total * 100)}%` : 'Loading SF3D model');
         },
       });
     }
     await source.decode();
-    status.textContent = 'Inferring shape';
+    setStatus('Inferring shape');
     const result = await producer.run(source, {
       runId: `learn-${Date.now()}`,
-      onProgress: message => { status.textContent = String(message); },
+      onProgress: message => { setStatus(String(message)); },
       routeOverrides: {
         cooperativeTwoStream: true,
         twoStreamDutyGranularity: 'stage',
         intermediateStageIds: ['block-0-fuse-out', 'block-1-fuse-out'],
         onIntermediatePreviewError: ({ stageId, error }) => {
           markStage(stageId, 'skipped');
-          status.textContent = `${stageId} preview unavailable`;
+          setStatus(`${stageId} preview unavailable`);
           console.warn('SF3D Learn projection failed', error);
         },
         onIntermediateTriplane: async ({ stageId, triplanesBuf, decoder, decoderWeights }) => {
@@ -286,10 +292,10 @@ runButton.addEventListener('click', async () => {
             const label = stageId === 'block-0-fuse-out' ? 'First shape' : 'Forming detail';
             await replaceGeometry(candidate.mesh.vertices, candidate.mesh.faces, label);
             markStage(stageId, 'done', performance.now() - started);
-            status.textContent = label;
+            setStatus(label);
           } catch (previewError) {
             markStage(stageId, 'skipped');
-            status.textContent = `${stageId} preview unavailable`;
+            setStatus(`${stageId} preview unavailable`);
             console.warn('SF3D Learn preview failed', previewError);
           }
         },
@@ -297,14 +303,14 @@ runButton.addEventListener('click', async () => {
     });
     await replaceGeometry(result.vertices, result.faces, 'Final mesh');
     markStage('final', 'done', performance.now() - started);
-    status.textContent = 'Mesh complete';
+    setStatus('Mesh complete');
     outputUrl = URL.createObjectURL(new Blob([result.glb], { type: 'model/gltf-binary' }));
     download.href = outputUrl;
     download.hidden = false;
   } catch (error) {
     errorBox.textContent = error?.message || String(error);
     errorBox.hidden = false;
-    status.textContent = 'Generation stopped';
+    setStatus('Generation stopped');
   } finally {
     running = false;
     publishRunState();
