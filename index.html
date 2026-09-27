@@ -3294,12 +3294,14 @@ import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mj
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
+  describeVolumeSettingsPresetAppliedDifferences,
   describeVolumeSettingsPresetProjection,
   describeVolumeSettingsSaveOutcome,
   resolveVolumeSettingsPresetVisualView,
   validateVolumeSettingsPresetDocument,
   validateVolumeSettingsPresetIndex,
   validateVolumeSettingsPresetTarget,
+  volumeSettingsPresetAppliedDifferences,
   volumeSettingsPresetControlValuesEqual,
   volumeSettingsPresetLabelReuseBlock,
 } from './volume-settings-preset-contract.mjs';
@@ -15717,10 +15719,28 @@ function activeVolumeSettingsPresetStatus() {
   const receipt = activeVolumeSettingsPresetReceipt;
   if (!receipt) return { text: '', warning: false };
   const projection = describeVolumeSettingsPresetProjection(receipt.serverProjection);
+  const applied = describeVolumeSettingsPresetAppliedDifferences(activeVolumeSettingsPresetApplied);
   return {
-    text: `${receipt.label || receipt.presetId} | requested ${receipt.requestedPresetRef} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projection.text ? ` | ${projection.text}` : ''}`,
-    warning: projection.warning,
+    text: `${receipt.label || receipt.presetId} | requested ${receipt.requestedPresetRef} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projection.text ? ` | ${projection.text}` : ''}${applied.text ? ` | ${applied.text}` : ''}`,
+    warning: projection.warning || applied.warning,
   };
+}
+
+// Read the controls back once the route has set them all, so a basin whose
+// values the page could not hold (clamped ranges, missing options, route
+// fallbacks) says so instead of passing for the saved one.
+function recordVolumeSettingsPresetApplied() {
+  activeVolumeSettingsPresetApplied = Object.freeze([]);
+  if (activeVolumeSettingsPresetReceipt) {
+    try {
+      activeVolumeSettingsPresetApplied = volumeSettingsPresetAppliedDifferences(activeVolumeSettingsPresetReceipt.preset, buildVolumeSettingsPreset());
+    } catch (error) {
+      console.error('Volume settings preset readback failed:', error);
+    }
+    volumeSettingsPresetStatus(activeVolumeSettingsPresetStatus().text, activeVolumeSettingsPresetStatus().warning);
+  }
+  window.__kaminosVolumeSettingsPresetApplied = activeVolumeSettingsPresetApplied;
+  return activeVolumeSettingsPresetApplied;
 }
 
 async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
@@ -15758,7 +15778,8 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         const kind = entry.reason === 'held-label' ? 'held' : 'earlier';
         const option = new Option(`${entry.label} | ${kind} ${when} | ${entry.presetId.slice(0, 16)}${projected ? ' | from another branch' : ''}`, entry.presetId);
         option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId} | ${entry.reason === 'other-store-label'
-          ? 'this label points at a newer basin in another store' : 'earlier version of this label'}`;
+          ? 'another store points this label here; the library label is current'
+          : entry.reason === 'held-label' ? 'the label did not follow this version' : 'earlier version of this label'}`;
         select.add(option);
         if (entry.presetId === previous) select.value = previous;
       }
@@ -15794,7 +15815,7 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset } = {}) {
     || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
   volumeSettingsPresetStatus(`saving ${label}...`);
   try {
-    const reuseBlock = volumeSettingsPresetLabelReuseBlock(activeVolumeSettingsPresetReceipt, label);
+    const reuseBlock = volumeSettingsPresetLabelReuseBlock(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied);
     if (reuseBlock) throw new Error(reuseBlock);
     await volumeCockpitLayoutReady;
     const preset = suppliedPreset || buildVolumeSettingsPreset();
@@ -15914,7 +15935,7 @@ async function exportBasinPromotionPackage() {
   volumeBasinPromotionStatus(`exporting ${handle}...`);
   try {
     if (!promotionRoot) throw new Error('promotion root is required');
-    const reuseBlock = volumeSettingsPresetLabelReuseBlock(activeVolumeSettingsPresetReceipt, label);
+    const reuseBlock = volumeSettingsPresetLabelReuseBlock(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied);
     if (reuseBlock) throw new Error(reuseBlock);
     await volumeCockpitLayoutReady;
     const preset = buildVolumeSettingsPreset();
@@ -21374,6 +21395,8 @@ function createVolumeMainRendererBridge() {
 }
 
 let activeVolumeSettingsPresetReceipt = null;
+// Controls whose value after loading differs from the saved basin.
+let activeVolumeSettingsPresetApplied = Object.freeze([]);
 
 async function admitVolumeSettingsPresetRoute(params) {
   const requestedPresetId = params.get('settings_preset');
@@ -23408,6 +23431,7 @@ async function initKaminosVolumeRoute() {
     renderStageBReceipt(failure);
   });
   syncControls();
+  recordVolumeSettingsPresetApplied();
   setInterval(refreshVolumeReadout, 500);
 }
 
