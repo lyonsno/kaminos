@@ -1115,6 +1115,9 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "updatedAt": written_at,
             "source": dict(source or {}),
         }
+        _append_volume_settings_alias_history(
+            store, alias, _volume_settings_label_history_row(alias_document, written_at, source)
+        )
         _atomic_write_json(alias_path, alias_document)
     preset_url = f"/volume-settings-preset.html?preset={preset_id}"
     return {
@@ -1263,7 +1266,47 @@ def list_volume_settings_presets(store_path, schema=None):
             "updatedAt": alias_document.get("updatedAt"),
             "source": alias_document.get("source") or {},
         })
+    current_by_alias = {entry["alias"]: entry["presetId"] for entry in entries}
+    current_by_alias.update({entry["alias"]: entry["presetId"] for entry in unavailable_entries})
+    earlier_versions = []
+    history_dir = store / "alias-history"
+    for history_path in sorted(history_dir.glob("*.jsonl")) if history_dir.exists() else []:
+        alias = history_path.stem
+        latest_rows = {}
+        for row in _read_volume_settings_alias_history(store, alias):
+            if isinstance(row.get("presetId"), str):
+                latest_rows[row["presetId"]] = row
+        for preset_id, row in latest_rows.items():
+            if preset_id == current_by_alias.get(alias):
+                continue
+            try:
+                document = read_volume_settings_preset(store, preset_id, schema)
+            except (OSError, ValueError) as error:
+                unavailable_entries.append({
+                    "alias": alias,
+                    "label": row.get("label") or alias,
+                    "presetId": preset_id,
+                    "updatedAt": row.get("publishedAt"),
+                    "source": row.get("source") or {},
+                    "reason": "unsupported-controls" if isinstance(error, UnsupportedVolumeSettingsControls) else "invalid-artifact",
+                    "version": "earlier",
+                    "error": str(error),
+                })
+                continue
+            projection = document.get("schemaProjection") or {}
+            earlier_versions.append({
+                "alias": alias,
+                "label": row.get("label") or alias,
+                "presetId": preset_id,
+                "contentHash": document["contentHash"],
+                "publishedAt": row.get("publishedAt"),
+                "source": row.get("source") or {},
+                "reason": "superseded-label",
+                "carriedControls": projection.get("carriedControls") or [],
+                "unsupportedValuesDefaulted": projection.get("unsupportedValuesDefaulted") or [],
+            })
     entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
+    earlier_versions.sort(key=lambda entry: (entry.get("publishedAt") or "", entry["alias"]), reverse=True)
     unavailable_entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
     return {
         "identity": "kaminos-volume-settings-preset-index-v1",
@@ -1273,6 +1316,7 @@ def list_volume_settings_presets(store_path, schema=None):
         "rendererControlCount": len(schema.get("rendererControls") or []),
         "presentationControlCount": len(schema.get("presentationControls") or []),
         "entries": entries,
+        "earlierVersions": earlier_versions,
         "unavailableEntries": unavailable_entries,
     }
 
@@ -1323,10 +1367,35 @@ def _volume_settings_newer_alias(current, candidate):
     )
 
 
+def _volume_settings_label_history_row(alias_document, published_at=None, source=None):
+    return {
+        "identity": "kaminos-volume-settings-preset-alias-history-v1",
+        "alias": alias_document["alias"],
+        "label": alias_document["label"],
+        "presetId": alias_document["presetId"],
+        "contentHash": alias_document.get("contentHash"),
+        "publishedAt": published_at if published_at is not None else (alias_document.get("updatedAt") or ""),
+        "source": dict(source if source is not None else (alias_document.get("source") or {})),
+    }
+
+
+def _read_volume_settings_alias_history(store, alias):
+    path = store / "alias-history" / f"{alias}.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
 def _append_volume_settings_alias_history(store, alias, row):
     """Append-only label log: re-pointing a label never erases where it pointed."""
     path = store / "alias-history" / f"{alias}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        # A store that predates label history: keep the pointer being replaced.
+        current = _volume_settings_alias_document(store, alias)
+        if current is not None and current.get("presetId") != row["presetId"]:
+            with path.open("a") as handle:
+                handle.write(json.dumps(_volume_settings_label_history_row(current), sort_keys=True) + "\n")
     if path.exists():
         for line in path.read_text().splitlines():
             existing = json.loads(line)
@@ -1449,21 +1518,46 @@ def list_volume_settings_presets_layered(layers, schema=None):
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     listings = [(role, list_volume_settings_presets(store, schema)) for role, store in layers]
     entries = {}
+    displaced = []
     unavailable = {}
     for role, listing in listings:
         for entry in listing["entries"]:
             entry = {**entry, "storeRole": role, "storePath": listing["storePath"]}
-            if _volume_settings_newer_alias(entries.get(entry["alias"]), entry):
+            current = entries.get(entry["alias"])
+            if _volume_settings_newer_alias(current, entry):
+                if current is not None:
+                    displaced.append(current)
                 entries[entry["alias"]] = entry
+            elif current is not None and current["presetId"] != entry["presetId"]:
+                displaced.append(entry)
         for entry in listing["unavailableEntries"]:
-            unavailable.setdefault(entry["alias"], {**entry, "storeRole": role, "storePath": listing["storePath"]})
-    ordering = lambda entry: (entry.get("updatedAt") or "", entry["alias"])
+            unavailable.setdefault((entry["alias"], entry["presetId"]), {**entry, "storeRole": role, "storePath": listing["storePath"]})
+    # Every version stays selectable: the other store's pointer for a label,
+    # and each store's earlier targets from its label history.
+    earlier = {}
+    for entry in displaced:
+        earlier.setdefault((entry["alias"], entry["presetId"]), {
+            "alias": entry["alias"], "label": entry["label"], "presetId": entry["presetId"],
+            "contentHash": entry["contentHash"], "publishedAt": entry.get("updatedAt"), "source": entry.get("source") or {},
+            "reason": "other-store-label", "storeRole": entry["storeRole"], "storePath": entry["storePath"],
+            "carriedControls": entry.get("carriedControls") or [],
+            "unsupportedValuesDefaulted": entry.get("unsupportedValuesDefaulted") or [],
+        })
+    for role, listing in listings:
+        for entry in listing.get("earlierVersions") or []:
+            earlier.setdefault((entry["alias"], entry["presetId"]), {**entry, "storeRole": role, "storePath": listing["storePath"]})
+    current_ids = {(alias, entry["presetId"]) for alias, entry in entries.items()}
+    ordering = lambda entry: (entry.get("updatedAt") or entry.get("publishedAt") or "", entry["alias"])
     return {
         **listings[0][1],
         "stores": [{"role": role, "storePath": listing["storePath"]} for role, listing in listings],
         "entries": sorted(entries.values(), key=ordering, reverse=True),
+        "earlierVersions": sorted(
+            (entry for key, entry in earlier.items() if key not in current_ids), key=ordering, reverse=True
+        ),
         "unavailableEntries": sorted(
-            (entry for alias, entry in unavailable.items() if alias not in entries), key=ordering, reverse=True
+            (entry for (alias, preset_id), entry in unavailable.items() if (alias, preset_id) not in current_ids and (alias, preset_id) not in earlier),
+            key=ordering, reverse=True,
         ),
     }
 
@@ -1533,6 +1627,34 @@ def import_volume_settings_stores(shared_store_path, store_paths, schema=None):
                     continue
                 report["aliasesMoved"] += int(result["aliasMoved"])
                 report["aliasHistoryRowsAppended"] += int(result["historyAppended"])
+            history_dir = source_store / "alias-history"
+            for history_path in sorted(history_dir.glob("*.jsonl")) if history_dir.exists() else []:
+                for row in _read_volume_settings_alias_history(source_store, history_path.stem):
+                    label = row.get("label")
+                    preset_id = row.get("presetId")
+                    if not isinstance(label, str) or not label.strip() or not isinstance(preset_id, str):
+                        continue
+                    if not (shared / "presets" / f"{preset_id}.json").exists():
+                        report["skipped"].append({"path": str(history_path), "reason": "history-target-not-imported", "presetId": preset_id})
+                        continue
+                    alias = _volume_settings_alias_for_label(shared, label)
+                    appended = _append_volume_settings_alias_history(shared, alias, {
+                        **row,
+                        "alias": alias,
+                        "source": {**(row.get("source") or {}), "importedFrom": str(source_store)},
+                    })
+                    report["aliasHistoryRowsAppended"] += int(appended)
+        current = set()
+        for alias_path in (shared / "aliases").glob("*.json"):
+            current.add(_read_json_object(alias_path, "alias").get("presetId"))
+        in_history = set()
+        history_dir = shared / "alias-history"
+        for history_path in history_dir.glob("*.jsonl") if history_dir.exists() else []:
+            in_history.update(row.get("presetId") for row in _read_volume_settings_alias_history(shared, history_path.stem))
+        all_presets = {path.stem for path in (shared / "presets").glob("vsp-*.json")}
+        report["presetsWithCurrentLabel"] = len(all_presets & current)
+        report["presetsOnlyInLabelHistory"] = len((all_presets & in_history) - current)
+        report["presetsWithoutLabel"] = len(all_presets - current - in_history)
     return report
 
 

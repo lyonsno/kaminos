@@ -217,11 +217,49 @@ def test_import_existing_stores_into_the_library(tmp):
     assert (shared / "alias-history" / "blast-furnace.jsonl").read_text() == history_before
 
 
+def test_label_versions_stay_selectable(tmp):
+    """A label follows its newest save, but no version of it disappears from the picker."""
+    lane_a = tmp / "lane-a"
+    lane_b = tmp / "lane-b"
+    shared = tmp / "library"
+    older = serve.write_volume_settings_preset(lane_a, "roast", payload(BASE_SCHEMA, BASE_VALUES), SOURCE, BASE_SCHEMA)
+    _age_alias(lane_a / "aliases" / "roast.json")
+    newer = serve.write_volume_settings_preset(
+        lane_b, "roast", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5}), {**SOURCE, "branch": "lane-b"}, BASE_SCHEMA)
+    older_id = older["effective"]["presetId"]
+    newer_id = newer["effective"]["presetId"]
+
+    # Two stores disagree about a label: the newest is current, the other stays selectable.
+    listing = serve.list_volume_settings_presets_layered([("local", lane_a), ("shared", lane_b)], BASE_SCHEMA)
+    assert [(entry["presetId"], entry["storeRole"]) for entry in listing["entries"]] == [(newer_id, "shared")], listing
+    assert [(entry["presetId"], entry["label"], entry["storeRole"], entry["reason"]) for entry in listing["earlierVersions"]] == [
+        (older_id, "roast", "local", "other-store-label")], listing["earlierVersions"]
+
+    # Re-pointing a label in one store keeps the earlier target selectable through its history.
+    third = serve.write_volume_settings_preset(
+        lane_b, "roast", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.125}), {**SOURCE, "branch": "lane-b"}, BASE_SCHEMA)
+    third_id = third["effective"]["presetId"]
+    own = serve.list_volume_settings_presets(lane_b, BASE_SCHEMA)
+    assert [entry["presetId"] for entry in own["entries"]] == [third_id]
+    assert [(entry["presetId"], entry["reason"], entry["source"]["branch"]) for entry in own["earlierVersions"]] == [
+        (newer_id, "superseded-label", "lane-b")], own["earlierVersions"]
+    assert serve.read_volume_settings_preset(lane_b, newer_id, BASE_SCHEMA)["presetId"] == newer_id
+
+    # Importing both lanes keeps every version selectable and says how many are not current.
+    report = serve.import_volume_settings_stores(shared, [lane_a, lane_b])
+    library = serve.list_volume_settings_presets(shared, BASE_SCHEMA)
+    assert [entry["presetId"] for entry in library["entries"]] == [third_id], library["entries"]
+    assert sorted(entry["presetId"] for entry in library["earlierVersions"]) == sorted([older_id, newer_id]), library["earlierVersions"]
+    assert report["presetsWithCurrentLabel"] == 1 and report["presetsOnlyInLabelHistory"] == 2, report
+    assert report["presetsWithoutLabel"] == 0, report
+
+
 def main():
     for test in (
         test_newer_branch_basin_loads_on_older_branch,
         test_shared_store_publication_read_through_and_alias_history,
         test_import_existing_stores_into_the_library,
+        test_label_versions_stay_selectable,
     ):
         with tempfile.TemporaryDirectory() as directory:
             test(Path(directory))

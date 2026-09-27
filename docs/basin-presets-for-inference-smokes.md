@@ -144,6 +144,8 @@ KAMINOS_VOLUME_SETTINGS_STORE=/absolute/path/to/basins \
 python3 serve.py 8106
 ```
 
+Every server also reads and publishes through the shared basin library (`KAMINOS_SHARED_BASIN_STORE`, default `~/.local/share/kaminos/basins`). A save lands in the server's own store and in the library. The preset index lists the union of both, including earlier versions of each label and basins saved by other branches. A test or witness server that saves throwaway basins should pass `--no-shared-basin-store` (or set `KAMINOS_SHARED_BASIN_STORE=off`) so its saves stay in its own store. `python3 import-basin-stores.py STORE...` imports existing stores into the library additively, verifying every content hash.
+
 Reopening also requires the same registered asset sources. Moving the JSON alone does not bundle its GLBs, environment assets, or immutable basin artifact. `/api/roots` and `/api/volume-settings-presets` report effective stores; `/api/runtime-config` reports the served checkout. Existing mesh-only documents remain loadable and leave the pinned flame route when opened from an authored composition.
 
 ### Parameterized annular burner

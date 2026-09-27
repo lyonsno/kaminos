@@ -15730,6 +15730,9 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     validateVolumeSettingsPresetIndex(index);
     volumeSettingsPresetIndex = index;
     const unavailable = index.unavailableEntries || [];
+    // Earlier versions of a label, and other stores' pointers for it, stay
+    // selectable: a label follows its newest save without hiding the rest.
+    const earlierVersions = index.earlierVersions || [];
     if (select) {
       const previous = selectedPresetId || activeVolumeSettingsPresetReceipt?.presetId || select.value;
       select.replaceChildren();
@@ -15747,6 +15750,15 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         }
         select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
       }
+      for (const entry of earlierVersions) {
+        const projected = entry.carriedControls?.length || entry.unsupportedValuesDefaulted?.length;
+        const when = [String(entry.publishedAt || '').slice(0, 10), entry.source?.branch].filter(Boolean).join(' ');
+        const option = new Option(`${entry.label} | earlier ${when} | ${entry.presetId.slice(0, 16)}${projected ? ' | from another branch' : ''}`, entry.presetId);
+        option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId} | ${entry.reason === 'other-store-label'
+          ? 'this label points at a newer basin in another store' : 'earlier version of this label'}`;
+        select.add(option);
+        if (entry.presetId === previous) select.value = previous;
+      }
       for (const entry of unavailable) {
         const option = new Option(`${entry.label} | unavailable on this version`, entry.presetId);
         option.disabled = true;
@@ -15756,7 +15768,7 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     }
     const active = activeVolumeSettingsPresetStatus();
     volumeSettingsPresetStatus(
-      `${active.text ? `${active.text} || ` : ''}${index.entries.length} presets${unavailable.length ? ` | ${unavailable.length} unavailable on this version` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      `${active.text ? `${active.text} || ` : ''}${index.entries.length} presets${earlierVersions.length ? ` | ${earlierVersions.length} earlier version${earlierVersions.length === 1 ? '' : 's'}` : ''}${unavailable.length ? ` | ${unavailable.length} unavailable on this version` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
       active.warning || unavailable.length > 0,
     );
     return index;
