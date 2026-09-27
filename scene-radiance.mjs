@@ -83,6 +83,10 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       // before rebuilding the GPU bind group, even for a new wrapper identity.
       tauExternal.version=nextVersion;
       tauNode.value=tauExternal;
+      // Retire per-material render-object bindings as well as the wrapper.
+      // Native trace shows current node/backend handles while an older GPU
+      // bind group still reaches submission after the producer reset.
+      for (const material of converted.values()) material.needsUpdate=true;
     }
     scene.updateMatrixWorld(true);
     const key=[...source.position];
