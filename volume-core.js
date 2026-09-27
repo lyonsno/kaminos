@@ -18024,7 +18024,6 @@ export function createKaminosVolumePrototype({
         );
         state.gpuStructuralCombustionAssembly = gpuStructuralCombustionAssembly.debugState();
       }
-      encodeHistoryCopy(encoder, currentTexture);
       encodeBoundarySplatTelemetry(encoder);
       if (foregroundService) foregroundService.submit([encoder.finish()], {metadata: {renderer: 'ordinary-volume', simStepCount: state.simStepCount}});
       else device.queue.submit([encoder.finish()]);

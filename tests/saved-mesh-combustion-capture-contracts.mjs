@@ -61,8 +61,11 @@ assert.throws(() => inspectPng(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])), 
 requirePattern(/live-volume-ready-before-scene-load/, 'capture must wait for live volume initialization before loading the saved scene');
 requirePattern(/backend === 'WebGPU:apple'/, 'capture must reject a fallback or unexpected renderer backend');
 requirePattern(/effectiveRoute === 'native-3d-compute-fluid-raymarch-v0'/, 'capture must reject an unexpected volume route');
-requirePattern(/Number\(lastRuntimeState\.simGrid\) === 96/, 'capture must keep the requested 96-cubed simulation grid');
-requirePattern(/route\.searchParams\.set\('volume_resolution', '96'\)/, 'the requested grid must be explicit in the effective route');
+requirePattern(/const resolution = Number\(args\.get\('--resolution'\) \|\| 48\)/, 'ordinary mesh captures default to the affordable 48-cubed basin route');
+requirePattern(/Number\(lastRuntimeState\.simGrid\) === resolution/, 'capture must verify the requested simulation grid');
+requirePattern(/route\.searchParams\.set\('volume_resolution', String\(resolution\)\)/, 'the selected affordable grid must be explicit in the effective route');
+requirePattern(/defaultVolumeSmokeBasin:[\s\S]*presetId:[\s\S]*label:[\s\S]*source:/, 'capture must identify the saved main-branch basin used beneath the grid override');
+requirePattern(/const modes = \['off', 'exposure', 'material'\]/, 'capture must include the product material shader as well as both diagnostic views');
 requirePattern(/assert\.equal\(loaded\.fileName, 'sinter-forked-timber-combustion\.kaminos\.json'/, 'capture must load the named saved scene');
 requirePattern(/expectedAssetIdentity: 'sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84'/, 'capture must pin the authored trestle asset identity');
 requirePattern(/report\.injectedScenePayloadSha256 = sha256\(Buffer\.from\(sceneLiteral, 'utf8'\)\)/, 'capture must hash the exact scene payload loaded into the browser');

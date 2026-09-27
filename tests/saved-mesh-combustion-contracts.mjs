@@ -6,6 +6,7 @@ import { createLayeredStructuralMaterial } from '../structural-material-3d-core.
 import { createStructuralMeshSkinBinding } from '../structural-combustion-gpu.mjs';
 
 const sceneHost = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const volumeCore = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 assert.match(sceneHost, /async function syncSavedSceneCombustionBinding\(\)[\s\S]*?currently supports one bound object/);
 assert.match(sceneHost, /get\('volume_structural_combustion_view'\)[\s\S]*?createSavedMeshCombustionAssembly\(\{ THREE, entry, gpuContext, presentationDebugMode \}\)/);
 assert.match(
@@ -15,6 +16,8 @@ assert.match(
 );
 assert.match(sceneHost, /hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion/,
   'saved mesh scenes activate the shared volume consumer without regressing composed scenes');
+assert.ok(!/\bencodeHistoryCopy\s*\(/.test(volumeCore) || /\b(?:function|const|let|var)\s+encodeHistoryCopy\b/.test(volumeCore),
+  'the rebased render loop must not call a retired, undefined history-copy helper');
 
 const promotedAsset = readFileSync(new URL('../artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb', import.meta.url));
 const promotedIdentity = `sha256:${createHash('sha256').update(promotedAsset).digest('hex')}`;

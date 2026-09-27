@@ -14,8 +14,10 @@ const repoRoot = resolve(args.get('--repo-root') || process.cwd());
 const scenePath = resolve(args.get('--scene') || `${repoRoot}/scenes/sinter-forked-timber-combustion.kaminos.json`);
 const outDir = resolve(args.get('--out-dir') || `${repoRoot}/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r3`);
 const origin = args.get('--origin') || 'http://127.0.0.1:8094';
+const resolution = Number(args.get('--resolution') || 48);
+assert.ok(Number.isInteger(resolution) && resolution > 0, '--resolution must be a positive integer');
 const chromePath = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const modes = ['exposure', 'material'];
+const modes = ['off', 'exposure', 'material'];
 const reportPath = `${outDir}/report.json`;
 const report = {
   schema: 'kaminos.saved-mesh-combustion-diagnostic-capture.v1',
@@ -30,6 +32,8 @@ const report = {
   injectedScenePayloadSha256: '',
   expectedObjectId: 'sinter-forked-timber-trestle',
   expectedAssetIdentity: 'sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84',
+  resolution,
+  defaultVolumeSmokeBasin: null,
   requestedModes: modes,
   statusScope: 'capture-and-runtime-only',
   visualStatus: 'inspection-required',
@@ -84,6 +88,13 @@ const runtimeSnapshotExpression = `(() => {
       error: state.error,
       routeIdentity: state.routeIdentity,
       effectiveRoute: state.effectiveRoute,
+      defaultVolumeSmokeBasin: window.__kaminosDefaultVolumeSmokeBasin ? {
+        presetId: window.__kaminosDefaultVolumeSmokeBasin.presetId,
+        label: window.__kaminosDefaultVolumeSmokeBasin.label,
+        source: window.__kaminosDefaultVolumeSmokeBasin.source,
+        applied: window.__kaminosDefaultVolumeSmokeBasin.applied,
+        missing: window.__kaminosDefaultVolumeSmokeBasin.missing,
+      } : null,
       volumeScene: state.volumeScene,
       simGrid: state.simGrid,
       frameCount: state.frameCount,
@@ -150,7 +161,7 @@ async function main() {
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       '--window-size=1600,1100',
-      `${origin}/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_pressure_strategy=spatial_tiers&volume_pressure_iterations=3&volume_resolution=96&volume_majorant_grid=48&volume_structural_combustion_view=exposure`,
+      `${origin}/?kaminos_volume_smoke=1&volume_resolution=${resolution}&volume_structural_combustion_view=off`,
     ], { stdio: 'ignore' });
     report.browser.pid = chrome.pid || null;
     await new Promise((resolveSpawn, rejectSpawn) => {
@@ -189,11 +200,7 @@ async function main() {
       report.phase = `load-scene-${mode}`;
       const route = new URL(`${origin}/`);
       route.searchParams.set('kaminos_volume_smoke', '1');
-      route.searchParams.set('volume_scene', 'tall_plume');
-      route.searchParams.set('volume_pressure_strategy', 'spatial_tiers');
-      route.searchParams.set('volume_pressure_iterations', '3');
-      route.searchParams.set('volume_resolution', '96');
-      route.searchParams.set('volume_majorant_grid', '48');
+      route.searchParams.set('volume_resolution', String(resolution));
       route.searchParams.set('volume_structural_combustion_view', mode);
       await cdpRequest(ws, 'Page.navigate', { url: route.toString() });
       await waitFor(async () => (await cdpValue(ws, 'document.readyState')) === 'complete', `${mode} page load`);
@@ -206,11 +213,12 @@ async function main() {
         return lastRuntimeState?.active === true
           && lastRuntimeState.backend === 'WebGPU:apple'
           && lastRuntimeState.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0'
-          && Number(lastRuntimeState.simGrid) === 96
+          && Number(lastRuntimeState.simGrid) === resolution
+          && lastRuntimeState.defaultVolumeSmokeBasin?.presetId === 'vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b'
           && lastRuntimeState.simStepCount > 0
           ? lastRuntimeState
           : null;
-      }, `${mode} live 96-cubed Apple WebGPU volume initialization`, 180000);
+      }, `${mode} live ${resolution}-cubed Apple WebGPU volume initialization on the saved cheap-blast-furnace basin`, 180000);
       assert.equal(new URL(route.toString()).searchParams.get('volume_structural_combustion_view'), mode, `${mode} route was not requested`);
       assert.equal(readyState.backend, 'WebGPU:apple', `${mode} volume renderer did not initialize on Apple WebGPU`);
       report.lastTrustedEvidence = {
@@ -221,6 +229,7 @@ async function main() {
         effectiveRoute: readyState.effectiveRoute,
         simGrid: readyState.simGrid,
         simStepCount: readyState.simStepCount,
+        defaultVolumeSmokeBasin: readyState.defaultVolumeSmokeBasin,
       };
       saveReport();
       const loaded = await cdpValue(ws, `(() => {
@@ -263,7 +272,8 @@ async function main() {
         return lastRuntimeState?.active === true
           && lastRuntimeState?.backend === 'WebGPU:apple'
           && lastRuntimeState?.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0'
-          && Number(lastRuntimeState?.simGrid) === 96
+          && Number(lastRuntimeState?.simGrid) === resolution
+          && lastRuntimeState?.defaultVolumeSmokeBasin?.presetId === 'vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b'
           && lastSceneStatus?.startsWith('Scene loaded: 1 object')
           && currentSource?.status === 'bound'
           && currentSource?.sameDevice === true
@@ -305,6 +315,7 @@ async function main() {
         effectiveRoute: state.effectiveRoute,
         backend: state.backend,
         simGrid: state.simGrid,
+        defaultVolumeSmokeBasin: state.defaultVolumeSmokeBasin,
         object: { id: report.expectedObjectId, type: record.type, source: record.source, assetIdentity: record.combustionBinding.assetIdentity },
         assembly,
         source: state.source,
@@ -337,7 +348,8 @@ async function main() {
 
       assert.equal(state.backend, 'WebGPU:apple', 'capture used an unexpected renderer backend');
       assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'volume route identity changed');
-      assert.equal(Number(state.simGrid), 96, 'Pyro grid did not remain 96 cubed');
+      assert.equal(Number(state.simGrid), resolution, `Pyro grid did not remain ${resolution} cubed`);
+      assert.equal(state.defaultVolumeSmokeBasin?.label, 'cheap-blast-furnace', 'capture did not load the saved main-branch basin');
       assert.equal(assembly.presentationDebugMode, mode, 'shader presentation mode did not match the requested route');
       assert.equal(assembly.meshTriangleCount, 864, 'capture no longer presents the authored trestle geometry');
       assert.equal(assembly.structureCount, 1, 'capture must contain only the named bound trestle');
