@@ -10539,7 +10539,7 @@ async function initScene() {
     syncViewportRendererSize();
     camera.updateMatrixWorld();
     fireLightFieldPass?.update();
-    renderSceneFrame();
+    if (renderSceneFrame() === false) return null;
     sceneRenderedForVolume = true;
     const texture = renderer.backend.get(prePass.getTexture('depth')).texture;
     return {device:sharedGpu.device, camera, texture};
@@ -10554,6 +10554,10 @@ async function initScene() {
   let fpsLast = performance.now();
 
   function renderSceneFrame() {
+    // Shared-source reset may span an await while this host's RAF keeps
+    // running. Keep the previous presented frame until both consumers have
+    // current inputs; do not submit retired medium resources or unlit fill.
+    if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
     const t0 = performance.now();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();

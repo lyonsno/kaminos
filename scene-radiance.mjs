@@ -95,6 +95,13 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       return {...source};
     },
     debugState:()=>({...status,source:{...source},frame:prototype.scenePointLightFrame(),shadow:shadow.debugState()}),
+    canRender() {
+      const medium=prototype.sceneMediumOpticalDepthField();
+      // The host RAF is independent of volume replay/reset. Never submit a
+      // material using a borrowed texture after its producer has retired it.
+      return !disposed && medium.status==='encoded' && medium.texture===tauExternal.sourceTexture
+        && medium.generation===lastFrame?.generation;
+    },
     dispose() {
       prototype.setScenePointLightFrame(null);prototype.setSceneSourceFrameConsumer(null);
       for(const [object,{original,replacement}] of originals) if(object.material===replacement) object.material=original;
