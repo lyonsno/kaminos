@@ -11,10 +11,12 @@ const outputDir = path.resolve(value('--output-dir', '/private/tmp/kaminos-sf3d-
 const baseUrl = value('--url', 'http://127.0.0.1:8179');
 const puppeteerPath = value('--puppeteer', '');
 const chromePath = value('--chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+const width = Number(value('--width', '1440'));
+const height = Number(value('--height', '900'));
 fs.mkdirSync(outputDir, { recursive: true });
 const reportPath = path.join(outputDir, 'report.json');
 const report = { schema: 'kaminos.sf3d-learn-browser.v0', phase: 'preflight', ok: false,
-  requested: { baseUrl }, effective: { baseUrl, puppeteerPath, chromePath }, events: [] };
+  requested: { baseUrl, width, height }, effective: { baseUrl, puppeteerPath, chromePath }, events: [] };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 write();
 let browser;
@@ -26,7 +28,7 @@ try {
   browser = await puppeteer.launch({ executablePath: chromePath, headless: false,
     args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--no-first-run', '--no-default-browser-check'] });
   const page = await browser.newPage();
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  await page.setViewport({ width, height, deviceScaleFactor: 1 });
   page.on('pageerror', error => report.events.push({ type: 'pageerror', message: error.message }));
   page.on('error', error => report.events.push({ type: 'page-crash', message: error.message }));
   page.on('requestfailed', request => report.events.push({ type: 'request-failed', url: request.url(), reason: request.failure()?.errorText }));
@@ -46,7 +48,7 @@ try {
   }
   await page.close();
   const directPage = await browser.newPage();
-  await directPage.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  await directPage.setViewport({ width, height, deviceScaleFactor: 1 });
   report.phase = 'direct-page'; write();
   await directPage.goto(`${baseUrl}/sf3d-learn.html`, { waitUntil: 'domcontentloaded' });
   await directPage.waitForSelector('#learn-viewer canvas');
