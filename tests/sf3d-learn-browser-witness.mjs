@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { assertServedSourceIdentity } from './served-source-contract.mjs';
 
 const args = process.argv.slice(2);
 const value = (flag, fallback) => {
@@ -16,15 +17,21 @@ const width = Number(value('--width', '1440'));
 const height = Number(value('--height', '900'));
 const deepLink = args.includes('--deep-link');
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
-const expectedHostSha256 = value('--expected-host-sha256', sha256(fs.readFileSync(new URL('../index.html', import.meta.url))));
+const expectedHostFile = value('--expected-host-file', fileURLToPath(new URL('../index.html', import.meta.url)));
 fs.mkdirSync(outputDir, { recursive: true });
 const reportPath = path.join(outputDir, 'report.json');
 const report = { schema: 'kaminos.sf3d-learn-browser.v0', phase: 'preflight', ok: false,
-  requested: { baseUrl, width, height, deepLink, expectedHostSha256 }, effective: { baseUrl, puppeteerPath, chromePath }, events: [] };
+  requested: { baseUrl, width, height, deepLink, expectedHostFile }, effective: { baseUrl, puppeteerPath, chromePath }, events: [] };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 write();
 let browser;
 try {
+  const sourceFiles = ['index.html', 'sf3d-learn.html', 'sf3d-learn.css', 'sf3d-learn.mjs'];
+  const expectedHashes = Object.fromEntries(sourceFiles.map(file => [file, sha256(fs.readFileSync(file === 'index.html' ? expectedHostFile : new URL(`../${file}`, import.meta.url)))]));
+  expectedHashes['index.html'] = value('--expected-host-sha256', expectedHashes['index.html']);
+  expectedHashes['sf3d-learn.html'] = value('--expected-learn-page-sha256', expectedHashes['sf3d-learn.html']);
+  report.requested.expectedHashes = expectedHashes;
+  write();
   if (!puppeteerPath || !fs.existsSync(puppeteerPath)) throw new Error('missing Puppeteer module');
   if (!fs.existsSync(chromePath)) throw new Error('missing Chrome');
   const { default: puppeteer } = await import(pathToFileURL(puppeteerPath).href);
@@ -42,10 +49,23 @@ try {
   const servedHostSha256 = hostResponse ? sha256(await hostResponse.buffer()) : null;
   report.effective.servedHostSha256 = servedHostSha256;
   write();
-  if (servedHostSha256 !== expectedHostSha256) throw new Error('served Kaminos host does not match the reviewed index.html');
+  if (servedHostSha256 !== expectedHashes['index.html']) throw new Error('served Kaminos host does not match the reviewed index.html');
   await page.waitForSelector('[data-tab="learn"]');
   if (!deepLink) await page.click('[data-tab="learn"]');
   await page.waitForFunction(() => document.querySelector('#learn-viewport-frame')?.contentDocument?.querySelector('#learn-viewer canvas'));
+  const frame = await (await page.$('#learn-viewport-frame')).contentFrame();
+  const servedLearnHashes = await frame.evaluate(async files => {
+    const entries = await Promise.all(files.map(async file => {
+      const response = await fetch(`/${file}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`served source missing: ${file} (${response.status})`);
+      const digest = await crypto.subtle.digest('SHA-256', await response.arrayBuffer());
+      return [file, [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')];
+    }));
+    return Object.fromEntries(entries);
+  }, sourceFiles.slice(1));
+  report.effective.servedLearnHashes = servedLearnHashes;
+  write();
+  assertServedSourceIdentity(Object.fromEntries(Object.entries(expectedHashes).filter(([file]) => file !== 'index.html')), servedLearnHashes);
   await new Promise(resolve => setTimeout(resolve, 1200));
   report.host = await page.evaluate(() => ({ activeTab: window.__kaminosActiveTab?.(),
     frameUrl: document.querySelector('#learn-viewport-frame').contentWindow?.location.href,
