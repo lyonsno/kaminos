@@ -3,7 +3,10 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const args = process.argv.slice(2);
-const value = (flag, fallback) => args[args.indexOf(flag) + 1] || fallback;
+const value = (flag, fallback) => {
+  const index = args.indexOf(flag);
+  return index < 0 ? fallback : args[index + 1] || fallback;
+};
 const outputDir = path.resolve(value('--output-dir', '/private/tmp/kaminos-sf3d-learn-browser'));
 const baseUrl = value('--url', 'http://127.0.0.1:8179');
 const puppeteerPath = value('--puppeteer', '');
