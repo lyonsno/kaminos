@@ -13,7 +13,8 @@ assert.match(
   /presentationDebugMode,\s*structures:/,
   'the saved trestle route must carry its requested GPU diagnostic view into the assembly',
 );
-assert.match(sceneHost, /hasVolumePrimitiveScene \|\| hasSavedMeshCombustion/);
+assert.match(sceneHost, /hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion/,
+  'saved mesh scenes activate the shared volume consumer without regressing composed scenes');
 
 const promotedAsset = readFileSync(new URL('../artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb', import.meta.url));
 const promotedIdentity = `sha256:${createHash('sha256').update(promotedAsset).digest('hex')}`;

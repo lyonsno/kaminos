@@ -444,7 +444,8 @@ assert.match(index, /window\.saveSceneAs\s*=[\s\S]*?if \(sceneSaveIsBlocked\(\)\
 assert.match(index, /if \(sceneIsEmpty\(\)\) return;/, 'keyboard save uses the shared empty-scene guard');
 assert.match(index, /setInfo\('Volume scene loaded'\);/, 'volume-only scene loads report success after shared camera/postprocessing/backdrop restoration');
 assert.match(index, /if \(objectRecords\.length > 0\) \{[\s\S]*\} else \{\s*clearScene\(\);[\s\S]*\}/, 'volume-only scene loads clear stale object state');
-assert.match(index, /setVolumePrimitivesState\(restorePlan\.volumePrimitives\);[\s\S]*if \(hasVolumePrimitiveScene \|\| hasSavedMeshCombustion\)/, 'bound mesh scenes activate the composition consumer while unbound object-only scenes remain inactive');
+assert.match(index, /if \(!activeSceneComposition \|\| JSON\.stringify\(previousVolumePrimitiveState\) !== JSON\.stringify\(restorePlan\.volumePrimitives\)\) \{\s*setVolumePrimitivesState\(restorePlan\.volumePrimitives\);\s*\}[\s\S]*if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion\)/,
+  'scene restore preserves the mounted composition basin and activates the shared consumer for bound mesh scenes');
 assert.match(index, /const previousSceneFile = currentSceneFile/, 'scene load preserves previous save target until restore succeeds');
 assert.match(index, /const previousVolumePrimitiveState = getVolumePrimitiveState\(\)/, 'scene load snapshots previous volume state before restore mutations');
 assert.match(index, /claimLoadedSceneFile\(file\)/, 'scene load claims current scene file only after successful restore');
