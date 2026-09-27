@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -230,7 +230,13 @@ try {
   report.source.dirtyPaths = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' })
     .split('\n').filter(Boolean).map(line => line.slice(3));
   report.source.sha256 = Object.fromEntries(relativeSources.map(path => [path, sha256(readFileSync(resolve(root, path)))]));
+  report.phase = 'browser-preflight';
   report.browser.executable = resolve(chromePath);
+  const actualExecutable = realpathSync(report.browser.executable);
+  report.browser.effectiveExecutable = actualExecutable;
+  if (actualExecutable.includes('/Google Chrome.app/Contents/MacOS/')) {
+    throw new Error('installed GUI Chrome cannot be used for headless smoke on the operator machine; use independent Chrome for Testing or Playwright Chromium');
+  }
   report.browser.version = execFileSync(chromePath, ['--version'], { encoding: 'utf8' }).trim();
 
   report.phase = 'browser-launch';

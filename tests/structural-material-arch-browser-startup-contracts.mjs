@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -10,6 +10,21 @@ const scratch = mkdtempSync(join(tmpdir(), 'kaminos-arch-browser-startup-'));
 const fakeChrome = join(scratch, 'fake-chrome');
 const reportPath = join(scratch, 'startup-report.json');
 const smokePath = join(root, 'structural-material-arch-browser-smoke.mjs');
+const installedGuiChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+const forbidden = spawnSync(process.execPath, [
+  smokePath,
+  'http://127.0.0.1:8423/structural-material-arch.html',
+  reportPath,
+  installedGuiChrome,
+], { cwd: root, encoding: 'utf8' });
+assert.equal(forbidden.status, 1);
+const forbiddenReport = JSON.parse(readFileSync(reportPath, 'utf8'));
+assert.equal(forbiddenReport.status, 'failed');
+assert.equal(forbiddenReport.error.phase, 'browser-preflight');
+assert.match(forbiddenReport.error.message, /installed GUI Chrome/i);
+assert.equal(forbiddenReport.browser.executable, installedGuiChrome);
+assert.equal(forbiddenReport.browser.pid, undefined);
 
 writeFileSync(fakeChrome, `#!/bin/sh
 if [ "$1" = "--version" ]; then
