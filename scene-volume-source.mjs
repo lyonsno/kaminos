@@ -27,6 +27,26 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       status = 'encoded'; reason = null; sourceIndex = index; frame = currentFrame; generation++;
     },
     invalidate(why) {if (status !== 'destroyed') {status = 'unbuilt'; reason = why;}},
+    async readback() {
+      if (status !== 'encoded') throw new Error('scene source is not encoded');
+      const snapshot = {frame, sourceIndex, generation};
+      const rowBytes = grid * 16, bytesPerRow = Math.ceil(rowBytes/256)*256;
+      const buffer = device.createBuffer({label: 'scene source witness readback', size: bytesPerRow*gridY*grid,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ});
+      try {
+        const encoder = device.createCommandEncoder();
+        encoder.copyTextureToBuffer({texture}, {buffer, bytesPerRow, rowsPerImage: gridY}, [grid,gridY,grid]);
+        device.queue.submit([encoder.finish()]);
+        await buffer.mapAsync(GPUMapMode.READ);
+        const mapped = new Float32Array(buffer.getMappedRange());
+        const values = new Float32Array(grid*gridY*grid*4);
+        for (let z=0; z<grid; z++) for (let y=0; y<gridY; y++) {
+          const row = y+gridY*z;
+          values.set(mapped.subarray(row*bytesPerRow/4, row*bytesPerRow/4+grid*4), row*grid*4);
+        }
+        return {...snapshot, dimensions: [grid,gridY,grid], values: Array.from(values)};
+      } finally {buffer.destroy();}
+    },
     describe() {return {identity: 'scene-volume-linear-emission-extinction-v0', status, reason, frame, sourceIndex, generation,
       dimensions: [grid, gridY, grid], localMin: [-1,-1,-1], localMax: [1, -1+2*gridY/grid, 1],
       channels: ['emission-r','emission-g','emission-b','extinction'], displayTransform: 'none',

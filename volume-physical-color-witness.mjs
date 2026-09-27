@@ -123,6 +123,7 @@ try {
         const input = document.getElementById(id); input.value = String(value); input.dispatchEvent(new Event('input', {bubbles:true}));
       }
       const core = window.__kaminosVolumePrototype;
+      if (${arm.sourceProbe === true}) core.setSceneVolumeSourceEnabled(true);
       const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
       if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
       const {width,height,rgba} = sample.image;
@@ -131,13 +132,27 @@ try {
       image.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(rgba),width,height),0,0);
       const profile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveLightProfile() : null;
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
-      return {sample, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      const source = ${arm.sourceProbe === true} ? await core.sampleSceneVolumeSource() : null;
+      return {sample, source, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, arm.temperature);
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
+    if (arm.sourceProbe) {
+      const source = result.source;
+      assert.ok(source && source.values.length === source.dimensions.reduce((a,b)=>a*b,4), 'missing/partial volume coefficients');
+      assert.ok(source.values.every(Number.isFinite), 'nonfinite coefficients');
+      assert.ok(source.values.some((v,i)=>i%4!==3 && v>0), 'empty source emission');
+      assert.ok(source.values.some((v,i)=>i%4===3 && v>0), 'empty source extinction');
+      const raw = Buffer.from(new Float32Array(source.values).buffer);
+      if (arm.sourceEquals) assert.deepEqual(raw, readFileSync(join(out, `${arm.sourceEquals}.source.f32`)), 'display edit changed physical source');
+      writeFileSync(join(out, `${arm.id}.source.f32`), raw);
+      report.sourceCaptures ||= [];
+      report.sourceCaptures.push({arm: arm.id, frame: source.frame, sourceIndex: source.sourceIndex,
+        generation: source.generation, dimensions: source.dimensions, path: `${arm.id}.source.f32`});
+    }
     writeFileSync(join(out, `${arm.id}.png`), Buffer.from(result.png, 'base64'));
     writeFileSync(join(out, `${arm.id}.rgba`), Buffer.from(result.sample.image.rgba));
     const rgba = Buffer.from(result.sample.image.rgba);

@@ -24711,6 +24711,10 @@ export function createKaminosVolumePrototype({
     sceneVolumeSourceField() {
       return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
     },
+    async sampleSceneVolumeSource() {
+      if (!sceneVolumeSourceRequested || !sceneVolumeSource) throw new Error('scene source not enabled/encoded');
+      return sceneVolumeSource.readback();
+    },
     sampleFireLightFieldGpuProfile,
     sampleFrame,
     sampleLiquidFireContactConsumer,
