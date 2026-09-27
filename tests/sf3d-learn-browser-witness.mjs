@@ -31,18 +31,6 @@ try {
   page.on('error', error => report.events.push({ type: 'page-crash', message: error.message }));
   page.on('requestfailed', request => report.events.push({ type: 'request-failed', url: request.url(), reason: request.failure()?.errorText }));
   page.on('response', response => { if (response.status() >= 400) report.events.push({ type: 'http-error', url: response.url(), status: response.status() }); });
-  report.phase = 'direct-page'; write();
-  await page.goto(`${baseUrl}/sf3d-learn.html`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#learn-viewer canvas');
-  await new Promise(resolve => setTimeout(resolve, 1200));
-  report.direct = await page.evaluate(() => ({ title: document.title, runEnabled: !document.querySelector('#learn-run').disabled,
-    sourceLoaded: document.querySelector('#learn-source').naturalWidth > 0,
-    canvas: { width: document.querySelector('#learn-viewer canvas').width, height: document.querySelector('#learn-viewer canvas').height },
-    error: document.querySelector('#learn-error').hidden ? null : document.querySelector('#learn-error').textContent }));
-  await page.screenshot({ path: path.join(outputDir, 'direct.png') });
-  if (!report.direct.runEnabled || !report.direct.sourceLoaded || !report.direct.canvas.width || report.direct.error) {
-    throw new Error('direct Learn page did not render a usable first screen');
-  }
   report.phase = 'host-tab'; write();
   await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-tab="learn"]');
@@ -55,6 +43,21 @@ try {
   await page.screenshot({ path: path.join(outputDir, 'host.png') });
   if (report.host.activeTab !== 'learn' || !report.host.panelVisible || !report.host.frameUrl?.endsWith('/sf3d-learn.html')) {
     throw new Error('Kaminos Learn tab did not mount the live page');
+  }
+  await page.close();
+  const directPage = await browser.newPage();
+  await directPage.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  report.phase = 'direct-page'; write();
+  await directPage.goto(`${baseUrl}/sf3d-learn.html`, { waitUntil: 'domcontentloaded' });
+  await directPage.waitForSelector('#learn-viewer canvas');
+  await new Promise(resolve => setTimeout(resolve, 1200));
+  report.direct = await directPage.evaluate(() => ({ title: document.title, runEnabled: !document.querySelector('#learn-run').disabled,
+    sourceLoaded: document.querySelector('#learn-source').naturalWidth > 0,
+    canvas: { width: document.querySelector('#learn-viewer canvas').width, height: document.querySelector('#learn-viewer canvas').height },
+    error: document.querySelector('#learn-error').hidden ? null : document.querySelector('#learn-error').textContent }));
+  await directPage.screenshot({ path: path.join(outputDir, 'direct.png') });
+  if (!report.direct.runEnabled || !report.direct.sourceLoaded || !report.direct.canvas.width || report.direct.error) {
+    throw new Error('direct Learn page did not render a usable first screen');
   }
   report.ok = true;
   report.phase = 'complete'; write();

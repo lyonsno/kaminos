@@ -9,6 +9,7 @@ const $ = id => document.getElementById(id);
 const source = $('learn-source');
 const input = $('learn-file');
 const runButton = $('learn-run');
+const unloadButton = $('learn-unload');
 const resolutionSelect = $('learn-resolution');
 const status = $('learn-status');
 const progress = $('learn-progress');
@@ -22,17 +23,27 @@ let mesh = null;
 let inputUrl = null;
 let outputUrl = null;
 let running = false;
+let embeddedActive = true;
+let releasePromise = null;
 let renderer = null;
 let viewerInitialized = false;
-let paintQueued = false;
+let paintPending = null;
+
+function showRenderError(error) {
+  errorBox.textContent = `3D viewer unavailable: ${error?.message || error}`;
+  errorBox.hidden = false;
+}
 
 function requestPaint() {
-  if (!viewerInitialized || paintQueued) return;
-  paintQueued = true;
-  requestAnimationFrame(() => {
-    paintQueued = false;
-    renderer.render(scene, camera);
-  });
+  if (!viewerInitialized || !embeddedActive) return Promise.resolve();
+  if (!paintPending) {
+    paintPending = new Promise((resolve, reject) => requestAnimationFrame(async () => {
+      try { await renderer.renderAsync(scene, camera); resolve(); }
+      catch (error) { reject(error); }
+      finally { paintPending = null; }
+    }));
+  }
+  return paintPending;
 }
 
 const scene = new Scene();
@@ -59,7 +70,7 @@ function placeCamera() {
   const cp = Math.cos(pitch);
   camera.position.set(target.x + distance * cp * Math.cos(yaw), target.y + distance * cp * Math.sin(yaw), target.z + distance * Math.sin(pitch));
   camera.lookAt(target);
-  requestPaint();
+  void requestPaint().catch(showRenderError);
 }
 placeCamera();
 
@@ -70,7 +81,7 @@ function resize() {
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height, false);
-  requestPaint();
+  void requestPaint().catch(showRenderError);
 }
 
 async function initViewer() {
@@ -81,7 +92,7 @@ async function initViewer() {
   viewerInitialized = true;
   resize();
   new ResizeObserver(resize).observe(viewer);
-  requestPaint();
+  void requestPaint().catch(showRenderError);
 }
 
 let drag = null;
@@ -121,7 +132,7 @@ function replaceGeometry(vertices, faces, label) {
   $('learn-view-empty').hidden = true;
   $('learn-view-label').textContent = label;
   $('learn-mesh-count').textContent = `${vertices.length / 3} vertices / ${faces.length / 3} faces`;
-  requestPaint();
+  return requestPaint();
 }
 
 function markStage(stageId, state, elapsedMs = null) {
@@ -139,6 +150,35 @@ function resetStages() {
   if (outputUrl) URL.revokeObjectURL(outputUrl);
   outputUrl = null;
 }
+
+function publishRunState() {
+  if (window.parent !== window) window.parent.postMessage({ type: 'kaminos-learn-run-state', running }, location.origin);
+}
+
+async function releaseModel() {
+  if (running || !producer) return;
+  const oldProducer = producer;
+  producer = null;
+  unloadButton.disabled = true;
+  releasePromise = oldProducer.dispose().completion;
+  try {
+    await releasePromise;
+    status.textContent = mesh ? 'Mesh retained; model released' : 'Model released';
+  } catch (error) {
+    errorBox.textContent = `Model release failed: ${error?.message || error}`;
+    errorBox.hidden = false;
+  } finally {
+    releasePromise = null;
+  }
+}
+
+unloadButton.addEventListener('click', () => { void releaseModel(); });
+window.addEventListener('message', event => {
+  if (event.origin !== location.origin || event.source !== window.parent || event.data?.type !== 'kaminos-learn-active') return;
+  embeddedActive = event.data.active === true;
+  if (embeddedActive) void requestPaint().catch(showRenderError);
+  else if (!running) void releaseModel();
+});
 
 input.addEventListener('change', async () => {
   const file = input.files?.[0];
@@ -163,14 +203,18 @@ input.addEventListener('change', async () => {
 runButton.addEventListener('click', async () => {
   if (running) return;
   running = true;
+  publishRunState();
   runButton.disabled = true;
+  unloadButton.disabled = true;
   input.disabled = true;
   resolutionSelect.disabled = true;
   resetStages();
   const started = performance.now();
   const resolution = Number(resolutionSelect.value);
   try {
-    await viewerInitialization;
+    const viewerError = await viewerInitialization;
+    if (viewerError) throw viewerError;
+    if (releasePromise) await releasePromise;
     if (!producer) {
       status.textContent = 'Loading SF3D model';
       producer = await createSf3dProducer({
@@ -189,22 +233,27 @@ runButton.addEventListener('click', async () => {
         cooperativeTwoStream: true,
         twoStreamDutyGranularity: 'stage',
         intermediateStageIds: ['block-0-fuse-out', 'block-1-fuse-out'],
+        onIntermediatePreviewError: ({ stageId, error }) => {
+          markStage(stageId, 'skipped');
+          status.textContent = `${stageId} preview unavailable`;
+          console.warn('SF3D Learn projection failed', error);
+        },
         onIntermediateTriplane: async ({ stageId, triplanesBuf, decoder, decoderWeights }) => {
           try {
             const candidate = await decodeSf3dPreviewMesh(producer.device, triplanesBuf, decoder, decoderWeights, resolution);
             const label = stageId === 'block-0-fuse-out' ? 'First shape' : 'Forming detail';
-            replaceGeometry(candidate.mesh.vertices, candidate.mesh.faces, label);
+            await replaceGeometry(candidate.mesh.vertices, candidate.mesh.faces, label);
             markStage(stageId, 'done', performance.now() - started);
             status.textContent = label;
           } catch (previewError) {
             markStage(stageId, 'skipped');
-            status.textContent = `${stageId} preview unavailable; inference continues`;
+            status.textContent = `${stageId} preview unavailable`;
             console.warn('SF3D Learn preview failed', previewError);
           }
         },
       },
     });
-    replaceGeometry(result.vertices, result.faces, 'Final mesh');
+    await replaceGeometry(result.vertices, result.faces, 'Final mesh');
     markStage('final', 'done', performance.now() - started);
     status.textContent = 'Mesh complete';
     outputUrl = URL.createObjectURL(new Blob([result.glb], { type: 'model/gltf-binary' }));
@@ -216,14 +265,16 @@ runButton.addEventListener('click', async () => {
     status.textContent = 'Generation stopped';
   } finally {
     running = false;
+    publishRunState();
     runButton.disabled = false;
     input.disabled = false;
     resolutionSelect.disabled = false;
+    if (!embeddedActive) await releaseModel();
+    else unloadButton.disabled = !producer;
   }
 });
 
-const viewerInitialization = initViewer().catch(error => {
-  errorBox.textContent = `3D viewer unavailable: ${error?.message || error}`;
-  errorBox.hidden = false;
-  throw error;
+const viewerInitialization = initViewer().then(() => null, error => {
+  showRenderError(error);
+  return error;
 });

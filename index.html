@@ -11405,6 +11405,16 @@ function ensureFingerJuiceTabFrameLoaded() {
   fingerJuiceFrame.src = fingerJuiceFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
 }
 
+const learnFrame = document.getElementById('learn-viewport-frame');
+learnFrame.addEventListener('load', () => {
+  learnFrame.dataset.loaded = 'true';
+  learnFrame.contentWindow.postMessage({ type: 'kaminos-learn-active', active: document.body.classList.contains('learn-active') }, location.origin);
+});
+window.addEventListener('message', event => {
+  if (event.origin !== location.origin || event.source !== learnFrame.contentWindow || event.data?.type !== 'kaminos-learn-run-state') return;
+  document.querySelector('[data-tab="learn"]').textContent = event.data.running ? 'Learn (running)' : 'Learn';
+});
+
 function setActiveTab(tabName) {
   document.body.classList.toggle('learn-active', tabName === 'learn');
   document.body.classList.toggle('sam-image-active', tabName === 'masks');
@@ -11416,9 +11426,9 @@ function setActiveTab(tabName) {
   const learnPanel = document.getElementById('learn-operator-panel');
   learnPanel.hidden = tabName !== 'learn';
   if (tabName === 'learn') {
-    const frame = document.getElementById('learn-viewport-frame');
-    if (!frame.src) frame.src = frame.dataset.src;
+    if (!learnFrame.src) learnFrame.src = learnFrame.dataset.src;
   }
+  if (learnFrame.dataset.loaded === 'true') learnFrame.contentWindow.postMessage({ type: 'kaminos-learn-active', active: tabName === 'learn' }, location.origin);
   const volumeCockpitPanel = document.getElementById('volume-authored-mix-panel');
   if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume';
   const transformBar = document.getElementById('transform-bar');

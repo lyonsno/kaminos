@@ -19,6 +19,8 @@ h2 { margin: 0; font-size: 12px; font-weight: 650; }
 #learn-run { width: 100%; min-height: 42px; color: #0d2019; background: #9be2b9; border: 1px solid #b9f0ca; border-radius: 4px; font-weight: 700; cursor: pointer; }
 #learn-run:hover:not(:disabled) { background: #b8efcc; }
 #learn-run:disabled { opacity: .65; cursor: default; }
+#learn-unload { width: 100%; min-height: 34px; margin-top: 7px; border: 1px solid #587363; border-radius: 4px; color: #c7dfce; background: transparent; cursor: pointer; font-size: 12px; }
+#learn-unload:disabled { opacity: .45; cursor: default; }
 #learn-status { min-height: 32px; margin: 13px 0 5px; font-size: 12px; color: #c5d0c8; line-height: 1.35; }
 #learn-progress { width: 100%; height: 6px; appearance: none; }
 #learn-progress::-webkit-progress-bar { background: #34443a; }
