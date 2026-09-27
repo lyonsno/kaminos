@@ -95,17 +95,28 @@ try {
     if (Object.keys(report.stages).length < stageIds.length) await new Promise(resolve => setTimeout(resolve, 500));
   }
   report.phase = 'output'; write();
-  report.output = await frame.evaluate(async () => {
+  const outputPayload = await frame.evaluate(async () => {
     const link = document.querySelector('#learn-download');
     if (link.hidden || !link.href.startsWith('blob:')) return { visible: false };
-    const bytes = await (await fetch(link.href)).arrayBuffer();
-    const header = String.fromCharCode(...new Uint8Array(bytes, 0, 4));
-    return { visible: true, byteLength: bytes.byteLength, header, meshCount: document.querySelector('#learn-mesh-count').textContent };
+    const buffer = await (await fetch(link.href)).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const chunks = [];
+    for (let offset = 0; offset < bytes.length; offset += 32768) {
+      chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 32768)));
+    }
+    return { visible: true, byteLength: bytes.byteLength, header: String.fromCharCode(...bytes.subarray(0, 4)),
+      meshCount: document.querySelector('#learn-mesh-count').textContent, base64: btoa(chunks.join('')) };
   });
+  const glb = outputPayload.visible ? Buffer.from(outputPayload.base64, 'base64') : null;
+  report.output = { visible: outputPayload.visible, byteLength: outputPayload.byteLength, header: outputPayload.header,
+    meshCount: outputPayload.meshCount, sha256: glb ? sha256(glb) : null, file: glb ? 'result.glb' : null };
+  if (glb) fs.writeFileSync(path.join(outputDir, 'result.glb'), glb);
   const stageHashes = Object.values(report.stages).map(stage => stage.canvasSha256);
   if (Object.values(report.stages).some(stage => stage.state !== 'done')) throw new Error('one or more visible stages were skipped');
   if (new Set(stageHashes).size !== stageHashes.length) throw new Error('stage canvases did not change');
-  if (!report.output.visible || report.output.header !== 'glTF' || report.output.byteLength < 1024) throw new Error('missing or invalid final GLB');
+  if (!report.output.visible || report.output.header !== 'glTF' || report.output.byteLength < 1024 || glb.length !== report.output.byteLength) {
+    throw new Error('missing, partial, or invalid final GLB');
+  }
   if (report.events.some(event => ['pageerror', 'page-crash', 'http-error'].includes(event.type))) throw new Error('browser errors occurred during the route');
   report.ok = true;
   report.phase = 'complete'; write();
