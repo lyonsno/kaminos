@@ -86,7 +86,7 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       // Retire per-material render-object bindings as well as the wrapper.
       // Native trace shows current node/backend handles while an older GPU
       // bind group still reaches submission after the producer reset.
-      for (const material of converted.values()) material.needsUpdate=true;
+      for (const material of converted.values()) material.dispose();
     }
     scene.updateMatrixWorld(true);
     const key=[...source.position];
