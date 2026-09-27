@@ -32,6 +32,60 @@ test('a frame completes without an inference run or fabricated consumer boundary
 });
 
 if (process.env.KIT_FOREGROUND_BASELINE !== '1') {
+  test('application service lends model-identified runs without replacing its requester or device', async () => {
+    const { service, device, submissions } = fixture({ routeId: 'application' });
+    assert.equal(service.device, device);
+    assert.equal(service.queue, device.queue);
+    const request = service.request;
+    for (const [index, routeId] of ['sf3d', 'other-model', 'sf3d'].entries()) {
+      const runId = `${routeId}:${index}`;
+      const run = await service.beginRun(runId, { routeId });
+      assert.equal(run.routeId, routeId);
+      assert.equal(service.snapshot().routeId, 'application');
+      assert.equal(service.snapshot().activeRun.routeId, routeId);
+      const runtime = await kit.createWebGpuInferenceRuntime({
+        routeId, device, adapterName: 'CPU contract fixture',
+        foregroundOpportunities: run.foregroundOpportunities,
+      });
+      const handle = request(frame(runId));
+      await runtime.prepareCommandDutyAtBoundary({ phase: 'model' }, { invocationId: runId });
+      const receipt = await handle.completion;
+      assert.equal(receipt.routeId, routeId);
+      assert.equal(receipt.runId, runId);
+      assert.equal(run.foregroundOpportunities.pressureSnapshot().routeId, routeId);
+      assert.equal((await run.finish()).routeId, routeId);
+      runtime.dispose();
+      assert.throws(() => run.foregroundOpportunities.request(frame('stale')), /finished/);
+    }
+    assert.equal(service.request, request);
+    const idle = await request(frame('after-model-unload')).completion;
+    assert.equal(idle.routeId, 'application');
+    assert.equal(idle.runId, null);
+    assert.deepEqual(submissions, ['sf3d:0', 'other-model:1', 'sf3d:2', 'after-model-unload']);
+    await service.dispose();
+  });
+
+  test('invalid model identity is rejected before reserving the application service', async () => {
+    const { service } = fixture({ routeId: 'application' });
+    for (const routeId of ['', ' ', null, 42]) {
+      assert.throws(() => service.beginRun('invalid', { routeId }), /routeId/);
+      assert.equal(service.snapshot().activeRun, null);
+      assert.equal(service.snapshot().runCount, 0);
+    }
+    for (const options of [null, [], 'model']) {
+      assert.throws(() => service.beginRun('invalid', options), /options/);
+    }
+    const legacy = await service.beginRun('legacy');
+    assert.equal(legacy.foregroundOpportunities.snapshot().routeId, 'application');
+    await legacy.finish();
+    const retry = await service.beginRun('retry', { routeId: 'sf3d' });
+    await assert.rejects(retry.withForeground('worker', async () => { throw new Error('worker failed'); }), /worker failed/);
+    await retry.finish();
+    const recovered = await service.beginRun('recovered', { routeId: 'sf3d' });
+    await recovered.finish();
+    await service.dispose();
+  });
+
   test('beginRun waits existing foreground callbacks and queues new frames at model boundaries', async () => {
     const { service, submissions } = fixture();
     const gate = deferred();
