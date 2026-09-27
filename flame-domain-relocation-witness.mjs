@@ -120,6 +120,8 @@ try {
   const box = await page.locator('#kaminos-host-renderer-canvas').boundingBox();
   await page.mouse.move(box.x + box.width * .7, box.y + box.height * .5);
   for (const key of ['g', 'x', '2']) await page.keyboard.press(key);
+  await page.waitForFunction(() => window.kaminosBurnerState?.()?.effective === false,
+    null, { timeout: 120000 });
   const preview = await state();
   assert.ok(Math.abs(preview.emitter.pose.position[0] - 2.3) < 1e-8);
   assert.equal(preview.emitter.injectionSuspended, true);
