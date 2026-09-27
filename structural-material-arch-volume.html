@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stone Arch · Structural Volume</title>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"}}
+  </script>
+  <style>
+    :root { color-scheme: dark; font: 14px/1.4 system-ui,sans-serif; background: #0b1012; color: #e7ecea; --line: #334145; --muted: #a5b2b0; --mint: #91c8b1; --gold: #e3bc70; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header { min-height: 50px; display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: #151e21; }
+    h1 { margin: 0; font-size: 15px; font-weight: 630; }
+    .identity,.readout,.receipt { color: var(--muted); font-size: 12px; }
+    main { max-width: 1500px; margin: 0 auto; padding: 12px 16px 24px; }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .force { min-width: 310px; display: grid; grid-template-columns: auto minmax(130px,1fr) 38px; align-items: center; gap: 10px; }
+    label { color: var(--muted); font-size: 12px; }
+    input[type="range"] { width: 100%; accent-color: var(--gold); }
+    output { font-variant-numeric: tabular-nums; }
+    button { height: 34px; padding: 0 12px; color: inherit; background: #202b2f; border: 1px solid #526267; border-radius: 5px; font: inherit; cursor: pointer; }
+    button:hover:not(:disabled) { background: #2b393d; }
+    button:disabled { opacity: .45; cursor: default; }
+    button:focus-visible,input:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; }
+    #bind { border-color: #63834f; color: #c9e8b7; }
+    #status { margin-left: auto; text-align: right; }
+    canvas { display: block; width: 100%; height: min(71vh,760px); min-height: 410px; background: #080d0f; border: 1px solid #293538; touch-action: none; }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+    section { min-width: 0; padding: 12px 12px 10px 0; }
+    section + section { border-left: 1px solid var(--line); padding-left: 12px; }
+    h2 { margin: 0 0 3px; font-size: 14px; font-weight: 620; }
+    .intact h2 { color: var(--mint); } .notched h2 { color: var(--gold); }
+    .metric { font-variant-numeric: tabular-nums; margin-top: 4px; }
+    .receipt { padding-top: 10px; overflow-wrap: anywhere; }
+    @media (max-width: 720px) {
+      header { padding: 8px 12px; } .identity { display: none; }
+      main { padding: 10px 12px 18px; }
+      .force { width: 100%; min-width: 0; }
+      #status { width: 100%; margin-left: 0; text-align: left; }
+      canvas { height: 60vh; min-height: 380px; }
+      .pair { grid-template-columns: 1fr; }
+      section,section + section { border-left: 0; padding: 10px 0; }
+      section + section { border-top: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <header><h1>Stone arch</h1><span class="identity">TRELLIS silhouettes · 3-layer structural volume</span></header>
+  <main>
+    <div class="controls">
+      <div class="force"><label for="force">Crown load · proxy units</label><input id="force" type="range" min="0.1" max="3" step="0.05" value="0.75"><output id="force-value" for="force">0.75</output></div>
+      <button id="solve" disabled>Fresh solve</button><button id="bind" disabled>Bind</button><button id="reset" disabled>Reset</button>
+      <div class="readout" id="status">Loading structural profiles</div>
+    </div>
+    <canvas id="view" aria-label="Orbitable intact and outer-notched stone arch structural volumes"></canvas>
+    <div class="pair">
+      <section class="intact"><h2>Intact</h2><div class="readout">Same supports, contact, force and bond law</div><div class="metric" id="intact-metric">Waiting for profile</div></section>
+      <section class="notched"><h2>Outer notch</h2><div class="readout">Source silhouette changed; structural rules matched</div><div class="metric" id="notched-metric">Waiting for profile</div></section>
+    </div>
+    <div class="receipt" id="receipt">No load applied</div>
+  </main>
+  <script type="module">
+    const status = document.getElementById('status');
+    const receipt = document.getElementById('receipt');
+    let phase = 'dependency-import';
+    try {
+      const [THREE, controlsModule, core, volume] = await Promise.all([
+        import('three'), import('three/addons/controls/OrbitControls.js'),
+        import('./structural-material-arch-core.js'), import('./structural-material-arch-volume-view.js'),
+      ]);
+      const { OrbitControls } = controlsModule;
+      const { buildArchStructuralProxy, solveArchStructuralForce, fractureArchStructuralProxy, bindArchStructuralProxy } = core;
+      const { buildArchVolumeFrame } = volume;
+      const ROUTE = 'kaminos.structural-material.arch-force-volume.v0';
+      const profileRoot = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness';
+      const load = { x: -0.05, y: 0.29, threshold: 0.04, iterations: 600 };
+      const forceInput = document.getElementById('force');
+      const forceOutput = document.getElementById('force-value');
+      const canvas = document.getElementById('view');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color('#080d0f');
+      scene.add(new THREE.HemisphereLight('#e5eeeb', '#444e49', 2.3));
+      const key = new THREE.DirectionalLight('#fff1d9', 3.4);
+      key.position.set(-2.4, 3.5, 4.4);
+      scene.add(key);
+      const rim = new THREE.DirectionalLight('#a4d2cf', 1.2);
+      rim.position.set(2.7, 1.5, -2.8);
+      scene.add(rim);
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(5, 3), new THREE.MeshStandardMaterial({ color: '#303a3c', roughness: 0.94 }));
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -0.39;
+      scene.add(floor);
+      const camera = new THREE.PerspectiveCamera(37, 1, 0.01, 30);
+      const orbit = new OrbitControls(camera, canvas);
+      orbit.enableDamping = false;
+      orbit.target.set(0, 0, 0);
+      orbit.minDistance = 1.1;
+      orbit.maxDistance = 9;
+      orbit.addEventListener('change', render);
+      const dummy = new THREE.Object3D();
+      const cool = new THREE.Color('#a6c4bb');
+      const warm = new THREE.Color('#d6c7a2');
+      const hot = new THREE.Color('#f06b57');
+      const crackMaterial = new THREE.LineBasicMaterial({ color: '#f56e59', depthTest: false, transparent: true, opacity: 0.92 });
+      const cases = {};
+      let applied = false;
+      let serial = 0;
+
+      function render() { renderer.render(scene, camera); }
+      function resize() {
+        const width = canvas.clientWidth, height = canvas.clientHeight;
+        if (!width || !height) return;
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        const stacked = width < 620;
+        for (const [name, item] of Object.entries(cases)) {
+          item.group.position.set(stacked ? 0 : (name === 'intact' ? -0.62 : 0.62), stacked ? (name === 'intact' ? 0.52 : -0.52) : 0, 0);
+        }
+        floor.position.y = stacked ? -0.94 : -0.39;
+        if (!Object.keys(cases).length || !resize.initialized) {
+          camera.position.set(stacked ? 0.72 : 0.8, stacked ? 0.72 : 0.48, stacked ? 3.45 : 2.45);
+          orbit.target.set(0, 0, 0);
+          orbit.update();
+          resize.initialized = true;
+        }
+        render();
+      }
+
+      function present(name) {
+        const item = cases[name];
+        const frame = buildArchVolumeFrame(item.state);
+        const color = new THREE.Color();
+        for (let index = 0; index < frame.nodes.length; index += 1) {
+          const node = frame.nodes[index];
+          dummy.position.set(node.position[0], node.position[1], node.position[2] * (2 / 3));
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.setScalar(1);
+          dummy.updateMatrix();
+          item.blocks.setMatrixAt(index, dummy.matrix);
+          color.copy(name === 'intact' ? cool : warm).lerp(hot, Math.min(1, node.strain / 0.12) * 0.88);
+          item.blocks.setColorAt(index, color);
+        }
+        item.blocks.instanceMatrix.needsUpdate = true;
+        if (item.blocks.instanceColor) item.blocks.instanceColor.needsUpdate = true;
+        item.blocks.computeBoundingSphere();
+        if (item.cracks) { item.group.remove(item.cracks); item.cracks.geometry.dispose(); }
+        const positions = [];
+        for (const segment of frame.brokenSegments) {
+          const front = segment[2] >= 0;
+          const faceZ = front ? 0.187 : -0.187;
+          positions.push(segment[0], segment[1], faceZ, segment[3], segment[4], faceZ);
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        item.cracks = new THREE.LineSegments(geometry, crackMaterial);
+        item.group.add(item.cracks);
+        const broken = item.state.bonds.filter(bond => !bond.alive).length;
+        const travel = item.state.load ? item.state.load.travel.toFixed(4) : '—';
+        document.getElementById(name === 'intact' ? 'intact-metric' : 'notched-metric').textContent =
+          `travel ${travel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}`;
+        render();
+      }
+
+      function solve() {
+        if (!cases.intact || !cases['outer-notch']) return;
+        try {
+          const force = Number(forceInput.value);
+          const updates = Object.fromEntries(Object.entries(cases).map(([name, item]) => {
+            const solved = solveArchStructuralForce(item.base, { ...load, force });
+            return [name, fractureArchStructuralProxy(solved, { threshold: load.threshold })];
+          }));
+          for (const [name, state] of Object.entries(updates)) { cases[name].state = state; present(name); }
+          applied = true;
+          serial += 1;
+          document.getElementById('bind').disabled = false;
+          status.textContent = `Matched load ${force.toFixed(2)} · independent intact-reference trials`;
+          receipt.textContent = `Equal crown load ${force.toFixed(2)} · feet fixed · 3 depth layers · outer-notch material event energy ${cases['outer-notch'].state.events.reduce((sum, event) => sum + event.energy, 0).toFixed(4)}`;
+        } catch (error) { status.textContent = `Solve failed: ${error.message}`; }
+      }
+
+      function bind() {
+        if (!applied) return;
+        for (const [name, item] of Object.entries(cases)) {
+          const bondIds = item.state.bonds.filter(bond => !bond.alive).map(bond => bond.id);
+          item.state = bindArchStructuralProxy(item.state, { bondIds });
+          present(name);
+        }
+        document.getElementById('bind').disabled = true;
+        status.textContent = 'Broken graph connections rebound';
+        receipt.textContent = 'Connectivity restored; the solved displacement remains until a new solve or reset.';
+      }
+
+      function reset() {
+        if (!cases.intact) return;
+        for (const [name, item] of Object.entries(cases)) { item.state = item.base; present(name); }
+        applied = false;
+        document.getElementById('bind').disabled = true;
+        status.textContent = 'Profiles loaded · no load applied';
+        receipt.textContent = 'No load applied';
+      }
+
+      forceInput.addEventListener('input', () => {
+        forceOutput.value = Number(forceInput.value).toFixed(2);
+        if (applied) {
+          applied = false;
+          document.getElementById('bind').disabled = true;
+          status.textContent = 'Force changed · run a fresh intact-reference trial';
+        }
+      });
+      document.getElementById('solve').addEventListener('click', solve);
+      document.getElementById('bind').addEventListener('click', bind);
+      document.getElementById('reset').addEventListener('click', reset);
+      window.addEventListener('resize', resize);
+      window.__archVolumeWitness = () => ({
+        route: ROUTE, phase, serial, camera: camera.position.toArray(),
+        cases: Object.fromEntries(Object.entries(cases).map(([name, item]) => [name, {
+          sourceSha256: item.profile.source.sha256,
+          nodes: item.state.nodes.length,
+          broken: item.state.bonds.filter(bond => !bond.alive).length,
+          components: item.state.components.length,
+          travel: item.state.load?.travel ?? null,
+          connectivityEpoch: item.state.connectivityEpoch,
+          renderedInstances: item.blocks.count,
+        }])),
+      });
+
+      phase = 'profile-load';
+      for (const name of ['intact', 'outer-notch']) {
+        const response = await fetch(`${profileRoot}/${name}-profile.json`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`${name} profile request returned ${response.status}`);
+        const profile = await response.json();
+        if (profile.source?.kind !== 'trellis-glb' || profile.occupancy?.length !== profile.columns * profile.rows) {
+          throw new Error(`${name} structural profile identity or shape mismatch`);
+        }
+        const base = buildArchStructuralProxy(profile, { layers: 3 });
+        const stepX = (profile.bounds.max[0] - profile.bounds.min[0]) / profile.columns;
+        const stepY = (profile.bounds.max[1] - profile.bounds.min[1]) / profile.rows;
+        const blocks = new THREE.InstancedMesh(
+          new THREE.BoxGeometry(stepX * 0.98, stepY * 0.98, 0.118),
+          new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95, metalness: 0.02 }),
+          base.nodes.length,
+        );
+        blocks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        const group = new THREE.Group();
+        group.add(blocks);
+        scene.add(group);
+        cases[name] = { profile, base, state: base, blocks, group, cracks: null };
+        present(name);
+      }
+      phase = 'interactive';
+      document.getElementById('solve').disabled = false;
+      document.getElementById('reset').disabled = false;
+      status.textContent = 'Profiles loaded · no load applied';
+      const params = new URLSearchParams(location.search);
+      if (params.has('force')) {
+        forceInput.value = String(Math.min(3, Math.max(0.1, Number(params.get('force')) || 0.75)));
+        forceOutput.value = Number(forceInput.value).toFixed(2);
+      }
+      resize();
+      if (params.get('load') === '1') solve();
+      if (params.get('bind') === '1') bind();
+    } catch (error) {
+      status.textContent = `Startup failed (${phase}): ${error.message}`;
+      receipt.textContent = `No structural-volume route established. ${error.stack || error.message}`;
+      console.error(error);
+    }
+  </script>
+</body>
+</html>
