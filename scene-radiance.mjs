@@ -3,6 +3,16 @@ import {createFireLightFieldShadow} from './fire-light-field-shadow.mjs';
 import {validateScenePointSource} from './scene-volume-source.mjs';
 import {SCENE_MEDIUM_LOOKUP_WGSL,SCENE_POINT_TRANSFER_WGSL} from './scene-point-light.mjs';
 
+export function cloneSceneRadianceMaterial(library, original) {
+  const material=library.fromMaterial(original).clone();
+  // Bundled NodeMaterial.copy preserves node slots but omits the ordinary
+  // standard/physical texture and BRDF properties. Keep those authored inputs
+  // as well; adding irradiance must not replace the kiln's material.
+  const physical=original.isMeshPhysicalMaterial || original.isMeshPhysicalNodeMaterial;
+  (physical?THREE.MeshPhysicalMaterial:THREE.MeshStandardMaterial).prototype.copy.call(material,original);
+  return material;
+}
+
 // Private experiment mount: no authoring schema, persistence or new host API.
 // A shared device and the ordinary identity world/volume transform are required.
 export function mountSceneRadiance({renderer,scene,prototype,source:initial={position:[0,1.4,.7],intensity:[3,1,.2],stepLength:.03125}}) {
@@ -59,7 +69,7 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
   function materialFor(original) {
     if (converted.has(original)) return converted.get(original);
     if (!original.isMeshStandardMaterial && !original.isMeshStandardNodeMaterial && !original.isMeshPhysicalMaterial && !original.isMeshPhysicalNodeMaterial) return original;
-    const material=renderer.library.fromMaterial(original).clone();
+    const material=cloneSceneRadianceMaterial(renderer.library,original);
     const setup=material.setupMaterialLightings;
     material.setupMaterialLightings=function(builder) {
       return [...setup.call(this,builder),new THREE.IrradianceNode(irradiance)];
