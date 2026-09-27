@@ -187,9 +187,11 @@ function volumeSettingsPresetServerProjection(document) {
   });
 }
 
-// One status line for what the server changed to make a basin load here.
-// Carried controls and replaced values are warnings: the basin on screen is
-// not exactly the basin that was saved.
+// One status line for what the server's schema projection changed to make a
+// basin load here. Carried controls and replaced values are warnings. This
+// sees only the server projection: page-side clamping and route fallbacks
+// when values are applied to controls are not reported here, so no warning
+// does not mean the controls hold exactly the saved values.
 export function describeVolumeSettingsPresetProjection(projection) {
   const parts = [];
   const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;

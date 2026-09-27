@@ -66,6 +66,17 @@ assert.match(carriedOption.text, /from another branch/);
 assert.match(carriedOption.title, /volume-ridge-radius-cells/);
 assert.doesNotMatch(loadedView.select.options.find(option => option.value === available.presetId).text, /another branch/);
 
+// Earlier versions of a label and other stores' pointers stay selectable.
+const earlier = { alias: 'live-kiln', label: 'Live kiln', presetId: `vsp-${'d'.repeat(64)}`, publishedAt: '2026-09-18T10:00:00Z',
+  source: { branch: 'cc/wake-kiln' }, reason: 'superseded-label' };
+const versionsView = await render({ ...mixed, unavailableEntries: [], earlierVersions: [earlier] });
+const earlierOption = versionsView.select.options.find(option => option.value === earlier.presetId);
+assert.ok(earlierOption, 'an earlier version of a label is listed');
+assert.equal(earlierOption.disabled, false, 'an earlier version is selectable');
+assert.match(earlierOption.text, /^Live kiln \| earlier 2026-09-18 cc\/wake-kiln \| vsp-dddddddddddd/);
+assert.match(versionsView.statuses.at(-1)[0], /1 earlier version/);
+assert.equal((await render({ ...mixed, unavailableEntries: [] })).select.options.length, 1, 'indexes without versions are unchanged');
+
 const emptyView = await render({ ...mixed, entries: [] });
 assert.equal(emptyView.select.value, '');
 assert.match(emptyView.select.options[0].text, /no compatible/i);
