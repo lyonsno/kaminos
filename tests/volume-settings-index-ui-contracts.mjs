@@ -78,6 +78,7 @@ assert.match(versionsView.statuses.at(-1)[0], /1 earlier version/);
 const heldView = await render({ ...mixed, unavailableEntries: [], earlierVersions: [{ ...earlier, reason: 'held-label' }] });
 assert.match(heldView.select.options.find(option => option.value === earlier.presetId).text, /^Live kiln \| held 2026-09-18 cc\/wake-kiln/,
   'a version the label did not follow is shown as held, not earlier');
+assert.match(heldView.select.options.find(option => option.value === earlier.presetId).title, /the label did not follow this version/);
 assert.equal((await render({ ...mixed, unavailableEntries: [] })).select.options.length, 1, 'indexes without versions are unchanged');
 
 // A listed earlier version opens through the picker's own commands.

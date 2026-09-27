@@ -213,14 +213,46 @@ export function describeVolumeSettingsPresetProjection(projection) {
 // A basin loaded across branches with carried or replaced values cannot be
 // saved back under its own label: this branch cannot hold what it carried,
 // so the save would replace the basin for every branch under that name.
-export function volumeSettingsPresetLabelReuseBlock(receipt, label) {
+export function volumeSettingsPresetLabelReuseBlock(receipt, label, appliedDifferences = []) {
   const projection = receipt?.serverProjection;
-  if (!projection || !(projection.carriedControls?.length || projection.unsupportedValuesDefaulted?.length)) return null;
+  const projected = Boolean(projection?.carriedControls?.length || projection?.unsupportedValuesDefaulted?.length);
+  const changed = Boolean(appliedDifferences?.length);
+  if (!receipt || (!projected && !changed)) return null;
   const requested = String(label || '').trim();
   const sameLabel = requested === receipt.label || (receipt.alias && requested.toLowerCase() === receipt.alias);
   if (!sameLabel) return null;
-  return `"${requested}" was loaded from another branch (${describeVolumeSettingsPresetProjection(projection).text}); `
+  const reasons = [
+    projected ? `was loaded from another branch (${describeVolumeSettingsPresetProjection(projection).text})` : null,
+    changed ? `had ${describeVolumeSettingsPresetAppliedDifferences(appliedDifferences).text}` : null,
+  ].filter(Boolean);
+  return `"${requested}" ${reasons.join(' and ')}; `
     + 'saving it under the same label would replace it for every branch. Save under a new label.';
+}
+
+// What the page holds after loading a basin, compared with what was saved:
+// clamped sliders, options the page does not offer, and route fallbacks show
+// up here even when the server projection is exact.
+export function volumeSettingsPresetAppliedDifferences(saved, applied) {
+  const differences = [];
+  for (const [axis, field] of [['basin', 'domControls'], ['renderer', 'rendererControls'], ['presentation', 'presentationControls']]) {
+    const savedValues = presetControlValues(saved?.[field]);
+    const appliedValues = presetControlValues(applied?.[field]);
+    for (const [id, value] of Object.entries(savedValues)) {
+      const present = Object.hasOwn(appliedValues, id);
+      if (present && sameAppliedControlValue(value, appliedValues[id])) continue;
+      differences.push(Object.freeze({ axis, id, saved: value, applied: present ? appliedValues[id] : null }));
+    }
+  }
+  return Object.freeze(differences);
+}
+
+export function describeVolumeSettingsPresetAppliedDifferences(differences) {
+  if (!differences?.length) return { text: '', warning: false };
+  const listed = differences.map(entry => `${entry.id} ${String(entry.saved)} -> ${entry.applied === null ? '(no control)' : String(entry.applied)}`);
+  return {
+    text: `${differences.length} value${differences.length === 1 ? '' : 's'} changed when loaded here: ${listed.join(', ')}`,
+    warning: true,
+  };
 }
 
 // Whether a save reached the shared basin library, for the save status line.

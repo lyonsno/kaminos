@@ -5,6 +5,8 @@ import {
   describeVolumeSettingsLibraryPublication,
   describeVolumeSettingsPresetProjection,
   describeVolumeSettingsSaveOutcome,
+  describeVolumeSettingsPresetAppliedDifferences,
+  volumeSettingsPresetAppliedDifferences,
   validateVolumeSettingsPresetDocument,
   volumeSettingsPresetLabelReuseBlock,
 } from '../volume-settings-preset-contract.mjs';
@@ -137,14 +139,59 @@ const libraryHeld = describeVolumeSettingsSaveOutcome({ effective: { label: 'kil
     aliasHeld: { reason: 'would-drop-controls', controls: ['volume-ridge-radius-cells'], currentPresetId: `vsp-${'9'.repeat(64)}` } } });
 assert.equal((libraryHeld.text.match(/kept on/g) || []).length, 1, 'one hold is reported once');
 const save = index.slice(index.indexOf('async function saveVolumeSettingsPreset('), index.indexOf('function buildVolumeBasinPromotionEffectiveState('));
-assert.match(save, /const reuseBlock = volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label\);\s*if \(reuseBlock\) throw new Error\(reuseBlock\);/,
+assert.match(save, /const reuseBlock = volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied\);\s*if \(reuseBlock\) throw new Error\(reuseBlock\);/,
   'save refuses to reuse a cross-branch basin label before writing');
 assert.match(save, /const outcome = describeVolumeSettingsSaveOutcome\(result\);/);
 assert.match(save, /outcome\.text \? ` \| \$\{outcome\.text\}` : ''\}`,\s*outcome\.warning,/, 'the save status shows the library outcome and warns');
 // Promotion export publishes to the library too: same guard, same report.
 const promote = index.slice(index.indexOf('async function exportBasinPromotionPackage('), index.indexOf('let activeVolumeBasinDriveRecorder'));
-assert.match(promote, /const reuseBlock = volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label\);\s*if \(reuseBlock\) throw new Error\(reuseBlock\);/,
+assert.match(promote, /const reuseBlock = volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied\);\s*if \(reuseBlock\) throw new Error\(reuseBlock\);/,
   'promotion refuses to reuse a cross-branch basin label');
 assert.match(promote, /const outcome = describeVolumeSettingsSaveOutcome\(\{ effective: result\.settingsPreset, sharedPublication: result\.sharedPublication \}\);/);
 assert.match(promote, /outcome\.text \? ` \| \$\{outcome\.text\}` : ''\}`, outcome\.warning\);/, 'the promotion status shows the library outcome and warns');
+// What the page actually applied is read back after a basin loads: a slider
+// that clamps, or a select that cannot hold the saved option, is a difference
+// the server projection cannot see.
+const savedPreset = {
+  domControls: {
+    'volume-reaction-boundary-fire-clean-blue': { id: 'volume-reaction-boundary-fire-clean-blue', value: 1.76 },
+    'volume-fire-render-mode': { id: 'volume-fire-render-mode', value: 'ridge' },
+    'volume-density': { id: 'volume-density', value: '0.5' },
+    'volume-gone': { id: 'volume-gone', value: 3 },
+  },
+  rendererControls: { 'volume-flow-kernel-coherence': { id: 'volume-flow-kernel-coherence', value: 2 } },
+};
+const appliedPreset = {
+  domControls: {
+    'volume-reaction-boundary-fire-clean-blue': { value: 1 },
+    'volume-fire-render-mode': { value: 'shell' },
+    'volume-density': { value: 0.5 },
+  },
+  rendererControls: { 'volume-flow-kernel-coherence': { value: 2 } },
+};
+const differences = volumeSettingsPresetAppliedDifferences(savedPreset, appliedPreset);
+assert.deepEqual(JSON.parse(JSON.stringify(differences)), [
+  { axis: 'basin', id: 'volume-reaction-boundary-fire-clean-blue', saved: 1.76, applied: 1 },
+  { axis: 'basin', id: 'volume-fire-render-mode', saved: 'ridge', applied: 'shell' },
+  { axis: 'basin', id: 'volume-gone', saved: 3, applied: null },
+]);
+assert.ok(Object.isFrozen(differences));
+const appliedSummary = describeVolumeSettingsPresetAppliedDifferences(differences);
+assert.equal(appliedSummary.warning, true);
+assert.equal(appliedSummary.text,
+  '3 values changed when loaded here: volume-reaction-boundary-fire-clean-blue 1.76 -> 1, volume-fire-render-mode ridge -> shell, volume-gone 3 -> (no control)');
+assert.deepEqual(describeVolumeSettingsPresetAppliedDifferences([]), { text: '', warning: false });
+assert.match(volumeSettingsPresetLabelReuseBlock({ ...exact, label: 'Plain', alias: 'plain' }, 'Plain', differences),
+  /changed when loaded here[\s\S]*new label/, 'a basin crushed on load cannot be saved back under its own label');
+assert.equal(volumeSettingsPresetLabelReuseBlock({ ...exact, label: 'Plain', alias: 'plain' }, 'Plain', []), null);
+const init = index.slice(index.indexOf('async function initKaminosVolumeRoute('));
+const initBody = init.slice(0, init.indexOf('\n}\n'));
+assert.match(initBody, /syncControls\(\);\s*recordVolumeSettingsPresetApplied\(\);/, 'the applied values are read back once the route has set every control');
+const recordFn = index.slice(index.indexOf('function recordVolumeSettingsPresetApplied('), index.indexOf('function recordVolumeSettingsPresetApplied(') + 900);
+assert.match(recordFn, /volumeSettingsPresetAppliedDifferences\(activeVolumeSettingsPresetReceipt\.preset, buildVolumeSettingsPreset\(\)\)/);
+assert.match(statusFn, /describeVolumeSettingsPresetAppliedDifferences\(activeVolumeSettingsPresetApplied\)/, 'the loaded-basin status reports what changed on load');
+for (const [name, body] of [['save', save], ['promotion', promote]]) {
+  assert.match(body, /volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied\)/,
+    `${name} refuses to reuse the label of a basin that changed on load`);
+}
 console.log('volume settings projection receipt contracts passed');
