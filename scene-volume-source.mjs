@@ -1,6 +1,16 @@
 // Opt-in experiment input, not a replacement for the accepted fire atlas or
 // smoke transport. Coefficients use volume-local inverse-length units and
 // relative linear RGB, before either consumer's camera transform.
+// Queue ordering is sufficient; no CPU readback or completion wait is needed.
+// The host's scene render submits between preparation and the volume draw.
+export function prepareSceneSourceFrame({encoder, encode, submit, consume, renderHost, createEncoder}) {
+  const field = encode(encoder);
+  submit([encoder.finish()]);
+  consume(field);
+  renderHost();
+  return createEncoder();
+}
+
 // Offline reference only: never called by the interactive renderer.
 export function integrateSceneMediumSegment(field, source, receiver, stepLength) {
   const dims = field.dimensions, pitch = 2/dims[0];

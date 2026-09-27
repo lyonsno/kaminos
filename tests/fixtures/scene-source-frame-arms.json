@@ -1,0 +1,4 @@
+[
+  {"id":"same-frame-source","mode":2,"temperature":2200,"ev":0,"sourceProbe":true,"sourceFrameProbe":true,
+   "mediumSource":{"position":[0.123,-0.789,0.234],"stepLength":0.03125}}
+]

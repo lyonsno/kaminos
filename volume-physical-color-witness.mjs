@@ -127,6 +127,11 @@ try {
       if (${arm.sourceProbe === true}) core.setSceneVolumeSourceEnabled(true);
       const smokePresentation = ${typeof arm.smokePresentation === 'string'} ? core.setRaymarchSmokePresentationMode(${JSON.stringify(arm.smokePresentation || 'on')}) : null;
       if (${Boolean(arm.mediumSource)}) core.setSceneMediumSource(${JSON.stringify(arm.mediumSource || null)});
+      let preparedSource = null;
+      if (${arm.sourceFrameProbe === true}) core.setSceneSourceFrameConsumer(field => {
+        preparedSource = {generation:field.source.generation,frame:field.source.frame,
+          mediumGeneration:field.medium.generation,simStepCount:field.simStepCount};
+      });
       const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
       if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
       const {width,height,rgba} = sample.image;
@@ -137,7 +142,7 @@ try {
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
       const source = ${arm.sourceProbe === true} ? await core.sampleSceneVolumeSource() : null;
       const optical = ${Boolean(arm.mediumSource)} ? await core.sampleSceneMediumOpticalDepth() : null;
-      return {sample, source, optical, profile, smokePresentation, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      return {sample, source, optical, profile, smokePresentation, preparedSource, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
@@ -151,6 +156,13 @@ try {
     if (arm.sourceProbe) {
       const source = result.source;
       assertSceneSourceCapture(source,result.state.frameCount);
+      if (arm.sourceFrameProbe) {
+        assert.equal(result.preparedSource?.generation, source.generation, 'host received a different source generation');
+        assert.equal(result.preparedSource?.frame, source.frame, 'host received a different source frame');
+        assert.equal(result.preparedSource?.simStepCount, result.state.simStepCount);
+        assert.equal(result.state.ordinarySceneDepth?.effective, true, 'actual host scene-depth render missing');
+        if (arm.mediumSource) assert.equal(result.preparedSource?.mediumGeneration, source.generation);
+      }
       const raw = Buffer.from(new Float32Array(source.values).buffer);
       if (arm.sourceEquals) assert.deepEqual(raw, readFileSync(join(out, `${arm.sourceEquals}.source.f32`)), 'display edit changed physical source');
       writeFileSync(join(out, `${arm.id}.source.f32`), raw);
