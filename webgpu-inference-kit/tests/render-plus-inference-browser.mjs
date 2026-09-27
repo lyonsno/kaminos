@@ -104,9 +104,10 @@ try {
     window.brightnessGpuResources = record;
     const createBuffer = GPUDevice.prototype.createBuffer;
     GPUDevice.prototype.createBuffer = function (descriptor) {
+      window.brightnessDevice = this;
       const buffer = createBuffer.call(this, descriptor);
-      if (['brightness.input-rgba8', 'brightness.output-rgba8', 'brightness.params'].includes(descriptor.label)) {
-        const row = { label: descriptor.label, destroyed: false };
+      if (descriptor.usage & (GPUBufferUsage.STORAGE | GPUBufferUsage.UNIFORM)) {
+        const row = { label: descriptor.label, usage: descriptor.usage, destroyed: false };
         record.allocations.push(row);
         const destroy = buffer.destroy.bind(buffer);
         buffer.destroy = () => { row.destroyed = true; destroy(); };
@@ -116,7 +117,13 @@ try {
     const createPipeline = GPUDevice.prototype.createComputePipeline;
     GPUDevice.prototype.createComputePipeline = function (descriptor) {
       const pipeline = createPipeline.call(this, descriptor);
-      if (descriptor.label === 'brightness.rgba8') record.pipelines += 1;
+      record.pipelines += 1;
+      return pipeline;
+    };
+    const createPipelineAsync = GPUDevice.prototype.createComputePipelineAsync;
+    GPUDevice.prototype.createComputePipelineAsync = async function (descriptor) {
+      const pipeline = await createPipelineAsync.call(this, descriptor);
+      record.pipelines += 1;
       return pipeline;
     };
     const destroy = GPUDevice.prototype.destroy;
@@ -155,6 +162,7 @@ try {
   const secondActivity = await (await page.$('#activity')).screenshot();
   assert.notDeepEqual(firstActivity, secondActivity, 'activity indicator must visibly animate');
   report.checks.push('native WebGPU renderer is visibly active before inference');
+  report.rendererResources = await page.evaluate(() => window.brightnessGpuResources);
 
   report.phase = 'brighten';
   await page.click('#apply');
@@ -182,11 +190,30 @@ try {
   report.residentFirst = await page.evaluate(() => ({
     state: window.renderInferenceExample.snapshot(), resources: window.brightnessGpuResources,
   }));
-  assert.equal(report.residentFirst.resources.allocations.length, 3);
-  assert.equal(report.residentFirst.resources.pipelines, 1);
+  assert.equal(report.residentFirst.resources.allocations.length, report.rendererResources.allocations.length + 3);
+  assert.equal(report.residentFirst.resources.pipelines, report.rendererResources.pipelines + 1);
   assert.equal(report.residentFirst.state.workloadGeneration, 1);
 
   report.phase = 'repeat-darker';
+  if (process.env.RENDER_INFERENCE_RELABEL_ALLOCATION === '1') {
+    report.injectedFault = 'relabeled-resource-creation';
+    await page.evaluate(async () => {
+      const device = window.brightnessDevice;
+      const buffer = device.createBuffer({ label: 'replacement-storage', size: 4, usage: GPUBufferUsage.STORAGE });
+      const module = device.createShaderModule({ code: '@group(0) @binding(0) var<storage,read_write> value: array<u32>; @compute @workgroup_size(1) fn main() { value[0] = 42u; }' });
+      const pipeline = await device.createComputePipelineAsync({ label: 'replacement-compute', layout: 'auto', compute: { module, entryPoint: 'main' } });
+      const bindings = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer } }] });
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginComputePass();
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, bindings);
+      pass.dispatchWorkgroups(1);
+      pass.end();
+      device.queue.submit([encoder.finish()]);
+      await device.queue.onSubmittedWorkDone();
+      buffer.destroy();
+    });
+  }
   if (process.env.RENDER_INFERENCE_FORCE_RELOAD === '1') {
     report.injectedFault = 'recreated-workload-between-runs';
     await page.evaluate(() => window.renderInferenceExample.unload());
@@ -207,8 +234,8 @@ try {
   report.residentSecond = await page.evaluate(() => ({
     state: window.renderInferenceExample.snapshot(), resources: window.brightnessGpuResources,
   }));
-  assert.equal(report.residentSecond.resources.allocations.length, 3, 'repeat must retain the original compute buffers');
-  assert.equal(report.residentSecond.resources.pipelines, 1, 'repeat must retain the compiled pipeline');
+  assert.equal(report.residentSecond.resources.allocations.length, report.residentFirst.resources.allocations.length, 'repeat must retain the original compute buffers');
+  assert.equal(report.residentSecond.resources.pipelines, report.residentFirst.resources.pipelines, 'repeat must retain the compiled pipeline');
   assert.equal(report.residentSecond.resources.allocations.some(row => row.destroyed), false);
   assert.equal(report.residentSecond.state.workloadGeneration, 1);
   report.checks.push('repeat run reuses the application and produces exact 0.50x pixels');
@@ -234,7 +261,8 @@ try {
     return { state: app.snapshot(), resources: window.brightnessGpuResources };
   });
   assert.equal(report.unloaded.state.workloadLoaded, false);
-  assert.equal(report.unloaded.resources.allocations.every(row => row.destroyed), true);
+  assert.equal(report.unloaded.resources.allocations.slice(report.rendererResources.allocations.length).every(row => row.destroyed), true);
+  assert.equal(report.unloaded.resources.allocations.slice(0, report.rendererResources.allocations.length).some(row => row.destroyed), false);
   assert.equal(report.unloaded.resources.deviceDestroys, 0);
   await page.waitForFunction(frames => window.renderInferenceExample.snapshot().frames > frames + 4, {}, report.unloaded.state.frames);
   report.reloaded = await page.evaluate(async () => {
@@ -252,8 +280,8 @@ try {
   assert.match(report.reloaded.unloadError, /while an adjustment is running/);
   assert.equal(report.reloaded.sha256, bright.sha256);
   assert.equal(report.reloaded.state.workloadGeneration, 2);
-  assert.equal(report.reloaded.resources.allocations.length, 6);
-  assert.equal(report.reloaded.resources.pipelines, 2);
+  assert.equal(report.reloaded.resources.allocations.length, report.residentFirst.resources.allocations.length + 3);
+  assert.equal(report.reloaded.resources.pipelines, report.residentFirst.resources.pipelines + 1);
   assert.equal(report.reloaded.resources.deviceDestroys, 0);
   report.checks.push('unload releases compute buffers while renderer advances; reload reproduces exact output');
 
