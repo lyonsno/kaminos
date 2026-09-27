@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { assertArmEquivalent, assertSceneSourceCapture, assertSharedSceneConsumers } from './volume-physical-color-witness-contract.mjs';
+import { assertArmEquivalent, assertSceneSourceCapture, assertSharedSceneConsumers, assertWitnessCamera } from './volume-physical-color-witness-contract.mjs';
 import { integrateSceneMediumSegment } from './scene-volume-source.mjs';
 const [url, output, expectedRoot, expectedCommit, armsPath] = process.argv.slice(2);
 assert.ok(output, 'usage: URL OUT_DIR REPO_ROOT COMMIT');
@@ -124,6 +124,10 @@ try {
         const input = document.getElementById(id); input.value = String(value); input.dispatchEvent(new Event('input', {bubbles:true}));
       }
       const core = window.__kaminosVolumePrototype;
+      if (${Boolean(arm.camera)}) {
+        const pose=${JSON.stringify(arm.camera || null)};
+        window.__kaminosSetSceneCameraFrame(pose.position,pose.target);
+      }
       if (${Boolean(arm.sharedSource)}) {
         if (!window.__kaminosSceneRadiance) throw new Error('shared scene radiance not mounted: '+JSON.stringify(window.__kaminosSceneRadianceSetup));
         window.__kaminosSceneRadiance.setSource(${JSON.stringify(arm.sharedSource || null)});
@@ -148,9 +152,10 @@ try {
       const optical = ${Boolean(arm.mediumSource)} ? await core.sampleSceneMediumOpticalDepth() : null;
       return {sample, source, optical, profile, smokePresentation, preparedSource,
         shared:${Boolean(arm.sharedSource)}?window.__kaminosSceneRadiance.debugState():null,
-        state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+        camera:window.kaminosCameraDebugState(),state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
+    if(arm.camera) assertWitnessCamera(arm.camera,result.camera);
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, arm.temperature);
@@ -209,6 +214,7 @@ try {
     report.captures.push({arm, sample, profile:result.profile, state:result.state,
       preparedSource:result.preparedSource, smokePresentation:result.smokePresentation,
       shared:result.shared,
+      camera:result.camera,
       image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
   }
   const screenshot = await call('Page.captureScreenshot', {format:'png'});

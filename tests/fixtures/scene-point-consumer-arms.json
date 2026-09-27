@@ -1,5 +1,5 @@
 [
-  {"id":"point-off","mode":2,"temperature":2200,"ev":0,"sharedSource":{"intensity":[0,0,0]}},
-  {"id":"point-red","mode":2,"temperature":2200,"ev":0,"sharedSource":{"intensity":[3,0,0]}},
-  {"id":"point-blue","mode":2,"temperature":2200,"ev":0,"sharedSource":{"intensity":[0,0,3]}}
+  {"id":"point-off","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"intensity":[0,0,0]}},
+  {"id":"point-red","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"intensity":[3,0,0]}},
+  {"id":"point-blue","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"intensity":[0,0,3]}}
 ]

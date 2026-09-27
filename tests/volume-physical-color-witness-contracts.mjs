@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { assertArmEquivalent } from '../volume-physical-color-witness-contract.mjs';
 const contract = await import('../volume-physical-color-witness-contract.mjs');
+assert.equal(typeof contract.assertWitnessCamera, 'function');
+const camera={position:[3,2,7],target:[0,1,0]};
+contract.assertWitnessCamera(camera,camera);
+assert.throws(()=>contract.assertWitnessCamera(camera,{...camera,position:[0,0,0]}),/camera/);
+assert.throws(()=>contract.assertWitnessCamera(camera,null),/camera/);
 assert.equal(typeof contract.assertSharedSceneConsumers, 'function', 'shared-light witness must reject missing or stale consumers');
 const shared={materialCount:1,frame:{frame:160,generation:3,hostDepthEffective:true,presented:true},shadow:{effective:true}};
 contract.assertSharedSceneConsumers(shared,160);

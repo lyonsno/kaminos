@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
 
+export function assertWitnessCamera(requested,effective) {
+  for(const key of ['position','target']) {
+    assert.ok(requested[key]?.length===3 && requested[key].every(Number.isFinite),'invalid requested camera');
+    assert.ok(effective?.[key]?.length===3 && effective[key].every((v,i)=>Number.isFinite(v)&&Math.abs(v-requested[key][i])<1e-6),'effective camera differs');
+  }
+}
+
 export function assertSharedSceneConsumers(shared, frame) {
   assert.ok(shared?.materialCount>0,'no actual material consumer');
   assert.equal(shared.frame?.frame,frame,'stale shared source frame');
