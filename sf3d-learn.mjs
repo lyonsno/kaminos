@@ -10,6 +10,7 @@ const source = $('learn-source');
 const input = $('learn-file');
 const runButton = $('learn-run');
 const unloadButton = $('learn-unload');
+const reloadButton = $('learn-reload');
 const resolutionSelect = $('learn-resolution');
 const status = $('learn-status');
 const progress = $('learn-progress');
@@ -25,6 +26,9 @@ let outputUrl = null;
 let running = false;
 let embeddedActive = true;
 let releasePromise = null;
+let releaseFailure = null;
+let selectionToken = 0;
+let selectionPending = false;
 let renderer = null;
 let viewerInitialized = false;
 let paintPending = null;
@@ -135,6 +139,19 @@ function replaceGeometry(vertices, faces, label) {
   return requestPaint();
 }
 
+function clearGeometry() {
+  if (mesh) {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+    mesh = null;
+  }
+  $('learn-view-empty').hidden = false;
+  $('learn-view-label').textContent = 'Awaiting first shape';
+  $('learn-mesh-count').textContent = 'No geometry yet';
+  void requestPaint().catch(showRenderError);
+}
+
 function markStage(stageId, state, elapsedMs = null) {
   const row = document.querySelector(`#learn-stages [data-stage="${stageId}"]`);
   row.dataset.state = state;
@@ -143,6 +160,7 @@ function markStage(stageId, state, elapsedMs = null) {
 }
 
 function resetStages() {
+  clearGeometry();
   for (const id of stageIds) markStage(id, 'waiting');
   progress.value = 0;
   errorBox.hidden = true;
@@ -156,23 +174,29 @@ function publishRunState() {
 }
 
 async function releaseModel() {
-  if (running || !producer) return;
+  if (running || !producer || releasePromise || releaseFailure) return;
   const oldProducer = producer;
-  producer = null;
   unloadButton.disabled = true;
-  releasePromise = oldProducer.dispose().completion;
+  runButton.disabled = true;
   try {
+    releasePromise = oldProducer.dispose().completion;
     await releasePromise;
+    producer = null;
     status.textContent = mesh ? 'Mesh retained; model released' : 'Model released';
   } catch (error) {
-    errorBox.textContent = `Model release failed: ${error?.message || error}`;
+    releaseFailure = error;
+    errorBox.textContent = `Model release failed: ${error?.message || error}. Reload this page before generating again.`;
     errorBox.hidden = false;
+    status.textContent = 'Model release failed';
+    reloadButton.hidden = false;
   } finally {
     releasePromise = null;
+    runButton.disabled = !!releaseFailure || running || selectionPending;
   }
 }
 
 unloadButton.addEventListener('click', () => { void releaseModel(); });
+reloadButton.addEventListener('click', () => location.reload());
 window.addEventListener('message', event => {
   if (event.origin !== location.origin || event.source !== window.parent || event.data?.type !== 'kaminos-learn-active') return;
   embeddedActive = event.data.active === true;
@@ -183,25 +207,43 @@ window.addEventListener('message', event => {
 input.addEventListener('change', async () => {
   const file = input.files?.[0];
   if (!file || running) return;
+  selectionToken += 1;
+  const thisSelection = selectionToken;
+  selectionPending = true;
+  input.disabled = true;
+  runButton.disabled = true;
   const nextUrl = URL.createObjectURL(file);
-  const oldUrl = inputUrl;
-  source.src = nextUrl;
+  const probe = new Image();
+  probe.src = nextUrl;
   try {
+    await probe.decode();
+    if (thisSelection !== selectionToken) { URL.revokeObjectURL(nextUrl); return; }
+    const oldUrl = inputUrl;
+    source.src = nextUrl;
     await source.decode();
+    if (thisSelection !== selectionToken) { URL.revokeObjectURL(nextUrl); return; }
     inputUrl = nextUrl;
     if (oldUrl) URL.revokeObjectURL(oldUrl);
     $('learn-source-name').textContent = file.name;
     status.textContent = 'Image loaded';
+    errorBox.hidden = true;
   } catch {
     URL.revokeObjectURL(nextUrl);
-    source.src = oldUrl || './fixtures/sf3d-demo-chair.png';
+    if (thisSelection !== selectionToken) return;
+    source.src = inputUrl || './fixtures/sf3d-demo-chair.png';
     errorBox.textContent = 'This image could not be opened.';
     errorBox.hidden = false;
+  } finally {
+    if (thisSelection === selectionToken) {
+      selectionPending = false;
+      input.disabled = false;
+      runButton.disabled = !!releaseFailure || !!releasePromise || running;
+    }
   }
 });
 
 runButton.addEventListener('click', async () => {
-  if (running) return;
+  if (running || releaseFailure || selectionPending || releasePromise) return;
   running = true;
   publishRunState();
   runButton.disabled = true;
@@ -266,7 +308,7 @@ runButton.addEventListener('click', async () => {
   } finally {
     running = false;
     publishRunState();
-    runButton.disabled = false;
+    runButton.disabled = !!releaseFailure || !!releasePromise || selectionPending;
     input.disabled = false;
     resolutionSelect.disabled = false;
     if (!embeddedActive) await releaseModel();

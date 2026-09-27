@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { assertServedSourceIdentity } from './served-source-contract.mjs';
 
 const args = process.argv.slice(2);
 const value = (flag, fallback) => {
@@ -14,6 +15,7 @@ const baseUrl = value('--url', 'http://127.0.0.1:8179');
 const puppeteerPath = value('--puppeteer', '');
 const chromePath = value('--chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
 const bundle = fs.readFileSync('lib/sf3d/sf3d-learn-producer.js');
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 fs.mkdirSync(outputDir, { recursive: true });
@@ -28,6 +30,7 @@ const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2)
 write();
 let browser;
 try {
+  if (dirty) throw new Error(`source checkout is dirty: ${dirty}`);
   if (!puppeteerPath || !fs.existsSync(puppeteerPath)) throw new Error('missing Puppeteer module');
   if (!fs.existsSync(chromePath)) throw new Error('missing Chrome');
   const { default: puppeteer } = await import(pathToFileURL(puppeteerPath).href);
@@ -45,6 +48,21 @@ try {
   const iframe = await page.waitForSelector('#learn-viewport-frame');
   const frame = await iframe.contentFrame();
   await frame.waitForSelector('#learn-viewer canvas');
+  report.phase = 'source-identity'; write();
+  const sourceFiles = ['index.html', 'sf3d-learn.html', 'sf3d-learn.css', 'sf3d-learn.mjs', 'lib/sf3d/sf3d-learn-producer.js'];
+  const localHashes = Object.fromEntries(sourceFiles.map(file => [file, sha256(fs.readFileSync(file))]));
+  const servedHashes = await frame.evaluate(async files => {
+    const entries = await Promise.all(files.map(async file => {
+      const response = await fetch(`/${file}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`served source missing: ${file} (${response.status})`);
+      const digest = await crypto.subtle.digest('SHA-256', await response.arrayBuffer());
+      return [file, [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')];
+    }));
+    return Object.fromEntries(entries);
+  }, sourceFiles);
+  report.effective.servedHashes = servedHashes;
+  write();
+  assertServedSourceIdentity(localHashes, servedHashes);
   const identity = await frame.evaluate(() => ({ page: location.href, sourceLoaded: document.querySelector('#learn-source').naturalWidth > 0,
     resolution: document.querySelector('#learn-resolution').value, runEnabled: !document.querySelector('#learn-run').disabled,
     error: document.querySelector('#learn-error').hidden ? null : document.querySelector('#learn-error').textContent }));
