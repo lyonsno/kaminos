@@ -123,9 +123,14 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
   prototype.setSceneSourceFrameConsumer(prepare);
   return {
     setSource(next) {
+      const previous=source;
       source=validateScenePointSource({...source,...next});
       position.value.set(...source.position);intensity.value.set(...source.intensity);
-      prototype.setSceneMediumSource(source);
+      // Source energy can change without changing the optical-depth paths.
+      // Rebuild that field only when its origin or integration step moves.
+      if(source.stepLength!==previous.stepLength || source.position.some((value,index)=>value!==previous.position[index])) {
+        prototype.setSceneMediumSource(source);
+      }
       return {...source};
     },
     debugState:()=>({...status,source:{...source},frame:prototype.scenePointLightFrame(),shadow:shadow.debugState(),

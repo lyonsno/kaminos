@@ -116,6 +116,18 @@ canvas { display: block; }
 #volume-authored-mix-control-root .slider-row { margin: 8px 0; }
 #volume-authored-mix-control-root .slider-label { min-width: 92px; color: #879398; }
 #volume-authored-mix-control-root .slider-val { color: #aab4b7; }
+.right-render-tabs { display: flex; gap: 4px; margin: 0 0 15px; border-bottom: 1px solid #293033; }
+.right-render-tabs button { flex: 1; padding: 8px 4px; border: 0; border-bottom: 2px solid transparent; background: none; color: #879398; font: inherit; font-size: 11px; cursor: pointer; }
+.right-render-tabs button[aria-selected="true"] { color: #e6ecee; border-bottom-color: #62a9cd; }
+#rendering-panel-content[hidden], #authored-mix-panel-content[hidden] { display: none; }
+.rendering-description { margin: 0 0 14px; color: #a6b2b5; font-size: 11px; line-height: 1.45; }
+.rendering-channel-select { display: block; width: 100%; padding: 8px; margin: 8px 0; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; font-size: 11px; }
+.rendering-channel-status { margin: 12px 0; padding: 9px; border-left: 2px solid #59676b; background: #121617; color: #a6b2b5; font: 10px 'SF Mono', monospace; line-height: 1.5; white-space: pre-wrap; }
+.rendering-channel-status[data-status="active"] { border-color: #4aa36a; }
+.rendering-channel-status[data-status="unavailable"] { border-color: #b88943; }
+.rendering-position-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 9px 0; }
+.rendering-position-row label { display: block; color: #9aa7aa; font-size: 10px; }
+.rendering-position-row input { box-sizing: border-box; width: 100%; margin-top: 4px; padding: 6px; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; font: 11px 'SF Mono', monospace; }
 @media (max-width: 1100px) {
   #sidebar { width: 330px; }
   #volume-authored-mix-panel { flex-basis: 320px; width: 320px; min-width: 320px; }
@@ -665,7 +677,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .saved-scene-picture img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
 .saved-scene-basin { padding: 0 8px 8px; color: #aaa; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
 .saved-scene-shot .gr-name { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-body.composition-authoring #volume-authored-mix-panel { display: none; }
+body.composition-authoring #volume-authored-mix-panel:not([data-rendering-route="true"]) { display: none; }
 body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width: max-content; flex-wrap: wrap; justify-content: center; }
 @media (max-width: 760px) {
   body.composition-authoring { flex-direction: column-reverse; }
@@ -773,19 +785,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
       <div id="scene-object-list" class="scene-object-list"></div>
-    </div>
-
-    <h2>Fire Light</h2>
-    <div class="panel">
-      <label class="import-mode">
-        <input type="checkbox" id="fire-light-test-scene-toggle">
-        <span>Test geometry</span>
-      </label>
-      <div class="slider-row">
-        <span class="slider-label">Light gain (stops)</span>
-        <input type="range" id="fire-light-gain-stops" min="-4" max="4" step="0.25" value="0">
-        <span class="slider-val" id="fire-light-gain-stops-val">+0.0</span>
-      </div>
     </div>
 
     <h2>Transform</h2>
@@ -3214,9 +3213,39 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   <div id="viewport-drop-overlay">Drop GLB, OBJ, PLY/SPZ, or .kaminos.json</div>
 </div>
 
-<aside id="volume-authored-mix-panel" data-collapsed="false" data-cockpit-status="pending" aria-label="Authored mix controls" hidden>
+<aside id="volume-authored-mix-panel" data-collapsed="false" data-right-tab="mix" data-cockpit-status="pending" aria-label="Volume and rendering controls" hidden>
   <button id="volume-authored-mix-toggle" type="button" aria-label="Collapse authored mix controls" aria-expanded="true" title="Collapse authored mix controls">&gt;</button>
   <div id="volume-authored-mix-body">
+    <div class="right-render-tabs" role="tablist" aria-label="Right-side controls">
+      <button type="button" id="right-tab-rendering" role="tab" aria-controls="rendering-panel-content" aria-selected="false">Rendering</button>
+      <button type="button" id="right-tab-mix" role="tab" aria-controls="authored-mix-panel-content" aria-selected="true">Volume Mix</button>
+    </div>
+    <div id="rendering-panel-content" role="tabpanel" aria-labelledby="right-tab-rendering" hidden>
+      <div class="volume-authored-mix-kicker">Scene light</div>
+      <h2 class="volume-authored-mix-title">Rendering</h2>
+      <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
+      <label for="rendering-light-mode">Light contributions</label>
+      <select class="rendering-channel-select" id="rendering-light-mode">
+        <option value="all">Both light paths</option>
+        <option value="shared">Shared ON · flame field OFF</option>
+        <option value="flame-field">Shared OFF · flame field ON</option>
+        <option value="neither">Both paths OFF</option>
+      </select>
+      <div id="rendering-light-status" class="rendering-channel-status" data-status="unavailable" role="status">Inspecting renderer route…</div>
+      <h2>Shared point source</h2>
+      <p class="rendering-description">This study source lights both mesh and smoke. Its gain changes source energy on both paths.</p>
+      <div class="rendering-position-row" aria-label="Shared point source position">
+        <label for="rendering-source-x">X<input type="number" id="rendering-source-x" step="0.1" value="0"></label>
+        <label for="rendering-source-y">Y<input type="number" id="rendering-source-y" step="0.1" value="1.4"></label>
+        <label for="rendering-source-z">Z<input type="number" id="rendering-source-z" step="0.1" value="0.7"></label>
+      </div>
+      <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
+      <h2>Flame field</h2>
+      <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
+      <label class="import-mode"><input type="checkbox" id="fire-light-test-scene-toggle"><span>Test geometry</span></label>
+      <div class="slider-row"><span class="slider-label">Light gain (stops)</span><input type="range" id="fire-light-gain-stops" min="-4" max="4" step="0.25" value="0"><span class="slider-val" id="fire-light-gain-stops-val">+0.0</span></div>
+    </div>
+    <div id="authored-mix-panel-content" role="tabpanel" aria-labelledby="right-tab-mix">
     <div class="volume-authored-mix-kicker">Volume</div>
     <h2 class="volume-authored-mix-title">Authored Mix</h2>
     <section class="volume-full-support-stage" aria-label="Full support coefficient authoring">
@@ -3250,6 +3279,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="volume-stage-b-status" data-status="disabled">stage-b-resources-missing | requested matched-optical-recurrence-v0 | effective none | renderer not encoded/applied</div>
     </section>
     <div id="volume-authored-mix-control-root" data-volume-control-root="authored-mix"></div>
+    </div>
   </div>
 </aside>
 
@@ -3267,6 +3297,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <script type="module">
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
+import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
@@ -3311,6 +3342,50 @@ let compositionModule = null;
 let compositionSetupError = null;
 const importCompositionModule = url => import(url);
 let fireLightFieldPass = null;
+let renderingMode = 'all';
+const renderingUrlState = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+const renderingUrlGain = Number(renderingUrlState.get('rendering_source_gain'));
+let renderingGainStops = renderingUrlState.has('rendering_source_gain') && Number.isFinite(renderingUrlGain)
+  ? Math.max(-4, Math.min(8, renderingUrlGain)) : 0;
+let renderingSourceIntensity = null;
+let renderingSourcePosition = parseSceneSourcePosition(renderingUrlState.get('rendering_source_xyz'));
+
+function refreshRenderingControls() {
+  const hasSharedRoute = fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1';
+  if (!hasSharedRoute && renderingMode === 'all') renderingMode = 'flame-field';
+  const selected = renderingChannelsForMode(renderingMode);
+  const source = window.__kaminosSceneRadiance;
+  if (source) {
+    renderingSourceIntensity ||= source.debugState().source.intensity.slice();
+    renderingSourcePosition ||= source.debugState().source.position.slice();
+    source.setSource({
+      position: renderingSourcePosition,
+      intensity: sceneSourceIntensityForMode(renderingSourceIntensity, renderingMode, renderingGainStops),
+    });
+  }
+  if (renderingSourcePosition) {
+    for (const [axis, value] of ['x', 'y', 'z'].map((axis, index) => [axis, renderingSourcePosition[index]])) {
+      document.getElementById(`rendering-source-${axis}`).value = String(value);
+    }
+  }
+  fireLightFieldPass?.setWitnessMute(!selected.flameField);
+  const select = document.getElementById('rendering-light-mode');
+  if (select) {
+    select.value = renderingMode;
+    for (const option of select.options) {
+      option.disabled = (option.value === 'shared' || option.value === 'all') && !hasSharedRoute;
+    }
+  }
+  const status = document.getElementById('rendering-light-status');
+  if (status) {
+    const sharedState = !hasSharedRoute ? 'not mounted on this route' : source ? (selected.shared ? 'on' : 'off') : 'mounting';
+    const fieldState = !fireLightFieldPass ? 'not mounted on this route' : selected.flameField ? 'on' : 'off';
+    const position = source?.debugState().source.position.map(value => value.toFixed(2)).join(', ');
+    status.textContent = `Shared point source (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}\nFlame field (mesh): ${fieldState}`;
+    status.dataset.status = source || fireLightFieldPass ? 'active' : 'unavailable';
+  }
+  window._kaminosDirty?.();
+}
 let ordinarySceneDepthProvider = null;
 let compositionHost = null;
 
@@ -10362,6 +10437,7 @@ async function initScene() {
   if (isFireLightFieldRoute() && sharedGpu?.device) {
     fireLightFieldPass = createFireLightFieldReceiverPass(baseSceneOutput, prePassDepth, prePassNormal);
     renderPipeline.outputNode = fireLightFieldPass.outputNode;
+    refreshRenderingControls();
   } else {
     renderPipeline.outputNode = baseSceneOutput;
   }
@@ -11222,7 +11298,7 @@ function setActiveTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
   const volumeCockpitPanel = document.getElementById('volume-authored-mix-panel');
-  if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume';
+  if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume' && !isFireLightFieldRoute();
   const transformBar = document.getElementById('transform-bar');
   if (transformBar) transformBar.hidden = tabName === 'volume';
   const fingerJuiceHostPanel = document.getElementById('finger-juice-host-operator-panel');
@@ -11248,6 +11324,43 @@ function setActiveTab(tabName) {
 
 window.__kaminosSetActiveTab = setActiveTab;
 window.__kaminosActiveTab = () => document.querySelector('.tab.active[data-tab]')?.dataset.tab || null;
+function setRightPanelTab(name) {
+  if (name !== 'mix' && name !== 'rendering') throw new Error(`unknown right panel tab: ${name}`);
+  const panel = document.getElementById('volume-authored-mix-panel');
+  panel.dataset.rightTab = name;
+  panel.dataset.renderingRoute = String(isFireLightFieldRoute());
+  document.getElementById('rendering-panel-content').hidden = name !== 'rendering';
+  document.getElementById('authored-mix-panel-content').hidden = name !== 'mix';
+  for (const tabName of ['rendering', 'mix']) {
+    document.getElementById(`right-tab-${tabName}`).setAttribute('aria-selected', String(name === tabName));
+  }
+  if (name === 'rendering') refreshRenderingControls();
+}
+for (const name of ['rendering', 'mix']) {
+  document.getElementById(`right-tab-${name}`).addEventListener('click', () => setRightPanelTab(name));
+}
+document.getElementById('rendering-light-mode').addEventListener('change', event => {
+  renderingMode = event.target.value;
+  refreshRenderingControls();
+});
+document.getElementById('rendering-shared-gain').addEventListener('input', event => {
+  renderingGainStops = Number(event.target.value);
+  document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
+  refreshRenderingControls();
+});
+for (const axis of ['x', 'y', 'z']) {
+  document.getElementById(`rendering-source-${axis}`).addEventListener('change', () => {
+    const input = ['x', 'y', 'z'].map(name => document.getElementById(`rendering-source-${name}`).value).join(',');
+    const position = parseSceneSourcePosition(input);
+    if (position) {
+      renderingSourcePosition = position;
+      refreshRenderingControls();
+    }
+  });
+}
+document.getElementById('rendering-shared-gain').value = String(renderingGainStops);
+document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
+setRightPanelTab(isFireLightFieldRoute() ? 'rendering' : 'mix');
 // Tab switching also stops inactive benches; initialize their state first.
 if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
@@ -21865,6 +21978,7 @@ async function initKaminosVolumeRoute() {
     import('./scene-radiance.mjs').then(({mountSceneRadiance}) => {
       window.__kaminosSceneRadiance = mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       window.__kaminosSceneRadianceSetup.status='mounted';
+      refreshRenderingControls();
     }).catch(error=>{
       window.__kaminosSceneRadianceSetup={status:'failed',error:String(error.message)};
       console.error('shared scene radiance mount failed',error);
