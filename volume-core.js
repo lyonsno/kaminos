@@ -7,6 +7,7 @@ import {
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
+import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource } from './scene-volume-source.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
@@ -4274,6 +4275,7 @@ fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
 
 ${PHYSICAL_COLOR_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
+${SCENE_VOLUME_SOURCE_WGSL}
 
 fn fireColor(temp: f32) -> vec3<f32> {
   let ember = vec3<f32>(0.70, 0.10, 0.018);
@@ -9704,6 +9706,8 @@ export function createKaminosVolumePrototype({
   let pressureResidualAfterPipeline = null;
   let boundarySidecarBuildPipeline = null;
   let emissiveLightField = null;
+  let sceneVolumeSource = null;
+  let sceneVolumeSourceRequested = false;
   let emissiveWhiteKelvin = null;
   let emissiveWhiteMatrix = null;
   let boundarySplatCompactPipeline = null;
@@ -10436,6 +10440,8 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    sceneVolumeSource?.destroy();
+    sceneVolumeSource = null;
     emissiveLightField?.destroy();
     emissiveLightField = null;
     selectiveHeadLiveRuntime?.destroy();
@@ -17528,9 +17534,15 @@ export function createKaminosVolumePrototype({
       drawPipeline = ordinaryDepthPipelines.get(basePipeline);
     }
     if (uniforms[368] > 1.5) {
+      if (sceneVolumeSourceRequested) {
+        sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers,
+          grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
+        sceneVolumeSource.encode(encoder, currentFluid, state.frameCount);
+      }
       emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
       state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
     }
+    if (uniforms[368] <= 1.5 || !sceneVolumeSourceRequested) sceneVolumeSource?.invalidate('inactive-source-route');
     const pass = encoder.beginRenderPass({
       label,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
@@ -24691,6 +24703,14 @@ export function createKaminosVolumePrototype({
       }
     },
     fireIrradianceLightField,
+    setSceneVolumeSourceEnabled(enabled) {
+      sceneVolumeSourceRequested = enabled === true;
+      if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}
+      return {requested: sceneVolumeSourceRequested};
+    },
+    sceneVolumeSourceField() {
+      return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
+    },
     sampleFireLightFieldGpuProfile,
     sampleFrame,
     sampleLiquidFireContactConsumer,

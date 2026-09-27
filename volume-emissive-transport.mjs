@@ -138,6 +138,11 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   let emission = hotSoot*thermalRadiance(kelvin) + gas;
   return EmissiveMaterial(emission, absorption, scattering);
 }
+fn sceneEmissiveMaterialAt(p: vec3<f32>) -> EmissiveMaterial {
+  let r = sampleWorldFlowReconstructionRaw(p);
+  let coverage = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
+  return emissiveMaterial(r,coverage,1.0-u.boundary_fire_display.z);
+}
 fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
   let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));
   let exposed = max(vec3<f32>(0.0), balanced*exp2(u.physical_display.y));
