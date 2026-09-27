@@ -125,6 +125,7 @@ try {
       }
       const core = window.__kaminosVolumePrototype;
       if (${arm.sourceProbe === true}) core.setSceneVolumeSourceEnabled(true);
+      const smokePresentation = ${typeof arm.smokePresentation === 'string'} ? core.setRaymarchSmokePresentationMode(${JSON.stringify(arm.smokePresentation || 'on')}) : null;
       if (${Boolean(arm.mediumSource)}) core.setSceneMediumSource(${JSON.stringify(arm.mediumSource || null)});
       const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
       if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
@@ -136,13 +137,17 @@ try {
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
       const source = ${arm.sourceProbe === true} ? await core.sampleSceneVolumeSource() : null;
       const optical = ${Boolean(arm.mediumSource)} ? await core.sampleSceneMediumOpticalDepth() : null;
-      return {sample, source, optical, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      return {sample, source, optical, profile, smokePresentation, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, arm.temperature);
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
+    if (arm.smokePresentation) {
+      assert.equal(result.smokePresentation?.effectiveMode, arm.smokePresentation, 'smoke presentation request did not take effect');
+      assert.equal(result.smokePresentation?.fallbackReason, null, 'smoke presentation fell back');
+    }
     if (arm.sourceProbe) {
       const source = result.source;
       assertSceneSourceCapture(source,result.state.frameCount);

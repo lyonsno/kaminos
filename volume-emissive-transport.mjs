@@ -141,7 +141,9 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
 fn sceneEmissiveMaterialAt(p: vec3<f32>) -> EmissiveMaterial {
   let r = sampleWorldFlowReconstructionRaw(p);
   let coverage = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
-  return emissiveMaterial(r,coverage,1.0-u.boundary_fire_display.z);
+  // Shared scene transport sees authored material, independent of whether the
+  // raymarch presentation chooses to show smoke. Suppression is consumer-local.
+  return emissiveMaterial(r,coverage,1.0);
 }
 fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
   let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));

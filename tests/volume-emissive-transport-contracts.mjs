@@ -25,6 +25,16 @@ assert.deepEqual(materialLawControl.allowedValues, ['0','1']);
 // These two scalar function bodies share JS/WGSL expression syntax. Execute
 // both selected laws directly from production source, not a copied formula.
 const scalarBody = name => EMISSIVE_TRANSPORT_WGSL.split(`fn ${name}(`)[1].split('\n}')[0].split('-> f32 {')[1];
+// Execute the shared-source wrapper with a material-law spy. Presentation may
+// hide smoke in one renderer but must not remove it from the shared medium.
+const sceneBody = EMISSIVE_TRANSPORT_WGSL.split('fn sceneEmissiveMaterialAt(')[1].split('\n}')[0].split('-> EmissiveMaterial {')[1]
+  .replaceAll('let ', 'const ').replace('vec4<f32>(0.0)', '0');
+const sampleScene = new Function('p', 'u', 'sampleWorldFlowReconstructionRaw', 'liveBoundarySupportAt', 'max', 'emissiveMaterial', sceneBody);
+for (const hidden of [0, 1]) {
+  const material = sampleScene([0,0,0], {boundary_fire_display:{z:hidden},topology_shell_carriers:0},
+    () => 'fluid', () => .7, Math.max, (fluid,coverage,smokeVisible) => ({fluid,coverage,smokeVisible}));
+  assert.deepEqual(material, {fluid:'fluid',coverage:.7,smokeVisible:1}, 'shared extinction ignores smoke presentation');
+}
 const sootAt = new Function('coverage','sootYield','strength','smokeAmount','transported','max',scalarBody('emissiveSootPopulation'));
 const hotSootAt = (...args) => sootAt(...args, true, Math.max);
 assert.equal(hotSootAt(1, 1, 1, 0), 0, 'no transported soot means no hot-soot extinction/emission');
