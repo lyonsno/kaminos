@@ -12,12 +12,14 @@ const outputDir = path.resolve(value('--output-dir', '/private/tmp/kaminos-sf3d-
 const baseUrl = value('--url', 'http://127.0.0.1:8179');
 const puppeteerPath = value('--puppeteer', '');
 const chromePath = value('--chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+const width = Number(value('--width', '1440'));
+const height = Number(value('--height', '900'));
 fs.mkdirSync(outputDir, { recursive: true });
 const reportPath = path.join(outputDir, 'report.json');
 const report = {
   schema: 'kaminos.sf3d-learn-lifecycle.v0', ok: false, phase: 'preflight',
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-  effective: { baseUrl, producerRoute: 'synthetic-response-intercept', puppeteerPath, chromePath },
+  effective: { baseUrl, width, height, producerRoute: 'synthetic-response-intercept', puppeteerPath, chromePath },
   events: [],
 };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
@@ -52,7 +54,7 @@ try {
   browser = await puppeteer.launch({ executablePath: chromePath, headless: false,
     args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--no-first-run', '--no-default-browser-check'] });
   const page = await browser.newPage();
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+  await page.setViewport({ width, height, deviceScaleFactor: 1 });
   page.on('pageerror', error => { report.events.push({ type: 'pageerror', message: error.message }); write(); });
   await page.setRequestInterception(true);
   page.on('request', request => {
@@ -74,15 +76,22 @@ try {
   await frame.waitForFunction(() => document.querySelector('#learn-source-name').textContent === 'moge-live-flame-source.png');
   await frame.click('#learn-run');
   await frame.waitForFunction(() => globalThis.__learnFake?.resumeSecond);
+  if (width <= 760) await new Promise(resolve => setTimeout(resolve, 600));
   report.duringSecond = await frame.evaluate(() => ({
     label: document.querySelector('#learn-view-label').textContent,
     count: document.querySelector('#learn-mesh-count').textContent,
     emptyVisible: !document.querySelector('#learn-view-empty').hidden,
     firstStage: document.querySelector('#learn-stages [data-stage="block-0-fuse-out"]').dataset.state,
+    viewerTop: document.querySelector('#learn-viewer').getBoundingClientRect().top,
+    emptyText: document.querySelector('#learn-view-empty').textContent,
   }));
   if (report.duringSecond.label !== 'Awaiting first shape' || report.duringSecond.count !== 'No geometry yet' || !report.duringSecond.emptyVisible || report.duringSecond.firstStage !== 'waiting') {
     throw new Error('old mesh was presented as the new run');
   }
+  if (width <= 760 && (report.duringSecond.viewerTop < -5 || report.duringSecond.viewerTop > 100 || report.duringSecond.emptyText !== 'Inferring shape')) {
+    throw new Error('mobile viewer did not return to visible live progress');
+  }
+  if (width <= 760) await page.screenshot({ path: path.join(outputDir, 'mobile-inference.png') });
   await frame.evaluate(() => globalThis.__learnFake.resumeSecond());
   await frame.waitForFunction(() => document.querySelector('#learn-stages [data-stage="final"]').dataset.state === 'done');
   report.second = await frame.evaluate(() => ({
