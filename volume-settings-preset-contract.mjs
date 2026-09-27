@@ -210,6 +210,38 @@ export function describeVolumeSettingsPresetProjection(projection) {
   return { text: parts.join(' | '), warning: Boolean(carried.length || replaced.length) };
 }
 
+// A basin loaded across branches with carried or replaced values cannot be
+// saved back under its own label: this branch cannot hold what it carried,
+// so the save would replace the basin for every branch under that name.
+export function volumeSettingsPresetLabelReuseBlock(receipt, label) {
+  const projection = receipt?.serverProjection;
+  if (!projection || !(projection.carriedControls?.length || projection.unsupportedValuesDefaulted?.length)) return null;
+  const requested = String(label || '').trim();
+  const sameLabel = requested === receipt.label || (receipt.alias && requested.toLowerCase() === receipt.alias);
+  if (!sameLabel) return null;
+  return `"${requested}" was loaded from another branch (${describeVolumeSettingsPresetProjection(projection).text}); `
+    + 'saving it under the same label would replace it for every branch. Save under a new label.';
+}
+
+// Whether a save reached the shared basin library, for the save status line.
+export function describeVolumeSettingsLibraryPublication(publication) {
+  if (!publication) return { text: '', warning: false };
+  if (!publication.published) {
+    return publication.error
+      ? { text: `NOT in library ${publication.storePath || ''}: ${publication.error}`.replace('library : ', 'library: '), warning: true }
+      : { text: 'library off', warning: false };
+  }
+  const held = publication.aliasHeld;
+  if (held) {
+    return {
+      text: `in library ${publication.storePath} as a version; label "${publication.label}" kept on ${String(held.currentPresetId).slice(0, 16)} `
+        + `because this branch lacks ${(held.controls || []).join(', ')}; save under a new label to publish it by name`,
+      warning: true,
+    };
+  }
+  return { text: `in library ${publication.storePath}`, warning: false };
+}
+
 export function validateVolumeSettingsPresetDocument(document, requestedPresetRef = null, rawSchema = null) {
   const schema = validatePresetSchema(rawSchema);
   const serverProjection = volumeSettingsPresetServerProjection(document);

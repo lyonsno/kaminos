@@ -3573,12 +3573,14 @@ import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mj
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
+  describeVolumeSettingsLibraryPublication,
   describeVolumeSettingsPresetProjection,
   resolveVolumeSettingsPresetVisualView,
   validateVolumeSettingsPresetDocument,
   validateVolumeSettingsPresetIndex,
   validateVolumeSettingsPresetTarget,
   volumeSettingsPresetControlValuesEqual,
+  volumeSettingsPresetLabelReuseBlock,
 } from './volume-settings-preset-contract.mjs';
 import {
   collectVolumeCockpitControlElements,
@@ -16773,16 +16775,20 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         if (entry.presetId === previous) select.value = previous;
       }
       for (const entry of unavailable) {
-        const option = new Option(`${entry.label} | unavailable on this version`, entry.presetId);
+        // A damaged artifact is not a version difference; say which it is.
+        const option = new Option(`${entry.label} | ${entry.reason === 'invalid-artifact' ? 'unreadable artifact' : 'unavailable on this version'}`, entry.presetId);
         option.disabled = true;
         option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId} | ${entry.error}`;
         select.add(option);
       }
     }
     const active = activeVolumeSettingsPresetStatus();
+    const unreadable = unavailable.filter(entry => entry.reason === 'invalid-artifact').length;
+    const skewed = unavailable.length - unreadable;
+    const invalidAliases = index.invalidAliases || [];
     volumeSettingsPresetStatus(
-      `${active.text ? `${active.text} || ` : ''}${index.entries.length} presets${earlierVersions.length ? ` | ${earlierVersions.length} earlier version${earlierVersions.length === 1 ? '' : 's'}` : ''}${unavailable.length ? ` | ${unavailable.length} unavailable on this version` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
-      active.warning || unavailable.length > 0,
+      `${active.text ? `${active.text} || ` : ''}${index.entries.length} presets${earlierVersions.length ? ` | ${earlierVersions.length} earlier version${earlierVersions.length === 1 ? '' : 's'}` : ''}${skewed ? ` | ${skewed} unavailable on this version` : ''}${unreadable ? ` | ${unreadable} unreadable` : ''}${invalidAliases.length ? ` | ${invalidAliases.length} malformed label${invalidAliases.length === 1 ? '' : 's'}` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      active.warning || unavailable.length > 0 || invalidAliases.length > 0,
     );
     return index;
   } catch (error) {
@@ -16799,6 +16805,8 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
     || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
   volumeSettingsPresetStatus(`saving ${label}...`);
   try {
+    const reuseBlock = volumeSettingsPresetLabelReuseBlock(activeVolumeSettingsPresetReceipt, label);
+    if (reuseBlock) throw new Error(reuseBlock);
     await volumeCockpitLayoutReady;
     const preset = suppliedPreset || buildVolumeSettingsPreset();
     const response = await fetch('/api/volume-settings-presets', {
@@ -16818,8 +16826,10 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
     }
     await refreshVolumeSettingsPresetList(result.effective.presetId);
     if (labelInput && !sceneSnapshot) labelInput.value = result.effective.label;
+    const library = describeVolumeSettingsLibraryPublication(result.sharedPublication);
     volumeSettingsPresetStatus(
-      `${result.effective.label} | ${result.effective.presetId} | ${result.effective.controlCount} basin + ${result.effective.rendererControlCount} renderer + ${result.effective.presentationControlCount} presentation controls | ${result.effective.storePath}`,
+      `${result.effective.label} | ${result.effective.presetId} | ${result.effective.controlCount} basin + ${result.effective.rendererControlCount} renderer + ${result.effective.presentationControlCount} presentation controls | ${result.effective.storePath}${library.text ? ` | ${library.text}` : ''}`,
+      library.warning,
     );
     console.log(JSON.stringify(result, null, 2));
     setInfo(`Volume settings preset saved: ${result.effective.label}`);

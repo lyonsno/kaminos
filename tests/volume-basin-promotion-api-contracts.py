@@ -93,11 +93,14 @@ def main():
         promotion_root = root / "repo" / "artifacts" / "basin-promotions"
         old_schema_path = serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH
         old_store = serve.VOLUME_SETTINGS_STORE
+        old_shared = serve.SHARED_BASIN_STORE
+        library = root / "basin-library"
         try:
             schema_path = root / "schema.json"
             schema_path.write_text(json.dumps(SCHEMA, indent=2) + "\n")
             serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = schema_path
             serve.VOLUME_SETTINGS_STORE = store
+            serve.SHARED_BASIN_STORE = library
             receipt = serve.write_volume_basin_promotion_package({
                 "label": "API Basin",
                 "handle": "API Basin",
@@ -125,6 +128,11 @@ def main():
         finally:
             serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = old_schema_path
             serve.VOLUME_SETTINGS_STORE = old_store
+            serve.SHARED_BASIN_STORE = old_shared
+
+        # A promoted basin reaches the shared library like any other save.
+        assert receipt["sharedPublication"]["published"] is True, receipt.get("sharedPublication")
+        assert (library / "presets" / f"{receipt['settingsPreset']['presetId']}.json").exists()
 
         assert receipt["identity"] == "kaminos.volume.basin-promotion-write-receipt.v1"
         assert receipt["promotion"]["status"] == "written"

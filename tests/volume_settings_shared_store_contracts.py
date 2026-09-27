@@ -126,7 +126,7 @@ def test_newer_branch_basin_loads_on_older_branch(tmp):
     unsupported = serve.list_volume_settings_presets(store, no_default)
     assert unsupported["entries"] == []
     assert [(entry["alias"], entry["reason"], "volume-mode" in entry["error"]) for entry in unsupported["unavailableEntries"]] == [
-        ("newer-basin", "unsupported-controls", True), ("broken", "invalid-artifact", False)], unsupported
+        ("newer-basin", "schema-skew", True), ("broken", "invalid-artifact", False)], unsupported
 
     # Writes stay strict: a page must never write controls its own branch lacks.
     try:
@@ -254,8 +254,76 @@ def test_label_versions_stay_selectable(tmp):
     assert report["presetsWithoutLabel"] == 0, report
 
 
+def test_lagging_branch_save_holds_the_shared_label(tmp):
+    """A branch that lacks some of a basin's controls cannot take its label in the library."""
+    shared = tmp / "library"
+    newer_local = tmp / "newer-branch"
+    older_local = tmp / "older-branch"
+    original = serve.write_volume_settings_preset_to_library(
+        newer_local, shared, "kiln", payload(NEWER_SCHEMA, NEWER_VALUES), SOURCE, NEWER_SCHEMA)
+    original_id = original["effective"]["presetId"]
+    loaded = serve.read_volume_settings_preset_layered([("local", older_local), ("shared", shared)], "kiln", BASE_SCHEMA)
+    assert loaded["presetId"] == original_id
+    resaved = serve.write_volume_settings_preset_to_library(
+        older_local, shared, "kiln", loaded["preset"], {**SOURCE, "branch": "older"}, BASE_SCHEMA)
+    lossy_id = resaved["effective"]["presetId"]
+    assert lossy_id != original_id
+    publication = resaved["sharedPublication"]
+    assert publication["published"] is True and publication["aliasMoved"] is False, publication
+    assert publication["aliasHeld"] == {
+        "reason": "would-drop-controls", "controls": ["volume-new-knob"], "currentPresetId": original_id}, publication
+    assert (shared / "presets" / f"{lossy_id}.json").exists(), "the lossy copy is still kept in the library"
+    fresh = tmp / "fresh-newer-branch"
+    assert serve.read_volume_settings_preset_layered([("local", fresh), ("shared", shared)], "kiln", NEWER_SCHEMA)["presetId"] == original_id
+    listing = serve.list_volume_settings_presets_layered([("local", fresh), ("shared", shared)], NEWER_SCHEMA)
+    assert [entry["presetId"] for entry in listing["entries"]] == [original_id], listing
+    assert [entry["presetId"] for entry in listing["earlierVersions"]] == [lossy_id], "the held copy stays selectable by version"
+
+
+def test_newest_unreadable_version_is_not_shadowed(tmp):
+    """When a label's newest version cannot load here, the picker says so instead of offering an older one as current."""
+    retiring = copy.deepcopy(BASE_SCHEMA)
+    retiring["controls"] = [control for control in retiring["controls"] if control["key"] != "volume-scene"]
+    retiring["retiredControls"] = [{"axis": "domControls", "key": "volume-scene", "param": "volume_scene",
+                                    "tagName": "SELECT", "type": "select-one"}]
+    retiring["controlCount"] = len(retiring["controls"])
+    local = tmp / "older-branch"
+    shared = tmp / "library"
+    older = serve.write_volume_settings_preset(local, "kiln", payload(BASE_SCHEMA, BASE_VALUES), SOURCE, BASE_SCHEMA)
+    _age_alias(local / "aliases" / "kiln.json")
+    retired_branch_payload = payload(retiring, {key: value for key, value in BASE_VALUES.items() if key != "volume-scene"})
+    newer = serve.write_volume_settings_preset_to_library(
+        tmp / "retiring-branch", shared, "kiln", retired_branch_payload, {**SOURCE, "branch": "retiring"}, retiring)
+    # volume-scene has no additive default on BASE: the retiring branch's basin cannot load here.
+    listing = serve.list_volume_settings_presets_layered([("local", local), ("shared", shared)], BASE_SCHEMA)
+    assert listing["entries"] == [], listing["entries"]
+    assert [(entry["presetId"], entry["reason"]) for entry in listing["unavailableEntries"]] == [
+        (newer["effective"]["presetId"], "schema-skew")], listing["unavailableEntries"]
+    assert [(entry["presetId"], entry["reason"]) for entry in listing["earlierVersions"]] == [
+        (older["effective"]["presetId"], "other-store-label")], listing["earlierVersions"]
+
+
+def test_malformed_alias_is_reported_alone(tmp):
+    store = tmp / "store"
+    good = serve.write_volume_settings_preset(store, "good", payload(BASE_SCHEMA, BASE_VALUES), SOURCE, BASE_SCHEMA)
+    (store / "aliases" / "no-label.json").write_text(json.dumps({
+        "identity": "kaminos-volume-settings-preset-alias-v1", "alias": "no-label", "presetId": good["effective"]["presetId"]}))
+    (store / "aliases" / "bad-target.json").write_text(json.dumps({
+        "identity": "kaminos-volume-settings-preset-alias-v1", "alias": "bad-target", "label": "bad target", "presetId": "not-an-id"}))
+    (store / "aliases" / "not-json.json").write_text("{")
+    listing = serve.list_volume_settings_presets(store, BASE_SCHEMA)
+    assert [entry["alias"] for entry in listing["entries"]] == ["good"], listing
+    assert all(entry.get("presetId", "").startswith("vsp-") and len(entry["presetId"]) == 68 for entry in listing["unavailableEntries"]), listing
+    assert sorted(entry["alias"] for entry in listing["invalidAliases"]) == ["bad-target", "no-label", "not-json"], listing
+    layered = serve.list_volume_settings_presets_layered([("local", store)], BASE_SCHEMA)
+    assert sorted(entry["alias"] for entry in layered["invalidAliases"]) == ["bad-target", "no-label", "not-json"]
+
+
 def main():
     for test in (
+        test_lagging_branch_save_holds_the_shared_label,
+        test_newest_unreadable_version_is_not_shadowed,
+        test_malformed_alias_is_reported_alone,
         test_newer_branch_basin_loads_on_older_branch,
         test_shared_store_publication_read_through_and_alias_history,
         test_import_existing_stores_into_the_library,
