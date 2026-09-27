@@ -137,7 +137,7 @@ try {
           mediumGeneration:field.medium.generation,simStepCount:field.simStepCount};
       });
       const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,presentToCanvas:${Boolean(arm.sharedSource)},now:${report.replay.finalTimeMs}});
-      if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed: '+JSON.stringify(sample));
+      if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed: '+JSON.stringify({sample,shared:window.__kaminosSceneRadiance?.debugState()}));
       const {width,height,rgba} = sample.image;
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
       const image = document.createElement('canvas'); image.width=width; image.height=height;

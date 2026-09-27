@@ -30,6 +30,22 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
     source:position,intensity,receiver:positionWorld,normal:normalWorld,resolution:uniform(512)});
   const irradiance=transported.mul(normalWorld.dot(position.sub(positionWorld).normalize()).max(0));
   const originals=new Map(), converted=new Map();
+  const bindingEvidence=new Map();
+  const updateBindings=renderer._bindings.updateForRender;
+  renderer._bindings.updateForRender=function(object) {
+    const result=updateBindings.call(this,object);
+    const rows=[];
+    for(const group of this.getForRender(object)) for(const binding of group.bindings) {
+      if(!binding.isSampledTexture || !binding.texture?.is3DTexture) continue;
+      const texture=binding.texture, gpu=renderer.backend.get(texture).texture;
+      rows.push({uuid:texture.uuid,nodeUuid:binding.textureNode?.value?.uuid,version:texture.version,
+        generation:binding.generation,currentWrapper:texture===tauExternal,
+        currentGpu:gpu===tauExternal.sourceTexture,gpuLabel:gpu?.label,
+        nodeCurrent:binding.textureNode?.value===tauExternal});
+    }
+    if(rows.length) bindingEvidence.set(object.id,rows);
+    return result;
+  };
   let visibilityKey=null,disposed=false,lastFrame=null;
   const status={identity:'shared-point-scene-radiance-experiment-v0',status:'mounted-awaiting-source',
     coordinateSpace:'identity-scene-and-volume-local',surfaceUnits:'relative-irradiance',smokeUnits:'relative-angular-mean-radiance',
@@ -98,7 +114,8 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       prototype.setSceneMediumSource(source);
       return {...source};
     },
-    debugState:()=>({...status,source:{...source},frame:prototype.scenePointLightFrame(),shadow:shadow.debugState()}),
+    debugState:()=>({...status,source:{...source},frame:prototype.scenePointLightFrame(),shadow:shadow.debugState(),
+      bindingEvidence:[...bindingEvidence],wrapper:{uuid:tauExternal.uuid,version:tauExternal.version}}),
     canRender() {
       const medium=prototype.sceneMediumOpticalDepthField();
       // The host RAF is independent of volume replay/reset. Never submit a
@@ -107,6 +124,7 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
         && medium.generation===lastFrame?.generation;
     },
     dispose() {
+      renderer._bindings.updateForRender=updateBindings;
       prototype.setScenePointLightFrame(null);prototype.setSceneSourceFrameConsumer(null);
       for(const [object,{original,replacement}] of originals) if(object.material===replacement) object.material=original;
       for(const material of converted.values()) material.dispose();
