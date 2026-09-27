@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
 
+export function assertSharedSceneConsumers(shared, frame) {
+  assert.ok(shared?.materialCount>0,'no actual material consumer');
+  assert.equal(shared.frame?.frame,frame,'stale shared source frame');
+  assert.ok(shared.frame.generation>0,'missing shared generation');
+  assert.equal(shared.frame.hostDepthEffective,true,'missing effective host depth');
+  assert.equal(shared.frame.presented,true,'shared smoke not presented');
+  assert.equal(shared.shadow?.effective,true,'missing solid visibility');
+}
+
 export function assertSceneSourceCapture(source, frame) {
   assert.equal(source?.kind, 'coefficients', 'wrong source kind');
   assert.equal(source.channels, 4);

@@ -8,6 +8,7 @@ import {
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
@@ -9708,6 +9709,10 @@ export function createKaminosVolumePrototype({
   let emissiveLightField = null;
   let sceneVolumeSource = null;
   let sceneVolumeSourceRequested = false;
+  let scenePointBindings = null;
+  let scenePointBindGroup = null;
+  let scenePointFrame = null;
+  const scenePointPipelines = new Map();
   let sceneSourceFrameConsumer = null;
   const sceneSourcePreparedEncoders = new WeakSet();
   let sceneMediumSource = null;
@@ -11540,6 +11545,7 @@ export function createKaminosVolumePrototype({
     }
     const renderPipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
     ordinaryDepthPipelines.clear();
+    scenePointPipelines.clear();
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
     const computePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight };
     const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
@@ -17527,6 +17533,7 @@ export function createKaminosVolumePrototype({
       consume: sceneSourceFrameConsumer, renderHost: updateOrdinarySceneDepth,
       createEncoder: () => device.createCommandEncoder({label:'same-source scene volume presentation'})});
     sceneSourcePreparedEncoders.add(next);
+    if (scenePointFrame) scenePointFrame.hostDepthEffective = true;
     return next;
   }
 
@@ -17573,6 +17580,28 @@ export function createKaminosVolumePrototype({
       }
       drawPipeline = ordinaryDepthPipelines.get(basePipeline);
     }
+    if (scenePointBindGroup) {
+      if (!sceneSourceFrameConsumer || scenePointFrame?.generation !== sceneVolumeSource?.describe().generation) {
+        throw new Error('shared-point-light-not-current-for-volume-frame');
+      }
+      const key = `${multisampled}:${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}`;
+      if (!scenePointPipelines.has(key)) {
+        let code = WGSL.replace('medium.scattering * incidentAt(p)', 'medium.scattering * (incidentAt(p) + scenePointIncident(p))') + SCENE_POINT_SMOKE_WGSL;
+        if (multisampled) code = code.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
+          .replace('let depth = textureLoad(productSceneDepth, pixel, 0);', `var depth = textureLoad(productSceneDepth, pixel, 0);
+            for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
+              depth = min(depth, textureLoad(productSceneDepth, pixel, sample));
+            }`);
+        const module = device.createShaderModule({label:'shared point light ordinary smoke',code});
+        const layout = device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,
+          multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,scenePointBindings.layout]});
+        scenePointPipelines.set(key,device.createRenderPipeline({label:'shared point light smoke consumer',layout,
+          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',
+            constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false},
+            targets:[{format:targetPipeline === readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
+      }
+      drawPipeline = scenePointPipelines.get(key);
+    }
     if (uniforms[368] > 1.5) {
       if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
       emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
@@ -17594,6 +17623,7 @@ export function createKaminosVolumePrototype({
     pass.setPipeline(drawPipeline);
     pass.setBindGroup(0, options.bindGroup || fluidBindGroup());
     pass.setBindGroup(1, ordinarySceneDepthBindGroup);
+    if (scenePointBindGroup) pass.setBindGroup(2, scenePointBindGroup);
     pass.draw(3);
     pass.end();
   }
@@ -22055,6 +22085,10 @@ export function createKaminosVolumePrototype({
       encodeBoundarySplatTelemetry(encoder, true);
     } else {
       encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
+      if (options.presentToCanvas === true) {
+        encodeDraw(encoder, context.getCurrentTexture().createView(), 'kaminos held shared scene canvas');
+        if (scenePointFrame) scenePointFrame.presented = true;
+      }
       state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
         ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
         : (state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
@@ -24755,6 +24789,19 @@ export function createKaminosVolumePrototype({
       if (consumer) sceneVolumeSourceRequested = true;
       return {enabled: Boolean(consumer), authority: 'ordered-submission-not-gpu-completion'};
     },
+    setScenePointLightFrame(input) {
+      if (input === null) {scenePointBindGroup=null;scenePointFrame=null;return;}
+      if (!device || !sceneSourceFrameConsumer || input.medium.generation !== sceneVolumeSource?.describe().generation) {
+        throw new Error('shared point light requires active same-generation source consumer');
+      }
+      scenePointBindings ||= createScenePointBindings(device);
+      scenePointBindGroup = scenePointBindings.update(input);
+      scenePointFrame = {generation:input.medium.generation,frame:input.medium.frame,
+        sourcePosition:input.source.position.slice(),intensity:input.source.intensity.slice(),
+        mediumStep:input.medium.stepLength,solidVisibility:true,normalization:'isotropic-1-over-4pi'};
+      return {...scenePointFrame};
+    },
+    scenePointLightFrame() {return scenePointFrame ? {...scenePointFrame} : null;},
     sceneVolumeSourceField() {
       return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
     },
@@ -24816,6 +24863,7 @@ export function createKaminosVolumePrototype({
     releaseFlowKernelDescriptorCapture,
     dispose() {
       this.setActive(false);
+      scenePointBindings?.dispose();
       persistentSparseCohortGpuState = null;
       fourArmHeldStateRuntimeState = null;
       fourArmHeldStateResidualGrid = null;

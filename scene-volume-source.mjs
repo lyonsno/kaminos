@@ -3,6 +3,13 @@
 // relative linear RGB, before either consumer's camera transform.
 // Queue ordering is sufficient; no CPU readback or completion wait is needed.
 // The host's scene render submits between preparation and the volume draw.
+export function validateScenePointSource(source) {
+  if (!Array.isArray(source?.position) || source.position.length !== 3 || !source.position.every(Number.isFinite)) throw new Error('scene source position must be finite XYZ');
+  if (!Array.isArray(source?.intensity) || source.intensity.length !== 3 || !source.intensity.every(x=>Number.isFinite(x)&&x>=0)) throw new Error('scene source intensity must be nonnegative finite linear RGB');
+  if (!Number.isFinite(source.stepLength) || source.stepLength <= 0) throw new Error('scene source integration step must be positive');
+  return {position:source.position.slice(), intensity:source.intensity.slice(), stepLength:source.stepLength};
+}
+
 export function prepareSceneSourceFrame({encoder, encode, submit, consume, renderHost, createEncoder}) {
   const field = encode(encoder);
   submit([encoder.finish()]);

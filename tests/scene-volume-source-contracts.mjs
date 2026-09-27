@@ -4,6 +4,13 @@ import {readFileSync} from 'node:fs';
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 assert.match(core, /sceneVolumeSourceField/, 'volume runtime must expose raw same-state source coefficients');
 const {createSceneVolumeSource, SCENE_VOLUME_SOURCE_WGSL, integrateSceneMediumSegment} = await import('../scene-volume-source.mjs');
+const sourceContract = await import('../scene-volume-source.mjs');
+assert.equal(typeof sourceContract.validateScenePointSource, 'function', 'shared consumer input must validate point-source units and values');
+assert.deepEqual(sourceContract.validateScenePointSource({position:[0,1,0], intensity:[2,3,4], stepLength:.03125}),
+  {position:[0,1,0], intensity:[2,3,4], stepLength:.03125});
+assert.throws(()=>sourceContract.validateScenePointSource({position:[0,1,0], intensity:[2,-1,4], stepLength:.03125}), /intensity/);
+assert.throws(()=>sourceContract.validateScenePointSource({position:[0,Infinity,0], intensity:[2,3,4], stepLength:.03125}), /position/);
+assert.throws(()=>sourceContract.validateScenePointSource({position:[0,1,0], intensity:[2,3,4], stepLength:0}), /step/);
 assert.equal(typeof integrateSceneMediumSegment, 'function', 'medium path needs an independently exercised segment reference');
 const constant = {dimensions: [4,8,4], values: Array(4*8*4*4).fill(2)};
 assert.equal(integrateSceneMediumSegment(constant, [0,-2,0], [0,4,0], .25), 8, 'clip both ends to tall volume');

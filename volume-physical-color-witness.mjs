@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { assertArmEquivalent, assertSceneSourceCapture } from './volume-physical-color-witness-contract.mjs';
+import { assertArmEquivalent, assertSceneSourceCapture, assertSharedSceneConsumers } from './volume-physical-color-witness-contract.mjs';
 import { integrateSceneMediumSegment } from './scene-volume-source.mjs';
 const [url, output, expectedRoot, expectedCommit, armsPath] = process.argv.slice(2);
 assert.ok(output, 'usage: URL OUT_DIR REPO_ROOT COMMIT');
@@ -124,6 +124,10 @@ try {
         const input = document.getElementById(id); input.value = String(value); input.dispatchEvent(new Event('input', {bubbles:true}));
       }
       const core = window.__kaminosVolumePrototype;
+      if (${Boolean(arm.sharedSource)}) {
+        if (!window.__kaminosSceneRadiance) throw new Error('shared scene radiance not mounted: '+JSON.stringify(window.__kaminosSceneRadianceSetup));
+        window.__kaminosSceneRadiance.setSource(${JSON.stringify(arm.sharedSource || null)});
+      }
       if (${arm.sourceProbe === true}) core.setSceneVolumeSourceEnabled(true);
       const smokePresentation = ${typeof arm.smokePresentation === 'string'} ? core.setRaymarchSmokePresentationMode(${JSON.stringify(arm.smokePresentation || 'on')}) : null;
       if (${Boolean(arm.mediumSource)}) core.setSceneMediumSource(${JSON.stringify(arm.mediumSource || null)});
@@ -132,8 +136,8 @@ try {
         preparedSource = {generation:field.source.generation,frame:field.source.frame,
           mediumGeneration:field.medium.generation,simStepCount:field.simStepCount};
       });
-      const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
-      if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
+      const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,presentToCanvas:${Boolean(arm.sharedSource)},now:${report.replay.finalTimeMs}});
+      if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed: '+JSON.stringify(sample));
       const {width,height,rgba} = sample.image;
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
       const image = document.createElement('canvas'); image.width=width; image.height=height;
@@ -142,13 +146,20 @@ try {
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
       const source = ${arm.sourceProbe === true} ? await core.sampleSceneVolumeSource() : null;
       const optical = ${Boolean(arm.mediumSource)} ? await core.sampleSceneMediumOpticalDepth() : null;
-      return {sample, source, optical, profile, smokePresentation, preparedSource, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      return {sample, source, optical, profile, smokePresentation, preparedSource,
+        shared:${Boolean(arm.sharedSource)}?window.__kaminosSceneRadiance.debugState():null,
+        state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, arm.temperature);
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
+    if (arm.sharedSource) {
+      assertSharedSceneConsumers(result.shared,160);
+      const screenshot = await call('Page.captureScreenshot',{format:'png'});
+      writeFileSync(join(out,`${arm.id}-scene.png`),Buffer.from(screenshot.data,'base64'));
+    }
     if (arm.smokePresentation) {
       assert.equal(result.smokePresentation?.effectiveMode, arm.smokePresentation, 'smoke presentation request did not take effect');
       assert.equal(result.smokePresentation?.fallbackReason, null, 'smoke presentation fell back');
@@ -195,7 +206,10 @@ try {
     assertArmEquivalent(arm,rgba,earlierRgba);
     earlierRgba.set(arm.id,rgba);
     const {image, ...sample} = result.sample;
-    report.captures.push({arm, sample, profile:result.profile, state:result.state, image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
+    report.captures.push({arm, sample, profile:result.profile, state:result.state,
+      preparedSource:result.preparedSource, smokePresentation:result.smokePresentation,
+      shared:result.shared,
+      image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
   }
   const screenshot = await call('Page.captureScreenshot', {format:'png'});
   writeFileSync(join(out, 'cockpit.png'), Buffer.from(screenshot.data, 'base64'));

@@ -21855,6 +21855,17 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
+  if (fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1') {
+    if (!isFireLightFieldRoute()) throw new Error('shared scene source requires ordinary fire light-field route');
+    window.__kaminosSceneRadianceSetup = {status:'mounting'};
+    import('./scene-radiance.mjs').then(({mountSceneRadiance}) => {
+      window.__kaminosSceneRadiance = mountSceneRadiance({renderer,scene,prototype:volumePrototype});
+      window.__kaminosSceneRadianceSetup.status='mounted';
+    }).catch(error=>{
+      window.__kaminosSceneRadianceSetup={status:'failed',error:String(error.message)};
+      console.error('shared scene radiance mount failed',error);
+    });
+  }
   // Optional composition-module seam: a URL HASH entry
   // #composition_module_url=<module> (hash, not query — settings routes are
   // contract-validated and reject unexpected query parameters) loads an ES

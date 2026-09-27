@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
 import { assertArmEquivalent } from '../volume-physical-color-witness-contract.mjs';
+const contract = await import('../volume-physical-color-witness-contract.mjs');
+assert.equal(typeof contract.assertSharedSceneConsumers, 'function', 'shared-light witness must reject missing or stale consumers');
+const shared={materialCount:1,frame:{frame:160,generation:3,hostDepthEffective:true,presented:true},shadow:{effective:true}};
+contract.assertSharedSceneConsumers(shared,160);
+assert.throws(()=>contract.assertSharedSceneConsumers({...shared,materialCount:0},160), /material/);
+assert.throws(()=>contract.assertSharedSceneConsumers({...shared,frame:{...shared.frame,frame:159}},160), /stale/);
+assert.throws(()=>contract.assertSharedSceneConsumers({...shared,frame:{...shared.frame,hostDepthEffective:false}},160), /depth/);
+assert.throws(()=>contract.assertSharedSceneConsumers({...shared,frame:{...shared.frame,presented:false}},160), /presented/);
 const {assertSceneSourceCapture} = await import('../volume-physical-color-witness-contract.mjs');
 assert.equal(typeof assertSceneSourceCapture, 'function', 'raw source evidence must reject false completion');
 const source = {kind:'coefficients', channels:4, dimensions:[1,2,1], frame:160, generation:1, values:[1,0,0,2,0,1,0,3]};

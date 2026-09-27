@@ -60,6 +60,10 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0};
   return {
     visibility,
+    resource() {
+      return {texture:status.effective ? renderer.backend.get(target.texture).texture : null,
+        effective:status.effective, resolution, colorTexture:target.texture};
+    },
     async diagnose(anchors,cameraPosition) {
       if(!status.effective||enabled.value===0) throw new Error('shadow-not-effective');
       const {diagnoseFireShadow}=await import('./fire-shadow-diagnostic.mjs');
