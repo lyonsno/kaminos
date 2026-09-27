@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -237,6 +237,16 @@ try {
   if (actualExecutable.includes('/Google Chrome.app/Contents/MacOS/')) {
     throw new Error('installed GUI Chrome cannot be used for headless smoke on the operator machine; use independent Chrome for Testing or Playwright Chromium');
   }
+  const independentBrowser = /\/(?:Google Chrome for Testing|Chromium)\.app\/Contents\/MacOS\/(?:Google Chrome for Testing|Chromium)$/.test(actualExecutable)
+    || /\/chrome-headless-shell$/.test(actualExecutable);
+  if (!independentBrowser) throw new Error('headless smoke requires an independent native browser executable, not a wrapper');
+  const browserFile = openSync(actualExecutable, 'r');
+  const magic = Buffer.alloc(4);
+  try { readSync(browserFile, magic, 0, 4, 0); } finally { closeSync(browserFile); }
+  const nativeBinary = magic.equals(Buffer.from([0xcf, 0xfa, 0xed, 0xfe]))
+    || magic.equals(Buffer.from([0xca, 0xfe, 0xba, 0xbe]))
+    || magic.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+  if (!nativeBinary) throw new Error('headless smoke requires a native browser executable, not a wrapper script');
   report.browser.version = execFileSync(chromePath, ['--version'], { encoding: 'utf8' }).trim();
 
   report.phase = 'browser-launch';

@@ -1,39 +1,63 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scratch = mkdtempSync(join(tmpdir(), 'kaminos-arch-browser-startup-'));
-const fakeChrome = join(scratch, 'fake-chrome');
+const fakeChrome = join(scratch, 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing');
 const reportPath = join(scratch, 'startup-report.json');
 const smokePath = join(root, 'structural-material-arch-browser-smoke.mjs');
 const installedGuiChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-const forbidden = spawnSync(process.execPath, [
+if (existsSync(installedGuiChrome)) {
+  const forbidden = spawnSync(process.execPath, [
+    smokePath,
+    'http://127.0.0.1:8423/structural-material-arch.html',
+    reportPath,
+    installedGuiChrome,
+  ], { cwd: root, encoding: 'utf8' });
+  assert.equal(forbidden.status, 1);
+  const forbiddenReport = JSON.parse(readFileSync(reportPath, 'utf8'));
+  assert.equal(forbiddenReport.status, 'failed');
+  assert.equal(forbiddenReport.error.phase, 'browser-preflight');
+  assert.match(forbiddenReport.error.message, /installed GUI Chrome/i);
+  assert.equal(forbiddenReport.browser.executable, installedGuiChrome);
+  assert.equal(forbiddenReport.browser.pid, undefined);
+}
+
+const wrapper = join(scratch, 'chrome-wrapper');
+writeFileSync(wrapper, '#!/bin/sh\nexit 0\n');
+chmodSync(wrapper, 0o755);
+const wrapped = spawnSync(process.execPath, [
   smokePath,
   'http://127.0.0.1:8423/structural-material-arch.html',
   reportPath,
-  installedGuiChrome,
+  wrapper,
+  '100',
 ], { cwd: root, encoding: 'utf8' });
-assert.equal(forbidden.status, 1);
-const forbiddenReport = JSON.parse(readFileSync(reportPath, 'utf8'));
-assert.equal(forbiddenReport.status, 'failed');
-assert.equal(forbiddenReport.error.phase, 'browser-preflight');
-assert.match(forbiddenReport.error.message, /installed GUI Chrome/i);
-assert.equal(forbiddenReport.browser.executable, installedGuiChrome);
-assert.equal(forbiddenReport.browser.pid, undefined);
+assert.equal(wrapped.status, 1);
+const wrappedReport = JSON.parse(readFileSync(reportPath, 'utf8'));
+assert.equal(wrappedReport.error.phase, 'browser-preflight');
+assert.match(wrappedReport.error.message, /wrapper|native browser executable/i);
 
-writeFileSync(fakeChrome, `#!/bin/sh
-if [ "$1" = "--version" ]; then
-  printf '%s\\n' 'Chrome fake startup-contract'
-  exit 0
-fi
-trap 'exit 0' TERM INT
-while :; do sleep 1; done
+mkdirSync(dirname(fakeChrome), { recursive: true });
+const fixtureSource = join(scratch, 'fake-chrome.c');
+writeFileSync(fixtureSource, `#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+int main(int argc, char **argv) {
+  if (argc > 1 && strcmp(argv[1], "--version") == 0) {
+    puts("Chrome fake startup-contract");
+    return 0;
+  }
+  for (;;) sleep(1);
+}
 `);
+const compiled = spawnSync('cc', [fixtureSource, '-o', fakeChrome], { encoding: 'utf8' });
+assert.equal(compiled.status, 0, `native test fixture compilation failed: ${compiled.stderr}`);
 chmodSync(fakeChrome, 0o755);
 
 const harness = spawn(process.execPath, [
