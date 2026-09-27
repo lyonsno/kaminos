@@ -171,13 +171,18 @@
         item.cracks = new THREE.LineSegments(geometry, crackMaterial);
         item.group.add(item.cracks);
         const contact = item.state.load?.contact;
-        const contactIndex = contact ? item.state.nodes.findIndex(node => node.column === contact.column && node.row === contact.row && node.layer === 2) : -1;
-        item.forceArrow.visible = contactIndex >= 0;
-        if (contactIndex >= 0) {
-          const [x, y] = frame.nodes[contactIndex].position;
-          const top = Math.max(...frame.nodes.map(node => node.position[1])) + 0.1;
-          item.forceArrow.position.set(x, top, 0.23);
-          item.forceArrow.setLength(Math.max(0.08, top - y - 0.02), 0.032, 0.022);
+        const contactCells = new Set((item.state.load?.contactCells ?? []).map(cell => `${cell.column}:${cell.row}`));
+        const loadedLayers = new Set(item.state.load?.loadedNodeLayers ?? []);
+        const loadedIndices = contact ? item.state.nodes.flatMap((node, index) =>
+          contactCells.has(`${node.column}:${node.row}`) && loadedLayers.has(node.layer) ? [index] : []) : [];
+        for (let index = 0; index < item.forceArrows.length; index += 1) {
+          const arrow = item.forceArrows[index];
+          const nodeIndex = loadedIndices[index];
+          arrow.visible = nodeIndex !== undefined;
+          if (nodeIndex === undefined) continue;
+          const [x, y, z] = frame.nodes[nodeIndex].position;
+          arrow.position.set(x, y + 0.13, z);
+          arrow.setLength(0.11, 0.032, 0.022);
         }
         const broken = item.state.bonds.filter(bond => !bond.alive).length;
         const travel = item.state.load ? item.state.load.travel.toFixed(4) : '—';
@@ -255,6 +260,10 @@
           travel: item.state.load?.travel ?? null,
           displayTravel: item.displayTravel,
           displayMode: item.displayMode,
+          contactDepthMode: item.state.load?.contactDepthMode ?? null,
+          loadedNodeLayers: item.state.load?.loadedNodeLayers ?? [],
+          forcePerNode: item.state.load?.forcePerNode ?? null,
+          forceMarkerCount: item.forceArrows.filter(arrow => arrow.visible).length,
           connectivityEpoch: item.state.connectivityEpoch,
           renderedInstances: item.blocks.count,
         }])),
@@ -288,13 +297,16 @@
           support.position.set((minX + maxX) / 2, Math.min(...pinned.map(node => node.y)) - stepY / 2 - 0.012, 0);
           group.add(support);
         }
-        const forceArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 0.1, '#e3bc70', 0.032, 0.022);
-        forceArrow.line.material.depthTest = false;
-        forceArrow.cone.material.depthTest = false;
-        forceArrow.visible = false;
-        group.add(forceArrow);
+        const forceArrows = Array.from({ length: 3 }, () => {
+          const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 0.11, '#e3bc70', 0.032, 0.022);
+          arrow.line.material.depthTest = false;
+          arrow.cone.material.depthTest = false;
+          arrow.visible = false;
+          group.add(arrow);
+          return arrow;
+        });
         scene.add(group);
-        cases[name] = { profile, base, state: base, blocks, group, cracks: null, forceArrow, displayTravel: null, displayMode: 'unloaded' };
+        cases[name] = { profile, base, state: base, blocks, group, cracks: null, forceArrows, displayTravel: null, displayMode: 'unloaded' };
         present(name);
       }
       phase = 'interactive';
