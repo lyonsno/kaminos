@@ -77,6 +77,18 @@ assert.match(earlierOption.text, /^Live kiln \| earlier 2026-09-18 cc\/wake-kiln
 assert.match(versionsView.statuses.at(-1)[0], /1 earlier version/);
 assert.equal((await render({ ...mixed, unavailableEntries: [] })).select.options.length, 1, 'indexes without versions are unchanged');
 
+// A corrupt artifact is not described as a version difference, and malformed
+// aliases are counted without failing the index.
+const corrupt = { alias: 'broken-kiln', label: 'Broken kiln', presetId: `vsp-${'e'.repeat(64)}`, reason: 'invalid-artifact',
+  error: 'volume settings preset artifact content hash mismatch' };
+const skewed = { ...unavailable, reason: 'schema-skew' };
+const reasonsView = await render({ ...mixed, unavailableEntries: [skewed, corrupt], invalidAliases: [{ alias: 'x', path: '/x', error: 'bad' }] });
+assert.match(reasonsView.select.options.find(option => option.value === skewed.presetId).text, /unavailable on this version/);
+assert.match(reasonsView.select.options.find(option => option.value === corrupt.presetId).text, /unreadable artifact/);
+assert.doesNotMatch(reasonsView.select.options.find(option => option.value === corrupt.presetId).text, /this version/);
+assert.match(reasonsView.statuses.at(-1)[0], /1 unreadable \| 1 malformed label/);
+assert.equal(reasonsView.statuses.at(-1)[1], true);
+
 const emptyView = await render({ ...mixed, entries: [] });
 assert.equal(emptyView.select.value, '');
 assert.match(emptyView.select.options[0].text, /no compatible/i);

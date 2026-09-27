@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  describeVolumeSettingsLibraryPublication,
   describeVolumeSettingsPresetProjection,
   validateVolumeSettingsPresetDocument,
+  volumeSettingsPresetLabelReuseBlock,
 } from '../volume-settings-preset-contract.mjs';
 
 // A basin loaded from another branch or an older schema is never changed
@@ -98,4 +100,30 @@ assert.match(refresh, /const previous = selectedPresetId \|\| activeVolumeSettin
 assert.match(refresh, /const active = activeVolumeSettingsPresetStatus\(\);/, 'the index status keeps the loaded basin report');
 assert.match(refresh, /active\.warning \|\| unavailable\.length > 0/, 'a projected basin keeps the status in its warning state');
 assert.match(index, /entry\.carriedControls\?\.length \|\| entry\.unsupportedValuesDefaulted\?\.length/, 'the picker marks basins projected across branches');
+// A basin loaded across branches with carried or replaced values cannot be
+// saved back under its own label: that would replace it for every branch.
+assert.match(volumeSettingsPresetLabelReuseBlock({ ...receipt, label: 'Crownflame', alias: 'crownflame' }, 'Crownflame'),
+  /loaded from another branch[\s\S]*carries 1 control[\s\S]*new label/);
+assert.ok(volumeSettingsPresetLabelReuseBlock({ ...receipt, label: 'Crownflame', alias: 'crownflame' }, 'crownflame'), 'the alias spelling is the same label');
+assert.equal(volumeSettingsPresetLabelReuseBlock({ ...receipt, label: 'Crownflame', alias: 'crownflame' }, 'Crownflame v2'), null, 'a new label is fine');
+assert.equal(volumeSettingsPresetLabelReuseBlock({ ...exact, label: 'Plain', alias: 'plain' }, 'Plain'), null, 'an exact basin keeps its label');
+assert.equal(volumeSettingsPresetLabelReuseBlock(null, 'Anything'), null);
+
+// The save status says whether the basin reached the shared library.
+assert.deepEqual(describeVolumeSettingsLibraryPublication(undefined), { text: '', warning: false }, 'older servers report nothing');
+assert.deepEqual(describeVolumeSettingsLibraryPublication({ published: false, reason: 'shared basin library disabled' }),
+  { text: 'library off', warning: false });
+assert.deepEqual(describeVolumeSettingsLibraryPublication({ published: false, storePath: '/lib', error: 'disk full' }),
+  { text: 'NOT in library /lib: disk full', warning: true });
+assert.deepEqual(describeVolumeSettingsLibraryPublication({ published: true, storePath: '/lib', aliasHeld: null }),
+  { text: 'in library /lib', warning: false });
+const held = describeVolumeSettingsLibraryPublication({ published: true, storePath: '/lib', label: 'kiln',
+  aliasHeld: { reason: 'would-drop-controls', controls: ['volume-ridge-radius-cells'], currentPresetId: `vsp-${'9'.repeat(64)}` } });
+assert.equal(held.warning, true);
+assert.match(held.text, /in library \/lib as a version; label "kiln" kept on vsp-999999999999 because this branch lacks volume-ridge-radius-cells/);
+const save = index.slice(index.indexOf('async function saveVolumeSettingsPreset('), index.indexOf('function buildVolumeBasinPromotionEffectiveState('));
+assert.match(save, /const reuseBlock = volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label\);\s*if \(reuseBlock\) throw new Error\(reuseBlock\);/,
+  'save refuses to reuse a cross-branch basin label before writing');
+assert.match(save, /const library = describeVolumeSettingsLibraryPublication\(result\.sharedPublication\);/);
+assert.match(save, /library\.text \? ` \| \$\{library\.text\}` : ''\}`,\s*library\.warning,/, 'the save status shows the library outcome and warns');
 console.log('volume settings projection receipt contracts passed');

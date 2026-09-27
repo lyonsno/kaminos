@@ -79,6 +79,25 @@ def main():
         ["8095", "--volume-settings-store", "/tmp/z"], Path("/tmp/y").resolve())
     assert serve.split_shared_basin_store_arguments(["--no-shared-basin-store"], home) == ([], None)
     assert serve.split_shared_basin_store_arguments(["8095"], home) == (["8095"], home)
+    for off in ("false", "no", "disabled", "OFF"):
+        assert serve.shared_basin_store_from_environment({"KAMINOS_SHARED_BASIN_STORE": off}) is None, off
+    for relative in ("false-ish/dir", "basins"):
+        for parse in (lambda: serve.shared_basin_store_from_environment({"KAMINOS_SHARED_BASIN_STORE": relative}),
+                      lambda: serve.split_shared_basin_store_arguments(["--shared-basin-store", relative], home)):
+            try:
+                parse()
+            except ValueError as error:
+                assert "absolute path" in str(error), error
+            else:
+                raise AssertionError(f"a relative shared basin store must be refused: {relative}")
+
+    # Harness servers given their own settings store stay out of the operator's
+    # library unless they name one explicitly.
+    for spawner in ("volume-full-support-cockpit-session.mjs", "volume-live-full-support-optics-session.mjs"):
+        source = (ROOT / spawner).read_text()
+        assert "if (sharedBasinStore) serverArgs.push('--shared-basin-store', resolve(String(sharedBasinStore)));" in source, spawner
+        assert "else if (settingsStore) serverArgs.push('--no-shared-basin-store');" in source, spawner
+    assert "--no-shared-basin-store" in (ROOT / "tests" / "volume_cockpit_layout_http_contracts.py").read_text()
 
     with tempfile.TemporaryDirectory(prefix="kaminos-shared-basins-") as temporary:
         shared = Path(temporary) / "library"
@@ -109,6 +128,9 @@ def main():
             assert status == 200 and index["entries"] == [], index
             status, missing = request_json(f"{isolated_base}/api/volume-settings-preset?preset={preset_id}")
             assert status == 404, missing
+            assert [layer["role"] for layer in missing["stores"]] == ["local"], "errors name every store that was searched"
+            status, missing = request_json(f"{reader_base}/api/volume-settings-preset?preset=vsp-{'0' * 64}")
+            assert status == 404 and [layer["role"] for layer in missing["stores"]] == ["local", "shared"], missing
         finally:
             for process in processes:
                 process.terminate()
