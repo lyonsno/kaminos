@@ -72,7 +72,7 @@
       ]);
       const { OrbitControls } = controlsModule;
       const { buildArchStructuralProxy, solveArchStructuralForce, fractureArchStructuralProxy, bindArchStructuralProxy } = core;
-      const { buildArchVolumeFrame } = volume;
+      const { buildArchVolumeFrame, resolveArchVolumeEquilibrium } = volume;
       const ROUTE = 'kaminos.structural-material.arch-force-volume.v0';
       const profileRoot = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness';
       const load = { x: -0.05, y: 0.29, threshold: 0.04, iterations: 600 };
@@ -135,13 +135,16 @@
         render();
       }
 
-      function present(name) {
+      function prepare(state, force) {
+        const display = resolveArchVolumeEquilibrium(state, { ...load, force });
+        return { display, frame: buildArchVolumeFrame(state, display.state) };
+      }
+
+      function present(name, prepared = prepare(cases[name].state, Number(forceInput.value))) {
         const item = cases[name];
-        const equilibrium = item.state.load
-          ? solveArchStructuralForce(item.state, { ...load, force: item.state.load.requestedForce })
-          : item.state;
-        item.displayTravel = equilibrium.load?.travel ?? null;
-        const frame = buildArchVolumeFrame(item.state, equilibrium);
+        const { display, frame } = prepared;
+        item.displayMode = display.mode;
+        item.displayTravel = display.state.load?.travel ?? null;
         const color = new THREE.Color();
         for (let index = 0; index < frame.nodes.length; index += 1) {
           const node = frame.nodes[index];
@@ -172,11 +175,15 @@
         item.forceArrow.visible = contactIndex >= 0;
         if (contactIndex >= 0) {
           const [x, y] = frame.nodes[contactIndex].position;
-          item.forceArrow.position.set(x, y + 0.14, 0.19);
+          const top = Math.max(...frame.nodes.map(node => node.position[1])) + 0.1;
+          item.forceArrow.position.set(x, top, 0.23);
+          item.forceArrow.setLength(Math.max(0.08, top - y - 0.02), 0.032, 0.022);
         }
         const broken = item.state.bonds.filter(bond => !bond.alive).length;
         const travel = item.state.load ? item.state.load.travel.toFixed(4) : '—';
-        const displayTravel = item.displayTravel === null ? '' : ` · post-break equilibrium ${item.displayTravel.toFixed(4)}`;
+        const displayTravel = item.displayTravel === null ? '' :
+          item.displayMode === 'accepted-pose-unanchored' ? ' · unanchored contact, accepted pose' :
+          ` · ${item.displayMode === 'broken-graph-equilibrium' ? 'post-break' : item.displayMode === 'repaired-graph-equilibrium' ? 'repaired' : 'loaded'} equilibrium ${item.displayTravel.toFixed(4)}`;
         document.getElementById(name === 'intact' ? 'intact-metric' : 'notched-metric').textContent =
           `loaded travel ${travel}${displayTravel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}`;
         render();
@@ -188,24 +195,30 @@
           const force = Number(forceInput.value);
           const updates = Object.fromEntries(Object.entries(cases).map(([name, item]) => {
             const solved = solveArchStructuralForce(item.base, { ...load, force });
-            return [name, fractureArchStructuralProxy(solved, { threshold: load.threshold })];
+            const state = fractureArchStructuralProxy(solved, { threshold: load.threshold });
+            return [name, { state, prepared: prepare(state, force) }];
           }));
-          for (const [name, state] of Object.entries(updates)) { cases[name].state = state; present(name); }
+          for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
+          for (const [name, update] of Object.entries(updates)) present(name, update.prepared);
           applied = true;
           serial += 1;
           document.getElementById('bind').disabled = false;
-          status.textContent = `Matched load ${force.toFixed(2)} · independent intact-reference trials`;
+          status.textContent = Object.values(cases).some(item => item.displayMode === 'accepted-pose-unanchored')
+            ? `Matched load ${force.toFixed(2)} · unanchored contact has no static display equilibrium`
+            : `Matched load ${force.toFixed(2)} · independent intact-reference trials`;
           receipt.textContent = `Equal crown load ${force.toFixed(2)} · feet fixed · 3 depth layers · outer-notch material event energy ${cases['outer-notch'].state.events.reduce((sum, event) => sum + event.energy, 0).toFixed(4)}`;
         } catch (error) { status.textContent = `Solve failed: ${error.message}`; }
       }
 
       function bind() {
         if (!applied) return;
-        for (const [name, item] of Object.entries(cases)) {
+        const updates = Object.fromEntries(Object.entries(cases).map(([name, item]) => {
           const bondIds = item.state.bonds.filter(bond => !bond.alive).map(bond => bond.id);
-          item.state = bindArchStructuralProxy(item.state, { bondIds });
-          present(name);
-        }
+          const state = bindArchStructuralProxy(item.state, { bondIds });
+          return [name, { state, prepared: prepare(state, item.state.load?.requestedForce ?? Number(forceInput.value)) }];
+        }));
+        for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
+        for (const [name, update] of Object.entries(updates)) present(name, update.prepared);
         document.getElementById('bind').disabled = true;
         status.textContent = 'Broken graph connections rebound';
         receipt.textContent = 'Connectivity restored; the displayed volume re-equilibrates on the repaired graph. Original load and fracture history remain.';
@@ -241,6 +254,7 @@
           components: item.state.components.length,
           travel: item.state.load?.travel ?? null,
           displayTravel: item.displayTravel,
+          displayMode: item.displayMode,
           connectivityEpoch: item.state.connectivityEpoch,
           renderedInstances: item.blocks.count,
         }])),
@@ -275,10 +289,12 @@
           group.add(support);
         }
         const forceArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 0.1, '#e3bc70', 0.032, 0.022);
+        forceArrow.line.material.depthTest = false;
+        forceArrow.cone.material.depthTest = false;
         forceArrow.visible = false;
         group.add(forceArrow);
         scene.add(group);
-        cases[name] = { profile, base, state: base, blocks, group, cracks: null, forceArrow, displayTravel: null };
+        cases[name] = { profile, base, state: base, blocks, group, cracks: null, forceArrow, displayTravel: null, displayMode: 'unloaded' };
         present(name);
       }
       phase = 'interactive';
