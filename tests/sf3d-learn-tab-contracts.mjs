@@ -32,6 +32,8 @@ assert.match(app, /selectionToken\s*\+=\s*1/);
 assert.match(app, /const probe = new Image\(\)/);
 assert.match(host, /kaminos-learn-run-state/);
 assert.match(host, /kaminos-learn-active/);
+assert.match(host, /@media \(max-width: 760px\)[\s\S]*body\.learn-active \{ flex-direction: column/);
+assert.match(host, /body\.learn-active #sidebar \{ width: 100%/);
 assert.match(app, /result\.vertices/);
 assert.match(bundle, /decodeSf3dPreviewMesh/);
 console.log('Kaminos Learn tab mounts real SF3D stage geometry');
