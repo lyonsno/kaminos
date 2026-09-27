@@ -4,6 +4,7 @@ import {
   requestBrowserWebGpuDevice,
   createWebGpuForegroundService,
   createWebGpuInferenceSession,
+  createWebGpuInferenceRuntime,
 } from '@kaminos/webgpu-inference-kit/core';
 
 export const BRIGHTNESS_ROUTE_ID = 'example.brightness-rgba8.webgpu-local.v0';
@@ -104,44 +105,57 @@ function readSourceImage(sourceImage) {
   return { width, height, pixels: context.getImageData(0, 0, width, height).data };
 }
 
-export function createBrightnessModelAdapter({ route, width, height }) {
-  if (!route || typeof route !== 'object') throw new Error('route is required');
+export function createBrightnessModelAdapter({ route, runtime = route?.runtime, width, height }) {
+  if (!runtime || typeof runtime !== 'object') throw new Error('resource runtime is required');
   if (!Number.isInteger(width) || width < 1 || !Number.isInteger(height) || height < 1) {
     throw new Error('image width and height must be positive integers');
   }
-  const runtime = route.runtime;
   const pixelCount = width * height;
-  const input = runtime.createTensor({
-    name: 'brightness.input-rgba8', shape: [pixelCount], dtype: 'u32',
-    usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
-  });
-  const output = runtime.createTensor({
-    name: 'brightness.output-rgba8', shape: [pixelCount], dtype: 'u32',
-    usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copySrc,
-  });
-  const params = runtime.createUniformBuffer({
-    label: 'brightness.params',
-    schema: [
-      { name: 'multiplier', type: 'f32' },
-      { name: 'pixelCount', type: 'u32' },
-      { name: 'pad', type: 'vec2<u32>' },
-    ],
-    values: { multiplier: 1, pixelCount, pad: [0, 0] },
-  });
-  const kernel = runtime.defineComputeKernel({
-    name: 'brightness.rgba8', code: BRIGHTNESS_KERNEL,
-    bindings: [
-      { name: 'input', resource: input, access: 'read-only-storage' },
-      { name: 'output', resource: output, access: 'storage' },
-      { name: 'params', resource: params, type: 'uniform' },
-    ],
-  });
+  let input, output, params, kernel;
+  const releaseBuffers = () => {
+    input?.buffer?.destroy?.();
+    output?.buffer?.destroy?.();
+    params?.buffer?.destroy?.();
+  };
+  try {
+    input = runtime.createTensor({
+      name: 'brightness.input-rgba8', shape: [pixelCount], dtype: 'u32',
+      usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+    });
+    output = runtime.createTensor({
+      name: 'brightness.output-rgba8', shape: [pixelCount], dtype: 'u32',
+      usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copySrc,
+    });
+    params = runtime.createUniformBuffer({
+      label: 'brightness.params',
+      schema: [
+        { name: 'multiplier', type: 'f32' },
+        { name: 'pixelCount', type: 'u32' },
+        { name: 'pad', type: 'vec2<u32>' },
+      ],
+      values: { multiplier: 1, pixelCount, pad: [0, 0] },
+    });
+    kernel = runtime.defineComputeKernel({
+      name: 'brightness.rgba8', code: BRIGHTNESS_KERNEL,
+      bindings: [
+        { name: 'input', resource: input, access: 'read-only-storage' },
+        { name: 'output', resource: output, access: 'storage' },
+        { name: 'params', resource: params, type: 'uniform' },
+      ],
+    });
+  } catch (error) {
+    releaseBuffers();
+    throw error;
+  }
   let disposed = false;
 
   return Object.freeze({
     modelId: 'brightness-rgba8-v0',
-    async run(pixels, multiplierValue, invocation) {
+    async run(pixels, multiplierValue, invocation, executionRuntime = runtime) {
       if (disposed) throw new Error('brightness adapter is disposed');
+      if (executionRuntime.device !== runtime.device || executionRuntime.queue !== runtime.queue) {
+        throw new Error('brightness execution must use the same device and queue as its resources');
+      }
       if (!invocation || typeof invocation.reportProgress !== 'function') {
         throw new Error('queued invocation context with reportProgress is required');
       }
@@ -150,26 +164,24 @@ export function createBrightnessModelAdapter({ route, width, height }) {
         throw new Error(`brightness input must contain exactly ${pixelCount} RGBA pixels`);
       }
       const multiplier = normalizeBrightnessMultiplier(multiplierValue);
-      runtime.uploadTensor(input, packed);
+      executionRuntime.uploadTensor(input, packed);
       params.update({ multiplier, pixelCount, pad: [0, 0] });
       invocation.reportProgress({ phase: 'Upload pixels', completed: 1, total: 3 });
 
-      await runtime.runKernel(kernel, {
+      await executionRuntime.runKernel(kernel, {
         stage: 'Adjust brightness', dispatch: [Math.ceil(pixelCount / 64), 1, 1],
         schedulerInvocation: invocation, yieldAfter: true,
       });
       invocation.reportProgress({ phase: 'Adjust brightness', completed: 2, total: 3 });
 
-      const result = await runtime.readTensor(output, { schedulerInvocation: invocation });
+      const result = await executionRuntime.readTensor(output, { schedulerInvocation: invocation });
       invocation.reportProgress({ phase: 'Return image', completed: 3, total: 3 });
       return { width, height, multiplier, pixels: unpackRgbaPixels(new Uint32Array(result)) };
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      input.buffer?.destroy?.();
-      output.buffer?.destroy?.();
-      params.buffer?.destroy?.();
+      releaseBuffers();
     },
   });
 }
@@ -190,7 +202,7 @@ export async function createRenderPlusInferenceExample({
   const { device } = context;
   let foreground, session, surface, activityUniform, activityPipeline, activityBindings;
   try {
-    foreground = createWebGpuForegroundService({ routeId: BRIGHTNESS_ROUTE_ID, device });
+    foreground = createWebGpuForegroundService({ routeId: 'example.application', device });
     session = await createWebGpuInferenceSession({
       sessionId: 'brightness-worked-example', device, adapter: context.adapter,
       backendIdentity: context.backendIdentity,
@@ -223,7 +235,10 @@ export async function createRenderPlusInferenceExample({
     status: 'idle', phase: 'Waiting for an adjustment', frames: 0, runs: 0,
     result: null, error: null, observerError: null, backend: context.backendIdentity,
     source: { width: source.width, height: source.height },
+    workloadLoaded: false, workloadGeneration: 0,
   };
+  let model = null;
+  let resourceRuntime = null;
   let activeBatch = null;
   let runSequence = 0;
   let frameSequence = 0;
@@ -283,10 +298,26 @@ export async function createRenderPlusInferenceExample({
     state.phase = 'Starting GPU work';
     state.error = null;
     activeBatch = Promise.resolve().then(async () => {
-      const active = await foreground.beginRun(runId);
+      const active = await foreground.beginRun(runId, { routeId: BRIGHTNESS_ROUTE_ID });
       let route;
-      let model;
+      let completion;
       try {
+        if (!model) {
+          const resources = await createWebGpuInferenceRuntime({
+            routeId: BRIGHTNESS_ROUTE_ID, device,
+            backendIdentity: context.backendIdentity,
+            adapterName: context.backendIdentity.adapterName,
+          });
+          try {
+            model = createBrightnessModelAdapter({ runtime: resources, width: source.width, height: source.height });
+          } catch (error) {
+            resources.dispose();
+            throw error;
+          }
+          resourceRuntime = resources;
+          state.workloadLoaded = true;
+          state.workloadGeneration += 1;
+        }
         route = await session.registerRoute({
           routeId: BRIGHTNESS_ROUTE_ID,
           runtimeOptions: {
@@ -296,7 +327,6 @@ export async function createRenderPlusInferenceExample({
             yieldMs: 0,
           },
         });
-        model = createBrightnessModelAdapter({ route, width: source.width, height: source.height });
         const job = route.enqueue({
           jobId: runId,
           metadata: { modelId: model.modelId, multiplier: normalizedMultiplier },
@@ -308,30 +338,29 @@ export async function createRenderPlusInferenceExample({
                 state.phase = progress.phase;
                 publish();
               },
-            });
+            }, route.runtime);
           },
         });
-        const completion = await job.completion;
+        completion = await job.completion;
         if (completion.status !== 'succeeded') {
           throw new Error(completion.failure?.message || completion.cancellation?.reason || completion.status);
         }
-        state.result = {
-          width: completion.output.width,
-          height: completion.output.height,
-          multiplier: completion.output.multiplier,
-          byteLength: completion.output.pixels.byteLength,
-        };
-        state.status = 'succeeded';
-        state.phase = 'Complete';
-        state.runs += 1;
-        publish();
-        return completion;
       } finally {
         if (route) await route.drain();
-        model?.dispose();
         if (route) session.unregisterRoute(route.routeId);
         await active.finish();
       }
+      state.result = {
+        width: completion.output.width,
+        height: completion.output.height,
+        multiplier: completion.output.multiplier,
+        byteLength: completion.output.pixels.byteLength,
+      };
+      state.status = 'succeeded';
+      state.phase = 'Complete';
+      state.runs += 1;
+      publish();
+      return completion;
     }).catch(error => {
       state.status = 'failed';
       state.phase = 'Adjustment failed';
@@ -345,6 +374,22 @@ export async function createRenderPlusInferenceExample({
     return activeBatch;
   }
 
+  function releaseWorkload() {
+    model?.dispose();
+    resourceRuntime?.dispose();
+    model = null;
+    resourceRuntime = null;
+    state.workloadLoaded = false;
+  }
+
+  function unload() {
+    if (disposed) throw new Error('example is disposed');
+    if (activeBatch) throw new Error('cannot unload while an adjustment is running');
+    if (foreground.snapshot().activeRun) throw new Error('cannot unload an unsettled foreground run');
+    releaseWorkload();
+    publish();
+  }
+
   function dispose() {
     if (disposal) return disposal;
     disposed = true;
@@ -354,6 +399,7 @@ export async function createRenderPlusInferenceExample({
       try { await activeBatch; } catch { /* Failure remains visible in state and the run promise. */ }
       await foreground.dispose();
       await session.drain();
+      releaseWorkload();
       session.close();
       surface.unconfigure();
       activityUniform.destroy();
@@ -365,5 +411,5 @@ export async function createRenderPlusInferenceExample({
   try { onState(snapshot()); }
   catch (error) { await dispose(); throw error; }
   raf = requestAnimationFrame(requestFrame);
-  return Object.freeze({ run, snapshot, dispose });
+  return Object.freeze({ run, unload, snapshot, dispose });
 }

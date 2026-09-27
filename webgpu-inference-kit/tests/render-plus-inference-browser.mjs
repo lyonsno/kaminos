@@ -99,6 +99,29 @@ try {
   });
   report.browser = await browser.version();
   const page = await browser.newPage();
+  await page.evaluateOnNewDocument(() => {
+    const record = { allocations: [], pipelines: 0, deviceDestroys: 0 };
+    window.brightnessGpuResources = record;
+    const createBuffer = GPUDevice.prototype.createBuffer;
+    GPUDevice.prototype.createBuffer = function (descriptor) {
+      const buffer = createBuffer.call(this, descriptor);
+      if (['brightness.input-rgba8', 'brightness.output-rgba8', 'brightness.params'].includes(descriptor.label)) {
+        const row = { label: descriptor.label, destroyed: false };
+        record.allocations.push(row);
+        const destroy = buffer.destroy.bind(buffer);
+        buffer.destroy = () => { row.destroyed = true; destroy(); };
+      }
+      return buffer;
+    };
+    const createPipeline = GPUDevice.prototype.createComputePipeline;
+    GPUDevice.prototype.createComputePipeline = function (descriptor) {
+      const pipeline = createPipeline.call(this, descriptor);
+      if (descriptor.label === 'brightness.rgba8') record.pipelines += 1;
+      return pipeline;
+    };
+    const destroy = GPUDevice.prototype.destroy;
+    GPUDevice.prototype.destroy = function () { record.deviceDestroys += 1; return destroy.call(this); };
+  });
   page.setDefaultTimeout(0);
   page.on('pageerror', error => report.pageErrors.push(error.message));
   await page.setViewport({ width: 1280, height: 1000 });
@@ -156,8 +179,18 @@ try {
   assert.equal(bright.canvasMismatches, 0, 'displayed bright image must match GPU output');
   assert.ok(bright.changedChannels > bright.width * bright.height, 'brightness operation must visibly change the photograph');
   report.checks.push('full photograph matches the exact 1.50x RGB transform');
+  report.residentFirst = await page.evaluate(() => ({
+    state: window.renderInferenceExample.snapshot(), resources: window.brightnessGpuResources,
+  }));
+  assert.equal(report.residentFirst.resources.allocations.length, 3);
+  assert.equal(report.residentFirst.resources.pipelines, 1);
+  assert.equal(report.residentFirst.state.workloadGeneration, 1);
 
   report.phase = 'repeat-darker';
+  if (process.env.RENDER_INFERENCE_FORCE_RELOAD === '1') {
+    report.injectedFault = 'recreated-workload-between-runs';
+    await page.evaluate(() => window.renderInferenceExample.unload());
+  }
   await page.$eval('#brightness', element => {
     element.value = '0.5';
     element.dispatchEvent(new Event('input', { bubbles: true }));
@@ -171,6 +204,13 @@ try {
   assert.equal(dark.alphaMismatches, 0);
   assert.equal(dark.canvasMismatches, 0, 'displayed dark image must match GPU output');
   assert.notEqual(dark.sha256, bright.sha256);
+  report.residentSecond = await page.evaluate(() => ({
+    state: window.renderInferenceExample.snapshot(), resources: window.brightnessGpuResources,
+  }));
+  assert.equal(report.residentSecond.resources.allocations.length, 3, 'repeat must retain the original compute buffers');
+  assert.equal(report.residentSecond.resources.pipelines, 1, 'repeat must retain the compiled pipeline');
+  assert.equal(report.residentSecond.resources.allocations.some(row => row.destroyed), false);
+  assert.equal(report.residentSecond.state.workloadGeneration, 1);
   report.checks.push('repeat run reuses the application and produces exact 0.50x pixels');
 
   report.phase = 'failure-recovery';
@@ -183,7 +223,39 @@ try {
   const recovered = await page.evaluate(() => window.renderInferenceExample.run({ multiplier: 1 }));
   assert.equal(recovered.status, 'succeeded');
   assert.equal(await page.evaluate(() => window.renderInferenceExample.snapshot().runs), 3);
+  assert.equal(await page.evaluate(() => window.renderInferenceExample.snapshot().workloadGeneration), 1);
   report.checks.push('bad image input settles and the next GPU run succeeds');
+
+  report.phase = 'unload-reload';
+  report.unloaded = await page.evaluate(() => {
+    const app = window.renderInferenceExample;
+    app.unload();
+    app.unload();
+    return { state: app.snapshot(), resources: window.brightnessGpuResources };
+  });
+  assert.equal(report.unloaded.state.workloadLoaded, false);
+  assert.equal(report.unloaded.resources.allocations.every(row => row.destroyed), true);
+  assert.equal(report.unloaded.resources.deviceDestroys, 0);
+  await page.waitForFunction(frames => window.renderInferenceExample.snapshot().frames > frames + 4, {}, report.unloaded.state.frames);
+  report.reloaded = await page.evaluate(async () => {
+    const app = window.renderInferenceExample;
+    const pending = app.run({ multiplier: 1.5 });
+    let unloadError;
+    try { app.unload(); } catch (error) { unloadError = error.message; }
+    const result = await pending;
+    const hash = await crypto.subtle.digest('SHA-256', result.output.pixels);
+    return {
+      state: app.snapshot(), resources: window.brightnessGpuResources, unloadError,
+      sha256: Array.from(new Uint8Array(hash), value => value.toString(16).padStart(2, '0')).join(''),
+    };
+  });
+  assert.match(report.reloaded.unloadError, /while an adjustment is running/);
+  assert.equal(report.reloaded.sha256, bright.sha256);
+  assert.equal(report.reloaded.state.workloadGeneration, 2);
+  assert.equal(report.reloaded.resources.allocations.length, 6);
+  assert.equal(report.reloaded.resources.pipelines, 2);
+  assert.equal(report.reloaded.resources.deviceDestroys, 0);
+  report.checks.push('unload releases compute buffers while renderer advances; reload reproduces exact output');
 
   report.phase = 'desktop';
   await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
