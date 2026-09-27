@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
+const host = read('../index.html');
+const page = read('../sf3d-learn.html');
+const app = read('../sf3d-learn.mjs');
+const bundle = read('../lib/sf3d/sf3d-learn-producer.js');
+
+assert.match(host, /data-tab="learn"/);
+assert.match(host, /id="tab-learn"/);
+assert.match(host, /id="learn-viewport-frame"/);
+assert.match(host, /tabName === 'learn'/);
+assert.match(page, /id="learn-viewer"/);
+assert.match(page, /id="learn-run"/);
+assert.match(page, /id="learn-progress"/);
+assert.match(app, /onIntermediateTriplane/);
+assert.match(app, /intermediateStageIds:\s*\['block-0-fuse-out',\s*'block-1-fuse-out'\]/);
+assert.match(app, /decodeSf3dPreviewMesh/);
+assert.match(app, /replaceGeometry/);
+assert.match(app, /result\.vertices/);
+assert.match(bundle, /decodeSf3dPreviewMesh/);
+console.log('Kaminos Learn tab mounts real SF3D stage geometry');

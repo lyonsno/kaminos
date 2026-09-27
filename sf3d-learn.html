@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Geometry forming | Kaminos Learn</title>
+  <link rel="stylesheet" href="./sf3d-learn.css">
+</head>
+<body>
+  <main class="learn-layout">
+    <section class="learn-workbench" aria-label="SF3D image input">
+      <div class="learn-heading"><span class="section-label">Learn / 01</span><h1>Geometry forming</h1><p>Watch a single image become a mesh.</p></div>
+      <div class="source-block">
+        <div class="block-heading"><h2>Source image</h2><label class="file-button" for="learn-file">Open image</label><input id="learn-file" type="file" accept="image/png,image/jpeg,image/webp" hidden></div>
+        <img id="learn-source" src="./fixtures/sf3d-demo-chair.png" alt="Chair used as the SF3D source image">
+        <span id="learn-source-name">Demo chair</span>
+      </div>
+      <div class="settings-block">
+        <label for="learn-resolution">Preview detail</label>
+        <select id="learn-resolution"><option value="24">Quick</option><option value="32" selected>Balanced</option><option value="40">Detailed</option></select>
+      </div>
+      <button id="learn-run" type="button">Generate mesh</button>
+      <p id="learn-status" role="status" aria-live="polite">Image loaded</p>
+      <progress id="learn-progress" max="3" value="0" aria-label="Geometry stages"></progress>
+      <ol id="learn-stages" aria-label="Mesh progression">
+        <li data-stage="block-0-fuse-out"><span class="stage-mark"></span><span class="stage-name">First shape</span><span class="stage-time">Waiting</span></li>
+        <li data-stage="block-1-fuse-out"><span class="stage-mark"></span><span class="stage-name">Forming detail</span><span class="stage-time">Waiting</span></li>
+        <li data-stage="final"><span class="stage-mark"></span><span class="stage-name">Final mesh</span><span class="stage-time">Waiting</span></li>
+      </ol>
+      <a id="learn-download" hidden download="sf3d-mesh.glb">Download mesh</a>
+      <p id="learn-error" role="alert" hidden></p>
+    </section>
+    <section class="viewer-panel" aria-label="Evolving 3D mesh">
+      <div class="viewer-header"><span>Live mesh</span><span id="learn-view-label">Awaiting first shape</span></div>
+      <div id="learn-viewer"><div id="learn-view-empty">The mesh will appear here</div></div>
+      <div class="viewer-footer"><span>SF3D / WebGPU</span><span id="learn-mesh-count">No geometry yet</span></div>
+    </section>
+  </main>
+  <script type="module" src="./sf3d-learn.mjs"></script>
+</body>
+</html>
