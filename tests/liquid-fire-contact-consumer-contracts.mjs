@@ -10,6 +10,9 @@ const consumerSource = await readFile(consumerUrl, 'utf8');
 const volumeSource = await readFile(coreUrl, 'utf8');
 const indexSource = await readFile(indexUrl, 'utf8');
 const witnessSource = await readFile(witnessUrl, 'utf8');
+assert.match(indexSource, /fingerFluidBenchSolverPromise = createWebGPUFingerFluidSolver\(\{[\s\S]*?webgpuDevice:\s*fingerFluidPyroCompositionRequested\(\) \? sharedGpu\.device : null,[\s\S]*?transparentBackground:/, 'liquid-contact solver borrows the kiln host GPUDevice');
+assert.match(indexSource, /transparentCanvas: fingerFluidPyroCompositionRequested\(\) \|\| isFireLightFieldRoute\(\),[\s\S]*?sharedGpuContext: sharedGpu,/, 'liquid-contact flame uses the same kiln host GPUDevice');
+assert.match(indexSource, /if \(fingerFluidPyroCompositionRequested\(\) && !sharedGpu\?\.device\) throw new Error\('finger-fluid-pyro-shared-device-unavailable'\)/, 'liquid-contact composition refuses a missing host device before mounting');
 const consumer = await import(consumerUrl);
 const extractWgslFunctionBody = (source, name) => {
   const declaration = source.indexOf(`fn ${name}(`);

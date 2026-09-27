@@ -123,7 +123,7 @@ assert.throws(
   /direction must be a finite non-zero vec3/,
 );
 assert.throws(
-  () => compile('nozzle', { origin: [1.45, 0, 0], direction: [1, 0, 0], length: 0.2 }),
+  () => compile('nozzle', { origin: [1.45, 0, 0], direction: [1, 0, 0], supportAxis: [0, 1, 0], length: 0.2 }),
   /generated emitter support exceeds volume-local analytic bounds \[-1\.5, 1\.5\]/,
 );
 assert.throws(
@@ -142,8 +142,28 @@ assert.doesNotThrow(
   () => compile('wick', { radius: 0.18, ringRadius: 'malformed-ring-radius', ringSegments: 'irrelevant' }),
 );
 assert.doesNotThrow(
-  () => compile('nozzle', { supportAxis: [0, Number.NaN, 0] }),
+  () => compile('nozzle', { direction: [0, 1, 0] }),
+  'an omitted optional side axis gets a deterministic orthogonal basis after a 90-degree aim',
 );
+assertVectorClose(
+  compile('nozzle', { direction: [0, 1, 0] }).descriptor.supportAxis,
+  [1, 0, 0],
+  'nozzle omission fallback remains orthogonal to the authored direction',
+);
+for (const family of ['wick', 'nozzle']) {
+  for (const supportAxis of [[0, 1, 0], [Number.NaN, 0, 0], [1, 2], [0, 0, 0]]) {
+    assert.throws(
+      () => compile(family, { direction: [0, 1, 0], supportAxis }),
+      /supportAxis|supportAxis projected perpendicular to direction/,
+      `${family} rejects an explicitly malformed side axis instead of silently substituting one: ${String(supportAxis)}`,
+    );
+  }
+  assertVectorClose(
+    compile(family, { direction: [0, 1, 0], supportAxis: [0, 0, 1] }).descriptor.supportAxis,
+    [0, 0, 1],
+    `${family} preserves an explicitly authored valid side axis`,
+  );
+}
 assert.throws(
   () => compile('ribbon', { supportAxis: [0, 1, 0] }),
   /supportAxis projected perpendicular to direction must be a finite non-zero vec3/,

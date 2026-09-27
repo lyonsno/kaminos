@@ -2272,7 +2272,7 @@ assert.match(core, /single-explicit-device-three-and-volume-v0/, 'shared device 
 assert.match(core, /maxStorageBuffersInFragmentStage/, 'shared device factory requests per-fragment-stage storage buffer limits for Three node materials');
 assert.match(index, /requestKaminosSharedWebGpuDevice/, 'index imports the shared device factory');
 assert.match(index, /new THREE\.WebGPURenderer\(\{[^}]*device:\s*sharedGpu\.device/, 'Three renderer is constructed on the shared GPUDevice when available');
-assert.match(index, /sharedGpuContext:\s*fingerFluidPyroCompositionRequested\(\) \? null : sharedGpu/, 'volume prototype is seated on the same shared GPU context, except the liquid-contact route that adopts the fluid solver device');
+assert.match(index, /sharedGpuContext:\s*sharedGpu,/, 'volume prototype uses the kiln shared GPU context for liquid contact too');
 
 // Same-state, same-law irradiance lattice seed.
 assert.match(core, /override IRRADIANCE_GRID/, 'irradiance lattice grid size is a shader override, not a hardcoded constant');

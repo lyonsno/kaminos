@@ -10998,6 +10998,7 @@ export function createKaminosVolumePrototype({
       sourceFrameHash: liquidFireContactDescriptor.sourceFrameHash,
       sourceQuenchCenter: sourcePrimitive.position.map(value => value * 0.5 + 0.5),
       sourceQuenchRadius: sourceContactRadius,
+      receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5),
     }));
     state.liquidFireSourceContactRadius = sourceContactRadius;
     return true;
@@ -13270,7 +13271,7 @@ export function createKaminosVolumePrototype({
       state.lookFreezeTimeSeconds = null;
     }
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    if (productFrameOwner === 'caller') {
+    if (productFrameOwner === 'caller' || productTransform.translate.some(value => value !== 0) || productTransform.scale !== 1) {
       productModelMatrix.makeScale(productTransform.scale, productTransform.scale, productTransform.scale);
       productModelMatrix.setPosition(...productTransform.translate);
       productViewProj.multiplyMatrices(viewProj, productModelMatrix);
@@ -14938,10 +14939,12 @@ export function createKaminosVolumePrototype({
       atlasHeight: irradianceGridSize * atlasTilesY,
       // The lattice covers the lower unit cube of the tall raymarch domain;
       // emission above world y = 1 is outside the light field and far field.
-      worldMin: [-1, -1, -1],
-      worldMax: [1, 1, 1],
+      worldMin: productTransform.translate.map(value => value - 1),
+      worldMax: productTransform.translate.map(value => value + 1),
       worldBoundsAuthority: 'lower-unit-cube-of-tall-raymarch-domain-v0',
-      raymarchWorldMax: [1, -1 + 2 * gridHeight / gridSize, 1],
+      raymarchWorldMax: [productTransform.translate[0] + 1,
+        productTransform.translate[1] - 1 + 2 * gridHeight / gridSize,
+        productTransform.translate[2] + 1],
       generation: irradianceAtlasGeneration,
       builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
       frameCount: state.fireLightFieldFrameCount || 0,
@@ -23914,6 +23917,23 @@ export function createKaminosVolumePrototype({
 
   return {
     sampleSharedTransmittanceContributions,
+    relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives) {
+      if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
+      if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
+        throw new Error('Domain translation requires three finite coordinates');
+      }
+      if (!Array.isArray(localPrimitives)) throw new Error('Local domain primitives must be an array');
+      const next = [...translation];
+      if (next.every((value, index) => value === productTransform.translate[index])) return false;
+      const normalizedPrimitives = localPrimitives.map(normalizePrimitiveRecord);
+      productTransform.translate = next;
+      volumePrimitives = normalizedPrimitives;
+      publishVolumePrimitiveState();
+      getPrimitiveSource();
+      if (device) rebuildFluidState(gridSize, 'authored-flame-domain-relocation');
+      writeLiquidFireContactParams();
+      return true;
+    },
     setVolumePresentationMode,
     setRaymarchSmokePresentationMode,
     setAppearanceDecompositionMode,
@@ -24497,6 +24517,7 @@ export function createKaminosVolumePrototype({
     debugState() {
       return {
         ...state,
+        ordinaryDomainTranslation: [...productTransform.translate],
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
         cameraSignature: cameraSignature(),
         boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),
