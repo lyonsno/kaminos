@@ -13,10 +13,11 @@ const puppeteerPath = value('--puppeteer', '');
 const chromePath = value('--chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const width = Number(value('--width', '1440'));
 const height = Number(value('--height', '900'));
+const deepLink = args.includes('--deep-link');
 fs.mkdirSync(outputDir, { recursive: true });
 const reportPath = path.join(outputDir, 'report.json');
 const report = { schema: 'kaminos.sf3d-learn-browser.v0', phase: 'preflight', ok: false,
-  requested: { baseUrl, width, height }, effective: { baseUrl, puppeteerPath, chromePath }, events: [] };
+  requested: { baseUrl, width, height, deepLink }, effective: { baseUrl, puppeteerPath, chromePath }, events: [] };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 write();
 let browser;
@@ -34,9 +35,9 @@ try {
   page.on('requestfailed', request => report.events.push({ type: 'request-failed', url: request.url(), reason: request.failure()?.errorText }));
   page.on('response', response => { if (response.status() >= 400) report.events.push({ type: 'http-error', url: response.url(), status: response.status() }); });
   report.phase = 'host-tab'; write();
-  await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${baseUrl}/${deepLink ? '?tab=learn' : ''}`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-tab="learn"]');
-  await page.click('[data-tab="learn"]');
+  if (!deepLink) await page.click('[data-tab="learn"]');
   await page.waitForFunction(() => document.querySelector('#learn-viewport-frame')?.contentDocument?.querySelector('#learn-viewer canvas'));
   await new Promise(resolve => setTimeout(resolve, 1200));
   report.host = await page.evaluate(() => ({ activeTab: window.__kaminosActiveTab?.(),

@@ -11467,6 +11467,7 @@ window.__kaminosSetActiveTab = setActiveTab;
 window.__kaminosActiveTab = () => document.querySelector('.tab.active[data-tab]')?.dataset.tab || null;
 // Tab switching also stops inactive benches; initialize their state first.
 if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
+else if (initialViewerParams.get('tab') === 'learn') setActiveTab('learn');
 
 function currentWorldChambersDebugState() {
   return worldChamberDebugState(worldChambersRegistry);
