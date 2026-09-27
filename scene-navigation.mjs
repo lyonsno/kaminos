@@ -261,7 +261,10 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     const rect = canvas.getBoundingClientRect();
     const ndc = new Vector2(2 * (e.clientX - rect.left) / rect.width - 1, 1 - 2 * (e.clientY - rect.top) / rect.height);
     const pivot = navigationPivot(camera, controls.target, ndc, roots(), {retainedPivot:workingPivot || controls.target, occluders:occluders()});
-    if (pivot.source === 'mesh-surface' && adoptNavigationDepth(camera, controls.target, pivot.point)) workingPivot = pivot.point.clone();
+    if (pivot.source === 'mesh-surface' && adoptNavigationDepth(camera, controls.target, pivot.point)) {
+      workingPivot = pivot.point.clone();
+      workingTarget.copy(controls.target);
+    }
     lastDepth = {point:pivot.point.toArray(), source:pivot.source, object:pivot.object};
     return pivot.point;
   };
@@ -358,8 +361,8 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
         code === 'Numpad8' ? -step : code === 'Numpad2' ? step : 0);
     };
     else if (!e.ctrlKey && ['NumpadAdd','NumpadSubtract'].includes(code)) action = () => zoomCamera(camera, controls.target, code === 'NumpadAdd' ? 1/1.2 : 1.2);
-    else if (!e.ctrlKey && code === 'Home') action = () => {frameAll(); workingPivot = null;};
-    else if (!e.ctrlKey && !e.shiftKey && (e.key.toLowerCase() === 'f' || code === 'NumpadDecimal')) action = () => {frameSelected(); workingPivot = null;};
+    else if (!e.ctrlKey && code === 'Home') action = () => {if (frameAll()) workingPivot = null;};
+    else if (!e.ctrlKey && !e.shiftKey && (e.key.toLowerCase() === 'f' || code === 'NumpadDecimal')) action = () => {if (frameSelected()) workingPivot = null;};
     if (action) {take(e); action(); changed();}
   }, true);
   return {

@@ -246,6 +246,28 @@ test('an off-center mesh hit remains the orbit pivot after the next empty-space 
  near(new THREE.Vector3(...f.nav.state().depth.point),retained);
  near(retained.clone().project(f.c),before,'miss must keep orbiting around last real surface point');
 });
+test('stationary pointer hit followed by an empty-space gesture retains its off-center pivot',()=>{
+ const surface=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial());surface.position.z=5;
+ const f=fixture({roots:()=>[surface]}),point=new THREE.Vector3(.8,.2,5),screen=point.clone().project(f.c);
+ emit(f.canvas,'pointerdown',{button:1,pointerId:1,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
+ emit(f.canvas,'pointerup',{button:1,pointerId:1});
+ const retained=new THREE.Vector3(...f.nav.state().depth.point);
+ surface.visible=false;
+ emit(f.canvas,'pointerdown',{button:1,pointerId:2,clientX:40,clientY:40});
+ near(new THREE.Vector3(...f.nav.state().depth.point),retained);
+ emit(f.canvas,'pointerup',{button:1,pointerId:2});
+});
+test('no-op F does not discard a previously sampled surface pivot',()=>{
+ const surface=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial());surface.position.z=5;
+ const f=fixture({inputMode:()=> 'trackpad',roots:()=>[surface],frameSelected:()=>false});
+ const point=new THREE.Vector3(.8,.2,5),screen=point.clone().project(f.c);
+ emit(f.canvas,'wheel',{deltaX:0,deltaY:0,deltaMode:0,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
+ const retained=new THREE.Vector3(...f.nav.state().depth.point);
+ emit(f.doc,'keydown',{key:'f',code:'KeyF'});
+ surface.visible=false;
+ emit(f.canvas,'wheel',{deltaX:0,deltaY:0,deltaMode:0,clientX:40,clientY:40});
+ near(new THREE.Vector3(...f.nav.state().depth.point),retained);
+});
 test('Shift glide pans with content motion, while Cmd/Ctrl glide zooms along the view axis',()=>{
  const f=fixture({inputMode:()=> 'trackpad'}),q=f.c.quaternion.clone(),point=new THREE.Vector3();
  emit(f.canvas,'wheel',{...trackpadPackets[1],clientX:400,clientY:300});
