@@ -10,7 +10,7 @@ const result = source.prepareSceneSourceFrame({encoder,
   encode(e) {assert.equal(e,encoder); events.push('encode-source'); return prepared;},
   submit(commands) {assert.deepEqual(commands,['commands']); events.push('submit-source');},
   consume(field) {assert.equal(field,prepared); events.push('bind-host-input');},
-  renderHost() {events.push('render-host');},
+  renderHost() {events.push('render-host'); return {label:'effective host depth'};},
   createEncoder() {events.push('create-volume-encoder'); return next;},
 });
 assert.equal(result,next);
@@ -19,4 +19,9 @@ let consumed = false;
 assert.throws(() => source.prepareSceneSourceFrame({encoder, encode:()=>prepared,
   submit(){throw new Error('submission rejected');},consume(){consumed=true;},renderHost(){consumed=true;},createEncoder(){consumed=true;}}), /submission rejected/);
 assert.equal(consumed,false,'failed submission must not publish source to either consumer');
+let volumeEncoderCreated = false;
+assert.throws(() => source.prepareSceneSourceFrame({encoder, encode:()=>prepared,
+  submit(){}, consume(){}, renderHost(){return null;},
+  createEncoder(){volumeEncoderCreated=true;}}), /shared-scene-source-host-depth-unavailable/);
+assert.equal(volumeEncoderCreated,false,'missing host depth must not admit a fallback volume draw');
 console.log('scene source submission precedes host consumption; failed submission cannot publish');

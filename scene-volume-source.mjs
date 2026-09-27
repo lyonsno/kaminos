@@ -7,7 +7,7 @@ export function prepareSceneSourceFrame({encoder, encode, submit, consume, rende
   const field = encode(encoder);
   submit([encoder.finish()]);
   consume(field);
-  renderHost();
+  if (!renderHost()) throw new Error('shared-scene-source-host-depth-unavailable');
   return createEncoder();
 }
 

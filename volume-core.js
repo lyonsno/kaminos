@@ -13274,7 +13274,9 @@ export function createKaminosVolumePrototype({
         reason: texture ? null : 'host-disabled', width: texture?.width ?? null,
         height: texture?.height ?? null, sampleCount: texture?.sampleCount ?? null, convention: 'webgpu-zero-one-top-down',
         source: 'same-camera-same-device-scene-prepass'};
+      return texture;
     }
+    return null;
   }
 
   function updateUniforms(now) {
