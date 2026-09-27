@@ -6,7 +6,7 @@ import { dirname, extname, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
 import { assertCleanGitCheckout, createSourceByteReceipt } from './trellis-dinov3-source-attestation.mjs';
-import { forwardF32ConditioningTensor, liveConditioningReceiptMatches, TRELLIS_DINO_CONDITIONING_BYTE_LENGTH, validateLiveConditioningSinkUrl } from './trellis-dinov3-live-conditioning-transport.mjs';
+import { forwardF32ConditioningTensor, liveConditioningProducerSessionReleaseMatches, liveConditioningReceiptMatches, TRELLIS_DINO_CONDITIONING_BYTE_LENGTH, validateLiveConditioningSinkUrl } from './trellis-dinov3-live-conditioning-transport.mjs';
 
 const args = new Map();
 for (let index=2; index<process.argv.length; index+=2) args.set(process.argv[index],process.argv[index+1]);
@@ -79,6 +79,7 @@ let stderr='';
 let outputReceipts={};
 let liveConditioningReceipt=null;
 let liveConditioningTransferError=null;
+let producerSessionReleaseError=null;
 let liveConditioningRequestSeen=false;
 let servedSourceReceipts={};
 let sourceAttestationErrors=[];
@@ -124,6 +125,7 @@ function writeReport(extra={}) {
     evidenceChain:browserState?.evidenceChain||[], lastCompletedPhase:browserState?.lastCompletedPhase||null,
     comparisons:browserState?.comparisons||{}, actualOutputs:browserState?.actualOutputs||{}, persistedOutputReceipts:outputReceipts,
     liveConditioningTransfer:liveConditioningReceipt, liveConditioningTransferError,
+    producerSessionReleaseError,
     sourceAttestation:sourceAttestation(),
     receipt:browserState?.receipt||null, browserState:browserState||null, stderrTail:stderr.slice(-6000),
     ...extra,
@@ -171,6 +173,16 @@ function startServer() {
           if (bytes.byteLength!==TRELLIS_DINO_CONDITIONING_BYTE_LENGTH) throw new Error(`partial conditioning tensor ${bytes.byteLength}; expected ${TRELLIS_DINO_CONDITIONING_BYTE_LENGTH}`);
           const sha256=createHash('sha256').update(bytes).digest('hex');
           if (request.headers['x-output-sha256']!==sha256) throw new Error('conditioning transfer digest does not match the browser session header');
+          let producerSessionRelease=null;
+          try { producerSessionRelease=JSON.parse(Buffer.from(request.headers['x-producer-session-release']||'','base64url').toString('utf8')); }
+          catch {
+            producerSessionReleaseError={phase:'producer-session-release-unverified',requestId:invocationId,error:'browser did not supply a valid producer-session release receipt'};
+            throw new Error(producerSessionReleaseError.error);
+          }
+          if (!liveConditioningProducerSessionReleaseMatches({requestId:invocationId,routeId:requestedRouteId,tensorSha256:sha256,receipt:producerSessionRelease})) {
+            producerSessionReleaseError={phase:'producer-session-release-unverified',requestId:invocationId,error:'producer-session release receipt does not match this request, route, or tensor'};
+            throw new Error(producerSessionReleaseError.error);
+          }
           const model=referenceManifestSummary?.model;
           const provenance={
             requestId:invocationId,
@@ -183,19 +195,21 @@ function startServer() {
             consumerModelReferenceRevision:referenceManifestSummary?.reference?.sourceRevision,
             consumerDinoSourceSha256:referenceManifestSummary?.reference?.sourceFileSha256,
           };
-          const forwarded=await forwardF32ConditioningTensor({url:conditioningSinkUrl,bytes,provenance});
+          const forwarded=await forwardF32ConditioningTensor({url:conditioningSinkUrl,bytes,provenance,producerSessionRelease});
           liveConditioningReceipt={
-            ok:true,status:'http-bytes-forwarded',requestId:invocationId,receivedAt:new Date().toISOString(),
+            ok:true,status:'consumer-accepted',requestId:invocationId,receivedAt:new Date().toISOString(),
             producerSessionId:provenance.producerSessionId,producerPid:provenance.producerPid,
             hostBridgeProcess:{name:'Kaminos Node browser-smoke process',pid:process.pid},
             receiverUrl:forwarded.requestUrl,receiverHttpStatus:forwarded.status,
-            receiverResponseText:forwarded.responseText,tensor:forwarded.tensor,envelope:forwarded.envelope,
-            acceptanceClaim:'HTTP delivery only; the receiver response is preserved but producer transport alone does not establish MLX array construction or sampler consumption',
+            receiverResponseText:forwarded.responseText,consumerReceipt:forwarded.consumerReceipt,
+            producerSessionRelease:forwarded.producerSessionRelease,
+            tensor:forwarded.tensor,envelope:forwarded.envelope,
+            acceptanceClaim:'receiver-owned consumer schema reports MLX condition-array evaluation and real sparse_flow_step consumption after its selected checkpoint save; producer HTTP delivery remains separately recorded',
           };
           response.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
           response.end(JSON.stringify(liveConditioningReceipt));
         } catch(error) {
-          liveConditioningTransferError={phase:'live-conditioning-transfer',requestId:invocationId,error:String(error?.message||error)};
+          liveConditioningTransferError={phase:producerSessionReleaseError?.phase||'live-conditioning-transfer',requestId:invocationId,error:String(error?.message||error)};
           response.writeHead(502,{'content-type':'application/json','cache-control':'no-store'});
           response.end(JSON.stringify(liveConditioningTransferError));
         }
@@ -371,11 +385,20 @@ try {
     tensorSha256:browserState?.actualOutputs?.conditioningFeatures?.sha256,
     receipt:liveConditioningReceipt,
   });
-  const smokeOk=browserState.status==='passed'&&liveTransferSatisfied;
-  const smokeError=!liveTransferSatisfied
-    ? 'configured live-conditioning sink has no matching same-session tensor transfer receipt'
+  const expectedTensorSha256=browserState?.actualOutputs?.conditioningFeatures?.sha256;
+  const producerSessionReleaseSatisfied=conditioningSinkUrl===null||[
+    browserState?.producerSessionRelease,
+    liveConditioningReceipt?.producerSessionRelease,
+  ].every(receipt=>liveConditioningProducerSessionReleaseMatches({
+    requestId:invocationId,routeId:requestedRouteId,tensorSha256:expectedTensorSha256,receipt,
+  }));
+  const smokeOk=browserState.status==='passed'&&liveTransferSatisfied&&producerSessionReleaseSatisfied;
+  const smokeError=!producerSessionReleaseSatisfied
+    ? 'the browser and host bridge do not both report a matching pre-forward WebGPU session release'
+    : !liveTransferSatisfied
+    ? 'configured live-conditioning sink has no matching receiver-owned MLX/sampler consumer receipt'
     : browserState.error||null;
-  const report=writeReport({ok:smokeOk,failure_phase:smokeOk?null:!liveTransferSatisfied?'live-conditioning-transfer-incomplete':browserState.failurePhase||phase,error:smokeError});
+  const report=writeReport({ok:smokeOk,failure_phase:smokeOk?null:!producerSessionReleaseSatisfied?'producer-session-release-unverified':!liveTransferSatisfied?'live-conditioning-transfer-incomplete':browserState.failurePhase||phase,error:smokeError});
   console.log(JSON.stringify({ok:report.ok,reportPath,mode,requestedRouteId:report.requestedRouteId,effectiveRouteId:report.effectiveRouteId,sourceRevision,browser:report.browserVersion,adapterName:report.adapterName,adapterClassification:report.adapterClassification,precision:report.precision,model:report.model,comparisons:report.comparisons,outputReceipts:report.persistedOutputReceipts,error:smokeError},null,2));
   if(report.sourceAttestation?.ok!==true) throw new Error(`browser source attestation did not close: ${JSON.stringify(report.sourceAttestation)}`);
   if(!report.ok) throw Object.assign(new Error(smokeError||'matched WebGPU-vs-MLX comparison failed'),{failurePhase:report.failure_phase});

@@ -486,13 +486,23 @@ try {
     if (!residentFullConditioningMode) throw new Error('live conditioning transfer requires the complete registered DINO conditioner');
     const values=actual.outputValues;
     if (!(values instanceof Float32Array) || values.length!==1*1029*1024) throw new Error('live conditioning transfer source is not the complete F32 [1,1029,1024] output');
-    const bytes=new Uint8Array(values.buffer,values.byteOffset,values.byteLength);
+    const bytes=new Uint8Array(values.buffer,values.byteOffset,values.byteLength).slice();
     const sha256Value=await sha256(bytes);
     if (sha256Value!==state.actualOutputs.conditioningFeatures.sha256) throw new Error('live conditioning transfer bytes differ from the parity-checked WebGPU output');
+    await closeInferenceSession();
+    const producerSessionRelease={
+      process:'Chrome',producerSessionId:`trellis-dinov3-full-conditioning-${invocationId}`,
+      routeId:state.requestedRouteId,tensorName:'cond',tensorSha256:sha256Value,
+      webgpuInferenceSessionClosed:inferenceSession===null&&inferenceRoute===null&&activeDevice===null,
+      releasedAt:new Date().toISOString(),beforeHostForward:true,
+    };
+    state.producerSessionRelease=producerSessionRelease;
+    evidence('Chrome copied the parity-checked F32 tensor into host-owned bytes, then drained and closed the WebGPU route/session and destroyed its device before forwarding to the host bridge',producerSessionRelease);
     setPhase('forward-live-conditioning-to-host-consumer',{requestId:invocationId,producerSessionId:`trellis-dinov3-full-conditioning-${invocationId}`,sha256:sha256Value,byteLength:bytes.byteLength});
+    const producerSessionReleaseHeader=btoa(JSON.stringify(producerSessionRelease)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
     const response=await fetch('/__live_conditioning',{
       method:'POST',
-      headers:{'content-type':'application/octet-stream','x-request-id':invocationId,'x-output-sha256':sha256Value},
+      headers:{'content-type':'application/octet-stream','x-request-id':invocationId,'x-output-sha256':sha256Value,'x-producer-session-release':producerSessionReleaseHeader},
       body:bytes,
       cache:'no-store',
     });
@@ -503,7 +513,7 @@ try {
     catch { throw new Error('live conditioning host bridge returned a non-JSON transfer receipt'); }
     if (transferReceipt.requestId!==invocationId || transferReceipt.tensor?.sha256!==sha256Value || transferReceipt.tensor?.byteLength!==bytes.byteLength || transferReceipt.producerSessionId!==`trellis-dinov3-full-conditioning-${invocationId}`) throw new Error('live conditioning transfer receipt does not bind to this session and exact tensor');
     state.liveConditioningTransfer=transferReceipt;
-    evidence('parity-checked WebGPU F32 conditioning bytes crossed the host bridge to the configured loopback consumer endpoint; receiver acceptance is a separate claim',transferReceipt);
+    evidence('copied parity-checked WebGPU F32 host bytes crossed the loopback bridge and the matching receiver schema reported MLX array evaluation plus real sparse_flow_step consumption',transferReceipt);
   }
   if (residentFullConditioningMode) await closeInferenceSession();
   else if (activeDevice) { activeDevice.destroy(); activeDevice = null; }
@@ -511,7 +521,7 @@ try {
   state.failurePhase = null;
   state.claim = residentFullConditioningMode
     ? state.liveConditioningTransfer
-      ? 'observed: one registered Kaminos session-route invocation executed all 24 DINOv3 blocks and final no-affine LayerNorm in F32; its [1,1029,1024] tensor matched same-job pinned MLX F32 within tolerance and the exact host-readback bytes were forwarded to the configured loopback consumer endpoint; the receiver response is preserved, but receiver-side MLX array construction and sampler consumption require consumer-process evidence'
+      ? 'observed: one registered Kaminos session-route invocation executed all 24 DINOv3 blocks and final no-affine LayerNorm in F32; its [1,1029,1024] tensor matched same-job pinned MLX F32 within tolerance, then copied host bytes were forwarded after releasing the WebGPU inference session; the matching receiver-owned schema reports MLX cond/neg_cond evaluation and finite first sparse_flow_step consumption, with success withheld until its checkpoint save; this is a one-step no-NPZ handoff, not full generation or an inspected asset'
       : 'observed: one registered Kaminos session-route invocation executed all 24 DINOv3 transformer blocks and final no-affine LayerNorm in F32, retained intermediate tensors on the same WebGPU device, and its final [1,1029,1024] conditioning tensor matched the same-job pinned MLX F32 output within recorded tolerance; diagnostic parity only, not yet consumed by native TRELLIS conditioning or an end-to-end image-to-3D route'
     : residentBlock2MlpMode
     ? 'observed: the live F32 tensor passed through three complete DINOv3 blocks on the same WebGPU runtime/device without intermediate host readback; all eleven captured F32 boundaries matched same-job pinned MLX F32 within recorded tolerance; diagnostic probe only, final model LayerNorm and TRELLIS conditioning not included'
