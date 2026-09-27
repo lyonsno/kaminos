@@ -11,6 +11,7 @@ assert.match(host, /data-tab="learn"/);
 assert.match(host, /id="tab-learn"/);
 assert.match(host, /id="learn-viewport-frame"/);
 assert.match(host, /tabName === 'learn'/);
+assert.match(host, /body\.learn-active #viewport > :not\(#learn-operator-panel\)/);
 assert.match(page, /id="learn-viewer"/);
 assert.match(page, /id="learn-run"/);
 assert.match(page, /id="learn-progress"/);

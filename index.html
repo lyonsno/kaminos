@@ -603,6 +603,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #learn-operator-panel { position: absolute; inset: 0; z-index: 5; background: #101512; }
 #learn-operator-panel[hidden] { display: none; }
 #learn-viewport-frame { width: 100%; height: 100%; border: 0; display: block; background: #101512; }
+body.learn-active #viewport > :not(#learn-operator-panel) { visibility: hidden; }
 
 /* Native Finger Juice host */
 .finger-juice-host-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
@@ -11405,6 +11406,7 @@ function ensureFingerJuiceTabFrameLoaded() {
 }
 
 function setActiveTab(tabName) {
+  document.body.classList.toggle('learn-active', tabName === 'learn');
   document.body.classList.toggle('sam-image-active', tabName === 'masks');
   document.getElementById('sam-image-viewport').hidden = tabName !== 'masks';
   samImageTools?.setActive(tabName === 'masks');
