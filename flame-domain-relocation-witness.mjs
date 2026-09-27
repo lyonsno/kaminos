@@ -187,13 +187,13 @@ try {
   assert.equal(reopened.history.undoCount, 0);
   await shot('07-reopened-adjusted-plume', reopened);
   report.phase = 'support-edge-release'; await save();
-  await page.evaluate(() => window.kaminosSceneEdits.apply('flame-emitter', { position: [0.3, -0.76, 0] }));
-  await waitSim(reopened.volume.frameCount + 8); await waitBurner(0.3);
-  const recentered = await state(); check(recentered, { x: 0.3, domain: 0 });
+  await page.goto('about:blank'); await page.goto(manifest.sceneUrl);
+  await waitSim(0, true, 60); await waitBurner(0.3);
+  const edgeStart = await state(); check(edgeStart, { x: 0.3, domain: 0 });
   await page.evaluate(() => window.kaminosSceneEdits.apply('flame-emitter', { position: [0.7, -0.76, 0] }));
-  await waitSim(recentered.volume.frameCount + 8); await waitBurner(0.7);
+  await waitSim(edgeStart.volume.frameCount + 8); await waitBurner(0.7);
   const supportEdge = await state(); check(supportEdge, { x: 0.7, domain: 0.7 });
-  assert.equal(supportEdge.volume.fluidStateResetCount, recentered.volume.fluidStateResetCount + 1,
+  assert.equal(supportEdge.volume.fluidStateResetCount, edgeStart.volume.fluidStateResetCount + 1,
     'release of a ring whose support crosses the analytic bound relocates the field once');
   assert.equal(supportEdge.sceneInfo, 'Flame grid moved to the released source; the field restarted there');
   await shot('08-support-edge-released', supportEdge);
