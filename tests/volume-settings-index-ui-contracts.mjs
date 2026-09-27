@@ -75,18 +75,37 @@ assert.ok(earlierOption, 'an earlier version of a label is listed');
 assert.equal(earlierOption.disabled, false, 'an earlier version is selectable');
 assert.match(earlierOption.text, /^Live kiln \| earlier 2026-09-18 cc\/wake-kiln \| vsp-dddddddddddd/);
 assert.match(versionsView.statuses.at(-1)[0], /1 earlier version/);
+const heldView = await render({ ...mixed, unavailableEntries: [], earlierVersions: [{ ...earlier, reason: 'held-label' }] });
+assert.match(heldView.select.options.find(option => option.value === earlier.presetId).text, /^Live kiln \| held 2026-09-18 cc\/wake-kiln/,
+  'a version the label did not follow is shown as held, not earlier');
 assert.equal((await render({ ...mixed, unavailableEntries: [] })).select.options.length, 1, 'indexes without versions are unchanged');
+
+// A listed earlier version opens through the picker's own commands.
+const pickerSource = ['function selectedVolumeSettingsPresetEntry(', 'function selectedVolumeSettingsPresetUrl(', 'function navigateToSelectedVolumeSettingsPreset(']
+  .map(head => source.match(new RegExp(`${head.replace(/[()]/g, '\\$&')}[^]*?\\n\\}`))?.[0]);
+assert.ok(pickerSource.every(Boolean), 'picker commands are present');
+const assigned = [];
+Object.assign(versionsView.context, {
+  isCompositionAuthoring: () => false, authoringBusy: false, setInfo: () => {},
+  location: { assign: target => assigned.push(target) }, window: { open: () => null },
+});
+versionsView.select.value = earlier.presetId;
+const opened = vm.runInContext(`${pickerSource.join('\n')}\nnavigateToSelectedVolumeSettingsPreset(false)`, versionsView.context);
+assert.equal(opened, `/volume-settings-preset.html?preset=${earlier.presetId}`, 'Load here opens the selected earlier version');
+assert.deepEqual(assigned, [opened]);
+assert.doesNotMatch(versionsView.statuses.at(-1)[0], /FAILED/);
 
 // A corrupt artifact is not described as a version difference, and malformed
 // aliases are counted without failing the index.
 const corrupt = { alias: 'broken-kiln', label: 'Broken kiln', presetId: `vsp-${'e'.repeat(64)}`, reason: 'invalid-artifact',
   error: 'volume settings preset artifact content hash mismatch' };
 const skewed = { ...unavailable, reason: 'schema-skew' };
-const reasonsView = await render({ ...mixed, unavailableEntries: [skewed, corrupt], invalidAliases: [{ alias: 'x', path: '/x', error: 'bad' }] });
+const reasonsView = await render({ ...mixed, unavailableEntries: [skewed, corrupt], invalidAliases: [{ alias: 'x', path: '/x', error: 'bad' }],
+  invalidHistoryRows: [{ alias: 'kiln', path: '/h', line: 2, error: 'bad' }] });
 assert.match(reasonsView.select.options.find(option => option.value === skewed.presetId).text, /unavailable on this version/);
 assert.match(reasonsView.select.options.find(option => option.value === corrupt.presetId).text, /unreadable artifact/);
 assert.doesNotMatch(reasonsView.select.options.find(option => option.value === corrupt.presetId).text, /this version/);
-assert.match(reasonsView.statuses.at(-1)[0], /1 unreadable \| 1 malformed label/);
+assert.match(reasonsView.statuses.at(-1)[0], /1 unreadable \| 1 malformed label \| 1 malformed history row/);
 assert.equal(reasonsView.statuses.at(-1)[1], true);
 
 const emptyView = await render({ ...mixed, entries: [] });

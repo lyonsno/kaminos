@@ -311,7 +311,13 @@ def test_malformed_alias_is_reported_alone(tmp):
     (store / "aliases" / "bad-target.json").write_text(json.dumps({
         "identity": "kaminos-volume-settings-preset-alias-v1", "alias": "bad-target", "label": "bad target", "presetId": "not-an-id"}))
     (store / "aliases" / "not-json.json").write_text("{")
+    other = serve.write_volume_settings_preset(store, "odd time", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5}), SOURCE, BASE_SCHEMA)
+    odd = json.loads((store / "aliases" / "odd-time.json").read_text())
+    odd["updatedAt"] = 5
+    (store / "aliases" / "odd-time.json").write_text(json.dumps(odd))
     listing = serve.list_volume_settings_presets(store, BASE_SCHEMA)
+    assert sorted(entry["alias"] for entry in listing["entries"]) == ["good", "odd-time"], "a non-string timestamp does not break the index"
+    listing = {**listing, "entries": [entry for entry in listing["entries"] if entry["alias"] == "good"]}
     assert [entry["alias"] for entry in listing["entries"]] == ["good"], listing
     assert all(entry.get("presetId", "").startswith("vsp-") and len(entry["presetId"]) == 68 for entry in listing["unavailableEntries"]), listing
     assert sorted(entry["alias"] for entry in listing["invalidAliases"]) == ["bad-target", "no-label", "not-json"], listing
@@ -319,8 +325,119 @@ def test_malformed_alias_is_reported_alone(tmp):
     assert sorted(entry["alias"] for entry in layered["invalidAliases"]) == ["bad-target", "no-label", "not-json"]
 
 
+VALUE_ONLY_SCHEMA = copy.deepcopy(BASE_SCHEMA)
+VALUE_ONLY_SCHEMA["controls"][2]["allowedValues"] = ["a", "b", "c"]
+
+
+def _alias_target(store, alias):
+    return json.loads((store / "aliases" / f"{alias}.json").read_text())["presetId"]
+
+
+def test_every_writer_holds_a_label_it_cannot_represent(tmp):
+    """No writer moves a label onto a copy that loses controls or values the current basin has."""
+    shared = tmp / "library"
+    original = serve.write_volume_settings_preset_to_library(
+        tmp / "newer", shared, "kiln", payload(VALUE_ONLY_SCHEMA, {**BASE_VALUES, "volume-mode": "c"}), SOURCE, VALUE_ONLY_SCHEMA)
+    original_id = original["effective"]["presetId"]
+    loaded = serve.read_volume_settings_preset_layered([("local", tmp / "older"), ("shared", shared)], "kiln", BASE_SCHEMA)
+    assert loaded["schemaProjection"]["unsupportedValuesDefaulted"], "the older branch replaces volume-mode c"
+    # A headless save of only-replaced values (no dropped control) is held too.
+    resaved = serve.write_volume_settings_preset_to_library(
+        tmp / "older", shared, "kiln", loaded["preset"], {**SOURCE, "branch": "older"}, BASE_SCHEMA)
+    assert resaved["sharedPublication"]["aliasHeld"] == {
+        "reason": "would-replace-values", "controls": ["volume-mode"], "currentPresetId": original_id}, resaved["sharedPublication"]
+    assert _alias_target(shared, "kiln") == original_id
+
+    # A server whose own store is the library holds at its local write as well.
+    newer_original = serve.write_volume_settings_preset_to_library(
+        tmp / "newer-2", shared, "furnace", payload(NEWER_SCHEMA, NEWER_VALUES), SOURCE, NEWER_SCHEMA)
+    loaded = serve.read_volume_settings_preset_layered(serve.volume_settings_store_layers(shared, shared), "furnace", BASE_SCHEMA)
+    same = serve.write_volume_settings_preset_to_library(shared, shared, "furnace", loaded["preset"], {**SOURCE, "branch": "older"}, BASE_SCHEMA)
+    assert same["effective"]["aliasHeld"]["reason"] == "would-drop-controls", same["effective"]
+    assert _alias_target(shared, "furnace") == newer_original["effective"]["presetId"]
+
+    # The held copy is listed as held, not as an earlier version.
+    listing = serve.list_volume_settings_presets(shared, VALUE_ONLY_SCHEMA)
+    held = [entry for entry in listing["earlierVersions"]
+            if entry["alias"] == "kiln" and entry["presetId"] == resaved["effective"]["presetId"]]
+    assert [entry["reason"] for entry in held] == ["held-label"], listing["earlierVersions"]
+
+    # An exact same-branch resave still moves the label.
+    edited = serve.write_volume_settings_preset_to_library(
+        tmp / "newer", shared, "kiln", payload(VALUE_ONLY_SCHEMA, {**BASE_VALUES, "volume-mode": "c", "volume-detail": 0.5}),
+        SOURCE, VALUE_ONLY_SCHEMA)
+    assert edited["sharedPublication"]["aliasMoved"] is True and edited["effective"]["aliasHeld"] is None
+    assert _alias_target(shared, "kiln") == edited["effective"]["presetId"]
+
+
+def test_import_keeps_live_labels(tmp):
+    """Importing lane stores never moves a label a live save set, even onto a newer pointer."""
+    shared = tmp / "library"
+    original = serve.write_volume_settings_preset_to_library(
+        tmp / "newer", shared, "kiln", payload(NEWER_SCHEMA, NEWER_VALUES), SOURCE, NEWER_SCHEMA)
+    original_id = original["effective"]["presetId"]
+    loaded = serve.read_volume_settings_preset_layered([("local", tmp / "older"), ("shared", shared)], "kiln", BASE_SCHEMA)
+    lossy = serve.write_volume_settings_preset_to_library(
+        tmp / "older", shared, "kiln", loaded["preset"], {**SOURCE, "branch": "older"}, BASE_SCHEMA)
+    _age_alias(shared / "aliases" / "kiln.json")  # the live pointer is older than the lagging lane's local pointer
+    report = serve.import_volume_settings_stores(shared, [tmp / "newer", tmp / "older"], NEWER_SCHEMA)
+    assert _alias_target(shared, "kiln") == original_id, report
+    assert report["aliasesKeptLive"] >= 1 and report["aliasesMoved"] == 0, report
+    versions = serve.list_volume_settings_presets(shared, NEWER_SCHEMA)["earlierVersions"]
+    assert lossy["effective"]["presetId"] in [entry["presetId"] for entry in versions]
+
+    # Between imported pointers, a candidate that drops controls does not take the label.
+    fresh = tmp / "fresh-library"
+    lagging_alias = tmp / "older" / "aliases" / "kiln.json"
+    lagging = json.loads(lagging_alias.read_text())
+    lagging["updatedAt"] = "2099-01-01T00:00:00Z"
+    lagging_alias.write_text(json.dumps(lagging))
+    report = serve.import_volume_settings_stores(fresh, [tmp / "newer", tmp / "older"], NEWER_SCHEMA)
+    assert _alias_target(fresh, "kiln") == original_id, report
+    assert report["aliasesHeld"] == 1, report
+
+
+def test_label_history_keeps_every_pointer(tmp):
+    store = tmp / "store"
+    a = serve.write_volume_settings_preset(store, "kiln", payload(BASE_SCHEMA, BASE_VALUES), SOURCE, BASE_SCHEMA)
+    # An older-code writer re-points the label without touching the history.
+    b = serve.write_volume_settings_preset(tmp / "scratch", "kiln", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5}), SOURCE, BASE_SCHEMA)
+    (store / "presets" / f"{b['effective']['presetId']}.json").write_text(
+        (tmp / "scratch" / "presets" / f"{b['effective']['presetId']}.json").read_text())
+    alias = json.loads((store / "aliases" / "kiln.json").read_text())
+    alias.update({"presetId": b["effective"]["presetId"], "contentHash": b["effective"]["contentHash"], "updatedAt": "2026-09-27T01:00:00Z"})
+    (store / "aliases" / "kiln.json").write_text(json.dumps(alias))
+    c = serve.write_volume_settings_preset(store, "kiln", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.125}), SOURCE, BASE_SCHEMA)
+    listing = serve.list_volume_settings_presets(store, BASE_SCHEMA)
+    assert [entry["presetId"] for entry in listing["entries"]] == [c["effective"]["presetId"]]
+    assert sorted(entry["presetId"] for entry in listing["earlierVersions"]) == sorted(
+        [a["effective"]["presetId"], b["effective"]["presetId"]]), listing["earlierVersions"]
+
+
+def test_bad_history_rows_are_skipped(tmp):
+    store = tmp / "store"
+    first = serve.write_volume_settings_preset(store, "kiln", payload(BASE_SCHEMA, BASE_VALUES), SOURCE, BASE_SCHEMA)
+    history = store / "alias-history" / "kiln.jsonl"
+    with history.open("a") as handle:
+        handle.write('{"presetId": "vsp-trunc\n')
+        handle.write("null\n")
+        handle.write(json.dumps({"presetId": "not-an-id", "label": "kiln"}) + "\n")
+    listing = serve.list_volume_settings_presets(store, BASE_SCHEMA)
+    assert [entry["presetId"] for entry in listing["entries"]] == [first["effective"]["presetId"]]
+    assert all(entry["presetId"].startswith("vsp-") and len(entry["presetId"]) == 68 for entry in listing["unavailableEntries"])
+    assert [row["line"] for row in listing["invalidHistoryRows"]] == [2, 3, 4], listing["invalidHistoryRows"]
+    second = serve.write_volume_settings_preset(store, "kiln", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5}), SOURCE, BASE_SCHEMA)
+    assert _alias_target(store, "kiln") == second["effective"]["presetId"], "a bad history row does not block saves"
+    layered = serve.list_volume_settings_presets_layered([("local", store)], BASE_SCHEMA)
+    assert [row["line"] for row in layered["invalidHistoryRows"]] == [2, 3, 4]
+
+
 def main():
     for test in (
+        test_every_writer_holds_a_label_it_cannot_represent,
+        test_import_keeps_live_labels,
+        test_label_history_keeps_every_pointer,
+        test_bad_history_rows_are_skipped,
         test_lagging_branch_save_holds_the_shared_label,
         test_newest_unreadable_version_is_not_shadowed,
         test_malformed_alias_is_reported_alone,

@@ -3294,8 +3294,8 @@ import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mj
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
-  describeVolumeSettingsLibraryPublication,
   describeVolumeSettingsPresetProjection,
+  describeVolumeSettingsSaveOutcome,
   resolveVolumeSettingsPresetVisualView,
   validateVolumeSettingsPresetDocument,
   validateVolumeSettingsPresetIndex,
@@ -15755,7 +15755,8 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
       for (const entry of earlierVersions) {
         const projected = entry.carriedControls?.length || entry.unsupportedValuesDefaulted?.length;
         const when = [String(entry.publishedAt || '').slice(0, 10), entry.source?.branch].filter(Boolean).join(' ');
-        const option = new Option(`${entry.label} | earlier ${when} | ${entry.presetId.slice(0, 16)}${projected ? ' | from another branch' : ''}`, entry.presetId);
+        const kind = entry.reason === 'held-label' ? 'held' : 'earlier';
+        const option = new Option(`${entry.label} | ${kind} ${when} | ${entry.presetId.slice(0, 16)}${projected ? ' | from another branch' : ''}`, entry.presetId);
         option.title = `${entry.label} | alias ${entry.alias} | ${entry.presetId} | ${entry.reason === 'other-store-label'
           ? 'this label points at a newer basin in another store' : 'earlier version of this label'}`;
         select.add(option);
@@ -15773,9 +15774,10 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     const unreadable = unavailable.filter(entry => entry.reason === 'invalid-artifact').length;
     const skewed = unavailable.length - unreadable;
     const invalidAliases = index.invalidAliases || [];
+    const invalidHistoryRows = index.invalidHistoryRows || [];
     volumeSettingsPresetStatus(
-      `${active.text ? `${active.text} || ` : ''}${index.entries.length} presets${earlierVersions.length ? ` | ${earlierVersions.length} earlier version${earlierVersions.length === 1 ? '' : 's'}` : ''}${skewed ? ` | ${skewed} unavailable on this version` : ''}${unreadable ? ` | ${unreadable} unreadable` : ''}${invalidAliases.length ? ` | ${invalidAliases.length} malformed label${invalidAliases.length === 1 ? '' : 's'}` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
-      active.warning || unavailable.length > 0 || invalidAliases.length > 0,
+      `${active.text ? `${active.text} || ` : ''}${index.entries.length} presets${earlierVersions.length ? ` | ${earlierVersions.length} earlier version${earlierVersions.length === 1 ? '' : 's'}` : ''}${skewed ? ` | ${skewed} unavailable on this version` : ''}${unreadable ? ` | ${unreadable} unreadable` : ''}${invalidAliases.length ? ` | ${invalidAliases.length} malformed label${invalidAliases.length === 1 ? '' : 's'}` : ''}${invalidHistoryRows.length ? ` | ${invalidHistoryRows.length} malformed history row${invalidHistoryRows.length === 1 ? '' : 's'}` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      active.warning || unavailable.length > 0 || invalidAliases.length > 0 || invalidHistoryRows.length > 0,
     );
     return index;
   } catch (error) {
@@ -15812,10 +15814,10 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset } = {}) {
     }
     await refreshVolumeSettingsPresetList(result.effective.presetId);
     if (labelInput) labelInput.value = result.effective.label;
-    const library = describeVolumeSettingsLibraryPublication(result.sharedPublication);
+    const outcome = describeVolumeSettingsSaveOutcome(result);
     volumeSettingsPresetStatus(
-      `${result.effective.label} | ${result.effective.presetId} | ${result.effective.controlCount} basin + ${result.effective.rendererControlCount} renderer + ${result.effective.presentationControlCount} presentation controls | ${result.effective.storePath}${library.text ? ` | ${library.text}` : ''}`,
-      library.warning,
+      `${result.effective.label} | ${result.effective.presetId} | ${result.effective.controlCount} basin + ${result.effective.rendererControlCount} renderer + ${result.effective.presentationControlCount} presentation controls | ${result.effective.storePath}${outcome.text ? ` | ${outcome.text}` : ''}`,
+      outcome.warning,
     );
     console.log(JSON.stringify(result, null, 2));
     setInfo(`Volume settings preset saved: ${result.effective.label}`);
@@ -15912,6 +15914,8 @@ async function exportBasinPromotionPackage() {
   volumeBasinPromotionStatus(`exporting ${handle}...`);
   try {
     if (!promotionRoot) throw new Error('promotion root is required');
+    const reuseBlock = volumeSettingsPresetLabelReuseBlock(activeVolumeSettingsPresetReceipt, label);
+    if (reuseBlock) throw new Error(reuseBlock);
     await volumeCockpitLayoutReady;
     const preset = buildVolumeSettingsPreset();
     const effectiveState = buildVolumeBasinPromotionEffectiveState();
@@ -15929,7 +15933,8 @@ async function exportBasinPromotionPackage() {
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || `basin promotion export failed: ${response.status}`);
     const promotion = result.promotion;
-    volumeBasinPromotionStatus(`${promotion.handle} | ${promotion.revision} | ${promotion.packagePath}${promotion.channelPath ? ` | ${promotion.channelPath}` : ''}`);
+    const outcome = describeVolumeSettingsSaveOutcome({ effective: result.settingsPreset, sharedPublication: result.sharedPublication });
+    volumeBasinPromotionStatus(`${promotion.handle} | ${promotion.revision} | ${promotion.packagePath}${promotion.channelPath ? ` | ${promotion.channelPath}` : ''}${outcome.text ? ` | ${outcome.text}` : ''}`, outcome.warning);
     if (handleInput) handleInput.value = promotion.handle;
     console.log(JSON.stringify(result, null, 2));
     setInfo(`Basin promotion exported: ${promotion.stableRef}`);
@@ -16428,7 +16433,9 @@ function selectedVolumeSettingsPresetView() {
 
 function selectedVolumeSettingsPresetEntry() {
   const presetId = document.getElementById('settings-preset-select')?.value;
-  const entry = volumeSettingsPresetIndex?.entries?.find(candidate => candidate.presetId === presetId);
+  // Every listed version opens, not only each label's current one.
+  const entry = [...(volumeSettingsPresetIndex?.entries || []), ...(volumeSettingsPresetIndex?.earlierVersions || [])]
+    .find(candidate => candidate.presetId === presetId);
   if (!entry) throw new Error('select a saved volume settings preset');
   return entry;
 }
