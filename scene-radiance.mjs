@@ -61,7 +61,11 @@ export function mountSceneRadiance({renderer,scene,prototype,source:initial={pos
       // A new wrapper identity also invalidates Three's cached sampled-texture
       // binding. Reusing the wrapper retained a destroyed pre-replay texture
       // in the first native consumer run (native-006).
+      const nextVersion=tauExternal.version+1;
       tauExternal=wrapTau(field.medium.texture,field.medium.dimensions);
+      // Bundled Three Bindings._update compares texture.version generations
+      // before rebuilding the GPU bind group, even for a new wrapper identity.
+      tauExternal.version=nextVersion;
       tauNode.value=tauExternal;
     }
     scene.updateMatrixWorld(true);
