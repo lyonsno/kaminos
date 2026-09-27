@@ -109,6 +109,7 @@
       const warm = new THREE.Color('#d6c7a2');
       const hot = new THREE.Color('#f06b57');
       const crackMaterial = new THREE.LineBasicMaterial({ color: '#f56e59', depthTest: false, transparent: true, opacity: 0.92 });
+      const markerMaterial = new THREE.MeshBasicMaterial({ color: '#e3bc70' });
       const cases = {};
       let applied = false;
       let serial = 0;
@@ -136,7 +137,11 @@
 
       function present(name) {
         const item = cases[name];
-        const frame = buildArchVolumeFrame(item.state);
+        const equilibrium = item.state.load
+          ? solveArchStructuralForce(item.state, { ...load, force: item.state.load.requestedForce })
+          : item.state;
+        item.displayTravel = equilibrium.load?.travel ?? null;
+        const frame = buildArchVolumeFrame(item.state, equilibrium);
         const color = new THREE.Color();
         for (let index = 0; index < frame.nodes.length; index += 1) {
           const node = frame.nodes[index];
@@ -162,10 +167,18 @@
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         item.cracks = new THREE.LineSegments(geometry, crackMaterial);
         item.group.add(item.cracks);
+        const contact = item.state.load?.contact;
+        const contactIndex = contact ? item.state.nodes.findIndex(node => node.column === contact.column && node.row === contact.row && node.layer === 2) : -1;
+        item.forceArrow.visible = contactIndex >= 0;
+        if (contactIndex >= 0) {
+          const [x, y] = frame.nodes[contactIndex].position;
+          item.forceArrow.position.set(x, y + 0.14, 0.19);
+        }
         const broken = item.state.bonds.filter(bond => !bond.alive).length;
         const travel = item.state.load ? item.state.load.travel.toFixed(4) : '—';
+        const displayTravel = item.displayTravel === null ? '' : ` · post-break equilibrium ${item.displayTravel.toFixed(4)}`;
         document.getElementById(name === 'intact' ? 'intact-metric' : 'notched-metric').textContent =
-          `travel ${travel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}`;
+          `loaded travel ${travel}${displayTravel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}`;
         render();
       }
 
@@ -195,7 +208,7 @@
         }
         document.getElementById('bind').disabled = true;
         status.textContent = 'Broken graph connections rebound';
-        receipt.textContent = 'Connectivity restored; the solved displacement remains until a new solve or reset.';
+        receipt.textContent = 'Connectivity restored; the displayed volume re-equilibrates on the repaired graph. Original load and fracture history remain.';
       }
 
       function reset() {
@@ -227,6 +240,7 @@
           broken: item.state.bonds.filter(bond => !bond.alive).length,
           components: item.state.components.length,
           travel: item.state.load?.travel ?? null,
+          displayTravel: item.displayTravel,
           connectivityEpoch: item.state.connectivityEpoch,
           renderedInstances: item.blocks.count,
         }])),
@@ -251,8 +265,20 @@
         blocks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         const group = new THREE.Group();
         group.add(blocks);
+        for (const side of [-1, 1]) {
+          const pinned = base.nodes.filter(node => node.pinned && node.layer === 2 && Math.sign(node.x) === side);
+          if (!pinned.length) continue;
+          const minX = Math.min(...pinned.map(node => node.x)) - stepX / 2;
+          const maxX = Math.max(...pinned.map(node => node.x)) + stepX / 2;
+          const support = new THREE.Mesh(new THREE.BoxGeometry(maxX - minX, 0.009, 0.42), markerMaterial);
+          support.position.set((minX + maxX) / 2, Math.min(...pinned.map(node => node.y)) - stepY / 2 - 0.012, 0);
+          group.add(support);
+        }
+        const forceArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 0.1, '#e3bc70', 0.032, 0.022);
+        forceArrow.visible = false;
+        group.add(forceArrow);
         scene.add(group);
-        cases[name] = { profile, base, state: base, blocks, group, cracks: null };
+        cases[name] = { profile, base, state: base, blocks, group, cracks: null, forceArrow, displayTravel: null };
         present(name);
       }
       phase = 'interactive';
