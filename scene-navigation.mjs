@@ -1,4 +1,4 @@
-import {BufferAttribute, Vector2, Vector3, Quaternion, Plane, Raycaster} from './lib/three.core.js';
+import {BufferAttribute, Vector2, Vector3, Quaternion, Raycaster} from './lib/three.core.js';
 import {MeshBVH, acceleratedRaycast} from './node_modules/three-mesh-bvh/build/index.module.js';
 
 const Y = new Vector3(0, 1, 0);
@@ -127,7 +127,7 @@ export function invalidateNavigationGeometry(root) {
 }
 
 // Visible triangles only: a splat's bounds or the flame's simulation box are
-// not surfaces. The caller supplies authored geometry, burner and ground.
+// not surfaces. The caller supplies authored geometry and burner meshes.
 export function navigationPivot(camera, target, ndc, roots) {
   camera.updateMatrixWorld(true);
   const cast = new Raycaster();
@@ -167,8 +167,7 @@ export function navigationPivot(camera, target, ndc, roots) {
       ? hit.object.material[hit.face.materialIndex] : hit.object.material;
     return material?.visible && (!material.transparent || material.opacity > 0);
   });
-  const plane = new Plane().setFromNormalAndCoplanarPoint(forward, target);
-  const point = hit?.point || cast.ray.intersectPlane(plane, new Vector3()) || target.clone();
+  const point = hit?.point || target.clone();
   return {point, source: hit ? 'mesh-surface' : indexing ? 'indexing-depth' : failed ? 'index-failed-depth' : 'retained-depth', object: hit?.object.name || null};
 }
 
@@ -249,7 +248,7 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     const rect = canvas.getBoundingClientRect();
     const ndc = new Vector2(2 * (e.clientX - rect.left) / rect.width - 1, 1 - 2 * (e.clientY - rect.top) / rect.height);
     const pivot = navigationPivot(camera, controls.target, ndc, roots());
-    adoptNavigationDepth(camera, controls.target, pivot.point);
+    if (pivot.source === 'mesh-surface') adoptNavigationDepth(camera, controls.target, pivot.point);
     lastDepth = {point:pivot.point.toArray(), source:pivot.source, object:pivot.object};
     return pivot.point;
   };

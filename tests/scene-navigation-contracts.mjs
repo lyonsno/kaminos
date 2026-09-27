@@ -36,7 +36,7 @@ test('orbit preserves the sampled off-center surface on screen through a whole d
  assert.ok(Math.abs(c.position.distanceTo(pivot)-distance)<1e-8);
  assert.ok(Math.abs(c.position.distanceTo(target)-4)<1e-8);
 });
-test('depth samples unselected transformed visible triangles; empty space retains working depth',()=>{
+test('depth samples unselected transformed visible triangles; empty space retains the exact working pivot',()=>{
  const c=cameraAt(),target=new THREE.Vector3(),group=new THREE.Group();
  group.position.z=5;
  const surface=new THREE.Mesh(new THREE.PlaneGeometry(3,3),new THREE.MeshBasicMaterial());surface.name='unselected kiln';group.add(surface);
@@ -45,8 +45,14 @@ test('depth samples unselected transformed visible triangles; empty space retain
  adoptNavigationDepth(c,target,hit.point);
  group.visible=false;
  const miss=navigationPivot(c,target,new THREE.Vector2(.8,.2),[surface]);
- assert.equal(miss.source,'retained-depth');assert.equal(miss.point.z,5);assert.notEqual(miss.point.x,0);
+ assert.equal(miss.source,'retained-depth');near(miss.point,target);
  adoptNavigationDepth(c,target,miss.point);near(target,new THREE.Vector3(0,0,5));
+});
+test('ground is visible but cannot set authored-mesh navigation depth',()=>{
+ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const roots=source.slice(source.indexOf('    roots: () => [...sceneObjects.filter('),source.indexOf('    frameAll:',source.indexOf('    roots: () => [...sceneObjects.filter(')));
+ assert.ok(roots.includes('sceneObjects.filter(entry => entry.type !== \'splat\')'));
+ assert.ok(!roots.includes('groundPlane'),'ground belongs in the rendered scene, not the navigation depth candidates');
 });
 test('prepared dense geometry keeps exact surface depth without changing the rendered index',async()=>{
  const c=cameraAt(),target=new THREE.Vector3(),root=new THREE.Group();
@@ -202,13 +208,14 @@ const trackpadPackets=[
  {deltaX:0,deltaY:-1,deltaMode:0,shiftKey:true},
  {deltaX:0,deltaY:-1,deltaMode:0,metaKey:true},
 ];
-test('click-free trackpad orbit retains the inspected point and distance, including horizontal motion',()=>{
+test('empty-space trackpad orbit retains the current pivot and distance, including horizontal motion',()=>{
  for(const packet of [trackpadPackets[0],{deltaX:-49,deltaY:0,deltaMode:0}]){
-  const f=fixture({inputMode:()=> 'trackpad'}),pivot=new THREE.Vector3(1,.5,0);
-  const screen=pivot.clone().project(f.c),q=f.c.quaternion.clone(),radius=f.c.position.distanceTo(pivot);
+  const f=fixture({inputMode:()=> 'trackpad'}),pivot=f.controls.target.clone();
+  const q=f.c.quaternion.clone(),radius=f.c.position.distanceTo(pivot);
+  const screen=new THREE.Vector3(1,.5,0).project(f.c);
   const e=emit(f.canvas,'wheel',{...packet,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
   assert.ok(f.c.quaternion.angleTo(q)>.01,'plain glide must orbit, including horizontal-only glide');
-  near(pivot.clone().project(f.c),screen,'the inspected point must stay under the pointer');
+  near(f.controls.target,pivot,'a miss cannot move the working orbit center toward the pointer');
   assert.ok(Math.abs(f.c.position.distanceTo(pivot)-radius)<1e-8,'orbit must not become wheel zoom');
   assert.equal(e.defaultPrevented,true);assert.equal(f.nav.state().gesture,null);assert.equal(f.canvas.captures.size,0);
  }
