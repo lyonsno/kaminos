@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { assertArmEquivalent } from './volume-physical-color-witness-contract.mjs';
+import { assertArmEquivalent, assertSceneSourceCapture } from './volume-physical-color-witness-contract.mjs';
+import { integrateSceneMediumSegment } from './scene-volume-source.mjs';
 const [url, output, expectedRoot, expectedCommit, armsPath] = process.argv.slice(2);
 assert.ok(output, 'usage: URL OUT_DIR REPO_ROOT COMMIT');
 const out = resolve(output);
@@ -124,6 +125,7 @@ try {
       }
       const core = window.__kaminosVolumePrototype;
       if (${arm.sourceProbe === true}) core.setSceneVolumeSourceEnabled(true);
+      if (${Boolean(arm.mediumSource)}) core.setSceneMediumSource(${JSON.stringify(arm.mediumSource || null)});
       const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
       if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
       const {width,height,rgba} = sample.image;
@@ -133,7 +135,8 @@ try {
       const profile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveLightProfile() : null;
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
       const source = ${arm.sourceProbe === true} ? await core.sampleSceneVolumeSource() : null;
-      return {sample, source, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      const optical = ${Boolean(arm.mediumSource)} ? await core.sampleSceneMediumOpticalDepth() : null;
+      return {sample, source, optical, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
@@ -142,16 +145,32 @@ try {
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
     if (arm.sourceProbe) {
       const source = result.source;
-      assert.ok(source && source.values.length === source.dimensions.reduce((a,b)=>a*b,4), 'missing/partial volume coefficients');
-      assert.ok(source.values.every(Number.isFinite), 'nonfinite coefficients');
-      assert.ok(source.values.some((v,i)=>i%4!==3 && v>0), 'empty source emission');
-      assert.ok(source.values.some((v,i)=>i%4===3 && v>0), 'empty source extinction');
+      assertSceneSourceCapture(source,result.state.frameCount);
       const raw = Buffer.from(new Float32Array(source.values).buffer);
       if (arm.sourceEquals) assert.deepEqual(raw, readFileSync(join(out, `${arm.sourceEquals}.source.f32`)), 'display edit changed physical source');
       writeFileSync(join(out, `${arm.id}.source.f32`), raw);
       report.sourceCaptures ||= [];
       report.sourceCaptures.push({arm: arm.id, frame: source.frame, sourceIndex: source.sourceIndex,
         generation: source.generation, dimensions: source.dimensions, path: `${arm.id}.source.f32`});
+      if (arm.mediumSource) {
+        const optical = result.optical;
+        // Preserve complete native output before judging selected rays.
+        assert.equal(optical?.values?.length, source.values.length/4, 'partial optical depth');
+        writeFileSync(join(out,`${arm.id}.tau.f32`),Buffer.from(new Float32Array(optical.values).buffer));
+        assert.equal(optical.generation,source.generation,'stale medium generation');
+        assert.equal(optical.frame,source.frame,'stale medium frame');
+        assert.ok(optical.values.every(v=>Number.isFinite(v)&&v>=0),'invalid optical depth');
+        const anchors=[], dims=source.dimensions, pitch=2/dims[0];
+        for (const z of [0,Math.floor(dims[2]/2),dims[2]-1]) for (const y of [0,Math.floor(dims[1]/2),dims[1]-1]) for (const x of [0,Math.floor(dims[0]/2),dims[0]-1]) {
+          const receiver=[x,y,z].map(c=>-1+(c+.5)*pitch);
+          const expected=integrateSceneMediumSegment(source,arm.mediumSource.position,receiver,arm.mediumSource.stepLength);
+          const actual=optical.values[x+dims[0]*(y+dims[1]*z)];
+          anchors.push({cell:[x,y,z],expected,actual,error:Math.abs(actual-expected)});
+        }
+        report.mediumCaptures ||= [];
+        report.mediumCaptures.push({arm:arm.id,sourcePosition:optical.sourcePosition,stepLength:optical.stepLength,anchors,path:`${arm.id}.tau.f32`}); save();
+        assert.ok(anchors.every(a=>a.error<=1e-4*Math.max(1,a.expected)),'native medium segments differ from CPU reference');
+      }
     }
     writeFileSync(join(out, `${arm.id}.png`), Buffer.from(result.png, 'base64'));
     writeFileSync(join(out, `${arm.id}.rgba`), Buffer.from(result.sample.image.rgba));

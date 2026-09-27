@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
 import { assertArmEquivalent } from '../volume-physical-color-witness-contract.mjs';
+const {assertSceneSourceCapture} = await import('../volume-physical-color-witness-contract.mjs');
+assert.equal(typeof assertSceneSourceCapture, 'function', 'raw source evidence must reject false completion');
+const source = {kind:'coefficients', channels:4, dimensions:[1,2,1], frame:160, generation:1, values:[1,0,0,2,0,1,0,3]};
+assertSceneSourceCapture(source,160);
+assert.throws(()=>assertSceneSourceCapture({...source,frame:159},160), /frame/);
+assert.throws(()=>assertSceneSourceCapture({...source,values:[1,0,0,2]},160), /partial/);
+assert.throws(()=>assertSceneSourceCapture({...source,values:Array(8).fill(0)},160), /emission/);
+assert.throws(()=>assertSceneSourceCapture({...source,values:[NaN,0,0,2,0,1,0,3]},160), /nonfinite/);
+assert.throws(()=>assertSceneSourceCapture({...source,kind:'optical-depth'},160), /kind/);
 const earlier = new Map([['bright',Buffer.from([3,5,8,255])]]);
 assertArmEquivalent({id:'isolation',equalTo:'bright'},Buffer.from([3,5,8,255]),earlier);
 assert.throws(()=>assertArmEquivalent({id:'isolation',equalTo:'bright'},Buffer.from([3,5,9,255]),earlier),/raw RGBA differs/);

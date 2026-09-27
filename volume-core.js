@@ -9708,6 +9708,7 @@ export function createKaminosVolumePrototype({
   let emissiveLightField = null;
   let sceneVolumeSource = null;
   let sceneVolumeSourceRequested = false;
+  let sceneMediumSource = null;
   let emissiveWhiteKelvin = null;
   let emissiveWhiteMatrix = null;
   let boundarySplatCompactPipeline = null;
@@ -17538,6 +17539,7 @@ export function createKaminosVolumePrototype({
         sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers,
           grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
         sceneVolumeSource.encode(encoder, currentFluid, state.frameCount);
+        if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
       }
       emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
       state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
@@ -24710,6 +24712,19 @@ export function createKaminosVolumePrototype({
     },
     sceneVolumeSourceField() {
       return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
+    },
+    setSceneMediumSource(source) {
+      if (source !== null && (!Array.isArray(source?.position) || source.position.length !== 3 || !source.position.every(Number.isFinite)
+        || !Number.isFinite(source.stepLength) || source.stepLength <= 0)) throw new Error('finite local source position and positive stepLength required');
+      sceneMediumSource = source === null ? null : {position: source.position.slice(), stepLength: source.stepLength};
+      sceneVolumeSource?.invalidate('medium-source-changed');
+    },
+    sceneMediumOpticalDepthField() {
+      return sceneVolumeSource?.opticalDepthField() || {status: 'unbuilt', texture: null};
+    },
+    async sampleSceneMediumOpticalDepth() {
+      if (!sceneVolumeSourceRequested || !sceneVolumeSource) throw new Error('scene source not enabled/encoded');
+      return sceneVolumeSource.readback('optical-depth');
     },
     async sampleSceneVolumeSource() {
       if (!sceneVolumeSourceRequested || !sceneVolumeSource) throw new Error('scene source not enabled/encoded');
