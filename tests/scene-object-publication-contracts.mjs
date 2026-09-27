@@ -89,9 +89,9 @@ test('direct-import browser overlap witness proves B loaded before releasing A',
   assert.match(overlapWitness, /const bLabel = 'Race B water emitter'/,
     'scene B needs an identity different from the emitter still visible in scene A');
   const bCompletionCheck = overlapWitness.indexOf('assert.equal(bState.objects[0]?.label,bLabel');
-  const releaseOldImport = overlapWitness.indexOf("phase='release-old-direct-splat-A'");
+  const releaseOldImport = overlapWitness.indexOf("await evaluate('window.__directSplatRace.release()')");
   assert.ok(bCompletionCheck >= 0 && bCompletionCheck < releaseOldImport,
-    'the witness must fail closed on A’s still-visible label before releasing the paused import');
+    'the witness must fail closed on A’s still-visible label before calling the paused import release');
   assert.match(overlapWitness, /releaseOrder:\{sceneBCompletionLabel:bState\.objects\[0\]\?\.label,assertedBeforePlyRelease:true\}/,
     'the raw report must preserve the B-specific completion evidence before PLY release');
 });
