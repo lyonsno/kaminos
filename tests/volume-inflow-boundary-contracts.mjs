@@ -156,6 +156,19 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.deepEqual([...packed.slice(8, 11)], [1, 0, 0]);
   assert.ok(Math.abs(packed[11] - 2 / 64) < 1e-12);
   assert.deepEqual([...core.inflowBoundaryUniformValues(closedTop)], new Array(12).fill(0), 'a refused inflow packs mode 0');
+  // Fresh review of 51b856f5, finding 1: the solver name is not the solve. When
+  // the pressure dispatch is disabled (iterations 0, projection 0) no solve
+  // accommodates the flux, so the inflow must not be admitted; a partial
+  // projection gain is admitted but named.
+  const noSweeps = core.resolveInflowBoundaryConfig({ pressureSolver: 'converged-open-top', pressureIterations: 0 }, compiled.descriptor, { grid: 64 });
+  assert.equal(noSweeps.effective.admitted, false);
+  assert.equal(noSweeps.effective.reason, 'inflow-boundary-requires-pressure-projection-dispatch:pressure-iterations-zero');
+  const noProjection = core.resolveInflowBoundaryConfig({ pressureSolver: 'converged-open-top', projection: 0 }, compiled.descriptor, { grid: 64 });
+  assert.equal(noProjection.effective.admitted, false);
+  assert.equal(noProjection.effective.reason, 'inflow-boundary-requires-pressure-projection-dispatch:projection-zero');
+  assert.equal(admitted.effective.projection, 'partial', 'the default projection gain 0.65 is a partial projection and the receipt says so');
+  assert.equal(core.resolveInflowBoundaryConfig({ pressureSolver: 'converged-open-top', projection: 1 }, compiled.descriptor, { grid: 64 }).effective.projection, 'full');
+  assert.equal(closedTop.effective.projection, null);
   const physicalColor = await import('../volume-physical-color.mjs');
   assert.equal(core.INFLOW_UNIFORM_OFFSET, physicalColor.PHYSICAL_COLOR_UNIFORM_FLOATS, 'the inflow slots follow the physical colour block (thermal LUT and emissive floats), the last occupied slots');
   assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12);
@@ -179,7 +192,21 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   assert.match(ghost, /vec4<f32>\(0\.0, u\.inflow_state\.w, u\.inflow_state\.z, 0\.0\)/, 'ghost material: no smoke, inlet temperature as heat, fuel fraction as fuel');
   const blend = wgslFunction('inflowGhostBlend');
   assert.match(blend, /let below = 0\.5 - cellCenter\.y;/, 'the blend starts at the first cell centre');
-  assert.match(blend, /clamp\(below, 0\.0, 1\.0\) \* inflowApertureWeight\(column\)/, 'full ghost at the ghost centre, only inside the aperture');
+  // Fresh review of 51b856f5, finding 2: the reservoir below the floor can only
+  // supply what the prescribed flux carries across the face in one step, so the
+  // ghost penetration is capped by v_in x backtrace scale x dt; zero flux admits
+  // no ghost, a backtrace deeper than the flux allows takes only the flux's worth.
+  assert.match(blend, /let penetration = min\(below, u\.inflow_state\.y \* dynamicsBacktraceScale\(\)\);/, 'penetration is capped by the flux displacement per step');
+  assert.match(blend, /clamp\(penetration, 0\.0, 1\.0\) \* inflowApertureWeight\(column\)/, 'full ghost only at and below the ghost centre, only inside the aperture, only as far as the flux reaches');
+  const model = core.inflowGhostBlendModel;
+  assert.equal(model({ cellCenterY: 0.0, inletVelocity: 0, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }), 0, 'zero flux admits no ghost even for a backtrace at the face');
+  assert.equal(model({ cellCenterY: -0.6, inletVelocity: 0, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }), 0, 'nor below it');
+  assert.ok(Math.abs(model({ cellCenterY: 0.035, inletVelocity: 0.15, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }) - 0.465) < 1e-9, 'a backtrace of exactly the flux displacement takes the plain trilinear ghost weight');
+  assert.ok(Math.abs(model({ cellCenterY: -0.6, inletVelocity: 0.15, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }) - 0.465) < 1e-9, 'a deeper backtrace (existing upward flow) still takes only the flux displacement');
+  assert.ok(Math.abs(model({ cellCenterY: -0.6, inletVelocity: 0.15, backtraceScale: 3.1, timeStep: 0.5, apertureWeight: 1 }) - 0.2325) < 1e-9, 'half a step carries half the flux');
+  assert.equal(model({ cellCenterY: -0.6, inletVelocity: 0.5, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }), 1, 'a flux that reaches past the ghost centre saturates at the ghost state');
+  assert.equal(model({ cellCenterY: 0.7, inletVelocity: 0.5, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }), 0, 'above the first cell centre there is no ghost');
+  assert.equal(model({ cellCenterY: -0.6, inletVelocity: 0.5, backtraceScale: 3.1, timeStep: 1, apertureWeight: 0 }), 0, 'outside the aperture there is no ghost');
   for (const sampler of ['sampleFluidSlot', 'samplePredictSlot']) {
     const body = wgslFunction(sampler);
     assert.match(body, /let ghost = inflowGhostBlend\(cellCenter\);/, `${sampler} blends toward the ghost`);
@@ -213,6 +240,7 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.match(index, /id="volume-inflow-boundary-state"/, 'the cockpit shows the inflow admission');
   assert.match(index, /NOT admitted: \$\{inflow\.effective\.reason\}/, 'a requested but refused inflow looks refused');
   assert.match(index, /admitted · \$\{inflow\.effective\.apertureKind\}/, 'an admitted inflow names its aperture and state');
+  assert.match(index, /projection \$\{inflow\.effective\.projection\}/, 'and its projection regime (full or partial)');
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /inflowBoundary: s\.inflowBoundary \?\? null/, 'the arm capture records the inflow receipt');
   assert.match(capture, /inflow-boundary/, 'and checks that an arm asking for the law was admitted');
