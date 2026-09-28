@@ -1321,6 +1321,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Emitter effective</span><span class="field-val" id="volume-emitter-effective">cluster</span></div>
       <div class="field"><span class="field-key">Emitter source</span><span class="field-val" id="volume-emitter-carrier">off / 0</span></div>
       <div class="field"><span class="field-key">Emitter fallback</span><span class="field-val" id="volume-emitter-fallback">no</span></div>
+      <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
       <div class="field"><span class="field-key">Promotion</span><span class="field-val" id="volume-basin-promotion-state" role="status" aria-live="polite">idle</span></div>
       <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
@@ -21865,6 +21866,16 @@ function refreshVolumeReadout() {
       : `inactive: ${s.physicalColor.inactiveReason || 'unverified route'}`;
   }
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);
+  // The inflow law is admitted per frame by the core (it needs the converged
+  // open-top solver); an inflow that was asked for and refused must look refused.
+  const inflow = s.inflowBoundary;
+  document.getElementById('volume-inflow-boundary-state').textContent = !inflow
+    ? 'off'
+    : (inflow.effective.admitted
+      ? `admitted · ${inflow.effective.apertureKind} · v ${inflow.effective.inletVelocity.toFixed(3)} · fuel ${inflow.effective.fuelFraction.toFixed(2)} · T ${inflow.effective.inletTemperature.toFixed(2)}`
+      : (inflow.requested.sourceLaw === 'inflow-boundary'
+        ? `NOT admitted: ${inflow.effective.reason}`
+        : 'off'));
   syncVolumePresentationControls(s.volumePresentationReceipt);
   syncRaymarchSmokePresentationControls(s.raymarchSmokePresentationReceipt);
   const timing = s.timing || {};
