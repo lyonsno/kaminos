@@ -2029,13 +2029,16 @@ export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, op
     requested,
     effective: {
       admitted: false, mode: 'off', apertureKind: 'off', center: [0, 0], ringRadius: 0, bandHalfWidth: 0, halfLength: 0, sideAxis: [1, 0],
-      inletVelocity: 0, fuelFraction: 0, inletTemperature: 0, antialiasWidth: 2 / grid, reason,
+      inletVelocity: 0, fuelFraction: 0, inletTemperature: 0, antialiasWidth: 2 / grid, projection: null, reason,
     },
   });
   if (!descriptor) return off('no-analytic-emitter');
   if (sourceLaw !== 'inflow-boundary') return off('source-law-is-not-inflow-boundary');
   if (!descriptor.inflow) return off('inflow-block-missing');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED || !pressure.openTop) return off('inflow-boundary-requires-converged-open-top-pressure-solver');
+  // The solver name is not the solve: with the pressure dispatch disabled
+  // (iterations 0, projection 0) no projection would accommodate the flux.
+  if (pressure.dispatch !== PRESSURE_SOLVER_CONVERGED) return off(`inflow-boundary-requires-pressure-projection-dispatch:${pressure.disabledReason || 'disabled'}`);
   const inflow = descriptor.inflow;
   return {
     identity: INFLOW_BOUNDARY_IDENTITY,
@@ -2053,9 +2056,23 @@ export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, op
       fuelFraction: inflow.fuelFraction,
       inletTemperature: inflow.inletTemperature,
       antialiasWidth: 2 / grid,
+      // A partial projection gain leaves (1 - gain) of the divergence, inflow
+      // included; the receipt keeps that distinct from a fully corrected field.
+      projection: pressure.projection,
       reason: null,
     },
   };
+}
+
+// CPU model of the shader's inflowGhostBlend, for the contract: below the first
+// cell centre the sample blends toward the ghost cell linearly over one cell,
+// but no deeper than the flux's own displacement in this step (v_in x backtrace
+// scale x dt), and only inside the aperture.
+export function inflowGhostBlendModel({ cellCenterY, inletVelocity, backtraceScale, timeStep = 1, apertureWeight = 1 }) {
+  const below = 0.5 - cellCenterY;
+  if (!(below > 0)) return 0;
+  const penetration = Math.min(below, Math.max(0, inletVelocity) * backtraceScale * timeStep);
+  return Math.min(1, Math.max(0, penetration)) * apertureWeight;
 }
 
 // Three vec4: aperture (mode, centre x, centre z, ring radius), state (band
@@ -3110,8 +3127,8 @@ fn inflowGhostState(slot: u32, sample: vec4<f32>) -> vec4<f32> {
 }
 
 // Below the first cell centre a sample interpolates toward the ghost cell
-// centred half a cell under the floor; it is fully the ghost state at and
-// below that centre, and only inside the aperture.
+// centred half a cell under the floor, only inside the aperture and only as
+// far as the prescribed flux reaches in one step.
 fn inflowGhostBlend(cellCenter: vec3<f32>) -> f32 {
   if (u.inflow_aperture.x < 0.5) {
     return 0.0;
@@ -3120,8 +3137,13 @@ fn inflowGhostBlend(cellCenter: vec3<f32>) -> f32 {
   if (below <= 0.0) {
     return 0.0;
   }
+  // The reservoir below the floor supplies only what the prescribed flux carries
+  // across the face in one step: penetration is capped by v_in x backtrace
+  // scale x dt (cells). Zero flux admits no ghost; a backtrace driven deeper by
+  // an existing upward interior velocity takes only the flux's worth.
+  let penetration = min(below, u.inflow_state.y * dynamicsBacktraceScale());
   let column = vec3<i32>(i32(floor(clamp(cellCenter.x, 0.0, f32(GRID) - 1.0))), 0, i32(floor(clamp(cellCenter.z, 0.0, f32(GRID) - 1.0))));
-  return clamp(below, 0.0, 1.0) * inflowApertureWeight(column);
+  return clamp(penetration, 0.0, 1.0) * inflowApertureWeight(column);
 }
 
 fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {

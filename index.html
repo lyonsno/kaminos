@@ -21872,7 +21872,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
     : (inflow.effective.admitted
-      ? `admitted · ${inflow.effective.apertureKind} · v ${inflow.effective.inletVelocity.toFixed(3)} · fuel ${inflow.effective.fuelFraction.toFixed(2)} · T ${inflow.effective.inletTemperature.toFixed(2)}`
+      ? `admitted · ${inflow.effective.apertureKind} · v ${inflow.effective.inletVelocity.toFixed(3)} · fuel ${inflow.effective.fuelFraction.toFixed(2)} · T ${inflow.effective.inletTemperature.toFixed(2)} · projection ${inflow.effective.projection}`
       : (inflow.requested.sourceLaw === 'inflow-boundary'
         ? `NOT admitted: ${inflow.effective.reason}`
         : 'off'));
