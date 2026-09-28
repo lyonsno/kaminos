@@ -2077,55 +2077,18 @@ export function inflowGhostBlendModel({ cellCenterY, inletVelocity, backtraceSca
   return Math.min(1, Math.max(0, penetration));
 }
 
-// CPU model of one floor cell's scalar update for one step, on the kernel's
-// transport rules for a single column: the cell's own (upper-face) velocity
-// sets the backtrace, the sample is the 1-D linear interpolation of the column
-// with the ghost blend below the first cell centre, and MacCormack adds the
-// predictor, the reverse trace and the neighbour-extrema limiter. Returns the
-// fuel and heat that entered an initially empty floor cell. The witness for
-// the contract that scalar entry follows the prescribed covered face flux
-// (c_in x v_in x coverage x backtraceScale x dt); the live arms remain the
-// witness that the floor is fed on the GPU.
-export function inflowFloorCellEntryModel({ scheme = 'first-order', inletVelocity, coverage = 1, backtraceScale, timeStep = 1, fuelFraction, inletTemperature, cellVelocity = null, columnHeight = 8 }) {
-  const velocity = cellVelocity === null ? inletVelocity * coverage : cellVelocity;
-  const displacement = velocity * backtraceScale * timeStep;
-  const ghost = { heat: inletTemperature, fuel: fuelFraction };
-  const column = Array.from({ length: columnHeight }, () => ({ heat: 0, fuel: 0 }));
-  const blendAt = y => inflowGhostBlendModel({ cellCenterY: y, inletVelocity, backtraceScale, timeStep, apertureWeight: coverage });
-  const sampleColumn = (cells, y) => {
-    const pc = Math.min(Math.max(y - 0.5, 0), columnHeight - 1.001);
-    const i0 = Math.floor(pc); const f = pc - i0;
-    const a = cells[i0]; const b = cells[Math.min(i0 + 1, columnHeight - 1)];
-    const linear = { heat: a.heat + (b.heat - a.heat) * f, fuel: a.fuel + (b.fuel - a.fuel) * f };
-    const g = blendAt(y);
-    return { heat: linear.heat + (ghost.heat - linear.heat) * g, fuel: linear.fuel + (ghost.fuel - linear.fuel) * g };
-  };
-  const backY = 0.5 - displacement;
-  const predicted = sampleColumn(column, backY);
-  // A forward sample fed by the ghost keeps the first-order prediction under
-  // MacCormack too (the kernel's macCormackSlot): the reservoir is not in the
-  // domain, so the reverse trace cannot measure a transport error against it.
-  if (scheme === 'first-order' || blendAt(backY) > 0) return predicted;
-  // MacCormack: predict the whole column, reverse-trace the prediction from the
-  // cell centre forward by the same displacement, correct by half the residual,
-  // and revert to the prediction outside the neighbour range (which admits the
-  // ghost state below the first centre, as the shader's slotExtrema does).
-  const predictedColumn = column.map((_, i) => sampleColumn(column, i + 0.5 - displacement));
-  const reversed = sampleColumn(predictedColumn, 0.5 + displacement);
-  const current = column[0];
-  const corrected = { heat: predicted.heat + (current.heat - reversed.heat) * 0.5, fuel: predicted.fuel + (current.fuel - reversed.fuel) * 0.5 };
-  const pc = Math.min(Math.max(backY - 0.5, 0), columnHeight - 1.001); const i0 = Math.floor(pc);
-  const lo = { heat: Math.min(column[i0].heat, column[Math.min(i0 + 1, columnHeight - 1)].heat), fuel: Math.min(column[i0].fuel, column[Math.min(i0 + 1, columnHeight - 1)].fuel) };
-  const hi = { heat: Math.max(column[i0].heat, column[Math.min(i0 + 1, columnHeight - 1)].heat), fuel: Math.max(column[i0].fuel, column[Math.min(i0 + 1, columnHeight - 1)].fuel) };
-  if (blendAt(backY) > 0) {
-    lo.heat = Math.min(lo.heat, ghost.heat); lo.fuel = Math.min(lo.fuel, ghost.fuel);
-    hi.heat = Math.max(hi.heat, ghost.heat); hi.fuel = Math.max(hi.fuel, ghost.fuel);
-  }
-  const inRange = (v, key) => v >= lo[key] - 1e-12 && v <= hi[key] + 1e-12;
-  return {
-    heat: inRange(corrected.heat, 'heat') ? corrected.heat : predicted.heat,
-    fuel: inRange(corrected.fuel, 'fuel') ? corrected.fuel : predicted.fuel,
-  };
+// CPU model of the scalar entry into one floor cell in one step, on the
+// kernel rule: the face flux brings a fraction v_in x coverage x
+// backtraceScale x dt of the cell volume in as pure inflow (fuel at the fuel
+// fraction, heat at the inlet temperature), independent of the cell velocity
+// and of the scalar scheme: the mass accounting of an inflow face. `scheme` and
+// `cellVelocity` are accepted so the contract can state that neither changes
+// the entry; what the flux displaces is the transport's business. The live
+// arms remain the witness that the floor is fed on the GPU.
+export function inflowFloorCellEntryModel({ scheme = 'first-order', inletVelocity, coverage = 1, backtraceScale, timeStep = 1, fuelFraction, inletTemperature, cellVelocity = null }) {
+  void scheme; void cellVelocity;
+  const fraction = Math.min(1, Math.max(0, inletVelocity) * Math.max(0, Math.min(1, coverage)) * backtraceScale * timeStep);
+  return { fuel: fuelFraction * fraction, heat: inletTemperature * fraction, fraction };
 }
 
 // Three vec4: aperture (mode, centre x, centre z, ring radius), state (band
@@ -3166,17 +3129,16 @@ fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
 }
 
 // The state a ghost cell below the floor holds inside the aperture: the inflow
-// velocity straight up (density carried from the sample), no smoke, the inlet
-// temperature as heat and the fuel fraction as fuel; the fire and detail layers
-// are empty, they are born in the domain.
+// velocity straight up (density carried from the sample). The ghost carries
+// momentum only. Material does not enter by the backtrace (from rest the first
+// transport step would admit nothing, and a slower interior would starve the
+// entry); it enters as the face flux in the main kernel (inflowFraction), so
+// every other slot samples the domain.
 fn inflowGhostState(slot: u32, sample: vec4<f32>) -> vec4<f32> {
   if (slot == 0u) {
     return vec4<f32>(0.0, u.inflow_state.y, 0.0, sample.w);
   }
-  if (slot == 1u) {
-    return vec4<f32>(0.0, u.inflow_state.w, u.inflow_state.z, 0.0);
-  }
-  return vec4<f32>(0.0);
+  return sample;
 }
 
 // Below the first cell centre a sample interpolates toward the ghost cell
@@ -5393,6 +5355,29 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var interfaceShred = microLayer.y * stepRate(0.948);
   var fireLick = microLayer.z * stepRate(0.902);
   var emberFleck = microLayer.w * stepRate(0.934);
+  // Inflow boundary: the prescribed flux through the floor face brings a
+  // fraction v_in x coverage x backtraceScale x dt of the floor cell volume in
+  // as pure inflow each step (fuel at the fuel fraction, heat at the inlet
+  // temperature, nothing else), independent of the cell velocity: the mass
+  // accounting of an inflow face, not a backtrace. The projection carries the
+  // momentum; the ghost below the floor carries only the inflow velocity.
+  if (cellI.y == 0 && u.inflow_aperture.x > 0.5) {
+    let inflowFraction = clamp(u.inflow_state.y * inflowApertureWeight(cellI) * dynamicsBacktraceScale(), 0.0, 1.0);
+    smoke = mix(smoke, 0.0, inflowFraction);
+    heat = mix(heat, u.inflow_state.w, inflowFraction);
+    fuel = mix(fuel, u.inflow_state.z, inflowFraction);
+    materialDetail = mix(materialDetail, 0.0, inflowFraction);
+    flame = mix(flame, 0.0, inflowFraction);
+    ember = mix(ember, 0.0, inflowFraction);
+    visibleFireCarrier = mix(visibleFireCarrier, 0.0, inflowFraction);
+    flameDetail = visibleFireCarrier;
+    combustionFront = mix(combustionFront, 0.0, inflowFraction);
+    microSmoke = mix(microSmoke, 0.0, inflowFraction);
+    interfaceShred = mix(interfaceShred, 0.0, inflowFraction);
+    fireLick = mix(fireLick, 0.0, inflowFraction);
+    emberFleck = mix(emberFleck, 0.0, inflowFraction);
+    combustionFrontTopology = mix(combustionFrontTopology, 0.0, inflowFraction);
+  }
 
   let sourceCenter = p - u.primitive_source.xyz;
   let radial = length(p.xz);

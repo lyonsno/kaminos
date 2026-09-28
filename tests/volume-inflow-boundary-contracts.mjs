@@ -189,7 +189,15 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   assert.match(wgslFunction('inflowFaceVelocity'), /u\.inflow_state\.y \* inflowApertureWeight\(cell\)/);
   const ghost = wgslFunction('inflowGhostState');
   assert.match(ghost, /vec4<f32>\(0\.0, u\.inflow_state\.y, 0\.0, sample\.w\)/, 'ghost velocity is the inflow, straight up; density carried');
-  assert.match(ghost, /vec4<f32>\(0\.0, u\.inflow_state\.w, u\.inflow_state\.z, 0\.0\)/, 'ghost material: no smoke, inlet temperature as heat, fuel fraction as fuel');
+  // Confirmation 2 of 27ed6465: material must not depend on the cell's own
+  // backtrace (from rest the first transport step admitted nothing). The ghost
+  // carries momentum only; scalars enter as the face flux, below.
+  assert.match(ghost, /if \(slot == 0u\) \{\s*return vec4<f32>\(0\.0, u\.inflow_state\.y, 0\.0, sample\.w\);\s*\}\s*return sample;/, 'the ghost carries momentum only; every other slot samples the domain');
+  assert.doesNotMatch(ghost, /u\.inflow_state\.w, u\.inflow_state\.z/, 'no ghost material');
+  const main0 = mainKernel();
+  assert.match(main0, /if \(cellI\.y == 0 && u\.inflow_aperture\.x > 0\.5\) \{[\s\S]{0,600}let inflowFraction = clamp\(u\.inflow_state\.y \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);[\s\S]{0,300}heat = mix\(heat, u\.inflow_state\.w, inflowFraction\);\s*\n\s*fuel = mix\(fuel, u\.inflow_state\.z, inflowFraction\);/, 'the floor cells receive the inflow as the face flux: a fraction v_in x coverage x backtraceScale x dt of the cell volume becomes pure inflow each step, independent of the cell velocity');
+  assert.match(main0, /smoke = mix\(smoke, 0\.0, inflowFraction\);/, 'the inflow carries no smoke');
+  assert.match(main0, /flame = mix\(flame, 0\.0, inflowFraction\);[\s\S]{0,900}emberFleck = mix\(emberFleck, 0\.0, inflowFraction\);[\s\S]{0,300}combustionFrontTopology = mix\(combustionFrontTopology, 0\.0, inflowFraction\);/, 'nor any fire or detail channel');
   const blend = wgslFunction('inflowGhostBlend');
   assert.match(blend, /let below = 0\.5 - cellCenter\.y;/, 'the blend starts at the first cell centre');
   // Fresh review of 51b856f5, finding 2: the reservoir below the floor can only
@@ -235,6 +243,14 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
     assert.equal(zeroFlux.heat, 0);
     const runningAhead = entry({ scheme, inletVelocity: 0.15, coverage: 1, backtraceScale: 3.1, timeStep: 1, fuelFraction: 0.56, inletTemperature: 1.2, cellVelocity: 0.4 });
     assert.ok(Math.abs(runningAhead.fuel - 0.56 * 0.15 * 3.1) < 1e-9, `${scheme}: an interior running ahead of the flux still admits only the flux`);
+    // Confirmation 2 of 27ed6465: a resting or slower interior must not starve
+    // the entry; the prescribed lower-face supply is independent of the
+    // upper-face backtrace.
+    const atRest = entry({ scheme, inletVelocity: 0.15, coverage: 1, backtraceScale: 3.1, timeStep: 1, fuelFraction: 0.56, inletTemperature: 1.2, cellVelocity: 0 });
+    assert.ok(Math.abs(atRest.fuel - 0.56 * 0.15 * 3.1) < 1e-9, `${scheme}: from rest the first step admits the full flux`);
+    const slower = entry({ scheme, inletVelocity: 0.15, coverage: 0.5, backtraceScale: 3.1, timeStep: 1, fuelFraction: 0.56, inletTemperature: 1.2, cellVelocity: 0.05 });
+    assert.ok(Math.abs(slower.fuel - 0.56 * 0.15 * 0.5 * 3.1) < 1e-9, `${scheme}: a slower interior admits the covered flux`);
+    assert.ok(Math.abs(slower.heat - 1.2 * 0.15 * 0.5 * 3.1) < 1e-9);
   }
   for (const sampler of ['sampleFluidSlot', 'samplePredictSlot']) {
     const body = wgslFunction(sampler);
@@ -260,6 +276,7 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.match(index, /emitterInletTemperature: parseFloat\(document\.getElementById\('volume-emitter-inlet-temperature'\)\.value\)/);
   assert.match(index, /'volume-emitter-fuel-fraction',\s*\n\s*'volume-emitter-inlet-temperature',/, 'both recompile the emitter');
   assert.match(index, /Inflow boundary puts the emitter's footprint on the floor face as a prescribed inflow/, 'the help says what the law is');
+  assert.match(index, /the floor cells take in the inflow's fuel and temperature in proportion to that flux each step/, 'and how material enters');
   assert.match(index, /needs the converged open-top pressure solver/, 'and what it needs');
   const keys = schema.controls.map(control => control.key);
   assert.ok(keys.includes('volume-emitter-fuel-fraction'));
