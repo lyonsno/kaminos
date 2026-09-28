@@ -165,12 +165,14 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
 test('the shader carries the inflow as a face flux at the floor, a ghost state below it, and no sponge on the aperture', () => {
   const face = wgslFunction('compactFaceVelocity');
   assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'the ghost face below the floor carries the prescribed inflow, other lower faces none');
+  const coverage = wgslFunction('inflowApertureCoverageAt');
+  assert.match(coverage, /abs\(length\(q\) - u\.inflow_aperture\.w\) - band/, 'annulus');
+  assert.match(coverage, /length\(q\) - band/, 'disc');
+  assert.match(coverage, /max\(along, across\)/, 'rectangle');
+  assert.match(coverage, /1\.0 - smoothstep\(-0\.5 \* aa, 0\.5 \* aa, signedDistance\)/, 'one-cell antialias from the packed width');
   const weight = wgslFunction('inflowApertureWeight');
-  assert.match(weight, /u\.inflow_aperture\.x/, 'reads the aperture mode');
-  assert.match(weight, /abs\(length\(q\) - u\.inflow_aperture\.w\) - band/, 'annulus');
-  assert.match(weight, /length\(q\) - band/, 'disc');
-  assert.match(weight, /max\(along, across\)/, 'rectangle');
-  assert.match(weight, /1\.0 - smoothstep\(-0\.5 \* aa, 0\.5 \* aa, signedDistance\)/, 'one-cell antialias from the packed width');
+  assert.match(weight, /u\.inflow_aperture\.x < 0\.5/, 'reads the aperture mode');
+  assert.match(weight, /for \(var sx = 0; sx < 4; sx = sx \+ 1\)[\s\S]*for \(var sz = 0; sz < 4; sz = sz \+ 1\)[\s\S]*inflowApertureCoverageAt\(sample\)[\s\S]*coverage \* \(1\.0 \/ 16\.0\)/, 'the cell weight is the coverage averaged over a 4 x 4 stratified footprint, not the value at the cell centre (first look: the ring staircase showed as vertical striations)');
   assert.match(wgslFunction('inflowFaceVelocity'), /u\.inflow_state\.y \* inflowApertureWeight\(cell\)/);
   const ghost = wgslFunction('inflowGhostState');
   assert.match(ghost, /vec4<f32>\(0\.0, u\.inflow_state\.y, 0\.0, sample\.w\)/, 'ghost velocity is the inflow, straight up; density carried');
@@ -186,7 +188,7 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   const extrema = wgslFunction('slotExtrema');
   assert.match(extrema, /inflowGhostState\(slot, lo\)/, 'the MacCormack limiter range admits the ghost state so the inflow is not reverted at the floor');
   const main = mainKernel();
-  assert.match(main, /let floorExempt = inflowApertureWeight\(cellI\);\s*\n\s*let verticalWall = max\(mix\(-p\.y, -1\.0, floorExempt\), p\.y - expandedTopY \+ 1\.0\);/, 'the wall sponge does not act on the floor inside the aperture');
+  assert.match(main, /let floorExempt = select\(0\.0, inflowApertureWeight\(cellI\), p\.y < -0\.8\);\s*\n\s*let verticalWall = max\(mix\(-p\.y, -1\.0, floorExempt\), p\.y - expandedTopY \+ 1\.0\);/, 'the wall sponge does not act on the floor inside the aperture (evaluated only in the floor band)');
   assert.match(source, /inflow_aperture: vec4<f32>,\s*\n[\s\S]{0,400}inflow_state: vec4<f32>,\s*\n[\s\S]{0,400}inflow_shape: vec4<f32>,/, 'three inflow vec4s in the uniform struct');
   const project = wgslFunction('csProjectPressureConverged');
   assert.doesNotMatch(project, /inflow/, 'the projection needs no inflow branch: the floor face is never stored, so the prescribed flux survives by construction');

@@ -3051,12 +3051,10 @@ fn readQuenchField(c: vec3<i32>) -> f32 {
 // inflow state from a ghost cell below the floor (inflowGhostBlend), so
 // momentum, fuel and temperature all enter by transport: no interior
 // increment, no clamp, no birth floor. Mode 0 turns all of it off.
-fn inflowApertureWeight(cell: vec3<i32>) -> f32 {
+// Aperture coverage at one point of the floor (volume x, z): a signed distance
+// to the aperture edge through a one-cell smoothstep.
+fn inflowApertureCoverageAt(p: vec2<f32>) -> f32 {
   let mode = u.inflow_aperture.x;
-  if (mode < 0.5) {
-    return 0.0;
-  }
-  let p = vec2<f32>((f32(cell.x) + 0.5) * (2.0 / f32(GRID)) - 1.0, (f32(cell.z) + 0.5) * (2.0 / f32(GRID)) - 1.0);
   let q = p - u.inflow_aperture.yz;
   let band = u.inflow_state.x;
   var signedDistance = length(q) - band;
@@ -3071,6 +3069,26 @@ fn inflowApertureWeight(cell: vec3<i32>) -> f32 {
   }
   let aa = u.inflow_shape.w;
   return 1.0 - smoothstep(-0.5 * aa, 0.5 * aa, signedDistance);
+}
+
+// Aperture weight of one floor cell: the coverage averaged over a 4 x 4
+// stratified set of points in the cell's footprint, so a curved aperture edge
+// does not become a staircase of whole cells (the first look at 64 showed the
+// ring's staircase as vertical striations in the plume).
+fn inflowApertureWeight(cell: vec3<i32>) -> f32 {
+  if (u.inflow_aperture.x < 0.5) {
+    return 0.0;
+  }
+  let cellWidth = 2.0 / f32(GRID);
+  let corner = vec2<f32>(f32(cell.x) * cellWidth - 1.0, f32(cell.z) * cellWidth - 1.0);
+  var coverage = 0.0;
+  for (var sx = 0; sx < 4; sx = sx + 1) {
+    for (var sz = 0; sz < 4; sz = sz + 1) {
+      let sample = corner + vec2<f32>((f32(sx) + 0.5) * 0.25, (f32(sz) + 0.5) * 0.25) * cellWidth;
+      coverage = coverage + inflowApertureCoverageAt(sample);
+    }
+  }
+  return coverage * (1.0 / 16.0);
 }
 
 fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
@@ -6342,7 +6360,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
   // Inside an inflow aperture the floor is an inlet, not a wall: the sponge
   // leaves it alone (the converged solve enforces the walls themselves).
-  let floorExempt = inflowApertureWeight(cellI);
+  let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
   let verticalWall = max(mix(-p.y, -1.0, floorExempt), p.y - expandedTopY + 1.0);
   let wall = max(max(abs(p.x), verticalWall), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
