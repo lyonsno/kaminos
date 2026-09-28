@@ -196,8 +196,14 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   // supply what the prescribed flux carries across the face in one step, so the
   // ghost penetration is capped by v_in x backtrace scale x dt; zero flux admits
   // no ghost, a backtrace deeper than the flux allows takes only the flux's worth.
-  assert.match(blend, /let penetration = min\(below, u\.inflow_state\.y \* dynamicsBacktraceScale\(\)\);/, 'penetration is capped by the flux displacement per step');
-  assert.match(blend, /clamp\(penetration, 0\.0, 1\.0\) \* inflowApertureWeight\(column\)/, 'full ghost only at and below the ghost centre, only inside the aperture, only as far as the flux reaches');
+  // Confirmation 1 of 22e2c61e: the cap must be the COVERED face flux, and the
+  // blend must not multiply by coverage again — at a half-covered cell whose
+  // velocity equals its face velocity the old rule applied coverage twice and
+  // fed half of what the prescribed flux carries.
+  assert.match(blend, /let coverage = inflowApertureWeight\(column\);/, 'coverage is read once');
+  assert.match(blend, /let penetration = min\(below, u\.inflow_state\.y \* coverage \* dynamicsBacktraceScale\(\)\);/, 'penetration is capped by the covered flux displacement per step');
+  assert.match(blend, /return clamp\(penetration, 0\.0, 1\.0\);/, 'the ghost state is the pure inflow; the covered flux alone sets how much of it enters');
+  assert.doesNotMatch(blend, /clamp\(penetration, 0\.0, 1\.0\) \* inflowApertureWeight/, 'coverage is not applied twice');
   const model = core.inflowGhostBlendModel;
   assert.equal(model({ cellCenterY: 0.0, inletVelocity: 0, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }), 0, 'zero flux admits no ghost even for a backtrace at the face');
   assert.equal(model({ cellCenterY: -0.6, inletVelocity: 0, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }), 0, 'nor below it');
@@ -207,11 +213,36 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   assert.equal(model({ cellCenterY: -0.6, inletVelocity: 0.5, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }), 1, 'a flux that reaches past the ghost centre saturates at the ghost state');
   assert.equal(model({ cellCenterY: 0.7, inletVelocity: 0.5, backtraceScale: 3.1, timeStep: 1, apertureWeight: 1 }), 0, 'above the first cell centre there is no ghost');
   assert.equal(model({ cellCenterY: -0.6, inletVelocity: 0.5, backtraceScale: 3.1, timeStep: 1, apertureWeight: 0 }), 0, 'outside the aperture there is no ghost');
+  assert.ok(Math.abs(model({ cellCenterY: 0.5 - 0.2325, inletVelocity: 0.15, backtraceScale: 3.1, timeStep: 1, apertureWeight: 0.5 }) - 0.2325) < 1e-9, 'a half-covered cell whose backtrace equals its covered face flux takes exactly that flux of the pure inflow state (not coverage squared)');
+  assert.ok(Math.abs(model({ cellCenterY: -0.6, inletVelocity: 0.15, backtraceScale: 3.1, timeStep: 1, apertureWeight: 0.5 }) - 0.2325) < 1e-9, 'and no more when driven deeper');
+  // The complete floor-cell scalar update, modelled on the kernel's transport
+  // for one column (semi-Lagrangian sample with the ghost; MacCormack predictor,
+  // reverse trace and neighbour-extrema limiter): fuel entering an initially
+  // empty floor cell in one step against the prescribed covered face flux
+  // c_in x v_in x coverage x backtraceScale x dt.
+  const entry = core.inflowFloorCellEntryModel;
+  for (const scheme of ['first-order', 'maccormack']) {
+    for (const coverage of [1, 0.5, 0.25]) {
+      const expected = 0.56 * 0.15 * coverage * 3.1;
+      const got = entry({ scheme, inletVelocity: 0.15, coverage, backtraceScale: 3.1, timeStep: 1, fuelFraction: 0.56, inletTemperature: 1.2 });
+      assert.ok(Math.abs(got.fuel - expected) < 1e-9, `${scheme} coverage ${coverage}: fuel entering ${got.fuel} equals the covered flux ${expected}`);
+      assert.ok(Math.abs(got.heat - 1.2 * 0.15 * coverage * 3.1) < 1e-9, `${scheme} coverage ${coverage}: heat entering follows the same flux`);
+    }
+    const halfStep = entry({ scheme, inletVelocity: 0.15, coverage: 1, backtraceScale: 3.1, timeStep: 0.5, fuelFraction: 0.56, inletTemperature: 1.2 });
+    assert.ok(Math.abs(halfStep.fuel - 0.56 * 0.15 * 3.1 * 0.5) < 1e-9, `${scheme}: half a step admits half the flux`);
+    const zeroFlux = entry({ scheme, inletVelocity: 0, coverage: 1, backtraceScale: 3.1, timeStep: 1, fuelFraction: 0.56, inletTemperature: 1.2, cellVelocity: 0.2 });
+    assert.equal(zeroFlux.fuel, 0, `${scheme}: an existing upward velocity with zero inlet admits nothing`);
+    assert.equal(zeroFlux.heat, 0);
+    const runningAhead = entry({ scheme, inletVelocity: 0.15, coverage: 1, backtraceScale: 3.1, timeStep: 1, fuelFraction: 0.56, inletTemperature: 1.2, cellVelocity: 0.4 });
+    assert.ok(Math.abs(runningAhead.fuel - 0.56 * 0.15 * 3.1) < 1e-9, `${scheme}: an interior running ahead of the flux still admits only the flux`);
+  }
   for (const sampler of ['sampleFluidSlot', 'samplePredictSlot']) {
     const body = wgslFunction(sampler);
     assert.match(body, /let ghost = inflowGhostBlend\(cellCenter\);/, `${sampler} blends toward the ghost`);
     assert.match(body, /return mix\([a-zA-Z0-9_(), .]+, inflowGhostState\(slot, [a-zA-Z0-9_]+\), ghost\);/, `${sampler} returns the blended sample`);
   }
+  const macCormack = wgslFunction('macCormackSlot');
+  assert.match(macCormack, /let predicted = fluidPredict\[idx \* SLOTS_PER_CELL \+ slot\];[\s\S]{0,600}if \(inflowGhostBlend\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}\s*let reversed = samplePredictSlot\(forwardCell, slot\);/, 'a floor cell fed by the ghost keeps the first-order prediction: the reverse trace cannot measure an error against a reservoir outside the domain (confirmation 1 of 22e2c61e: the corrector removed ~27 % of the entering fuel)');
   const extrema = wgslFunction('slotExtrema');
   assert.match(extrema, /inflowGhostState\(slot, lo\)/, 'the MacCormack limiter range admits the ghost state so the inflow is not reverted at the floor');
   const main = mainKernel();
