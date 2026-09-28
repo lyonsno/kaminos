@@ -1729,7 +1729,10 @@ const ANALYTIC_EMITTER_FAMILY_MODE = Object.freeze({
 const ANALYTIC_EMITTER_SOURCE_LAW_MODE = Object.freeze({
   'legacy-volume': 0,
   'shallow-primary': 1,
+  'inflow-boundary': 2,
 });
+
+const ANALYTIC_EMITTER_INFLOW_APERTURE_KINDS = Object.freeze(['disc', 'annulus', 'rectangle']);
 
 const ANALYTIC_EMITTER_INLET_PROFILE_MODE = Object.freeze({
   plug: 0,
@@ -1758,6 +1761,36 @@ function orthonormalAnalyticEmitterSupportAxis(axis, value) {
   const length = Math.hypot(...perpendicular);
   if (length <= 1e-9) throw new Error('analytic emitter supportAxis must not be parallel to axis');
   return perpendicular.map(component => component / length);
+}
+
+// The inflow block of an inflow-boundary descriptor: the floor aperture and
+// the state the inflow carries. Clamped like every other descriptor field.
+function normalizeAnalyticEmitterInflow(inflow) {
+  if (!inflow || typeof inflow !== 'object' || Array.isArray(inflow)) {
+    throw new Error('inflow-boundary descriptor needs an inflow block');
+  }
+  const apertureKind = String(inflow.apertureKind || '');
+  if (!ANALYTIC_EMITTER_INFLOW_APERTURE_KINDS.includes(apertureKind)) {
+    throw new Error(`unsupported inflow aperture kind: ${apertureKind || 'missing'}`);
+  }
+  const center = Array.isArray(inflow.center) && inflow.center.length === 2 && inflow.center.every(component => Number.isFinite(Number(component)))
+    ? inflow.center.map(Number)
+    : null;
+  if (!center) throw new Error('inflow aperture center must be a finite [x, z]');
+  const side = Array.isArray(inflow.sideAxis) && inflow.sideAxis.length === 2 ? inflow.sideAxis.map(Number) : [1, 0];
+  const sideLength = Math.hypot(side[0], side[1]);
+  return {
+    apertureKind,
+    center,
+    ringRadius: clampFinite(inflow.ringRadius, 0, 0.95, 0),
+    bandHalfWidth: clampFinite(inflow.bandHalfWidth, 0.006, 0.5, 0.04),
+    halfLength: clampFinite(inflow.halfLength, 0, 0.95, 0),
+    sideAxis: Number.isFinite(sideLength) && sideLength > 1e-9 ? side.map(component => component / sideLength) : [1, 0],
+    inletVelocity: clampFinite(inflow.inletVelocity, 0, 1, 0.04),
+    fuelFraction: clampFinite(inflow.fuelFraction, 0, 1, 0.56),
+    inletTemperature: clampFinite(inflow.inletTemperature, 0, 2.4, 1.2),
+    linkIgnored: true,
+  };
 }
 
 function normalizeAnalyticEmitterDescriptor(descriptor) {
@@ -1809,6 +1842,14 @@ function normalizeAnalyticEmitterDescriptor(descriptor) {
       detail: clampFinite(chemistry.detail, 0, 3, 0),
     },
   };
+  if (sourceLaw === 'inflow-boundary') {
+    normalized.inflow = normalizeAnalyticEmitterInflow(descriptor.inflow);
+    // A prescribed inflow has no per-step increment to link: the face velocity
+    // is the requested inlet velocity.
+    normalized.effectiveInletVelocity = normalized.inletVelocity;
+  } else {
+    delete normalized.inflow;
+  }
   return normalized;
 }
 
@@ -1887,6 +1928,11 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize, gridHeigh
   };
   if (descriptor === null || descriptor === undefined) return inactive;
   const normalized = normalizeAnalyticEmitterDescriptor(descriptor);
+  if (normalized.sourceLaw === 'inflow-boundary') {
+    // A prescribed inflow is a boundary condition of the pressure solve and a
+    // ghost state for the backtrace; nothing is injected in the interior.
+    return { ...inactive, family: normalized.family, reason: 'inflow-boundary-has-no-interior-injection' };
+  }
   const cellWidth = 2 / grid;
   const edgeMargin = normalized.inletProfile === 'edge-entrained'
     ? normalized.shearWidthCells * cellWidth
@@ -1959,6 +2005,71 @@ export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, 
   floats[27] = descriptor.shearWidthCells;
   words.set([...dispatch.cellMin, dispatch.grid], 28);
   words.set([...dispatch.cellExtent, 0], 32);
+}
+
+// Inflow boundary (emitter source law inflow-boundary). The emitter's footprint
+// is an aperture on the floor face carrying a prescribed inflow velocity: the
+// converged solve reads it as the flux through the ghost face below the first
+// cell layer, and the backtrace reads the inflow state from a ghost cell below
+// the floor. It needs the converged open-top solver: a closed box with a net
+// inflow has no divergence-free solution.
+export const INFLOW_BOUNDARY_IDENTITY = 'kaminos.volume.inflow-boundary.v1';
+export const INFLOW_APERTURE_KIND_MODE = Object.freeze({ off: 0, disc: 1, annulus: 2, rectangle: 3 });
+export const INFLOW_UNIFORM_OFFSET = PHYSICAL_COLOR_UNIFORM_FLOATS;
+export const INFLOW_UNIFORM_FLOATS = 12;
+export const VOLUME_UNIFORM_FLOATS = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOATS;
+
+export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, options = {}) {
+  const grid = normalizeGridSize(options.grid ?? 64);
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const sourceLaw = descriptor ? String(descriptor.sourceLaw ?? 'legacy-volume') : null;
+  const requested = { sourceLaw, family: descriptor?.family ?? null, pressureSolver: pressure.solver, openTop: pressure.openTop };
+  const off = reason => ({
+    identity: INFLOW_BOUNDARY_IDENTITY,
+    requested,
+    effective: {
+      admitted: false, mode: 'off', apertureKind: 'off', center: [0, 0], ringRadius: 0, bandHalfWidth: 0, halfLength: 0, sideAxis: [1, 0],
+      inletVelocity: 0, fuelFraction: 0, inletTemperature: 0, antialiasWidth: 2 / grid, reason,
+    },
+  });
+  if (!descriptor) return off('no-analytic-emitter');
+  if (sourceLaw !== 'inflow-boundary') return off('source-law-is-not-inflow-boundary');
+  if (!descriptor.inflow) return off('inflow-block-missing');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED || !pressure.openTop) return off('inflow-boundary-requires-converged-open-top-pressure-solver');
+  const inflow = descriptor.inflow;
+  return {
+    identity: INFLOW_BOUNDARY_IDENTITY,
+    requested,
+    effective: {
+      admitted: true,
+      mode: 'inflow-boundary',
+      apertureKind: inflow.apertureKind,
+      center: [...inflow.center],
+      ringRadius: inflow.ringRadius,
+      bandHalfWidth: inflow.bandHalfWidth,
+      halfLength: inflow.halfLength,
+      sideAxis: [...inflow.sideAxis],
+      inletVelocity: inflow.inletVelocity,
+      fuelFraction: inflow.fuelFraction,
+      inletTemperature: inflow.inletTemperature,
+      antialiasWidth: 2 / grid,
+      reason: null,
+    },
+  };
+}
+
+// Three vec4: aperture (mode, centre x, centre z, ring radius), state (band
+// half-width, inlet velocity, fuel fraction, inlet temperature), shape (side
+// axis x, side axis z, half length, antialias width). A refused inflow packs
+// mode 0, which turns every inflow branch in the shader off.
+export function inflowBoundaryUniformValues(config) {
+  const e = config?.effective;
+  if (!e || !e.admitted) return new Array(INFLOW_UNIFORM_FLOATS).fill(0);
+  return [
+    INFLOW_APERTURE_KIND_MODE[e.apertureKind] ?? 0, e.center[0], e.center[1], e.ringRadius,
+    e.bandHalfWidth, e.inletVelocity, e.fuelFraction, e.inletTemperature,
+    e.sideAxis[0], e.sideAxis[1], e.halfLength, e.antialiasWidth,
+  ];
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -2750,6 +2861,13 @@ struct Uniforms {
   emissive_white_g: vec4<f32>,
   emissive_white_b: vec4<f32>,
   emissive_reserved: vec4<f32>,
+  // Inflow boundary (emitter source law inflow-boundary), packed from the emitter descriptor when admitted.
+  // .x aperture mode (0 off, 1 disc, 2 annulus, 3 rectangle); .y centre x; .z centre z; .w ring radius.
+  inflow_aperture: vec4<f32>,
+  // .x band half-width; .y inlet velocity (face flux, field units); .z fuel fraction; .w inlet temperature.
+  inflow_state: vec4<f32>,
+  // .x side axis x; .y side axis z; .z half length (rectangle); .w antialias width (one cell, volume units).
+  inflow_shape: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -2926,6 +3044,68 @@ fn readQuenchField(c: vec3<i32>) -> f32 {
   return f32(quenchSrc[index3(clampCell(c))]) / 65536.0;
 }
 
+// Inflow boundary (emitter source law inflow-boundary). The emitter's footprint
+// is an aperture on the floor face (y = -1) carrying a prescribed inflow
+// velocity. The converged solve reads it as the flux through the ghost face
+// below the first cell layer (compactFaceVelocity), and the backtrace reads the
+// inflow state from a ghost cell below the floor (inflowGhostBlend), so
+// momentum, fuel and temperature all enter by transport: no interior
+// increment, no clamp, no birth floor. Mode 0 turns all of it off.
+fn inflowApertureWeight(cell: vec3<i32>) -> f32 {
+  let mode = u.inflow_aperture.x;
+  if (mode < 0.5) {
+    return 0.0;
+  }
+  let p = vec2<f32>((f32(cell.x) + 0.5) * (2.0 / f32(GRID)) - 1.0, (f32(cell.z) + 0.5) * (2.0 / f32(GRID)) - 1.0);
+  let q = p - u.inflow_aperture.yz;
+  let band = u.inflow_state.x;
+  var signedDistance = length(q) - band;
+  if (mode > 1.5 && mode < 2.5) {
+    signedDistance = abs(length(q) - u.inflow_aperture.w) - band;
+  }
+  if (mode > 2.5) {
+    let side = u.inflow_shape.xy;
+    let along = abs(dot(q, side)) - u.inflow_shape.z;
+    let across = abs(dot(q, vec2<f32>(-side.y, side.x))) - band;
+    signedDistance = max(along, across);
+  }
+  let aa = u.inflow_shape.w;
+  return 1.0 - smoothstep(-0.5 * aa, 0.5 * aa, signedDistance);
+}
+
+fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
+  return u.inflow_state.y * inflowApertureWeight(cell);
+}
+
+// The state a ghost cell below the floor holds inside the aperture: the inflow
+// velocity straight up (density carried from the sample), no smoke, the inlet
+// temperature as heat and the fuel fraction as fuel; the fire and detail layers
+// are empty, they are born in the domain.
+fn inflowGhostState(slot: u32, sample: vec4<f32>) -> vec4<f32> {
+  if (slot == 0u) {
+    return vec4<f32>(0.0, u.inflow_state.y, 0.0, sample.w);
+  }
+  if (slot == 1u) {
+    return vec4<f32>(0.0, u.inflow_state.w, u.inflow_state.z, 0.0);
+  }
+  return vec4<f32>(0.0);
+}
+
+// Below the first cell centre a sample interpolates toward the ghost cell
+// centred half a cell under the floor; it is fully the ghost state at and
+// below that centre, and only inside the aperture.
+fn inflowGhostBlend(cellCenter: vec3<f32>) -> f32 {
+  if (u.inflow_aperture.x < 0.5) {
+    return 0.0;
+  }
+  let below = 0.5 - cellCenter.y;
+  if (below <= 0.0) {
+    return 0.0;
+  }
+  let column = vec3<i32>(i32(floor(clamp(cellCenter.x, 0.0, f32(GRID) - 1.0))), 0, i32(floor(clamp(cellCenter.z, 0.0, f32(GRID) - 1.0))));
+  return clamp(below, 0.0, 1.0) * inflowApertureWeight(column);
+}
+
 fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
@@ -2991,7 +3171,9 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let x11 = mix(c011, c111, f.x);
   let y0 = mix(x00, x10, f.y);
   let y1 = mix(x01, x11, f.y);
-  return mix(y0, y1, f.z);
+  let sample = mix(y0, y1, f.z);
+  let ghost = inflowGhostBlend(cellCenter);
+  return mix(sample, inflowGhostState(slot, sample), ghost);
 }
 
 fn sampleFluidSlotMasked(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
@@ -3060,7 +3242,9 @@ fn samplePredictSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let x11 = mix(c011, c111, f.x);
   let y0 = mix(x00, x10, f.y);
   let y1 = mix(x01, x11, f.y);
-  return mix(y0, y1, f.z);
+  let sample = mix(y0, y1, f.z);
+  let ghost = inflowGhostBlend(cellCenter);
+  return mix(sample, inflowGhostState(slot, sample), ghost);
 }
 
 struct SlotExtrema {
@@ -3100,6 +3284,14 @@ fn slotExtrema(cellCenter: vec3<f32>, slot: u32) -> SlotExtrema {
         hi = max(hi, v);
       }
     }
+  }
+  // The limiter's range admits the ghost state below the floor, so the
+  // corrected value the inflow produces is not reverted as an overshoot.
+  let ghost = inflowGhostBlend(cellCenter);
+  if (ghost > 0.0) {
+    let ghostValue = inflowGhostState(slot, lo);
+    lo = min(lo, ghostValue);
+    hi = max(hi, ghostValue);
   }
   return SlotExtrema(lo, hi);
 }
@@ -3542,11 +3734,16 @@ fn pressureSolverOpenTop() -> bool {
 
 // Flux through the upper face of cell c on one axis. The domain is a closed box:
 // the ghost face below cell 0 and the upper face of the last cell carry no flux,
-// except the top face when the open-top option lets buoyant gas leave; that
-// stored flux is then corrected by the forward pressure gradient like any other.
+// except the top face when the open-top option lets buoyant gas leave (that
+// stored flux is then corrected by the forward pressure gradient like any other)
+// and the floor face inside an inflow aperture, which carries the prescribed
+// inflow. The floor face is never stored, so the projection cannot alter it.
 fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
   if (sceneSolidAt(c) || !sceneFaceOpen(c, axis)) { return 0.0; }
   if (c[axis] < 0) {
+    if (axis == 1u) {
+      return inflowFaceVelocity(c);
+    }
     return 0.0;
   }
   if (c[axis] >= gridExtent(axis) - 1) {
@@ -6143,7 +6340,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // expanded domain ceiling. The old symmetric abs(y) wall would suppress
   // every added cell above y=1 and silently recreate the old clip.
   let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
-  let verticalWall = max(-p.y, p.y - expandedTopY + 1.0);
+  // Inside an inflow aperture the floor is an inlet, not a wall: the sponge
+  // leaves it alone (the converged solve enforces the walls themselves).
+  let floorExempt = inflowApertureWeight(cellI);
+  let verticalWall = max(mix(-p.y, -1.0, floorExempt), p.y - expandedTopY + 1.0);
   let wall = max(max(abs(p.x), verticalWall), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
   let smokeTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
@@ -9314,7 +9514,7 @@ export function createKaminosVolumePrototype({
   const productModelMatrix = new THREE.Matrix4();
   const productViewProj = new THREE.Matrix4();
   const productLocalCameraPosition = new THREE.Vector3();
-  const uniforms = new Float32Array(PHYSICAL_COLOR_UNIFORM_FLOATS);
+  const uniforms = new Float32Array(VOLUME_UNIFORM_FLOATS);
   uniforms.set(THERMAL_LUT, 376);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
@@ -9542,6 +9742,7 @@ export function createKaminosVolumePrototype({
     coreEmitterSourceReceipt: null,
     analyticEmitterMode: 'off',
     analyticEmitterFamily: 'cluster',
+    inflowBoundary: null,
     analyticEmitterRequestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
     analyticEmitterRequestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
     analyticEmitterRequestedInletProfile: String(controlsSnapshot.emitterInletProfile ?? 'plug'),
@@ -10385,6 +10586,7 @@ export function createKaminosVolumePrototype({
       effectiveInletVelocity: analyticEmitterDescriptor ? analyticEmitterDescriptor.effectiveInletVelocity : null,
       shearWidthCells: analyticEmitterDescriptor ? analyticEmitterDescriptor.shearWidthCells : null,
       edgeEntrainment: analyticEmitterDescriptor ? analyticEmitterDescriptor.edgeEntrainment : null,
+      inflow: analyticEmitterDescriptor?.inflow ?? null,
       coordinateSpace: analyticEmitterDescriptor ? 'volume-local' : 'none',
       count: analyticEmitterDescriptor ? 1 : 0,
       frameId: analyticEmitterDescriptor?.frameId || null,
@@ -14194,6 +14396,9 @@ export function createKaminosVolumePrototype({
     const timeStepConfig = resolveTimeStepConfig(controlsSnapshot);
     uniforms[354] = timeStepModeUniformValue(timeStepConfig.effective.mode);
     uniforms[355] = timeStepConfig.effective.referenceSpeed;
+    const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize });
+    uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
+    state.inflowBoundary = inflowBoundaryConfig;
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,

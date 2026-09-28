@@ -1838,8 +1838,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <select id="volume-emitter-source-law" data-volume-settings-param="volume_emitter_source_law" class="select-input">
         <option value="legacy-volume">Filled volume</option>
         <option value="shallow-primary">Shallow primary</option>
+        <option value="inflow-boundary">Inflow boundary (floor)</option>
       </select>
       <span class="slider-val" id="volume-emitter-source-law-val">legacy-volume</span>
+      <span class="slider-help">Filled volume and Shallow primary add velocity and material inside the emitter every step: a per-step increment, then a clamp at 0.52 per component, then max() floors on smoke, heat and fuel. Inflow boundary puts the emitter's footprint on the floor face as a prescribed inflow: the pressure solve carries that flux through the floor and the backtrace below the floor reads the inflow's velocity, fuel fraction and temperature, so nothing is added in the interior and nothing is clamped. It needs the converged open-top pressure solver and an upright emitter; Inlet Δv is then the inflow velocity, and Link momentum, Shear width, Edge entrainment and Source depth do not apply.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="source-law">
       <span class="slider-label">Source Depth (volume-local)</span>
@@ -1874,6 +1876,16 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-label">Edge entrainment (×)</span>
       <input type="range" id="volume-emitter-edge-entrainment" data-volume-settings-param="volume_emitter_edge_entrainment" min="0" max="2" step="any" value="0.65">
       <span class="slider-val" id="volume-emitter-edge-entrainment-val">0.65</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Fuel fraction (inflow)</span>
+      <input type="range" id="volume-emitter-fuel-fraction" data-volume-settings-param="volume_emitter_fuel_fraction" min="0" max="1" step="any" value="0.56">
+      <span class="slider-val" id="volume-emitter-fuel-fraction-val">0.56</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Inlet temperature (inflow)</span>
+      <input type="range" id="volume-emitter-inlet-temperature" data-volume-settings-param="volume_emitter_inlet_temperature" min="0" max="2.4" step="any" value="1.2">
+      <span class="slider-val" id="volume-emitter-inlet-temperature-val">1.20</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
@@ -21235,6 +21247,8 @@ function readVolumeControls() {
     emitterInletVelocity: parseFloat(document.getElementById('volume-emitter-inlet-velocity').value),
     emitterShearWidthCells: parseFloat(document.getElementById('volume-emitter-shear-width').value),
     emitterEdgeEntrainment: parseFloat(document.getElementById('volume-emitter-edge-entrainment').value),
+    emitterFuelFraction: parseFloat(document.getElementById('volume-emitter-fuel-fraction').value),
+    emitterInletTemperature: parseFloat(document.getElementById('volume-emitter-inlet-temperature').value),
     fixedSourceDephase: document.getElementById('volume-fixed-source-dephase').checked,
     reactionLiveView,
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
@@ -21534,6 +21548,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-inlet-velocity-val').textContent = c.emitterInletVelocity.toFixed(4);
   document.getElementById('volume-emitter-shear-width-val').textContent = c.emitterShearWidthCells.toFixed(1);
   document.getElementById('volume-emitter-edge-entrainment-val').textContent = c.emitterEdgeEntrainment.toFixed(2);
+  document.getElementById('volume-emitter-fuel-fraction-val').textContent = c.emitterFuelFraction.toFixed(2);
+  document.getElementById('volume-emitter-inlet-temperature-val').textContent = c.emitterInletTemperature.toFixed(2);
   document.getElementById('volume-fixed-source-dephase-val').textContent = c.fixedSourceDephase ? 'on' : 'off';
   document.getElementById('volume-reaction-boundary-fire-clean-color-val').textContent = c.reactionBoundaryFireCleanColor;
   document.getElementById('volume-reaction-boundary-fire-soot-color-val').textContent = c.reactionBoundaryFireSootColor;
@@ -22932,6 +22948,8 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-inlet-velocity',
     'volume-emitter-shear-width',
     'volume-emitter-edge-entrainment',
+    'volume-emitter-fuel-fraction',
+    'volume-emitter-inlet-temperature',
     'volume-input-radius',
     'volume-flow-rate',
     'volume-speed',
