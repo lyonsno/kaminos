@@ -2071,8 +2071,61 @@ export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, op
 export function inflowGhostBlendModel({ cellCenterY, inletVelocity, backtraceScale, timeStep = 1, apertureWeight = 1 }) {
   const below = 0.5 - cellCenterY;
   if (!(below > 0)) return 0;
-  const penetration = Math.min(below, Math.max(0, inletVelocity) * backtraceScale * timeStep);
-  return Math.min(1, Math.max(0, penetration)) * apertureWeight;
+  // Covered flux: the fluid that crossed a partly covered face is pure inflow,
+  // and there is coverage-times less of it; coverage is not applied twice.
+  const penetration = Math.min(below, Math.max(0, inletVelocity) * Math.max(0, apertureWeight) * backtraceScale * timeStep);
+  return Math.min(1, Math.max(0, penetration));
+}
+
+// CPU model of one floor cell's scalar update for one step, on the kernel's
+// transport rules for a single column: the cell's own (upper-face) velocity
+// sets the backtrace, the sample is the 1-D linear interpolation of the column
+// with the ghost blend below the first cell centre, and MacCormack adds the
+// predictor, the reverse trace and the neighbour-extrema limiter. Returns the
+// fuel and heat that entered an initially empty floor cell. The witness for
+// the contract that scalar entry follows the prescribed covered face flux
+// (c_in x v_in x coverage x backtraceScale x dt); the live arms remain the
+// witness that the floor is fed on the GPU.
+export function inflowFloorCellEntryModel({ scheme = 'first-order', inletVelocity, coverage = 1, backtraceScale, timeStep = 1, fuelFraction, inletTemperature, cellVelocity = null, columnHeight = 8 }) {
+  const velocity = cellVelocity === null ? inletVelocity * coverage : cellVelocity;
+  const displacement = velocity * backtraceScale * timeStep;
+  const ghost = { heat: inletTemperature, fuel: fuelFraction };
+  const column = Array.from({ length: columnHeight }, () => ({ heat: 0, fuel: 0 }));
+  const blendAt = y => inflowGhostBlendModel({ cellCenterY: y, inletVelocity, backtraceScale, timeStep, apertureWeight: coverage });
+  const sampleColumn = (cells, y) => {
+    const pc = Math.min(Math.max(y - 0.5, 0), columnHeight - 1.001);
+    const i0 = Math.floor(pc); const f = pc - i0;
+    const a = cells[i0]; const b = cells[Math.min(i0 + 1, columnHeight - 1)];
+    const linear = { heat: a.heat + (b.heat - a.heat) * f, fuel: a.fuel + (b.fuel - a.fuel) * f };
+    const g = blendAt(y);
+    return { heat: linear.heat + (ghost.heat - linear.heat) * g, fuel: linear.fuel + (ghost.fuel - linear.fuel) * g };
+  };
+  const backY = 0.5 - displacement;
+  const predicted = sampleColumn(column, backY);
+  // A forward sample fed by the ghost keeps the first-order prediction under
+  // MacCormack too (the kernel's macCormackSlot): the reservoir is not in the
+  // domain, so the reverse trace cannot measure a transport error against it.
+  if (scheme === 'first-order' || blendAt(backY) > 0) return predicted;
+  // MacCormack: predict the whole column, reverse-trace the prediction from the
+  // cell centre forward by the same displacement, correct by half the residual,
+  // and revert to the prediction outside the neighbour range (which admits the
+  // ghost state below the first centre, as the shader's slotExtrema does).
+  const predictedColumn = column.map((_, i) => sampleColumn(column, i + 0.5 - displacement));
+  const reversed = sampleColumn(predictedColumn, 0.5 + displacement);
+  const current = column[0];
+  const corrected = { heat: predicted.heat + (current.heat - reversed.heat) * 0.5, fuel: predicted.fuel + (current.fuel - reversed.fuel) * 0.5 };
+  const pc = Math.min(Math.max(backY - 0.5, 0), columnHeight - 1.001); const i0 = Math.floor(pc);
+  const lo = { heat: Math.min(column[i0].heat, column[Math.min(i0 + 1, columnHeight - 1)].heat), fuel: Math.min(column[i0].fuel, column[Math.min(i0 + 1, columnHeight - 1)].fuel) };
+  const hi = { heat: Math.max(column[i0].heat, column[Math.min(i0 + 1, columnHeight - 1)].heat), fuel: Math.max(column[i0].fuel, column[Math.min(i0 + 1, columnHeight - 1)].fuel) };
+  if (blendAt(backY) > 0) {
+    lo.heat = Math.min(lo.heat, ghost.heat); lo.fuel = Math.min(lo.fuel, ghost.fuel);
+    hi.heat = Math.max(hi.heat, ghost.heat); hi.fuel = Math.max(hi.fuel, ghost.fuel);
+  }
+  const inRange = (v, key) => v >= lo[key] - 1e-12 && v <= hi[key] + 1e-12;
+  return {
+    heat: inRange(corrected.heat, 'heat') ? corrected.heat : predicted.heat,
+    fuel: inRange(corrected.fuel, 'fuel') ? corrected.fuel : predicted.fuel,
+  };
 }
 
 // Three vec4: aperture (mode, centre x, centre z, ring radius), state (band
@@ -3138,12 +3191,16 @@ fn inflowGhostBlend(cellCenter: vec3<f32>) -> f32 {
     return 0.0;
   }
   // The reservoir below the floor supplies only what the prescribed flux carries
-  // across the face in one step: penetration is capped by v_in x backtrace
-  // scale x dt (cells). Zero flux admits no ghost; a backtrace driven deeper by
-  // an existing upward interior velocity takes only the flux's worth.
-  let penetration = min(below, u.inflow_state.y * dynamicsBacktraceScale());
+  // across the face in one step: penetration is capped by v_in x coverage x
+  // backtrace scale x dt (cells). Zero flux admits no ghost; a backtrace driven
+  // deeper by an existing upward interior velocity takes only the flux's worth.
+  // The flux through a partly covered floor cell is v_in x coverage; the fluid
+  // that crossed is pure inflow. So the covered flux sets how deep the ghost
+  // reaches and the ghost state is not scaled by coverage again.
   let column = vec3<i32>(i32(floor(clamp(cellCenter.x, 0.0, f32(GRID) - 1.0))), 0, i32(floor(clamp(cellCenter.z, 0.0, f32(GRID) - 1.0))));
-  return clamp(penetration, 0.0, 1.0) * inflowApertureWeight(column);
+  let coverage = inflowApertureWeight(column);
+  let penetration = min(below, u.inflow_state.y * coverage * dynamicsBacktraceScale());
+  return clamp(penetration, 0.0, 1.0);
 }
 
 fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
@@ -3406,6 +3463,14 @@ fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
 // steps, inflated every field to its peak (observed as a saturated domain).
 fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3<f32>, slot: u32) -> vec4<f32> {
   let predicted = fluidPredict[idx * SLOTS_PER_CELL + slot];
+  // A forward sample that came partly from the inflow ghost has no reverse
+  // trace to correct against (the reservoir is not in the domain): the
+  // corrector would read the injected inflow as a transport error and remove
+  // part of it. Floor cells fed by the inflow keep the first-order prediction,
+  // so scalar entry follows the prescribed face flux under both schemes.
+  if (inflowGhostBlend(backCell) > 0.0) {
+    return predicted;
+  }
   let reversed = samplePredictSlot(forwardCell, slot);
   let current = fluidSrc[idx * SLOTS_PER_CELL + slot];
   let corrected = predicted + (current - reversed) * 0.5;
