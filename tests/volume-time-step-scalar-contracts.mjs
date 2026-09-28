@@ -141,7 +141,12 @@ test('review of 57b45f72: relaxation blends and the wall velocity sponge follow 
   // remains with a bare per-step weight (a blend whose first argument is the
   // channel itself; scene selectors mix two candidates and are not caught).
   const relaxable = 'material|fireLayer|microLayer|smoke|heat|fuel|flame|ember|materialDetail|flameDetail|combustionFront|combustionFrontTopology|microSmoke|interfaceShred|fireLick|emberFleck';
-  assert.doesNotMatch(main, new RegExp(`^\\s*(${relaxable}) = mix\\(\\1, [^,]+, (?!stepBlend\\()`, 'm'), 'no bare relaxation blend remains');
+  // The inflow boundary's face-flux entry (`mix(x, inflow, inflowFraction)`,
+  // emitter law inflow-boundary) is the one blend whose weight is already per
+  // unit time by construction: inflowFraction = v_in x coverage x
+  // dynamicsBacktraceScale(), and dynamicsBacktraceScale() carries the step.
+  assert.doesNotMatch(main, new RegExp(`^\\s*(${relaxable}) = mix\\(\\1, [^,]+, (?!stepBlend\\(|inflowFraction\\))`, 'm'), 'no bare relaxation blend remains');
+  assert.match(main, /let inflowFraction = clamp\(u\.inflow_state\.y \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'the inflow fraction carries the step through dynamicsBacktraceScale');
   // The wall sponge on velocity is written after the increment law's line, so
   // it takes the rate law directly.
   assert.match(main, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, wallFade\)\);/, 'the wall velocity sponge is a per-step survival');
