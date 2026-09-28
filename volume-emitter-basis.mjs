@@ -12,6 +12,10 @@ export const VOLUME_EMITTER_FAMILIES = Object.freeze([
 export const VOLUME_EMITTER_SOURCE_LAWS = Object.freeze([
   'legacy-volume',
   'shallow-primary',
+  // The emitter's footprint becomes an aperture on the floor face carrying a
+  // prescribed inflow: a boundary condition of the pressure solve and a ghost
+  // state for the backtrace, with no interior injection at all.
+  'inflow-boundary',
 ]);
 
 export const VOLUME_EMITTER_INLET_PROFILES = Object.freeze([
@@ -23,6 +27,7 @@ export const VOLUME_EMITTER_INLET_PROFILES = Object.freeze([
 export const VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES = Object.freeze({
   'legacy-volume': Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
   'shallow-primary': Object.freeze([0, 1, 2, 4, 5, 6]),
+  'inflow-boundary': Object.freeze([]),
 });
 
 const FLUID_COMPONENT_SLOTS = Object.freeze([
@@ -306,12 +311,21 @@ export function compileVolumeEmitterFamily(request = {}) {
     throw new Error(`unsupported emitter family: ${family || 'missing-family'}`);
   }
 
-  const origin = vec3(request.origin, 'origin', [0, -0.76, 0]);
+  const placedOrigin = vec3(request.origin, 'origin', [0, -0.76, 0]);
   const requestedDirection = vec3(request.direction, 'direction', [0, 1, 0]);
   const axis = normalize(requestedDirection, 'direction');
   const radius = numberInRange(request.radius ?? 0.04, 'radius', 0.006, 0.18);
   const sourceLaw = String(request.sourceLaw ?? 'legacy-volume');
   assertEmitterSourceLaw(sourceLaw);
+  const inflowLaw = sourceLaw === 'inflow-boundary';
+  // Under the inflow law the footprint is an aperture on the floor face: the
+  // pose height is not a source height, and the aperture needs a vertical axis.
+  if (inflowLaw && !(axis[1] > 0.999)) {
+    throw new Error(`inflow-boundary needs a vertical (+y) emitter axis, got direction [${requestedDirection.join(', ')}]`);
+  }
+  const origin = inflowLaw ? [placedOrigin[0], -1, placedOrigin[2]] : placedOrigin;
+  const fuelFraction = numberInRange(request.fuelFraction ?? 0.56, 'fuelFraction', 0, 1);
+  const inletTemperature = numberInRange(request.inletTemperature ?? 1.2, 'inletTemperature', 0, 2.4);
   const sourceDepth = numberInRange(request.sourceDepth ?? 0.04, 'sourceDepth', 0.006, 0.36);
   const strength = numberInRange(request.strength ?? 1, 'strength', 0, 4);
   const velocitySpeed = numberInRange(request.velocitySpeed ?? 0.22, 'velocitySpeed', 0, 3);
@@ -375,11 +389,40 @@ export function compileVolumeEmitterFamily(request = {}) {
     }
   }
 
-  assertAnalyticBounds({ family, origin, axis, supportAxis, radius, extent });
+  let inflow = null;
+  if (inflowLaw) {
+    const apertureKind = family === 'ring' ? 'annulus' : (family === 'ribbon' ? 'rectangle' : 'disc');
+    const planarSide = [supportAxis[0], supportAxis[2]];
+    const planarLength = Math.hypot(planarSide[0], planarSide[1]);
+    const sideAxis = family === 'ribbon' && planarLength > 1e-9 ? planarSide.map(component => component / planarLength) : [1, 0];
+    const halfLength = family === 'ribbon' ? extent * 0.5 : 0;
+    const ringRadius = family === 'ring' ? extent : 0;
+    const center = [origin[0], origin[2]];
+    const reach = apertureKind === 'annulus' ? ringRadius + radius : (apertureKind === 'rectangle' ? Math.hypot(halfLength, radius) : radius);
+    if (Math.abs(center[0]) + reach > 1 || Math.abs(center[1]) + reach > 1) {
+      throw new Error(`inflow-boundary aperture (center [${center.join(', ')}], reach ${reach.toFixed(3)}) must lie within the floor face [-1, 1]`);
+    }
+    inflow = {
+      apertureKind,
+      center,
+      ringRadius,
+      bandHalfWidth: radius,
+      halfLength,
+      sideAxis,
+      inletVelocity,
+      fuelFraction,
+      inletTemperature,
+      // Link momentum to flow sets a per-step increment; a prescribed inflow
+      // has no increment to link.
+      linkIgnored: true,
+    };
+  } else {
+    assertAnalyticBounds({ family, origin, axis, supportAxis, radius, extent });
+  }
   const support = supportFor({ family, origin, axis, supportAxis, radius, extent });
   const requested = {
     family,
-    origin,
+    origin: placedOrigin,
     direction: requestedDirection,
     radius,
     ...familyRequested,
@@ -393,6 +436,8 @@ export function compileVolumeEmitterFamily(request = {}) {
     inletVelocity,
     shearWidthCells,
     edgeEntrainment,
+    fuelFraction,
+    inletTemperature,
     chemistry,
     temporal,
     lifetime,
@@ -420,18 +465,23 @@ export function compileVolumeEmitterFamily(request = {}) {
     inletProfile,
     momentumLinked,
     inletVelocity,
-    effectiveInletVelocity: inletVelocityReceipt.effectiveInletVelocity,
+    effectiveInletVelocity: inflowLaw ? inletVelocity : inletVelocityReceipt.effectiveInletVelocity,
     shearWidthCells,
     edgeEntrainment,
+    fuelFraction,
+    inletTemperature,
+    ...(inflow ? { inflow } : {}),
     chemistry,
     temporal: effectiveTemporal,
     support,
-    injectedFields: sourceLaw === 'shallow-primary'
-      ? ['velocity', 'smoke', 'heat', 'fuel']
-      : ['velocity', 'density-carrier', 'smoke', 'heat', 'fuel', 'detail', 'flame', 'fire-detail', 'microstructure'],
+    injectedFields: inflowLaw
+      ? []
+      : (sourceLaw === 'shallow-primary'
+        ? ['velocity', 'smoke', 'heat', 'fuel']
+        : ['velocity', 'density-carrier', 'smoke', 'heat', 'fuel', 'detail', 'flame', 'fire-detail', 'microstructure']),
     writableFluidComponentIndices: [...VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES[sourceLaw]],
     compactSupport: {
-      interior: sourceLaw === 'shallow-primary' ? 'shallow-inlet' : 'full',
+      interior: inflowLaw ? 'floor-aperture' : (sourceLaw === 'shallow-primary' ? 'shallow-inlet' : 'full'),
       transition: 'one-grid-cell-smoothstep',
       exterior: 'zero',
     },
@@ -453,9 +503,12 @@ export function compileVolumeEmitterFamily(request = {}) {
       inletProfile,
       momentumLinked,
       inletVelocity,
-      effectiveInletVelocity: inletVelocityReceipt.effectiveInletVelocity,
+      effectiveInletVelocity: inflowLaw ? inletVelocity : inletVelocityReceipt.effectiveInletVelocity,
       shearWidthCells,
       edgeEntrainment,
+      fuelFraction,
+      inletTemperature,
+      inflow,
       chemistry,
       temporal: effectiveTemporal,
       sourceCount: 1,
