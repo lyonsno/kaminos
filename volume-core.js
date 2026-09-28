@@ -3425,11 +3425,13 @@ fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
 // steps, inflated every field to its peak (observed as a saturated domain).
 fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3<f32>, slot: u32) -> vec4<f32> {
   let predicted = fluidPredict[idx * SLOTS_PER_CELL + slot];
-  // A forward sample that came partly from the inflow ghost has no reverse
-  // trace to correct against (the reservoir is not in the domain): the
-  // corrector would read the injected inflow as a transport error and remove
-  // part of it. Floor cells fed by the inflow keep the first-order prediction,
-  // so scalar entry follows the prescribed face flux under both schemes.
+  // A forward sample that came partly from the inflow ghost (which now carries
+  // the inflow velocity only) has no reverse trace to correct against: the
+  // reservoir is not in the domain, so the corrector would read the injected
+  // momentum as a transport error and remove part of it. Cells whose backtrace
+  // touches the ghost keep the first-order prediction for every slot. Scalar
+  // entry itself follows the prescribed face flux through the floor source in
+  // the main kernel (inflowFraction), not through this return.
   if (inflowGhostBlend(backCell) > 0.0) {
     return predicted;
   }
