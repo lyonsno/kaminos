@@ -210,6 +210,9 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-inlet-temperature').additiveDefault, 1.2);
   assert.equal(schema.controlCount, 218);
   assert.match(source, /state\.inflowBoundary = inflowBoundaryConfig;/, 'the receipt carries the resolved inflow');
+  assert.match(index, /id="volume-inflow-boundary-state"/, 'the cockpit shows the inflow admission');
+  assert.match(index, /NOT admitted: \$\{inflow\.effective\.reason\}/, 'a requested but refused inflow looks refused');
+  assert.match(index, /admitted · \$\{inflow\.effective\.apertureKind\}/, 'an admitted inflow names its aperture and state');
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /inflowBoundary: s\.inflowBoundary \?\? null/, 'the arm capture records the inflow receipt');
   assert.match(capture, /inflow-boundary/, 'and checks that an arm asking for the law was admitted');
