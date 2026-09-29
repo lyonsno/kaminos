@@ -289,6 +289,10 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.match(index, /NOT admitted: \$\{inflow\.effective\.reason\}/, 'a requested but refused inflow looks refused');
   assert.match(index, /admitted · \$\{inflow\.effective\.apertureKind\}/, 'an admitted inflow names its aperture and state');
   assert.match(index, /projection \$\{inflow\.effective\.projection\}/, 'and its projection regime (full or partial)');
+  // 2026-09-29, Noah: switching to the law on an approved basin gave a black
+  // screen — the basins load the legacy solver, the law was refused, and the
+  // rebuilt empty state had no source. The refusal must sit next to the select.
+  assert.match(index, /sourceLawValue\.textContent = inflow\.effective\.admitted\s*\n\s*\? 'inflow-boundary · admitted'\s*\n\s*: `inflow-boundary — NOT ADMITTED \(\$\{inflow\.effective\.reason\}\); set Pressure solver to converged open top and Projection above 0`/, 'a refused inflow is named next to the Source Law select, with the fix');
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /inflowBoundary: s\.inflowBoundary \?\? null/, 'the arm capture records the inflow receipt');
   assert.match(capture, /inflow-boundary/, 'and checks that an arm asking for the law was admitted');
