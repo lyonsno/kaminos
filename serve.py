@@ -1089,7 +1089,7 @@ def _volume_settings_alias_for_label(store, label):
     return disambiguated
 
 
-_LABEL_DECISION_HERE = object()
+_NO_LIBRARY_DECISION = object()
 
 
 def _prepare_volume_settings_preset_write(payload, schema):
@@ -1108,11 +1108,14 @@ def _prepare_volume_settings_preset_write(payload, schema):
     return normalized_payload, schema_projection, _volume_settings_content_hash(normalized_payload, schema)
 
 
-def write_volume_settings_preset(store_path, label, payload, source, schema=None, label_hold=_LABEL_DECISION_HERE):
+def write_volume_settings_preset(store_path, label, payload, source, schema=None, library_hold=_NO_LIBRARY_DECISION):
     """Write a basin into one store.
 
-    The store decides whether its label follows the new basin unless the
-    caller passes the decision already made against the label readers resolve.
+    Without a library the store decides alone whether its label follows the new
+    basin. With one, the caller passes the library's decision: the label holds
+    if the library held, and also if this store's own label points at a basin
+    the writer cannot hold (a local-only hold, reported with scope
+    "local-store"), so branches still reading this store directly keep it.
     """
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     normalized_payload, schema_projection, content_hash = _prepare_volume_settings_preset_write(payload, schema)
@@ -1152,9 +1155,15 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "updatedAt": written_at,
             "source": dict(source or {}),
         }
-        alias_held = label_hold if label_hold is not _LABEL_DECISION_HERE else _volume_settings_label_hold(
+        own_hold = _volume_settings_label_hold(
             store, _volume_settings_alias_document(store, alias), preset_id, normalized_payload, schema
         )
+        if library_hold is _NO_LIBRARY_DECISION:
+            alias_held = own_hold
+        elif library_hold:
+            alias_held = library_hold
+        else:
+            alias_held = {**own_hold, "scope": "local-store"} if own_hold else None
         history_row = _volume_settings_label_history_row(alias_document, written_at, source)
         if alias_held:
             history_row["held"] = alias_held
@@ -1559,7 +1568,7 @@ def _volume_settings_dropped_controls_hold(current_alias, current_payload, new_p
 
 
 def _publish_volume_settings_artifact_locked(store, document, label, published_at, source, schema, move_alias_only_forward=False,
-                                             label_hold=_LABEL_DECISION_HERE):
+                                             fallback_hold=None):
     preset_id = _verify_volume_settings_artifact(document, schema)
     preset_path = store / "presets" / f"{preset_id}.json"
     created = _atomic_create_json(preset_path, document)
@@ -1584,8 +1593,12 @@ def _publish_volume_settings_artifact_locked(store, document, label, published_a
     if not move_alias_only_forward:
         # A live save: the label follows it unless this branch cannot
         # represent the basin the label points at now.
-        alias_held = label_hold if label_hold is not _LABEL_DECISION_HERE else _volume_settings_label_hold(
-            store, current_alias, preset_id, document.get("preset") or {}, schema
+        # Decided here, under the library lock, against the pointer as it is
+        # now. Where the library has no label yet, the caller's hold against
+        # the label readers resolved elsewhere applies.
+        alias_held = (
+            _volume_settings_label_hold(store, current_alias, preset_id, document.get("preset") or {}, schema)
+            if current_alias is not None else fallback_hold
         )
         move = alias_held is None and (current_alias or {}).get("presetId") != preset_id
     elif current_alias and current_alias.get("presetId") != preset_id and "importedFrom" not in (current_alias.get("source") or {}):
@@ -1631,7 +1644,7 @@ def _publish_volume_settings_artifact_locked(store, document, label, published_a
     }
 
 
-def publish_volume_settings_preset(shared_store_path, document, label, source, schema=None, label_hold=_LABEL_DECISION_HERE):
+def publish_volume_settings_preset(shared_store_path, document, label, source, schema=None, fallback_hold=None):
     """Publish one hash-verified basin artifact into the shared library."""
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     _verify_volume_settings_artifact(document, schema)
@@ -1640,7 +1653,7 @@ def publish_volume_settings_preset(shared_store_path, document, label, source, s
     published_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     with _volume_settings_store_lock(store):
         result = _publish_volume_settings_artifact_locked(
-            store, document, effective_label, published_at, source, schema, label_hold=label_hold
+            store, document, effective_label, published_at, source, schema, fallback_hold=fallback_hold
         )
     return {
         "published": True,
@@ -1651,24 +1664,15 @@ def publish_volume_settings_preset(shared_store_path, document, label, source, s
     }
 
 
-def _volume_settings_resolved_label_hold(stores, label, preset_id, payload, schema):
-    """The one hold decision for a save: against the label readers resolve, in authority order."""
-    for store in stores:
-        try:
-            current = _volume_settings_alias_document(store, _volume_settings_alias_for_label(store, label))
-        except (OSError, ValueError):
-            continue
-        if current is not None:
-            return _volume_settings_label_hold(store, current, preset_id, payload, schema)
-    return None
-
-
 def write_volume_settings_preset_to_library(local_store_path, shared_store_path, label, payload, source, schema=None):
-    """Save into this server's store, then publish the same artifact to the shared library.
+    """Publish a basin to the shared library, then save it into this server's store.
 
-    With the library on, it is the label authority: one decision is made
-    against the label readers resolve (the library's, else the local store's)
-    and both stores follow it.
+    With the library on, it is the label authority: the library decides under
+    its own lock whether its label follows the new basin (against the local
+    store's label where the library has none yet), and the local store follows
+    that decision, holding also where its own label points at a basin this
+    branch cannot hold. If the library cannot be written, the local store
+    decides alone and the receipt says the basin did not reach the library.
     """
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     if shared_store_path is None:
@@ -1676,27 +1680,37 @@ def write_volume_settings_preset_to_library(local_store_path, shared_store_path,
         receipt["sharedPublication"] = {"published": False, "reason": "shared basin library disabled"}
         return receipt
     normalized_payload, _projection, content_hash = _prepare_volume_settings_preset_write(payload, schema)
-    label_hold = _volume_settings_resolved_label_hold(
-        [_volume_settings_store_path(shared_store_path), _volume_settings_store_path(local_store_path)],
-        str(label or "").strip() or "Unnamed preset", f"vsp-{content_hash}", normalized_payload, schema,
-    )
-    receipt = write_volume_settings_preset(local_store_path, label, payload, source, schema, label_hold=label_hold)
-    if shared_store_path is None:
-        receipt["sharedPublication"] = {"published": False, "reason": "shared basin library disabled"}
-        return receipt
+    preset_id = f"vsp-{content_hash}"
+    effective_label = str(label or "").strip() or "Unnamed preset"
     local = _volume_settings_store_path(local_store_path)
+    shared = _volume_settings_store_path(shared_store_path)
     try:
-        document = _read_json_object(local / "presets" / f"{receipt['effective']['presetId']}.json", "artifact")
-        receipt["sharedPublication"] = publish_volume_settings_preset(
-            shared_store_path, document, receipt["effective"]["label"], source, schema, label_hold=label_hold
+        local_current = _volume_settings_alias_document(local, _volume_settings_alias_for_label(local, effective_label))
+    except (OSError, ValueError):
+        local_current = None
+    document = {
+        "identity": VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY,
+        "presetId": preset_id,
+        "contentHash": f"sha256:{content_hash}",
+        "schemaIdentity": schema["identity"],
+        "controlCount": schema["controlCount"],
+        "initialLabel": effective_label,
+        "writtenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": dict(source or {}),
+        "preset": normalized_payload,
+    }
+    try:
+        publication = publish_volume_settings_preset(
+            shared, document, effective_label, source, schema,
+            fallback_hold=_volume_settings_label_hold(local, local_current, preset_id, normalized_payload, schema),
         )
+        library_hold = publication.get("aliasHeld")
     except (OSError, ValueError) as error:
         # The local save stands; the receipt says the basin did not reach the library.
-        receipt["sharedPublication"] = {
-            "published": False,
-            "storePath": str(_volume_settings_store_path(shared_store_path)),
-            "error": str(error),
-        }
+        publication = {"published": False, "storePath": str(shared), "error": str(error)}
+        library_hold = _NO_LIBRARY_DECISION
+    receipt = write_volume_settings_preset(local, label, payload, source, schema, library_hold=library_hold)
+    receipt["sharedPublication"] = publication
     return receipt
 
 
@@ -1868,7 +1882,12 @@ def import_volume_settings_stores(shared_store_path, store_paths, schema=None):
                 report["aliasHistoryRowsAppended"] += int(result["historyAppended"])
             history_dir = source_store / "alias-history"
             for history_path in sorted(history_dir.glob("*.jsonl")) if history_dir.exists() else []:
-                for row in _read_volume_settings_alias_history(source_store, history_path.stem):
+                rows, invalid_rows = _scan_volume_settings_alias_history(source_store, history_path.stem)
+                report["skipped"].extend(
+                    {"path": row["path"], "reason": "invalid-history-row", "line": row["line"], "error": row["error"]}
+                    for row in invalid_rows
+                )
+                for row in rows:
                     label = row.get("label")
                     preset_id = row.get("presetId")
                     if not isinstance(label, str) or not label.strip() or not isinstance(preset_id, str):

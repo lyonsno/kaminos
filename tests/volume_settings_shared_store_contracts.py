@@ -472,8 +472,12 @@ def test_library_is_the_label_authority(tmp):
     assert loaded["presetId"] == w["effective"]["presetId"]
     edited = serve.write_volume_settings_preset_to_library(
         local_2, library_2, "kiln", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5}), SOURCE, BASE_SCHEMA)
-    assert edited["effective"]["aliasHeld"] is None and edited["sharedPublication"]["aliasMoved"] is True, "a truthful move is reported"
-    assert _alias_target(library_2, "kiln") == _alias_target(local_2, "kiln") == edited["effective"]["presetId"]
+    assert edited["sharedPublication"]["aliasMoved"] is True and edited["sharedPublication"]["aliasHeld"] is None, "a truthful move is reported"
+    assert _alias_target(library_2, "kiln") == edited["effective"]["presetId"]
+    # The default local store's label points at a basin this branch cannot
+    # hold; branches without the library still read it there, so it stays.
+    assert _alias_target(local_2, "kiln") == x["effective"]["presetId"]
+    assert edited["effective"]["aliasHeld"]["scope"] == "local-store", edited["effective"]
 
     # With the library off, the local store is the authority and decides alone.
     solo = tmp / "solo"
@@ -509,6 +513,7 @@ def test_history_rows_need_a_label_and_source_shape(tmp):
     assert all(isinstance(entry["label"], str) for entry in listing["unavailableEntries"])
     report = serve.import_volume_settings_stores(tmp / "library", [store], BASE_SCHEMA)
     assert report["presetsImported"] == 1, report
+    assert [(row["reason"], row["line"]) for row in report["skipped"]] == [("invalid-history-row", 2), ("invalid-history-row", 3)], report["skipped"]
 
 
 def test_import_kept_beside_a_live_label_is_shown_as_held(tmp):
@@ -522,8 +527,59 @@ def test_import_kept_beside_a_live_label_is_shown_as_held(tmp):
     assert [(entry["presetId"], entry["reason"]) for entry in versions] == [(other["effective"]["presetId"], "held-label")], versions
 
 
+def test_local_store_keeps_its_label_over_an_unrebased_pointer(tmp):
+    """X9: a library-aware save moves the library label but not a local label a branch without the library still reads."""
+    library = tmp / "library"
+    default_local = tmp / "default-local"
+    w = serve.write_volume_settings_preset_to_library(default_local, library, "kiln", payload(BASE_SCHEMA, BASE_VALUES), SOURCE, BASE_SCHEMA)
+    # A branch without the library, on a grown schema, saves its newest "kiln" to the default local store only.
+    x = serve.write_volume_settings_preset(default_local, "kiln", payload(NEWER_SCHEMA, NEWER_VALUES), SOURCE, NEWER_SCHEMA)
+    x_id = x["effective"]["presetId"]
+    assert _alias_target(default_local, "kiln") == x_id
+    edited = serve.write_volume_settings_preset_to_library(
+        default_local, library, "kiln", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5}), SOURCE, BASE_SCHEMA)
+    edited_id = edited["effective"]["presetId"]
+    assert edited["sharedPublication"]["aliasMoved"] is True and _alias_target(library, "kiln") == edited_id, "the library label follows"
+    assert _alias_target(default_local, "kiln") == x_id, "the local label stays on the basin this branch cannot hold"
+    assert serve.read_volume_settings_preset(default_local, "kiln", NEWER_SCHEMA)["presetId"] == x_id
+    assert edited["effective"]["aliasHeld"] == {
+        "reason": "would-drop-controls", "controls": ["volume-new-knob"], "currentPresetId": x_id, "scope": "local-store"}, edited["effective"]
+    assert w["effective"]["presetId"] != edited_id
+
+
+def test_library_decides_under_its_lock(tmp):
+    """X8: a newer branch's publish landing just before the library write is seen by the decision."""
+    library = tmp / "library"
+    older_local = tmp / "older-local"
+    serve.write_volume_settings_preset_to_library(older_local, library, "kiln", payload(BASE_SCHEMA, BASE_VALUES), SOURCE, BASE_SCHEMA)
+    newer = serve.write_volume_settings_preset(tmp / "newer-local", "kiln", payload(NEWER_SCHEMA, NEWER_VALUES), SOURCE, NEWER_SCHEMA)
+    newer_document = json.loads((tmp / "newer-local" / "presets" / f"{newer['effective']['presetId']}.json").read_text())
+    real_lock = serve._volume_settings_store_lock
+    state = {"raced": False}
+
+    def racing_lock(store):
+        # The first time the saving call takes the library lock, a newer branch publishes first.
+        if not state["raced"] and serve._volume_settings_store_path(store) == serve._volume_settings_store_path(library):
+            state["raced"] = True
+            serve.publish_volume_settings_preset(library, newer_document, "kiln", SOURCE, NEWER_SCHEMA)
+        return real_lock(store)
+
+    serve._volume_settings_store_lock = racing_lock
+    try:
+        resaved = serve.write_volume_settings_preset_to_library(
+            older_local, library, "kiln", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5}), SOURCE, BASE_SCHEMA)
+    finally:
+        serve._volume_settings_store_lock = real_lock
+    assert state["raced"]
+    assert _alias_target(library, "kiln") == newer["effective"]["presetId"], "the library label stays on the newer basin"
+    assert resaved["sharedPublication"]["aliasHeld"]["reason"] == "would-drop-controls", resaved["sharedPublication"]
+    assert resaved["effective"]["aliasHeld"] == resaved["sharedPublication"]["aliasHeld"], "the local store follows the library's actual decision"
+
+
 def main():
     for test in (
+        test_local_store_keeps_its_label_over_an_unrebased_pointer,
+        test_library_decides_under_its_lock,
         test_library_is_the_label_authority,
         test_damaged_label_state_does_not_block_saves,
         test_history_rows_need_a_label_and_source_shape,

@@ -287,7 +287,11 @@ export function describeVolumeSettingsSaveOutcome(result) {
   const library = describeVolumeSettingsLibraryPublication(result?.sharedPublication);
   const localHold = result?.effective?.aliasHeld;
   if (!localHold || result?.sharedPublication?.aliasHeld) return library;
-  const hold = describeVolumeSettingsLabelHold(localHold, result.effective.label);
+  const hold = localHold.scope === 'local-store'
+    ? `this server's store kept "${result.effective.label}" on ${String(localHold.currentPresetId).slice(0, 16)} because this branch `
+      + `${localHold.reason === 'would-replace-values' ? 'does not offer the saved value of' : 'lacks'} ${(localHold.controls || []).join(', ')}; `
+      + 'the library label follows this save'
+    : describeVolumeSettingsLabelHold(localHold, result.effective.label);
   return { text: library.text ? `${library.text} | ${hold}` : hold, warning: true };
 }
 
