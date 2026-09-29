@@ -84,12 +84,12 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
           objectBounds.copy(object.geometry.boundingBox).applyMatrix4(object.matrixWorld);
           bounds.union(objectBounds);meshCount++;
         });
-        // Bound scene plus source domain [-1,1]^3; no arbitrary distance cap.
+        // Bound scene plus the full tall source domain x/z [-1,1], y [-1,3].
         const extent=bounds.isEmpty()?new THREE.Vector3(1,1,1):new THREE.Vector3(
           Math.max(Math.abs(bounds.min.x),Math.abs(bounds.max.x)),
           Math.max(Math.abs(bounds.min.y),Math.abs(bounds.max.y)),
           Math.max(Math.abs(bounds.min.z),Math.abs(bounds.max.z)));
-        const far=extent.length()+Math.sqrt(3)+.01;
+        const far=extent.length()+Math.sqrt(11)+.01;
         for(const camera of cubeCamera.children) {camera.far=far;camera.updateProjectionMatrix();}
         renderFireShadowCube({renderer,scene,cubeCamera,material,far});
         effective.value=1;status.effective=true;status.reason=null;
