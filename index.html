@@ -26668,8 +26668,6 @@ window.captureComposition = () => withAuthoringAction(async () => {
   try {
     if (helper) helper.visible = false;
     if (emitterHandle) emitterHandle.visible = false;
-    scenePlacementTools?.suspendVisuals(true);
-    selectionFeedback?.suspend(true);
     window._kaminosDirty?.();
     // The second callback samples after both render loops have had a turn.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -26686,8 +26684,6 @@ window.captureComposition = () => withAuthoringAction(async () => {
   } finally {
     if (helper) helper.visible = visible;
     if (emitterHandle) emitterHandle.visible = emitterVisible;
-    scenePlacementTools?.suspendVisuals(false);
-    selectionFeedback?.suspend(false);
     window._kaminosDirty?.();
   }
   if (!await saveToServer(data, null)) throw new Error('Capture was not saved');

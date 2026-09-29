@@ -66,6 +66,28 @@ assert.equal(await vm.runInContext("changeCompositionBasin({presetId: 'chosen', 
 assert.equal(chosenComposition.flame.presetId, 'chosen', 'mesh-only authoring can add its first basin');
 assert.equal(chosenComposition.route.volume_light_field, '1');
 
+const helper = { visible: true }, emitter = { visible: true };
+let captured = false;
+const captureContext = vm.createContext({
+  window: {}, withAuthoringAction: action => action(), sceneSaveIsBlocked: () => false,
+  sceneIsEmpty: () => false, volumePrototype: { debugState: () => ({ active: true }), canvasElement: () => 'volume' },
+  isFireLightFieldRoute: () => true, sceneObjects: [{ id: 'flame-emitter', object: emitter }],
+  FLAME_EMITTER_ID: 'flame-emitter', transformControls: { getHelper: () => helper },
+  scenePlacementTools: { draw() {} }, activeSceneComposition: { flame: { label: 'Authored' } },
+  document: { getElementById: () => ({ value: 'Captured kiln' }) },
+  compositionStatus() {}, collectSceneComposition: async () => () => {},
+  requestAnimationFrame: callback => callback(), renderer: { domElement: 'host' },
+  captureComposedCanvases: ({ host, volume }) => {
+    assert.equal(helper.visible, false); assert.equal(emitter.visible, false);
+    assert.equal(host, 'host'); assert.equal(volume, 'volume'); captured = true; return { label: 'Captured kiln' };
+  },
+  buildSceneData: capture => ({ capture }), saveToServer: async () => true,
+});
+vm.runInContext(between('window.captureComposition =', "document.getElementById('composition-capture')"), captureContext);
+assert.equal(await vm.runInContext('window.captureComposition()', captureContext), true);
+assert.equal(captured, true, 'capture uses the current placement controller without retired overlay APIs');
+assert.equal(helper.visible, true); assert.equal(emitter.visible, true);
+
 const elements = new Map();
 const document = { getElementById(id) {
   if (!elements.has(id)) elements.set(id, { value: '2', checked: true, style: {}, handlers: {},
