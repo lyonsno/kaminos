@@ -21869,6 +21869,15 @@ function refreshVolumeReadout() {
   // The inflow law is admitted per frame by the core (it needs the converged
   // open-top solver); an inflow that was asked for and refused must look refused.
   const inflow = s.inflowBoundary;
+  // A refused inflow must be visible where the operator is looking: next to
+  // the Source Law select, not only in the receipt panel. Switching to the law
+  // rebuilds the fluid state, so a refusal reads as a black screen otherwise.
+  const sourceLawValue = document.getElementById('volume-emitter-source-law-val');
+  if (sourceLawValue && inflow?.requested?.sourceLaw === 'inflow-boundary') {
+    sourceLawValue.textContent = inflow.effective.admitted
+      ? 'inflow-boundary · admitted'
+      : `inflow-boundary — NOT ADMITTED (${inflow.effective.reason}); set Pressure solver to converged open top and Projection above 0`;
+  }
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
     : (inflow.effective.admitted
