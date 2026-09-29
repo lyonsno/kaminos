@@ -27,7 +27,8 @@ test('F frames the selected authored object through generic geometry bounds', ()
 test('clearing resets scene history while reloadable object removal becomes a chronological history action', () => {
   assert.match(html, /window\.removeSceneObject = function\(id\) \{\s*return removeSceneObjectInternal\(id\);/);
   assert.match(html, /function sceneObjectMembershipSnapshot\(id\)[\s\S]*record\.type !== 'glb' \|\| !isReloadableSceneObjectRecord\(record\)/);
-  assert.match(html, /function removeSceneObjectInternal\(id, \{ recordHistory = true \} = \{\}\)[\s\S]*if \(recordHistory && !editId\) scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\)/);
+  assert.match(html, /function removeSceneObjectInternal\(id, \{ recordHistory = true, preserveForMembershipHistory = false \} = \{\}\)[\s\S]*if \(recordHistory && !editId\) scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\)/);
+  assert.match(html, /write: value => value == null\s*\? removeSceneObjectInternal\(id, \{ recordHistory: false, preserveForMembershipHistory: true \}\)/);
   assert.match(html, /recordApplied\(editId, before, null, `Remove/);
   const removeStart = html.indexOf('function removeSceneObjectInternal(');
   const removeEnd = html.indexOf('window.removeSceneObject = function', removeStart);

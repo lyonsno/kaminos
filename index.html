@@ -9794,7 +9794,7 @@ function ensureSceneObjectMembershipTarget(id) {
       read: () => sceneObjectMembershipSnapshot(id),
       check: value => checkedSceneObjectMembership(value, id),
       write: value => value == null
-        ? removeSceneObjectInternal(id, { recordHistory: false })
+        ? removeSceneObjectInternal(id, { recordHistory: false, preserveForMembershipHistory: true })
         : restoreSceneObjectMembership(value),
     });
     sceneMembershipEditTargets.add(editId);
@@ -9813,7 +9813,7 @@ async function recordSceneObjectInsertion(id) {
 
 window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
 
-function removeSceneObjectInternal(id, { recordHistory = true } = {}) {
+function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
   if (id === FLAME_EMITTER_ID) {
     setInfo('Use flame flow to turn off this source; its simulation domain stays in the scene');
     return false;
@@ -9853,8 +9853,8 @@ function removeSceneObjectInternal(id, { recordHistory = true } = {}) {
   scene.remove(entry.object);
   const retainForMembershipHistory = Boolean(editId) || (
     !recordHistory
-    && scenePlacementTools?.edits.state().replaying
-    && scenePlacementTools.edits.hasHistoryEntry(membershipEditTargetId(id))
+    && scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))
+    && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
   );
   if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
   else disposeObjectTree(entry.object);

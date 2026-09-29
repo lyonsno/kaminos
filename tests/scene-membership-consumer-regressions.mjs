@@ -9,6 +9,10 @@ const membershipStart = html.indexOf('function membershipEditTargetId(');
 const membershipEnd = html.indexOf('function shouldIgnoreSceneObjectDeleteShortcut(', membershipStart);
 assert.ok(membershipStart >= 0 && membershipEnd > membershipStart, 'production scene-membership methods must be extractable');
 const membershipSource = html.slice(membershipStart, membershipEnd);
+const disposeStart = html.indexOf('function disposeObjectTree(');
+const disposeEnd = html.indexOf('function shouldClearSceneForImport(', disposeStart);
+assert.ok(disposeStart >= 0 && disposeEnd > disposeStart, 'production object disposal must be extractable');
+const disposeSource = html.slice(disposeStart, disposeEnd);
 
 function makeRecord(id, object, overrides = {}) {
   return {
@@ -21,7 +25,6 @@ function makeRecord(id, object, overrides = {}) {
 function makeSceneContext({ reloadObject = () => ({}) } = {}) {
   const sceneObjects = [];
   const sceneGroups = [];
-  const disposed = [];
   const scene = {
     add(object) { object.parent = this; },
     remove(object) { if (object.parent === this) object.parent = null; },
@@ -61,7 +64,6 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     stopHybridSplatOverlay() {},
     exitSplatCorrectionMode() {},
     setInfo() {},
-    disposeObjectTree: object => { object.disposed = true; disposed.push(object); },
     sceneNavigation: { prepare() {}, invalidate() {} },
     sceneObjectsForFraming: () => [],
     setActiveSceneObject(id) {
@@ -86,9 +88,10 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     scene.add(object);
     return object;
   };
+  vm.runInContext(disposeSource, context);
   vm.runInContext(membershipSource, context);
   edits.subscribe(context.releaseUnreferencedSceneMembershipObjects);
-  return { context, edits, sceneObjects, scene, disposed };
+  return { context, edits, sceneObjects, scene };
 }
 
 function presentGlbMethod() {
@@ -169,6 +172,7 @@ function attribute(array, itemSize) {
 }
 
 function repairedMesh() {
+  const texture = { disposed: false, dispose() { this.disposed = true; } };
   const position = attribute(new Float32Array([
     0, 0, 0, 1, 0, 0, 0, 1, 0, .1, 0, 0, 0, .01, 0,
   ]), 3);
@@ -176,10 +180,13 @@ function repairedMesh() {
   const geometry = {
     index: { array: new Uint16Array([0, 1, 2, 0, 3, 4]), needsUpdate: false },
     attributes: { position, normal },
+    disposed: false,
+    dispose() { this.disposed = true; },
     getAttribute(name) { return this.attributes[name]; },
     setIndex(indices) { this.index = { array: new Uint16Array(indices), needsUpdate: false }; },
   };
-  const mesh = { geometry, traverse(callback) { callback({ isMesh: true, geometry }); } };
+  const material = { map: texture, disposed: false, dispose() { this.disposed = true; } };
+  const mesh = { geometry, material, texture, traverse(callback) { callback({ isMesh: true, geometry, material }); } };
   return mesh;
 }
 
@@ -219,12 +226,33 @@ test('membership undo restores repaired GLB geometry rather than its original so
   assert.equal(context.sceneMembershipRetainedObjects.get('repaired-kiln')?.object, restored,
     'history keeps the detached-object handle available for redo');
 
+  await edits.redo();
+  assert.equal(sceneObjects.some(entry => entry.id === 'repaired-kiln'), false, 'redo should remove the member again');
+  assert.equal(context.sceneMembershipRetainedObjects.get('repaired-kiln')?.object, restored,
+    'redo must retain the exact object while the future history entry still refers to it');
+  assert.equal(restored.geometry.disposed, false, 'redo must not dispose geometry still needed by undo');
+  assert.equal(restored.material.map, restored.texture, 'redo must preserve material maps still needed by undo');
+
+  await edits.undo();
+  const redoneRestored = sceneObjects.find(entry => entry.id === 'repaired-kiln')?.object;
+  assert.equal(redoneRestored, restored, 'undo after redo must reattach the same in-memory object');
+  assert.deepEqual(Array.from(redoneRestored.geometry.index.array), expectedIndices,
+    'a full undo/redo cycle must preserve repaired indices');
+  assert.deepEqual(Array.from(redoneRestored.geometry.getAttribute('normal').array), expectedNormals,
+    'a full undo/redo cycle must preserve repaired normals');
+  assert.equal(redoneRestored.material.map, redoneRestored.texture,
+    'a full undo/redo cycle must preserve material maps');
+
   edits.clear();
   assert.equal(context.sceneMembershipRetainedObjects.has('repaired-kiln'), false,
     'clearing history releases the detached-object handle');
-  assert.equal(restored.disposed, undefined, 'dropping history for a live object must not dispose the scene member');
+  assert.equal(restored.geometry.disposed, false, 'dropping history for a live object must keep its geometry alive');
+  assert.equal(restored.material.map, restored.texture, 'dropping history for a live object must keep its material map alive');
 
   assert.equal(vm.runInContext("removeSceneObjectInternal('repaired-kiln')", context), true);
   edits.clear();
-  assert.equal(restored.disposed, true, 'dropping the final history reference disposes a detached GLB');
+  assert.equal(restored.geometry.disposed, true, 'final disposal releases detached geometry');
+  assert.equal(restored.texture.disposed, true, 'final disposal releases detached textures');
+  assert.equal(restored.material.disposed, true, 'final disposal releases detached materials');
+  assert.equal(restored.material.map, null, 'final disposal clears the detached texture map');
 });
