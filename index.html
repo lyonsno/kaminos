@@ -16739,6 +16739,19 @@ function activeVolumeSettingsPresetStatus() {
   };
 }
 
+// The last preset-index summary, kept so every status update shows it
+// alongside the loaded basin's report whichever of the two arrives last.
+let volumeSettingsPresetIndexSummary = null;
+
+function showVolumeSettingsPresetStatus() {
+  const active = activeVolumeSettingsPresetStatus();
+  const summary = volumeSettingsPresetIndexSummary;
+  volumeSettingsPresetStatus(
+    [active.text, summary?.text].filter(Boolean).join(' || '),
+    active.warning || Boolean(summary?.warning),
+  );
+}
+
 // Read the controls back once the route has set them all, so a basin whose
 // values the page could not hold (clamped ranges, missing options, route
 // fallbacks) says so instead of passing for the saved one.
@@ -16750,7 +16763,7 @@ function recordVolumeSettingsPresetApplied() {
     } catch (error) {
       console.error('Volume settings preset readback failed:', error);
     }
-    volumeSettingsPresetStatus(activeVolumeSettingsPresetStatus().text, activeVolumeSettingsPresetStatus().warning);
+    showVolumeSettingsPresetStatus();
   }
   window.__kaminosVolumeSettingsPresetApplied = activeVolumeSettingsPresetApplied;
   return activeVolumeSettingsPresetApplied;
@@ -16804,15 +16817,15 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         select.add(option);
       }
     }
-    const active = activeVolumeSettingsPresetStatus();
     const unreadable = unavailable.filter(entry => entry.reason === 'invalid-artifact').length;
     const skewed = unavailable.length - unreadable;
     const invalidAliases = index.invalidAliases || [];
     const invalidHistoryRows = index.invalidHistoryRows || [];
-    volumeSettingsPresetStatus(
-      `${active.text ? `${active.text} || ` : ''}${index.entries.length} presets${earlierVersions.length ? ` | ${earlierVersions.length} earlier version${earlierVersions.length === 1 ? '' : 's'}` : ''}${skewed ? ` | ${skewed} unavailable on this version` : ''}${unreadable ? ` | ${unreadable} unreadable` : ''}${invalidAliases.length ? ` | ${invalidAliases.length} malformed label${invalidAliases.length === 1 ? '' : 's'}` : ''}${invalidHistoryRows.length ? ` | ${invalidHistoryRows.length} malformed history row${invalidHistoryRows.length === 1 ? '' : 's'}` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
-      active.warning || unavailable.length > 0 || invalidAliases.length > 0 || invalidHistoryRows.length > 0,
-    );
+    volumeSettingsPresetIndexSummary = {
+      text: `${index.entries.length} presets${earlierVersions.length ? ` | ${earlierVersions.length} earlier version${earlierVersions.length === 1 ? '' : 's'}` : ''}${skewed ? ` | ${skewed} unavailable on this version` : ''}${unreadable ? ` | ${unreadable} unreadable` : ''}${invalidAliases.length ? ` | ${invalidAliases.length} malformed label${invalidAliases.length === 1 ? '' : 's'}` : ''}${invalidHistoryRows.length ? ` | ${invalidHistoryRows.length} malformed history row${invalidHistoryRows.length === 1 ? '' : 's'}` : ''} | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+      warning: unavailable.length > 0 || invalidAliases.length > 0 || invalidHistoryRows.length > 0,
+    };
+    showVolumeSettingsPresetStatus();
     return index;
   } catch (error) {
     volumeSettingsPresetIndex = null;
@@ -22501,7 +22514,7 @@ async function admitVolumeSettingsPresetRoute(params) {
   activeVolumeSettingsPresetReceipt = receipt;
   window.__kaminosVolumeSettingsPresetReceipt = receipt;
   document.getElementById('settings-preset-label').value = receipt.label || receipt.presetId;
-  volumeSettingsPresetStatus(activeVolumeSettingsPresetStatus().text, activeVolumeSettingsPresetStatus().warning);
+  showVolumeSettingsPresetStatus();
   return receipt;
 }
 

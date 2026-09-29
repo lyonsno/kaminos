@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import * as contract from '../volume-settings-preset-contract.mjs';
 import { describeVolumeSettingsPresetProjection, validateVolumeSettingsPresetIndex } from '../volume-settings-preset-contract.mjs';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const refresh = source.match(/async function refreshVolumeSettingsPresetList\([^]*?\n\}/)?.[0];
 assert.ok(refresh);
+const showStatus = source.match(/function showVolumeSettingsPresetStatus\(\)[^]*?\n\}/)?.[0] || '';
 const available = { alias: 'live-kiln', label: 'Live kiln', presetId: `vsp-${'a'.repeat(64)}` };
 const unavailable = {
   alias: 'future-kiln', label: 'Future kiln', presetId: `vsp-${'b'.repeat(64)}`,
@@ -35,8 +37,9 @@ async function render(index, selected = '', active = null) {
     activeVolumeSettingsPresetReceipt: active?.receipt || null,
     activeVolumeSettingsPresetStatus: () => active?.status || { text: '', warning: false },
     volumeSettingsPresetStatus: (...args) => statuses.push(args),
+    volumeSettingsPresetIndexSummary: null,
   });
-  await vm.runInContext(`${refresh}\nrefreshVolumeSettingsPresetList()`, context);
+  await vm.runInContext(`${showStatus}\n${refresh}\nrefreshVolumeSettingsPresetList()`, context);
   return { select, statuses, context };
 }
 
@@ -108,6 +111,36 @@ assert.match(reasonsView.select.options.find(option => option.value === corrupt.
 assert.doesNotMatch(reasonsView.select.options.find(option => option.value === corrupt.presetId).text, /this version/);
 assert.match(reasonsView.statuses.at(-1)[0], /1 unreadable \| 1 malformed label \| 1 malformed history row/);
 assert.equal(reasonsView.statuses.at(-1)[1], true);
+
+// The readback at the end of route init and the index load race; whichever
+// lands last, the status keeps both the loaded basin's report and the index summary.
+{
+  const grab = head => source.match(new RegExp(`${head.replace(/[()]/g, '\\$&')}[^]*?\\n\\}`))?.[0];
+  const pageFns = [grab('function activeVolumeSettingsPresetStatus()'), grab('function recordVolumeSettingsPresetApplied()'), showStatus, refresh]
+    .filter(Boolean).join('\n');
+  const receipt = { presetId: available.presetId, label: 'Live kiln', requestedPresetRef: 'live-kiln', schemaIdentity: 's', storePath: '/store',
+    serverProjection: { defaultsApplied: [], retiredControlIds: [], carriedControls: [], unsupportedValuesDefaulted: [] },
+    preset: { domControls: { 'volume-detail': { value: 0.44 } } } };
+  for (const order of [['index', 'readback'], ['readback', 'index']]) {
+    for (const applied of [0.44, 0.4]) {
+      let status = null;
+      const select = { options: [], value: '', replaceChildren(...o) { this.options = o; }, add(o) { this.options.push(o); } };
+      const context = vm.createContext({ ...contract, window: {}, console, volumeSettingsPresetIndex: null, volumeSettingsPresetIndexSummary: null,
+        activeVolumeSettingsPresetReceipt: receipt, activeVolumeSettingsPresetApplied: Object.freeze([]),
+        document: { getElementById: () => select }, Option: class { constructor(text, value) { this.text = text; this.value = value; } },
+        fetch: async () => ({ ok: true, json: async () => mixed }),
+        buildVolumeSettingsPreset: () => ({ domControls: { 'volume-detail': { value: applied } } }),
+        volumeSettingsPresetStatus: (text, warning) => { status = { text, warning }; } });
+      vm.runInContext(pageFns, context);
+      for (const step of order) await vm.runInContext(step === 'index' ? 'refreshVolumeSettingsPresetList()' : 'recordVolumeSettingsPresetApplied()', context);
+      const label = `${order.join(' then ')}, ${applied === 0.44 ? 'exact' : 'clamped'} load`;
+      assert.match(status.text, /^Live kiln \| requested live-kiln/, `${label}: loaded basin report`);
+      assert.match(status.text, /\|\| 1 presets \| 1 unavailable on this version/, `${label}: index summary kept`);
+      assert.equal(/changed when loaded here: volume-detail 0\.44 -> 0\.4/.test(status.text), applied === 0.4, `${label}: readback`);
+      assert.equal(status.warning, true, `${label}: the unavailable basin keeps the warning`);
+    }
+  }
+}
 
 const emptyView = await render({ ...mixed, entries: [] });
 assert.equal(emptyView.select.value, '');

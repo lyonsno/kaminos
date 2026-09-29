@@ -92,16 +92,18 @@ assert.deepEqual(describeVolumeSettingsPresetProjection(exact.serverProjection),
 // The page reports the projection when it admits a basin, and the picker
 // marks basins that carry controls or had values replaced.
 const admit = index.slice(index.indexOf('async function admitVolumeSettingsPresetRoute('), index.indexOf('function reportKaminosVolumeRouteInitFailure('));
-assert.match(admit, /volumeSettingsPresetStatus\(activeVolumeSettingsPresetStatus\(\)\.text, activeVolumeSettingsPresetStatus\(\)\.warning\)/,
-  'admission status shows the loaded basin and its projection, and warns');
+assert.match(admit, /showVolumeSettingsPresetStatus\(\);/, 'admission status shows the loaded basin and its projection');
+const showFn = index.slice(index.indexOf('function showVolumeSettingsPresetStatus('), index.indexOf('function showVolumeSettingsPresetStatus(') + 600);
+assert.match(showFn, /const active = activeVolumeSettingsPresetStatus\(\);/, 'every status shows the loaded basin report');
+assert.match(showFn, /active\.warning \|\| Boolean\(summary\?\.warning\)/, 'either report keeps the status in its warning state');
 const statusFn = index.slice(index.indexOf('function activeVolumeSettingsPresetStatus('), index.indexOf('async function refreshVolumeSettingsPresetList('));
 assert.match(statusFn, /describeVolumeSettingsPresetProjection\(receipt\.serverProjection\)/, 'the loaded-basin status describes the server projection');
 // The picker index loads concurrently with route admission; its status must
 // not erase the loaded basin's report, and it selects the loaded basin.
 const refresh = index.slice(index.indexOf('async function refreshVolumeSettingsPresetList('), index.indexOf('async function saveVolumeSettingsPreset('));
 assert.match(refresh, /const previous = selectedPresetId \|\| activeVolumeSettingsPresetReceipt\?\.presetId \|\| select\.value;/, 'the picker selects the loaded basin');
-assert.match(refresh, /const active = activeVolumeSettingsPresetStatus\(\);/, 'the index status keeps the loaded basin report');
-assert.match(refresh, /active\.warning \|\| unavailable\.length > 0/, 'a projected basin keeps the status in its warning state');
+assert.match(refresh, /volumeSettingsPresetIndexSummary = \{[\s\S]*warning: unavailable\.length > 0/, 'the index keeps its summary for later status updates');
+assert.match(refresh, /showVolumeSettingsPresetStatus\(\);/, 'the index status keeps the loaded basin report');
 assert.match(index, /entry\.carriedControls\?\.length \|\| entry\.unsupportedValuesDefaulted\?\.length/, 'the picker marks basins projected across branches');
 // A basin loaded across branches with carried or replaced values cannot be
 // saved back under its own label: that would replace it for every branch.
@@ -134,6 +136,13 @@ assert.equal(localHold.warning, true);
 assert.match(localHold.text, /library off \| label "kiln" kept on vsp-888888888888 because this branch does not offer the saved value of volume-mode/);
 assert.deepEqual(describeVolumeSettingsSaveOutcome({ effective: { label: 'kiln', aliasHeld: null },
   sharedPublication: { published: true, storePath: '/lib', aliasHeld: null } }), { text: 'in library /lib', warning: false });
+// A hold only in this server's store (the library label moved) says so.
+const localOnly = describeVolumeSettingsSaveOutcome({
+  effective: { label: 'kiln', aliasHeld: { reason: 'would-drop-controls', controls: ['volume-new-knob'], currentPresetId: `vsp-${'7'.repeat(64)}`, scope: 'local-store' } },
+  sharedPublication: { published: true, storePath: '/lib', aliasHeld: null },
+});
+assert.equal(localOnly.warning, true);
+assert.equal(localOnly.text, 'in library /lib | this server\'s store kept "kiln" on vsp-777777777777 because this branch lacks volume-new-knob; the library label follows this save');
 const libraryHeld = describeVolumeSettingsSaveOutcome({ effective: { label: 'kiln', aliasHeld: held ? { reason: 'would-drop-controls', controls: ['x'], currentPresetId: `vsp-${'9'.repeat(64)}` } : null },
   sharedPublication: { published: true, storePath: '/lib', label: 'kiln',
     aliasHeld: { reason: 'would-drop-controls', controls: ['volume-ridge-radius-cells'], currentPresetId: `vsp-${'9'.repeat(64)}` } } });
