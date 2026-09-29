@@ -3933,6 +3933,7 @@ let volumePrimitives = [];
 let sceneObjects = [];
 let sceneNavigation = null;
 const sceneMembershipEditTargets = new Set();
+const sceneMembershipRetainedObjects = new Map();
 let sceneImportStatus = null;
 let sceneGroups = [];
 let activeSceneObjectId = null;
@@ -9690,6 +9691,17 @@ function membershipEditTargetId(id) {
   return `@scene-membership:${encodeURIComponent(id)}`;
 }
 
+function releaseUnreferencedSceneMembershipObjects() {
+  for (const [id, entry] of sceneMembershipRetainedObjects) {
+    const editId = membershipEditTargetId(id);
+    if (scenePlacementTools?.edits?.hasHistoryEntry(editId)) continue;
+    sceneMembershipRetainedObjects.delete(id);
+    if (!sceneObjects.some(record => record.id === id && record.object === entry.object)) {
+      disposeObjectTree(entry.object);
+    }
+  }
+}
+
 function sceneObjectMembershipSnapshot(id) {
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return null;
@@ -9744,7 +9756,17 @@ async function restoreSceneObjectMembership(snapshot) {
   if (sceneObjects.some(entry => entry.id === record.id)) {
     throw new Error(`Scene object "${record.id}" is already present`);
   }
-  const object = await addSceneObjectFromSource(record);
+  const retainedEntry = sceneMembershipRetainedObjects.get(record.id);
+  let object;
+  if (retainedEntry) {
+    object = retainedEntry.object;
+    scene.add(object);
+    sceneObjects.push(retainedEntry);
+    sceneNavigation?.prepare(object);
+    sceneSaveBlockedByFailedRestore = false;
+  } else {
+    object = await addSceneObjectFromSource(record);
+  }
   const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
   if (!entry || object !== entry.object) throw new Error(`Scene object "${record.id}" did not restore its retained identity`);
   applySceneObjectTransformState(object, record.transform);
@@ -9780,11 +9802,13 @@ function ensureSceneObjectMembershipTarget(id) {
   return editId;
 }
 
-function recordSceneObjectInsertion(id) {
+async function recordSceneObjectInsertion(id) {
   const after = sceneObjectMembershipSnapshot(id);
   if (!after) return false;
   const editId = ensureSceneObjectMembershipTarget(id);
-  return scenePlacementTools.edits.recordApplied(editId, null, after, `Add ${after.record.label || after.record.fileName || id}`);
+  return scenePlacementTools.edits.recordAppliedWhenAvailable(
+    editId, null, after, `Add ${after.record.label || after.record.fileName || id}`,
+  );
 }
 
 window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
@@ -9827,7 +9851,13 @@ function removeSceneObjectInternal(id, { recordHistory = true } = {}) {
     transformControls.visible = false;
   }
   scene.remove(entry.object);
-  disposeObjectTree(entry.object);
+  const retainForMembershipHistory = Boolean(editId) || (
+    !recordHistory
+    && scenePlacementTools?.edits.state().replaying
+    && scenePlacementTools.edits.hasHistoryEntry(membershipEditTargetId(id))
+  );
+  if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
+  else disposeObjectTree(entry.object);
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
   if (activeGroupSurvives) {
     setActiveSceneGroup(previousActiveGroupId);
@@ -10835,6 +10865,7 @@ async function initScene() {
         event.operation === 'commit' ? null : event.afterContext);
     },
   });
+  scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1';
@@ -10931,11 +10962,12 @@ async function initScene() {
       const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
       const saved = await response.json();
       if (!response.ok || saved.sha256 !== sha256) throw new Error(saved.error || 'generated mesh persistence hash mismatch');
+      await scenePlacementTools.edits.waitForReplay();
       const object = await showGLB(saved.source, {clear:false, metadata:{source:saved.source,type:'glb',fileName:`${sha256}.glb`,label:`SF3D chair · ${runId}`}});
       const entry = sceneObjects.find(row => row.object === object);
       if (!entry) throw new Error('SF3D output was not registered in the host scene');
       try {
-        if (!recordSceneObjectInsertion(entry.id)) throw new Error('SF3D output has no retained scene-membership history target');
+        if (!await recordSceneObjectInsertion(entry.id)) throw new Error('SF3D output has no retained scene-membership history target');
       } catch (error) {
         removeSceneObjectInternal(entry.id, { recordHistory: false });
         throw error;

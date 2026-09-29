@@ -29,6 +29,18 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   };
   const put = (id, value) => targets.has(id) ? targets.get(id).write(clone(value)) : write(id, value);
   const state = () => ({ active: active ? clone(active) : null, undoCount: past.length, redoCount: future.length, replaying });
+  const hasHistoryEntry = id => past.some(entry => entry.id === id) || future.some(entry => entry.id === id);
+  const waitForReplay = () => {
+    if (!replaying) return Promise.resolve();
+    return new Promise(resolve => {
+      let unsubscribe = () => {};
+      unsubscribe = subscribe(current => {
+        if (current.replaying) return;
+        unsubscribe();
+        resolve();
+      });
+    });
+  };
   const assertAvailable = () => {
     if (replaying) throw new Error('Wait for the current scene history action to finish');
   };
@@ -41,6 +53,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     changed(state());
     for (const listener of listeners) listener(state());
   };
+  const subscribe = listener => { listeners.add(listener); return () => listeners.delete(listener); };
 
   function begin(id, label = 'Transform') {
     admit();
@@ -154,6 +167,11 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     return true;
   }
 
+  function recordAppliedWhenAvailable(id, before, after, label = 'Change') {
+    if (!replaying) return recordApplied(id, before, after, label);
+    return waitForReplay().then(() => recordApplied(id, before, after, label));
+  }
+
   function assertCanRecordApplied(id) {
     admit();
     assertAvailable();
@@ -180,8 +198,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   }
 
   return {
-    begin, preview, commit, cancel, apply, state,
-    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    begin, preview, commit, cancel, apply, state, waitForReplay, hasHistoryEntry, subscribe,
     register(id, target) {
       if (!id.startsWith('@') || targets.has(id)) throw new Error('Duplicate or invalid edit target');
       if (!target || typeof target.read !== 'function' || typeof target.write !== 'function') {
@@ -191,7 +208,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     },
     undo: () => replay(past, future, 'before'),
     redo: () => replay(future, past, 'after'),
-    recordApplied,
+    recordApplied, recordAppliedWhenAvailable,
     assertCanRecordApplied,
     discard,
     unregister,

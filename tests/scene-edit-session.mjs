@@ -144,6 +144,36 @@ test('clearing scene history is rejected while asynchronous membership replay is
   assert.deepEqual(edits.state(), { active: null, undoCount: 0, redoCount: 1, replaying: false });
 });
 
+test('an applied scene insertion can record immediately after asynchronous replay settles', async () => {
+  let blocker = 'after';
+  let finishReplay;
+  let member = { id: 'generated-chair', source: '/api/ingest-mesh/chair.glb', type: 'glb' };
+  const edits = createSceneEdits({ read: () => null, write() {} });
+  edits.register('@history-blocker', {
+    allowMissing: true,
+    read: () => blocker,
+    check: value => value,
+    write: value => new Promise(resolve => { finishReplay = () => { blocker = value; resolve(); }; }),
+  });
+  edits.register('@scene-membership:generated-chair', {
+    allowMissing: true,
+    read: () => structuredClone(member),
+    check: value => value === null ? null : structuredClone(value),
+    write: value => { member = structuredClone(value); },
+  });
+  edits.recordApplied('@history-blocker', 'before', 'after', 'Prior history action');
+
+  const replay = edits.undo();
+  const insertion = edits.recordAppliedWhenAvailable('@scene-membership:generated-chair', null, member, 'Add generated chair');
+  assert.equal(edits.state().replaying, true);
+  finishReplay();
+  await replay;
+
+  assert.equal(await insertion, true);
+  assert.deepEqual(edits.state(), { active: null, undoCount: 1, redoCount: 0, replaying: false },
+    'the insertion should follow the replay chronologically and clear only the invalid redo branch');
+});
+
 test('registered membership targets can be released only after their history is cleared', () => {
   let member = { id: 'generated-chair' };
   const edits = createSceneEdits({ read: () => null, write: () => {} });
