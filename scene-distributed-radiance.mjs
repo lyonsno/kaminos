@@ -14,26 +14,31 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     limitations:['vertex-surface-receivers','nearest-smoke-receivers','no-surface-bounce','independent-consumer-display']};
   function retire() {
     prototype.setSceneDistributedLightFrame(null);
+    const uses=new Map();
+    for(const row of originals.values())for(const resource of [row.geometry,...(Array.isArray(row.material)?row.material:[row.material])])uses.set(resource,(uses.get(resource)||0)+1);
     for(const [mesh,row] of originals) {
       // Restore only our installed substitutions, carrying intervening edits
       // back to their authored inputs. Never overwrite an external replacement.
       if(mesh.geometry===row.clone) {
-        row.geometry.copy(row.clone);
-        if(row.receiverAttribute)row.geometry.setAttribute('sceneReceiverIndex',row.receiverAttribute);
-        else row.geometry.deleteAttribute('sceneReceiverIndex');
-        mesh.geometry=row.geometry;
+        // Divergent per-mesh edits cannot be restored into one shared input.
+        const authored=uses.get(row.geometry)>1?row.geometry.clone():row.geometry;
+        authored.copy(row.clone);
+        if(row.receiverAttribute)authored.setAttribute('sceneReceiverIndex',row.receiverAttribute);
+        else authored.deleteAttribute('sceneReceiverIndex');
+        mesh.geometry=authored;
       }
       if(mesh.material===row.converted) {
-        const authored=Array.isArray(row.material)?row.material:[row.material];
+        const authored=Array.isArray(row.material)?[...row.material]:[row.material];
         const installed=Array.isArray(row.converted)?row.converted:[row.converted];
         for(let i=0;i<authored.length;i++) {
           if(installed[i]!==row.ownedMaterials[i]){authored[i]=installed[i];continue;}
+          if(uses.get(authored[i])>1)authored[i]=authored[i].clone();
           authored[i].copy(installed[i]);
           const Type=authored[i].isMeshPhysicalMaterial||authored[i].isMeshPhysicalNodeMaterial?THREE.MeshPhysicalMaterial:THREE.MeshStandardMaterial;
           Type.prototype.copy.call(authored[i],installed[i]);
           authored[i].needsUpdate=true;
         }
-        mesh.material=row.material;
+        mesh.material=Array.isArray(row.material)?authored:authored[0];
       }
       for(const m of row.ownedMaterials||[])m.dispose();
       row.clone.dispose();

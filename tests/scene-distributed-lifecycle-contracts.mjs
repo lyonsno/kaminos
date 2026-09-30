@@ -47,6 +47,27 @@ if(!selected||selected==='edits') {
   assert.equal(external.mesh.geometry,replacementGeometry,'disposal preserves intervening geometry replacement');
   assert.equal(external.mesh.material,replacementMaterial,'disposal preserves intervening material replacement');
 }
+if(!selected||selected==='shared') {
+  for(const kind of ['geometry','material'])for(const terminal of ['rebuild','dispose']) {
+    const f=fixture();
+    const peer=new THREE.Mesh(kind==='geometry'?f.geometry:f.geometry.clone(),kind==='material'?f.material:f.material.clone());
+    peer.castShadow=true;f.mesh.parent.add(peer);f.prepare();
+    if(kind==='geometry'){f.mesh.geometry.attributes.position.setX(0,.25);f.mesh.geometry.attributes.position.needsUpdate=true;}
+    else {f.mesh.material.color.setHex(0xff0000);f.mesh.material.needsUpdate=true;}
+    if(terminal==='rebuild')f.prepare();else f.mount.dispose();
+    if(kind==='geometry') {
+      assert.equal(f.mesh.geometry.attributes.position.getX(0),.25,`${terminal} preserves edited shared geometry`);
+      assert.equal(peer.geometry.attributes.position.getX(0),0,'unaffected geometry peer remains unchanged');
+      if(terminal==='rebuild')assert.equal(f.uploads.at(-1)[0],.25);
+    } else {
+      assert.equal(f.mesh.material.color.getHex(),0xff0000,`${terminal} preserves edited shared material`);
+      assert.equal(peer.material.color.getHex(),0xffffff,'unaffected material peer remains unchanged');
+    }
+    if(terminal==='rebuild')f.mount.dispose();
+    assert.equal(f.mesh.geometry.hasAttribute('sceneReceiverIndex'),false);
+    assert.equal(peer.geometry.hasAttribute('sceneReceiverIndex'),false);
+  }
+}
 if(!selected||selected==='normals') {
   const f=fixture();f.prepare();
   for(let i=0;i<3;i++)f.mesh.geometry.attributes.normal.setZ(i,-1);
