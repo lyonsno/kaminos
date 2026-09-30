@@ -2,6 +2,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import {
   KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
   KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT,
@@ -63,7 +64,9 @@ const postContactOut = resolve(args.get('--post-contact-out') || out.replace(/\.
 const recoveryOut = resolve(args.get('--recovery-out') || out.replace(/\.png$/i, '.pilot-recovery.png'));
 const surfaceRegistrationDir = resolve(args.get('--surface-registration-dir') || out.replace(/\.png$/i, '.surface-registration'));
 const port = Number(args.get('--debug-port') || 9493);
-const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const requestedChrome = process.env.KAMINOS_CHROME || null;
+let chrome = null;
+let browserLaunchArgs = null;
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-finger-fluid-bench-profile-${port}-${process.pid}`;
 const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1120);
@@ -154,6 +157,8 @@ function writeReport(report = {}) {
     requestedUrl: url,
     debugPort: port,
     chrome,
+    requestedChrome,
+    browserLaunchArgs,
     userDataDir,
     viewport: { width: viewportWidth, height: viewportHeight, deviceScaleFactor },
     settleMs,
@@ -1838,18 +1843,12 @@ async function main() {
     throw new Error(`Finger Fluid cadence evidence must span at least 3600ms, received: ${cadenceMs}`);
   }
   const compositionRequested = new URL(url).searchParams.get('finger_fluid_pyro_composition') === '1';
-  const chromeProcess = spawn(chrome, [
-    `--remote-debugging-port=${port}`,
-    `--user-data-dir=${userDataDir}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--disable-extensions',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--disable-backgrounding-occluded-windows',
-    `--window-size=${viewportWidth},${viewportHeight}`,
-    'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  phase = 'validate_browser';
+  const browserLaunch = fluidBrowserLaunch({ executable: requestedChrome, debugPort: port,
+    userDataDir, width: viewportWidth, height: viewportHeight });
+  chrome = browserLaunch.executable;
+  browserLaunchArgs = browserLaunch.args;
+  const chromeProcess = spawn(chrome, browserLaunchArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => {
     stderr += chunk.toString();
   });
