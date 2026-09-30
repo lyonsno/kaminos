@@ -32,6 +32,7 @@ Focused checks:
 ```sh
 node models/trellis2/tests/sparse-prefix-contracts.mjs
 node models/trellis2/tests/sparse-prefix-witness-contracts.mjs
+node models/trellis2/tests/sparse-prefix-early-failure.mjs
 ```
 
 Replay (all persistent destinations and source roots are caller-owned):

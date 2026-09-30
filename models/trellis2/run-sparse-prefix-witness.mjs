@@ -11,13 +11,13 @@ const { values } = parseArgs({ options: Object.fromEntries(
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
   if (!values[name]) throw new Error(`--${name} is required`);
 }
-const root = await fs.realpath(values['repo-root']);
-const fixture = await fs.realpath(values.fixture);
+let root, fixture;
 const output = path.resolve(values.report);
 const evidenceRoot = path.join(path.dirname(output), 'raw');
-const report = { schema: 'trellis2.sparse-prefix-browser.v0', status: 'failed', phase: 'source-identity',
+const report = { schema: 'trellis2.sparse-prefix-browser.v0', status: 'failed', phase: 'repo-root-admission',
   receiver: values.receiver, terminalEvidence: output,
-  repoRoot: root, command: process.argv, expectedCommit: values['expected-commit'], servedSources: {} };
+  requestedRepoRoot: values['repo-root'], requestedFixtureRoot: values.fixture,
+  command: process.argv, expectedCommit: values['expected-commit'], servedSources: {} };
 const persist = async () => { await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(output, JSON.stringify(report, null, 2) + '\n'); };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -59,6 +59,10 @@ async function connect(url) {
 
 try {
   await persist();
+  root = await fs.realpath(values['repo-root']); report.repoRoot = root;
+  report.phase = 'fixture-admission';
+  fixture = await fs.realpath(values.fixture); report.fixtureRoot = fixture;
+  report.phase = 'source-identity';
   report.commit = git(['rev-parse', 'HEAD']);
   report.dirty = git(['status', '--porcelain']);
   if (report.commit !== report.expectedCommit || report.dirty) throw new Error('source revision must be the exact clean requested commit');
