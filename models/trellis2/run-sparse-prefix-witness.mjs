@@ -7,11 +7,12 @@ import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
 const { values } = parseArgs({ options: Object.fromEntries(
-  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver'].map(name => [name, { type: 'string' }])) });
+  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture'].map(name => [name, { type: 'string' }])) });
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
   if (!values[name]) throw new Error(`--${name} is required`);
 }
-let root, fixture;
+let root, fixture, prefixFixture;
+const witness = values.witness || 'prefix';
 const output = path.resolve(values.report);
 const evidenceRoot = path.join(path.dirname(output), 'raw');
 const report = { schema: 'trellis2.sparse-prefix-browser.v0', status: 'failed', phase: 'repo-root-admission',
@@ -62,6 +63,14 @@ try {
   root = await fs.realpath(values['repo-root']); report.repoRoot = root;
   report.phase = 'fixture-admission';
   fixture = await fs.realpath(values.fixture); report.fixtureRoot = fixture;
+  report.phase = 'witness-admission'; report.witness = witness;
+  if (!['prefix', 'block'].includes(witness)) throw new Error('--witness must be prefix or block');
+  if (witness === 'block') {
+    if (!values['prefix-fixture']) throw new Error('--prefix-fixture is required for a block witness');
+    prefixFixture = await fs.realpath(values['prefix-fixture']);
+    report.prefixFixtureRoot = prefixFixture;
+    report.prefixFixtureSha256 = digest(await fs.readFile(path.join(prefixFixture, 'manifest.json')));
+  }
   report.phase = 'source-identity';
   report.commit = git(['rev-parse', 'HEAD']);
   report.dirty = git(['status', '--porcelain']);
@@ -74,7 +83,7 @@ try {
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
       if (pathname === '/favicon.ico') { res.writeHead(204).end(); return; }
-      if (req.method === 'POST' && /^\/output\/(projected|modulation)$/.test(pathname)) {
+      if (req.method === 'POST' && /^\/output\/[\w.-]+$/.test(pathname)) {
         const chunks = []; for await (const chunk of req) chunks.push(chunk);
         const bytes = Buffer.concat(chunks), name = pathname.split('/').at(-1);
         const target = path.join(evidenceRoot, `${name}.f32`);
@@ -84,9 +93,11 @@ try {
       }
       if (pathname === '/') { res.setHeader('Content-Type', 'text/html');
         res.end('<!doctype html><title>TRELLIS sparse prefix numerical witness</title>'); return; }
-      const isFixture = pathname.startsWith('/fixture/');
-      const base = isFixture ? fixture : root;
-      const file = path.resolve(base, `.${isFixture ? pathname.slice(8) : pathname}`);
+      const isPrefixFixture = pathname.startsWith('/prefix-fixture/');
+      const isFixture = isPrefixFixture || pathname.startsWith('/fixture/');
+      const base = isPrefixFixture ? prefixFixture : isFixture ? fixture : root;
+      if (!base) { res.writeHead(404).end(); return; }
+      const file = path.resolve(base, `.${isPrefixFixture ? pathname.slice(15) : isFixture ? pathname.slice(8) : pathname}`);
       if (!file.startsWith(base + path.sep)) { res.writeHead(403).end(); return; }
       const bytes = await fs.readFile(file);
       if (!isFixture && /\.m?js$/.test(file)) {
@@ -124,10 +135,10 @@ try {
   const loaded = cdp.once('Page.loadEventFired', sessionId);
   await cdp.call('Page.navigate', { url: report.requestedUrl }, sessionId);
   await loaded;
-  report.phase = 'native-prefix-execution'; await persist();
+  report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
-    const { runSparsePrefixWitness } = await import('/models/trellis2/sparse-prefix-witness.js');
-    return { url: location.href, result: await runSparsePrefixWitness(${JSON.stringify(report.fixtureSha256)}) };
+    const { ${witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${witness}-witness.js');
+    return { url: location.href, result: await ${witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}` : ''}) };
   })()`, awaitPromise: true, returnByValue: true }, sessionId);
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   const value = result.result.value;
@@ -135,7 +146,13 @@ try {
   if (value.url !== report.requestedUrl) throw new Error('effective browser URL differs from requested route');
   if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
-  for (const name of ['projected', 'modulation']) {
+  const requiredOutputs = ['projected', 'modulation'];
+  if (witness === 'block') {
+    const manifest = JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8'));
+    requiredOutputs.push(...Object.keys(manifest.tensors).filter(name => name.startsWith('expected.')).map(name => name.slice(9)));
+    if (!requiredOutputs.includes('after_mlp')) throw new Error('final block output is missing');
+  }
+  for (const name of requiredOutputs) {
     if (!report.rawOutputs?.[name] || report.rawOutputs[name].sha256 !== value.result.outputs?.[name]?.sha256) {
       throw new Error(`missing or mismatched raw evidence: ${name}`);
     }
