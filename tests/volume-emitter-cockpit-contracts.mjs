@@ -5,7 +5,7 @@ const cockpit = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(
   cockpit,
-  /import \{ applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES \} from '\.\/volume-emitter-runtime\.mjs'/,
+  /import \{ applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES \} from '\.\/volume-emitter-runtime\.mjs(\?v=[^']+)?'/,
   'cockpit consumes the tested emitter runtime adapter instead of reconstructing morphology inline',
 );
 assert.match(
