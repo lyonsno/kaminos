@@ -1,0 +1,1166 @@
+{
+  "status": "captured-inspection-required",
+  "scope": "spatial-assay-inspection-required",
+  "phase": "complete",
+  "sourceCommit": "e9f43e23d758a1d8a75be4f2b4e7da8efe33bdc4",
+  "gitStatus": "?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/off-canvas.png\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/off.png\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/server.log",
+  "repoRoot": "/private/tmp/kaminos-sinter-local48-0930",
+  "requestedMode": "off",
+  "browser": {
+    "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "headless": false,
+    "pid": 1631
+  },
+  "frames": [
+    {
+      "pose": {
+        "name": "cold-outside",
+        "position": [
+          2.5,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "steps": 180
+      },
+      "effectivePose": {
+        "id": "sinter-forked-timber-trestle",
+        "label": "Forked timber reliquary trestle",
+        "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "type": "glb",
+        "groupId": null,
+        "active": true,
+        "transform": {
+          "position": [
+            2.5,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "sceneTransform": null,
+        "combustionBinding": {
+          "schema": "kaminos.object-combustion-binding.v0",
+          "objectId": "sinter-forked-timber-trestle",
+          "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+          "structuralProfile": "timber-two-island.v0",
+          "burnRate": 0.003
+        },
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "state": {
+        "url": "http://127.0.0.1:18100/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=off#authoring=1&scene=sinter-forked-timber-combustion.kaminos.json",
+        "backend": "WebGPU:apple",
+        "error": null,
+        "grid": 48,
+        "gridDimensions": [
+          48,
+          96,
+          48
+        ],
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "assembly": {
+          "schema": "kaminos.structural-combustion.node-material.v0",
+          "authority": "same-device-pyro-node-material-bond-strength-v0",
+          "presentationDebugMode": "off",
+          "mode": "structural-combustion",
+          "status": "active",
+          "dispatchCount": 181,
+          "presentationCount": 181,
+          "runtimeReadbackCount": 0,
+          "liveRuntimeReadbackCount": 0,
+          "terminalReadbackCount": 0,
+          "hostCausalFeedbackCount": 0,
+          "structureCount": 1,
+          "gridDimensions": [
+            48,
+            96,
+            48
+          ],
+          "spatialTransforms": [
+            {
+              "id": "sinter-forked-timber-trestle",
+              "authority": "saved-object-world-to-current-pyro-domain-v0",
+              "domainTranslation": [
+                0,
+                0,
+                0
+              ],
+              "nodeToPyro": [
+                0.7546666860580444,
+                0,
+                0,
+                0,
+                0,
+                0.5425262339413166,
+                0,
+                0,
+                0,
+                0,
+                0.3748362809419632,
+                0,
+                1.3820621371269226,
+                0.4504723958671093,
+                0.33154095709323883,
+                1
+              ],
+              "displayTransform": [
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                2.5,
+                0,
+                0,
+                1
+              ],
+              "normalTransform": [
+                1,
+                0,
+                0,
+                -2.5,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            }
+          ],
+          "surfaceCellCount": 1000,
+          "meshTriangleCount": 864,
+          "meshAssetIdentities": [
+            "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+          ],
+          "presentationMode": "indexed-mesh-skin-resident-structural-proxy-v0",
+          "emittingObjectId": 2328813346,
+          "sourceCapacity": 1331,
+          "deviceOwnership": "borrowed",
+          "lastTerminalReceipt": null
+        },
+        "source": {
+          "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+          "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+          "status": "bound",
+          "gridSize": 48,
+          "sourceSchema": "kaminos.combustible-object-source-descriptor.v0",
+          "sourceFrameId": "gpu-structural-combustion-assembly",
+          "sourceFrameHash": 1398035011,
+          "allocationGeneration": 1,
+          "topologyEpoch": 0,
+          "materialStep": 0,
+          "writeTick": 1,
+          "sourceCount": 1331,
+          "packedCount": 1331,
+          "rejectedCount": 0,
+          "overflowCount": 0,
+          "emittedVolatileMass": 0,
+          "sameDevice": true,
+          "transformIdentity": "affine-object-world-to-pyro-near-domain-v0",
+          "fieldTransfer": [
+            96,
+            128,
+            96,
+            96
+          ],
+          "dispatchCount": 181,
+          "lastScheduledIdentity": "1:0:gpu-dispatch-181:1398035011",
+          "lastReceipt": null,
+          "fallback": null,
+          "gpuAuthoredDynamic": true
+        },
+        "sceneStatus": "Scene loaded: 1 object",
+        "basin": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "objects": [
+          {
+            "id": "sinter-forked-timber-trestle",
+            "label": "Forked timber reliquary trestle",
+            "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+            "type": "glb",
+            "groupId": null,
+            "active": true,
+            "transform": {
+              "position": [
+                2.5,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ]
+            },
+            "sceneTransform": null,
+            "combustionBinding": {
+              "schema": "kaminos.object-combustion-binding.v0",
+              "objectId": "sinter-forked-timber-trestle",
+              "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+              "structuralProfile": "timber-two-island.v0",
+              "burnRate": 0.003
+            },
+            "splat": null,
+            "image": null,
+            "renderRoute": null,
+            "renderCapabilities": null,
+            "renderHandoffSchema": null
+          }
+        ],
+        "camera": {
+          "position": [
+            4.5,
+            2.3999999999999995,
+            5.5
+          ],
+          "target": [
+            0.7,
+            0.3,
+            0
+          ],
+          "projectionMatrix": [
+            1.9630326671099267,
+            0,
+            0,
+            0,
+            0,
+            2.4142135623730954,
+            0,
+            0,
+            0,
+            0,
+            -1.002002002002002,
+            -1,
+            0,
+            0,
+            -0.20020020020020018,
+            0
+          ],
+          "matrixWorldInverse": [
+            0.822730338093269,
+            -0.17035581711980516,
+            0.5423040534187247,
+            0,
+            0,
+            0.9540352715644229,
+            0.2996943453103477,
+            0,
+            -0.5684318699553496,
+            -0.2465676300418233,
+            0.7849137615271014,
+            0,
+            -0.5759112366652875,
+            -0.1669615094854632,
+            -7.476660357528153,
+            1
+          ]
+        }
+      },
+      "image": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/spatial48-beauty-0930/cold-outside.png"
+    },
+    {
+      "pose": {
+        "name": "contact-rotated-scaled",
+        "position": [
+          0,
+          -0.5,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0.35
+        ],
+        "scale": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "steps": 120
+      },
+      "effectivePose": {
+        "id": "sinter-forked-timber-trestle",
+        "label": "Forked timber reliquary trestle",
+        "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "type": "glb",
+        "groupId": null,
+        "active": true,
+        "transform": {
+          "position": [
+            0,
+            -0.5,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0.35
+          ],
+          "scale": [
+            0.8,
+            0.8,
+            0.8
+          ]
+        },
+        "sceneTransform": null,
+        "combustionBinding": {
+          "schema": "kaminos.object-combustion-binding.v0",
+          "objectId": "sinter-forked-timber-trestle",
+          "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+          "structuralProfile": "timber-two-island.v0",
+          "burnRate": 0.003
+        },
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "state": {
+        "url": "http://127.0.0.1:18100/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=off#authoring=1&scene=sinter-forked-timber-combustion.kaminos.json",
+        "backend": "WebGPU:apple",
+        "error": null,
+        "grid": 48,
+        "gridDimensions": [
+          48,
+          96,
+          48
+        ],
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "assembly": {
+          "schema": "kaminos.structural-combustion.node-material.v0",
+          "authority": "same-device-pyro-node-material-bond-strength-v0",
+          "presentationDebugMode": "off",
+          "mode": "structural-combustion",
+          "status": "active",
+          "dispatchCount": 314,
+          "presentationCount": 314,
+          "runtimeReadbackCount": 0,
+          "liveRuntimeReadbackCount": 0,
+          "terminalReadbackCount": 0,
+          "hostCausalFeedbackCount": 0,
+          "structureCount": 1,
+          "gridDimensions": [
+            48,
+            96,
+            48
+          ],
+          "spatialTransforms": [
+            {
+              "id": "sinter-forked-timber-trestle",
+              "authority": "saved-object-world-to-current-pyro-domain-v0",
+              "domainTranslation": [
+                0,
+                0,
+                0
+              ],
+              "nodeToPyro": [
+                0.5671306337423091,
+                0.20701884160717993,
+                0,
+                0,
+                -0.1488248448844326,
+                0.407707472134661,
+                0,
+                0,
+                0,
+                0,
+                0.2998690247535706,
+                0,
+                0.23708169476747215,
+                0.11184802694866611,
+                0.36523276567459106,
+                1
+              ],
+              "displayTransform": [
+                0.7514981702779031,
+                0.2743182459643611,
+                0,
+                0,
+                -0.2743182459643611,
+                0.7514981702779031,
+                0,
+                0,
+                0,
+                0,
+                0.8,
+                0,
+                0,
+                -0.5,
+                0,
+                1
+              ],
+              "normalTransform": [
+                1.1742158910592237,
+                0.42862225931931425,
+                0,
+                0.21431112965965712,
+                -0.42862225931931425,
+                1.1742158910592237,
+                0,
+                0.5871079455296119,
+                0,
+                0,
+                1.25,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            }
+          ],
+          "surfaceCellCount": 1000,
+          "meshTriangleCount": 864,
+          "meshAssetIdentities": [
+            "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+          ],
+          "presentationMode": "indexed-mesh-skin-resident-structural-proxy-v0",
+          "emittingObjectId": 2328813346,
+          "sourceCapacity": 1331,
+          "deviceOwnership": "borrowed",
+          "lastTerminalReceipt": null
+        },
+        "source": {
+          "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+          "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+          "status": "bound",
+          "gridSize": 48,
+          "sourceSchema": "kaminos.combustible-object-source-descriptor.v0",
+          "sourceFrameId": "gpu-structural-combustion-assembly",
+          "sourceFrameHash": 1398035011,
+          "allocationGeneration": 1,
+          "topologyEpoch": 0,
+          "materialStep": 0,
+          "writeTick": 1,
+          "sourceCount": 1331,
+          "packedCount": 1331,
+          "rejectedCount": 0,
+          "overflowCount": 0,
+          "emittedVolatileMass": 0,
+          "sameDevice": true,
+          "transformIdentity": "affine-object-world-to-pyro-near-domain-v0",
+          "fieldTransfer": [
+            96,
+            128,
+            96,
+            96
+          ],
+          "dispatchCount": 314,
+          "lastScheduledIdentity": "1:0:gpu-dispatch-314:1398035011",
+          "lastReceipt": null,
+          "fallback": null,
+          "gpuAuthoredDynamic": true
+        },
+        "sceneStatus": "Scene loaded: 1 object",
+        "basin": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "objects": [
+          {
+            "id": "sinter-forked-timber-trestle",
+            "label": "Forked timber reliquary trestle",
+            "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+            "type": "glb",
+            "groupId": null,
+            "active": true,
+            "transform": {
+              "position": [
+                0,
+                -0.5,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0.35
+              ],
+              "scale": [
+                0.8,
+                0.8,
+                0.8
+              ]
+            },
+            "sceneTransform": null,
+            "combustionBinding": {
+              "schema": "kaminos.object-combustion-binding.v0",
+              "objectId": "sinter-forked-timber-trestle",
+              "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+              "structuralProfile": "timber-two-island.v0",
+              "burnRate": 0.003
+            },
+            "splat": null,
+            "image": null,
+            "renderRoute": null,
+            "renderCapabilities": null,
+            "renderHandoffSchema": null
+          }
+        ],
+        "camera": {
+          "position": [
+            4.5,
+            2.3999999999999995,
+            5.5
+          ],
+          "target": [
+            0.7,
+            0.3,
+            0
+          ],
+          "projectionMatrix": [
+            1.9630326671099267,
+            0,
+            0,
+            0,
+            0,
+            2.4142135623730954,
+            0,
+            0,
+            0,
+            0,
+            -1.002002002002002,
+            -1,
+            0,
+            0,
+            -0.20020020020020018,
+            0
+          ],
+          "matrixWorldInverse": [
+            0.822730338093269,
+            -0.17035581711980516,
+            0.5423040534187247,
+            0,
+            0,
+            0.9540352715644229,
+            0.2996943453103477,
+            0,
+            -0.5684318699553496,
+            -0.2465676300418233,
+            0.7849137615271014,
+            0,
+            -0.5759112366652875,
+            -0.1669615094854632,
+            -7.476660357528153,
+            1
+          ]
+        }
+      },
+      "image": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/spatial48-beauty-0930/contact-rotated-scaled.png"
+    },
+    {
+      "pose": {
+        "name": "removed-hot-object",
+        "position": [
+          2.5,
+          -0.5,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0.35
+        ],
+        "scale": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "steps": 90
+      },
+      "effectivePose": {
+        "id": "sinter-forked-timber-trestle",
+        "label": "Forked timber reliquary trestle",
+        "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "type": "glb",
+        "groupId": null,
+        "active": true,
+        "transform": {
+          "position": [
+            2.5,
+            -0.5,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0.35
+          ],
+          "scale": [
+            0.8,
+            0.8,
+            0.8
+          ]
+        },
+        "sceneTransform": null,
+        "combustionBinding": {
+          "schema": "kaminos.object-combustion-binding.v0",
+          "objectId": "sinter-forked-timber-trestle",
+          "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+          "structuralProfile": "timber-two-island.v0",
+          "burnRate": 0.003
+        },
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "state": {
+        "url": "http://127.0.0.1:18100/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=off#authoring=1&scene=sinter-forked-timber-combustion.kaminos.json",
+        "backend": "WebGPU:apple",
+        "error": null,
+        "grid": 48,
+        "gridDimensions": [
+          48,
+          96,
+          48
+        ],
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "assembly": {
+          "schema": "kaminos.structural-combustion.node-material.v0",
+          "authority": "same-device-pyro-node-material-bond-strength-v0",
+          "presentationDebugMode": "off",
+          "mode": "structural-combustion",
+          "status": "active",
+          "dispatchCount": 416,
+          "presentationCount": 416,
+          "runtimeReadbackCount": 0,
+          "liveRuntimeReadbackCount": 0,
+          "terminalReadbackCount": 0,
+          "hostCausalFeedbackCount": 0,
+          "structureCount": 1,
+          "gridDimensions": [
+            48,
+            96,
+            48
+          ],
+          "spatialTransforms": [
+            {
+              "id": "sinter-forked-timber-trestle",
+              "authority": "saved-object-world-to-current-pyro-domain-v0",
+              "domainTranslation": [
+                0,
+                0,
+                0
+              ],
+              "nodeToPyro": [
+                0.5671306337423091,
+                0.20701884160717993,
+                0,
+                0,
+                -0.1488248448844326,
+                0.407707472134661,
+                0,
+                0,
+                0,
+                0,
+                0.2998690247535706,
+                0,
+                1.487081694767472,
+                0.11184802694866611,
+                0.36523276567459106,
+                1
+              ],
+              "displayTransform": [
+                0.7514981702779031,
+                0.2743182459643611,
+                0,
+                0,
+                -0.2743182459643611,
+                0.7514981702779031,
+                0,
+                0,
+                0,
+                0,
+                0.8,
+                0,
+                2.5,
+                -0.5,
+                0,
+                1
+              ],
+              "normalTransform": [
+                1.1742158910592237,
+                0.42862225931931425,
+                0,
+                -2.721228597988402,
+                -0.42862225931931425,
+                1.1742158910592237,
+                0,
+                1.6586635938278973,
+                0,
+                0,
+                1.25,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            }
+          ],
+          "surfaceCellCount": 1000,
+          "meshTriangleCount": 864,
+          "meshAssetIdentities": [
+            "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+          ],
+          "presentationMode": "indexed-mesh-skin-resident-structural-proxy-v0",
+          "emittingObjectId": 2328813346,
+          "sourceCapacity": 1331,
+          "deviceOwnership": "borrowed",
+          "lastTerminalReceipt": null
+        },
+        "source": {
+          "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+          "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+          "status": "bound",
+          "gridSize": 48,
+          "sourceSchema": "kaminos.combustible-object-source-descriptor.v0",
+          "sourceFrameId": "gpu-structural-combustion-assembly",
+          "sourceFrameHash": 1398035011,
+          "allocationGeneration": 1,
+          "topologyEpoch": 0,
+          "materialStep": 0,
+          "writeTick": 1,
+          "sourceCount": 1331,
+          "packedCount": 1331,
+          "rejectedCount": 0,
+          "overflowCount": 0,
+          "emittedVolatileMass": 0,
+          "sameDevice": true,
+          "transformIdentity": "affine-object-world-to-pyro-near-domain-v0",
+          "fieldTransfer": [
+            96,
+            128,
+            96,
+            96
+          ],
+          "dispatchCount": 416,
+          "lastScheduledIdentity": "1:0:gpu-dispatch-416:1398035011",
+          "lastReceipt": null,
+          "fallback": null,
+          "gpuAuthoredDynamic": true
+        },
+        "sceneStatus": "Scene loaded: 1 object",
+        "basin": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "objects": [
+          {
+            "id": "sinter-forked-timber-trestle",
+            "label": "Forked timber reliquary trestle",
+            "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+            "type": "glb",
+            "groupId": null,
+            "active": true,
+            "transform": {
+              "position": [
+                2.5,
+                -0.5,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0.35
+              ],
+              "scale": [
+                0.8,
+                0.8,
+                0.8
+              ]
+            },
+            "sceneTransform": null,
+            "combustionBinding": {
+              "schema": "kaminos.object-combustion-binding.v0",
+              "objectId": "sinter-forked-timber-trestle",
+              "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+              "structuralProfile": "timber-two-island.v0",
+              "burnRate": 0.003
+            },
+            "splat": null,
+            "image": null,
+            "renderRoute": null,
+            "renderCapabilities": null,
+            "renderHandoffSchema": null
+          }
+        ],
+        "camera": {
+          "position": [
+            4.5,
+            2.3999999999999995,
+            5.5
+          ],
+          "target": [
+            0.7,
+            0.3,
+            0
+          ],
+          "projectionMatrix": [
+            1.9630326671099267,
+            0,
+            0,
+            0,
+            0,
+            2.4142135623730954,
+            0,
+            0,
+            0,
+            0,
+            -1.002002002002002,
+            -1,
+            0,
+            0,
+            -0.20020020020020018,
+            0
+          ],
+          "matrixWorldInverse": [
+            0.822730338093269,
+            -0.17035581711980516,
+            0.5423040534187247,
+            0,
+            0,
+            0.9540352715644229,
+            0.2996943453103477,
+            0,
+            -0.5684318699553496,
+            -0.2465676300418233,
+            0.7849137615271014,
+            0,
+            -0.5759112366652875,
+            -0.1669615094854632,
+            -7.476660357528153,
+            1
+          ]
+        }
+      },
+      "image": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/spatial48-beauty-0930/removed-hot-object.png"
+    },
+    {
+      "pose": {
+        "name": "returned-contact",
+        "position": [
+          0,
+          -0.5,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          -0.35
+        ],
+        "scale": [
+          0.8,
+          0.8,
+          0.8
+        ],
+        "steps": 120
+      },
+      "effectivePose": {
+        "id": "sinter-forked-timber-trestle",
+        "label": "Forked timber reliquary trestle",
+        "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "type": "glb",
+        "groupId": null,
+        "active": true,
+        "transform": {
+          "position": [
+            0,
+            -0.5,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -0.35
+          ],
+          "scale": [
+            0.8,
+            0.8,
+            0.8
+          ]
+        },
+        "sceneTransform": null,
+        "combustionBinding": {
+          "schema": "kaminos.object-combustion-binding.v0",
+          "objectId": "sinter-forked-timber-trestle",
+          "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+          "structuralProfile": "timber-two-island.v0",
+          "burnRate": 0.003
+        },
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "state": {
+        "url": "http://127.0.0.1:18100/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=off#authoring=1&scene=sinter-forked-timber-combustion.kaminos.json",
+        "backend": "WebGPU:apple",
+        "error": null,
+        "grid": 48,
+        "gridDimensions": [
+          48,
+          96,
+          48
+        ],
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "assembly": {
+          "schema": "kaminos.structural-combustion.node-material.v0",
+          "authority": "same-device-pyro-node-material-bond-strength-v0",
+          "presentationDebugMode": "off",
+          "mode": "structural-combustion",
+          "status": "active",
+          "dispatchCount": 550,
+          "presentationCount": 550,
+          "runtimeReadbackCount": 0,
+          "liveRuntimeReadbackCount": 0,
+          "terminalReadbackCount": 0,
+          "hostCausalFeedbackCount": 0,
+          "structureCount": 1,
+          "gridDimensions": [
+            48,
+            96,
+            48
+          ],
+          "spatialTransforms": [
+            {
+              "id": "sinter-forked-timber-trestle",
+              "authority": "saved-object-world-to-current-pyro-domain-v0",
+              "domainTranslation": [
+                0,
+                0,
+                0
+              ],
+              "nodeToPyro": [
+                0.5671306337423091,
+                -0.20701884160717993,
+                0,
+                0,
+                0.1488248448844326,
+                0.407707472134661,
+                0,
+                0,
+                0,
+                0,
+                0.2998690247535706,
+                0,
+                0.20990904378236847,
+                0.31371216528310253,
+                0.36523276567459106,
+                1
+              ],
+              "displayTransform": [
+                0.7514981702779031,
+                -0.2743182459643611,
+                0,
+                0,
+                0.2743182459643611,
+                0.7514981702779031,
+                0,
+                0,
+                0,
+                0,
+                0.8,
+                0,
+                0,
+                -0.5,
+                0,
+                1
+              ],
+              "normalTransform": [
+                1.1742158910592237,
+                -0.42862225931931425,
+                0,
+                -0.21431112965965712,
+                0.42862225931931425,
+                1.1742158910592237,
+                0,
+                0.5871079455296119,
+                0,
+                0,
+                1.25,
+                0,
+                0,
+                0,
+                0,
+                1
+              ]
+            }
+          ],
+          "surfaceCellCount": 1000,
+          "meshTriangleCount": 864,
+          "meshAssetIdentities": [
+            "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+          ],
+          "presentationMode": "indexed-mesh-skin-resident-structural-proxy-v0",
+          "emittingObjectId": 2328813346,
+          "sourceCapacity": 1331,
+          "deviceOwnership": "borrowed",
+          "lastTerminalReceipt": null
+        },
+        "source": {
+          "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+          "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+          "status": "bound",
+          "gridSize": 48,
+          "sourceSchema": "kaminos.combustible-object-source-descriptor.v0",
+          "sourceFrameId": "gpu-structural-combustion-assembly",
+          "sourceFrameHash": 1398035011,
+          "allocationGeneration": 1,
+          "topologyEpoch": 0,
+          "materialStep": 0,
+          "writeTick": 1,
+          "sourceCount": 1331,
+          "packedCount": 1331,
+          "rejectedCount": 0,
+          "overflowCount": 0,
+          "emittedVolatileMass": 0,
+          "sameDevice": true,
+          "transformIdentity": "affine-object-world-to-pyro-near-domain-v0",
+          "fieldTransfer": [
+            96,
+            128,
+            96,
+            96
+          ],
+          "dispatchCount": 550,
+          "lastScheduledIdentity": "1:0:gpu-dispatch-550:1398035011",
+          "lastReceipt": null,
+          "fallback": null,
+          "gpuAuthoredDynamic": true
+        },
+        "sceneStatus": "Scene loaded: 1 object",
+        "basin": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "objects": [
+          {
+            "id": "sinter-forked-timber-trestle",
+            "label": "Forked timber reliquary trestle",
+            "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+            "type": "glb",
+            "groupId": null,
+            "active": true,
+            "transform": {
+              "position": [
+                0,
+                -0.5,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                -0.35
+              ],
+              "scale": [
+                0.8,
+                0.8,
+                0.8
+              ]
+            },
+            "sceneTransform": null,
+            "combustionBinding": {
+              "schema": "kaminos.object-combustion-binding.v0",
+              "objectId": "sinter-forked-timber-trestle",
+              "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+              "structuralProfile": "timber-two-island.v0",
+              "burnRate": 0.003
+            },
+            "splat": null,
+            "image": null,
+            "renderRoute": null,
+            "renderCapabilities": null,
+            "renderHandoffSchema": null
+          }
+        ],
+        "camera": {
+          "position": [
+            4.5,
+            2.3999999999999995,
+            5.5
+          ],
+          "target": [
+            0.7,
+            0.3,
+            0
+          ],
+          "projectionMatrix": [
+            1.9630326671099267,
+            0,
+            0,
+            0,
+            0,
+            2.4142135623730954,
+            0,
+            0,
+            0,
+            0,
+            -1.002002002002002,
+            -1,
+            0,
+            0,
+            -0.20020020020020018,
+            0
+          ],
+          "matrixWorldInverse": [
+            0.822730338093269,
+            -0.17035581711980516,
+            0.5423040534187247,
+            0,
+            0,
+            0.9540352715644229,
+            0.2996943453103477,
+            0,
+            -0.5684318699553496,
+            -0.2465676300418233,
+            0.7849137615271014,
+            0,
+            -0.5759112366652875,
+            -0.1669615094854632,
+            -7.476660357528153,
+            1
+          ]
+        }
+      },
+      "image": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/spatial48-beauty-0930/returned-contact.png"
+    }
+  ],
+  "errors": [],
+  "finishedAt": "2026-09-30T15:37:09.247Z"
+}

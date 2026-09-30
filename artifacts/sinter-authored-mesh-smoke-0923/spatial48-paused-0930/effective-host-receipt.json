@@ -1,0 +1,26 @@
+{
+  "server": {
+    "schema": "kaminos.runtime-config.v0",
+    "hybridSplatOverlayModuleUrl": null,
+    "sam3": null,
+    "volumeBasinSessionStore": "/Users/noahlyons/.local/share/kaminos/volume-basin-drive-sessions",
+    "volumeCockpitLayoutStore": "/Users/noahlyons/.local/share/kaminos/volume-cockpit-layouts",
+    "source": {
+      "repoRoot": "/private/tmp/kaminos-sinter-local48-0930",
+      "serverPort": 18100,
+      "branch": "cc/sinter-local48-0930",
+      "commit": "e9f43e23d758a1d8a75be4f2b4e7da8efe33bdc4",
+      "dirty": true
+    }
+  },
+  "browser": {
+    "Browser": "Chrome/154.0.8037.92",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+    "V8-Version": "15.4.80.19",
+    "WebKit-Version": "537.36 (@334b65d254ccc35df4fca82706d1753227b01039)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:43992/devtools/browser/62d4c58a-c34b-4ce5-9141-ab87d121bdfd"
+  },
+  "debugPortOwner": "1631",
+  "browserCommand": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --remote-debugging-port=43992 --user-data-dir=/tmp/sinter-spatial48-qRbBVn --no-first-run --disable-background-timer-throttling --disable-renderer-backgrounding --window-size=1600,1100 about:blank"
+}
