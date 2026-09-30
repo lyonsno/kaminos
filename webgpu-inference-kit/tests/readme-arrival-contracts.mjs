@@ -58,10 +58,15 @@ const assertSamPublicClaims = ({ rootReadme: root, packageReadme, samDemoGuide: 
   const rootSection = section(root, '## WebGPU Inference Kit');
   const packageSection = section(packageReadme, '## One Runtime, Different Models');
   const surfaces = {
-    'root README': passage(rootSection, '| [SAM 3.1]', '\n\nThe package includes'),
-    'package README': passage(packageSection, '| [SAM 3.1]', '\n\n```text'),
+    'root README': passage(rootSection, '| [SAM 3]', '\n\nThe package includes'),
+    'package README': passage(packageSection, '| [SAM 3]', '\n\n```text'),
     'SAM demo guide': guide,
   };
+
+  for (const [name, copy] of Object.entries(surfaces)) {
+    assert.match(copy, /SAM 3 image detector/i, `${name} must identify the image detector rather than imply a SAM 3.1 video result`);
+  }
+  assert.match(guide, /SAM 3\.1 tracking primitives[\s\S]*do not exercise a video/i, 'image evidence must remain distinct from tracking primitives');
 
   assertSurfaceSemantics('root README', surfaces['root README'], [
     ['an image-plus-text mask result', /masks from an image and text prompt/i],

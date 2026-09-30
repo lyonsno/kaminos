@@ -96,11 +96,12 @@ export async function runAttentionCases(baseline, candidate, record) {
       try {
         const inputs = [fixture.q, fixture.k, fixture.v].map(values => upload(values, GPUBufferUsage.STORAGE));
         if (fixture.extra) inputs.push(upload(fixture.extra, GPUBufferUsage.STORAGE));
-        const output = device.createBuffer({ size: fixture.q.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-        const readback = device.createBuffer({ size: fixture.q.byteLength, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-        buffers.push(output, readback);
         const uniform = upload(fixture.dims, GPUBufferUsage.UNIFORM);
         const execute = async code => {
+          const output = device.createBuffer({ size: fixture.q.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+          const readback = device.createBuffer({ size: fixture.q.byteLength, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+          buffers.push(output, readback);
+          const unwritten = new Float32Array(fixture.q.length).fill(NaN);
           device.pushErrorScope('validation');
           const module = device.createShaderModule({ code });
           const info = await module.getCompilationInfo();
@@ -112,6 +113,8 @@ export async function runAttentionCases(baseline, candidate, record) {
           // One warm-up and three separately completed samples; no batching
           // across SAM-sized dispatches that would hide a foreground stall.
           for (let sample = 0; sample < 4; sample++) {
+            // No preceding dispatch or implementation may supply missing writes.
+            device.queue.writeBuffer(output, 0, unwritten);
             const encoder = device.createCommandEncoder();
             const pass = encoder.beginComputePass();
             pass.setPipeline(pipeline); pass.setBindGroup(0, bindGroup);

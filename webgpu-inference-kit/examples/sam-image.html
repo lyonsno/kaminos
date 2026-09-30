@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAM Image | WebGPU Inference Kit</title>
+  <style>
+    :root { color-scheme: light; font: 14px/1.5 system-ui, sans-serif; color: #242929; background: #f5f7f7; }
+    * { box-sizing: border-box; letter-spacing: 0; }
+    body { margin: 0; }
+    header { padding: 18px 24px; background: #fff; border-bottom: 1px solid #d4dcdc; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+    h1 { font-size: 22px; line-height: 1.2; margin: 0; }
+    header span { color: #606c6c; }
+    main { max-width: 1400px; margin: auto; padding: 24px; }
+    .controls { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(200px, 1fr); gap: 14px 24px; padding-bottom: 20px; }
+    label { display: grid; gap: 6px; font-weight: 600; min-width: 0; }
+    input, select, button { font: inherit; max-width: 100%; min-width: 0; }
+    input, select { padding: 9px 10px; border: 1px solid #a9b6b6; border-radius: 4px; background: #fff; color: inherit; width: 100%; }
+    input[type=file] { padding: 6px; }
+    input[type=file]::file-selector-button { padding: 5px 10px; font: inherit; margin-right: 10px; }
+    button { border: 1px solid #a9b6b6; border-radius: 4px; padding: 9px 14px; background: #fff; color: #263232; cursor: pointer; }
+    #run { background: #176849; color: #fff; border-color: #176849; }
+    button:disabled, input:disabled, select:disabled { opacity: 0.5; cursor: default; }
+    :focus-visible { outline: 2px solid #146d9e; outline-offset: 3px; }
+    .commands, .views { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .commands { grid-column: 1 / -1; }
+    .status { padding: 12px 0 20px; border-top: 1px solid #d4dcdc; overflow-wrap: anywhere; }
+    #status { margin: 0 0 4px; font-weight: 600; }
+    #status[data-error=true] { color: #a22932; }
+    #submissions { color: #657272; font-size: 12px; }
+    .images { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+    figure { margin: 0; min-width: 0; }
+    figcaption { padding-bottom: 10px; font-weight: 600; overflow-wrap: anywhere; }
+    .viewport { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; overflow: hidden; background: #e2e8e8; border: 1px solid #c2cece; }
+    #source { width: 100%; height: 100%; display: block; }
+    #result { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+    .selection { display: flex; justify-content: space-between; align-items: start; gap: 14px; flex-wrap: wrap; padding-top: 20px; }
+    .selection > label { width: 280px; }
+    .views { padding: 6px 0; }
+    .views label { display: flex; gap: 5px; align-items: center; font-weight: 400; }
+    .views input { width: auto; }
+    .exports { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+    @media (max-width: 700px) { main { padding: 16px; } header { padding: 16px; } .controls, .images { grid-template-columns: minmax(0, 1fr); } .selection > label { width: 100%; } }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "@kaminos/webgpu-inference-kit/core": "../src/core.js",
+      "@kaminos/webgpu-inference-kit/sam": "../src/sam.js"
+    } }
+  </script>
+</head>
+<body>
+  <header><h1>SAM Image</h1><span>WebGPU Inference Kit</span></header>
+  <main>
+    <section class="controls" aria-label="Image and prompt">
+      <label>Image<input id="image" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <label>Model manifest<input id="manifest" type="text" spellcheck="false" value="/sam3-packet/tensor-manifest.json"></label>
+      <label>Text prompt<input id="prompt" type="text" placeholder="wheels" autocomplete="off"></label>
+      <div class="commands"><button id="run" type="button" disabled>Run SAM</button><button id="unload" type="button" disabled>Unload Model</button></div>
+    </section>
+    <div class="status"><p id="status" role="status">idle: No image</p><span id="submissions">0 source queue submissions; coexistence unverified</span></div>
+    <section class="images" aria-label="Source and masks">
+      <figure><figcaption id="source-name">Source image</figcaption><div class="viewport"><canvas id="source" aria-label="Moving source image"></canvas></div></figure>
+      <figure><figcaption id="result-name">Selection</figcaption><div class="viewport"><canvas id="result" width="1" height="1" aria-label="Selected mask or cutout"></canvas></div></figure>
+    </section>
+    <section class="selection" aria-label="Instance selection">
+      <label>Instances<select id="instances" disabled></select></label>
+      <div class="views" role="group" aria-label="Result view">
+        <label><input type="radio" name="view" value="overlay" checked>Overlay</label>
+        <label><input type="radio" name="view" value="mask">Mask</label>
+        <label><input type="radio" name="view" value="cutout">Cutout</label>
+      </div>
+    </section>
+    <div class="exports">
+      <button id="save-mask" type="button" disabled>Save Mask PNG</button>
+      <button id="save-cutout" type="button" disabled>Save Cutout PNG</button>
+      <button id="save-provenance" type="button" disabled>Save Provenance JSON</button>
+    </div>
+  </main>
+  <script type="module">
+    import { mountSamImagePage } from './sam-image.mjs';
+    mountSamImagePage(document).catch(error => {
+      document.getElementById('status').textContent = error.message;
+      document.getElementById('status').dataset.error = 'true';
+    });
+  </script>
+</body>
+</html>
