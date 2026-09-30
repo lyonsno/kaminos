@@ -1,0 +1,294 @@
+{
+  "schema": "kaminos.saved-mesh-combustion-diagnostic-capture.v1",
+  "status": "passed",
+  "phase": "complete",
+  "repoRoot": "/private/tmp/kaminos-sinter-local48-0930",
+  "gitHead": "db84a597d7456b9c989ada8652ee3706d9e8821d",
+  "gitStatus": "A  artifacts/kaminos-saved-mesh-combustion-smoke-2026-09-23/saved-scene-final.json\nA  artifacts/kaminos-saved-mesh-combustion-smoke-2026-09-23/saved-scene-final.png\nA  artifacts/kaminos-saved-mesh-combustion-smoke-2026-09-23/saved-scene-soak-120.json\nA  artifacts/kaminos-saved-mesh-combustion-smoke-2026-09-23/saved-scene-soak-120.png\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r2.mjs\nAM artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r3.mjs\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-cdp.mjs\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r2.public.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r3.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r4.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-png-inspector.mjs\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r2/report.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-run-r4.sh\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-start-receipt-r2.public.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-start-receipt-r3.public.json\nA  artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb\nA  artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/structuralMeshAssetDescriptor.json\nA  combustible-object-fire-gpu.mjs\nM  index.html\nA  saved-mesh-combustion.mjs\nM  scene-persistence-core.js\nA  scenes/sinter-forked-timber-combustion.kaminos.json\nAM structural-combustion-gpu.mjs\nA  structural-material-3d-core.js\nA  structural-material-3d-webgpu-core.js\nA  structural-material-3d-webgpu-hot-sidecar.js\nA  structural-material-3d-webgpu-retained.js\nAM tests/gpu-structural-combustion-contracts.mjs\nA  tests/saved-mesh-combustion-capture-contracts.mjs\nA  tests/saved-mesh-combustion-contracts.mjs\nM  tests/scene-contracts.mjs\nM  tests/scene-roundtrip.mjs\nA  tests/structural-combustion-spatial-contracts.mjs\nA  tests/volume-tiered-pressure-layout-contracts.mjs\nM  volume-core.js\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930-r2/\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/",
+  "origin": "http://127.0.0.1:18097",
+  "scenePath": "/private/tmp/kaminos-sinter-local48-0930/scenes/sinter-forked-timber-combustion.kaminos.json",
+  "sceneSha256": "45e31211bfd35d6f6db5e67eae1b135f355c4c0c36352923130ba59d4bb91fbc",
+  "injectedScenePayloadSha256": "6f8663bf6126a5b452b26ddda460b11c8eb3552981808b83ffcc97476a4f5af9",
+  "expectedObjectId": "sinter-forked-timber-trestle",
+  "expectedAssetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+  "resolution": 48,
+  "defaultVolumeSmokeBasin": null,
+  "requestedModes": [
+    "off",
+    "exposure",
+    "material"
+  ],
+  "statusScope": "capture-and-runtime-only",
+  "visualStatus": "inspection-required",
+  "captures": [
+    {
+      "mode": "off",
+      "requestedRoute": "http://127.0.0.1:18097/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=off",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "simGrid": 48,
+      "defaultVolumeSmokeBasin": {
+        "presetId": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "label": "cheap-blast-furnace",
+        "source": "./artifacts/default-basin/cheap-blast-furnace.json",
+        "applied": 217,
+        "missing": []
+      },
+      "object": {
+        "id": "sinter-forked-timber-trestle",
+        "type": "glb",
+        "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+      },
+      "assembly": {
+        "schema": "kaminos.structural-combustion.node-material.v0",
+        "status": "active",
+        "presentationDebugMode": "off",
+        "dispatchCount": 121,
+        "presentationCount": 121,
+        "runtimeReadbackCount": 0,
+        "structureCount": 1,
+        "meshTriangleCount": 864,
+        "meshAssetIdentities": [
+          "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+        ],
+        "emittingObjectId": 2328813346
+      },
+      "source": {
+        "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+        "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+        "status": "bound",
+        "gridSize": 48,
+        "sourceFrameId": "gpu-structural-combustion-assembly",
+        "sourceCount": 1331,
+        "sameDevice": true,
+        "dispatchCount": 121
+      },
+      "simulation": {
+        "frameCount": 167,
+        "simStepCount": 121
+      },
+      "sceneStatus": "Scene loaded: 1 object",
+      "assetResponse": {
+        "url": "http://127.0.0.1:18097/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "status": 200
+      },
+      "dispatchCount": 121,
+      "screenshot": {
+        "path": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-0930-r2/off.png",
+        "sha256": "7e629c39d9985685c307df6054e6fcc242a40882fa6b9cb8025e905c3f9639c5",
+        "bytes": 1404154,
+        "width": 3200,
+        "height": 1984
+      },
+      "canvasScreenshot": {
+        "path": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-0930-r2/off-canvas.png",
+        "sha256": "fa2319994a85f30713f78b4fad9264ad6b4b0a47df16b0db2a68d4308944ed05",
+        "bytes": 1077868,
+        "width": 1664,
+        "height": 1984,
+        "activePixels": 1998423,
+        "distinctSampledColors": 257,
+        "referenceColor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "canvasRect": {
+        "x": 380,
+        "y": 0,
+        "width": 832,
+        "height": 992,
+        "devicePixelRatio": 2
+      },
+      "pageErrors": []
+    },
+    {
+      "mode": "exposure",
+      "requestedRoute": "http://127.0.0.1:18097/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=exposure",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "simGrid": 48,
+      "defaultVolumeSmokeBasin": {
+        "presetId": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "label": "cheap-blast-furnace",
+        "source": "./artifacts/default-basin/cheap-blast-furnace.json",
+        "applied": 217,
+        "missing": []
+      },
+      "object": {
+        "id": "sinter-forked-timber-trestle",
+        "type": "glb",
+        "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+      },
+      "assembly": {
+        "schema": "kaminos.structural-combustion.node-material.v0",
+        "status": "active",
+        "presentationDebugMode": "exposure",
+        "dispatchCount": 120,
+        "presentationCount": 120,
+        "runtimeReadbackCount": 0,
+        "structureCount": 1,
+        "meshTriangleCount": 864,
+        "meshAssetIdentities": [
+          "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+        ],
+        "emittingObjectId": 2328813346
+      },
+      "source": {
+        "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+        "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+        "status": "bound",
+        "gridSize": 48,
+        "sourceFrameId": "gpu-structural-combustion-assembly",
+        "sourceCount": 1331,
+        "sameDevice": true,
+        "dispatchCount": 120
+      },
+      "simulation": {
+        "frameCount": 154,
+        "simStepCount": 120
+      },
+      "sceneStatus": "Scene loaded: 1 object",
+      "assetResponse": {
+        "url": "http://127.0.0.1:18097/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "status": 200
+      },
+      "dispatchCount": 120,
+      "screenshot": {
+        "path": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-0930-r2/exposure.png",
+        "sha256": "3371166d56f4820ed592f8e842474aa32a85d40378662c2ae148eb37caf5ceeb",
+        "bytes": 1291305,
+        "width": 3200,
+        "height": 1984
+      },
+      "canvasScreenshot": {
+        "path": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-0930-r2/exposure-canvas.png",
+        "sha256": "d9cbfc19cd9847678e16c717525e85a33e421b28030be5262fb9f46a347fbeb0",
+        "bytes": 960291,
+        "width": 1664,
+        "height": 1984,
+        "activePixels": 1988833,
+        "distinctSampledColors": 257,
+        "referenceColor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "canvasRect": {
+        "x": 380,
+        "y": 0,
+        "width": 832,
+        "height": 992,
+        "devicePixelRatio": 2
+      },
+      "pageErrors": []
+    },
+    {
+      "mode": "material",
+      "requestedRoute": "http://127.0.0.1:18097/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=material",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "simGrid": 48,
+      "defaultVolumeSmokeBasin": {
+        "presetId": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "label": "cheap-blast-furnace",
+        "source": "./artifacts/default-basin/cheap-blast-furnace.json",
+        "applied": 217,
+        "missing": []
+      },
+      "object": {
+        "id": "sinter-forked-timber-trestle",
+        "type": "glb",
+        "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+      },
+      "assembly": {
+        "schema": "kaminos.structural-combustion.node-material.v0",
+        "status": "active",
+        "presentationDebugMode": "material",
+        "dispatchCount": 126,
+        "presentationCount": 126,
+        "runtimeReadbackCount": 0,
+        "structureCount": 1,
+        "meshTriangleCount": 864,
+        "meshAssetIdentities": [
+          "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+        ],
+        "emittingObjectId": 2328813346
+      },
+      "source": {
+        "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+        "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+        "status": "bound",
+        "gridSize": 48,
+        "sourceFrameId": "gpu-structural-combustion-assembly",
+        "sourceCount": 1331,
+        "sameDevice": true,
+        "dispatchCount": 126
+      },
+      "simulation": {
+        "frameCount": 161,
+        "simStepCount": 126
+      },
+      "sceneStatus": "Scene loaded: 1 object",
+      "assetResponse": {
+        "url": "http://127.0.0.1:18097/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "status": 200
+      },
+      "dispatchCount": 126,
+      "screenshot": {
+        "path": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-0930-r2/material.png",
+        "sha256": "f20b33677fc897ec04459bef14c8002914df12bbad1c82c59c64cf437960b41c",
+        "bytes": 1330106,
+        "width": 3200,
+        "height": 1984
+      },
+      "canvasScreenshot": {
+        "path": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-0930-r2/material-canvas.png",
+        "sha256": "b90b2ebc3810816ac8ca5522301f16b455abf5f5f9329f5745d096f7bf8e7e19",
+        "bytes": 978143,
+        "width": 1664,
+        "height": 1984,
+        "activePixels": 2005643,
+        "distinctSampledColors": 257,
+        "referenceColor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "canvasRect": {
+        "x": 380,
+        "y": 0,
+        "width": 832,
+        "height": 992,
+        "devicePixelRatio": 2
+      },
+      "pageErrors": []
+    }
+  ],
+  "lastTrustedEvidence": {
+    "mode": "material",
+    "effectivePageRoute": "http://127.0.0.1:18097/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=material",
+    "selectedSceneFile": "sinter-forked-timber-combustion.kaminos.json",
+    "sourceSceneFileSha256": "45e31211bfd35d6f6db5e67eae1b135f355c4c0c36352923130ba59d4bb91fbc",
+    "injectedScenePayloadSha256": "6f8663bf6126a5b452b26ddda460b11c8eb3552981808b83ffcc97476a4f5af9",
+    "expectedObjectId": "sinter-forked-timber-trestle",
+    "expectedAssetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+  },
+  "errors": [],
+  "assetPath": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+  "assetSha256": "1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+  "browser": {
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "profile": "/tmp/kaminos-sinter-diagnostic-profile-Ds0HHi",
+    "debugPort": 44273,
+    "pid": 38065,
+    "launchStatus": "spawned"
+  },
+  "finishedAt": "2026-09-30T12:27:16.372Z"
+}

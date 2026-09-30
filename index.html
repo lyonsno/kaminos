@@ -26962,7 +26962,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
   if (hasVolumePrimitiveScene || activeSceneComposition || hasSavedMeshCombustion) {
-    setActiveTab('volume');
+    setActiveTab(activeSceneComposition ? 'assets' : 'volume');
     await volumePrototype?.setActive?.(true);
   } else {
     await volumePrototype?.setActive?.(false);

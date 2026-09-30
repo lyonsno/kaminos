@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { buildSavedMeshStructuralSurface, validateSavedMeshCombustionAssetIdentity } from '../saved-mesh-combustion.mjs';
 import { createLayeredStructuralMaterial } from '../structural-material-3d-core.js';
 import { createStructuralMeshSkinBinding } from '../structural-combustion-gpu.mjs';
@@ -16,6 +17,21 @@ assert.match(
 );
 assert.match(sceneHost, /hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion/,
   'saved mesh scenes activate the shared volume consumer without regressing composed scenes');
+const activationBranch = sceneHost.match(/if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion\) \{[\s\S]*?\n  \}/)[0];
+for (const activeSceneComposition of [false, true]) {
+  const selectedTabs = [];
+  const activations = [];
+  await runInNewContext(`(async () => { ${activationBranch} })()`, {
+    hasVolumePrimitiveScene: false,
+    activeSceneComposition,
+    hasSavedMeshCombustion: true,
+    setActiveTab: tab => selectedTabs.push(tab),
+    volumePrototype: { setActive: active => activations.push(active) },
+  });
+  assert.deepEqual(selectedTabs, [activeSceneComposition ? 'assets' : 'volume'],
+    'authored compositions retain their object-editing tab while saved meshes activate volume');
+  assert.deepEqual(activations, [true]);
+}
 assert.ok(!/\bencodeHistoryCopy\s*\(/.test(volumeCore) || /\b(?:function|const|let|var)\s+encodeHistoryCopy\b/.test(volumeCore),
   'the rebased render loop must not call a retired, undefined history-copy helper');
 

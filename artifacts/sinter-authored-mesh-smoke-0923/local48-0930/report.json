@@ -1,0 +1,313 @@
+{
+  "schema": "kaminos.saved-mesh-combustion-diagnostic-capture.v1",
+  "status": "failed",
+  "phase": "simulate-off",
+  "repoRoot": "/private/tmp/kaminos-sinter-local48-0930",
+  "gitHead": "db84a597d7456b9c989ada8652ee3706d9e8821d",
+  "gitStatus": "A  artifacts/kaminos-saved-mesh-combustion-smoke-2026-09-23/saved-scene-final.json\nA  artifacts/kaminos-saved-mesh-combustion-smoke-2026-09-23/saved-scene-final.png\nA  artifacts/kaminos-saved-mesh-combustion-smoke-2026-09-23/saved-scene-soak-120.json\nA  artifacts/kaminos-saved-mesh-combustion-smoke-2026-09-23/saved-scene-soak-120.png\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r2.mjs\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r3.mjs\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-cdp.mjs\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r2.public.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r3.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r4.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-png-inspector.mjs\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r2/report.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-run-r4.sh\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-start-receipt-r2.public.json\nA  artifacts/sinter-authored-mesh-smoke-0923/diagnostic-start-receipt-r3.public.json\nA  artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb\nA  artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/structuralMeshAssetDescriptor.json\nA  combustible-object-fire-gpu.mjs\nM  index.html\nA  saved-mesh-combustion.mjs\nM  scene-persistence-core.js\nA  scenes/sinter-forked-timber-combustion.kaminos.json\nA  structural-combustion-gpu.mjs\nA  structural-material-3d-core.js\nA  structural-material-3d-webgpu-core.js\nA  structural-material-3d-webgpu-hot-sidecar.js\nA  structural-material-3d-webgpu-retained.js\nA  tests/gpu-structural-combustion-contracts.mjs\nA  tests/saved-mesh-combustion-capture-contracts.mjs\nA  tests/saved-mesh-combustion-contracts.mjs\nM  tests/scene-contracts.mjs\nM  tests/scene-roundtrip.mjs\nA  tests/structural-combustion-spatial-contracts.mjs\nA  tests/volume-tiered-pressure-layout-contracts.mjs\nM  volume-core.js\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/",
+  "origin": "http://127.0.0.1:18096",
+  "scenePath": "/private/tmp/kaminos-sinter-local48-0930/scenes/sinter-forked-timber-combustion.kaminos.json",
+  "sceneSha256": "45e31211bfd35d6f6db5e67eae1b135f355c4c0c36352923130ba59d4bb91fbc",
+  "injectedScenePayloadSha256": "6f8663bf6126a5b452b26ddda460b11c8eb3552981808b83ffcc97476a4f5af9",
+  "expectedObjectId": "sinter-forked-timber-trestle",
+  "expectedAssetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+  "resolution": 48,
+  "defaultVolumeSmokeBasin": null,
+  "requestedModes": [
+    "off",
+    "exposure",
+    "material"
+  ],
+  "statusScope": "capture-and-runtime-only",
+  "visualStatus": "inspection-required",
+  "captures": [
+    {
+      "mode": "off",
+      "requestedRoute": "http://127.0.0.1:18096/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=off",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "simGrid": 48,
+      "defaultVolumeSmokeBasin": {
+        "presetId": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "label": "cheap-blast-furnace",
+        "source": "./artifacts/default-basin/cheap-blast-furnace.json",
+        "applied": 217,
+        "missing": []
+      },
+      "object": {
+        "id": "sinter-forked-timber-trestle",
+        "type": "glb",
+        "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+      },
+      "assembly": {
+        "schema": "kaminos.structural-combustion.node-material.v0",
+        "status": "active",
+        "presentationDebugMode": "off",
+        "dispatchCount": 126,
+        "presentationCount": 126,
+        "runtimeReadbackCount": 0,
+        "structureCount": 1,
+        "meshTriangleCount": 864,
+        "meshAssetIdentities": [
+          "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+        ],
+        "emittingObjectId": 2328813346
+      },
+      "source": {
+        "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+        "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+        "status": "bound",
+        "gridSize": 48,
+        "sourceFrameId": "gpu-structural-combustion-assembly",
+        "sourceCount": 1331,
+        "sameDevice": true,
+        "dispatchCount": 126
+      },
+      "simulation": {
+        "frameCount": 162,
+        "simStepCount": 126
+      },
+      "sceneStatus": "Scene loaded: 1 object",
+      "assetResponse": {
+        "url": "http://127.0.0.1:18096/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "status": 200
+      },
+      "dispatchCount": 126,
+      "screenshot": {
+        "path": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-0930/off.png",
+        "sha256": "5eacce0e12b2171df2d3174c43aa850172379ae0d24c39db9ed31deca5277a32",
+        "bytes": 1415059,
+        "width": 3200,
+        "height": 1984
+      },
+      "canvasScreenshot": {
+        "path": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-0930/off-canvas.png",
+        "sha256": "bbe6b8d294a2b079fe123059021de7fe241d2a0f12b1d568f7cad1a45bce6e34",
+        "bytes": 1072801,
+        "width": 1664,
+        "height": 1984,
+        "activePixels": 2005643,
+        "distinctSampledColors": 257,
+        "referenceColor": [
+          0,
+          0,
+          0
+        ]
+      },
+      "canvasRect": {
+        "x": 380,
+        "y": 0,
+        "width": 832,
+        "height": 992,
+        "devicePixelRatio": 2
+      },
+      "pageErrors": [
+        "network net::ERR_ABORTED: 03AE25036103BFC097D09DFBD9C31BB5"
+      ]
+    }
+  ],
+  "lastTrustedEvidence": {
+    "mode": "off",
+    "effectivePageRoute": "http://127.0.0.1:18096/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=off",
+    "selectedSceneFile": "sinter-forked-timber-combustion.kaminos.json",
+    "sourceSceneFileSha256": "45e31211bfd35d6f6db5e67eae1b135f355c4c0c36352923130ba59d4bb91fbc",
+    "injectedScenePayloadSha256": "6f8663bf6126a5b452b26ddda460b11c8eb3552981808b83ffcc97476a4f5af9",
+    "expectedObjectId": "sinter-forked-timber-trestle",
+    "expectedAssetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+  },
+  "errors": [
+    "AssertionError [ERR_ASSERTION]: browser reported an exception or console error\n+ actual - expected\n\n+ [\n+   'network net::ERR_ABORTED: 03AE25036103BFC097D09DFBD9C31BB5'\n+ ]\n- []\n\n    at main (file:///private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r3.mjs:361:14)"
+  ],
+  "assetPath": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+  "assetSha256": "1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+  "browser": {
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "profile": "/tmp/kaminos-sinter-diagnostic-profile-k4URdY",
+    "debugPort": 49766,
+    "pid": 1799,
+    "launchStatus": "spawned"
+  },
+  "failureContext": {
+    "phase": "simulate-off",
+    "lastTrustedEvidence": {
+      "mode": "off",
+      "effectivePageRoute": "http://127.0.0.1:18096/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=off",
+      "selectedSceneFile": "sinter-forked-timber-combustion.kaminos.json",
+      "sourceSceneFileSha256": "45e31211bfd35d6f6db5e67eae1b135f355c4c0c36352923130ba59d4bb91fbc",
+      "injectedScenePayloadSha256": "6f8663bf6126a5b452b26ddda460b11c8eb3552981808b83ffcc97476a4f5af9",
+      "expectedObjectId": "sinter-forked-timber-trestle",
+      "expectedAssetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+    },
+    "lastRuntimeState": {
+      "prototypeAvailable": true,
+      "backend": "WebGPU:apple",
+      "active": true,
+      "error": null,
+      "routeIdentity": "native-3d-compute-fluid-raymarch-v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "defaultVolumeSmokeBasin": {
+        "presetId": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b",
+        "label": "cheap-blast-furnace",
+        "source": "./artifacts/default-basin/cheap-blast-furnace.json",
+        "applied": 217,
+        "missing": []
+      },
+      "volumeScene": "tall_plume",
+      "simGrid": 48,
+      "frameCount": 162,
+      "simStepCount": 126,
+      "assembly": {
+        "schema": "kaminos.structural-combustion.node-material.v0",
+        "status": "active",
+        "presentationDebugMode": "off",
+        "dispatchCount": 126,
+        "presentationCount": 126,
+        "runtimeReadbackCount": 0,
+        "structureCount": 1,
+        "meshTriangleCount": 864,
+        "meshAssetIdentities": [
+          "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+        ],
+        "emittingObjectId": 2328813346
+      },
+      "source": {
+        "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+        "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+        "status": "bound",
+        "gridSize": 48,
+        "sourceFrameId": "gpu-structural-combustion-assembly",
+        "sourceCount": 1331,
+        "sameDevice": true,
+        "dispatchCount": 126
+      }
+    },
+    "sceneStatus": "Scene loaded: 1 object",
+    "pageErrors": [
+      "network net::ERR_ABORTED: 03AE25036103BFC097D09DFBD9C31BB5"
+    ],
+    "recentAssetResponses": [
+      {
+        "url": "http://127.0.0.1:18096/volume-stage-b-optical-adjudication.mjs",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/volume-layer-coefficient-live-union-overlay.mjs",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/volume-persistent-sparse-cohort-gpu-consumer.mjs",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/combustible-object-fire-gpu.mjs",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/volume-retired-control-migration.mjs",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/structural-material-3d-webgpu-retained.js",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/structural-material-3d-webgpu-core.js",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/cie-1931-observer.mjs",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/models/selective-head-live/exact-basin-160-to-128-v0/model.generated.js",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/lib/three.core.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/utils/BufferGeometryUtils.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/loaders/EXRLoader.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/controls/OrbitControls.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/exporters/GLTFExporter.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/loaders/GLTFLoader.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/loaders/RGBELoader.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/loaders/MTLLoader.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/loaders/OBJLoader.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/libs/fflate.module.js",
+        "status": 200
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/controls/TransformControls.js",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/api/pipeline-manifest",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/volume-settings-preset-schema-v2.json",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/api/volume-cockpit-layouts",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/api/volume-cockpit-layout?id=source-default",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/api/runtime-config",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/api/volume-settings-presets",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/artifacts/default-basin/cheap-blast-furnace.json",
+        "status": 200
+      },
+      {
+        "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:18096/artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+        "status": 200
+      }
+    ]
+  },
+  "finishedAt": "2026-09-30T12:23:20.050Z"
+}
