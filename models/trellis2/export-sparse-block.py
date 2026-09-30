@@ -1,0 +1,165 @@
+"""Capture one pinned sparse block, reusing saved prefix/noise and conditioning.
+
+Offline reference only: a single ModulatedBlock, never full model generation.
+Uses explicitly named MLX GPU fast SDPA, default two-pass LN, mlx-sum QK norm,
+real RoPE and the source's authenticated BF16 GELU table.
+"""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import struct
+import subprocess
+import sys
+import time
+
+import numpy as np
+
+
+def digest(path):
+    value = hashlib.sha256()
+    with path.open('rb') as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b''):
+            value.update(chunk)
+    return value.hexdigest()
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--source-root', type=Path, required=True)
+    p.add_argument('--prefix', type=Path, required=True)
+    p.add_argument('--conditioning', type=Path, required=True)
+    p.add_argument('--out', type=Path, required=True)
+    args = p.parse_args()
+    args.out.mkdir(parents=True, exist_ok=True)
+    report = {'schema': 'trellis2.sparse-block-reference.v0', 'status': 'failed', 'phase': 'source',
+              'tensors': {}, 'fullModelExecutions': 0, 'blockExecutions': 0,
+              'config': {'resolution': 16, 'channels': 1536, 'heads': 12, 'contextChannels': 1024,
+                         'contextRows': 1029, 'hidden': 8192},
+              'referenceRoute': 'pinned-MLX-GPU-single-block/fast-SDPA/two-pass-LN/mlx-sum-QK/real-RoPE/source-BF16-GELU'}
+    started = time.perf_counter()
+    try:
+        root = args.source_root.resolve()
+        git = lambda *a: subprocess.check_output(['git', '-C', str(root), *a], text=True).strip()
+        report['source'] = {'root': str(root), 'commit': git('rev-parse', 'HEAD'), 'dirty': git('status', '--porcelain')}
+        if report['source']['dirty']:
+            raise ValueError('reference source must be clean')
+        report['prefix'] = {'path': str(args.prefix.resolve()), 'sha256': digest(args.prefix)}
+        prefix = json.loads(args.prefix.read_text())
+        if prefix['status'] != 'succeeded' or prefix['source']['commit'] != report['source']['commit']:
+            raise ValueError('pinned prefix source identity mismatch')
+        checkpoint = Path(prefix['checkpoint']['path'])
+        report['checkpoint'] = {'path': str(checkpoint), 'sha256': digest(checkpoint)}
+        if report['checkpoint']['sha256'] != prefix['checkpoint']['sha256']:
+            raise ValueError('checkpoint changed since prefix reference')
+        report['conditioning'] = {'path': str(args.conditioning.resolve()), 'sha256': digest(args.conditioning)}
+        for file in ('trellmlx/models/sparse_structure_flow.py', 'trellmlx/modules/attention.py',
+                     'trellmlx/modules/norm.py', 'trellmlx/modules/rope.py', 'trellmlx/sparse_flow_layernorm.py'):
+            report['source'][file] = digest(root / file)
+        os.environ['TRELLIS2MLX_ATTENTION_BACKEND'] = 'fast'
+        os.environ['TRELLIS2MLX_QK_NORM_BACKEND'] = 'mlx-sum'
+        sys.path.insert(0, str(root))
+        import mlx.core as mx
+        from trellmlx.models.sparse_structure_flow import ModulatedBlock
+        from trellmlx.sparse_flow_rope import build_sparse_flow_rope_phases
+        from trellmlx.modules.attention import qk_norm_backend_identity
+        from trellmlx.sparse_flow_layernorm import sparse_flow_layernorm_backend_identity
+        from trellmlx.sparse_flow_rope import sparse_flow_rope_backend_identity
+        report['effectiveBackend'] = {'device': str(mx.default_device()), 'qk': qk_norm_backend_identity(),
+            'layernorm': sparse_flow_layernorm_backend_identity(), 'rope': sparse_flow_rope_backend_identity(), 'attention': 'fast'}
+        if mx.default_device() != mx.gpu:
+            raise ValueError('reference requires the declared MLX GPU route')
+        def save(name, values, **extra):
+            values = np.asarray(values, dtype='<f4', order='C')
+            if name != 'gelu' and not np.isfinite(values).all():
+                raise ValueError(f'nonfinite {name}')
+            file = args.out / f'{name}.f32'
+            values.tofile(file)
+            report['tensors'][name] = {'file': file.name, 'shape': list(values.shape), 'dtype': 'float32',
+                'byteLength': values.nbytes, 'sha256': digest(file), **extra}
+        mapping = {'modulation': 'modulation', 'norm2.weight': 'norm2.weight', 'norm2.bias': 'norm2.bias',
+            'self.qkv.weight': 'self_attn.to_qkv.weight', 'self.qkv.bias': 'self_attn.to_qkv.bias',
+            'self.out.weight': 'self_attn.to_out.weight', 'self.out.bias': 'self_attn.to_out.bias',
+            'self.q.gamma': 'self_attn.q_rms_norm.gamma', 'self.k.gamma': 'self_attn.k_rms_norm.gamma',
+            'cross.q.weight': 'cross_attn.to_q.weight', 'cross.q.bias': 'cross_attn.to_q.bias',
+            'cross.kv.weight': 'cross_attn.to_kv.weight', 'cross.kv.bias': 'cross_attn.to_kv.bias',
+            'cross.out.weight': 'cross_attn.to_out.weight', 'cross.out.bias': 'cross_attn.to_out.bias',
+            'cross.q.gamma': 'cross_attn.q_rms_norm.gamma', 'cross.k.gamma': 'cross_attn.k_rms_norm.gamma',
+            'mlp.in.weight': 'mlp.mlp.0.weight', 'mlp.in.bias': 'mlp.mlp.0.bias',
+            'mlp.out.weight': 'mlp.mlp.2.weight', 'mlp.out.bias': 'mlp.mlp.2.bias'}
+        loaded = []
+        report['phase'] = 'checkpoint-block-export'
+        with checkpoint.open('rb') as f:
+            n = struct.unpack('<Q', f.read(8))[0]
+            header = json.loads(f.read(n))
+            for name, key in mapping.items():
+                source_key = 'blocks.0.' + key
+                item = header[source_key]
+                a, b = item['data_offsets']
+                f.seek(8 + n + a)
+                raw = f.read(b - a)
+                if item['dtype'] == 'BF16':
+                    values = (np.frombuffer(raw, dtype='<u2').astype('<u4') << 16).view('<f4')
+                elif item['dtype'] == 'F32':
+                    values = np.frombuffer(raw, dtype='<f4')
+                else:
+                    raise ValueError(f'unsupported dtype {item["dtype"]}')
+                values = values.reshape(item['shape']).copy()
+                save(name, values, checkpointKey=source_key, checkpointDtype=item['dtype'],
+                     checkpointTensorSha256=hashlib.sha256(raw).hexdigest())
+                local_key = key.replace('mlp.mlp.0.', 'mlp.mlp_0.').replace('mlp.mlp.2.', 'mlp.mlp_2.')
+                # Source loader keeps normalization parameters F32; torso linears and modulation BF16.
+                value = mx.array(values)
+                if name == 'modulation' or name.startswith(('self.qkv.', 'self.out.', 'cross.q.', 'cross.kv.', 'cross.out.', 'mlp.')) and not name.endswith('.gamma'):
+                    value = value.astype(mx.bfloat16)
+                loaded.append((local_key, value))
+        block = ModulatedBlock(1536, 12, 1024, 8192, sparse_flow_layernorm=True)
+        block.load_weights(loaded, strict=True)
+        def prefix_tensor(name):
+            descriptor = prefix['tensors'][name]
+            file = args.prefix.parent / descriptor['file']
+            if digest(file) != descriptor['sha256']:
+                raise ValueError(f'prefix bytes changed: {name}')
+            return np.fromfile(file, dtype='<f4').reshape(descriptor['shape'])
+        projected = mx.array(prefix_tensor('expected.projected')).astype(mx.bfloat16)
+        mod = mx.array(prefix_tensor('expected.modulation').reshape(-1)).astype(mx.bfloat16)
+        data = np.load(args.conditioning, allow_pickle=False)
+        report['conditioning']['keys'] = list(data.files)
+        condition = np.asarray(data['cond'], dtype=np.float32)
+        if condition.shape != (1, 1029, 1024):
+            raise ValueError(f'incompatible conditioning {condition.shape}')
+        save('conditioning', condition.reshape(1029, 1024))
+        phases = build_sparse_flow_rope_phases(16, 128)
+        mx.eval(phases)
+        save('phases', np.asarray(phases))
+        table_path = root / 'trellmlx/models/source_cuda_bf16_gelu_tanh_table.npy'
+        table = np.load(table_path, allow_pickle=False)
+        report['geluSource'] = {'path': str(table_path), 'sha256': digest(table_path)}
+        save('gelu', (table.astype('<u4') << 16).view('<f4'))
+        report['phase'] = 'single-block-reference'
+        output, trace = block.trace(projected, mod, mx.array(condition).astype(mx.bfloat16), phases)
+        mx.eval(output, *trace.values())
+        report['blockExecutions'] = 1
+        names = ['norm1', 'modulated_self_input', 'q_post_norm', 'k_post_norm', 'q_post_rope', 'k_post_rope',
+                 'attention_raw', 'self_attn', 'after_self', 'norm2', 'cross_attention_raw', 'after_cross',
+                 'mlp_input', 'mlp_fc1', 'mlp_gelu', 'mlp_fc2', 'after_mlp']
+        aliases = {'attention_raw': 'self.attention', 'cross_attention_raw': 'cross.attention'}
+        for name in names:
+            value = np.asarray(trace['block0_' + name].astype(mx.float32))
+            if value.ndim == 3:
+                value = value.reshape(-1, 1536)
+            save('expected.' + aliases.get(name, name), value, arithmetic='bfloat16')
+        report['status'] = 'succeeded'
+        report['phase'] = None
+    except Exception as error:
+        report['error'] = {'type': type(error).__name__, 'message': str(error)}
+        raise
+    finally:
+        report['elapsedSeconds'] = time.perf_counter() - started
+        (args.out / 'manifest.json').write_text(json.dumps(report, indent=2) + '\n')
+        print(json.dumps({'status': report['status'], 'phase': report['phase'], 'report': str(args.out / 'manifest.json')}))
+
+
+if __name__ == '__main__':
+    main()
