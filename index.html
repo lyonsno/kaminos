@@ -3359,6 +3359,7 @@ function refreshRenderingControls() {
   const distributed=source?.debugState().identity==='distributed-volume-direct-radiance-v0';
   document.getElementById('rendering-distributed-controls').hidden=!distributed;
   document.querySelector('.rendering-position-row').hidden=distributed;
+  document.querySelector('.rendering-position-row').style.display=distributed ? 'none' : '';
   document.getElementById('rendering-source-title').textContent=distributed ? 'Distributed flame source' : 'Shared point source';
   if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
   if (source && !distributed) {

@@ -4,7 +4,7 @@ import {chromium} from '/private/tmp/beaming-smoke-deps-0926/node_modules/playwr
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
-const report={requestedUrl:url,executable,status:'running',phase:'load',errors:[],views:[]};
+const report={requestedUrl:url,executable,status:'running',phase:'load',errors:[],httpFailures:[],views:[]};
 const save=()=>fs.writeFile(`${out}/report.json`,JSON.stringify(report,null,2));
 await save();let browser,page;
 try {
@@ -16,6 +16,7 @@ try {
   await fs.access(executable);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  page.on('response',r=>{if(r.status()>=400){report.httpFailures.push({url:r.url(),status:r.status()});void save();}});
   page.on('pageerror',e=>{report.errors.push(String(e));void save();});
   page.on('console',m=>{if(m.type()==='error'&&!m.location().url.endsWith('/favicon.ico')){report.errors.push(`${m.location().url}: ${m.text()}`);void save();}});
   await page.goto(new URL('/api/runtime-config',url).href);
@@ -47,7 +48,17 @@ try {
     await page.screenshot({path:`${out}/${mode}.png`});
     report.views.push(await page.evaluate(()=>({mode:document.getElementById('rendering-light-mode').value,lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()})));await save();
   }
-  assert.deepEqual(report.errors,[]);
+  if(process.argv.includes('--gain-sweep')) {
+    await page.selectOption('#rendering-light-mode','shared');
+    for(const stops of [4,8]){
+      await page.evaluate(stops=>{const gain=document.getElementById('rendering-shared-gain');gain.value=String(stops);gain.dispatchEvent(new Event('input',{bubbles:true}));},stops);
+      await page.waitForTimeout(700);await page.screenshot({path:`${out}/gain-${stops}.png`});
+      report.views.push(await page.evaluate(()=>({mode:'shared',gainStops:Number(document.getElementById('rendering-shared-gain').value),lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()})));await save();
+    }
+  }
+  const faviconOnly=report.httpFailures.length>0&&report.httpFailures.every(r=>new URL(r.url).pathname==='/favicon.ico');
+  const materialErrors=report.errors.filter(e=>!(faviconOnly&&e.includes('Failed to load resource: the server responded with a status of 404')));
+  assert.deepEqual(materialErrors,[]);
   report.status='captured';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack||e);process.exitCode=1;if(page)await page.screenshot({path:`${out}/failure.png`}).catch(()=>{});}
 finally{await save();await browser?.close();}

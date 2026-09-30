@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import * as THREE from '../lib/three.webgpu.js';
+import {mountDistributedSceneRadiance} from '../scene-distributed-radiance.mjs';
+
+// Actual local Three geometry/material lifecycle; no GPU arithmetic claim.
+globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4};
+globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
+function fixture(castShadow=true) {
+  const uploads=[];
+  const pipeline={getBindGroupLayout(){return {};}};
+  const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxComputeWorkgroupsPerDimension:65535},
+    queue:{writeBuffer(buffer,offset,data){if(buffer.label==='surface and smoke receivers')uploads.push(new Float32Array(data));},submit(){}},
+    createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
+    createShaderModule(){return {};},createComputePipeline(){return pipeline;},createBindGroup(){return {};},
+    createCommandEncoder(){return {beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+  let consume;
+  const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(){}};
+  const renderer={library:new THREE.StandardNodeLibrary(),backend:{get(){return {};}}};
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,1,0,0,0,1,0],3));
+  geometry.setIndex([0,1,2]);geometry.computeVertexNormals();
+  const material=new THREE.MeshStandardMaterial();
+  const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=castShadow;
+  const scene=new THREE.Scene();scene.add(mesh);
+  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2});
+  const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
+  return {mesh,mount,geometry,material,uploads,prepare(){consume(field);}};
+}
+const selected=process.argv[2];
+if(!selected||selected==='edits') {
+  const f=fixture();f.prepare();
+  f.mesh.geometry.attributes.position.setX(0,.25);f.mesh.geometry.attributes.position.needsUpdate=true;
+  f.mesh.geometry.index.setX(1,2);f.mesh.geometry.index.setX(2,1);f.mesh.geometry.index.needsUpdate=true;
+  f.mesh.material.color.setHex(0xff0000);f.mesh.material.side=THREE.DoubleSide;f.mesh.material.needsUpdate=true;
+  f.prepare();
+  assert.equal(f.mesh.geometry.attributes.position.getX(0),.25,'cache rebuild must preserve current vertex edit');
+  assert.equal(f.mesh.geometry.index.getX(1),2,'winding edit must survive rebuilding');
+  assert.equal(f.mesh.material.color.getHex(),0xff0000,'material edit must survive rebuilding');
+  assert.equal(f.mesh.material.side,THREE.DoubleSide);
+  assert.equal(f.uploads.at(-1)[0],.25,'new receiver snapshot reflects geometry edit');
+  f.mount.dispose();assert.equal(f.mesh.geometry,f.geometry);assert.equal(f.mesh.material,f.material);
+  assert.equal(f.geometry.attributes.position.getX(0),.25);assert.equal(f.material.color.getHex(),0xff0000);
+  assert.equal(f.geometry.hasAttribute('sceneReceiverIndex'),false);
+  const external=fixture();external.prepare();
+  const replacementGeometry=new THREE.BoxGeometry(),replacementMaterial=new THREE.MeshStandardMaterial({color:0xabcdef});
+  external.mesh.geometry=replacementGeometry;external.mesh.material=replacementMaterial;external.mount.dispose();
+  assert.equal(external.mesh.geometry,replacementGeometry,'disposal preserves intervening geometry replacement');
+  assert.equal(external.mesh.material,replacementMaterial,'disposal preserves intervening material replacement');
+}
+if(!selected||selected==='normals') {
+  const f=fixture();f.prepare();
+  for(let i=0;i<3;i++)f.mesh.geometry.attributes.normal.setZ(i,-1);
+  f.mesh.geometry.attributes.normal.needsUpdate=true;f.prepare();
+  assert.equal(f.uploads.length,2,'normal edit invalidates uploaded receiver data');
+  assert.equal(f.uploads.at(-1)[6],-1,'receiver snapshot contains changed normal');f.mount.dispose();
+  const receiver=fixture(false);receiver.prepare();receiver.mesh.position.x=2;receiver.prepare();
+  assert.equal(receiver.uploads.length,2,'noncasting receiver movement invalidates receiver snapshot');
+  assert.equal(receiver.uploads.at(-1)[0],2);receiver.mount.dispose();
+}
+console.log('distributed authored-edit and receiver lifecycle contracts passed');

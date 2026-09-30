@@ -7,14 +7,35 @@ import {createVolumeGather} from './scene-volume-gather.mjs';
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16}) {
   let gain=1,handle=null,revision=null,frame=null,external=null,disposed=false;
   const originals=new Map();
+  const attributeIds=new WeakMap();let nextAttributeId=0;
+  const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
     source:'actual-material-emission-extinction',coordinates:'identity-world-and-volume-local',
     limitations:['vertex-surface-receivers','nearest-smoke-receivers','no-surface-bounce','independent-consumer-display']};
   function retire() {
     prototype.setSceneDistributedLightFrame(null);
     for(const [mesh,row] of originals) {
-      mesh.material=row.material;mesh.geometry=row.geometry;
-      for(const m of Array.isArray(row.converted)?row.converted:[row.converted])m?.dispose();
+      // Restore only our installed substitutions, carrying intervening edits
+      // back to their authored inputs. Never overwrite an external replacement.
+      if(mesh.geometry===row.clone) {
+        row.geometry.copy(row.clone);
+        if(row.receiverAttribute)row.geometry.setAttribute('sceneReceiverIndex',row.receiverAttribute);
+        else row.geometry.deleteAttribute('sceneReceiverIndex');
+        mesh.geometry=row.geometry;
+      }
+      if(mesh.material===row.converted) {
+        const authored=Array.isArray(row.material)?row.material:[row.material];
+        const installed=Array.isArray(row.converted)?row.converted:[row.converted];
+        for(let i=0;i<authored.length;i++) {
+          if(installed[i]!==row.ownedMaterials[i]){authored[i]=installed[i];continue;}
+          authored[i].copy(installed[i]);
+          const Type=authored[i].isMeshPhysicalMaterial||authored[i].isMeshPhysicalNodeMaterial?THREE.MeshPhysicalMaterial:THREE.MeshStandardMaterial;
+          Type.prototype.copy.call(authored[i],installed[i]);
+          authored[i].needsUpdate=true;
+        }
+        mesh.material=row.material;
+      }
+      for(const m of row.ownedMaterials||[])m.dispose();
       row.clone.dispose();
     }
     originals.clear();
@@ -42,7 +63,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         ids[i]=receivers.length;receivers.push({position:position.toArray(),normal:normal.toArray()});
       }
       const clone=geometry.clone();clone.setAttribute('sceneReceiverIndex',new THREE.BufferAttribute(ids,1));
-      originals.set(mesh,{material:mesh.material,geometry,clone});mesh.geometry=clone;
+      originals.set(mesh,{material:mesh.material,geometry,clone,receiverAttribute:geometry.getAttribute('sceneReceiverIndex')});mesh.geometry=clone;
     });
     handle=createVolumeGather(device,{geometry:packed,receivers,volumeGrid,directions});
     external=new THREE.ExternalTexture(handle.surface);
@@ -60,16 +81,28 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         return material;
       };
       row.converted=Array.isArray(row.material)?row.material.map(convert):convert(row.material);
+      row.ownedMaterials=Array.isArray(row.converted)?[...row.converted]:[row.converted];
       mesh.material=row.converted;
     }
-    // Revision includes our current attribute/material identities; a changed
-    // caster or transform rebuilds distances before another lighting update.
-    revision=staticSceneGeometryRevision(scene);
+    revision=receiverRevision();
     status.staticTriangles=packed.triangleCount;status.surfaceReceivers=receivers.length;
+  }
+  function receiverRevision() {
+    const solid=staticSceneGeometryRevision(scene);
+    const rows=[];
+    scene.traverseVisible(mesh=>{
+      if(!mesh.isMesh)return;
+      const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+      if(!materials.every(m=>m?.isMeshStandardMaterial||m?.isMeshStandardNodeMaterial||m?.isMeshPhysicalMaterial||m?.isMeshPhysicalNodeMaterial))return;
+      const g=mesh.geometry,p=g.attributes.position,n=g.attributes.normal;
+      rows.push([mesh.uuid,mesh.matrixWorld.elements,g.uuid,attributeId(p),p?.version,p?.count,attributeId(n),n?.version,n?.count,
+        attributeId(g.index),g.index?.version,materials.map(m=>[m.uuid,m.version,m.side])]);
+    });
+    return JSON.stringify([solid,rows]);
   }
   function prepare(field) {
     if(disposed)throw new Error('distributed lighting disposed');
-    if(!handle||staticSceneGeometryRevision(scene)!==revision)build();
+    if(!handle||receiverRevision()!==revision)build();
     frame=handle.encode(field.source,{gain});
     prototype.setSceneDistributedLightFrame({texture:handle.smoke,...frame});
     status.status='submitted-awaiting-presentation';

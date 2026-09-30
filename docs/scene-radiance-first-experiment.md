@@ -59,12 +59,12 @@ Display remains a consequential boundary: the mesh scene exposure and basin smok
 
 This experiment can establish a usable common direct-light path and expose its cost and artifacts. It cannot establish complete environment integration, generalized emitters, full one-bounce quality, or production admission.
 
-## Decision before implementation
+## Previous point-source approval (September 27, historical)
 
 Noah approved proceeding after the flame-sidecar and rigid-motion discussions. The primary object is volume-source complexity: live emission/extinction sampling, spatial extent, source approximation, frame identity, and explicit display boundaries. Reuse the flame sidecar's source preparation and lifecycle, not its display-biased, geometry-blind propagated RGB as universal incident light. Exercise its live source reduction through the shared path as well as the controlled source. Preserve the accepted rendering as the comparison.
 
 Rigid motion is subordinate and must consume no more than 20% of representational complexity, per the operator's explicit allocation. This is not a code-line or elapsed-time quota: its only additions are existing rigid transforms, visibility invalidation, and one combined rotation/translation exercise. Re-render the existing shadow cube when required. No hinge representation, joint UI, pose-response cache, static/dynamic cube split, or fluid-boundary implementation is part of this slice. If motion requires another representation or substantial machinery, return the concrete tradeoff to Noah instead of silently expanding scope. Geometry-local motion may change distant shadows; do not assume only nearby receivers need updating.
 
-Recommend the existing GPU shadow mechanism for the first shared-source experiment, with the CPU cache retained as a reference. This revises the earlier preference to improve CPU cache preparation first: the immediate uncertainty is whether both live consumers can use coherent visible/transmitted source light, and the existing GPU mechanism buys that observation sooner. No renderer switch or cache optimization has been implemented under this proposal.
+That earlier slice recommended the existing GPU shadow mechanism for one shared point source, with the CPU cache retained as a reference. The operator's subsequent source-shape rejection supersedes that recommendation for flame transport; the current distributed experiment above uses packed triangle visibility and actual material coefficients instead.
 
 Loop reminder approved by the operator: “Follow the light from its source through real geometry to both surface and smoke.” It applies through this slice and expires at its end.
