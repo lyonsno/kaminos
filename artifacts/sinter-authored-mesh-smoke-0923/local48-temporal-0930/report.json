@@ -1,0 +1,147 @@
+{
+  "status": "captured-inspection-required",
+  "sourceCommit": "8981eb9b30a584ea09992c1ed5307949de05803e",
+  "repoRoot": "/private/tmp/kaminos-sinter-local48-0930",
+  "browser": {
+    "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "headless": false,
+    "pid": 93076
+  },
+  "frames": [
+    {
+      "name": "early",
+      "state": {
+        "url": "http://127.0.0.1:18100/?kaminos_volume_smoke=1&volume_resolution=48#authoring=1&scene=sinter-forked-timber-combustion.kaminos.json",
+        "backend": "WebGPU:apple",
+        "grid": 48,
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "assembly": {
+          "schema": "kaminos.structural-combustion.node-material.v0",
+          "authority": "same-device-pyro-node-material-bond-strength-v0",
+          "presentationDebugMode": "off",
+          "mode": "structural-combustion",
+          "status": "active",
+          "dispatchCount": 10,
+          "presentationCount": 10,
+          "runtimeReadbackCount": 0,
+          "liveRuntimeReadbackCount": 0,
+          "terminalReadbackCount": 0,
+          "hostCausalFeedbackCount": 0,
+          "structureCount": 1,
+          "surfaceCellCount": 1000,
+          "meshTriangleCount": 864,
+          "meshAssetIdentities": [
+            "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+          ],
+          "presentationMode": "indexed-mesh-skin-resident-structural-proxy-v0",
+          "emittingObjectId": 2328813346,
+          "sourceCapacity": 1331,
+          "deviceOwnership": "borrowed",
+          "lastTerminalReceipt": null
+        },
+        "source": {
+          "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+          "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+          "status": "bound",
+          "gridSize": 48,
+          "sourceSchema": "kaminos.combustible-object-source-descriptor.v0",
+          "sourceFrameId": "gpu-structural-combustion-assembly",
+          "sourceFrameHash": 1398035011,
+          "allocationGeneration": 1,
+          "topologyEpoch": 0,
+          "materialStep": 0,
+          "writeTick": 1,
+          "sourceCount": 1331,
+          "packedCount": 1331,
+          "rejectedCount": 0,
+          "overflowCount": 0,
+          "emittedVolatileMass": 0,
+          "sameDevice": true,
+          "transformIdentity": "affine-object-world-to-pyro-near-domain-v0",
+          "fieldTransfer": [
+            96,
+            128,
+            96,
+            96
+          ],
+          "dispatchCount": 10,
+          "lastScheduledIdentity": "1:0:gpu-dispatch-10:1398035011",
+          "lastReceipt": null,
+          "fallback": null,
+          "gpuAuthoredDynamic": true
+        },
+        "sceneStatus": "Scene loaded: 1 object",
+        "basin": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b"
+      },
+      "image": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-temporal-0930/early.png"
+    },
+    {
+      "name": "late",
+      "state": {
+        "url": "http://127.0.0.1:18100/?kaminos_volume_smoke=1&volume_resolution=48#authoring=1&scene=sinter-forked-timber-combustion.kaminos.json",
+        "backend": "WebGPU:apple",
+        "grid": 48,
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "assembly": {
+          "schema": "kaminos.structural-combustion.node-material.v0",
+          "authority": "same-device-pyro-node-material-bond-strength-v0",
+          "presentationDebugMode": "off",
+          "mode": "structural-combustion",
+          "status": "active",
+          "dispatchCount": 600,
+          "presentationCount": 600,
+          "runtimeReadbackCount": 0,
+          "liveRuntimeReadbackCount": 0,
+          "terminalReadbackCount": 0,
+          "hostCausalFeedbackCount": 0,
+          "structureCount": 1,
+          "surfaceCellCount": 1000,
+          "meshTriangleCount": 864,
+          "meshAssetIdentities": [
+            "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84"
+          ],
+          "presentationMode": "indexed-mesh-skin-resident-structural-proxy-v0",
+          "emittingObjectId": 2328813346,
+          "sourceCapacity": 1331,
+          "deviceOwnership": "borrowed",
+          "lastTerminalReceipt": null
+        },
+        "source": {
+          "schema": "kaminos.pyro-combustible-object-source-consumer.v0",
+          "routeIdentity": "same-device-combustible-object-source-to-native-pyro-v0",
+          "status": "bound",
+          "gridSize": 48,
+          "sourceSchema": "kaminos.combustible-object-source-descriptor.v0",
+          "sourceFrameId": "gpu-structural-combustion-assembly",
+          "sourceFrameHash": 1398035011,
+          "allocationGeneration": 1,
+          "topologyEpoch": 0,
+          "materialStep": 0,
+          "writeTick": 1,
+          "sourceCount": 1331,
+          "packedCount": 1331,
+          "rejectedCount": 0,
+          "overflowCount": 0,
+          "emittedVolatileMass": 0,
+          "sameDevice": true,
+          "transformIdentity": "affine-object-world-to-pyro-near-domain-v0",
+          "fieldTransfer": [
+            96,
+            128,
+            96,
+            96
+          ],
+          "dispatchCount": 600,
+          "lastScheduledIdentity": "1:0:gpu-dispatch-600:1398035011",
+          "lastReceipt": null,
+          "fallback": null,
+          "gpuAuthoredDynamic": true
+        },
+        "sceneStatus": "Scene loaded: 1 object",
+        "basin": "vsp-13e22642e71f4ac8f758fae803a83110577ecc6d7ef9f233411e096af8e9097b"
+      },
+      "image": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/local48-temporal-0930/late.png"
+    }
+  ],
+  "errors": []
+}
