@@ -5,6 +5,7 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { validateBlockFixture, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 
 const { values } = parseArgs({ options: Object.fromEntries(
   ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture'].map(name => [name, { type: 'string' }])) });
@@ -76,6 +77,11 @@ try {
   report.dirty = git(['status', '--porcelain']);
   if (report.commit !== report.expectedCommit || report.dirty) throw new Error('source revision must be the exact clean requested commit');
   report.fixtureSha256 = digest(await fs.readFile(path.join(fixture, 'manifest.json')));
+  if (witness === 'block') {
+    report.phase = 'block-reference-admission';
+    validateBlockFixture(JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')),
+      JSON.parse(await fs.readFile(path.join(prefixFixture, 'manifest.json'), 'utf8')), report.prefixFixtureSha256);
+  }
   report.chrome = await fs.realpath(values.chrome);
   if (/\/Applications\/Google Chrome\.app\//.test(report.chrome)) throw new Error('GUI Google Chrome is not an isolated headless executable');
   await fs.mkdir(evidenceRoot, { recursive: true });
@@ -147,11 +153,7 @@ try {
   if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
   const requiredOutputs = ['projected', 'modulation'];
-  if (witness === 'block') {
-    const manifest = JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8'));
-    requiredOutputs.push(...Object.keys(manifest.tensors).filter(name => name.startsWith('expected.')).map(name => name.slice(9)));
-    if (!requiredOutputs.includes('after_mlp')) throw new Error('final block output is missing');
-  }
+  if (witness === 'block') requiredOutputs.push(...BLOCK_OBSERVATIONS);
   for (const name of requiredOutputs) {
     if (!report.rawOutputs?.[name] || report.rawOutputs[name].sha256 !== value.result.outputs?.[name]?.sha256) {
       throw new Error(`missing or mismatched raw evidence: ${name}`);

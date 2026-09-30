@@ -2,7 +2,7 @@ import { createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/cor
 import { createTrellisSparsePrefixAdapter } from './sparse-prefix.js';
 import { createTrellisSparseBlockAdapter, SPARSE_BLOCK_ROUTE } from './sparse-block.js';
 import { validatePrefixFixture, validateNativePrefixBackend, prefixAdapterName, comparePrefixTensor } from './sparse-prefix-witness-checks.js';
-import { validateBlockFixture, compareBlockTensor } from './sparse-block-witness-checks.js';
+import { validateBlockFixture, compareBlockTensor, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 
 const hash = async data => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), b => b.toString(16).padStart(2, '0')).join('');
 async function loadManifest(path, expectedSha) {
@@ -77,8 +77,8 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
     report.phase = 'observation-readback';
     report.outputs = {};
     const observed = { projected: completion.output.producer.projected, modulation: completion.output.producer.modulation,
-      ...Object.fromEntries(Object.keys(blockTensors).filter(name => name.startsWith('expected.')).map(name => {
-        const key = name.slice(9), tensor = blockAdapter.diagnostics[key];
+      ...Object.fromEntries(BLOCK_OBSERVATIONS.map(key => {
+        const tensor = blockAdapter.diagnostics[key];
         if (!tensor) throw new Error(`missing block diagnostic ${key}`);
         return [key, tensor];
       })) };
