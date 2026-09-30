@@ -1848,12 +1848,17 @@ async function main() {
     userDataDir, width: viewportWidth, height: viewportHeight });
   chrome = browserLaunch.executable;
   browserLaunchArgs = browserLaunch.args;
+  phase = 'launch_browser';
   const chromeProcess = spawn(chrome, browserLaunchArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => {
     stderr += chunk.toString();
   });
 
   try {
+    await new Promise((resolveLaunch, rejectLaunch) => {
+      chromeProcess.once('spawn', resolveLaunch);
+      chromeProcess.once('error', rejectLaunch);
+    });
     phase = 'connect_cdp';
     browserVersion = await waitForCdp();
     const page = await waitForTargetPage();
