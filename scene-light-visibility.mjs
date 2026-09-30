@@ -111,5 +111,28 @@ export function buildTriangleVisibility(triangles) {
     visit(root);
     return result;
   }
-  return Object.freeze({ trace, triangleCount: records.length, nodeCount });
+  function packGpu() {
+    // Preorder + escape index permits stackless GPU traversal. Leaf triangle
+    // order is explicit; no geometry or winding information is discarded.
+    const nodes = new Float32Array(Math.max(1,nodeCount)*12);
+    const words = new Uint32Array(nodes.buffer);
+    const triangles = new Float32Array(Math.max(1,records.length)*12);
+    let nextNode=0, nextTriangle=0;
+    function write(node) {
+      const id=nextNode++, at=id*12;
+      nodes.set(node.min,at); nodes.set(node.max,at+4);
+      if(node.items) {
+        words[at+9]=nextTriangle; words[at+10]=node.items.length;
+        for(const t of node.items) {
+          const offset=nextTriangle++*12;
+          triangles.set(t.points[0],offset);
+          triangles.set(t.edge1,offset+4);triangles.set(t.edge2,offset+8);
+        }
+      } else {write(node.left);write(node.right);}
+      words[at+8]=nextNode;
+    }
+    if(root) write(root);
+    return {nodes,triangles,nodeCount,triangleCount:records.length};
+  }
+  return Object.freeze({ trace, packGpu, triangleCount: records.length, nodeCount });
 }

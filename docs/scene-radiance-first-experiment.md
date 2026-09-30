@@ -1,6 +1,6 @@
 # Shared scene lighting: design for the first experiment
 
-Status: operator-approved first experiment, September 27, 2026; runtime implementation pending. Beaming/Astra owns design and the first composed experiment. The accepted direct fire appearance and authored scene remain the baseline.
+Status: September 30 distributed-source implementation experiment. The September 27 point-source experiment is rejected as an approximation of this flame following the operator's gain sweep. The accepted direct fire appearance and authored kiln remain the baseline. This file describes the current experiment, not a claim of visual success or affordability.
 
 ## Purpose
 
@@ -25,7 +25,17 @@ Preparation stores geometry visibility; live GPU work updates source values and 
 
 The initial BVH is a reference for selected geometry queries. Its current build cost does not justify either optimizing it immediately or committing the interactive architecture to it.
 
-### First experiment: one source, two real consumers
+### Current experiment: distributed emission, two real consumers
+
+Use the live raw flame-material emission/extinction lattice, before display exposure, as the source. Integrate incident radiance along receiver rays until the first actual solid surface, accumulating emission and dynamic medium transmittance along the way. Surface receivers reduce the directions with the cosine and solid-angle weights; isotropic smoke receivers use their angular mean. This replaces, rather than adds to, the geometry-blind internal flame scattering contribution on the opt-in experiment route.
+
+Cache first-solid distances for fixed mesh vertices and smoke-grid receivers using the existing double-sided triangle visibility reference packed for GPU traversal. Geometry or sampling changes rebuild that cache. A 24-direction antipodal set is the starting approximation; 48 and 96 directions are explicit comparison settings, not established adequate budgets. The source lattice remains 32×64×32; the initial smoke receiving lattice is 16×32×16. Surface lighting is computed at mesh vertices and interpolated. These are consequential approximations: angular misses, undersampled source features, coarse receiving samples near walls, and large low-poly faces may limit quality. A matched held-state comparison must judge them, not simply a nonblank image.
+
+The authored kiln is the assay. Compare distributed transport on/off at the same simulation state; inspect inside and outside, including smoke above the kiln roof. Then choose whether more angular/spatial samples earn their runtime cost. Measure static preparation separately from live work. No point-source fitting, global gain reduction, or mesh edits may substitute for source/visibility fidelity.
+
+Shared raw inputs do not unify mesh and volume display transforms. First reflected surface light, environment integration, skinning, general emitter registration and efficient rigid-motion support are incomplete. Movement currently invalidates a full static cache; it is not a moving-creature capability. Motion remains subordinate to the volume-source problem.
+
+### Previous point-source experiment (historical mechanism, not current flame design)
 
 Proposed source: a fixed point emitter with explicit RGB radiant intensity in the renderer's relative linear convention. Its color/intensity can change live. One point removes area-source sampling from this first decision; it does not establish area-emitter quality. The next source test expands to a finite panel with explicit sample-count comparisons.
 

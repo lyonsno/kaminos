@@ -9,6 +9,7 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
+import { DISTRIBUTED_SMOKE_WGSL } from './scene-volume-gather.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
@@ -9712,6 +9713,10 @@ export function createKaminosVolumePrototype({
   let scenePointBindings = null;
   let scenePointBindGroup = null;
   let scenePointFrame = null;
+  let distributedFrame = null;
+  let distributedGroup = null;
+  let distributedLayout = null;
+  const distributedPipelines = new Map();
   const scenePointPipelines = new Map();
   let sceneSourceFrameConsumer = null;
   const sceneSourcePreparedEncoders = new WeakSet();
@@ -17602,6 +17607,24 @@ export function createKaminosVolumePrototype({
       }
       drawPipeline = scenePointPipelines.get(key);
     }
+    if(distributedGroup) {
+      if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('distributed flame lighting is stale');
+      const key=`${multisampled}:${targetPipeline===readbackPipeline}:${gridSize}:${gridHeight}`;
+      if(!distributedPipelines.has(key)) {
+        // Replace internal flame incident lighting so this emission is counted
+        // once. Direct camera emission and material scattering stay intact.
+        let code=WGSL.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')+DISTRIBUTED_SMOKE_WGSL;
+        if(multisampled)code=code.replace('var productSceneDepth: texture_depth_2d;','var productSceneDepth: texture_depth_multisampled_2d;')
+          .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',`var depth=textureLoad(productSceneDepth,pixel,0);
+          for(var sample=1u;sample<textureNumSamples(productSceneDepth);sample++){depth=min(depth,textureLoad(productSceneDepth,pixel,sample));}`);
+        const module=device.createShaderModule({label:'distributed flame smoke consumer',code});
+        const layout=device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,multisampled?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout]});
+        distributedPipelines.set(key,device.createRenderPipeline({label:'distributed flame scene smoke',layout,
+          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false},
+          targets:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
+      }
+      drawPipeline=distributedPipelines.get(key);
+    }
     if (uniforms[368] > 1.5) {
       if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
       emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
@@ -17624,6 +17647,7 @@ export function createKaminosVolumePrototype({
     pass.setBindGroup(0, options.bindGroup || fluidBindGroup());
     pass.setBindGroup(1, ordinarySceneDepthBindGroup);
     if (scenePointBindGroup) pass.setBindGroup(2, scenePointBindGroup);
+    if (distributedGroup) pass.setBindGroup(2,distributedGroup);
     pass.draw(3);
     pass.end();
   }
@@ -24802,6 +24826,13 @@ export function createKaminosVolumePrototype({
       return {...scenePointFrame};
     },
     scenePointLightFrame() {return scenePointFrame ? {...scenePointFrame} : null;},
+    setSceneDistributedLightFrame(input) {
+      if(input===null){distributedFrame=null;distributedGroup=null;return;}
+      if(!device||!sceneSourceFrameConsumer||input.generation!==sceneVolumeSource?.describe().generation)throw new Error('distributed lighting needs same-generation source');
+      distributedLayout ||= device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}}]});
+      if(distributedFrame?.texture!==input.texture)distributedGroup=device.createBindGroup({layout:distributedLayout,entries:[{binding:0,resource:input.texture.createView()}]});
+      distributedFrame=input;
+    },
     sceneVolumeSourceField() {
       return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
     },

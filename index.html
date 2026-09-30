@@ -3232,7 +3232,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="neither">Both paths OFF</option>
       </select>
       <div id="rendering-light-status" class="rendering-channel-status" data-status="unavailable" role="status">Inspecting renderer route…</div>
-      <h2>Shared point source</h2>
+      <h2 id="rendering-source-title">Shared point source</h2>
       <p class="rendering-description">This study source lights both mesh and smoke. Its gain changes source energy on both paths.</p>
       <div class="rendering-position-row" aria-label="Shared point source position">
         <label for="rendering-source-x">X<input type="number" id="rendering-source-x" step="0.1" value="0"></label>
@@ -3240,6 +3240,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <label for="rendering-source-z">Z<input type="number" id="rendering-source-z" step="0.1" value="0.7"></label>
       </div>
       <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
+      <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>24</option><option>48</option><option>96</option></select><p class="rendering-description">Integrates live flame emission through smoke up to the first kiln surface. Shared gain affects surface and smoke illumination together. Surface bounce is not implemented.</p></div>
       <h2>Flame field</h2>
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
       <label class="import-mode"><input type="checkbox" id="fire-light-test-scene-toggle"><span>Test geometry</span></label>
@@ -3355,7 +3356,12 @@ function refreshRenderingControls() {
   if (!hasSharedRoute && renderingMode === 'all') renderingMode = 'flame-field';
   const selected = renderingChannelsForMode(renderingMode);
   const source = window.__kaminosSceneRadiance;
-  if (source) {
+  const distributed=source?.debugState().identity==='distributed-volume-direct-radiance-v0';
+  document.getElementById('rendering-distributed-controls').hidden=!distributed;
+  document.querySelector('.rendering-position-row').hidden=distributed;
+  document.getElementById('rendering-source-title').textContent=distributed ? 'Distributed flame source' : 'Shared point source';
+  if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
+  if (source && !distributed) {
     renderingSourceIntensity ||= source.debugState().source.intensity.slice();
     renderingSourcePosition ||= source.debugState().source.position.slice();
     source.setSource({
@@ -3380,8 +3386,8 @@ function refreshRenderingControls() {
   if (status) {
     const sharedState = !hasSharedRoute ? 'not mounted on this route' : source ? (selected.shared ? 'on' : 'off') : 'mounting';
     const fieldState = !fireLightFieldPass ? 'not mounted on this route' : selected.flameField ? 'on' : 'off';
-    const position = source?.debugState().source.position.map(value => value.toFixed(2)).join(', ');
-    status.textContent = `Shared point source (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}\nFlame field (mesh): ${fieldState}`;
+    const position = source?.debugState().source?.position?.map(value => value.toFixed(2)).join(', ');
+    status.textContent = `${distributed ? 'Distributed flame' : 'Shared point source'} (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}${distributed ? ` · ${source.debugState().directions} directions · ${source.debugState().status}` : ''}\nFlame field (mesh): ${fieldState}`;
     status.dataset.status = source || fireLightFieldPass ? 'active' : 'unavailable';
   }
   window._kaminosDirty?.();
@@ -11346,6 +11352,10 @@ document.getElementById('rendering-light-mode').addEventListener('change', event
 document.getElementById('rendering-shared-gain').addEventListener('input', event => {
   renderingGainStops = Number(event.target.value);
   document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
+  refreshRenderingControls();
+});
+document.getElementById('rendering-angular-samples').addEventListener('change',event=>{
+  window.__kaminosSceneRadiance?.setDirections?.(Number(event.target.value));
   refreshRenderingControls();
 });
 for (const axis of ['x', 'y', 'z']) {
@@ -21975,8 +21985,12 @@ async function initKaminosVolumeRoute() {
   if (fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1') {
     if (!isFireLightFieldRoute()) throw new Error('shared scene source requires ordinary fire light-field route');
     window.__kaminosSceneRadianceSetup = {status:'mounting'};
-    import('./scene-radiance.mjs').then(({mountSceneRadiance}) => {
-      window.__kaminosSceneRadiance = mountSceneRadiance({renderer,scene,prototype:volumePrototype});
+    const distributed=fireLightFieldRouteParams().get('volume_light_field_distributed')==='1';
+    if(distributed)renderingMode='shared';
+    import(distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
+      window.__kaminosSceneRadiance = distributed
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device})
+        : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       window.__kaminosSceneRadianceSetup.status='mounted';
       refreshRenderingControls();
     }).catch(error=>{
