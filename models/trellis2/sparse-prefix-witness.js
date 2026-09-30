@@ -10,7 +10,7 @@ const hash = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest
 // reads outputs back; these two browser-owned GPU tensors can feed block 0.
 export async function runSparsePrefixWitness(expectedManifestSha) {
   const report = { status: 'failed', phase: 'fixture', requestedRoute: SPARSE_PREFIX_ROUTE };
-  let session, implementation, device;
+  let session, implementation, device, errorScope = false;
   const errors = [];
   try {
     const response = await fetch('/fixture/manifest.json', { cache: 'no-store' });
@@ -40,11 +40,12 @@ export async function runSparsePrefixWitness(expectedManifestSha) {
       device: adapter.info.device, description: adapter.info.description, isFallbackAdapter: adapter.isFallbackAdapter };
     validateNativePrefixBackend(report.backend);
     device = await adapter.requestDevice();
+    device.pushErrorScope('validation'); errorScope = true;
     device.addEventListener('uncapturederror', event => errors.push(event.error.message));
     session = await createWebGpuInferenceSession({ sessionId: `sparse-prefix-${crypto.randomUUID()}`,
       adapter, device, adapterName: prefixAdapterName(adapter.info) });
     const route = await session.registerRoute({ routeId: SPARSE_PREFIX_ROUTE,
-      runtimeOptions: { requiredStages: plan.stages } });
+      runtimeOptions: { requiredStages: plan.stages, kernel: { profile: 'trellis2-sparse-prefix-bf16-values-v0' } } });
     report.effectiveRoute = route.routeId;
     validatePrefixRoute(report.requestedRoute, report.effectiveRoute);
     report.phase = 'prefix-execution';
@@ -68,13 +69,17 @@ export async function runSparsePrefixWitness(expectedManifestSha) {
         gpuBufferRetained: !!gpuTensor.buffer, sha256: await hash(data),
         comparison: comparePrefixTensor(data, tensors[`expected.${name}`]) };
     }
-    report.profile = route.runtime.finishProfile({ evidence: { mode: 'live', source: 'sparse-prefix-exact-fixture' } });
+    const validation = await device.popErrorScope(); errorScope = false;
+    if (validation) errors.push(validation.message);
     report.errors = errors;
     if (errors.length) throw new Error(errors.join('\n'));
     if (!Object.values(report.outputs).every(row => row.comparison.passed)) throw new Error('prefix numerical comparison failed');
+    report.profile = route.runtime.finishProfile({ evidence: { mode: 'live', source: 'sparse-prefix-exact-fixture' } });
     report.status = 'succeeded'; report.phase = null;
   } catch (error) { report.error = { message: error.message, stack: error.stack }; }
   finally {
+    if (errorScope) { const validation = await device.popErrorScope(); if (validation) errors.push(validation.message); }
+    report.errors = errors;
     implementation?.dispose();
     if (session) { await session.drain(); session.close(); }
     device?.destroy();

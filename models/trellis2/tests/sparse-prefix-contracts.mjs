@@ -23,4 +23,26 @@ assert.equal(api.roundBfloat16(1.00390625), 1);
 assert.equal(api.roundBfloat16(1.01171875), 1.015625);
 assert.equal(api.roundBfloat16(-1.00390625), -1);
 assert.equal(api.roundBfloat16(0), 0);
+const small = api.buildSparsePrefixPlan({ resolution: 2, inChannels: 2, channels: 4, frequencyDim: 6 });
+const counts = { 'input.weight': 8, 'input.bias': 4, 'time0.weight': 24, 'time0.bias': 4,
+  'time2.weight': 16, 'time2.bias': 4, 'mod.weight': 96, 'mod.bias': 24 };
+const definitions = [], events = [];
+const runtime = {
+  createTensor(descriptor) { return { ...descriptor, buffer: { destroy() { events.push('destroy'); } } }; },
+  uploadTensor() {},
+  defineComputeKernel(definition) { definitions.push(definition); return definition; },
+  async runKernel(kernel, options) { events.push(options.stage); },
+};
+const adapter = api.createTrellisSparsePrefixAdapter({ route: { runtime }, config: small,
+  weights: Object.fromEntries(Object.entries(counts).map(([name, count]) => [name, new Float32Array(count)])) });
+for (const definition of definitions.filter(row => row.bindings[0].name === 'dims')) {
+  assert.equal(definition.bindings[0].type, 'uniform', 'kit uniform bindings require type, not storage access');
+}
+const result = await adapter.run({ sample: new Float32Array(16), timestep: 1000 }, {});
+assert.deepEqual(events, small.stages);
+assert.strictEqual(result.projected, adapter.outputs.projected);
+assert.strictEqual(result.modulation, adapter.outputs.modulation);
+adapter.dispose(); const destroyed = events.length; adapter.dispose();
+assert.equal(events.length, destroyed, 'disposal is idempotent');
+await assert.rejects(() => adapter.run({ sample: new Float32Array(16), timestep: 1000 }), /disposed/);
 console.log('TRELLIS sparse prefix shape, stage, precision, and weight contracts passed');

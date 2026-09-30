@@ -109,7 +109,8 @@ export function createTrellisSparsePrefixAdapter({ route, weights, config = {} }
     const value = runtime.createTensor({ name: `trellis.sparse.${name}`, shape, dtype, usage });
     resources.push(value); return value;
   };
-  const bindings = values => values.map(([name, resource, access]) => ({ name, resource, access }));
+  const bindings = values => values.map(([name, resource, access]) => access === 'uniform'
+    ? { name, resource, type: 'uniform' } : { name, resource, access });
   const read = (name, resource) => [name, resource, 'read-only-storage'];
   const write = (name, resource) => [name, resource, 'storage'];
   const wgLimit = runtime.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65535;
