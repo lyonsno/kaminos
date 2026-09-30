@@ -21,9 +21,13 @@ const productionBindings = [
 
 assert.equal(existsSync(sharedUrl), true, 'serving attention must share one online-softmax WGSL family');
 const shared = existsSync(sharedUrl) ? readFileSync(sharedUrl, 'utf8') : '';
-assert.match(shared, /var<workgroup> products: array<f32, 64>/, 'QK products must be reduced once across the head dimension');
-assert.match(shared, /accumulator = accumulator \* state\[2\] \+ state\[3\] \* v_values/, 'online softmax must reuse one score for every value dimension');
-assert.equal((shared.match(/for \(var token = 0u;/g) || []).length, 1, 'the score/value pass must traverse keys once, not once per output channel and softmax pass');
+assert.match(shared, /var products: array<f32, 64>/, 'each lane must retain the original 64-element QK reduction tree for its key');
+assert.match(shared, /var<workgroup> scores: array<f32, 64>/, 'a workgroup must calculate a tile of distinct key scores');
+assert.match(shared, /tile_start = tile_start \+ 64u/, 'synchronization must advance in 64-key tiles');
+assert.equal((shared.match(/workgroupBarrier\(\)/g) || []).length, 4, 'attention must use initialization plus three barriers per tile, not barriers per key or reduction step');
+assert.match(shared, /accumulator = accumulator \* old_scales\[offset\] \+ token_scales\[offset\] \* v_values/, 'value accumulation must preserve the original token recurrence');
+assert.match(shared, /products\[reduction_index\] = products\[reduction_index\] \+ products\[reduction_index \+ reduction_stride\]/, 'QK reduction must preserve tree pair ordering');
+assert.match(shared, /let tile_count = min\(64u, .* - tile_start\)/, 'a partial final tile must not read nonexistent keys');
 assert.match(shared, /head_dim > 64u/, 'the shared kernel must fail closed when a head exceeds its workgroup width');
 assert.match(packageJson.scripts.test, /sam-serving-attention-complexity-contracts\.mjs/, 'the default suite must retain the serving attention regression contract');
 assert.deepEqual(onlineAttentionDispatch(576, 16, 9, 64), [576, 16, 9]);

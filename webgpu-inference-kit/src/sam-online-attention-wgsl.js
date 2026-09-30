@@ -89,8 +89,10 @@ ${extraBinding}
 @group(0) @binding(${outputBinding}) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(${uniformBinding}) var<uniform> dims: ${dimsType};
 
-var<workgroup> products: array<f32, 64>;
-var<workgroup> state: array<f32, 4>;
+var<workgroup> scores: array<f32, 64>;
+var<workgroup> old_scales: array<f32, 64>;
+var<workgroup> token_scales: array<f32, 64>;
+var<workgroup> state: array<f32, 2>;
 
 @compute @workgroup_size(64)
 fn main(
@@ -115,43 +117,53 @@ fn main(
   if (dimension == 0u) {
     state[0] = -3.402823e38;
     state[1] = 0.0;
-    state[2] = 0.0;
-    state[3] = 0.0;
   }
   workgroupBarrier();
 
-  for (var token = 0u; token < ${keyTokens}; token = token + 1u) {
-    let k_base = ${kBase};
-    var product = 0.0;
-    if (dimension < dims.head_dim) {
-      product = q_values[q_base + dimension] * k_values[k_base + dimension];
-    }
-    products[dimension] = product;
-    workgroupBarrier();
-
-    var reduction_stride = 32u;
-    loop {
-      if (dimension < reduction_stride) {
-        products[dimension] = products[dimension] + products[dimension + reduction_stride];
+  // Each lane scores one key. Keep the original reduction tree and token-order
+  // recurrence, but synchronize once per tile instead of per key/dimension.
+  for (var tile_start = 0u; tile_start < ${keyTokens}; tile_start = tile_start + 64u) {
+    let tile_count = min(64u, ${keyTokens} - tile_start);
+    let token = tile_start + dimension;
+    if (dimension < tile_count) {
+      let k_base = ${kBase};
+      var products: array<f32, 64>;
+      for (var component = 0u; component < 64u; component = component + 1u) {
+        products[component] = 0.0;
+        if (component < dims.head_dim) {
+          products[component] = q_values[q_base + component] * k_values[k_base + component];
+        }
       }
-      workgroupBarrier();
-      if (reduction_stride == 1u) { break; }
-      reduction_stride = reduction_stride / 2u;
-    }
-
-    if (dimension == 0u) {
+      var reduction_stride = 32u;
+      loop {
+        for (var reduction_index = 0u; reduction_index < reduction_stride; reduction_index = reduction_index + 1u) {
+          products[reduction_index] = products[reduction_index] + products[reduction_index + reduction_stride];
+        }
+        if (reduction_stride == 1u) { break; }
+        reduction_stride = reduction_stride / 2u;
+      }
       var score = products[0] * scale;
       ${scoreAdjustment}
-      let next_max = max(state[0], score);
-      state[2] = exp(state[0] - next_max);
-      state[3] = exp(score - next_max);
-      state[0] = next_max;
-      state[1] = state[1] * state[2] + state[3];
+      scores[dimension] = score;
+    }
+    workgroupBarrier();
+
+    if (dimension == 0u) {
+      for (var offset = 0u; offset < tile_count; offset = offset + 1u) {
+        let next_max = max(state[0], scores[offset]);
+        old_scales[offset] = exp(state[0] - next_max);
+        token_scales[offset] = exp(scores[offset] - next_max);
+        state[0] = next_max;
+        state[1] = state[1] * old_scales[offset] + token_scales[offset];
+      }
     }
     workgroupBarrier();
 
     if (dimension < dims.head_dim) {
-      accumulator = accumulator * state[2] + state[3] * v_values[${vIndex}];
+      for (var offset = 0u; offset < tile_count; offset = offset + 1u) {
+        let token = tile_start + offset;
+        accumulator = accumulator * old_scales[offset] + token_scales[offset] * v_values[${vIndex}];
+      }
     }
     workgroupBarrier();
   }
