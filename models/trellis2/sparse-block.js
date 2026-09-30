@@ -38,6 +38,50 @@ export function sparseBlockWeightShapes(p) {
     'mlp.in.weight': [h, c], 'mlp.in.bias': [h], 'mlp.out.weight': [c, h], 'mlp.out.bias': [c] };
 }
 
+const workspaceStates = new WeakMap();
+
+// One named activation set across serialized blocks. Diagnostics and hidden
+// are borrowed views: the next block overwrites them after their last use.
+// Offline observers may snapshot them; serving does not retain per-block copies.
+export function createTrellisSparseBlockWorkspace({ route, config = {}, conditioning, phases }) {
+  const runtime = route?.runtime, plan = buildSparseBlockPlan(config);
+  if (!runtime?.createTensor || !runtime?.uploadTensor) throw new TypeError('registered WebGPU runtime required');
+  for (const [name, values, count] of [['conditioning', conditioning, plan.contextRows * plan.contextChannels],
+    ['phases', phases, plan.rows * plan.headDim]]) {
+    if (!(values instanceof Float32Array) || values.length !== count || !values.every(Number.isFinite)) throw new TypeError(`complete finite ${name} required`);
+  }
+  const resources = new Map(); let disposed = false, inUse = false;
+  const available = () => { if (disposed) throw new Error('sparse block workspace disposed'); };
+  const allocate = (name, shape) => {
+    available();
+    const existing = resources.get(name);
+    if (existing) {
+      if (JSON.stringify(existing.shape) !== JSON.stringify(shape)) throw new Error(`workspace shape changed: ${name}`);
+      return existing;
+    }
+    const bytes = shape.reduce((a, b) => a * b, 4);
+    if (bytes > (runtime.device?.limits?.maxStorageBufferBindingSize ?? 134217728)) throw new RangeError('workspace exceeds storage binding capacity');
+    const t = runtime.createTensor({ name: `trellis.block.shared.${name}`, shape, dtype: 'f32', usage: U.storage | U.copyDst | U.copySrc });
+    resources.set(name, t); return t;
+  };
+  const dispose = () => {
+    if (inUse) throw new Error('sparse block workspace in use');
+    if (disposed) return; disposed = true;
+    for (const t of resources.values()) t.buffer?.destroy?.();
+  };
+  try {
+    const context = allocate('conditioning', [plan.contextRows, plan.contextChannels]);
+    const rope = allocate('rope-phases', [plan.rows, plan.headDim / 2, 2]);
+    runtime.uploadTensor(context, Float32Array.from(conditioning, roundBfloat16));
+    runtime.uploadTensor(rope, phases);
+    const workspace = Object.freeze({ plan, conditioning: context, phases: rope, dispose });
+    workspaceStates.set(workspace, { runtime, plan, allocate, available,
+      acquire() { available(); if (inUse) throw new Error('sparse block workspace in use'); inUse = true; },
+      release() { inUse = false; } });
+    return workspace;
+  } catch (error) { dispose(); throw error; }
+}
+
 // Native [out,in] checkpoint weights; 16x16 shared tiles. No activation cap.
 // The accumulator is F32 and only linear output is rounded to BF16.
 function matrixShader({ rows, columns, reduction, aStride, aOffset = 0,
@@ -113,9 +157,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) 
 }`;
 }
 
-export function createTrellisSparseBlockAdapter({ route, config = {}, weights, inputs, conditioning, phases }) {
+export function createTrellisSparseBlockAdapter({ route, config = {}, weights, inputs, conditioning, phases, workspace }) {
   const runtime = route?.runtime, plan = buildSparseBlockPlan(config);
   if (!runtime?.createTensor || !runtime?.defineComputeKernel) throw new TypeError('registered WebGPU runtime required');
+  const shared = workspace === undefined ? null : workspaceStates.get(workspace);
+  if (workspace !== undefined) {
+    if (!shared || shared.runtime !== runtime) throw new TypeError('workspace runtime must match block runtime');
+    shared.available();
+    if (JSON.stringify(shared.plan) !== JSON.stringify(plan)) throw new TypeError('workspace configuration must match block configuration');
+    if (conditioning !== undefined || phases !== undefined) throw new TypeError('workspace owns conditioning and phases; do not replace them per block');
+  }
   for (const [name, shape] of Object.entries({ projected: plan.outputShape, modulation: [1, 6 * plan.channels] })) {
     const value = inputs?.[name];
     if (!value?.buffer || value.dtype !== 'f32' || JSON.stringify(value.shape) !== JSON.stringify(shape)) {
@@ -129,7 +180,7 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
     }
   }
   if (!(weights.gelu instanceof Float32Array) || weights.gelu.length !== 65536) throw new TypeError('complete source BF16 GELU table required');
-  for (const [name, array, count] of [['conditioning', conditioning, plan.contextRows * plan.contextChannels],
+  if (!shared) for (const [name, array, count] of [['conditioning', conditioning, plan.contextRows * plan.contextChannels],
     ['phases', phases, plan.rows * plan.headDim]]) {
     if (!(array instanceof Float32Array) || array.length !== count || !array.every(Number.isFinite)) throw new TypeError(`complete finite ${name} required`);
   }
@@ -137,9 +188,10 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
     ...Object.values(shapes).map(shape => shape.reduce((a, b) => a * b, 4)));
   if (largest > (runtime.device?.limits?.maxStorageBufferBindingSize ?? 134217728)) throw new RangeError(`block requires ${largest} bytes of storage binding capacity`);
   const resources = [], kernels = [], tensors = {}, w = {};
-  let disposed = false;
+  let disposed = false, running = false;
   const tensor = (name, shape) => { const t = runtime.createTensor({ name: `trellis.block.${name}`, shape, dtype: 'f32', usage: U.storage | U.copyDst | U.copySrc }); resources.push(t); return t; };
-  const allocate = (name, rows = plan.rows, width = plan.channels) => (tensors[name] = tensor(name, [rows, width]));
+  const activation = (name, shape) => shared ? shared.allocate(name, shape) : tensor(name, shape);
+  const allocate = (name, rows = plan.rows, width = plan.channels) => (tensors[name] = activation(name, [rows, width]));
   const add = (name, code, args, dispatch) => kernels.push({ name, dispatch, kernel: runtime.defineComputeKernel({
     name: `trellis.block.${name}`, code, bindings: args.map((resource, i) => ({ name: `b${i}`, resource,
       access: i === args.length - 1 ? 'storage' : 'read-only-storage' })) }) });
@@ -149,9 +201,10 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
   const c = plan.channels, r = plan.rows, d = plan.headDim, heads = plan.heads, s = plan.contextRows;
   try {
     for (const [name, shape] of Object.entries({ ...shapes, gelu: [65536] })) { w[name] = tensor(name, shape); runtime.uploadTensor(w[name], weights[name]); }
-    const context = tensor('conditioning', [s, plan.contextChannels]); runtime.uploadTensor(context, Float32Array.from(conditioning, roundBfloat16));
-    const rope = tensor('rope-phases', [r, d / 2, 2]); runtime.uploadTensor(rope, phases);
-    const mod = tensor('modulation', [6 * c]);
+    const context = workspace?.conditioning ?? tensor('conditioning', [s, plan.contextChannels]);
+    const rope = workspace?.phases ?? tensor('rope-phases', [r, d / 2, 2]);
+    if (!shared) { runtime.uploadTensor(context, Float32Array.from(conditioning, roundBfloat16)); runtime.uploadTensor(rope, phases); }
+    const mod = activation('modulation', [6 * c]);
     add('block-modulation', elementShader(6 * c, decl(['timestep_mod', 'bias', 'output']), 'output[i] = round_bf16(timestep_mod[i] + bias[i]);'), [inputs.modulation, w.modulation, mod], grid(6 * c));
     const norm = (stage, input, name, affine = false) => { const out = allocate(name); add(stage, normShader({ rows: r, width: c, affine }),
       affine ? [input, w['norm2.weight'], w['norm2.bias'], out] : [input, out], [r, 1, 1]); return out; };
@@ -171,7 +224,7 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
       `let token = i / ${c / 2}u; let pair = i % ${d / 2}u; let p = token * ${d}u + pair * 2u;
        let a = input[i * 2u]; let b = input[i * 2u + 1u]; let cs = phases[p]; let sn = phases[p + 1u];
        output[i * 2u] = round_bf16(a * cs - b * sn); output[i * 2u + 1u] = round_bf16(a * sn + b * cs);`), [input, rope, out], grid(r * c / 2)); return out; };
-    const scores = tensor('attention-scores-scratch', [r, Math.max(r, s)]);
+    const scores = activation('attention-scores-scratch', [r, Math.max(r, s)]);
     const attend = (prefix, q, k, v, keyRows, vComponents, vComponent) => {
       const out = allocate(`${prefix}.attention`);
       for (let head = 0; head < heads; head++) {
@@ -230,8 +283,12 @@ fn main(@builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) wid: 
     if (JSON.stringify(kernels.map(x => x.name)) !== JSON.stringify(plan.stages)) throw new Error('block stage plan mismatch');
     return Object.freeze({ plan, outputs: { hidden: output }, diagnostics: Object.freeze({ ...tensors, modulation: mod }),
       async run(invocation) { if (disposed) throw new Error('sparse block adapter disposed');
-        for (const { name, kernel, dispatch } of kernels) await runtime.runKernel(kernel, { stage: name, dispatch, schedulerInvocation: invocation, yieldAfter: true });
-        return { hidden: output, arithmetic: plan.arithmetic }; },
-      dispose() { if (disposed) return; disposed = true; for (const t of resources) t.buffer?.destroy?.(); } });
+        if (running) throw new Error('sparse block workspace/adapter in use');
+        shared?.acquire(); running = true;
+        try {
+          for (const { name, kernel, dispatch } of kernels) await runtime.runKernel(kernel, { stage: name, dispatch, schedulerInvocation: invocation, yieldAfter: true });
+          return { hidden: output, arithmetic: plan.arithmetic };
+        } finally { running = false; shared?.release(); } },
+      dispose() { if (running) throw new Error('sparse block adapter in use'); if (disposed) return; disposed = true; for (const t of resources) t.buffer?.destroy?.(); } });
   } catch (error) { for (const t of resources) t.buffer?.destroy?.(); throw error; }
 }

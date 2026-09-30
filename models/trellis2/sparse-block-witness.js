@@ -1,6 +1,6 @@
 import { createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/core.js';
 import { createTrellisSparsePrefixAdapter } from './sparse-prefix.js';
-import { createTrellisSparseBlockAdapter, SPARSE_BLOCK_ROUTE } from './sparse-block.js';
+import { createTrellisSparseBlockAdapter, createTrellisSparseBlockWorkspace, SPARSE_BLOCK_ROUTE } from './sparse-block.js';
 import { validatePrefixFixture, validateNativePrefixBackend, prefixAdapterName, comparePrefixTensor } from './sparse-prefix-witness-checks.js';
 import { validateBlockFixture, compareBlockTensor, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 
@@ -32,7 +32,7 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
   const report = { status: 'failed', phase: 'fixture', requestedRoute: SPARSE_BLOCK_ROUTE,
     blockFixtureSha256: blockSha, prefixFixtureSha256: prefixSha };
   const errors = [];
-  let device, session, prefixAdapter, blockAdapter, errorScope = false;
+  let device, session, prefixAdapter, blockAdapter, workspace, errorScope = false;
   try {
     const prefixManifest = await loadManifest('/prefix-fixture/manifest.json', prefixSha);
     const blockManifest = await loadManifest('/fixture/manifest.json', blockSha);
@@ -59,8 +59,10 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
     report.effectiveRoute = route.routeId;
     if (report.effectiveRoute !== report.requestedRoute) throw new Error('effective block route mismatch');
     prefixAdapter = createTrellisSparsePrefixAdapter({ route, config: prefixManifest.config, weights: prefixTensors });
+    workspace = createTrellisSparseBlockWorkspace({ route, config: blockManifest.config,
+      conditioning: blockTensors.conditioning, phases: blockTensors.phases });
     blockAdapter = createTrellisSparseBlockAdapter({ route, config: blockManifest.config, weights: blockTensors,
-      inputs: prefixAdapter.outputs, conditioning: blockTensors.conditioning, phases: blockTensors.phases });
+      inputs: prefixAdapter.outputs, workspace });
     report.phase = 'prefix-block-composition';
     const started = performance.now();
     const job = route.enqueue({ jobId: 'prefix-block0', execute: async invocation => {
@@ -73,7 +75,8 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
     if (completion.status !== 'succeeded') throw new Error(`block job ${completion.status}: ${completion.error?.message || ''}`);
     report.hostSubmitMs = performance.now() - started;
     report.sessionId = session.snapshot().sessionId;
-    report.composition = { sameSession: true, sameJob: true, readbackBetweenPrefixAndBlock: false, reusedResidentPrefixBuffers: true };
+    report.composition = { sameSession: true, sameJob: true, readbackBetweenPrefixAndBlock: false, reusedResidentPrefixBuffers: true,
+      activationStorage: 'shared-serialized-block-workspace', executedBlocks: 1 };
     report.phase = 'observation-readback';
     report.outputs = {};
     const observed = { projected: completion.output.producer.projected, modulation: completion.output.producer.modulation,
@@ -102,7 +105,7 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
   } catch (error) { report.error = { message: error.message, stack: error.stack }; }
   finally {
     if (errorScope) { const validation = await device.popErrorScope(); if (validation) errors.push(validation.message); }
-    report.errors = errors; blockAdapter?.dispose(); prefixAdapter?.dispose();
+    report.errors = errors; blockAdapter?.dispose(); workspace?.dispose(); prefixAdapter?.dispose();
     if (session) { await session.drain(); session.close(); }
     device?.destroy();
   }
