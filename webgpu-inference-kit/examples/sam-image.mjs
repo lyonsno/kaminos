@@ -276,6 +276,7 @@ export async function createSamImageExample({ canvas, onState = () => {},
         const result = await sam.run(model.href, request);
         if (fatal) throw fatal;
         await validateOutput(result, request);
+        if (fatal) throw fatal;
         const indices = result.instances.map(instance => instance.index);
         createSam3SourceMask(result, indices, source.width, source.height);
         output = result; state.selectedIndices = indices;

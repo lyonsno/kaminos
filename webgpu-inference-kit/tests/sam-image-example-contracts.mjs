@@ -221,4 +221,42 @@ try {
     if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
   }
 }
+// A terminal GPU notification may arrive during the asynchronous digest admission.
+const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+try {
+  for (const failureKind of ['uncapturederror', 'device-loss']) {
+    let listener, lose;
+    const faultyDevice = { lost: new Promise(resolve => { lose = resolve; }),
+      addEventListener(_name, callback) { listener = callback; }, removeEventListener() {}, destroy() {} };
+    const admission = await createSamImageExample({ canvas: {}, baseUrl: 'http://localhost/', services: {
+      requestDevice: async () => ({ device: faultyDevice, adapter: {}, backendIdentity: { kind: 'fixture' } }),
+      createSession: async () => ({ async drain() {}, close() {} }),
+      decodeSource: async () => ({ ...source, release() {} }),
+      createForeground: async () => ({ setSource() {}, yield: async () => {}, evidence: () => ({}), close() {} }),
+      createRuntime: () => ({ async run(_manifest, request) { return { ...maskOutput,
+        invocationId: request.invocationId, promptText: request.promptText, promptSha256: promptDigest,
+        sourceImage: request.sourceImage, outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
+        requestedRouteId: 'fixture', effectiveRouteId: 'fixture' }; }, evidence: () => ({}), async close() {} }),
+    } });
+    await admission.loadImage({});
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {
+      randomUUID: () => webcrypto.randomUUID(), subtle: { async digest(...args) {
+        const digest = await webcrypto.subtle.digest(...args);
+        if (failureKind === 'uncapturederror') listener({ error: { message: 'failure during digest' } });
+        else lose({ reason: 'unknown', message: 'failure during digest' });
+        await Promise.resolve();
+        return digest;
+      } },
+    } });
+    await assert.rejects(admission.run({ manifestUrl: '/model.json', promptText: 'wheel' }), /failure during digest/);
+    assert.equal(admission.snapshot().status, 'failed');
+    assert.equal(admission.snapshot().output, null);
+    assert.equal(admission.provenance().output, null, 'terminal failure cannot export successful provenance');
+    assert.throws(() => admission.pixels('cutout'), /no current output/);
+    await admission.dispose();
+  }
+} finally {
+  if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto);
+  else delete globalThis.crypto;
+}
 console.log('SAM image example deterministic contracts passed (no GPU witness)');
