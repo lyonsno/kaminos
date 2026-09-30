@@ -233,12 +233,13 @@ export function createCombustibleObjectSourceProducer({
   };
 }
 
-function createConsumerShader(gridSize) {
+function createConsumerShader(gridSize, gridHeight = gridSize) {
   const grid = nonnegativeInteger(gridSize, 'Combustible object receiver grid');
   if (grid < 4) throw new Error('Combustible object receiver grid must be at least 4');
   return /* wgsl */`
 const GRID: u32 = ${grid}u;
-const GRID_CELLS: u32 = ${grid * grid * grid}u;
+const GRID_Y: u32 = ${gridHeight}u;
+const GRID_CELLS: u32 = ${grid * gridHeight * grid}u;
 const SOURCE_MAGIC: u32 = ${COMBUSTIBLE_OBJECT_SOURCE_MAGIC}u;
 const SOURCE_VERSION: u32 = ${COMBUSTIBLE_OBJECT_SOURCE_VERSION}u;
 const FIXED_POINT_SCALE: f32 = ${COMBUSTIBLE_OBJECT_FIRE_FIXED_POINT_SCALE}.0;
@@ -385,12 +386,13 @@ fn scatter(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let receiver = params.objectToReceiver * vec4<f32>(record.localPositionRadius.xyz, 1.0);
-  if (any(receiver.xyz < vec3<f32>(0.0)) || any(receiver.xyz > vec3<f32>(1.0))) {
+  let domainMaximum = vec3<f32>(1.0, f32(GRID_Y) / f32(GRID), 1.0);
+  if (any(receiver.xyz < vec3<f32>(0.0)) || any(receiver.xyz >= domainMaximum)) {
     atomicAdd(&stats.rejectedRecords, 1u);
     if (audited) { atomicAdd(&stats.auditRejectedRecords, 1u); }
     return;
   }
-  let cell = min(vec3<u32>(receiver.xyz * f32(GRID)), vec3<u32>(GRID - 1u));
+  let cell = min(vec3<u32>(receiver.xyz * f32(GRID)), vec3<u32>(GRID - 1u, GRID_Y - 1u, GRID - 1u));
   let radiusScale = max(
     max(length(params.objectToReceiver[0].xyz), length(params.objectToReceiver[1].xyz)),
     length(params.objectToReceiver[2].xyz)
@@ -401,12 +403,12 @@ fn scatter(@builtin(global_invocation_id) gid: vec3<u32>) {
   let lower = vec3<u32>(floor(clamp(
     (receiver.xyz - vec3<f32>(supportRadius)) * f32(GRID),
     vec3<f32>(0.0),
-    vec3<f32>(f32(GRID - 1u))
+    vec3<f32>(f32(GRID - 1u), f32(GRID_Y - 1u), f32(GRID - 1u))
   )));
   let upper = vec3<u32>(floor(clamp(
     (receiver.xyz + vec3<f32>(supportRadius)) * f32(GRID),
     vec3<f32>(0.0),
-    vec3<f32>(f32(GRID - 1u))
+    vec3<f32>(f32(GRID - 1u), f32(GRID_Y - 1u), f32(GRID - 1u))
   )));
   var weightSum = 0.0;
   for (var z = lower.z; z <= upper.z; z += 1u) {
@@ -433,7 +435,7 @@ fn scatter(@builtin(global_invocation_id) gid: vec3<u32>) {
         let distanceSquared = dot(center - receiver.xyz, center - receiver.xyz);
         if (distanceSquared <= supportRadius * supportRadius) {
           let weight = exp(-distanceSquared / (sigma * sigma)) / weightSum;
-          let cellIndex = kernelCell.x + kernelCell.y * GRID + kernelCell.z * GRID * GRID;
+          let cellIndex = kernelCell.x + kernelCell.y * GRID + kernelCell.z * GRID * GRID_Y;
           if (atomicExchange(&accumulation[cellIndex].touched, 1u) == 0u) {
             atomicAdd(&stats.touchedCells, 1u);
           }
@@ -534,13 +536,16 @@ fn finalizeApply() {
 export async function createCombustibleObjectFireReceiver({
   device,
   gridSize,
+  gridDimensions = [gridSize, gridSize, gridSize],
   validateDescriptor,
   transformIdentity,
 } = {}) {
   if (!device?.queue) throw new Error('Combustible object fire receiver requires a GPUDevice and GPUQueue');
   if (typeof validateDescriptor !== 'function') throw new Error('Combustible object fire receiver requires descriptor validation');
   const grid = nonnegativeInteger(gridSize, 'Combustible object receiver grid');
-  const shader = device.createShaderModule({ label: 'kaminos combustible object fire receiver', code: createConsumerShader(grid) });
+  if (!Array.isArray(gridDimensions) || gridDimensions.length !== 3 || gridDimensions[0] !== grid || gridDimensions[2] !== grid || !Number.isInteger(gridDimensions[1]) || gridDimensions[1] < 4) throw new Error('Combustible object receiver requires effective grid dimensions');
+  const cells = grid * gridDimensions[1] * grid;
+  const shader = device.createShaderModule({ label: 'kaminos combustible object fire receiver', code: createConsumerShader(grid, gridDimensions[1]) });
   const compilation = await shader.getCompilationInfo();
   const errors = compilation.messages.filter(message => message.type === 'error');
   if (errors.length > 0) {
@@ -566,7 +571,7 @@ export async function createCombustibleObjectFireReceiver({
   ]);
   const accumulationBuffer = device.createBuffer({
     label: `kaminos combustible object accumulation ${grid}^3`,
-    size: grid * grid * grid * ACCUMULATION_WORDS * Uint32Array.BYTES_PER_ELEMENT,
+    size: cells * ACCUMULATION_WORDS * Uint32Array.BYTES_PER_ELEMENT,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
   const statsBuffer = device.createBuffer({
@@ -584,7 +589,7 @@ export async function createCombustibleObjectFireReceiver({
     size: CONSUMER_STATS_WORDS * Uint32Array.BYTES_PER_ELEMENT,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
-  device.queue.writeBuffer(accumulationBuffer, 0, new Uint32Array(grid * grid * grid * ACCUMULATION_WORDS));
+  device.queue.writeBuffer(accumulationBuffer, 0, new Uint32Array(cells * ACCUMULATION_WORDS));
   device.queue.writeBuffer(statsBuffer, 0, new Uint32Array(CONSUMER_STATS_WORDS));
   let descriptor = null;
   let transform = null;
@@ -673,7 +678,7 @@ export async function createCombustibleObjectFireReceiver({
     pass.setPipeline(scatterPipeline);
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(descriptor.capacity / 64)));
     pass.setPipeline(applyPipeline);
-    pass.dispatchWorkgroups(Math.ceil((grid * grid * grid) / 64));
+    pass.dispatchWorkgroups(Math.ceil(cells / 64));
     pass.setPipeline(finalizePipeline);
     pass.dispatchWorkgroups(1);
     pass.end();

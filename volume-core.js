@@ -24359,6 +24359,8 @@ export function createKaminosVolumePrototype({
         queue: device.queue,
         format,
         gridSize,
+        gridDimensions: [gridSize, gridHeight, gridSize],
+        domainTranslation: () => [...productTransform.translate],
         receiverSchema: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_SCHEMA,
         routeIdentity: COMBUSTIBLE_OBJECT_FIRE_ROUTE,
         ownership: 'borrowed-device-queue-no-destruction-authority',
@@ -24375,6 +24377,7 @@ export function createKaminosVolumePrototype({
         combustibleObjectSourceReceiver = await createCombustibleObjectFireReceiver({
           device,
           gridSize,
+          gridDimensions: [gridSize, gridHeight, gridSize],
           validateDescriptor: validateCombustibleObjectSourceDescriptor,
           transformIdentity: COMBUSTIBLE_OBJECT_FIRE_RECEIVER_TRANSFORM_ID,
         });

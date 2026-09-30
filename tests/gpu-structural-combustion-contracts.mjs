@@ -9,6 +9,7 @@ import {
   evaluateStructuralCombustionTerminalChecks,
 } from '../structural-combustion-gpu.mjs';
 import * as volumeModule from '../volume-core.js';
+import { createCombustibleObjectFireReceiver } from '../combustible-object-fire-gpu.mjs';
 
 const { validateCombustibleObjectSourceDescriptor } = volumeModule;
 
@@ -169,8 +170,13 @@ let presentationCompilationMessages = [];
 let rejectedComputeEntryPoint = null;
 let rejectedRenderEntryPoint = null;
 const presentationUniformWrites = [];
+const parameterWrites = [];
+const shaderModules = [];
 const queue = {
   writeBuffer(buffer, offset, data) {
+    if (buffer?.descriptor?.label === 'structural combustion target params') {
+      parameterWrites.push(new Uint8Array(data).slice());
+    }
     if (buffer?.descriptor?.label?.includes('presentation')) {
       const bytes = data instanceof ArrayBuffer
         ? new Uint8Array(data)
@@ -198,6 +204,7 @@ const device = {
     return texture;
   },
   createShaderModule(descriptor) {
+    shaderModules.push(descriptor);
     return {
       async getCompilationInfo() {
         return {
@@ -370,9 +377,12 @@ try {
   );
   rejectedComputeEntryPoint = null;
 
+  let spatialTranslation = 0;
+  const identityMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
   const assembly = await createGpuStructuralCombustionAssembly({
     device,
     gridSize: 32,
+    gridDimensions: [32, 64, 32],
     format: 'rgba8unorm',
     presentationDebugMode: 'exposure',
     structures: [
@@ -385,6 +395,11 @@ try {
         pyroScale: [0.26, 0.32, 0.32],
         pyroOffset: [0.26, 0.26, 0.32],
         worldOffset: [-0.65, 0, 0],
+        spatialTransformProvider: () => ({
+          nodeToPyro: [...identityMatrix.slice(0, 12), spatialTranslation, 0, 0, 1],
+          displayTransform: [...identityMatrix.slice(0, 12), spatialTranslation * 2, 0, 0, 1],
+          normalTransform: identityMatrix,
+        }),
       },
       {
         id: 'control',
@@ -404,6 +419,17 @@ try {
       radius: 0.26,
     },
   });
+  const spatialShader = shaderModules.findLast(module => module.label === STRUCTURAL_COMBUSTION_AUTHORITY).code;
+  assert.match(spatialShader, /const GRID_Y: u32 = 64u;/, 'heat sampling must use the effective tall fluid layout');
+  assert.match(spatialShader, /cell\.z \* GRID \* GRID_Y/, 'z stride must not alias the middle of the tall volume');
+  assert.match(spatialShader, /params\.nodeToPyro \* vec4<f32>\(position, 1\.0\)/, 'heat sampling uses the live affine object transform');
+  assert.doesNotMatch(spatialShader, /let samplePosition = clamp\(/, 'outside objects must not sample a clamped hot boundary');
+  const tallReceiver = await createCombustibleObjectFireReceiver({device, gridSize: 32, gridDimensions: [32, 64, 32], validateDescriptor: value => value});
+  const receiverShader = shaderModules.findLast(module => module.label === 'kaminos combustible object fire receiver').code;
+  assert.match(receiverShader, /const GRID_Y: u32 = 64u;/, 'object emissions use the same tall fluid layout as heat sampling');
+  assert.match(receiverShader, /kernelCell\.z \* GRID \* GRID_Y/);
+  assert.equal(buffers.findLast(buffer => buffer.descriptor.label.startsWith('kaminos combustible object accumulation')).descriptor.size, 32 * 64 * 32 * 5 * 4);
+  tallReceiver.destroy();
   for (const label of ['structural combustion presentation layout', 'structural combustion mesh presentation layout']) {
     const layout = bindGroupLayouts.find(candidate => candidate.label === label);
     assert.ok(layout, `${label} must be created`);
@@ -473,6 +499,17 @@ try {
   assert.ok(targetPresentation, 'diagnostic mode must be carried to the presentation shader');
   assert.equal(new DataView(targetPresentation.bytes.buffer).getFloat32(92, true), 1);
   assert.equal(assembly.debugState().runtimeReadbackCount, 0, 'GPU presentation diagnostics must not add host material readback');
+  const materialBufferCount = buffers.filter(buffer => /target materials/.test(buffer.descriptor.label)).length;
+  const writesBeforeMove = parameterWrites.length;
+  spatialTranslation = 1.25;
+  assembly.encode(encoder, {});
+  assembly.encodePresentation(presentationEncoder, {}, identityMatrix, {width: 640, height: 360});
+  assert.equal(parameterWrites.length, writesBeforeMove + 1, 'moving the object uploads only its changed affine parameters');
+  assert.equal(new Float32Array(parameterWrites.at(-1).buffer)[48], 1.25, 'the GPU heat/source matrix follows object translation');
+  assert.equal(new Float32Array(presentationUniformWrites.findLast(write => write.label === 'structural combustion target presentation').bytes.buffer)[40], 2.5, 'the visible surface follows the same pose');
+  assert.equal(buffers.filter(buffer => /target materials/.test(buffer.descriptor.label)).length, materialBufferCount, 'moving the object must preserve resident material history');
+  assert.equal(assembly.debugState().spatialTransforms[0].nodeToPyro[12], 1.25);
+  assert.equal(assembly.debugState().runtimeReadbackCount, 0);
 
   const meshSurface = {
     schema: 'kaminos.structural-mesh-surface.v0',

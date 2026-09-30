@@ -134,12 +134,31 @@ export async function createSavedMeshCombustionAssembly({ THREE, entry, gpuConte
   const effectiveAssetIdentity = `sha256:${Array.from(new Uint8Array(sourceHash), value => value.toString(16).padStart(2, '0')).join('')}`;
   validateSavedMeshCombustionAssetIdentity(binding, effectiveAssetIdentity);
   const surface = buildSavedMeshStructuralSurface({ THREE, object: entry.object, assetIdentity: binding.assetIdentity });
+  const initialWorldInverse = entry.object.matrixWorld.clone().invert();
+  const normalizedToRestWorld = new THREE.Matrix4().makeScale(...surface.displayScale);
+  normalizedToRestWorld.setPosition(...surface.worldOffset.map((value, axis) => value - surface.displayScale[axis] * 0.5));
+  const spatialTransformProvider = () => {
+    entry.object.updateWorldMatrix(true, true);
+    if (Math.abs(entry.object.matrixWorld.determinant()) < 1e-12) throw new Error('combustion object transform is singular');
+    const delta = entry.object.matrixWorld.clone().multiply(initialWorldInverse);
+    const domainTranslation = gpuContext.domainTranslation();
+    const worldToPyro = new THREE.Matrix4().makeScale(0.5, 0.5, 0.5);
+    worldToPyro.setPosition(...domainTranslation.map(value => 0.5 - value * 0.5));
+    return {
+      authority: 'saved-object-world-to-current-pyro-domain-v0',
+      domainTranslation,
+      nodeToPyro: worldToPyro.multiply(delta).multiply(normalizedToRestWorld).toArray(),
+      displayTransform: delta.toArray(),
+      normalTransform: delta.clone().invert().transpose().toArray(),
+    };
+  };
   const state = createLayeredStructuralMaterial({ columns: 11, rows: 11, layers: 11, notch: false });
   const sidecar = await createLayeredStructuralHotWebGpuSidecar({ state, device: gpuContext.device });
   try {
     const assembly = await createGpuStructuralCombustionAssembly({
       device: gpuContext.device,
       gridSize: gpuContext.gridSize,
+      gridDimensions: gpuContext.gridDimensions,
       format: gpuContext.format,
       presentationDebugMode,
       structures: [{
@@ -152,8 +171,8 @@ export async function createSavedMeshCombustionAssembly({ THREE, entry, gpuConte
         meshSurface: surface.meshSurface,
         worldOffset: surface.worldOffset,
         displayScale: surface.displayScale,
-        pyroScale: [0.28, 0.32, 0.32],
-        pyroOffset: [0.3, 0.26, 0.32],
+        spatialTransformProvider,
+        spatialState: spatialTransformProvider(),
         burnRate: binding.burnRate,
       }],
     });

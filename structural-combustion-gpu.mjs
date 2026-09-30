@@ -20,8 +20,9 @@ export const STRUCTURAL_COMBUSTION_PRESENTATION_DEBUG_MODES = Object.freeze(['of
 const NODE_MATERIAL_BYTES = 64;
 const COMPONENT_MOTION_BYTES = 32;
 const CARRIED_FIRE_AUDIT_BYTES = 32;
-const PARAMS_BYTES = 144;
-const PRESENTATION_BYTES = 112;
+const PARAMS_BYTES = 208;
+const PRESENTATION_BYTES = 240;
+const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 const MESH_VERTEX_BYTES = 32;
 const MESH_BINDING_BYTES = 48;
 const SOURCE_FRAME_HASH = 0x53545243;
@@ -779,12 +780,18 @@ function packParams(structure, nodeCount, bondCount, capacity, gridSize) {
   f32.set([3.2, 0.72, 0.28, 0.45], 24);
   f32.set([...(structure.worldOffset || [0, 0, 0]), structure.control ? 1 : 0], 28);
   f32.set([...(structure.motion || [0.18, -0.82, 0.04]), finite(structure.maximumMotionAge, 1)], 32);
+  const scale = structure.pyroScale || [0.28, 0.32, 0.32];
+  const offset = structure.pyroOffset || [0.3, 0.26, 0.32];
+  f32.set(structure.spatialState?.nodeToPyro || [
+    scale[0], 0, 0, 0, 0, scale[1], 0, 0, 0, 0, scale[2], 0, ...offset, 1,
+  ], 36);
   return bytes;
 }
 
-function structuralCombustionShader(gridSize) {
+function structuralCombustionShader(gridSize, gridHeight = gridSize) {
   return /* wgsl */`
 const GRID: u32 = ${gridSize}u;
+const GRID_Y: u32 = ${gridHeight}u;
 const WORKGROUP_SIZE: u32 = ${WORKGROUP_SIZE}u;
 const SOURCE_MAGIC: u32 = ${COMBUSTIBLE_OBJECT_SOURCE_MAGIC}u;
 const SOURCE_VERSION: u32 = ${COMBUSTIBLE_OBJECT_SOURCE_VERSION}u;
@@ -839,6 +846,7 @@ struct Params {
   emission: vec4<f32>,
   world: vec4<f32>,
   motion: vec4<f32>,
+  nodeToPyro: mat4x4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> fluid: array<vec4<f32>>;
@@ -859,9 +867,11 @@ fn carriedNodePosition(nodeIndex: u32) -> vec3<f32> {
 }
 
 fn fluidExposure(position: vec3<f32>) -> f32 {
-  let samplePosition = clamp(position * params.pyroScale.xyz + params.pyroOffset.xyz, vec3<f32>(0.0), vec3<f32>(0.9999));
-  let cell = min(vec3<u32>(samplePosition * f32(GRID)), vec3<u32>(GRID - 1u));
-  let cellIndex = cell.x + cell.y * GRID + cell.z * GRID * GRID;
+  let samplePosition = (params.nodeToPyro * vec4<f32>(position, 1.0)).xyz;
+  let sampleCell = samplePosition * f32(GRID);
+  if (any(sampleCell < vec3<f32>(0.0)) || any(sampleCell >= vec3<f32>(f32(GRID), f32(GRID_Y), f32(GRID)))) { return 0.0; }
+  let cell = vec3<u32>(sampleCell);
+  let cellIndex = cell.x + cell.y * GRID + cell.z * GRID * GRID_Y;
   let base = cellIndex * 4u;
   return max(0.0, fluid[base + 1u].y) + max(0.0, fluid[base + 2u].x) * 0.20;
 }
@@ -994,7 +1004,7 @@ fn emitSources(@builtin(global_invocation_id) gid: vec3<u32>) {
   let step = atomicLoad(&sourceHeader[18]);
   let sourceIndex = atomicAdd(&sourceHeader[9], 1u);
   if (sourceIndex < params.counts.z) {
-    let position = carriedNodePosition(nodeIndex) * params.pyroScale.xyz + params.pyroOffset.xyz;
+    let position = (params.nodeToPyro * vec4<f32>(carriedNodePosition(nodeIndex), 1.0)).xyz;
     let emittedFuel = consumedFuel * params.emission.y;
     let emittedSoot = consumedFuel * params.emission.z;
     sourceRecords[sourceIndex] = SourceRecord(
@@ -1084,6 +1094,8 @@ struct Presentation {
   world: vec4<f32>,
   style: vec4<f32>,
   topology: vec4<u32>,
+  displayTransform: mat4x4<f32>,
+  normalTransform: mat4x4<f32>,
 }
 
 struct VertexOut {
@@ -1122,8 +1134,9 @@ fn carriedNodePosition(nodeIndex: u32) -> vec3<f32> {
 
 fn displayedPosition(nodeIndex: u32) -> vec3<f32> {
   let node = nodes[nodeIndex];
-  return (carriedNodePosition(nodeIndex) - vec3<f32>(0.5)) * presentation.style.xyz +
+  let restWorld = (carriedNodePosition(nodeIndex) - vec3<f32>(0.5)) * presentation.style.xyz +
     node.displacement.xyz + presentation.world.xyz;
+  return (presentation.displayTransform * vec4<f32>(restWorld, 1.0)).xyz;
 }
 
 fn semanticBurnWeights(thermal: vec4<f32>, reaction: vec4<f32>) -> vec4<f32> {
@@ -1344,9 +1357,10 @@ fn meshSurfaceVertex(@builtin(vertex_index) indexStreamOffset: u32) -> VertexOut
   let motion = componentMotions[binding.motion.x].translation.xyz;
   let nodeDisplacement = nodes[binding.motion.x].displacement.xyz;
   let materialPosition = vertex.position.xyz;
-  let worldPosition = (materialPosition + motion - vec3<f32>(0.5)) * presentation.style.xyz +
+  let restWorld = (materialPosition + motion - vec3<f32>(0.5)) * presentation.style.xyz +
     nodeDisplacement + presentation.world.xyz;
-  let surfaceNormal = normalize(vertex.normal.xyz / max(abs(presentation.style.xyz), vec3<f32>(0.0001)));
+  let worldPosition = (presentation.displayTransform * vec4<f32>(restWorld, 1.0)).xyz;
+  let surfaceNormal = normalize((presentation.normalTransform * vec4<f32>(vertex.normal.xyz / max(abs(presentation.style.xyz), vec3<f32>(0.0001)), 0.0)).xyz);
   var out: VertexOut;
   out.position = presentation.viewProjection * vec4<f32>(worldPosition, 1.0);
   out.color = vec4<f32>(vec3<f32>(1.0), 0.98);
@@ -1478,6 +1492,7 @@ fn fragmentMain(in: VertexOut) -> @location(0) vec4<f32> {
 export async function createGpuStructuralCombustionAssembly({
   device,
   gridSize,
+  gridDimensions = [gridSize, gridSize, gridSize],
   format,
   structures = [],
   load,
@@ -1487,6 +1502,9 @@ export async function createGpuStructuralCombustionAssembly({
   if (!device?.queue) throw new Error('GPU structural combustion requires a caller-owned GPUDevice and GPUQueue');
   const grid = positiveInteger(gridSize, 0);
   if (grid < 4) throw new Error('GPU structural combustion grid must be at least 4');
+  if (!Array.isArray(gridDimensions) || gridDimensions.length !== 3 || gridDimensions[0] !== grid || gridDimensions[2] !== grid || !Number.isInteger(gridDimensions[1]) || gridDimensions[1] < 4) {
+    throw new Error('GPU structural combustion requires effective x/y/z grid dimensions');
+  }
   if (!format) throw new Error('GPU structural combustion requires a presentation format');
   if (!Array.isArray(structures) || structures.length < 1) throw new Error('GPU structural combustion requires structural sockets');
   const presentationDebugCode = structuralCombustionPresentationDebugCode(presentationDebugMode);
@@ -1657,7 +1675,7 @@ export async function createGpuStructuralCombustionAssembly({
     bondPresentationPipeline,
     nodePresentationPipeline,
   } = await constructWithOwnedBufferCleanup(ownedBuffers, async () => {
-    const computeShaderSource = structuralCombustionShader(grid);
+    const computeShaderSource = structuralCombustionShader(grid, gridDimensions[1]);
     const module = device.createShaderModule({
       label: STRUCTURAL_COMBUSTION_AUTHORITY,
       code: computeShaderSource,
@@ -1947,6 +1965,19 @@ export async function createGpuStructuralCombustionAssembly({
     if (destroyed) throw new Error('GPU structural combustion assembly is destroyed');
     if (frozen) throw new Error('GPU structural combustion assembly is frozen');
     if (!encoder?.beginComputePass || !fluidBuffer) throw new Error('GPU structural combustion encode requires an encoder and current Pyro field');
+    sockets.forEach(socket => {
+      if (!socket.spatialTransformProvider) return;
+      const next = socket.spatialTransformProvider();
+      for (const field of ['nodeToPyro', 'displayTransform', 'normalTransform']) {
+        if (!Array.isArray(next?.[field]) || next[field].length !== 16 || next[field].some(value => !Number.isFinite(value))) {
+          throw new Error(`structural combustion ${socket.id} invalid ${field}`);
+        }
+      }
+      if (JSON.stringify(next) === socket.spatialStateKey) return;
+      socket.spatialState = next;
+      socket.spatialStateKey = JSON.stringify(next);
+      device.queue.writeBuffer(socket.paramsBuffer, 0, packParams(socket, socket.descriptor.nodeCount, socket.descriptor.bondCount, sourceCapacity, grid));
+    });
     const groups = sockets.map(socket => bindGroup(socket, fluidBuffer));
     const targetGroup = groups[sockets.indexOf(targetSocket)];
     encodePass(encoder, 'structural combustion clear source', clearPipeline, targetGroup, 1);
@@ -2046,6 +2077,8 @@ export async function createGpuStructuralCombustionAssembly({
       values.set([...(socket.worldOffset || [0, 0, 0]), socket.contactThreshold], 16);
       values.set([...(socket.displayScale || [1.12, 0.68, 0.58]), presentationDebugCode], 20);
       integers.set([socket.columns, socket.rows, socket.layers, socket.surfaceCellCount], 24);
+      values.set(socket.spatialState?.displayTransform || IDENTITY_MATRIX, 28);
+      values.set(socket.spatialState?.normalTransform || IDENTITY_MATRIX, 44);
       device.queue.writeBuffer(socket.presentationBuffer, 0, bytes);
     });
     const pass = encoder.beginRenderPass({
@@ -2328,6 +2361,8 @@ export async function createGpuStructuralCombustionAssembly({
       terminalReadbackCount: runtimeReadbackCount,
       hostCausalFeedbackCount: 0,
       structureCount: sockets.length,
+      gridDimensions: [...gridDimensions],
+      spatialTransforms: sockets.map(socket => ({ id: socket.id, ...socket.spatialState })),
       surfaceCellCount: sockets.reduce((sum, socket) => sum + socket.surfaceCellCount, 0),
       meshTriangleCount: sockets.reduce((sum, socket) => sum + (socket.meshSkin?.triangleCount ?? 0), 0),
       meshAssetIdentities: sockets.flatMap(socket => socket.meshSkin ? [socket.meshSkin.assetIdentity] : []),
