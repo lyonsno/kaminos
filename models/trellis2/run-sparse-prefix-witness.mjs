@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { validateBlockFixture, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
+import { finalizeSparseWitness } from './sparse-witness-finalize.mjs';
 
 const { values } = parseArgs({ options: Object.fromEntries(
   ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture'].map(name => [name, { type: 'string' }])) });
@@ -162,13 +163,18 @@ try {
   report.status = 'succeeded'; report.phase = null;
 } catch (error) { report.error = { message: error.message, stack: error.stack }; process.exitCode = 1; }
 finally {
-  report.finishedAt = new Date().toISOString();
-  if (cdp) { try { await cdp.call('Browser.close'); } catch {} cdp.close(); }
-  if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
-  if (server) await new Promise(resolve => server.close(resolve));
-  // Only ephemeral state from the exact owned browser profile is removed.
-  if (profile) await fs.rm(profile, { recursive: true, force: true });
-  await persist();
+  await finalizeSparseWitness({ report, persist, cleanup: [
+    ['browser', async () => { if (cdp) { try { await cdp.call('Browser.close'); } catch {} cdp.close(); } }],
+    ['child', async () => {
+      if (child && child.exitCode === null && child.signalCode === null) {
+        await new Promise((resolve, reject) => { child.once('close', resolve); child.once('error', reject); child.kill('SIGTERM'); });
+      }
+    }],
+    ['server', async () => { if (server) await new Promise(resolve => server.close(resolve)); }],
+    // Only ephemeral state from the exact owned browser profile is removed.
+    ['profile', async () => { if (profile) await fs.rm(profile, { recursive: true, force: true }); }],
+  ] });
+  if (report.status !== 'succeeded') process.exitCode = 1;
   console.log(JSON.stringify({ status: report.status, phase: report.phase, report: output,
     comparisons: Object.fromEntries(Object.entries(report.result?.outputs || {}).map(([name, row]) => [name, row.comparison])),
     error: report.error?.message }));
