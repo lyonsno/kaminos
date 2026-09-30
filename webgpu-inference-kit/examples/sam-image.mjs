@@ -307,6 +307,7 @@ export async function createSamImageExample({ canvas, onState = () => {},
     return operate('unloading', async () => {
       clearOutput(); state.phase = 'Release model resources';
       await sam?.close(); sam = null; state.modelUrl = null; runtimeEvidence = null;
+      if (fatal) throw fatal;
       if (!closing) state.status = 'idle'; state.phase = source ? 'Image loaded' : 'No image';
     });
   }

@@ -259,4 +259,33 @@ try {
   if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto);
   else delete globalThis.crypto;
 }
+for (const kind of ['uncapturederror', 'device-loss']) {
+  let listener, lose, releaseClose;
+  const terminalDevice = { lost: new Promise(resolve => { lose = resolve; }),
+    addEventListener(_name, callback) { listener = callback; }, removeEventListener() {}, destroy() {} };
+  const app = await createSamImageExample({ canvas: {}, baseUrl: 'http://localhost/', services: {
+    requestDevice: async () => ({ device: terminalDevice, adapter: {}, backendIdentity: { kind: 'fixture' } }),
+    createSession: async () => ({ async drain() {}, close() {} }),
+    decodeSource: async () => ({ ...source, release() {} }),
+    createForeground: async () => ({ setSource() {}, yield: async () => {}, evidence: () => ({}), close() {} }),
+    createRuntime: () => ({ async run(_manifest, request) { return { ...maskOutput, instances: [],
+      invocationId: request.invocationId, promptText: request.promptText, promptSha256: promptDigest,
+      sourceImage: request.sourceImage, outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
+      requestedRouteId: 'fixture', effectiveRouteId: 'fixture' }; }, evidence: () => ({}),
+      close() { return new Promise(resolve => { releaseClose = resolve; }); } }),
+  } });
+  await app.loadImage({});
+  await app.run({ manifestUrl: '/model.json', promptText: 'wheel' });
+  const unload = app.unloadModel();
+  await new Promise(resolve => setImmediate(resolve));
+  if (kind === 'uncapturederror') listener({ error: { message: 'failure during unload' } });
+  else lose({ reason: 'unknown', message: 'failure during unload' });
+  await Promise.resolve();
+  releaseClose();
+  await assert.rejects(unload, /failure during unload/);
+  assert.equal(app.snapshot().status, 'failed');
+  assert.equal(app.snapshot().output, null);
+  assert.equal(app.snapshot().modelUrl, null, 'unload still clears released model state');
+  await app.dispose();
+}
 console.log('SAM image example deterministic contracts passed (no GPU witness)');
