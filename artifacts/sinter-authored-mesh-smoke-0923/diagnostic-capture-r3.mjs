@@ -16,6 +16,8 @@ const outDir = resolve(args.get('--out-dir') || `${repoRoot}/artifacts/sinter-au
 const origin = args.get('--origin') || 'http://127.0.0.1:8094';
 const resolution = Number(args.get('--resolution') || 48);
 assert.ok(Number.isInteger(resolution) && resolution > 0, '--resolution must be a positive integer');
+const minimumDispatches = Number(args.get('--steps') || 120);
+assert.ok(Number.isInteger(minimumDispatches) && minimumDispatches > 0, '--steps must be a positive integer');
 const chromePath = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const modes = ['off', 'exposure', 'material'];
 const reportPath = `${outDir}/report.json`;
@@ -33,6 +35,7 @@ const report = {
   expectedObjectId: 'sinter-forked-timber-trestle',
   expectedAssetIdentity: 'sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84',
   resolution,
+  minimumDispatches,
   defaultVolumeSmokeBasin: null,
   requestedModes: modes,
   statusScope: 'capture-and-runtime-only',
@@ -277,8 +280,8 @@ async function main() {
           && lastSceneStatus?.startsWith('Scene loaded: 1 object')
           && currentSource?.status === 'bound'
           && currentSource?.sameDevice === true
-          && currentAssembly?.dispatchCount >= 120
-          && currentAssembly?.presentationCount >= 120
+          && currentAssembly?.dispatchCount >= minimumDispatches
+          && currentAssembly?.presentationCount >= minimumDispatches
           && currentAssembly?.meshTriangleCount === 864
           && currentAssembly?.meshAssetIdentities?.includes(report.expectedAssetIdentity)
           && currentAssembly?.presentationDebugMode === mode

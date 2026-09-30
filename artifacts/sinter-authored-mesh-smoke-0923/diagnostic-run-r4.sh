@@ -26,4 +26,4 @@ until curl --silent --fail --max-time 2 "$origin/api/runtime-config" >/dev/null;
 done
 
 /opt/homebrew/bin/node artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r3.mjs \
-  --repo-root "$repo_root" --scene "$scene_path" --origin "$origin" --out-dir "$out_dir"
+  --repo-root "$repo_root" --scene "$scene_path" --origin "$origin" --out-dir "$out_dir" "${@:5}"

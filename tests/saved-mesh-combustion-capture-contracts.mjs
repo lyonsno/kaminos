@@ -70,7 +70,7 @@ requirePattern(/assert\.equal\(loaded\.fileName, 'sinter-forked-timber-combustio
 requirePattern(/expectedAssetIdentity: 'sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84'/, 'capture must pin the authored trestle asset identity');
 requirePattern(/report\.injectedScenePayloadSha256 = sha256\(Buffer\.from\(sceneLiteral, 'utf8'\)\)/, 'capture must hash the exact scene payload loaded into the browser');
 requirePattern(/currentSource\?\.sameDevice === true/, 'GPU scene source and combustion assembly must share device identity');
-requirePattern(/currentAssembly\?\.dispatchCount >= 120[\s\S]*?currentAssembly\?\.presentationCount >= 120/, 'capture must observe actual simulation and presentation dispatches');
+requirePattern(/currentAssembly\?\.dispatchCount >= minimumDispatches[\s\S]*?currentAssembly\?\.presentationCount >= minimumDispatches/, 'capture must observe the requested number of actual simulation and presentation dispatches');
 requirePattern(/currentAssembly\?\.meshTriangleCount === 864[\s\S]*?meshAssetIdentities\?\.includes\(report\.expectedAssetIdentity\)/, 'capture must match the exact trestle geometry and asset');
 requirePattern(/assert\.equal\(assembly\.runtimeReadbackCount, 0, 'GPU diagnostic introduced host material readback'/, 'the visual assay must retain its GPU-only material boundary');
 requirePattern(/assertNonBlankCanvasScreenshot\(inspectPng\(canvasImageBytes\)\)/, 'capture must reject blank canvas pixels after decoding its screenshot');
