@@ -1961,10 +1961,7 @@ export async function createGpuStructuralCombustionAssembly({
     pass.end();
   }
 
-  function encode(encoder, fluidBuffer) {
-    if (destroyed) throw new Error('GPU structural combustion assembly is destroyed');
-    if (frozen) throw new Error('GPU structural combustion assembly is frozen');
-    if (!encoder?.beginComputePass || !fluidBuffer) throw new Error('GPU structural combustion encode requires an encoder and current Pyro field');
+  function refreshSpatialTransforms() {
     sockets.forEach(socket => {
       if (!socket.spatialTransformProvider) return;
       const next = socket.spatialTransformProvider();
@@ -1978,6 +1975,13 @@ export async function createGpuStructuralCombustionAssembly({
       socket.spatialStateKey = JSON.stringify(next);
       device.queue.writeBuffer(socket.paramsBuffer, 0, packParams(socket, socket.descriptor.nodeCount, socket.descriptor.bondCount, sourceCapacity, grid));
     });
+  }
+
+  function encode(encoder, fluidBuffer) {
+    if (destroyed) throw new Error('GPU structural combustion assembly is destroyed');
+    if (frozen) throw new Error('GPU structural combustion assembly is frozen');
+    if (!encoder?.beginComputePass || !fluidBuffer) throw new Error('GPU structural combustion encode requires an encoder and current Pyro field');
+    refreshSpatialTransforms();
     const groups = sockets.map(socket => bindGroup(socket, fluidBuffer));
     const targetGroup = groups[sockets.indexOf(targetSocket)];
     encodePass(encoder, 'structural combustion clear source', clearPipeline, targetGroup, 1);
@@ -2069,6 +2073,7 @@ export async function createGpuStructuralCombustionAssembly({
     if (!viewProjection || viewProjection.length !== 16 || [...viewProjection].some(value => !Number.isFinite(value))) {
       throw new Error('GPU structural combustion presentation requires a finite view-projection matrix');
     }
+    refreshSpatialTransforms();
     sockets.forEach(socket => {
       const bytes = new ArrayBuffer(PRESENTATION_BYTES);
       const values = new Float32Array(bytes);

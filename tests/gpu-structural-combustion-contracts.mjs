@@ -502,8 +502,9 @@ try {
   const materialBufferCount = buffers.filter(buffer => /target materials/.test(buffer.descriptor.label)).length;
   const writesBeforeMove = parameterWrites.length;
   spatialTranslation = 1.25;
-  assembly.encode(encoder, {});
   assembly.encodePresentation(presentationEncoder, {}, identityMatrix, {width: 640, height: 360});
+  assert.equal(new Float32Array(presentationUniformWrites.findLast(write => write.label === 'structural combustion target presentation').bytes.buffer)[40], 2.5, 'presentation follows object edits even while simulation stepping is paused');
+  assembly.encode(encoder, {});
   assert.equal(parameterWrites.length, writesBeforeMove + 1, 'moving the object uploads only its changed affine parameters');
   assert.equal(new Float32Array(parameterWrites.at(-1).buffer)[48], 1.25, 'the GPU heat/source matrix follows object translation');
   assert.equal(new Float32Array(presentationUniformWrites.findLast(write => write.label === 'structural combustion target presentation').bytes.buffer)[40], 2.5, 'the visible surface follows the same pose');
