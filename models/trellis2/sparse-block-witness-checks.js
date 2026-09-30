@@ -1,4 +1,4 @@
-import { buildSparseBlockPlan } from './sparse-block.js';
+import { buildSparseBlockPlan, sparseBlockWeightShapes } from './sparse-block.js';
 
 // Declared before native execution. Allows BF16 boundary drift, but does not
 // admit arbitrary mean error or a visually "better" output as fidelity.
@@ -24,8 +24,9 @@ export function compareBlockTensor(actual, expected) {
     actualAtWorst: actual[worstIndex], expectedAtWorst: expected[worstIndex], rmse: Math.sqrt(squared / actual.length),
     relativeL2: Math.sqrt(squared / Math.max(referenceSquared, Number.MIN_VALUE)), tolerance: BLOCK_TOLERANCE };
 }
-export function validateBlockFixture(manifest, prefix, prefixSha256) {
+export function validateBlockFixture(manifest, prefix, prefixSha256, { blockIndex = 0 } = {}) {
   if (manifest?.schema !== 'trellis2.sparse-block-reference.v0' || manifest.status !== 'succeeded') throw new Error('complete block reference required');
+  if ((manifest.blockIndex ?? 0) !== blockIndex) throw new Error('reference block index mismatch');
   if (!/^[a-f0-9]{64}$/.test(prefixSha256) || manifest.prefix?.sha256 !== prefixSha256 ||
       !/^[a-f0-9]{40}$/.test(manifest.source?.commit) || manifest.source.commit !== prefix.source?.commit ||
       manifest.source.dirty !== '') throw new Error('block/prefix source or input identity mismatch');
@@ -45,6 +46,33 @@ export function validateBlockFixture(manifest, prefix, prefixSha256) {
     const row = manifest.tensors?.[`expected.${name}`];
     if (!row || JSON.stringify(row.shape) !== JSON.stringify([plan.rows, width]) || row.dtype !== 'float32' ||
         row.byteLength !== plan.rows * width * 4 || !/^[a-f0-9]{64}$/.test(row.sha256)) throw new Error(`partial block reference: ${name}`);
+  }
+  return plan;
+}
+
+// The browser consumes its actual resident exit; the canonical reference used
+// the saved MLX exit. This admits composition evidence, not same-input parity.
+export function validateBlockChainFixture(next, first, prefix, prefixSha256, firstSha256) {
+  validateBlockFixture(first, prefix, prefixSha256);
+  const plan = validateBlockFixture(next, prefix, prefixSha256, { blockIndex: 1 });
+  if (!/^[a-f0-9]{64}$/.test(firstSha256) || next.inputBlock?.sha256 !== firstSha256 ||
+      next.inputBlock.blockIndex !== 0 || next.inputBlock.tensorSha256 !== first.tensors['expected.after_mlp'].sha256) {
+    throw new Error('consecutive block hidden reference identity mismatch');
+  }
+  if (!/^[a-f0-9]{64}$/.test(first.conditioning?.sha256) || next.conditioning?.sha256 !== first.conditioning.sha256) {
+    throw new Error('consecutive block conditioning source mismatch');
+  }
+  for (const name of ['conditioning', 'phases', 'gelu']) {
+    if (!/^[a-f0-9]{64}$/.test(first.tensors[name]?.sha256) || next.tensors[name]?.sha256 !== first.tensors[name].sha256) {
+      throw new Error(`consecutive block common input changed: ${name}`);
+    }
+  }
+  for (const [name, shape] of Object.entries(sparseBlockWeightShapes(plan))) {
+    const row = next.tensors[name];
+    if (!row || !row.checkpointKey?.startsWith('blocks.1.') || JSON.stringify(row.shape) !== JSON.stringify(shape) ||
+        row.dtype !== 'float32' || row.byteLength !== shape.reduce((a, b) => a * b, 4) || !/^[a-f0-9]{64}$/.test(row.sha256)) {
+      throw new Error(`partial or wrong-block weight: ${name}`);
+    }
   }
   return plan;
 }

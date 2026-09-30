@@ -5,15 +5,15 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { validateBlockFixture, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
+import { validateBlockFixture, validateBlockChainFixture, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 import { finalizeSparseWitness } from './sparse-witness-finalize.mjs';
 
 const { values } = parseArgs({ options: Object.fromEntries(
-  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture'].map(name => [name, { type: 'string' }])) });
+  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture'].map(name => [name, { type: 'string' }])) });
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
   if (!values[name]) throw new Error(`--${name} is required`);
 }
-let root, fixture, prefixFixture;
+let root, fixture, prefixFixture, nextBlockFixture;
 const witness = values.witness || 'prefix';
 const output = path.resolve(values.report);
 const evidenceRoot = path.join(path.dirname(output), 'raw');
@@ -67,11 +67,16 @@ try {
   fixture = await fs.realpath(values.fixture); report.fixtureRoot = fixture;
   report.phase = 'witness-admission'; report.witness = witness;
   if (!['prefix', 'block'].includes(witness)) throw new Error('--witness must be prefix or block');
+  if (values['next-block-fixture'] && witness !== 'block') throw new Error('--next-block-fixture requires block witness');
   if (witness === 'block') {
     if (!values['prefix-fixture']) throw new Error('--prefix-fixture is required for a block witness');
     prefixFixture = await fs.realpath(values['prefix-fixture']);
     report.prefixFixtureRoot = prefixFixture;
     report.prefixFixtureSha256 = digest(await fs.readFile(path.join(prefixFixture, 'manifest.json')));
+    if (values['next-block-fixture']) {
+      nextBlockFixture = await fs.realpath(values['next-block-fixture']); report.nextBlockFixtureRoot = nextBlockFixture;
+      report.nextBlockFixtureSha256 = digest(await fs.readFile(path.join(nextBlockFixture, 'manifest.json')));
+    }
   }
   report.phase = 'source-identity';
   report.commit = git(['rev-parse', 'HEAD']);
@@ -82,6 +87,9 @@ try {
     report.phase = 'block-reference-admission';
     validateBlockFixture(JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')),
       JSON.parse(await fs.readFile(path.join(prefixFixture, 'manifest.json'), 'utf8')), report.prefixFixtureSha256);
+    if (nextBlockFixture) validateBlockChainFixture(JSON.parse(await fs.readFile(path.join(nextBlockFixture, 'manifest.json'), 'utf8')),
+      JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')),
+      JSON.parse(await fs.readFile(path.join(prefixFixture, 'manifest.json'), 'utf8')), report.prefixFixtureSha256, report.fixtureSha256);
   }
   report.chrome = await fs.realpath(values.chrome);
   if (/\/Applications\/Google Chrome\.app\//.test(report.chrome)) throw new Error('GUI Google Chrome is not an isolated headless executable');
@@ -101,10 +109,11 @@ try {
       if (pathname === '/') { res.setHeader('Content-Type', 'text/html');
         res.end('<!doctype html><title>TRELLIS sparse prefix numerical witness</title>'); return; }
       const isPrefixFixture = pathname.startsWith('/prefix-fixture/');
-      const isFixture = isPrefixFixture || pathname.startsWith('/fixture/');
-      const base = isPrefixFixture ? prefixFixture : isFixture ? fixture : root;
+      const isNextFixture = pathname.startsWith('/next-block-fixture/');
+      const isFixture = isPrefixFixture || isNextFixture || pathname.startsWith('/fixture/');
+      const base = isPrefixFixture ? prefixFixture : isNextFixture ? nextBlockFixture : isFixture ? fixture : root;
       if (!base) { res.writeHead(404).end(); return; }
-      const file = path.resolve(base, `.${isPrefixFixture ? pathname.slice(15) : isFixture ? pathname.slice(8) : pathname}`);
+      const file = path.resolve(base, `.${isPrefixFixture ? pathname.slice(15) : isNextFixture ? pathname.slice(19) : isFixture ? pathname.slice(8) : pathname}`);
       if (!file.startsWith(base + path.sep)) { res.writeHead(403).end(); return; }
       const bytes = await fs.readFile(file);
       if (!isFixture && /\.m?js$/.test(file)) {
@@ -145,7 +154,7 @@ try {
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
     const { ${witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${witness}-witness.js');
-    return { url: location.href, result: await ${witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}` : ''}) };
+    return { url: location.href, result: await ${witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''}) };
   })()`, awaitPromise: true, returnByValue: true }, sessionId);
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   const value = result.result.value;

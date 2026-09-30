@@ -2,7 +2,7 @@ import { createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/cor
 import { createTrellisSparsePrefixAdapter } from './sparse-prefix.js';
 import { createTrellisSparseBlockAdapter, createTrellisSparseBlockWorkspace, SPARSE_BLOCK_ROUTE } from './sparse-block.js';
 import { validatePrefixFixture, validateNativePrefixBackend, prefixAdapterName, comparePrefixTensor } from './sparse-prefix-witness-checks.js';
-import { validateBlockFixture, compareBlockTensor, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
+import { validateBlockFixture, validateBlockChainFixture, compareBlockTensor, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 
 const hash = async data => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), b => b.toString(16).padStart(2, '0')).join('');
 async function loadManifest(path, expectedSha) {
@@ -28,21 +28,27 @@ async function loadTensors(base, manifest) {
 
 // Offline observer. The serving composition below never downloads expected
 // outputs and never reads between prefix and block; only this observer does.
-export async function runSparseBlockWitness(blockSha, prefixSha) {
+export async function runSparseBlockWitness(blockSha, prefixSha, nextBlockSha) {
   const report = { status: 'failed', phase: 'fixture', requestedRoute: SPARSE_BLOCK_ROUTE,
-    blockFixtureSha256: blockSha, prefixFixtureSha256: prefixSha };
+    blockFixtureSha256: blockSha, prefixFixtureSha256: prefixSha, nextBlockFixtureSha256: nextBlockSha };
   const errors = [];
-  let device, session, prefixAdapter, blockAdapter, workspace, errorScope = false;
+  let device, session, prefixAdapter, blockAdapter, nextAdapter, workspace, errorScope = false;
   try {
     const prefixManifest = await loadManifest('/prefix-fixture/manifest.json', prefixSha);
     const blockManifest = await loadManifest('/fixture/manifest.json', blockSha);
     const prefixPlan = validatePrefixFixture(prefixManifest);
     const blockPlan = validateBlockFixture(blockManifest, prefixManifest, prefixSha);
+    const nextManifest = nextBlockSha ? await loadManifest('/next-block-fixture/manifest.json', nextBlockSha) : null;
+    if (nextManifest) validateBlockChainFixture(nextManifest, blockManifest, prefixManifest, prefixSha, blockSha);
     const prefixTensors = await loadTensors('/prefix-fixture', prefixManifest);
     const blockTensors = await loadTensors('/fixture', blockManifest);
-    report.reference = { route: blockManifest.referenceRoute, effectiveBackend: blockManifest.effectiveBackend,
-      source: blockManifest.source, checkpoint: blockManifest.checkpoint, conditioning: blockManifest.conditioning,
-      fullModelExecutions: blockManifest.fullModelExecutions, blockExecutions: blockManifest.blockExecutions };
+    const nextTensors = nextManifest ? await loadTensors('/next-block-fixture', nextManifest) : null;
+    const observedManifest = nextManifest || blockManifest, observedTensors = nextTensors || blockTensors;
+    report.reference = { route: observedManifest.referenceRoute, effectiveBackend: observedManifest.effectiveBackend,
+      source: observedManifest.source, checkpoint: observedManifest.checkpoint, conditioning: observedManifest.conditioning,
+      fullModelExecutions: observedManifest.fullModelExecutions, blockExecutions: observedManifest.blockExecutions,
+      blockIndex: observedManifest.blockIndex ?? 0, inputBlock: observedManifest.inputBlock,
+      comparisonClass: nextManifest ? 'canonical-chain; native incoming hidden differs from saved canonical hidden' : 'prefix-to-block0' };
     report.phase = 'native-device';
     const adapter = await navigator.gpu?.requestAdapter();
     if (!adapter) throw new Error('WebGPU adapter unavailable');
@@ -63,12 +69,19 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
       conditioning: blockTensors.conditioning, phases: blockTensors.phases });
     blockAdapter = createTrellisSparseBlockAdapter({ route, config: blockManifest.config, weights: blockTensors,
       inputs: prefixAdapter.outputs, workspace });
+    if (nextManifest) nextAdapter = createTrellisSparseBlockAdapter({ route, config: nextManifest.config, weights: nextTensors,
+      inputs: { projected: blockAdapter.outputs.hidden, modulation: prefixAdapter.outputs.modulation }, workspace });
     report.phase = 'prefix-block-composition';
     const started = performance.now();
-    const job = route.enqueue({ jobId: 'prefix-block0', execute: async invocation => {
+    const job = route.enqueue({ jobId: nextManifest ? 'prefix-block0-block1' : 'prefix-block0', execute: async invocation => {
       const producer = await prefixAdapter.run({ sample: prefixTensors.sample, timestep: prefixTensors.timestep[0] }, invocation);
       if (producer.projected !== prefixAdapter.outputs.projected || producer.modulation !== prefixAdapter.outputs.modulation) throw new Error('prefix tensor identity changed');
-      const output = await blockAdapter.run(invocation);
+      let output = await blockAdapter.run(invocation);
+      if (nextAdapter) {
+        if (output.hidden !== blockAdapter.outputs.hidden) throw new Error('resident block0 hidden identity changed');
+        output = await nextAdapter.run(invocation);
+        if (output.hidden !== blockAdapter.outputs.hidden) throw new Error('shared block-chain exit storage changed');
+      }
       return { ...output, producer };
     } });
     const completion = await job.completion;
@@ -76,12 +89,15 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
     report.hostSubmitMs = performance.now() - started;
     report.sessionId = session.snapshot().sessionId;
     report.composition = { sameSession: true, sameJob: true, readbackBetweenPrefixAndBlock: false, reusedResidentPrefixBuffers: true,
-      activationStorage: 'shared-serialized-block-workspace', executedBlocks: 1 };
+      activationStorage: 'shared-serialized-block-workspace', executedBlocks: nextManifest ? 2 : 1,
+      observedBlockIndex: nextManifest ? 1 : 0, readbackBetweenBlocks: false,
+      block0FixtureSha256: blockSha, block1FixtureSha256: nextBlockSha,
+      reusedResidentBlockHidden: Boolean(nextAdapter) };
     report.phase = 'observation-readback';
     report.outputs = {};
     const observed = { projected: completion.output.producer.projected, modulation: completion.output.producer.modulation,
       ...Object.fromEntries(BLOCK_OBSERVATIONS.map(key => {
-        const tensor = blockAdapter.diagnostics[key];
+        const tensor = (nextAdapter || blockAdapter).diagnostics[key];
         if (!tensor) throw new Error(`missing block diagnostic ${key}`);
         return [key, tensor];
       })) };
@@ -92,7 +108,7 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
       if (!response.ok) throw new Error(`could not preserve complete raw ${name}`);
       const isPrefix = name === 'projected' || name === 'modulation';
       report.outputs[name] = { shape: tensor.shape, dtype: tensor.dtype, sha256: await hash(data),
-        comparison: isPrefix ? comparePrefixTensor(data, prefixTensors[`expected.${name}`]) : compareBlockTensor(data, blockTensors[`expected.${name}`]) };
+        comparison: isPrefix ? comparePrefixTensor(data, prefixTensors[`expected.${name}`]) : compareBlockTensor(data, observedTensors[`expected.${name}`]) };
     }
     report.completedWithReadbackMs = performance.now() - started;
     report.observerReadbackAndSaveMs = performance.now() - observedAt;
@@ -100,12 +116,12 @@ export async function runSparseBlockWitness(blockSha, prefixSha) {
     if (validation) errors.push(validation.message);
     if (errors.length) throw new Error(errors.join('\n'));
     if (!Object.values(report.outputs).every(row => row.comparison.passed)) throw new Error('whole-block numerical comparison failed');
-    report.profile = route.runtime.finishProfile({ evidence: { mode: 'live', source: 'sparse-prefix-block0-exact-fixture' } });
+    report.profile = route.runtime.finishProfile({ evidence: { mode: 'live', source: nextManifest ? 'sparse-prefix-block0-block1-exact-fixture' : 'sparse-prefix-block0-exact-fixture' } });
     report.status = 'succeeded'; report.phase = null;
   } catch (error) { report.error = { message: error.message, stack: error.stack }; }
   finally {
     if (errorScope) { const validation = await device.popErrorScope(); if (validation) errors.push(validation.message); }
-    report.errors = errors; blockAdapter?.dispose(); workspace?.dispose(); prefixAdapter?.dispose();
+    report.errors = errors; nextAdapter?.dispose(); blockAdapter?.dispose(); workspace?.dispose(); prefixAdapter?.dispose();
     if (session) { await session.drain(); session.close(); }
     device?.destroy();
   }

@@ -30,11 +30,13 @@ def main():
     p.add_argument('--source-root', type=Path, required=True)
     p.add_argument('--prefix', type=Path, required=True)
     p.add_argument('--conditioning', type=Path, required=True)
+    p.add_argument('--block-index', type=int, default=0)
+    p.add_argument('--input-block', type=Path, help='Saved preceding canonical block manifest; no preceding block rerun.')
     p.add_argument('--out', type=Path, required=True)
     args = p.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     report = {'schema': 'trellis2.sparse-block-reference.v0', 'status': 'failed', 'phase': 'source',
-              'tensors': {}, 'fullModelExecutions': 0, 'blockExecutions': 0,
+              'tensors': {}, 'fullModelExecutions': 0, 'blockExecutions': 0, 'blockIndex': args.block_index,
               'config': {'resolution': 16, 'channels': 1536, 'heads': 12, 'contextChannels': 1024,
                          'contextRows': 1029, 'hidden': 8192},
               'referenceRoute': 'pinned-MLX-GPU-single-block/fast-SDPA/two-pass-LN/mlx-sum-QK/real-RoPE/source-BF16-GELU'}
@@ -53,7 +55,27 @@ def main():
         report['checkpoint'] = {'path': str(checkpoint), 'sha256': digest(checkpoint)}
         if report['checkpoint']['sha256'] != prefix['checkpoint']['sha256']:
             raise ValueError('checkpoint changed since prefix reference')
+        previous = None
+        if args.block_index < 0 or args.block_index >= 30:
+            raise ValueError('block index outside checkpoint model geometry')
+        if args.block_index == 0 and args.input_block is not None:
+            raise ValueError('block0 must consume the canonical prefix')
+        if args.block_index > 0:
+            if args.input_block is None:
+                raise ValueError('later block requires preceding canonical block manifest')
+            previous = json.loads(args.input_block.read_text())
+            if (previous.get('status') != 'succeeded' or previous.get('blockIndex', 0) != args.block_index - 1 or
+                    previous.get('source', {}).get('commit') != report['source']['commit'] or
+                    previous.get('source', {}).get('dirty') != '' or
+                    previous.get('checkpoint', {}).get('sha256') != report['checkpoint']['sha256'] or
+                    previous.get('prefix', {}).get('sha256') != report['prefix']['sha256']):
+                raise ValueError('preceding block source/checkpoint/prefix/index mismatch')
+            descriptor = previous['tensors']['expected.after_mlp']
+            report['inputBlock'] = {'path': str(args.input_block.resolve()), 'sha256': digest(args.input_block),
+                'blockIndex': args.block_index - 1, 'tensorSha256': descriptor['sha256']}
         report['conditioning'] = {'path': str(args.conditioning.resolve()), 'sha256': digest(args.conditioning)}
+        if previous is not None and previous.get('conditioning', {}).get('sha256') != report['conditioning']['sha256']:
+            raise ValueError('conditioning changed across canonical blocks')
         for file in ('trellmlx/models/sparse_structure_flow.py', 'trellmlx/modules/attention.py',
                      'trellmlx/modules/norm.py', 'trellmlx/modules/rope.py', 'trellmlx/sparse_flow_layernorm.py'):
             report['source'][file] = digest(root / file)
@@ -94,7 +116,7 @@ def main():
             n = struct.unpack('<Q', f.read(8))[0]
             header = json.loads(f.read(n))
             for name, key in mapping.items():
-                source_key = 'blocks.0.' + key
+                source_key = f'blocks.{args.block_index}.' + key
                 item = header[source_key]
                 a, b = item['data_offsets']
                 f.seek(8 + n + a)
@@ -122,7 +144,19 @@ def main():
             if digest(file) != descriptor['sha256']:
                 raise ValueError(f'prefix bytes changed: {name}')
             return np.fromfile(file, dtype='<f4').reshape(descriptor['shape'])
-        projected = mx.array(prefix_tensor('expected.projected')).astype(mx.bfloat16)
+        if previous is None:
+            hidden = prefix_tensor('expected.projected')
+        else:
+            descriptor = previous['tensors']['expected.after_mlp']
+            file = args.input_block.parent / descriptor['file']
+            if (descriptor.get('dtype') != 'float32' or descriptor.get('shape') != [4096, 1536] or
+                    descriptor.get('byteLength') != 4096 * 1536 * 4 or file.stat().st_size != descriptor['byteLength'] or
+                    digest(file) != descriptor['sha256']):
+                raise ValueError('preceding canonical hidden bytes/shape changed')
+            hidden = np.fromfile(file, dtype='<f4').reshape(4096, 1536)
+        if not np.isfinite(hidden).all():
+            raise ValueError('nonfinite canonical block input')
+        projected = mx.array(hidden).astype(mx.bfloat16)
         mod = mx.array(prefix_tensor('expected.modulation').reshape(-1)).astype(mx.bfloat16)
         data = np.load(args.conditioning, allow_pickle=False)
         report['conditioning']['keys'] = list(data.files)
@@ -138,7 +172,8 @@ def main():
         report['geluSource'] = {'path': str(table_path), 'sha256': digest(table_path)}
         save('gelu', (table.astype('<u4') << 16).view('<f4'))
         report['phase'] = 'single-block-reference'
-        output, trace = block.trace(projected, mod, mx.array(condition).astype(mx.bfloat16), phases)
+        trace_prefix = f'block{args.block_index}'
+        output, trace = block.trace(projected, mod, mx.array(condition).astype(mx.bfloat16), phases, trace_prefix=trace_prefix)
         mx.eval(output, *trace.values())
         report['blockExecutions'] = 1
         names = ['norm1', 'modulated_self_input', 'q_post_norm', 'k_post_norm', 'q_post_rope', 'k_post_rope',
@@ -146,7 +181,7 @@ def main():
                  'mlp_input', 'mlp_fc1', 'mlp_gelu', 'mlp_fc2', 'after_mlp']
         aliases = {'attention_raw': 'self.attention', 'cross_attention_raw': 'cross.attention'}
         for name in names:
-            value = np.asarray(trace['block0_' + name].astype(mx.float32))
+            value = np.asarray(trace[trace_prefix + '_' + name].astype(mx.float32))
             if value.ndim == 3:
                 value = value.reshape(-1, 1536)
             save('expected.' + aliases.get(name, name), value, arithmetic='bfloat16')
