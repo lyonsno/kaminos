@@ -37,6 +37,8 @@ assert.ok(output.hidden.buffer);
 assert.deepEqual(output.hidden.shape, [8, 12]);
 assert.deepEqual(runs.map(row => row.options.stage), adapter.plan.stages);
 assert.ok(runs.every(row => row.options.schedulerInvocation === invocation));
+assert.ok(!runs.some(row => /var<[^>]+>\s+shared\b/.test(row.kernel.code)),
+  'Native WGSL rejects shared as a reserved binding name (captured exact-source compiler error).');
 assert.ok(runs.some(row => row.kernel.bindings.some(binding => binding.resource === projected)));
 assert.ok(runs.some(row => row.kernel.bindings.some(binding => binding.resource === modulation)));
 assert.ok(!uploads.includes(projected) && !uploads.includes(modulation), 'Prefix GPU inputs cannot be replaced with CPU uploads.');

@@ -152,7 +152,7 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
     const context = tensor('conditioning', [s, plan.contextChannels]); runtime.uploadTensor(context, Float32Array.from(conditioning, roundBfloat16));
     const rope = tensor('rope-phases', [r, d / 2, 2]); runtime.uploadTensor(rope, phases);
     const mod = tensor('modulation', [6 * c]);
-    add('block-modulation', elementShader(6 * c, decl(['shared', 'bias', 'output']), 'output[i] = round_bf16(shared[i] + bias[i]);'), [inputs.modulation, w.modulation, mod], grid(6 * c));
+    add('block-modulation', elementShader(6 * c, decl(['timestep_mod', 'bias', 'output']), 'output[i] = round_bf16(timestep_mod[i] + bias[i]);'), [inputs.modulation, w.modulation, mod], grid(6 * c));
     const norm = (stage, input, name, affine = false) => { const out = allocate(name); add(stage, normShader({ rows: r, width: c, affine }),
       affine ? [input, w['norm2.weight'], w['norm2.bias'], out] : [input, out], [r, 1, 1]); return out; };
     const adaln = (stage, input, name, shift, scale) => { const out = allocate(name); add(stage, elementShader(r * c, decl(['input', 'modulation', 'output']),
