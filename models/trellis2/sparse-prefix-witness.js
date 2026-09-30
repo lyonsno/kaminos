@@ -1,7 +1,7 @@
 import { createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/core.js';
 import { createTrellisSparsePrefixAdapter, SPARSE_PREFIX_ROUTE } from './sparse-prefix.js';
 import { comparePrefixTensor, validateNativePrefixBackend, validatePrefixFixture,
-  validatePrefixRoute } from './sparse-prefix-witness-checks.js';
+  validatePrefixRoute, prefixAdapterName } from './sparse-prefix-witness-checks.js';
 
 const hash = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
   x => x.toString(16).padStart(2, '0')).join('');
@@ -42,7 +42,7 @@ export async function runSparsePrefixWitness(expectedManifestSha) {
     device = await adapter.requestDevice();
     device.addEventListener('uncapturederror', event => errors.push(event.error.message));
     session = await createWebGpuInferenceSession({ sessionId: `sparse-prefix-${crypto.randomUUID()}`,
-      adapter, device, adapterName: adapter.info.description || adapter.info.device });
+      adapter, device, adapterName: prefixAdapterName(adapter.info) });
     const route = await session.registerRoute({ routeId: SPARSE_PREFIX_ROUTE,
       runtimeOptions: { requiredStages: plan.stages } });
     report.effectiveRoute = route.routeId;

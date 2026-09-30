@@ -69,6 +69,7 @@ try {
   server = http.createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+      if (pathname === '/favicon.ico') { res.writeHead(204).end(); return; }
       if (req.method === 'POST' && /^\/output\/(projected|modulation)$/.test(pathname)) {
         const chunks = []; for await (const chunk of req) chunks.push(chunk);
         const bytes = Buffer.concat(chunks), name = pathname.split('/').at(-1);
@@ -101,6 +102,7 @@ try {
   profile = await fs.mkdtemp(path.join(os.tmpdir(), 'trellis-sparse-chrome-'));
   report.profilePath = profile;
   child = spawn(report.chrome, ['--headless=new', '--enable-unsafe-webgpu', '--remote-debugging-port=0',
+    '--use-mock-keychain', '--password-store=basic', '--no-first-run',
     `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   report.ownedBrowserPid = child.pid;
   const wsUrl = await new Promise((resolve, reject) => {
@@ -127,13 +129,13 @@ try {
   const value = result.result.value;
   report.effectiveUrl = value.url; report.result = value.result;
   if (value.url !== report.requestedUrl) throw new Error('effective browser URL differs from requested route');
+  if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
   for (const name of ['projected', 'modulation']) {
     if (!report.rawOutputs?.[name] || report.rawOutputs[name].sha256 !== value.result.outputs?.[name]?.sha256) {
       throw new Error(`missing or mismatched raw evidence: ${name}`);
     }
   }
-  if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   report.status = 'succeeded'; report.phase = null;
 } catch (error) { report.error = { message: error.message, stack: error.stack }; process.exitCode = 1; }
 finally {

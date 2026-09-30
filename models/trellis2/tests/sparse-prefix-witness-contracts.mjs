@@ -16,4 +16,5 @@ assert.throws(() => api.validatePrefixFixture({ status: 'failed' }), /complete/)
 assert.throws(() => api.validateNativePrefixBackend({ vendor: 'google', description: 'SwiftShader' }), /native Apple/);
 assert.throws(() => api.validateNativePrefixBackend({ vendor: 'apple', isFallbackAdapter: true }), /native Apple/);
 assert.throws(() => api.validatePrefixRoute('other.webgpu.v0', 'trellis2.sparse-flow-prefix.webgpu.v0'), /route/);
+assert.equal(api.prefixAdapterName({ vendor: 'apple', architecture: 'metal-3', description: '', device: '' }), 'apple metal-3');
 console.log('Sparse prefix witness rejects missing, partial, nonfinite, blank, wrong-route, and fallback closure');

@@ -23,6 +23,9 @@ export function validateNativePrefixBackend(backend) {
   if (backend.vendor?.toLowerCase() !== 'apple' || backend.isFallbackAdapter ||
     /swiftshader|software/i.test(backend.description || '')) throw new Error('native Apple WebGPU adapter required');
 }
+export function prefixAdapterName(info) {
+  return info.description || info.device || `${info.vendor} ${info.architecture}`.trim();
+}
 export function validatePrefixRoute(requested, effective) {
   if (requested !== SPARSE_PREFIX_ROUTE || effective !== requested) throw new Error('effective prefix route mismatch');
 }
