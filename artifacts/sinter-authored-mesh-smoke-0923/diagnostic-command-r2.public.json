@@ -1,0 +1,27 @@
+{
+  "schema": "kaminos.saved-mesh-combustion-diagnostic-command-public.v1",
+  "publicAgentAlias": "sinter-object-combustion",
+  "submissionIdentityNote": "This public-safe record omits the private runtime agent identity. The exact submitted request is preserved by Greenroom under the recorded job ID.",
+  "repoRoot": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
+  "cwd": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
+  "env": {
+    "KAMINOS_CHROME": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  },
+  "outputDir": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r2",
+  "routeIdentity": "kaminos-saved-timber-trestle-gpu-diagnostic-v0-r2",
+  "argv": [
+    "/opt/homebrew/bin/node",
+    "artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r2.mjs",
+    "--repo-root",
+    "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
+    "--scene",
+    "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/scenes/sinter-forked-timber-combustion.kaminos.json",
+    "--origin",
+    "http://127.0.0.1:8094",
+    "--out-dir",
+    "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r2"
+  ],
+  "timeoutSeconds": 180,
+  "submittedGreenroomJobId": "5288bc11c616",
+  "submittedManifestSha256": "be72cb90bff54fbd0cb510d055394c495ab4b208f1a0dce9098b4cb33bc4bf0d"
+}

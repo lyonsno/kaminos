@@ -3273,6 +3273,7 @@ import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
+import { createSavedMeshCombustionAssembly } from './saved-mesh-combustion.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
@@ -3564,6 +3565,7 @@ let annularBurner = null;
 let burnerRecipe = null;
 let burnerError = null;
 let volumeBridge = null;
+let savedMeshCombustionRuntime = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -6633,6 +6635,7 @@ function registerSceneObject(object, metadata = {}) {
     label: metadata.label ?? metadata.fileName ?? id,
     groupId: metadata.groupId ?? null,
     createdAt: metadata.createdAt ?? new Date().toISOString(),
+    combustionBinding: metadata.combustionBinding ?? null,
     splat: metadata.splat ?? null,
     image: metadata.image ?? null,
     renderRoute: metadata.renderRoute ?? null,
@@ -6648,6 +6651,7 @@ function registerSceneObject(object, metadata = {}) {
     label: record.label,
     groupId: record.groupId,
     createdAt: record.createdAt,
+    combustionBinding: record.combustionBinding,
     splat: record.splat,
     image: record.image,
     renderRoute: record.renderRoute,
@@ -6704,6 +6708,7 @@ window.kaminosSceneObjectDebugState = function() {
     active: record.id === activeSceneObjectId,
     transform: sceneObjectTransformState(record.object),
     sceneTransform: record.sceneTransform ? cloneTransformState(record.sceneTransform) : null,
+    combustionBinding: record.combustionBinding ? structuredClone(record.combustionBinding) : null,
     splat: record.splat || null,
     image: record.image || null,
     renderRoute: record.renderRoute || null,
@@ -26250,6 +26255,7 @@ function serializeSceneObject(entry) {
     transform: entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(object),
     sceneTransform: entry.type === 'splat' ? splatSceneTransformState(entry) : null,
     materials: getMaterialStateForObject(object),
+    combustionBinding: metadata.combustionBinding ?? entry.combustionBinding ?? null,
     splat: metadata.splat ?? entry.splat ?? null,
     image: metadata.image ?? entry.image ?? null,
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
@@ -26343,6 +26349,31 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
     setActiveSceneGroup(activeGroupId);
   } else {
     setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
+  }
+}
+
+async function syncSavedSceneCombustionBinding() {
+  const boundEntries = sceneObjects.filter(entry => entry.combustionBinding);
+  if (boundEntries.length > 1) throw new Error(`saved-scene combustion currently supports one bound object; found ${boundEntries.length}`);
+  const entry = boundEntries[0] || null;
+  if (savedMeshCombustionRuntime?.entry === entry) return !!entry;
+  if (savedMeshCombustionRuntime) {
+    volumePrototype?.clearGpuStructuralCombustionAssembly?.();
+    savedMeshCombustionRuntime.runtime.dispose();
+    savedMeshCombustionRuntime = null;
+  }
+  if (!entry) return false;
+  const gpuContext = await volumePrototype.borrowStructuralCombustionGpuContext();
+  const presentationDebugMode = new URLSearchParams(window.location.search)
+    .get('volume_structural_combustion_view') || 'off';
+  const runtime = await createSavedMeshCombustionAssembly({ THREE, entry, gpuContext, presentationDebugMode });
+  try {
+    await volumePrototype.setGpuStructuralCombustionAssembly(runtime.assembly);
+    savedMeshCombustionRuntime = { entry, runtime };
+    return true;
+  } catch (error) {
+    runtime.dispose();
+    throw error;
   }
 }
 
@@ -26829,6 +26860,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
+  let hasSavedMeshCombustion = false;
 
   try {
     assertSceneObjectsReloadable(objectRecords);
@@ -26907,6 +26939,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (objectRecords.length > 0) {
     try {
       await loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId);
+      hasSavedMeshCombustion = await syncSavedSceneCombustionBinding();
     } catch (e) {
       setFlameDomainTranslation(previousFlameDomainTranslation);
       setVolumePrimitivesState(previousVolumePrimitiveState);
@@ -26917,6 +26950,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     }
   } else {
     clearScene();
+    hasSavedMeshCombustion = await syncSavedSceneCombustionBinding();
   }
   if (activeSceneComposition && window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster') {
     ensureAuthoredFlameEmitter();
@@ -26927,8 +26961,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (!activeSceneComposition || JSON.stringify(previousVolumePrimitiveState) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
-  if (hasVolumePrimitiveScene || activeSceneComposition) {
-    setActiveTab(activeSceneComposition ? 'assets' : 'volume');
+  if (hasVolumePrimitiveScene || activeSceneComposition || hasSavedMeshCombustion) {
+    setActiveTab('volume');
     await volumePrototype?.setActive?.(true);
   } else {
     await volumePrototype?.setActive?.(false);

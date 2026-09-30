@@ -1,0 +1,73 @@
+{
+  "schema": "kaminos.scene.v1",
+  "version": 4,
+  "timestamp": "2026-09-23T00:00:00.000Z",
+  "objects": [
+    {
+      "id": "sinter-forked-timber-trestle",
+      "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+      "type": "glb",
+      "fileName": "forked-timber-reliquary-trestle-v0.glb",
+      "label": "Forked timber reliquary trestle",
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "materials": {
+        "side": 2,
+        "transparent": false,
+        "opacity": 1
+      },
+      "combustionBinding": {
+        "schema": "kaminos.object-combustion-binding.v0",
+        "objectId": "sinter-forked-timber-trestle",
+        "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+        "structuralProfile": "timber-two-island.v0",
+        "burnRate": 0.003
+      }
+    }
+  ],
+  "groups": [],
+  "activeObjectId": "sinter-forked-timber-trestle",
+  "activeGroupId": null,
+  "model": {
+    "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+    "type": "glb",
+    "fileName": "forked-timber-reliquary-trestle-v0.glb"
+  },
+  "provenance": {
+    "assetId": "forked-timber-reliquary-trestle-v0",
+    "assetDescriptor": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/structuralMeshAssetDescriptor.json"
+  },
+  "transform": {
+    "position": [0, 0, 0],
+    "rotation": [0, 0, 0],
+    "scale": [1, 1, 1]
+  },
+  "camera": {
+    "position": [2.7, 1.8, 3.4],
+    "target": [0, 0.42, 0],
+    "up": [0, 1, 0],
+    "near": 0.1,
+    "far": 100,
+    "fov": 45
+  },
+  "environment": {
+    "name": "studio",
+    "exposure": 1.2,
+    "intensity": 1,
+    "rotation": 0,
+    "showBackground": false,
+    "backgroundBlur": 0.4
+  },
+  "volumePrimitives": {
+    "schema": "kaminos.volume-primitives.v0",
+    "primitives": []
+  },
+  "postprocessing": {
+    "ao": { "enabled": false, "radius": 0.4, "intensity": 1, "scale": 1, "thickness": 1, "falloff": 0.7, "farBlend": 0.7 },
+    "dof": { "enabled": false, "focus": 8, "aperture": 0.0001, "maxblur": 0.01 }
+  },
+  "backdrop": false
+}
