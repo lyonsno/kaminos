@@ -932,7 +932,15 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <button class="btn" id="motion-panel-stop-wriggle">Stop / Restore Rig</button>
         <button class="btn" id="motion-panel-fixture-preview">Preview Fixture</button>
       </div>
-      <div style="font-size:10px;color:#999;margin-top:5px;line-height:1.4">Select the intended cat, then click a hind-leg rig helper in the viewport to choose its skinned mesh. Generate + Wriggle pitches the weighted pelvis and drives six hind-leg joints; unweighted forequarters and other bones stay visibly still. Stop cancels pending generation or restores the captured rig.</div>
+      <div style="font-size:10px;color:#999;margin-top:5px;line-height:1.4">Generate + Wriggle uses the selected hind-leg rig helper. Retained playback below uses a previously generated SOMA30 clip, not fresh inference. Only the painted pelvis/hind-leg channels are driven; inspect the unweighted front and its transition. Stop restores the captured rig.</div>
+      <div class="slider-row"><span class="slider-label">Painted cast</span><select id="motion-panel-retained-cast" class="select-input"><option value="0">First cast</option><option value="1">Second cast</option></select></div>
+      <input type="file" id="motion-panel-retained-file" accept="application/json,.json" aria-label="Load previously generated motion JSON">
+      <div class="volume-actions">
+        <button class="btn" id="motion-panel-play-retained" disabled>Play Retained Clip</button>
+        <button class="btn" id="motion-panel-focus-rig">Focus Chosen Cast</button>
+        <button class="btn" id="motion-panel-show-pair">Restore Pair View</button>
+      </div>
+      <div id="motion-panel-retained-status" role="status" style="font-size:11px;color:#aaa;margin:6px 0">No retained clip loaded.</div>
       <div class="slider-row">
         <span class="slider-label">Export</span>
         <select id="motion-panel-export-resolution" class="select-input">
@@ -2897,6 +2905,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObject, frameObjects, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { loadRetainedMotionClip, decodeRetainedMotionClip, focusRigMeshes } from './motion-retained-clip.mjs';
 import {
   buildKimodoHindquartersTrack,
   createMotionRigRequestGate,
@@ -8572,6 +8581,86 @@ const MOTION_RIG_PREVIEW_BONES = Object.freeze({
   rightHock: 'hindlimb-right-hock',
 });
 
+let retainedMotionClip = null;
+let retainedMotionLoadGeneration = 0;
+let restoreRetainedRigFocus = null;
+
+function retainedMotionStatus(message) {
+  document.getElementById('motion-panel-retained-status').textContent = message;
+}
+
+async function loadMotionPanelRetainedClip(source, expectedSha256 = '') {
+  const generation = ++retainedMotionLoadGeneration;
+  retainedMotionClip = null;
+  document.getElementById('motion-panel-play-retained').disabled = true;
+  retainedMotionStatus('Loading retained generated clip…');
+  try {
+    const clip = typeof source === 'string'
+      ? await loadRetainedMotionClip(source, { expectedSha256 })
+      : await decodeRetainedMotionClip(await source.arrayBuffer(), { expectedSha256 });
+    if (generation !== retainedMotionLoadGeneration) return null;
+    retainedMotionClip = clip;
+    window.__kaminosRetainedMotionClip = { sha256: clip.sha256, frameCount: clip.frameCount, fps: clip.fps, authority: clip.authority };
+    document.getElementById('motion-panel-play-retained').disabled = false;
+    retainedMotionStatus(`Retained generated clip · ${clip.frameCount} frames · ${clip.fps} fps · ${clip.sha256.slice(0, 12)} · no fresh inference`);
+    return clip;
+  } catch (error) {
+    if (generation === retainedMotionLoadGeneration) {
+      window.__kaminosRetainedMotionClip = { status: 'failed', error: error.message };
+      retainedMotionStatus(`Retained clip unavailable: ${error.message}`);
+    }
+    return null;
+  }
+}
+
+function selectRetainedMotionRig() {
+  const index = Number(document.getElementById('motion-panel-retained-cast').value);
+  const record = selectedSceneObjectEntry();
+  if (!record) throw new Error('Select the painted cat scene object first');
+  window.kaminosSelectSkinnedBoneForRigPreview(record.id, index, 'hindlimb-left-hip');
+  return selectedSceneBoneTarget;
+}
+
+function restoreRetainedMotionPairView() {
+  restoreRetainedRigFocus?.();
+  restoreRetainedRigFocus = null;
+  window._kaminosDirty?.();
+}
+
+function focusRetainedMotionRig(target = selectRetainedMotionRig()) {
+  restoreRetainedMotionPairView();
+  const restoreMeshes = focusRigMeshes(sceneObjectSkinnedMeshes(target.objectId), target.mesh);
+  const helper = target.helperState?.helper;
+  const helperVisible = helper?.visible;
+  const gizmoVisible = transformControls?.visible;
+  if (helper) helper.visible = false;
+  if (transformControls) transformControls.visible = false;
+  restoreRetainedRigFocus = () => {
+    restoreMeshes();
+    if (helper) helper.visible = helperVisible;
+    if (transformControls) transformControls.visible = gizmoVisible;
+  };
+  target.mesh.computeBoundingBox();
+  frameObject(target.mesh, camera, controls);
+  window._kaminosDirty?.();
+}
+
+function playRetainedMotionRig() {
+  try {
+    if (!retainedMotionClip) throw new Error('Load a retained generated clip first');
+    stopMotionRigPreview('retained-replay');
+    const target = selectRetainedMotionRig();
+    focusRetainedMotionRig(target);
+    return startMotionRigPreview(retainedMotionClip.result, {
+      target, prompt: retainedMotionClip.result.prompt || '',
+      sourceRoute: `retained-kimodo-clip:sha256:${retainedMotionClip.sha256}`,
+    });
+  } catch (error) {
+    retainedMotionStatus(`Cannot play retained clip: ${error.message}`);
+    return null;
+  }
+}
+
 function motionRigPreviewStatus() {
   const state = motionRigPreviewState;
   return state ? {
@@ -8633,6 +8722,7 @@ function invalidatePendingMotionRigPreview(reason = 'request-invalidated') {
 }
 
 function motionRigSelectionChanged(reason = 'selection-changed') {
+  restoreRetainedMotionPairView();
   invalidatePendingMotionRigPreview(reason);
   const state = motionRigPreviewState;
   if (state && (selectedSceneBoneTarget?.objectId !== state.objectId || selectedSceneBoneTarget?.mesh !== state.mesh)) {
@@ -8734,7 +8824,7 @@ function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.moti
     stopReason: null,
   };
   window.__kaminosMotionRigPreview = motionRigPreviewStatus();
-  setMotionPanelTemporalStatus(`Playing ${track.frameCount} Kimodo frames on selected cat pelvis and hindquarters; unweighted forequarters stay still`, '#66bb6a');
+  setMotionPanelTemporalStatus(`Playing ${track.frameCount} Kimodo frames on selected cat pelvis and hindquarters; inspect the unweighted front/transition`, '#66bb6a');
   window._kaminosDirty?.();
   return window.__kaminosMotionRigPreview;
 }
@@ -9123,6 +9213,17 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-panel-generate-preview')?.addEventListener('click', () => void generateMotionPanelTemporalPreview());
   document.getElementById('motion-panel-generate-wriggle')?.addEventListener('click', () => void generateMotionPanelCatHindquartersPreview());
   document.getElementById('motion-panel-stop-wriggle')?.addEventListener('click', () => stopMotionRigPreview('operator-stop'));
+  document.getElementById('motion-panel-play-retained')?.addEventListener('click', playRetainedMotionRig);
+  document.getElementById('motion-panel-retained-file')?.addEventListener('change', event => {
+    if (event.target.files[0]) void loadMotionPanelRetainedClip(event.target.files[0]);
+  });
+  document.getElementById('motion-panel-focus-rig')?.addEventListener('click', () => {
+    try { focusRetainedMotionRig(); } catch (error) { retainedMotionStatus(error.message); }
+  });
+  document.getElementById('motion-panel-show-pair')?.addEventListener('click', restoreRetainedMotionPairView);
+  document.getElementById('motion-panel-retained-cast')?.addEventListener('change', () => {
+    stopMotionRigPreview('retained-cast-changed'); restoreRetainedMotionPairView();
+  });
   document.getElementById('motion-panel-fixture-preview')?.addEventListener('click', () => void previewMotionPanelTemporalFixture());
   document.getElementById('motion-panel-export-view')?.addEventListener('click', () => void exportMotionPanelCurrentViewFilmstrip());
   document.querySelectorAll('[data-motion-temporal-clip]').forEach(button => {
@@ -9139,6 +9240,11 @@ function initKaminosMotionAgencyRoute() {
     });
   }
   const params = new URLSearchParams(window.location.search);
+  if (params.has('motion_clip_url')) {
+    document.getElementById('motion-panel-retained-cast').value = params.get('motion_cast_index') === '1' ? '1' : '0';
+    void loadMotionPanelRetainedClip(params.get('motion_clip_url'), params.get('motion_clip_sha256') || '');
+    document.querySelector('[data-tab="motion"]')?.click();
+  }
   if (params.has('kaminos_forge_host')) {
     const forgeSource = params.get('kaminos_forge_host') === 'live' ? 'live_registry' : 'fixture';
     void createForgeHostStationScene({ force: true, source: forgeSource });

@@ -333,6 +333,44 @@ async function runMeshSkinnedPoseScenario(ws) {
   lastEvidence.meshSkinnedPose = { objectId, expectedAssetSha256, loadedSha256, poseMeshIndex, bone: boneName, axis: 'z', degrees: 12, before, beforeShot, action, after, moved, otherBoneError, posedShot, restored, restoredShot, returnError, quaternionReturnError, identicalControl, posedPixels, restoredPixels };
 }
 
+// Exercises the retained route and ordinary buttons. No generation response is mocked.
+async function runCatRetainedPlaybackScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-cat-retained-playback';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const clip = await evaluate(ws, 'window.__kaminosRetainedMotionClip ?? null');
+  assert.equal(clip?.sha256, new URL(url).searchParams.get('motion_clip_sha256'));
+  assert.equal(clip?.authority, 'retained-motion-playback');
+  assert.ok(clip.frameCount > 1);
+  const click = async id => {
+    const point = await evaluate(ws, `(() => { const e = document.getElementById(${JSON.stringify(id)}); const r = e?.getBoundingClientRect(); if (!e || e.disabled || !r?.width || !r?.height) throw new Error('control unavailable: ' + ${JSON.stringify(id)}); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+    await dispatchMouseClick(ws, point);
+  };
+  await click('motion-panel-focus-rig');
+  await delay(300);
+  const rest = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-retained-before'));
+  await click('motion-panel-play-retained');
+  const frames = [];
+  for (let index = 0; index < 8; index++) {
+    await delay(500);
+    const state = await evaluate(ws, 'window.kaminosMotionRigPreviewDebugState()');
+    assert.equal(state.active, true, 'playback must be live during the captured sequence');
+    frames.push({ elapsedMs: index * 500 + 500, state, screenshot: await capturePngScreenshot(ws, siblingPngPath(`-retained-${index}`)) });
+  }
+  assert.ok(new Set(frames.map(frame => frame.state.frame)).size > 1, 'motion frames must advance');
+  await click('motion-panel-stop-wriggle');
+  const restored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  assert.deepEqual(restored.meshes.map(mesh => mesh.boneQuaternions), rest.meshes.map(mesh => mesh.boneQuaternions), 'Stop restores both imported casts');
+  const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-retained-restored'));
+  await click('motion-panel-play-retained');
+  await delay(clip.frameCount / clip.fps * 1000 + 300);
+  const completed = await evaluate(ws, 'window.kaminosMotionRigPreviewDebugState()');
+  assert.equal(completed.active, false, 'the complete clip reaches natural completion');
+  await click('motion-panel-show-pair');
+  lastEvidence.catRetainedPlayback = { clip, rest, beforeShot, frames, restored, restoredShot, completed, sourceRoute: 'real retained JSON URL; ordinary visible controls' };
+}
+
 async function runCatMotionRetargetScenario(ws) {
   await runMeshAssetLinkScenario(ws);
   phase = 'scenario-cat-motion-retarget';
@@ -5399,6 +5437,11 @@ try {
   await waitForWebSocketOpen(ws);
   await wsRequest(ws, 'Runtime.enable');
   await wsRequest(ws, 'Page.enable');
+  // Seat the owned target explicitly: startup can expose about:blank before argv navigation.
+  if (scenario === 'cat-retained-playback') {
+    const navigation = await wsRequest(ws, 'Page.navigate', { url });
+    if (navigation.errorText) throw new Error(`witness navigation failed: ${navigation.errorText}`);
+  }
   await wsRequest(ws, 'Page.bringToFront');
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'location.href');
@@ -5419,6 +5462,8 @@ try {
     await runMeshSkinnedPoseScenario(ws);
   } else if (scenario === 'cat-motion-retarget') {
     await runCatMotionRetargetScenario(ws);
+  } else if (scenario === 'cat-retained-playback') {
+    await runCatRetainedPlaybackScenario(ws);
   } else if (scenario === 'mesh-skinned-pose-controls') {
     await runSceneBoneGizmoScenario(ws);
   } else if (scenario === 'scene-bone-gizmo') {

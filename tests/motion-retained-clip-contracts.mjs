@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const core = await import('../motion-retained-clip.mjs').catch(() => ({}));
+assert.equal(typeof core.loadRetainedMotionClip, 'function', 'retained playback must load actual clip bytes, not fake a generation endpoint');
+const parents = [-1, 0, 1, 2, 3, 4, 5, 6, 6, 6, 3, 10, 11, 12, 13, 13, 3, 16, 17, 18, 19, 19, 0, 22, 23, 24, 0, 26, 27, 28];
+const frame = Array.from({ length: 30 }, () => [0, 0, 0]);
+Object.assign(frame, { 1: [0, 1, 0], 22: [1, 0, 0], 23: [1, -1, 0], 24: [1, -1.8, 0.2], 25: [1, -2, 1],
+  26: [-1, 0, 0], 27: [-1, -1, 0], 28: [-1, -1.8, 0.2], 29: [-1, -2, 1] });
+const result = { joints: [frame, frame], parents, numJoints: 30, numFrames: 2, fps: 30 };
+const bytes = new TextEncoder().encode(JSON.stringify(result));
+const request = async () => ({ ok: true, arrayBuffer: async () => bytes.buffer });
+const clip = await core.loadRetainedMotionClip('/clip.json', { fetchImpl: request });
+assert.equal(clip.frameCount, 2);
+assert.equal(clip.fps, 30);
+assert.match(clip.sha256, /^[a-f0-9]{64}$/);
+assert.equal(clip.authority, 'retained-motion-playback');
+await assert.rejects(core.loadRetainedMotionClip('/clip.json', { fetchImpl: request, expectedSha256: '0'.repeat(64) }), /hash mismatch/);
+await assert.rejects(core.loadRetainedMotionClip('/clip.json', { fetchImpl: async () => ({ ok: false, status: 404 }) }), /404/);
+await assert.rejects(core.loadRetainedMotionClip('/clip.json', { fetchImpl: async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) }) }), /blank/);
+const incomplete = new TextEncoder().encode(JSON.stringify({ ...result, numFrames: 3 }));
+await assert.rejects(core.loadRetainedMotionClip('/clip.json', { fetchImpl: async () => ({ ok: true, arrayBuffer: async () => incomplete.buffer }) }), /frame count/);
+const first = { visible: true }, second = { visible: false }, third = { visible: true };
+const restore = core.focusRigMeshes([first, second, third], first);
+assert.deepEqual([first.visible, second.visible, third.visible], [true, false, false]);
+restore(); restore();
+assert.deepEqual([first.visible, second.visible, third.visible], [true, false, true], 'focus restores the actual prior visibility, not all visible');
+assert.throws(() => core.focusRigMeshes([first], second), /target/);
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+assert.match(html, /id="motion-panel-play-retained"/);
+assert.match(html, /id="motion-panel-retained-file"/);
+assert.match(html, /loadRetainedMotionClip/);
+assert.match(html, /motion_clip_url/);
+console.log('retained motion clip contracts passed');
