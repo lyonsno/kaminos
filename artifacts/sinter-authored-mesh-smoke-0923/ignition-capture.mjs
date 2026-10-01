@@ -9,10 +9,17 @@ import {cdpRequest} from './diagnostic-cdp.mjs';
 import {assertIgnitionCaptureState} from './ignition-capture-contract.mjs';
 
 const out = resolve(process.argv[2] || 'artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001');
+const protocol = process.argv[4] ? JSON.parse(readFileSync(process.argv[4], 'utf8')) : {
+  view: 'material', emissionCases: [false, true], primeSteps: [140], warmupSteps: 0,
+  sourcePose: null, primeOnly: false,
+  transferSourcePose: {position: [0.6, -0.55, 0]},
+  transferReceiverPose: {position: [0.6, 0.1, 0]}, transferSteps: [60, 120, 180],
+};
+assert.ok(['material', 'exposure', 'off'].includes(protocol.view));
 mkdirSync(out, {recursive: true});
 const report = {status: 'running', phase: 'preflight', receiver: 'sinter-timber-ignition',
   command: process.argv, repoRoot: process.cwd(), terminalEvidence: join(out, 'report.json'),
-  startedAt: new Date().toISOString(), runs: [], errors: [], scope: 'matched-visual-experiment-inspection-required'};
+  startedAt: new Date().toISOString(), protocol, runs: [], errors: [], scope: 'matched-visual-experiment-inspection-required'};
 const save = () => writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2));
 save();
 let browser, ws, logFd, browserExit;
@@ -78,6 +85,7 @@ try {
   });
   await cdpRequest(ws, 'Runtime.enable');
   await cdpRequest(ws, 'Log.enable');
+  await cdpRequest(ws, 'Page.enable');
   await cdpRequest(ws, 'Emulation.setFocusEmulationEnabled', {enabled: true});
   ws.addEventListener('message', event => {
     const message = JSON.parse(String(event.data));
@@ -87,7 +95,7 @@ try {
   const scene = JSON.parse(readFileSync('scenes/sinter-timber-ignition-pair.kaminos.json', 'utf8'));
   const capture = async (run, name) => {
     const state = await snapshot();
-    assertIgnitionCaptureState(state, {emissionEnabled: run.emissionEnabled, objectIds: scene.objects.map(object => object.id)});
+    assertIgnitionCaptureState(state, {emissionEnabled: run.emissionEnabled, objectIds: scene.objects.map(object => object.id), view: protocol.view});
     const screenshot = await cdpRequest(ws, 'Page.captureScreenshot', {format: 'png', fromSurface: true});
     const path = join(out, `${run.name}-${name}.png`);
     writeFileSync(path, Buffer.from(screenshot.data, 'base64'));
@@ -98,33 +106,41 @@ try {
     assert.equal(receipt.ok, true); assert.equal(receipt.gpuComplete, true);
     return receipt;
   };
-  for (const emissionEnabled of [false, true]) {
+  for (const emissionEnabled of protocol.emissionCases) {
     const run = {name: emissionEnabled ? 'emission-on' : 'emission-off', emissionEnabled, frames: [], phases: []};
     report.runs.push(run);
     report.phase = `${run.name}-load`; save();
     run.scene = structuredClone(scene);
     run.scene.objects.forEach(object => {object.combustionBinding.emissionEnabled = emissionEnabled;});
+    if (protocol.sourcePose) Object.assign(run.scene.objects.find(object => object.id === 'sinter-source-timber').transform, protocol.sourcePose);
     run.scene.objects.find(object => object.id === 'sinter-receiver-timber').transform.position = [2.5, 0.1, 0];
     const sceneText = JSON.stringify(run.scene);
     run.inputSha256 = createHash('sha256').update(sceneText).digest('hex');
     writeFileSync(join(out, `${run.name}-input.kaminos.json`), sceneText);
-    const route = 'http://127.0.0.1:18100/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=material';
+    const route = `http://127.0.0.1:18100/?kaminos_volume_smoke=1&volume_resolution=48&volume_structural_combustion_view=${protocol.view}`;
     await cdpRequest(ws, 'Page.navigate', {url: route});
     await wait(state => state?.backend === 'WebGPU:apple' && state.simStepCount > 0);
-    run.selectedFile = await evaluate(`(() => {const input=document.getElementById('scene-file-input');const dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(sceneText)}], 'sinter-timber-ignition-pair.kaminos.json', {type:'application/json'}));input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return input.files[0].name;})()`);
+    if (protocol.warmupSteps) run.warmup = await advance(protocol.warmupSteps);
+    run.selectedFile = await evaluate(`(() => {const input=document.getElementById('scene-file-input');const dt=new DataTransfer();dt.items.add(new File([${JSON.stringify(sceneText)}], 'sinter-timber-ignition-pair.kaminos.json', {type:'application/json'}));input.files=dt.files;const name=input.files[0].name;input.dispatchEvent(new Event('change',{bubbles:true}));return name;})()`);
+    if (protocol.warmupSteps) run.resumeAfterWarmup = await evaluate(`window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false)`);
     await wait(state => state?.assembly?.structureCount === 2 && state.assembly.dispatchCount > 0);
     await evaluate(`window.kaminosSetCameraDebugPose({position:[3.1,1.4,4],target:[0.6,-0.2,0]})`);
     run.phases.push({name: 'cold', pause: await advance(1)});
     await capture(run, 'cold');
     report.phase = `${run.name}-prime-source`; save();
-    run.phases.push({name: 'primed', pause: await advance(140)});
-    await capture(run, 'primed');
+    for (const steps of protocol.primeSteps) {
+      const name = `primed-${run.phases.filter(phase => phase.name.startsWith('primed')).length + 1}`;
+      run.phases.push({name, pause: await advance(steps)});
+      await capture(run, name);
+    }
+    if (protocol.primeOnly) continue;
     report.phase = `${run.name}-burner-off-and-place`; save();
-    run.manipulation = await evaluate(`(() => {const v=window.__kaminosVolumePrototype;v.setControls({flowRate:0});return {
-      source:window.kaminosSetSceneObjectTransform('sinter-source-timber',{position:[0.6,-0.55,0]}),
-      receiver:window.kaminosSetSceneObjectTransform('sinter-receiver-timber',{position:[0.6,0.1,0]}),
+    run.manipulation = await evaluate(`(() => {const v=window.__kaminosVolumePrototype;v.setControls({flowRate:0});const burnerShutdown=v.setAnalyticEmitterDescriptor(null);return {
+      burnerShutdown,
+      source:window.kaminosSetSceneObjectTransform('sinter-source-timber',${JSON.stringify(protocol.transferSourcePose)}),
+      receiver:window.kaminosSetSceneObjectTransform('sinter-receiver-timber',${JSON.stringify(protocol.transferReceiverPose)}),
       state:v.debugState()};})()`);
-    for (const steps of [60, 120, 180]) {
+    for (const steps of protocol.transferSteps) {
       report.phase = `${run.name}-transfer-${steps}`; save();
       run.phases.push({name: `transfer-${steps}`, pause: await advance(steps)});
       await capture(run, `transfer-${steps}`);
@@ -133,7 +149,7 @@ try {
   assert.deepEqual(report.errors, []);
   report.status = 'captured-inspection-required'; report.phase = 'complete';
 } catch (error) {
-  report.status = 'failed'; report.error = String(error.stack); process.exitCode = 1;
+  report.status = 'failed'; report.error = String(error.stack); process.exitCode = 1; save();
 } finally {
   ws?.close();
   if (browser?.pid && browser.exitCode === null) browser.kill('SIGTERM');

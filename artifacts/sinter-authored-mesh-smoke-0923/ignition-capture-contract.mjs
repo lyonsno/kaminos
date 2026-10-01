@@ -10,6 +10,7 @@ export function assertIgnitionCaptureState(state, expected) {
   assert.equal(state.assembly.meshTriangleCount, 1728);
   assert.ok(state.assembly.dispatchCount > 0);
   assert.equal(state.assembly.runtimeReadbackCount, 0);
+  assert.equal(state.assembly.presentationDebugMode, expected.view);
   assert.equal(state.assembly.emittingObjectIds.length, expected.emissionEnabled ? 2 : 0);
   assert.equal(state.source?.sameDevice, true);
   assert.deepEqual(state.objects.map(object => object.id), expected.objectIds);
