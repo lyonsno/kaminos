@@ -3301,7 +3301,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
-import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
+import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
@@ -10391,7 +10391,11 @@ async function initScene() {
   const prePass = pass(scene, camera);
   prePass.name = 'Pre-Pass';
   prePass.transparent = false;
-  prePass.setMRT(mrt({ output: packNormalToRGB(normalView) }));
+  // GTAO integrates the visible hemisphere. With inconsistent authored winding,
+  // Three's material-side normal can face away even on a visible double-sided
+  // surface. Correct this screen-space input, not the asset or material normal.
+  const aoNormalView = normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(), normalView);
+  prePass.setMRT(mrt({ output: packNormalToRGB(aoNormalView) }));
   const prePassNormal = sample((uv) => unpackRGBToNormal(prePass.getTextureNode().sample(uv)));
   const prePassDepth = prePass.getTextureNode('depth');
   const normalTexture = prePass.getTexture('output');
