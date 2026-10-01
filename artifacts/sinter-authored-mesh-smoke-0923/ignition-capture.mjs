@@ -6,7 +6,7 @@ import {join, resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {cdpRequest} from './diagnostic-cdp.mjs';
-import {assertIgnitionCaptureState} from './ignition-capture-contract.mjs';
+import {assertIgnitionCaptureState, ignitionCaptureBrowserArguments} from './ignition-capture-contract.mjs';
 
 const out = resolve(process.argv[2] || 'artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001');
 let protocol = {
@@ -50,6 +50,8 @@ try {
   if (process.argv[4]) protocol = JSON.parse(readFileSync(process.argv[4], 'utf8'));
   report.protocol = protocol;
   assert.ok(['material', 'exposure', 'off'].includes(protocol.view), 'unsupported capture view');
+  const headless = protocol.headless ?? true;
+  assert.equal(typeof headless, 'boolean', 'capture headless mode must be boolean');
   report.driverSha256 = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
   report.sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim();
   report.gitStatus = execFileSync('git', ['status', '--short'], {encoding: 'utf8'}).trim();
@@ -57,10 +59,8 @@ try {
   const executable = realpathSync(process.argv[3] || '/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
   assert.ok(!executable.startsWith('/Applications/Google Chrome.app/'), 'independent capture browser required');
   const profile = mkdtempSync(join(tmpdir(), 'sinter-ignition48-'));
-  const args = ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
-    '--no-first-run', '--enable-unsafe-webgpu', '--use-angle=metal',
-    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1600,1100', 'about:blank'];
-  report.browser = {executable, profile, args, headless: true};
+  const args = ignitionCaptureBrowserArguments({profile, headless});
+  report.browser = {executable, profile, args, headless};
   report.phase = 'browser-launch'; save();
   logFd = openSync(join(out, 'browser.log'), 'w');
   browser = spawn(executable, args, {stdio: ['ignore', logFd, logFd]});
@@ -89,6 +89,7 @@ try {
   await cdpRequest(ws, 'Runtime.enable');
   await cdpRequest(ws, 'Log.enable');
   await cdpRequest(ws, 'Page.enable');
+  if (!headless) await cdpRequest(ws, 'Page.bringToFront');
   await cdpRequest(ws, 'Emulation.setFocusEmulationEnabled', {enabled: true});
   ws.addEventListener('message', event => {
     const message = JSON.parse(String(event.data));

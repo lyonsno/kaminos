@@ -3,7 +3,13 @@ import {spawnSync} from 'node:child_process';
 import {existsSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {assertIgnitionCaptureState} from '../artifacts/sinter-authored-mesh-smoke-0923/ignition-capture-contract.mjs';
+import {assertIgnitionCaptureState, ignitionCaptureBrowserArguments} from '../artifacts/sinter-authored-mesh-smoke-0923/ignition-capture-contract.mjs';
+
+const visibleArgs = ignitionCaptureBrowserArguments({profile: '/caller/visible-profile', headless: false});
+assert.ok(!visibleArgs.some(argument => argument.startsWith('--headless')), 'visible capture must not silently launch headlessly');
+assert.ok(visibleArgs.includes('--user-data-dir=/caller/visible-profile'));
+assert.ok(ignitionCaptureBrowserArguments({profile: '/caller/default-profile'}).includes('--headless=new'));
+assert.throws(() => ignitionCaptureBrowserArguments({profile: '/caller/profile', headless: 'false'}), /must be boolean/);
 
 const expected = {emissionEnabled: true, objectIds: ['source', 'receiver'], view: 'material'};
 const state = {

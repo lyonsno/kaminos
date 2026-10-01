@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
 
+export function ignitionCaptureBrowserArguments({profile, headless = true}) {
+  assert.equal(typeof headless, 'boolean', 'capture headless mode must be boolean');
+  return [...(headless ? ['--headless=new'] : []), '--remote-debugging-port=0', `--user-data-dir=${profile}`,
+    '--no-first-run', '--enable-unsafe-webgpu', '--use-angle=metal',
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--window-size=1600,1100', 'about:blank'];
+}
+
 export function assertIgnitionCaptureState(state, expected) {
   assert.equal(state.backend, 'WebGPU:apple');
   assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
