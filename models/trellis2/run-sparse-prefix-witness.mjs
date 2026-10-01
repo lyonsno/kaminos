@@ -7,7 +7,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { validateBlockFixture, validateBlockChainFixture, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 import { finalizeSparseWitness, persistSparseWitnessResult, admitSparseWitnessResult } from './sparse-witness-finalize.mjs';
-import { validateFlowFixture } from './sparse-flow-witness-checks.js';
+import { validateFlowFixture, validateSLatFlowFixture } from './sparse-flow-witness-checks.js';
 import { validateSamplerFixture, validateSamplerTrajectoryFixture, SAMPLER_OBSERVATIONS } from './sparse-sampler-witness-checks.js';
 import { validateDecoderFixture, decoderObservationShapes } from './sparse-decoder-witness-checks.js';
 import { validateOccupancyCoordinateFixture } from './occupancy-coordinate-witness-checks.js';
@@ -17,7 +17,7 @@ const { values } = parseArgs({ options: Object.fromEntries(
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
   if (!values[name]) throw new Error(`--${name} is required`);
 }
-let root, fixture, prefixFixture, nextBlockFixture, samplerFixture, trajectoryFixture, trajectoryPlan, decoderPlan, coordinatePlan;
+let root, fixture, prefixFixture, nextBlockFixture, samplerFixture, trajectoryFixture, trajectoryPlan, decoderPlan, coordinatePlan, slatPlan;
 const witness = values.witness || 'prefix';
 const isSampler = witness === 'sampler' || witness === 'sampler-full';
 const output = path.resolve(values.report);
@@ -81,7 +81,7 @@ try {
   report.phase = 'fixture-admission';
   fixture = await fs.realpath(values.fixture); report.fixtureRoot = fixture;
   report.phase = 'witness-admission'; report.witness = witness;
-  if (!['prefix', 'block', 'flow', 'sampler', 'sampler-full', 'decoder', 'coordinates'].includes(witness)) throw new Error('--witness must be prefix, block, flow, sampler, sampler-full, decoder or coordinates');
+  if (!['prefix', 'block', 'flow', 'sampler', 'sampler-full', 'decoder', 'coordinates', 'slat'].includes(witness)) throw new Error('--witness must be prefix, block, flow, sampler, sampler-full, decoder, coordinates or slat');
   if (values['sampler-fixture'] && !isSampler) throw new Error('--sampler-fixture requires sampler witness');
   if (values['trajectory-fixture'] && witness !== 'sampler-full') throw new Error('--trajectory-fixture requires sampler-full witness');
   if (isSampler) {
@@ -112,6 +112,10 @@ try {
   if (witness === 'flow') { report.phase = 'flow-reference-admission'; report.schema = 'trellis2.sparse-flow-browser.v0'; }
   if (isSampler) { report.phase = 'sampler-reference-admission'; report.schema = witness === 'sampler-full' ? 'trellis2.sparse-sampler-trajectory-browser.v0' : 'trellis2.sparse-sampler-browser.v0'; }
   report.fixtureSha256 = digest(await fs.readFile(path.join(fixture, 'manifest.json')));
+  if (witness === 'slat') {
+    report.phase='SLat-reference-admission';report.schema='trellis2.slat-flow-browser.v0';
+    slatPlan=validateSLatFlowFixture(JSON.parse(await fs.readFile(path.join(fixture,'manifest.json'),'utf8')));
+  }
   if (witness === 'coordinates') {
     report.phase = 'coordinate-reference-admission'; report.schema = 'trellis2.occupancy-coordinate-browser.v0';
     coordinatePlan = validateOccupancyCoordinateFixture(JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')));
@@ -207,8 +211,8 @@ try {
   await loaded;
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
-    const { ${isSampler ? 'runSparseSamplerWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
-    const result = await ${isSampler ? 'runSparseSamplerWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''});
+    const { ${isSampler ? 'runSparseSamplerWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
+    const result = await ${isSampler ? 'runSparseSamplerWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''});
     const saved = await fetch('/witness-result', { method: 'POST', body: JSON.stringify(result) });
     if (!saved.ok) throw new Error('browser result was not durably saved');
     return { url: location.href, receipt: await saved.json() };
@@ -222,6 +226,16 @@ try {
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
   const requiredOutputs = coordinatePlan ? ['coordinates'] : isSampler ? [...SAMPLER_OBSERVATIONS] : decoderPlan ? Object.keys(decoderObservationShapes(decoderPlan)) : ['projected', 'modulation'];
   const observedOutputs={...value.result.outputs};
+  if (slatPlan) {
+    requiredOutputs.push('hidden','normalized','prediction','phases','coordinates');
+    const c=value.result.composition;
+    if(value.result.effectiveRoute!=='trellis2.slat-flow.webgpu.v0'||value.result.numericalStatus!=='passed'||value.result.profileStatus!=='passed'||
+      c?.executedBlocks!==30||c.coordinateRows!==slatPlan.tokenRows||c.exactBorrowedCoordinateIdentity!==true||c.metadataBytesToCPU!==4||
+      c.coordinateBytesToCPUDuringServing!==0||c.readbackBetweenBlocks!==false||c.sameSession!==true)throw Error('complete resident-coordinate SLat evidence required');
+    for(const name of ['models/trellis2/slat-flow.js','models/trellis2/occupancy-coordinates.js','models/trellis2/sparse-slat-witness.js',
+      'models/trellis2/sparse-flow.js','models/trellis2/sparse-prefix.js','models/trellis2/sparse-block.js','webgpu-inference-kit/src/inference-runtime.js'])
+      if(!report.servedSources[name])throw Error('missing SLat served-source attestation '+name);
+  }
   if (coordinatePlan) {
     if (value.result.numericalStatus !== 'passed' || value.result.profileStatus !== 'passed' || value.result.composition?.metadataBytesToCPU !== 4) throw new Error('complete native coordinate conformance required');
     for (const name of ['models/trellis2/occupancy-coordinates.js', 'models/trellis2/sparse-coordinates-witness.js', 'models/trellis2/occupancy-coordinate-witness-checks.js', 'webgpu-inference-kit/src/inference-runtime.js']) {
