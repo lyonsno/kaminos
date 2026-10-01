@@ -5,6 +5,19 @@ export const SAMPLER_REFERENCE_ROUTE='pinned-MLX-GPU-source-first-step-sampler/f
 export const SAMPLER_TRAJECTORY_REFERENCE_ROUTE='pinned-MLX-GPU-source-complete-sparse-schedule/fast-SDPA/two-pass-LN/mlx-sum-QK/F32-CFG-Euler';
 export const SAMPLER_OBSERVATIONS=Object.freeze(['positive','negative','guided','x0Positive','x0Guided','stds','rescaled','mixed','final','sample']);
 export const SAMPLE_TOLERANCE=Object.freeze({atol:0.001,rtol:0.001});
+export function recordSamplerCompletion(report,completion){
+  report.executionStatus=completion.status;
+  if(completion.status!=='succeeded')report.executionFailure={phase:report.phase,status:completion.status,
+    failure:completion.failure??{message:`sampler job ${completion.status}`,cancellation:completion.cancellation}};
+}
+export function preserveSamplerWitnessFailure(report,error){
+  const detail=error?{message:error.message,stack:error.stack}:undefined;
+  if(report.executionFailure){
+    if(detail)report.observationFailure={phase:report.phase,...detail};
+    report.phase=report.executionFailure.phase;
+    report.error=report.executionFailure.failure;
+  }else if(detail)report.error=detail;
+}
 export function requiredSamplerWitnessStages(flowPlan,plan,stepIndex=0){
   const step=plan.steps[stepIndex];if(!step)throw new RangeError('witness step outside source schedule');
   const stages=['sampler-positive-snapshot'];

@@ -2,7 +2,7 @@ import {createWebGpuInferenceSession} from '../../webgpu-inference-kit/src/core.
 import {createTrellisSparseFlowAdapter} from './sparse-flow.js';
 import {createTrellisSparseSamplerAdapter,SPARSE_SAMPLER_ROUTE} from './sparse-sampler.js';
 import {validateFlowFixture} from './sparse-flow-witness-checks.js';
-import {validateSamplerFixture,validateSamplerTrajectoryFixture,compareSamplerTensor,SAMPLER_OBSERVATIONS,requiredSamplerWitnessStages,finishSamplerWitnessObservation} from './sparse-sampler-witness-checks.js';
+import {validateSamplerFixture,validateSamplerTrajectoryFixture,compareSamplerTensor,SAMPLER_OBSERVATIONS,requiredSamplerWitnessStages,finishSamplerWitnessObservation,recordSamplerCompletion,preserveSamplerWitnessFailure} from './sparse-sampler-witness-checks.js';
 import {validateNativePrefixBackend,prefixAdapterName} from './sparse-prefix-witness-checks.js';
 import {createSparseBlockInputCapture} from './sparse-block-witness.js';
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
@@ -94,7 +94,7 @@ export async function runSparseSamplerWitness(flowSha,samplerSha,trajectorySha){
     const job=route.enqueue({jobId:trajectory?'sparse-complete-cfg-euler-schedule':'sparse-first-cfg-euler-step',execute:invocation=>trajectory
       ?trajectoryCapture.run(tensors.sample,invocation):sampler.step({sample:tensors.sample,stepIndex:0},invocation)});
     const completion=await job.completion;
-    report.executionStatus=completion.status;
+    recordSamplerCompletion(report,completion);
     // On a failed recurrent job, preserve snapshots of completed steps before
     // returning failure. They never become fallback model inputs.
     const result=completion.output;
@@ -126,10 +126,10 @@ export async function runSparseSamplerWitness(flowSha,samplerSha,trajectorySha){
     report.observerReadbackAndSaveMs=performance.now()-observer;
     const validation=await device.popErrorScope();errorScope=false;if(validation)errors.push(validation.message);
     if(errors.length)throw new Error(errors.join('\n'));
-    if(completion.status!=='succeeded')throw new Error(`sampler job ${completion.status}:${completion.error?.message||''}`);
+    if(completion.status!=='succeeded'){preserveSamplerWitnessFailure(report);return report;}
     finishSamplerWitnessObservation(report,()=>route.runtime.finishProfile({evidence:{mode:'live',source:trajectory?'sparse-complete-schedule-exact-source-reference':'sparse-first-step-exact-source-reference'}}),trajectory?plan.steps.length:undefined);
     report.status='succeeded';report.phase=null;
-  }catch(error){report.error={message:error.message,stack:error.stack};}
+  }catch(error){preserveSamplerWitnessFailure(report,error);}
   finally{
     if(errorScope){const validation=await device.popErrorScope();if(validation)errors.push(validation.message);}
     report.errors=errors;
