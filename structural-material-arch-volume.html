@@ -51,7 +51,7 @@
   <main>
     <div class="controls">
       <div class="force"><label for="force">Crown load · proxy units</label><input id="force" type="range" min="0.1" max="3" step="0.05" value="0.75"><output id="force-value" for="force">0.75</output></div>
-      <button id="solve" disabled>Fresh solve</button><button id="bind" disabled>Bind</button><button id="reset" disabled>Reset</button>
+      <button id="solve" disabled>Fresh solve</button><button id="release" disabled>Release</button><button id="bind" disabled>Bind</button><button id="reset" disabled>Reset</button>
       <div class="readout" id="status">Loading structural profiles</div>
     </div>
     <canvas id="view" aria-label="Orbitable intact and outer-notched stone arch structural volumes"></canvas>
@@ -72,7 +72,7 @@
       ]);
       const { OrbitControls } = controlsModule;
       const { buildArchStructuralProxy, solveArchStructuralForce, fractureArchStructuralProxy, bindArchStructuralProxy } = core;
-      const { buildArchVolumeFrame, resolveArchVolumeEquilibrium } = volume;
+      const { buildArchVolumeFrame, releaseArchStructuralLoad, resolveArchVolumeEquilibrium } = volume;
       const ROUTE = 'kaminos.structural-material.arch-force-volume.v0';
       const profileRoot = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness';
       const load = { x: -0.05, y: 0.29, threshold: 0.04, iterations: 600, contactDepthMode: 'camera-facing-surface', contactLayer: 2 };
@@ -178,7 +178,7 @@
         for (let index = 0; index < item.forceArrows.length; index += 1) {
           const arrow = item.forceArrows[index];
           const nodeIndex = loadedIndices[index];
-          arrow.visible = nodeIndex !== undefined;
+          arrow.visible = nodeIndex !== undefined && item.state.load?.requestedForce > 0;
           if (nodeIndex === undefined) continue;
           const [x, y, z] = frame.nodes[nodeIndex].position;
           arrow.position.set(x, y + 0.13, z);
@@ -187,10 +187,12 @@
         const broken = item.state.bonds.filter(bond => !bond.alive).length;
         const travel = item.state.load ? item.state.load.travel.toFixed(4) : '—';
         const displayTravel = item.displayTravel === null ? '' :
+          item.displayMode === 'fracture-event-pose' ? ' · accepted fracture-event pose' :
+          item.displayMode === 'unloaded-damaged' ? ' · released pose · damage retained' :
           item.displayMode === 'accepted-pose-unanchored' ? ' · unanchored contact, accepted pose' :
           ` · ${item.displayMode === 'broken-graph-equilibrium' ? 'post-break' : item.displayMode === 'repaired-graph-equilibrium' ? 'repaired' : 'loaded'} equilibrium ${item.displayTravel.toFixed(4)}`;
         document.getElementById(name === 'intact' ? 'intact-metric' : 'notched-metric').textContent =
-          `loaded travel ${travel}${displayTravel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}`;
+          `contact travel ${travel}${displayTravel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}`;
         render();
       }
 
@@ -207,12 +209,28 @@
           for (const [name, update] of Object.entries(updates)) present(name, update.prepared);
           applied = true;
           serial += 1;
+          document.getElementById('release').disabled = false;
           document.getElementById('bind').disabled = false;
           status.textContent = Object.values(cases).some(item => item.displayMode === 'accepted-pose-unanchored')
             ? `Front depth layer only · load ${force.toFixed(2)} · unanchored contact has no static display equilibrium`
+            : Object.values(cases).some(item => item.displayMode === 'fracture-event-pose')
+              ? `Front depth layer only · load ${force.toFixed(2)} · fracture pose retained; Release clears force, not cracks`
             : `Front depth layer only · load ${force.toFixed(2)} · independent intact-reference trials`;
           receipt.textContent = `Front-layer load ${force.toFixed(2)} · camera-facing layer 3 of 3 · feet fixed · outer-notch material event energy ${cases['outer-notch'].state.events.reduce((sum, event) => sum + event.energy, 0).toFixed(4)}`;
         } catch (error) { status.textContent = `Solve failed: ${error.message}`; }
+      }
+
+      function release() {
+        if (!applied) return;
+        const updates = Object.fromEntries(Object.entries(cases).map(([name, item]) => {
+          const released = releaseArchStructuralLoad(item.state, load);
+          return [name, { state: released.state, prepared: prepare(released.state, 0) }];
+        }));
+        for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
+        for (const [name, update] of Object.entries(updates)) present(name, update.prepared);
+        document.getElementById('release').disabled = true;
+        status.textContent = 'Load released · fracture history and connectivity retained';
+        receipt.textContent = `Release at zero force · ${cases['outer-notch'].state.bonds.filter(bond => !bond.alive).length} broken bonds retained · connectivity epoch ${cases['outer-notch'].state.connectivityEpoch}`;
       }
 
       function bind() {
@@ -224,15 +242,17 @@
         }));
         for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
         for (const [name, update] of Object.entries(updates)) present(name, update.prepared);
+        document.getElementById('release').disabled = true;
         document.getElementById('bind').disabled = true;
-        status.textContent = 'Broken graph connections rebound';
-        receipt.textContent = 'Connectivity restored; the displayed volume re-equilibrates on the repaired graph. Original load and fracture history remain.';
+        status.textContent = 'Connections rebound at zero load';
+        receipt.textContent = 'Connectivity restored on the released graph; crack history remains recorded.';
       }
 
       function reset() {
         if (!cases.intact) return;
         for (const [name, item] of Object.entries(cases)) { item.state = item.base; present(name); }
         applied = false;
+        document.getElementById('release').disabled = true;
         document.getElementById('bind').disabled = true;
         status.textContent = 'Profiles loaded · no load applied';
         receipt.textContent = 'No load applied';
@@ -242,17 +262,20 @@
         forceOutput.value = Number(forceInput.value).toFixed(2);
         if (applied) {
           applied = false;
+          document.getElementById('release').disabled = true;
           document.getElementById('bind').disabled = true;
           status.textContent = 'Force changed · run a fresh intact-reference trial';
         }
       });
       document.getElementById('solve').addEventListener('click', solve);
+      document.getElementById('release').addEventListener('click', release);
       document.getElementById('bind').addEventListener('click', bind);
       document.getElementById('reset').addEventListener('click', reset);
       window.addEventListener('resize', resize);
       window.__archVolumeWitness = () => ({
         route: ROUTE, phase, serial, camera: camera.position.toArray(),
         cases: Object.fromEntries(Object.entries(cases).map(([name, item]) => [name, {
+          solverAuthority: item.base.solverAuthority,
           sourceSha256: item.profile.source.sha256,
           nodes: item.state.nodes.length,
           broken: item.state.bonds.filter(bond => !bond.alive).length,

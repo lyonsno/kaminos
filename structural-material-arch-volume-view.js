@@ -36,6 +36,7 @@ export function buildArchVolumeFrame(state, equilibrium = state) {
 
 export function resolveArchVolumeEquilibrium(state, load) {
   if (!state.load) return { state, mode: 'unloaded' };
+  const broken = state.bonds.some(bond => !bond.alive);
   const contactCells = new Set(state.load.contactCells.map(cell => `${cell.column}:${cell.row}`));
   const pinnedComponents = new Set(state.nodes.filter(node => node.pinned).map(node => node.componentId));
   const loadedComponents = new Set(state.nodes
@@ -44,7 +45,16 @@ export function resolveArchVolumeEquilibrium(state, load) {
   if ([...loadedComponents].some(id => !pinnedComponents.has(id))) {
     return { state, mode: 'accepted-pose-unanchored' };
   }
-  const mode = state.bonds.some(bond => !bond.alive) ? 'broken-graph-equilibrium' :
-    state.events.some(event => event.kind === 'bind') ? 'repaired-graph-equilibrium' : 'intact-graph-equilibrium';
+  if (broken && state.load.requestedForce === 0) return { state, mode: 'unloaded-damaged' };
+  if (broken && state.load.requestedForce > 0) return { state, mode: 'fracture-event-pose' };
+  const mode = state.events.some(event => event.kind === 'bind') ? 'repaired-graph-equilibrium' : 'intact-graph-equilibrium';
   return { state: solveArchStructuralForce(state, load), mode };
+}
+
+export function releaseArchStructuralLoad(state, load = {}) {
+  if (!state?.load) throw new Error('arch release requires an applied structural load');
+  return {
+    state: solveArchStructuralForce(state, { ...state.load, ...load, force: 0 }),
+    mode: 'unloaded-damaged',
+  };
 }
