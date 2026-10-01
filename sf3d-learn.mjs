@@ -268,7 +268,7 @@ runButton.addEventListener('click', async () => {
   input.disabled = true;
   resolutionSelect.disabled = true;
   resetStages();
-  if (matchMedia('(max-width: 760px)').matches) viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (matchMedia('(max-width: 760px)').matches) viewer.scrollIntoView({ behavior: 'instant', block: 'start' });
   const started = performance.now();
   const resolution = Number(resolutionSelect.value);
   try {
@@ -303,8 +303,15 @@ runButton.addEventListener('click', async () => {
           $('learn-feature-time').textContent = `${((performance.now() - started) / 1000).toFixed(1)}s`;
           featurePanel.hidden = false;
           $('learn-view-empty').hidden = true;
-          $('learn-view-label').textContent = 'Encoding image';
-          if (sample.completedBlocks === sample.totalBlocks) markStage('encoder', 'done', performance.now() - started);
+          const encoded = sample.completedBlocks === sample.totalBlocks;
+          $('learn-view-label').textContent = encoded ? 'Image encoded; forming geometry' : 'Encoding image';
+          if (encoded) markStage('encoder', 'done', performance.now() - started);
+          else {
+            const row = document.querySelector('[data-stage="encoder"]');
+            row.dataset.state = 'active';
+            row.querySelector('.stage-time').textContent = `${sample.completedBlocks}/${sample.totalBlocks}`;
+            progress.value = sample.completedBlocks / sample.totalBlocks;
+          }
           window.dispatchEvent(new CustomEvent('sf3d-learn-observation', { detail: {
             kind: 'encoder', ...sample, values: Array.from(sample.values), atMs: performance.now() - started,
           } }));

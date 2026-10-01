@@ -14,12 +14,14 @@ const puppeteerPath = value('--puppeteer', '');
 const chromePath = value('--chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const width = Number(value('--width', '1440'));
 const height = Number(value('--height', '900'));
+const featureReplay = value('--feature-replay', '');
+const featureSample = featureReplay ? JSON.parse(fs.readFileSync(featureReplay, 'utf8')).observations.find(sample => sample.completedBlocks === 12) : null;
 fs.mkdirSync(outputDir, { recursive: true });
 const reportPath = path.join(outputDir, 'report.json');
 const report = {
   schema: 'kaminos.sf3d-learn-lifecycle.v0', ok: false, phase: 'preflight',
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-  effective: { baseUrl, width, height, producerRoute: 'synthetic-response-intercept', puppeteerPath, chromePath },
+  effective: { baseUrl, width, height, producerRoute: 'synthetic-response-intercept', featureReplay, puppeteerPath, chromePath },
   events: [],
 };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
@@ -34,6 +36,10 @@ export async function createSf3dProducer() {
     device: {},
     async run(_image, { routeOverrides }) {
       runCount += 1;
+      if (runCount === 1 && ${JSON.stringify(!!featureSample)}) {
+        await routeOverrides.onEncoderFeatures(${JSON.stringify(featureSample)});
+        await new Promise(resolve => { globalThis.__learnFake.resumeFeatures = resolve; });
+      }
       if (runCount === 2) {
         await new Promise(resolve => { globalThis.__learnFake.resumeSecond = resolve; });
         for (const stageId of routeOverrides.intermediateStageIds) routeOverrides.onIntermediatePreviewError({ stageId, error: new Error('injected preview failure') });
@@ -68,6 +74,19 @@ try {
   const frame = await (await page.waitForSelector('#learn-viewport-frame')).contentFrame();
   await frame.waitForSelector('#learn-viewer canvas');
   await frame.click('#learn-run');
+  if (featureSample) {
+    await frame.waitForFunction(() => globalThis.__learnFake?.resumeFeatures);
+    if (width <= 760) await new Promise(resolve => setTimeout(resolve, 600));
+    await page.screenshot({ path: path.join(outputDir, 'feature-replay.png') });
+    report.featureView = await frame.evaluate(() => ({
+      visible: !document.querySelector('#learn-features').hidden,
+      block: document.querySelector('#learn-feature-step').textContent,
+      pageWidth: document.documentElement.scrollWidth,
+      viewportWidth: innerWidth,
+    }));
+    if (!report.featureView.visible || report.featureView.pageWidth > report.featureView.viewportWidth) throw new Error('feature replay is hidden or overflowing');
+    await frame.evaluate(() => globalThis.__learnFake.resumeFeatures());
+  }
   await frame.waitForFunction(() => document.querySelector('#learn-stages [data-stage="final"]').dataset.state === 'done');
   report.first = await frame.evaluate(() => ({ label: document.querySelector('#learn-view-label').textContent, count: document.querySelector('#learn-mesh-count').textContent }));
   if (report.first.label !== 'Final mesh') throw new Error('first run did not show final geometry');
