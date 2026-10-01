@@ -1,0 +1,10 @@
+2026-10-01 14:52:33.600 Google Chrome for Testing Helper[78596:206127067] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+
+DevTools listening on ws://127.0.0.1:52059/devtools/browser/bc830127-8a82-4dd5-8b3e-b8daf81b6a97
+2026-10-01 14:52:33.666 Google Chrome for Testing Helper[78596:206127067] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+[78537:206126600:1001/145233.855546:ERROR:chrome/browser/ui/views/user_education/impl/browser_user_education_interface_impl.cc:186] Attempting to show IPH IPH_BatterySaverMode before browser initialization complete; IPH will not be shown.
+[78537:206126912:1001/145248.995561:ERROR:components/os_crypt/common/keychain_password_mac.mm:102] Keychain lookup failed: Error Domain=NSOSStatusErrorDomain Code=-128 "userCanceledErr" (-128)
+[78537:206126935:1001/145249.000297:ERROR:components/password_manager/core/browser/password_store/login_database_async_helper.cc:99] Encryption is not available.
+[78537:206126933:1001/145249.000598:ERROR:components/password_manager/core/browser/password_store/login_database_async_helper.cc:99] Encryption is not available.
+[78537:206127009:1001/145252.233584:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: QUOTA_EXCEEDED
+[78537:206126600:1001/145415.350241:ERROR:gpu/ipc/client/command_buffer_proxy_impl.cc:490] GPU state invalid after WaitForGetOffsetInRange.
