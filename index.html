@@ -2076,7 +2076,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="gusty">Gusty</option>
       </select>
       <span class="slider-val" id="volume-wind-model-val">steady</span>
-      <span class="slider-help">Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a slow deterministic signal from the simulation clock: strength breathes between (1 − gust) and (1 + gust) times the slider, and the direction veers by up to the veer angle, over the gust period. No per-cell noise; saved basins are unchanged on Steady.</span>
+      <span class="slider-help">Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a slow deterministic signal from the simulation clock (the gust period is simulated seconds, so it follows Speed): strength breathes between (1 − gust) and (1 + gust) times the slider, never above the wind ceiling of 1.5 (the receipt says when it saturates), and the direction veers by up to the veer angle, over the gust period. No per-cell noise; saved basins are unchanged on Steady.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Gust</span>

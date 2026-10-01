@@ -2128,7 +2128,8 @@ export function inflowGhostVelocityModel({ position, center = [0, 0], inletVeloc
 // Wind model (slice 2). `steady` is the authored law: one constant strength and
 // angle. `gusty` drives the same two uniforms with a slow stochastic signal:
 // two Ornstein-Uhlenbeck processes (correlated noise with a correlation time
-// of `windGustPeriod` seconds at 60 simulation steps per second), seeded and
+// of `windGustPeriod` seconds of simulated time, 60 reference steps per second
+// scaled by the time step's dtScale), seeded and
 // advanced per simulation step, so a replay at the same seed and step count is
 // the same wind. Gusts are stochastic in nature; this is the standard
 // first-order model of their statistics. No periodic math, no per-cell noise,
@@ -2137,6 +2138,19 @@ export function inflowGhostVelocityModel({ position, center = [0, 0], inletVeloc
 export const WIND_MODEL_IDENTITY = 'kaminos.volume.wind-model.v1';
 export const WIND_MODELS = Object.freeze(['steady', 'gusty']);
 export const WIND_GUST_STEPS_PER_SECOND = 60;
+// The shader clamps the wind strength uniform to this ceiling (predictor and
+// main kernel); the effective receipt never claims more than the shader uses.
+export const WIND_STRENGTH_CEILING = 1.5;
+// The gust correlation time in simulation steps: `windGustPeriod` seconds of
+// simulated time. Under the uniform time step each step advances dtScale of the
+// reference step, so a slow Speed takes proportionally more steps to
+// decorrelate and the gust keeps pace with the fluid, not with the frame rate.
+// The legacy time step has no dt scale (1).
+export function windGustTauSteps(controls = {}) {
+  const period = clampFinite(controls.windGustPeriod, 2, 30, 8);
+  const dtScale = resolveTimeStepConfig(controls).effective.dtScale;
+  return period * WIND_GUST_STEPS_PER_SECOND / Math.max(1e-3, Number.isFinite(dtScale) ? dtScale : 1);
+}
 export class WindGustProcess {
   constructor(seed = 1) {
     this.seed = Math.max(1, Math.floor(Number(seed) || 1)) >>> 0;
@@ -2188,16 +2202,19 @@ export function resolveWindConfig(controls = {}, gustSignal = { s1: 0, s2: 0, st
   const period = clampFinite(controls.windGustPeriod, 2, 30, 8);
   const veer = clampFinite(controls.windGustVeer, 0, 60, 25);
   if (model !== 'gusty') {
-    return { identity: WIND_MODEL_IDENTITY, requested: { model: requestedModel, ...base, gust, period, veer }, effective: { model: 'steady', ...base, gust: 0, period, veer: 0, signal: [0, 0], step: null } };
+    return { identity: WIND_MODEL_IDENTITY, requested: { model: requestedModel, ...base, gust, period, veer }, effective: { model: 'steady', ...base, unsaturatedStrength: base.strength, saturated: false, gust: 0, period, veer: 0, signal: [0, 0], step: null } };
   }
   const s1 = Number.isFinite(gustSignal?.s1) ? gustSignal.s1 : 0;
   const s2 = Number.isFinite(gustSignal?.s2) ? gustSignal.s2 : 0;
+  const unsaturatedStrength = base.strength * Math.max(0, 1 + gust * s1);
   return {
     identity: WIND_MODEL_IDENTITY,
     requested: { model: requestedModel, ...base, gust, period, veer },
     effective: {
       model: 'gusty',
-      strength: base.strength * Math.max(0, 1 + gust * s1),
+      strength: Math.min(WIND_STRENGTH_CEILING, unsaturatedStrength),
+      unsaturatedStrength,
+      saturated: unsaturatedStrength > WIND_STRENGTH_CEILING,
       angleDeg: base.angleDeg + veer * s2,
       height: base.height,
       gust, period, veer,
@@ -14318,7 +14335,7 @@ export function createKaminosVolumePrototype({
     updateExternalEmitterDebug(now);
     uniforms[51] = state.coreEmitterSourceMode === 'analytic-only' ? 0 : state.externalEmitterCount;
     uniforms[52] = volumeSceneMode(controlsSnapshot.volumeScene);
-    const windConfig = resolveWindConfig(controlsSnapshot, windGustProcess.sampleAt(state.simStepCount ?? 0, clampFinite(controlsSnapshot.windGustPeriod, 2, 30, 8) * WIND_GUST_STEPS_PER_SECOND));
+    const windConfig = resolveWindConfig(controlsSnapshot, windGustProcess.sampleAt(state.simStepCount ?? 0, windGustTauSteps(controlsSnapshot)));
     uniforms[53] = windConfig.effective.strength;
     uniforms[54] = windConfig.effective.angleDeg * Math.PI / 180;
     state.wind = windConfig;

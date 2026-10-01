@@ -301,5 +301,5 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.match(index, /sourceLawValue\.textContent = inflow\.effective\.admitted\s*\n\s*\? 'inflow-boundary · admitted'\s*\n\s*: `inflow-boundary — NOT ADMITTED \(\$\{inflow\.effective\.reason\}\); set Pressure solver to converged open top and Projection above 0`/, 'a refused inflow is named next to the Source Law select, with the fix');
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /inflowBoundary: s\.inflowBoundary \?\? null/, 'the arm capture records the inflow receipt');
-  assert.match(capture, /inflow-boundary/, 'and checks that an arm asking for the law was admitted');
+  assert.match(readFileSync(new URL('../volume-arm-capture-checks.mjs', import.meta.url), 'utf8'), /inflow-boundary requested but not admitted/, 'and checks that an arm asking for the law was admitted');
 });

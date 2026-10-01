@@ -129,12 +129,13 @@ test('the arm capture records confinement and enstrophy in its receipt', () => {
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /confinement: s\.confinement\?\.effective \?\? null/, 'effective confinement in the arm receipt');
   assert.match(capture, /vorticity: s\.pressureSolver\?\.residual\?\.vorticity \?\? null/, 'enstrophy readout in the arm receipt');
-  assert.match(capture, /volume-confinement/, 'requested-vs-effective check covers the confinement mode');
+  assert.match(readFileSync(new URL('../volume-arm-capture-checks.mjs', import.meta.url), 'utf8'), /cid === 'volume-confinement'/, 'requested-vs-effective check covers the confinement mode');
   assert.match(capture, /confinementUniform: s\.confinement\?\.uniform \?\? null/, 'the packed uniform is recorded');
-  assert.match(capture, /observed !== Math\.fround\(Number\(value\)\)/, 'the packed epsilon is compared as float32 against the request');
-  assert.match(capture, /null override: packed epsilon/, 'a null override must return to the table value in calibrated mode');
+  const checks = readFileSync(new URL('../volume-arm-capture-checks.mjs', import.meta.url), 'utf8');
+  assert.match(checks, /observed !== Math\.fround\(Number\(value\)\)/, 'the packed epsilon is compared as float32 against the request');
+  assert.match(checks, /null override: packed epsilon/, 'a null override must return to the table value in calibrated mode');
   assert.match(capture, /stale residual: probe step/, 'an arm needs a residual probe newer than its switch');
   assert.match(capture, /\['arm-error', 'packed-epsilon', 'stale-residual', 'null-mode-drift'\]/, 'every failure path has a fault case');
-  assert.match(capture, /effectiveMismatches\(arm, end, expectedMode\)/, 'the expected confinement mode is carried across arms');
-  assert.match(capture, /confinement mode drifted: expected/, 'an override-only arm must end in the expected mode');
+  assert.match(checks, /confinement mode drifted: expected/, 'an override-only arm must end in the expected mode');
+  assert.match(capture, /effectiveMismatches\(arm, end, expectedMode, fault\)/, 'the capture passes its injected fault to the checks');
 });

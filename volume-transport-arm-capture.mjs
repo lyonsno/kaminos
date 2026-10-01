@@ -33,6 +33,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { effectiveMismatches, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -65,7 +66,7 @@ const report = {
   effective: { source: null, sourceVerified: false },
   // The browser this run spawned and drove; a capture must never attach to
   // another instance (2026-09-26: a fixed port let it attach to an orphan).
-  browser: { pid: null, port: null, profile: null, devtoolsUrl: null },
+  browser: { executable: null, executableSource: null, pid: null, port: null, profile: null, devtoolsUrl: null },
   cleanupWarning: null,
   admitted: null,
   arms: [],
@@ -101,60 +102,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 const errors = report.browserErrors;
 
-// Requested control value -> the effective receipt it must produce. Controls
-// without an effective receipt are checked at the DOM only.
-const solverExpectation = { legacy: { solver: 'legacy' }, converged: { solver: 'converged', openTop: false }, 'converged-open-top': { solver: 'converged', openTop: true } };
-// `expectedMode` is the last requested confinement mode (or the admitted one), so
-// an arm that only changes the override cannot complete in a different mode.
-function effectiveMismatches(arm, end, expectedMode) {
-  const mismatches = [];
-  for (const [cid, value] of arm.set) {
-    if (cid === 'volume-advection-scheme' && end.transport?.scheme !== value) mismatches.push(`scheme requested ${value}, effective ${end.transport?.scheme}`);
-    if (cid === 'volume-emitter-aperture-pattern' && end.inflowBoundary?.effective?.pattern?.kind !== value) mismatches.push(`aperture pattern requested ${value}, effective ${end.inflowBoundary?.effective?.pattern?.kind}`);
-    if (cid === 'volume-emitter-swirl' && Math.abs(Number(end.inflowBoundary?.effective?.swirl) - Number(value)) > 1e-6) mismatches.push(`swirl requested ${value}, effective ${end.inflowBoundary?.effective?.swirl}`);
-    if (cid === 'volume-wind-model' && end.wind?.effective?.model !== value) mismatches.push(`wind model requested ${value}, effective ${end.wind?.effective?.model}`);
-    if (cid === 'volume-emitter-source-law') {
-      if (end.emitterSourceLaw !== value) mismatches.push(`emitter source law requested ${value}, effective ${end.emitterSourceLaw}`);
-      if (value === 'inflow-boundary' && end.inflowBoundary?.effective?.admitted !== true) mismatches.push(`inflow-boundary requested but not admitted${end.inflowBoundary?.effective?.reason ? ` (${end.inflowBoundary.effective.reason})` : ''}`);
-    }
-    if (cid === 'volume-time-step' && end.timeStep?.mode !== value) mismatches.push(`time step requested ${value}, effective ${end.timeStep?.mode}${end.timeStep?.reason ? ` (${end.timeStep.reason})` : ''}`);
-    if (cid === 'volume-confinement') {
-      if (end.confinement?.mode !== value) mismatches.push(`confinement requested ${value}, effective ${end.confinement?.mode}`);
-      const packedMode = { 'curl-slider': 0, calibrated: 1, off: 2 }[value];
-      if (end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement ${value} requested but uniform slot 345 holds mode ${end.confinementUniform?.mode}`);
-    }
-    if (cid === '@confinementEpsilon') {
-      // The shader reads uniform slot 346 (a Float32Array element), so the packed
-      // value must equal the float32 rounding of the request, not just the
-      // resolver's double. `packed-epsilon` perturbs the observation to prove
-      // this comparison can fail.
-      const packed = end.confinementUniform?.confinementAmount;
-      const observed = fault === 'packed-epsilon' ? (Number(packed) || 0) + 1 : packed;
-      // The drift fault targets the null-override arm specifically, the case the
-      // confirmation review constructed (override-only arm ending in `off`).
-      const observedMode = fault === 'null-mode-drift' && value === 'null' ? 'off' : end.confinement?.mode;
-      const packedMode = { 'curl-slider': 0, calibrated: 1, off: 2 }[expectedMode];
-      if (!expectedMode) mismatches.push('override requested but no confinement mode has been requested or admitted');
-      else if (observedMode !== expectedMode) mismatches.push(`confinement mode drifted: expected ${expectedMode} (last requested or admitted), observed ${observedMode}`);
-      else if (!(fault === 'null-mode-drift' && value === 'null') && end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement mode ${expectedMode} expected but uniform slot 345 holds ${end.confinementUniform?.mode}`);
-      if (value === 'null') {
-        if (expectedMode === 'calibrated') {
-          if (end.confinement?.calibration?.source !== 'table') mismatches.push(`null override requested but calibration source is ${end.confinement?.calibration?.source}`);
-          if (observed !== Math.fround(Number(end.confinement?.calibration?.epsilon))) mismatches.push(`null override: packed epsilon ${observed} is not the table value ${end.confinement?.calibration?.epsilon}`);
-        }
-      } else {
-        if (end.confinement?.confinementAmount !== Number(value)) mismatches.push(`confinement epsilon override ${value} requested, effective amount ${end.confinement?.confinementAmount} (mode ${end.confinement?.mode})`);
-        if (observed !== Math.fround(Number(value))) mismatches.push(`packed epsilon ${observed} is not the float32 of the requested ${value} (${Math.fround(Number(value))})`);
-      }
-    }
-    if (cid === 'volume-pressure-solver') {
-      const expected = solverExpectation[value];
-      if (!expected) mismatches.push(`unknown solver request ${value}`);
-      else if (end.solver?.solver !== expected.solver || (expected.openTop !== undefined && Boolean(end.solver?.openTop) !== expected.openTop)) mismatches.push(`solver requested ${value}, effective ${end.solver?.solver}${end.solver?.openTop ? ' open top' : ''}`);
-    }
-  }
-  return mismatches;
-}
+// Requested control value -> the effective receipt it must produce: see
+// volume-arm-capture-checks.mjs (effectiveMismatches).
 
 try {
   report.failurePhase = 'runtime-config';
@@ -169,7 +118,11 @@ try {
   writeReport();
 
   report.failurePhase = 'browser-launch';
-  chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
+  // An independent executable, never the installed GUI Chrome (shared operator machine).
+  let headlessBrowser;
+  try { headlessBrowser = resolveHeadlessBrowser(); } catch (error) { fail('browser-launch', String(error?.message || error)); }
+  report.browser.executable = headlessBrowser.executable; report.browser.executableSource = headlessBrowser.source; writeReport();
+  chrome = spawn(headlessBrowser.executable, ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
   chrome.stdout.on('data', () => {}); chrome.stderr.on('data', () => {});
   // Chrome publishes the port it actually bound in DevToolsActivePort inside this
   // run's own profile directory, so the capture can only attach to the browser it spawned.
@@ -179,7 +132,7 @@ try {
   let pages = null; for (let i = 0; i < 100 && !pages; i++) { try { pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(100); } }
   if (!pages) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never answered`);
   const page = pages.find(p => p.type === 'page'); ws = new WebSocket(page.webSocketDebuggerUrl);
-  report.browser = { pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
+  report.browser = { executable: headlessBrowser.executable, executableSource: headlessBrowser.source, pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
   writeReport();
   await new Promise(res => ws.addEventListener('open', res, { once: true }));
   let id = 0; const pending = new Map();
@@ -248,7 +201,7 @@ try {
     // after the switch; `stale-residual` makes that impossible to prove the check.
     const freshnessFloor = fault === 'stale-residual' ? Number.POSITIVE_INFINITY : s0;
     if (!(end.residual?.step > freshnessFloor)) fail(report.failurePhase, `stale residual: probe step ${end.residual?.step ?? 'none'} is not newer than the required floor ${freshnessFloor} (arm switch at step ${s0}${fault === 'stale-residual' ? ', fault stale-residual' : ''}); the arm's enstrophy is not its own measurement`);
-    const mismatches = effectiveMismatches(arm, end, expectedMode);
+    const mismatches = effectiveMismatches(arm, end, expectedMode, fault);
     if (mismatches.length) fail(report.failurePhase, `effective state does not match arm ${arm.name}: ${mismatches.join('; ')}`);
     report.failurePhase = `arm-${arm.name}-capture`;
     const shot = await call('Page.captureScreenshot', { format: 'png' });
