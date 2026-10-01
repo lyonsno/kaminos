@@ -92,8 +92,9 @@ test('capture: an asynchronous launch error is a terminal browser-launch failure
   assert.doesNotMatch(run.stderr, /Unhandled|triggerUncaughtException/, 'no unhandled error escaped');
 });
 
-// Every launch-phase wait is bounded by --call-timeout-ms, including the
-// optional browser-version read: a pending /json/version response must not
+// The launch-phase fetches, the socket wait and the devtools calls are bounded
+// by --call-timeout-ms (the DevToolsActivePort poll keeps its own fixed 20 s
+// bound), including the optional browser-version read: a pending /json/version response must not
 // hold the capture. The browser is a shell script that publishes a
 // DevToolsActivePort and sleeps; the preload answers runtime-config and
 // /json synthetically and leaves /json/version pending forever. The capture
