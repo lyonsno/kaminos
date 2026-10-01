@@ -1,4 +1,30 @@
-import { solveArchStructuralForce } from './structural-material-arch-core.js';
+import { advanceArchStructuralForce, fractureArchStructuralProxy, solveArchStructuralForce } from './structural-material-arch-core.js';
+
+export function advanceArchVolumeLoad(state, load = {}, options = {}) {
+  const duration = options.duration ?? 0.1;
+  const timeStep = options.timeStep ?? 0.02;
+  const damping = options.damping ?? 8;
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error('load duration must be finite and positive');
+  if (!Number.isFinite(timeStep) || timeStep <= 0) throw new Error('load time step must be finite and positive');
+  const startingEpoch = state.connectivityEpoch;
+  const startingEvents = state.events.length;
+  let next = state;
+  let elapsed = 0;
+  let steps = 0;
+  while (elapsed < duration - Number.EPSILON * duration) {
+    const dt = Math.min(timeStep, duration - elapsed);
+    next = fractureArchStructuralProxy(advanceArchStructuralForce(next, load, { timeStep: dt, damping }),
+      { threshold: load.threshold });
+    elapsed += dt;
+    steps += 1;
+  }
+  return { ...next, loadApplication: {
+    round: (state.loadApplication?.round ?? 0) + 1,
+    elapsed: (state.loadApplication?.elapsed ?? 0) + elapsed,
+    duration: elapsed, steps, timeStep, damping, startingEpoch,
+    addedCracks: next.events.length - startingEvents,
+  } };
+}
 
 export function buildArchVolumeFrame(state, equilibrium = state) {
   if (!state || !Array.isArray(state.nodes) || !Array.isArray(state.bonds) || !Number.isInteger(state.layers)) {
@@ -36,6 +62,7 @@ export function buildArchVolumeFrame(state, equilibrium = state) {
 
 export function resolveArchVolumeEquilibrium(state, load) {
   if (!state.load) return { state, mode: 'unloaded' };
+  if (state.load.mode === 'equal-force-time-step') return { state, mode: 'evolving-force-pose' };
   const broken = state.bonds.some(bond => !bond.alive);
   const contactCells = new Set(state.load.contactCells.map(cell => `${cell.column}:${cell.row}`));
   const pinnedComponents = new Set(state.nodes.filter(node => node.pinned).map(node => node.componentId));

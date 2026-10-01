@@ -297,7 +297,7 @@ export function buildArchStructuralProxy(profile, options = {}) {
   });
 }
 
-function solveArchLinearSystem(state, load, mode) {
+function solveArchLinearSystem(state, load, mode, evolution = null) {
   const x = finite(load.x ?? 0, 'load x');
   const y = finite(load.y ?? state.bounds.max[1], 'load y');
   const magnitude = finite(mode === 'force' ? load.force : load.travel, mode === 'force' ? 'load force' : 'load travel');
@@ -326,7 +326,7 @@ function solveArchLinearSystem(state, load, mode) {
   const contactIndices = state.nodes.flatMap((node, index) =>
     contactCellKeys.has(`${node.column}:${node.row}`) &&
       (contactDepthMode === 'through-thickness' || node.layer === contactLayer) ? [index] : []);
-  if (mode === 'force' && magnitude > 0) {
+  if (mode === 'force' && magnitude > 0 && !evolution) {
     const adjacency = state.nodes.map(() => []);
     for (const bond of state.bonds) {
       if (!bond.alive) continue;
@@ -377,7 +377,9 @@ function solveArchLinearSystem(state, load, mode) {
     }
   }
   const shearWeight = 0.18;
+  const drag = evolution ? evolution.damping / evolution.timeStep : 0;
   const diagonal = new Float64Array(count);
+  if (evolution) diagonal.fill(drag);
   const liveBonds = state.bonds.filter(bond => bond.alive);
   for (const bond of liveBonds) {
     const stiffness = bond.stiffness / bond.rest;
@@ -389,6 +391,11 @@ function solveArchLinearSystem(state, load, mode) {
   }
   const apply = vector => {
     const result = new Float64Array(count);
+    if (evolution) {
+      for (let index = 0; index < count; index += 1) {
+        if (!fixed[index]) result[index] = drag * vector[index];
+      }
+    }
     for (const bond of liveBonds) {
       const a = bond.a * 3;
       const b = bond.b * 3;
@@ -411,6 +418,14 @@ function solveArchLinearSystem(state, load, mode) {
   const rhs = new Float64Array(count);
   for (let index = 0; index < count; index += 1) {
     if (!fixed[index]) rhs[index] = external[index] - fixedForce[index];
+  }
+  if (evolution) {
+    for (let index = 0; index < state.nodes.length; index += 1) {
+      const previous = state.nodes[index].displacement;
+      for (const [axis, name] of ['x', 'y', 'z'].entries()) {
+        if (!fixed[index * 3 + axis]) rhs[index * 3 + axis] += drag * previous[name];
+      }
+    }
   }
   const dot = (a, b) => {
     let sum = 0;
@@ -478,7 +493,7 @@ function solveArchLinearSystem(state, load, mode) {
   return {
     ...state, nodes, bonds,
     load: {
-      mode: mode === 'force' ? 'equal-force' : 'prescribed-travel',
+      mode: evolution ? 'equal-force-time-step' : mode === 'force' ? 'equal-force' : 'prescribed-travel',
       x, y, contact: { column: contact.column, row: contact.row },
       contactCells,
       contactDepthMode,
@@ -493,8 +508,12 @@ function solveArchLinearSystem(state, load, mode) {
       requestedTravel: mode === 'travel' ? magnitude : null,
       iterationBudget: iterations, iterations: usedIterations, relativeResidual,
       shearWeight,
+      ...(evolution ? { evolution: {
+        kind: 'overdamped-linear-spring-implicit-euler-v0',
+        timeStep: evolution.timeStep, damping: evolution.damping,
+      } } : {}),
     },
-    maxStrain: Math.max(...bonds.filter(bond => bond.alive).map(bond => bond.lastStrain)),
+    maxStrain: Math.max(0, ...bonds.filter(bond => bond.alive).map(bond => bond.lastStrain)),
   };
 }
 
@@ -504,6 +523,15 @@ export function solveArchStructuralProxy(state, load = {}) {
 
 export function solveArchStructuralForce(state, load = {}) {
   return solveArchLinearSystem(state, load, 'force');
+}
+
+export function advanceArchStructuralForce(state, load = {}, options = {}) {
+  const timeStep = finite(options.timeStep ?? 0.02, 'force time step');
+  const damping = finite(options.damping ?? 8, 'force damping');
+  if (timeStep <= 0 || damping <= 0) throw new Error('force time step and damping must be positive');
+  // Backward Euler retains the current pose and makes a finite force interval
+  // well-defined even after the contact loses its static path to a support.
+  return solveArchLinearSystem(state, load, 'force', { timeStep, damping });
 }
 
 export function fractureArchStructuralProxy(state, options = {}) {

@@ -50,8 +50,8 @@
   <header><h1>Stone arch</h1><span class="identity">TRELLIS silhouettes · front-layer load · 3-layer volume</span></header>
   <main>
     <div class="controls">
-      <div class="force"><label for="force">Crown load · proxy units</label><input id="force" type="range" min="0.1" max="3" step="0.05" value="0.75"><output id="force-value" for="force">0.75</output></div>
-      <button id="solve" disabled>Fresh solve</button><button id="release" disabled>Release</button><button id="bind" disabled>Bind</button><button id="reset" disabled>Reset</button>
+      <div class="force"><label for="force">Load · proxy units</label><input id="force" type="range" min="0.1" max="3" step="0.05" value="0.75"><output id="force-value" for="force">0.75</output></div>
+      <button id="solve" disabled>Apply load</button><button id="release" disabled>Release</button><button id="bind" disabled>Bind</button><button id="reset" disabled>Reset</button>
       <div class="readout" id="status">Loading structural profiles</div>
     </div>
     <canvas id="view" aria-label="Orbitable intact and outer-notched stone arch structural volumes"></canvas>
@@ -71,11 +71,11 @@
         import('./structural-material-arch-core.js'), import('./structural-material-arch-volume-view.js'),
       ]);
       const { OrbitControls } = controlsModule;
-      const { buildArchStructuralProxy, solveArchStructuralForce, fractureArchStructuralProxy, bindArchStructuralProxy } = core;
-      const { buildArchVolumeFrame, releaseArchStructuralLoad, resolveArchVolumeEquilibrium } = volume;
+      const { buildArchStructuralProxy, bindArchStructuralProxy } = core;
+      const { advanceArchVolumeLoad, buildArchVolumeFrame, releaseArchStructuralLoad, resolveArchVolumeEquilibrium } = volume;
       const ROUTE = 'kaminos.structural-material.arch-force-volume.v0';
       const profileRoot = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness';
-      const load = { x: -0.05, y: 0.29, threshold: 0.04, iterations: 600, contactDepthMode: 'camera-facing-surface', contactLayer: 2 };
+      const load = { x: -0.05, y: 0.29, patchRadius: 0.025, threshold: 0.04, iterations: 600, contactDepthMode: 'camera-facing-surface', contactLayer: 2 };
       const forceInput = document.getElementById('force');
       const forceOutput = document.getElementById('force-value');
       const canvas = document.getElementById('view');
@@ -114,6 +114,26 @@
       let applied = false;
       let released = false;
       let serial = 0;
+      let selectedContact = { x: load.x, y: load.y, sourceProfile: null, column: null, row: null, layer: 2 };
+      const raycaster = new THREE.Raycaster();
+      let pointerStart = null;
+
+      function makeForceArrow() {
+        const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 0.11, '#e3bc70', 0.032, 0.022);
+        arrow.line.material.depthTest = false;
+        arrow.cone.material.depthTest = false;
+        arrow.visible = false;
+        return arrow;
+      }
+
+      function moveContactMarkers() {
+        for (const item of Object.values(cases)) {
+          const node = item.state.nodes.filter(node => node.layer === 2 && !node.pinned).reduce((best, next) =>
+            Math.hypot(next.x - load.x, next.y - load.y) < Math.hypot(best.x - load.x, best.y - load.y) ? next : best);
+          item.contactMarker.position.set(node.x + node.displacement.x, node.y + node.displacement.y,
+            (node.z + node.displacement.z) * (2 / 3) + 0.061);
+        }
+      }
 
       function render() { renderer.render(scene, camera); }
       function resize() {
@@ -176,6 +196,11 @@
         const loadedLayers = new Set(item.state.load?.loadedNodeLayers ?? []);
         const loadedIndices = contact ? item.state.nodes.flatMap((node, index) =>
           contactCells.has(`${node.column}:${node.row}`) && loadedLayers.has(node.layer) ? [index] : []) : [];
+        while (item.forceArrows.length < loadedIndices.length) {
+          const arrow = makeForceArrow();
+          item.forceArrows.push(arrow);
+          item.group.add(arrow);
+        }
         for (let index = 0; index < item.forceArrows.length; index += 1) {
           const arrow = item.forceArrows[index];
           const nodeIndex = loadedIndices[index];
@@ -188,12 +213,14 @@
         const broken = item.state.bonds.filter(bond => !bond.alive).length;
         const travel = item.state.load ? item.state.load.travel.toFixed(4) : '—';
         const displayTravel = item.displayTravel === null ? '' :
+          item.displayMode === 'evolving-force-pose' ? ` · force interval ${item.state.loadApplication.round} · +${item.state.loadApplication.addedCracks} cracks` :
           item.displayMode === 'fracture-event-pose' ? ' · accepted fracture-event pose' :
           item.displayMode === 'unloaded-damaged' ? ' · released pose · damage retained' :
           item.displayMode === 'accepted-pose-unanchored' ? ' · unanchored contact, accepted pose' :
           ` · ${item.displayMode === 'broken-graph-equilibrium' ? 'post-break' : item.displayMode === 'repaired-graph-equilibrium' ? 'repaired' : 'loaded'} equilibrium ${item.displayTravel.toFixed(4)}`;
         document.getElementById(name === 'intact' ? 'intact-metric' : 'notched-metric').textContent =
           `contact travel ${travel}${displayTravel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}`;
+        moveContactMarkers();
         render();
       }
 
@@ -202,8 +229,7 @@
         try {
           const force = Number(forceInput.value);
           const updates = Object.fromEntries(Object.entries(cases).map(([name, item]) => {
-            const solved = solveArchStructuralForce(item.base, { ...load, force });
-            const state = fractureArchStructuralProxy(solved, { threshold: load.threshold });
+            const state = advanceArchVolumeLoad(item.state, { ...load, force });
             return [name, { state, prepared: prepare(state, force) }];
           }));
           for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
@@ -213,12 +239,8 @@
           serial += 1;
           document.getElementById('release').disabled = false;
           document.getElementById('bind').disabled = true;
-          status.textContent = Object.values(cases).some(item => item.displayMode === 'accepted-pose-unanchored')
-            ? `Front depth layer only · load ${force.toFixed(2)} · unanchored contact has no static display equilibrium`
-            : Object.values(cases).some(item => item.displayMode === 'fracture-event-pose')
-              ? `Front depth layer only · load ${force.toFixed(2)} · fracture pose retained; Release clears force, not cracks`
-            : `Front depth layer only · load ${force.toFixed(2)} · independent intact-reference trials`;
-          receipt.textContent = `Front-layer load ${force.toFixed(2)} · camera-facing layer 3 of 3 · feet fixed · outer-notch material event energy ${cases['outer-notch'].state.events.reduce((sum, event) => sum + event.energy, 0).toFixed(4)}`;
+          status.textContent = `Front layer · load ${force.toFixed(2)} · interval ${cases.intact.state.loadApplication.round}`;
+          receipt.textContent = `Front-layer force advanced 0.10 proxy seconds on the existing graph · feet fixed · ${cases.intact.state.loadApplication.addedCracks}/${cases['outer-notch'].state.loadApplication.addedCracks} new cracks · cumulative material event energy ${cases['outer-notch'].state.events.reduce((sum, event) => sum + event.energy, 0).toFixed(4)}`;
         } catch (error) { status.textContent = `Solve failed: ${error.message}`; }
       }
 
@@ -266,13 +288,29 @@
 
       forceInput.addEventListener('input', () => {
         forceOutput.value = Number(forceInput.value).toFixed(2);
-        if (applied) {
-          applied = false;
-          released = false;
-          document.getElementById('release').disabled = true;
-          document.getElementById('bind').disabled = true;
-          status.textContent = 'Force changed · run a fresh intact-reference trial';
-        }
+        status.textContent = `Next interval load ${Number(forceInput.value).toFixed(2)} · current state retained`;
+      });
+      canvas.addEventListener('pointerdown', event => {
+        if (event.button === 0) pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId };
+      });
+      canvas.addEventListener('pointerup', event => {
+        const start = pointerStart;
+        pointerStart = null;
+        if (!start || start.id !== event.pointerId || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
+        const rect = canvas.getBoundingClientRect();
+        raycaster.setFromCamera(new THREE.Vector2((event.clientX - rect.left) / rect.width * 2 - 1,
+          1 - (event.clientY - rect.top) / rect.height * 2), camera);
+        const hit = raycaster.intersectObjects(Object.values(cases).map(item => item.blocks))[0];
+        if (!hit || hit.instanceId === undefined) return;
+        const [name, item] = Object.entries(cases).find(([, value]) => value.blocks === hit.object);
+        const node = item.state.nodes[hit.instanceId];
+        if (node.layer !== 2 || node.pinned) return;
+        load.x = node.x;
+        load.y = node.y;
+        selectedContact = { x: node.x, y: node.y, sourceProfile: name, column: node.column, row: node.row, layer: node.layer };
+        status.textContent = `Front contact (${node.column}, ${node.row}) selected · damage retained`;
+        moveContactMarkers();
+        render();
       });
       document.getElementById('solve').addEventListener('click', solve);
       document.getElementById('release').addEventListener('click', release);
@@ -280,7 +318,7 @@
       document.getElementById('reset').addEventListener('click', reset);
       window.addEventListener('resize', resize);
       window.__archVolumeWitness = () => ({
-        route: ROUTE, phase, serial, camera: camera.position.toArray(),
+        route: ROUTE, phase, serial, camera: camera.position.toArray(), selectedContact,
         cases: Object.fromEntries(Object.entries(cases).map(([name, item]) => [name, {
           solverAuthority: item.base.solverAuthority,
           sourceSha256: item.profile.source.sha256,
@@ -297,6 +335,26 @@
           forceMarkerCount: item.forceArrows.filter(arrow => arrow.visible).length,
           connectivityEpoch: item.state.connectivityEpoch,
           renderedInstances: item.blocks.count,
+          brokenBondIds: item.state.bonds.filter(bond => !bond.alive).map(bond => bond.id),
+          eventCount: item.state.events.length,
+          crackEventCount: item.state.events.filter(event => event.kind === 'crack').length,
+          loadApplication: item.state.loadApplication ?? null,
+          evolution: item.state.load?.evolution ?? null,
+          contact: item.state.load?.contact ?? null,
+          contactCells: item.state.load?.contactCells ?? [],
+          depthMotion: Array.from({ length: item.state.layers }, (_, layer) => {
+            const nodes = item.state.nodes.filter(node => node.layer === layer);
+            return { layer, maxDisplacement: Math.max(...nodes.map(node => Math.hypot(...Object.values(node.displacement)))) };
+          }),
+          pickTargets: Object.fromEntries([['left-shoulder', -0.22, 0.18], ['right-shoulder', 0.22, 0.18]].map(([label, x, y]) => {
+            const node = item.state.nodes.filter(node => node.layer === 2 && !node.pinned).reduce((best, next) =>
+              Math.hypot(next.x - x, next.y - y) < Math.hypot(best.x - x, best.y - y) ? next : best);
+            const point = new THREE.Vector3(node.x + node.displacement.x, node.y + node.displacement.y,
+              (node.z + node.displacement.z) * (2 / 3) + 0.06).add(item.group.position).project(camera);
+            const rect = canvas.getBoundingClientRect();
+            return [label, { column: node.column, row: node.row, layer: node.layer,
+              x: rect.x + (point.x + 1) / 2 * rect.width, y: rect.y + (1 - point.y) / 2 * rect.height }];
+          })),
         }])),
       });
 
@@ -328,16 +386,12 @@
           support.position.set((minX + maxX) / 2, Math.min(...pinned.map(node => node.y)) - stepY / 2 - 0.012, 0);
           group.add(support);
         }
-        const forceArrows = Array.from({ length: 3 }, () => {
-          const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 0.11, '#e3bc70', 0.032, 0.022);
-          arrow.line.material.depthTest = false;
-          arrow.cone.material.depthTest = false;
-          arrow.visible = false;
-          group.add(arrow);
-          return arrow;
-        });
+        const forceArrows = [];
+        const contactMarker = new THREE.Mesh(new THREE.SphereGeometry(0.008, 12, 8),
+          new THREE.MeshBasicMaterial({ color: '#72dac4', depthTest: false }));
+        group.add(contactMarker);
         scene.add(group);
-        cases[name] = { profile, base, state: base, blocks, group, cracks: null, forceArrows, displayTravel: null, displayMode: 'unloaded' };
+        cases[name] = { profile, base, state: base, blocks, group, contactMarker, cracks: null, forceArrows, displayTravel: null, displayMode: 'unloaded' };
         present(name);
       }
       phase = 'interactive';

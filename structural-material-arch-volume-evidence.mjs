@@ -22,3 +22,24 @@ export function findArchVolumeEvidenceContradictions({
   }
   return issues;
 }
+
+export function findArchVolumeContinuationContradictions(priorCases, nextCases) {
+  const issues = [];
+  for (const [name, prior] of Object.entries(priorCases)) {
+    const next = nextCases?.[name];
+    if (!next) { issues.push(`missing continued profile: ${name}`); continue; }
+    if (!Array.isArray(next.brokenBondIds) || next.brokenBondIds.length !== next.broken ||
+        prior.brokenBondIds.some(id => !next.brokenBondIds.includes(id))) {
+      issues.push(`damage was reset or incompletely observed: ${name}`);
+    }
+    if (!(next.eventCount >= prior.eventCount) || !(next.crackEventCount > prior.crackEventCount) ||
+        !(next.broken > prior.broken) || !(next.connectivityEpoch > prior.connectivityEpoch)) {
+      issues.push(`no new persistent fracture event: ${name}`);
+    }
+    if (next.loadApplication?.round !== prior.loadApplication?.round + 1 ||
+        !(next.loadApplication?.elapsed > prior.loadApplication?.elapsed)) {
+      issues.push(`stale or reset force interval: ${name}`);
+    }
+  }
+  return issues;
+}
