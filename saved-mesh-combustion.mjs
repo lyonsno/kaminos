@@ -116,13 +116,16 @@ export function buildSavedMeshStructuralSurface({ THREE, object, assetIdentity }
   };
 }
 
-export async function createSavedMeshCombustionAssembly({ THREE, entry, gpuContext, presentationDebugMode = 'off' } = {}) {
+async function createSavedMeshCombustionStructure({ THREE, entry, gpuContext }) {
   const binding = entry?.combustionBinding;
   if (!binding || binding.schema !== 'kaminos.object-combustion-binding.v0' || binding.objectId !== entry.id) {
     throw new Error('saved mesh combustion binding identity does not match the scene object');
   }
   if (binding.structuralProfile !== 'timber-two-island.v0') {
     throw new Error(`unsupported saved mesh structural profile: ${binding.structuralProfile}`);
+  }
+  if (binding.emissionEnabled !== undefined && typeof binding.emissionEnabled !== 'boolean') {
+    throw new Error('saved mesh combustion emissionEnabled must be a boolean');
   }
   if (!gpuContext?.device || !gpuContext?.format || !Number.isInteger(gpuContext.gridSize)) {
     throw new Error('saved mesh combustion requires the active Pyro GPU context');
@@ -153,38 +156,51 @@ export async function createSavedMeshCombustionAssembly({ THREE, entry, gpuConte
     };
   };
   const state = createLayeredStructuralMaterial({ columns: 11, rows: 11, layers: 11, notch: false });
+  const spatialState = spatialTransformProvider();
   const sidecar = await createLayeredStructuralHotWebGpuSidecar({ state, device: gpuContext.device });
+  return {
+    id: entry.id,
+    objectId: objectIdNumber(entry.id),
+    state,
+    sidecar,
+    role: 'emitter',
+    emissionEnabled: binding.emissionEnabled ?? true,
+    motionEnabled: true,
+    presentationMode: 'mesh-skin',
+    meshSurface: surface.meshSurface,
+    worldOffset: surface.worldOffset,
+    displayScale: surface.displayScale,
+    spatialTransformProvider,
+    spatialState,
+    burnRate: binding.burnRate,
+  };
+}
+
+export async function createSavedMeshCombustionAssembly({ THREE, entry, entries = entry ? [entry] : [], gpuContext, presentationDebugMode = 'off' } = {}) {
+  if (!Array.isArray(entries) || !entries.length) throw new Error('saved mesh combustion requires bound objects');
+  if (new Set(entries.map(value => value.id)).size !== entries.length) throw new Error('saved mesh combustion object identities must be unique');
+  const structures = [];
   try {
+    for (const boundEntry of entries) {
+      structures.push(await createSavedMeshCombustionStructure({THREE, entry: boundEntry, gpuContext}));
+    }
     const assembly = await createGpuStructuralCombustionAssembly({
       device: gpuContext.device,
       gridSize: gpuContext.gridSize,
       gridDimensions: gpuContext.gridDimensions,
       format: gpuContext.format,
       presentationDebugMode,
-      structures: [{
-        id: entry.id,
-        objectId: objectIdNumber(entry.id),
-        state,
-        sidecar,
-        role: 'emitter',
-        presentationMode: 'mesh-skin',
-        meshSurface: surface.meshSurface,
-        worldOffset: surface.worldOffset,
-        displayScale: surface.displayScale,
-        spatialTransformProvider,
-        spatialState: spatialTransformProvider(),
-        burnRate: binding.burnRate,
-      }],
+      structures,
     });
     return {
       assembly,
       dispose() {
         assembly.destroy();
-        void sidecar.dispose();
+        structures.forEach(structure => { void structure.sidecar.dispose(); });
       },
     };
   } catch (error) {
-    await sidecar.dispose();
+    await Promise.all(structures.map(structure => structure.sidecar.dispose()));
     throw error;
   }
 }

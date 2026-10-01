@@ -26354,22 +26354,21 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
 
 async function syncSavedSceneCombustionBinding() {
   const boundEntries = sceneObjects.filter(entry => entry.combustionBinding);
-  if (boundEntries.length > 1) throw new Error(`saved-scene combustion currently supports one bound object; found ${boundEntries.length}`);
-  const entry = boundEntries[0] || null;
-  if (savedMeshCombustionRuntime?.entry === entry) return !!entry;
+  if (savedMeshCombustionRuntime?.entries.length === boundEntries.length &&
+      boundEntries.every((entry, index) => savedMeshCombustionRuntime.entries[index] === entry)) return !!boundEntries.length;
   if (savedMeshCombustionRuntime) {
     volumePrototype?.clearGpuStructuralCombustionAssembly?.();
     savedMeshCombustionRuntime.runtime.dispose();
     savedMeshCombustionRuntime = null;
   }
-  if (!entry) return false;
+  if (!boundEntries.length) return false;
   const gpuContext = await volumePrototype.borrowStructuralCombustionGpuContext();
   const presentationDebugMode = new URLSearchParams(window.location.search)
     .get('volume_structural_combustion_view') || 'off';
-  const runtime = await createSavedMeshCombustionAssembly({ THREE, entry, gpuContext, presentationDebugMode });
+  const runtime = await createSavedMeshCombustionAssembly({ THREE, entries: boundEntries, gpuContext, presentationDebugMode });
   try {
     await volumePrototype.setGpuStructuralCombustionAssembly(runtime.assembly);
-    savedMeshCombustionRuntime = { entry, runtime };
+    savedMeshCombustionRuntime = { entries: boundEntries, runtime };
     return true;
   } catch (error) {
     runtime.dispose();

@@ -1557,8 +1557,8 @@ export async function createGpuStructuralCombustionAssembly({
     };
   });
   const emittingSockets = sockets.filter(socket => socket.emissionEnabled);
-  if (emittingSockets.length !== 1) throw new Error('GPU structural combustion requires exactly one emitting target');
   if (mode === STRUCTURAL_CARRIED_FIRE_MODE) {
+    if (emittingSockets.length !== 1) throw new Error('GPU structural carried fire requires exactly one emitting target');
     const requiredRoles = ['emitter', 'control', 'propagation-target', 'propagation-control'];
     for (const role of requiredRoles) {
       if (sockets.filter(socket => socket.role === role).length !== 1) {
@@ -1569,9 +1569,9 @@ export async function createGpuStructuralCombustionAssembly({
       throw new Error('GPU structural carried fire contains unexpected structural roles');
     }
   }
-  const targetSocket = emittingSockets[0];
+  const targetSocket = emittingSockets[0] || sockets[0];
   const target = targetSocket;
-  const sourceCapacity = targetSocket.state.nodes.length;
+  const sourceCapacity = Math.max(1, emittingSockets.reduce((count, socket) => count + socket.state.nodes.length, 0));
   const ownedBuffers = [];
   const makeBuffer = descriptor => {
     const buffer = device.createBuffer(descriptor);
@@ -2013,13 +2013,13 @@ export async function createGpuStructuralCombustionAssembly({
         Math.ceil(socket.descriptor.nodeCount / WORKGROUP_SIZE),
       );
     });
-    encodePass(
+    emittingSockets.forEach(socket => encodePass(
       encoder,
-      `structural combustion emit carried sources ${targetSocket.id}`,
+      `structural combustion emit carried sources ${socket.id}`,
       emitPipeline,
-      targetSocket.emissionBindGroups[targetSocket.materialIndex],
-      Math.ceil(targetSocket.descriptor.nodeCount / WORKGROUP_SIZE),
-    );
+      socket.emissionBindGroups[socket.materialIndex],
+      Math.ceil(socket.descriptor.nodeCount / WORKGROUP_SIZE),
+    ));
     encodePass(encoder, 'structural combustion finalize source', finalizePipeline, targetGroup, 1);
     sockets.forEach(socket => { socket.materialIndex = 1 - socket.materialIndex; });
     dispatchCount += 1;
@@ -2374,7 +2374,8 @@ export async function createGpuStructuralCombustionAssembly({
       presentationMode: sockets.some(socket => socket.meshSkin)
         ? 'indexed-mesh-skin-resident-structural-proxy-v0'
         : 'solid-cell-surface-with-structural-overlay-v0',
-      emittingObjectId: target.objectId,
+      emittingObjectId: emittingSockets.length === 1 ? target.objectId : null,
+      emittingObjectIds: emittingSockets.map(socket => socket.objectId),
       sourceCapacity,
       deviceOwnership: 'borrowed',
       lastTerminalReceipt,

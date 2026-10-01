@@ -540,6 +540,38 @@ try {
   assembly.freeze();
   assert.throws(() => assembly.encode(encoder, {}), /frozen/i);
   assembly.destroy();
+
+  const pairStructures = [
+    {id: 'first-timber', objectId: 31, state: targetState, sidecar: targetSidecar, load: {magnitude: 0.74}},
+    {id: 'second-timber', objectId: 32, state: controlState, sidecar: controlSidecar, load: {magnitude: 0.74}},
+  ];
+  const pair = await createGpuStructuralCombustionAssembly({
+    device, gridSize: 32, format: 'rgba8unorm', structures: pairStructures,
+  });
+  assert.equal(pair.sourceDescriptor().capacity, targetState.nodes.length + controlState.nodes.length,
+    'the shared source stream has room for every emitting node, without a per-object cap');
+  passes.length = 0;
+  pair.encode(encoder, {});
+  assert.deepEqual(passes.filter(label => label.startsWith('structural combustion emit carried sources')), [
+    'structural combustion emit carried sources first-timber',
+    'structural combustion emit carried sources second-timber',
+  ], 'each burning object contributes before the one shared source finalize');
+  assert.equal(passes.filter(label => label === 'structural combustion clear source').length, 1);
+  assert.equal(passes.filter(label => label === 'structural combustion finalize source').length, 1);
+  assert.equal(pair.debugState().runtimeReadbackCount, 0);
+  assert.deepEqual(pair.debugState().emittingObjectIds, [31, 32]);
+  pair.destroy();
+  const quietPair = await createGpuStructuralCombustionAssembly({
+    device, gridSize: 32, format: 'rgba8unorm',
+    structures: pairStructures.map(structure => ({...structure, emissionEnabled: false})),
+  });
+  passes.length = 0;
+  quietPair.encode(encoder, {});
+  assert.equal(passes.filter(label => label.startsWith('structural combustion heat and conduct')).length, 2,
+    'the emission-off comparison retains both objects and their live heat sampling');
+  assert.equal(passes.filter(label => label.startsWith('structural combustion emit carried sources')).length, 0);
+  assert.deepEqual(quietPair.debugState().emittingObjectIds, []);
+  quietPair.destroy();
   assert.ok(buffers.every(buffer => buffer.destroyCount === 1));
   assert.ok(textures.every(texture => texture.destroyCount === 1));
 } finally {

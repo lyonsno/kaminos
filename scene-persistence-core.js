@@ -30,6 +30,9 @@ function normalizeCombustionBinding(binding, objectId) {
   if (!Number.isFinite(binding.burnRate) || binding.burnRate <= 0) {
     throw new Error(`scene object ${objectId} combustion binding burn rate is invalid`);
   }
+  if (binding.emissionEnabled !== undefined && typeof binding.emissionEnabled !== 'boolean') {
+    throw new Error(`scene object ${objectId} combustion emissionEnabled must be a boolean`);
+  }
   return cloneJson(binding);
 }
 

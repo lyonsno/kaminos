@@ -5,14 +5,36 @@ import { runInNewContext } from 'node:vm';
 import { buildSavedMeshStructuralSurface, validateSavedMeshCombustionAssetIdentity } from '../saved-mesh-combustion.mjs';
 import { createLayeredStructuralMaterial } from '../structural-material-3d-core.js';
 import { createStructuralMeshSkinBinding } from '../structural-combustion-gpu.mjs';
+import { getSceneObjectRecords } from '../scene-persistence-core.js';
 
 const sceneHost = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const volumeCore = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
-assert.match(sceneHost, /async function syncSavedSceneCombustionBinding\(\)[\s\S]*?currently supports one bound object/);
-assert.match(sceneHost, /get\('volume_structural_combustion_view'\)[\s\S]*?createSavedMeshCombustionAssembly\(\{ THREE, entry, gpuContext, presentationDebugMode \}\)/);
+const syncSource = sceneHost.match(/async function syncSavedSceneCombustionBinding\(\) \{[\s\S]*?\n\}/)[0];
+const boundObjects = [{id: 'first', combustionBinding: {}}, {id: 'second', combustionBinding: {}}];
+const assemblyCalls = [];
+const syncContext = {
+  sceneObjects: boundObjects,
+  savedMeshCombustionRuntime: null,
+  THREE: {}, URLSearchParams,
+  window: {location: {search: '?volume_structural_combustion_view=material'}},
+  volumePrototype: {
+    borrowStructuralCombustionGpuContext: async () => ({device: 'same-device'}),
+    setGpuStructuralCombustionAssembly: async () => {},
+    clearGpuStructuralCombustionAssembly() {},
+  },
+  createSavedMeshCombustionAssembly: async args => {
+    assemblyCalls.push(args);
+    return {assembly: {}, dispose() {}};
+  },
+};
+assert.equal(await runInNewContext(`(async () => { ${syncSource}; return syncSavedSceneCombustionBinding(); })()`, syncContext), true);
+assert.deepEqual(assemblyCalls[0].entries, boundObjects, 'every bound saved object reaches the one shared GPU assembly');
+assert.equal(assemblyCalls[0].presentationDebugMode, 'material');
+assert.equal(await runInNewContext(`(async () => { ${syncSource}; return syncSavedSceneCombustionBinding(); })()`, syncContext), true);
+assert.equal(assemblyCalls.length, 1, 'unchanged object identities retain their resident assembly and material history');
 assert.match(
   readFileSync(new URL('../saved-mesh-combustion.mjs', import.meta.url), 'utf8'),
-  /presentationDebugMode,\s*structures:/,
+  /presentationDebugMode,\s*structures[, :]/,
   'the saved trestle route must carry its requested GPU diagnostic view into the assembly',
 );
 assert.match(sceneHost, /hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion/,
@@ -37,6 +59,13 @@ assert.ok(!/\bencodeHistoryCopy\s*\(/.test(volumeCore) || /\b(?:function|const|l
 
 const promotedAsset = readFileSync(new URL('../artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb', import.meta.url));
 const promotedIdentity = `sha256:${createHash('sha256').update(promotedAsset).digest('hex')}`;
+const bindingFixture = {
+  schema: 'kaminos.object-combustion-binding.v0', objectId: 'first',
+  assetIdentity: promotedIdentity, structuralProfile: 'timber-two-island.v0', burnRate: 0.003,
+};
+assert.equal(getSceneObjectRecords({objects: [{id: 'first', combustionBinding: {...bindingFixture, emissionEnabled: false}}]})[0].combustionBinding.emissionEnabled, false);
+assert.throws(() => getSceneObjectRecords({objects: [{id: 'first', combustionBinding: {...bindingFixture, emissionEnabled: 'false'}}]}), /emissionEnabled must be a boolean/,
+  'a string-valued emission-off control must not silently emit');
 assert.equal(promotedIdentity, 'sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84');
 assert.equal(validateSavedMeshCombustionAssetIdentity({ assetIdentity: promotedIdentity }, promotedIdentity), promotedIdentity);
 assert.throws(() => validateSavedMeshCombustionAssetIdentity({ assetIdentity: 'sha256:wrong' }, promotedIdentity), /asset identity mismatch/);
