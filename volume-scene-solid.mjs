@@ -269,13 +269,17 @@ export function voxelizeTriangleSolid(triangles, grid) {
     if (z + 1 < grid) enqueue(index + plane);
   }
   let interiorCellCount = 0;
-  let blockedFaceCount = 0;
-  for (let z = 0; z < grid; z++) for (let y = 0; y < height; y++) for (let x = 0; x < grid; x++) {
-    const index = solidFieldIndex(grid, x, y, z);
+  for (let index = 0; index < cells.length; index++) {
     if (!cells[index] && !exterior[index]) {
       cells[index] = 1;
       interiorCellCount++;
     }
+  }
+  // Count interfaces only after the occupancy field is final: unvisited
+  // enclosed neighbours must not be mistaken for fluid.
+  let blockedFaceCount = 0;
+  for (let z = 0; z < grid; z++) for (let y = 0; y < height; y++) for (let x = 0; x < grid; x++) {
+    const index = solidFieldIndex(grid, x, y, z);
     if (!cells[index]) continue;
     if (x + 1 < grid && !cells[index + 1]) blockedFaceCount++;
     if (x > 0 && !cells[index - 1]) blockedFaceCount++;

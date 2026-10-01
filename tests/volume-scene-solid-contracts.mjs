@@ -24,7 +24,8 @@ assert.equal(solid.cells[solidFieldIndex(grid, 12, 12, 12)], 1, 'closed box inte
 assert.equal(solid.cells[solidFieldIndex(grid, 12, 12, 19)], 0, 'outside is fluid');
 assert.ok(solid.surfaceCellCount > 0);
 assert.ok(solid.interiorCellCount > 0);
-assert.ok(solid.blockedFaceCount > 0);
+assert.equal(solid.blockedFaceCount, 384,
+  'closed box counts only interfaces with fluid after all interior cells are filled');
 const packed = packSolidTextureRows(solid.cells, grid);
 assert.equal(packed.bytesPerRow, 256);
 assert.equal(packed.data[256 * (12 + grid * 2 * 12) + 12], 1, 'GPU texture row preserves XYZ cell address');
