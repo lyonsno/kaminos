@@ -19,11 +19,20 @@ def digest(path):
     return h.hexdigest()
 
 
+def model_checkpoint_path(named, captured):
+    if named is None or Path(named).suffix != '.safetensors':
+        raise ValueError('named .safetensors checkpoint path required by source MLX format routing')
+    if Path(named).resolve() != Path(captured).resolve():
+        raise ValueError('named model input must resolve to the same checkpoint bytes')
+    return Path(named).absolute()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('repo-root', 'source-root', 'flow-fixture', 'out'):
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--expected-commit', required=True)
+    parser.add_argument('--checkpoint', type=Path)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     report = {'schema': 'trellis2.sparse-sampler-reference.v0', 'status': 'failed', 'phase': 'source',
@@ -55,6 +64,9 @@ def main():
             report[name] = base[name]
             if digest(Path(base[name]['path'])) != base[name]['sha256']:
                 raise ValueError(f'changed {name} input')
+        checkpoint = model_checkpoint_path(args.checkpoint, base['checkpoint']['path'])
+        report['modelCheckpoint'] = {'requestedPath': str(args.checkpoint), 'effectivePath': str(checkpoint),
+            'resolvedPath': str(checkpoint.resolve()), 'sha256': base['checkpoint']['sha256']}
         sample_path = Path(base['sample']['path'])
         with np.load(sample_path, allow_pickle=False) as capture:
             sample = np.asarray(capture['sample_in'], dtype=np.float32)
@@ -93,7 +105,7 @@ def main():
             'inverseCoefficient': float(np.float32(1 / coefficient)), 'guided': True}
         report['phase'] = 'model-load'
         model = SparseStructureFlowModel()
-        skipped = load_weights(model, base['checkpoint']['path'], verbose=False)
+        skipped = load_weights(model, str(checkpoint), verbose=False)
         if skipped or len(model.blocks) != 30:
             raise ValueError('complete source sparse checkpoint required')
         report['effectiveBackend'] = {'device': str(mx.default_device()), 'attention': 'fast', 'qk': qk_norm_backend_identity(),
