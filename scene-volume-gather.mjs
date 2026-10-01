@@ -34,6 +34,8 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
   const volumeCount=volumeDimensions.reduce((a,b)=>a*b,1);
   const total=receivers.length+volumeCount;
   const reconstructionCells=buildSmokeReconstructionCells(geometry,volumeDimensions);
+  const reconstructionBytes=Math.max(16,reconstructionCells.words.byteLength);
+  if(reconstructionBytes>device.limits.maxStorageBufferBindingSize) throw new Error(`smoke reconstruction cell triangle candidates needs ${reconstructionBytes} bytes; device supports ${device.limits.maxStorageBufferBindingSize}`);
   const receiverValues=new Float32Array(total*8);
   receivers.forEach((r,i)=>receiverValues.set([...r.position,1,...r.normal,0],i*8));
   for(let z=0;z<volumeGrid;z++) for(let y=0;y<volumeGrid*2;y++) for(let x=0;x<volumeGrid;x++) {
