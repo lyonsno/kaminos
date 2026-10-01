@@ -8,15 +8,16 @@ import { parseArgs } from 'node:util';
 import { validateBlockFixture, validateBlockChainFixture, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 import { finalizeSparseWitness } from './sparse-witness-finalize.mjs';
 import { validateFlowFixture } from './sparse-flow-witness-checks.js';
-import { validateSamplerFixture, SAMPLER_OBSERVATIONS } from './sparse-sampler-witness-checks.js';
+import { validateSamplerFixture, validateSamplerTrajectoryFixture, SAMPLER_OBSERVATIONS } from './sparse-sampler-witness-checks.js';
 
 const { values } = parseArgs({ options: Object.fromEntries(
-  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture'].map(name => [name, { type: 'string' }])) });
+  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture'].map(name => [name, { type: 'string' }])) });
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
   if (!values[name]) throw new Error(`--${name} is required`);
 }
-let root, fixture, prefixFixture, nextBlockFixture, samplerFixture;
+let root, fixture, prefixFixture, nextBlockFixture, samplerFixture, trajectoryFixture, trajectoryPlan;
 const witness = values.witness || 'prefix';
+const isSampler = witness === 'sampler' || witness === 'sampler-full';
 const output = path.resolve(values.report);
 const evidenceRoot = path.join(path.dirname(output), 'raw');
 const report = { schema: 'trellis2.sparse-prefix-browser.v0', status: 'failed', phase: 'repo-root-admission',
@@ -68,12 +69,18 @@ try {
   report.phase = 'fixture-admission';
   fixture = await fs.realpath(values.fixture); report.fixtureRoot = fixture;
   report.phase = 'witness-admission'; report.witness = witness;
-  if (!['prefix', 'block', 'flow', 'sampler'].includes(witness)) throw new Error('--witness must be prefix, block, flow or sampler');
-  if (values['sampler-fixture'] && witness !== 'sampler') throw new Error('--sampler-fixture requires sampler witness');
-  if (witness === 'sampler') {
+  if (!['prefix', 'block', 'flow', 'sampler', 'sampler-full'].includes(witness)) throw new Error('--witness must be prefix, block, flow, sampler or sampler-full');
+  if (values['sampler-fixture'] && !isSampler) throw new Error('--sampler-fixture requires sampler witness');
+  if (values['trajectory-fixture'] && witness !== 'sampler-full') throw new Error('--trajectory-fixture requires sampler-full witness');
+  if (isSampler) {
     if (!values['sampler-fixture']) throw new Error('--sampler-fixture is required for sampler witness');
     samplerFixture=await fs.realpath(values['sampler-fixture']); report.samplerFixtureRoot=samplerFixture;
     report.samplerFixtureSha256=digest(await fs.readFile(path.join(samplerFixture,'manifest.json')));
+  }
+  if (witness === 'sampler-full') {
+    if (!values['trajectory-fixture']) throw new Error('--trajectory-fixture is required for complete schedule witness');
+    trajectoryFixture=await fs.realpath(values['trajectory-fixture']); report.trajectoryFixtureRoot=trajectoryFixture;
+    report.trajectoryFixtureSha256=digest(await fs.readFile(path.join(trajectoryFixture,'manifest.json')));
   }
   if (values['next-block-fixture'] && witness !== 'block') throw new Error('--next-block-fixture requires block witness');
   if (witness === 'block') {
@@ -91,11 +98,14 @@ try {
   report.dirty = git(['status', '--porcelain']);
   if (report.commit !== report.expectedCommit || report.dirty) throw new Error('source revision must be the exact clean requested commit');
   if (witness === 'flow') { report.phase = 'flow-reference-admission'; report.schema = 'trellis2.sparse-flow-browser.v0'; }
-  if (witness === 'sampler') { report.phase = 'sampler-reference-admission'; report.schema = 'trellis2.sparse-sampler-browser.v0'; }
+  if (isSampler) { report.phase = 'sampler-reference-admission'; report.schema = witness === 'sampler-full' ? 'trellis2.sparse-sampler-trajectory-browser.v0' : 'trellis2.sparse-sampler-browser.v0'; }
   report.fixtureSha256 = digest(await fs.readFile(path.join(fixture, 'manifest.json')));
-  if (witness === 'flow' || witness === 'sampler') validateFlowFixture(JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')));
-  if (witness === 'sampler') validateSamplerFixture(JSON.parse(await fs.readFile(path.join(samplerFixture,'manifest.json'),'utf8')),
+  if (witness === 'flow' || isSampler) validateFlowFixture(JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')));
+  if (isSampler) validateSamplerFixture(JSON.parse(await fs.readFile(path.join(samplerFixture,'manifest.json'),'utf8')),
     JSON.parse(await fs.readFile(path.join(fixture,'manifest.json'),'utf8')),report.fixtureSha256);
+  if (trajectoryFixture) trajectoryPlan=validateSamplerTrajectoryFixture(JSON.parse(await fs.readFile(path.join(trajectoryFixture,'manifest.json'),'utf8')),
+    JSON.parse(await fs.readFile(path.join(samplerFixture,'manifest.json'),'utf8')),JSON.parse(await fs.readFile(path.join(fixture,'manifest.json'),'utf8')),
+    report.fixtureSha256,report.samplerFixtureSha256);
   if (witness === 'block') {
     report.phase = 'block-reference-admission';
     validateBlockFixture(JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')),
@@ -124,10 +134,11 @@ try {
       const isPrefixFixture = pathname.startsWith('/prefix-fixture/');
       const isNextFixture = pathname.startsWith('/next-block-fixture/');
       const isSamplerFixture = pathname.startsWith('/sampler-fixture/');
-      const isFixture = isPrefixFixture || isNextFixture || isSamplerFixture || pathname.startsWith('/fixture/');
-      const base = isPrefixFixture ? prefixFixture : isNextFixture ? nextBlockFixture : isSamplerFixture ? samplerFixture : isFixture ? fixture : root;
+      const isTrajectoryFixture = pathname.startsWith('/trajectory-fixture/');
+      const isFixture = isPrefixFixture || isNextFixture || isSamplerFixture || isTrajectoryFixture || pathname.startsWith('/fixture/');
+      const base = isPrefixFixture ? prefixFixture : isNextFixture ? nextBlockFixture : isSamplerFixture ? samplerFixture : isTrajectoryFixture ? trajectoryFixture : isFixture ? fixture : root;
       if (!base) { res.writeHead(404).end(); return; }
-      const file = path.resolve(base, `.${isPrefixFixture ? pathname.slice(15) : isNextFixture ? pathname.slice(19) : isSamplerFixture ? pathname.slice(16) : isFixture ? pathname.slice(8) : pathname}`);
+      const file = path.resolve(base, `.${isPrefixFixture ? pathname.slice(15) : isNextFixture ? pathname.slice(19) : isSamplerFixture ? pathname.slice(16) : isTrajectoryFixture ? pathname.slice(19) : isFixture ? pathname.slice(8) : pathname}`);
       if (!file.startsWith(base + path.sep)) { res.writeHead(403).end(); return; }
       const bytes = await fs.readFile(file);
       if (!isFixture && /\.m?js$/.test(file)) {
@@ -167,8 +178,8 @@ try {
   await loaded;
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
-    const { ${witness === 'sampler' ? 'runSparseSamplerWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${witness}-witness.js');
-    return { url: location.href, result: await ${witness === 'sampler' ? 'runSparseSamplerWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness === 'sampler' ? `, ${JSON.stringify(report.samplerFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''}) };
+    const { ${isSampler ? 'runSparseSamplerWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
+    return { url: location.href, result: await ${isSampler ? 'runSparseSamplerWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''}) };
   })()`, awaitPromise: true, returnByValue: true }, sessionId);
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   const value = result.result.value;
@@ -176,8 +187,15 @@ try {
   if (value.url !== report.requestedUrl) throw new Error('effective browser URL differs from requested route');
   if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
-  const requiredOutputs = witness === 'sampler' ? [...SAMPLER_OBSERVATIONS] : ['projected', 'modulation'];
-  if (witness === 'sampler') {
+  const requiredOutputs = isSampler ? [...SAMPLER_OBSERVATIONS] : ['projected', 'modulation'];
+  const observedOutputs={...value.result.outputs};
+  if (trajectoryPlan) {
+    const expectedCalls=trajectoryPlan.steps.reduce((n,step)=>n+(step.guided?2:1),0);
+    if (value.result.composition?.stepsExecuted!==trajectoryPlan.steps.length||value.result.composition?.modelCalls!==expectedCalls||
+        value.result.trajectory?.steps?.length!==trajectoryPlan.steps.length||value.result.trajectoryStatus!=='passed') throw new Error('incomplete native sampler schedule evidence');
+    for (const row of value.result.trajectory.steps) { const name=`step${row.index}.sample`; requiredOutputs.push(name); observedOutputs[name]=row; }
+  }
+  if (isSampler) {
     for (const name of ['models/trellis2/sparse-sampler.js','models/trellis2/sparse-sampler-witness.js','models/trellis2/sparse-sampler-witness-checks.js',
       'models/trellis2/sparse-flow.js','models/trellis2/sparse-prefix.js','models/trellis2/sparse-block.js','webgpu-inference-kit/src/inference-runtime.js']) {
       if (!report.servedSources[name]) throw new Error(`missing sampler served-source attestation:${name}`);
@@ -196,7 +214,7 @@ try {
     throw new Error('missing or mismatched incoming block1 input evidence');
   }
   for (const name of requiredOutputs) {
-    if (!report.rawOutputs?.[name] || report.rawOutputs[name].sha256 !== value.result.outputs?.[name]?.sha256) {
+    if (!report.rawOutputs?.[name] || report.rawOutputs[name].sha256 !== observedOutputs[name]?.sha256) {
       throw new Error(`missing or mismatched raw evidence: ${name}`);
     }
   }

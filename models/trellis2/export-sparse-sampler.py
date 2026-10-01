@@ -1,4 +1,4 @@
-"""Export one reusable source sampler step; no downstream generation."""
+"""Export a sparse sampler step or its remaining schedule; no downstream generation."""
 import argparse
 import hashlib
 import inspect
@@ -27,17 +27,49 @@ def model_checkpoint_path(named, captured):
     return Path(named).absolute()
 
 
+def load_trajectory_start(folder, base, flow_sha, source_commit):
+    manifest = json.loads((folder / 'manifest.json').read_text())
+    if (manifest.get('schema') != 'trellis2.sparse-sampler-reference.v0' or manifest.get('status') != 'succeeded'
+        or manifest.get('referenceRoute') != 'pinned-MLX-GPU-source-first-step-sampler/fast-SDPA/two-pass-LN/mlx-sum-QK/F32-CFG-Euler'
+        or manifest.get('source', {}).get('commit') != source_commit or manifest['source'].get('dirty') != ''
+        or manifest.get('producer', {}).get('dirty') != '' or len(manifest['producer'].get('commit', '')) != 40
+        or manifest.get('flowFixture', {}).get('sha256') != flow_sha or manifest.get('stepIndex') != 0
+        or manifest.get('stepsExecuted') != 1 or manifest.get('modelCalls') != 2 or manifest.get('blocksExecuted') != 60):
+        raise ValueError('matching complete source first-step reference required for schedule reuse')
+    for name in ('sample', 'conditioning', 'checkpoint'):
+        if manifest.get(name, {}).get('sha256') != base[name]['sha256']:
+            raise ValueError(f'changed reused first-step {name}')
+    row = manifest.get('tensors', {}).get('sample', {})
+    name = row.get('file', '')
+    if (not name or Path(name).name != name or row.get('shape') != [1, 8, 16, 16, 16]
+        or row.get('dtype') != 'float32' or row.get('byteLength') != 131072):
+        raise ValueError('complete first-step state descriptor required')
+    path = folder / name
+    if path.stat().st_size != row['byteLength'] or digest(path) != row.get('sha256'):
+        raise ValueError('partial/changed first-step state')
+    state = np.fromfile(path, dtype='<f4').reshape(row['shape'])
+    if not np.isfinite(state).all():
+        raise ValueError('nonfinite first-step state')
+    return manifest, state
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('repo-root', 'source-root', 'flow-fixture', 'out'):
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--expected-commit', required=True)
     parser.add_argument('--checkpoint', type=Path)
+    parser.add_argument('--full-schedule', action='store_true')
+    parser.add_argument('--first-step-fixture', type=Path)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     report = {'schema': 'trellis2.sparse-sampler-reference.v0', 'status': 'failed', 'phase': 'source',
         'tensors': {}, 'modelCalls': 0, 'modelAttempts': 0, 'stepsExecuted': 0, 'blocksExecuted': 0, 'stepIndex': 0,
         'referenceRoute': 'pinned-MLX-GPU-source-first-step-sampler/fast-SDPA/two-pass-LN/mlx-sum-QK/F32-CFG-Euler'}
+    if args.full_schedule:
+        report.update(schema='trellis2.sparse-sampler-trajectory-reference.v0',
+            referenceRoute='pinned-MLX-GPU-source-complete-sparse-schedule/fast-SDPA/two-pass-LN/mlx-sum-QK/F32-CFG-Euler',
+            computedSteps=0, reusedSteps=0, startStepIndex=1)
     started = time.perf_counter()
     try:
         root = args.source_root.resolve()
@@ -47,6 +79,8 @@ def main():
             'dirty': git(args.repo_root, 'status', '--porcelain'), 'scriptSha256': digest(Path(__file__))}
         if report['source']['dirty'] or report['producer']['dirty'] or report['producer']['commit'] != args.expected_commit:
             raise ValueError('clean exact producer and source required')
+        if bool(args.first_step_fixture) != args.full_schedule:
+            raise ValueError('full-schedule requires its first-step fixture; first-step fixture requires full-schedule')
         report['phase'] = 'flow-reference-admission'
         fixture = args.flow_fixture.resolve()
         manifest_path = fixture / 'manifest.json'
@@ -80,6 +114,14 @@ def main():
         for name, values in [('sample', sample), ('conditioning', conditioning)]:
             if hashlib.sha256(np.asarray(values, dtype='<f4', order='C').tobytes()).hexdigest() != base['tensors'][name]['sha256']:
                 raise ValueError(f'capture differs from exported flow {name}')
+        first = None
+        if args.full_schedule:
+            report['phase'] = 'first-step-reuse-admission'
+            first_root = args.first_step_fixture.resolve()
+            first, resumed = load_trajectory_start(first_root, base, report['flowFixture']['sha256'], report['source']['commit'])
+            report['firstStepFixture'] = {'root': str(first_root), 'sha256': digest(first_root / 'manifest.json'),
+                'stateSha256': first['tensors']['sample']['sha256'], 'role': 'retained source artifact continuation, not live WebGPU handoff'}
+            report['reusedSteps'] = 1
         os.environ['TRELLIS2MLX_ATTENTION_BACKEND'] = 'fast'
         os.environ['TRELLIS2MLX_QK_NORM_BACKEND'] = 'mlx-sum'
         sys.path.insert(0, str(root))
@@ -97,12 +139,25 @@ def main():
         config['guidanceInterval'] = list(config['guidanceInterval'])
         report['config'] = config
         report['configSource'] = {'steps': 'captured NPZ integer', 'other': 'pinned source sampler literal defaults, not rounded serialized F32 config'}
+        if first is not None and first['config'] != config:
+            raise ValueError('reused first-step config differs from actual source schedule')
         times = np.linspace(1, 0, steps + 1)
         times = config['rescaleT'] * times / (1 + (config['rescaleT'] - 1) * times)
         coefficient = config['sigmaMin'] + (1 - config['sigmaMin']) * times[0]
         report['clock'] = {'index': 0, 'time': float(times[0]), 'previousTime': float(times[1]), 'modelTime': float(np.float32(1000 * times[0])),
             'dt': float(np.float32(times[0] - times[1])), 'coefficient': float(np.float32(coefficient)),
             'inverseCoefficient': float(np.float32(1 / coefficient)), 'guided': True}
+        if args.full_schedule:
+            if steps < 2 or first['clock'] != report['clock']:
+                raise ValueError('complete continued source schedule and matching first clock required')
+            report['clocks'] = []
+            for i in range(steps):
+                coefficient = config['sigmaMin'] + (1 - config['sigmaMin']) * times[i]
+                report['clocks'].append({'index': i, 'time': float(times[i]), 'previousTime': float(times[i + 1]),
+                    'modelTime': float(np.float32(1000 * times[i])), 'dt': float(np.float32(times[i] - times[i + 1])),
+                    'coefficient': float(np.float32(coefficient)), 'inverseCoefficient': float(np.float32(1 / coefficient)),
+                    'guided': config['guidanceStrength'] != 1 and config['guidanceInterval'][0] <= times[i] <= config['guidanceInterval'][1]})
+            report['completeScheduleModelCalls'] = sum(2 if clock['guided'] else 1 for clock in report['clocks'])
         report['phase'] = 'model-load'
         model = SparseStructureFlowModel()
         skipped = load_weights(model, str(checkpoint), verbose=False)
@@ -125,17 +180,25 @@ def main():
                 report['modelCalls'] += 1
                 report['blocksExecuted'] += len(model.blocks)
                 return result
-        report['phase'] = 'source-first-sampler-step'
-        capture = {}
-        result = flow_euler_sample(ObservedModel(), mx.array(sample), mx.array(conditioning), mx.zeros(conditioning.shape, dtype=mx.float32),
-            steps=steps, verbose=False, stop_after_first_step=True, capture_first_step=capture,
+        report['phase'] = 'source-complete-sparse-schedule' if args.full_schedule else 'source-first-sampler-step'
+        capture = [] if args.full_schedule else {}
+        result = flow_euler_sample(ObservedModel(), mx.array(resumed if args.full_schedule else sample), mx.array(conditioning), mx.zeros(conditioning.shape, dtype=mx.float32),
+            steps=steps, verbose=False, stop_after_first_step=not args.full_schedule,
+            **({'capture_steps': capture, 'start_step_index': 1} if args.full_schedule else {'capture_first_step': capture}),
             **{value: config[key] for key, value in names.items()})
         mx.eval(result)
-        report['stepsExecuted'] = 1
         mapping = {'positive': 'pred_pos', 'negative': 'pred_neg', 'guided': 'pred_cfg', 'x0Positive': 'x0_pos', 'x0Guided': 'x0_cfg',
             'rescaled': 'x0_rescaled', 'mixed': 'x0_after_rescale', 'final': 'pred_final', 'sample': 'sample_next'}
-        values = {name: np.asarray(capture[key].astype(mx.float32)) for name, key in mapping.items()}
-        values['stds'] = np.array([np.asarray(capture['std_pos']).item(), np.asarray(capture['std_cfg']).item()], dtype=np.float32)
+        if args.full_schedule:
+            report['computedSteps'] = len(capture)
+            report['stepsExecuted'] = 1 + len(capture)
+            if report['stepsExecuted'] != steps or report['modelCalls'] != report['completeScheduleModelCalls'] - 2:
+                raise ValueError('complete effective source schedule/call count required')
+            values = {'step0.sample': resumed, **{f'step{i + 1}.sample': np.asarray(row['sample_next'].astype(mx.float32)) for i, row in enumerate(capture)}}
+        else:
+            report['stepsExecuted'] = 1
+            values = {name: np.asarray(capture[key].astype(mx.float32)) for name, key in mapping.items()}
+            values['stds'] = np.array([np.asarray(capture['std_pos']).item(), np.asarray(capture['std_cfg']).item()], dtype=np.float32)
         report['phase'] = 'output-export'
         for name, value in values.items():
             value = np.asarray(value, dtype='<f4', order='C')
@@ -144,8 +207,11 @@ def main():
             file = args.out / f'{name}.f32'
             value.tofile(file)
             report['tensors'][name] = {'file': file.name, 'shape': list(value.shape), 'dtype': 'float32', 'byteLength': value.nbytes, 'sha256': digest(file)}
-        report['positiveVsUncachedFullFlow'] = {'byteIdentical': report['tensors']['positive']['sha256'] == base['tensors']['expected.prediction']['sha256'],
-            'referenceSha256': base['tensors']['expected.prediction']['sha256']}
+        if not args.full_schedule:
+            report['positiveVsUncachedFullFlow'] = {'byteIdentical': report['tensors']['positive']['sha256'] == base['tensors']['expected.prediction']['sha256'],
+                'referenceSha256': base['tensors']['expected.prediction']['sha256']}
+        elif digest(first_root / 'manifest.json') != report['firstStepFixture']['sha256'] or report['tensors']['step0.sample']['sha256'] != first['tensors']['sample']['sha256']:
+            raise ValueError('reused source fixture changed during schedule export')
         report['phase'] = 'post-source-admission'
         for name, base_root, commit in [('source', root, report['source']['commit']), ('producer', args.repo_root, args.expected_commit)]:
             state = {'commit': git(base_root, 'rev-parse', 'HEAD'), 'dirty': git(base_root, 'status', '--porcelain')}

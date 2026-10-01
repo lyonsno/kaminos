@@ -8,10 +8,10 @@ const hash = async data => Array.from(new Uint8Array(await crypto.subtle.digest(
 
 // Offline-only snapshot: queue-ordered GPU copy before the shared workspace is
 // overwritten. The next block still consumes the original resident tensor.
-export function createSparseBlockInputCapture(runtime, source) {
+export function createSparseBlockInputCapture(runtime, source, name = 'trellis.witness.block1.input') {
   if (source?.dtype !== 'f32' || !source.buffer || !(source.usage & U.copySrc) ||
       source.byteLength !== source.shape?.reduce((a, b) => a * b, 4)) throw new TypeError('complete copyable f32 block input required');
-  const tensor = runtime.createTensor({ name: 'trellis.witness.block1.input', shape: [...source.shape],
+  const tensor = runtime.createTensor({ name, shape: [...source.shape],
     dtype: 'f32', usage: U.copySrc | U.copyDst });
   let captured = false, disposed = false;
   return { tensor, capture() {
