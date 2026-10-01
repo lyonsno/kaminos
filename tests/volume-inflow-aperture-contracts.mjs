@@ -161,6 +161,17 @@ test('cockpit and schema carry the new controls', () => {
   assert.match(index, /windModel: document\.getElementById\('volume-wind-model'\)\.value/);
   assert.match(index, /<option value="jets">Ring of jets<\/option>/);
   assert.match(index, /<option value="gusty">Gusty<\/option>/);
+  // 2026-10-01: the first complete live look showed every pattern arm running
+  // the family shape — the cockpit registers its change listeners from an
+  // explicit id list, and none of the inflow or wind controls were in it, so a
+  // change never reached the core until some other control moved.
+  const listenerList = index.slice(index.indexOf("  for (const id of [\n    'volume-emitter-source-law',"), index.indexOf("    document.getElementById(id).addEventListener('input', syncControls);"));
+  for (const id of ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer']) {
+    assert.ok(listenerList.includes(`'${id}',`), `${id} has a change listener`);
+  }
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /aperture pattern requested \$\{value\}, effective/, 'the arm capture refuses an arm whose pattern did not take effect');
+  assert.match(capture, /wind model requested \$\{value\}, effective/, 'and one whose wind model did not');
   assert.equal(schema.controlCount, 227);
   const additive = schema.controls.filter(control => control.additiveSinceControlCount >= 219).map(control => control.additiveSinceControlCount);
   assert.deepEqual(additive, [219, 220, 221, 222, 223, 224, 225, 226, 227]);
