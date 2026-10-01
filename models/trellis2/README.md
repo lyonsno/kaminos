@@ -4,6 +4,36 @@ This model-specific slice uses the public Kaminos inference-kit session,
 registered route, tensors, kernels, and linear shader. It does not extend the
 shared kit or depend on the older DINO feature stack.
 
+## Resident generation stages
+
+`createTrellisSparseFlowAdapter` composes the prefix, all thirty transformer
+blocks, terminal LayerNorm and F32 prediction. `createTrellisSparseSamplerAdapter`
+keeps CFG, guidance rescaling, standard deviation, Euler updates and subsequent
+model inputs resident through the complete source schedule. Their offline
+witnesses retain failed numerical predicates rather than treating a passing
+prediction or latent as whole-model fidelity.
+
+`createTrellisSparseDecoderAdapter` accepts the same registered runtime and a
+borrowed F32 NCDHW sampler tensor. Its twenty 3D convolutions, eight residual
+blocks, two pixel-shuffle expansions and channel-wise LayerNorm/SiLU produce
+F32 `[1,1,64,64,64]` occupancy logits without layer readback. Native OI-DHW
+checkpoint weights are F32 in this adapter: the pinned MLX loader also casts
+mixed F16/F32 checkpoint storage into F32 constructor destinations. Implicit
+im2col uses only workgroup tiles; it does not allocate a full unfolded volume.
+The caller retains ownership of borrowed latent storage.
+
+`export-sparse-decoder.py --synthetic` provides small actual-source operation
+conformance, distinct from `--checkpoint ... --checkpoint-config ...
+--input-manifest ...` full checkpoint decoding. Both are offline stage fixtures,
+not live sampler composition. The existing isolated runner accepts `--witness
+decoder`; it records native route/source identity and complete raw outputs.
+Decoder arithmetic uses the predeclared F32 state predicate `atol=rtol=0.001`.
+Occupancy sign agreement is reported separately. Shape/texture models, image
+conditioning composition and the generated asset's authoring consumer remain
+outside these serving adapters.
+
+## Prefix entrance and historical reference
+
 `createTrellisSparsePrefixAdapter` accepts a registered route, decoded checkpoint
 weights in native `[out,in]` layout, and grid configuration. `run` takes complete
 F32 NCDHW noise and a timestep and returns two browser-session-owned GPU tensors:

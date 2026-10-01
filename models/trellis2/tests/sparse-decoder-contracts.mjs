@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {WEBGPU_BUFFER_USAGE as U} from '../../../webgpu-inference-kit/src/core.js';
+
+const path=new URL('../sparse-decoder.js',import.meta.url);
+assert.ok(fs.existsSync(path),'Missing occupancy decoder consuming the resident sampler latent, not an MLX decode handoff.');
+const {buildSparseDecoderPlan,sparseDecoderWeightShapes,createTrellisSparseDecoderAdapter}=await import(path);
+const full=buildSparseDecoderPlan();
+assert.deepEqual(full.inputShape,[1,8,16,16,16]);
+assert.deepEqual(full.outputShape,[1,1,64,64,64]);
+assert.equal(full.convolutions,20);
+assert.equal(full.residualBlocks,8);
+assert.equal(full.arithmetic,'f32-channel-layernorm-silu-conv3d');
+assert.equal(full.normEpsilon,1e-6);
+const bindingBytes=full.requiredBindingBytes??Math.max(...full.channels.map((c,i)=>(full.resolution*2**i)**3*8*c*4));
+assert.ok(bindingBytes<=134217728,'Admission must measure actual decoder tensors, not a nonexistent final eight-channel expansion.');
+const config={resolution:2,latentChannels:2,channels:[4,2],numResBlocks:1,numResBlocksMiddle:1};
+const plan=buildSparseDecoderPlan(config),shapes=sparseDecoderWeightShapes(plan);
+assert.deepEqual(shapes['blocks.1.conv.weight'],[16,4,3,3,3]);
+assert.deepEqual(shapes['out_layer.0.weight'],[2]);
+assert.deepEqual(plan.outputShape,[1,1,4,4,4]);
+const weights=Object.fromEntries(Object.entries(shapes).map(([name,shape])=>[name,new Float32Array(shape.reduce((a,b)=>a*b,1))]));
+const allocations=[],uploads=[],runs=[];
+const runtime={device:{limits:{maxStorageBufferBindingSize:134217728,maxComputeWorkgroupsPerDimension:65535}},
+  createTensor(spec){const t={...spec,byteLength:spec.shape.reduce((a,b)=>a*b,4),buffer:{destroy(){t.destroyed=true;}}};allocations.push(t);return t;},
+  uploadTensor(t,data){uploads.push({t,data});},defineComputeKernel(spec){return spec;},
+  async runKernel(kernel,options){runs.push({kernel,options});},readTensor(){assert.fail('Serving decoder must never read back.');}};
+const sample=runtime.createTensor({name:'sampler-owned-final-latent',shape:plan.inputShape,dtype:'f32',usage:U.storage|U.copySrc});
+const route={runtime,routeId:'resident-generation'};
+const decoder=createTrellisSparseDecoderAdapter({route,config,weights,sampleTensor:sample});
+const invocation={id:'sampler-to-decoder'};
+const output=await decoder.run({},invocation);
+assert.strictEqual(output.logits,decoder.outputs.logits);
+assert.deepEqual(output.logits.shape,plan.outputShape);
+assert.equal(output.logits.dtype,'f32');
+assert.ok(!uploads.some(row=>row.t===sample),'The final latent crosses by GPU tensor identity, not CPU reupload.');
+assert.ok(runs.every(row=>row.options.schedulerInvocation===invocation));
+assert.deepEqual(runs.map(row=>row.options.stage),plan.stages,'Required profile stages must name the actual decoder operation graph.');
+assert.equal(runs.filter(row=>row.options.stage.endsWith('-conv3d')).length,plan.convolutions);
+assert.equal(runs.filter(row=>row.options.stage.endsWith('-pixel-shuffle')).length,1);
+assert.equal(runs.filter(row=>row.options.stage.endsWith('-residual')).length,3);
+assert.ok(runs.filter(row=>row.options.stage.endsWith('-conv3d')).every(row=>/workgroup_size\(16,16\)/.test(row.kernel.code)));
+assert.ok(!runs.some(row=>/round_bf16|f16/.test(row.kernel.code)),'Source destination arithmetic is F32.');
+await assert.rejects(decoder.run({sample:new Float32Array(16)},invocation),/borrowed/);
+const active=decoder.run({},invocation);await assert.rejects(decoder.run({},invocation),/in use/);
+assert.throws(()=>decoder.dispose(),/in use/);await active;
+decoder.dispose();decoder.dispose();assert.ok(!sample.destroyed);
+assert.ok(allocations.filter(t=>t!==sample).every(t=>t.destroyed));
+await assert.rejects(decoder.run({},invocation),/disposed/);
+const before=allocations.length;
+assert.throws(()=>createTrellisSparseDecoderAdapter({route,config,weights:{...weights,'input_layer.weight':new Float32Array(1)},sampleTensor:sample}),/input_layer.weight/);
+assert.equal(allocations.length,before,'Incomplete checkpoint must fail before allocating workspaces.');
+assert.throws(()=>buildSparseDecoderPlan({channels:[]}),/channels/);
+assert.throws(()=>createTrellisSparseDecoderAdapter({route,config,weights,sampleTensor:{...sample,dtype:'f16'}}),/F32/);
+console.log('Full decoder geometry/checkpoint layout, resident latent consumption, F32 operation graph and disposal contracts pass; fake runtime is not GPU numerics.');
