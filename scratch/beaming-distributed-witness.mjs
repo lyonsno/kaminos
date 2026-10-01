@@ -77,6 +77,33 @@ try {
       }
     }
   }
+  if(process.argv.includes('--winding-check')) {
+    report.phase='double-sided-orientation-comparison';await save();
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.selectOption('#rendering-angular-samples','96');
+    await page.selectOption('#rendering-smoke-solver','distributed');
+    await page.evaluate(()=>{
+      window.selectSceneObject('kiln');window.toggleBackface();window.toggleDoubleSided();window.setGizmoMode?.(null);
+      window.__kaminosSetSceneCameraFrame([-3,2,7],[0,.7,0]);
+      const gain=document.getElementById('rendering-shared-gain');gain.value='4';gain.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    let originalSource;
+    for(const [name,operation] of [['original',null],['reversed-winding','reverseWinding'],['reversed-winding-and-normals','flipNormals']]) {
+      const prior=await page.evaluate(()=>window.__kaminosSceneRadiance.debugState().frame.generation);
+      if(operation)await page.evaluate(operation=>window[operation](),operation);
+      await page.waitForFunction(prior=>{const d=window.__kaminosSceneRadiance.debugState();return d.frame.generation>prior&&d.directions===96&&window.__kaminosSceneRadiance.canRender();},prior,{timeout:0});
+      await page.waitForTimeout(700);
+      const view=await page.evaluate(async()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),
+        source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),objects:window.kaminosSceneObjectDebugState(),doubleSided:document.getElementById('tb-double-sided').classList.contains('active')}));
+      report.views.push({name,operation,...view});await save();
+      assert.equal(view.doubleSided,true);assert.ok(view.objects.some(o=>o.id==='kiln'&&o.active),'orientation operation must target kiln');
+      assert.equal(view.volume.error,null);assert.equal(view.lighting.smokeMode,'distributed');
+      assert.equal(view.lighting.frame.smokeReconstruction.identity,'geometry-visible-trilinear-v1');
+      if(originalSource)assert.deepEqual(view.source.values,originalSource,'orientation comparison requires identical raw source coefficients');
+      else originalSource=view.source.values;
+      await page.screenshot({path:`${out}/orientation-${name}.png`});
+    }
+  }
   const faviconOnly=report.httpFailures.length>0&&report.httpFailures.every(r=>new URL(r.url).pathname==='/favicon.ico');
   const materialErrors=report.errors.filter(e=>!(faviconOnly&&e.includes('Failed to load resource: the server responded with a status of 404')));
   assert.deepEqual(materialErrors,[]);
