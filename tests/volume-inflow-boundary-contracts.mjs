@@ -183,7 +183,7 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   // a pattern, averaged over a 4 x 4 footprint); mode 0 still turns it off.
   const weight = wgslFunction('inflowApertureWeight');
   assert.match(weight, /u\.inflow_aperture\.x < 0\.5/, 'reads the aperture mode');
-  assert.match(weight, /return inflowCoverage\[/, 'the cell weight is read from the coverage map');
+  assert.match(weight, /return textureLoad\(inflowCoverage, /, 'the cell weight is read from the coverage map texture');
   assert.doesNotMatch(source, /fn inflowApertureCoverageAt\(/, 'no shape evaluation in WGSL');
   assert.match(wgslFunction('inflowFaceVelocity'), /u\.inflow_state\.y \* inflowApertureWeight\(cell\)/);
   const ghost = wgslFunction('inflowGhostState');
