@@ -9,6 +9,20 @@ const state = { active: true, effectiveRoute: 'native-3d-compute-fluid-raymarch-
 const expectedSource = { repoRoot: '/worktree', commit: '1234abcd' };
 const servingSource = { ...expectedSource, branch: 'cc/test', dirty: false };
 assert.deepEqual(admitFrameOnlySource(url, receipt, state, servingSource, expectedSource).servingSource, servingSource);
+const kilnRoute = `${url}#authoring=1&scene=kiln-assay.kaminos.json&volume_collision=kiln`;
+const kilnCollision = { requested: true, effective: 'mesh-voxel-solid', sourceId: 'kiln',
+  geometryRevision: 'mesh@transform', triangleCount: 12, solidCellCount: 4, blockedFaceCount: 6,
+  sourceSupport: { fluidSupportCells: 3 } };
+assert.deepEqual(admitFrameOnlySource(kilnRoute, receipt, { ...state, sceneCollision: kilnCollision },
+  servingSource, expectedSource).sceneCollision, kilnCollision,
+  'collision-on frame evidence must retain the effective authored-solid receipt');
+for (const [name, route, collision] of [
+  ['scene hash without authoring', `${url}#scene=kiln-assay.kaminos.json&volume_collision=kiln`, kilnCollision],
+  ['collision not effective', kilnRoute, { ...kilnCollision, effective: 'off' }],
+  ['wrong collider', kilnRoute, { ...kilnCollision, sourceId: 'other' }],
+  ['emitter occluded', kilnRoute, { ...kilnCollision, sourceSupport: { fluidSupportCells: 0 } }],
+]) assert.throws(() => admitFrameOnlySource(route, receipt, { ...state, sceneCollision: collision },
+  servingSource, expectedSource), Error, name);
 for (const [name, route, source, runtime] of [
   ['missing preset', 'http://127.0.0.1:18447/?kaminos_volume_smoke=1', receipt, state],
   ['wrong preset', url, { ...receipt, presetId: `vsp-${'b'.repeat(64)}` }, state],
@@ -54,5 +68,7 @@ assert.match(witness, /\/api\/runtime-config/);
 assert.ok(witness.indexOf('sourceBeforeLoad = await frameOnlyServingSource()') < witness.indexOf('browserSession = await attachOrLaunchSharedBrowser()'),
   'source identity must be checked before loading page code');
 assert.match(witness, /phase = 'frame-only-postcapture-source'/);
+assert.match(witness, /phase = 'frame-only-postcapture-collision'[\s\S]*admitFrameOnlySource/,
+  'collision-on evidence must recheck the effective scene solid after the captured frames');
 assert.match(witness, /partialControlledStepFrames/);
 console.log('volume frame-only contracts passed');

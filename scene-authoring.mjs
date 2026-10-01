@@ -46,7 +46,8 @@ export function forwardCompositionHash(target, sourceHash) {
   const hash = new URLSearchParams(sourceHash.replace(/^#/, ''));
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
-    if (['authoring', 'scene', 'composition_module_url'].includes(key) || key.startsWith('volume_light_field')) forwarded.set(key, value);
+    if (['authoring', 'scene', 'composition_module_url', 'volume_collision'].includes(key)
+      || key.startsWith('volume_light_field')) forwarded.set(key, value);
   }
   url.hash = forwarded.toString();
   return url.href;
