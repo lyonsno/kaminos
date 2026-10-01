@@ -1,0 +1,724 @@
+{
+  "schema": "kaminos.structural-material.arch-volume-smoke.v1",
+  "status": "failed",
+  "phase": "cleanup",
+  "failure": {
+    "phase": "cleanup",
+    "message": "Node exited with code 13 because browser-child termination was awaited after its exit event had already passed; the run reached the bound frame but did not write a terminal report."
+  },
+  "requestedUrl": "http://127.0.0.1:18434/structural-material-arch-volume.html",
+  "effectiveRoute": "kaminos.structural-material.arch-force-volume.v0",
+  "source": {
+    "revision": "1ec23abc12dd6d11d03ab4f3e4e3dddfeabfaa21",
+    "dirtyPaths": [
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r2-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r2-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r2-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r2-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r3-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r3-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r3-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r3-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r5-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r5-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r5-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r5-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r6-2026-10-01.json"
+    ],
+    "expectedSha256": {
+      "structural-material-arch-volume.html": "d241ee1dedcc0a945c0ad0fe2f45cb0c419d495766377407cfd09a79d9681c94",
+      "structural-material-arch-volume-view.js": "caab5c4c81ed7bb48469b1efad44c6b705137254ef2b065f3f61b544fce122c2",
+      "structural-material-arch-core.js": "9d78a4622ed1edbfb133a2fd17bc817326575c65be8910bd9880e3425dc6e335",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json": "ed2fd8a8191bf81366028259078f2f8d90aa230f9ce98277544332b2ed0eef37",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json": "3ed2e83bd82b433d2df6e07185d71eaac636bb8544ea9b178b03cd9d02de3028"
+    },
+    "expectedProfileSourceSha256": {
+      "intact": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+      "outer-notch": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594"
+    },
+    "served": {
+      "structural-material-arch-volume.html": {
+        "status": 200,
+        "sha256": "d241ee1dedcc0a945c0ad0fe2f45cb0c419d495766377407cfd09a79d9681c94",
+        "profileSourceSha256": null
+      },
+      "structural-material-arch-volume-view.js": {
+        "status": 200,
+        "sha256": "caab5c4c81ed7bb48469b1efad44c6b705137254ef2b065f3f61b544fce122c2",
+        "profileSourceSha256": null
+      },
+      "structural-material-arch-core.js": {
+        "status": 200,
+        "sha256": "9d78a4622ed1edbfb133a2fd17bc817326575c65be8910bd9880e3425dc6e335",
+        "profileSourceSha256": null
+      },
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json": {
+        "status": 200,
+        "sha256": "ed2fd8a8191bf81366028259078f2f8d90aa230f9ce98277544332b2ed0eef37",
+        "profileSourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5"
+      },
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json": {
+        "status": 200,
+        "sha256": "3ed2e83bd82b433d2df6e07185d71eaac636bb8544ea9b178b03cd9d02de3028",
+        "profileSourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594"
+      }
+    }
+  },
+  "browser": {
+    "requestedExecutable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+    "effectiveExecutable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+    "version": "Google Chrome for Testing 153.0.8010.12"
+  },
+  "profileResponses": [
+    {
+      "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+      "status": 200
+    }
+  ],
+  "transitions": {
+    "release": {
+      "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?force=2&load=1",
+      "title": "Stone Arch · Structural Volume",
+      "status": "Load released · fracture history and connectivity retained",
+      "receipt": "Release at zero force · 296 broken bonds retained · connectivity epoch 1",
+      "routeWitness": {
+        "route": "kaminos.structural-material.arch-force-volume.v0",
+        "phase": "interactive",
+        "serial": 1,
+        "camera": [
+          0.8000000000000002,
+          0.48000000000000004,
+          2.4500000000000006
+        ],
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 307,
+            "components": 1,
+            "travel": 0,
+            "requestedForce": 0,
+            "displayTravel": 0,
+            "displayMode": "unloaded-damaged",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0,
+            "forceMarkerCount": 0,
+            "connectivityEpoch": 1,
+            "renderedInstances": 2148
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 296,
+            "components": 1,
+            "travel": 0,
+            "requestedForce": 0,
+            "displayTravel": 0,
+            "displayMode": "unloaded-damaged",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0,
+            "forceMarkerCount": 0,
+            "connectivityEpoch": 1,
+            "renderedInstances": 2052
+          }
+        }
+      },
+      "controls": {
+        ".force": {
+          "rect": {
+            "x": 16,
+            "y": 69,
+            "width": 327.140625,
+            "height": 20
+          }
+        },
+        "#solve": {
+          "disabled": false,
+          "rect": {
+            "x": 355.140625,
+            "y": 62,
+            "width": 99.453125,
+            "height": 34
+          }
+        },
+        "#release": {
+          "disabled": true,
+          "rect": {
+            "x": 466.59375,
+            "y": 62,
+            "width": 76.484375,
+            "height": 34
+          }
+        },
+        "#bind": {
+          "disabled": false,
+          "rect": {
+            "x": 555.078125,
+            "y": 62,
+            "width": 54.828125,
+            "height": 34
+          }
+        },
+        "#reset": {
+          "disabled": false,
+          "rect": {
+            "x": 621.90625,
+            "y": 62,
+            "width": 62.609375,
+            "height": 34
+          }
+        },
+        "#status": {
+          "rect": {
+            "x": 445.625,
+            "y": 108,
+            "width": 323.375,
+            "height": 16.796875
+          }
+        }
+      },
+      "canvas": {
+        "x": 16,
+        "y": 137.796875,
+        "width": 753,
+        "height": 426
+      },
+      "viewport": {
+        "width": 800,
+        "height": 600,
+        "documentWidth": 785
+      }
+    },
+    "bind": {
+      "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?force=2&load=1",
+      "title": "Stone Arch · Structural Volume",
+      "status": "Connections rebound at zero load",
+      "receipt": "Connectivity restored on the released graph; crack history remains recorded.",
+      "routeWitness": {
+        "route": "kaminos.structural-material.arch-force-volume.v0",
+        "phase": "interactive",
+        "serial": 1,
+        "camera": [
+          0.8000000000000002,
+          0.48000000000000004,
+          2.4500000000000006
+        ],
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 0,
+            "components": 1,
+            "travel": 0,
+            "requestedForce": 0,
+            "displayTravel": 0,
+            "displayMode": "repaired-graph-equilibrium",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0,
+            "forceMarkerCount": 0,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2148
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 0,
+            "components": 1,
+            "travel": 0,
+            "requestedForce": 0,
+            "displayTravel": 0,
+            "displayMode": "repaired-graph-equilibrium",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0,
+            "forceMarkerCount": 0,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2052
+          }
+        }
+      },
+      "controls": {
+        ".force": {
+          "rect": {
+            "x": 16,
+            "y": 69,
+            "width": 327.140625,
+            "height": 20
+          }
+        },
+        "#solve": {
+          "disabled": false,
+          "rect": {
+            "x": 355.140625,
+            "y": 62,
+            "width": 99.453125,
+            "height": 34
+          }
+        },
+        "#release": {
+          "disabled": true,
+          "rect": {
+            "x": 466.59375,
+            "y": 62,
+            "width": 76.484375,
+            "height": 34
+          }
+        },
+        "#bind": {
+          "disabled": true,
+          "rect": {
+            "x": 555.078125,
+            "y": 62,
+            "width": 54.828125,
+            "height": 34
+          }
+        },
+        "#reset": {
+          "disabled": false,
+          "rect": {
+            "x": 621.90625,
+            "y": 62,
+            "width": 62.609375,
+            "height": 34
+          }
+        },
+        "#status": {
+          "rect": {
+            "x": 577.609375,
+            "y": 108,
+            "width": 191.390625,
+            "height": 16.796875
+          }
+        }
+      },
+      "canvas": {
+        "x": 16,
+        "y": 137.796875,
+        "width": 753,
+        "height": 426
+      },
+      "viewport": {
+        "width": 800,
+        "height": 600,
+        "documentWidth": 785
+      }
+    }
+  },
+  "captures": {
+    "loaded-fracture": {
+      "path": "/private/tmp/kaminos-burning-demon-arch-repair-source-1001/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r6-2026-10-01-loaded-fracture.png",
+      "sha256": "72ff01076d7b9278e28e3bf61ea2479b2845659d8f03c3068de1aefe95ec0ec4",
+      "width": 800,
+      "height": 600,
+      "state": {
+        "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?force=2&load=1",
+        "title": "Stone Arch · Structural Volume",
+        "status": "Front depth layer only · load 2.00 · fracture pose retained; Release clears force, not cracks",
+        "receipt": "Front-layer load 2.00 · camera-facing layer 3 of 3 · feet fixed · outer-notch material event energy 0.2517",
+        "routeWitness": {
+          "route": "kaminos.structural-material.arch-force-volume.v0",
+          "phase": "interactive",
+          "serial": 1,
+          "camera": [
+            0.8000000000000002,
+            0.48000000000000004,
+            2.4500000000000006
+          ],
+          "cases": {
+            "intact": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+              "nodes": 2148,
+              "broken": 307,
+              "components": 1,
+              "travel": 0.05722609642357092,
+              "requestedForce": 2,
+              "displayTravel": 0.05722609642357092,
+              "displayMode": "fracture-event-pose",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 2,
+              "forceMarkerCount": 1,
+              "connectivityEpoch": 1,
+              "renderedInstances": 2148
+            },
+            "outer-notch": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+              "nodes": 2052,
+              "broken": 296,
+              "components": 1,
+              "travel": 0.06806276220666571,
+              "requestedForce": 2,
+              "displayTravel": 0.06806276220666571,
+              "displayMode": "fracture-event-pose",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 2,
+              "forceMarkerCount": 1,
+              "connectivityEpoch": 1,
+              "renderedInstances": 2052
+            }
+          }
+        },
+        "controls": {
+          ".force": {
+            "rect": {
+              "x": 16,
+              "y": 69,
+              "width": 327.140625,
+              "height": 20
+            }
+          },
+          "#solve": {
+            "disabled": false,
+            "rect": {
+              "x": 355.140625,
+              "y": 62,
+              "width": 99.453125,
+              "height": 34
+            }
+          },
+          "#release": {
+            "disabled": false,
+            "rect": {
+              "x": 466.59375,
+              "y": 62,
+              "width": 76.484375,
+              "height": 34
+            }
+          },
+          "#bind": {
+            "disabled": true,
+            "rect": {
+              "x": 555.078125,
+              "y": 62,
+              "width": 54.828125,
+              "height": 34
+            }
+          },
+          "#reset": {
+            "disabled": false,
+            "rect": {
+              "x": 621.90625,
+              "y": 62,
+              "width": 62.609375,
+              "height": 34
+            }
+          },
+          "#status": {
+            "rect": {
+              "x": 259.421875,
+              "y": 108,
+              "width": 509.578125,
+              "height": 16.796875
+            }
+          }
+        },
+        "canvas": {
+          "x": 16,
+          "y": 137.796875,
+          "width": 753,
+          "height": 426
+        },
+        "viewport": {
+          "width": 800,
+          "height": 600,
+          "documentWidth": 785
+        }
+      }
+    },
+    "released-damage-retained": {
+      "path": "/private/tmp/kaminos-burning-demon-arch-repair-source-1001/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r6-2026-10-01-released-damage-retained.png",
+      "sha256": "0d13843bba841db4dc92a2c359ac1577ea2df55487b3949aa91af463ad40ef40",
+      "width": 800,
+      "height": 600,
+      "state": {
+        "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?force=2&load=1",
+        "title": "Stone Arch · Structural Volume",
+        "status": "Load released · fracture history and connectivity retained",
+        "receipt": "Release at zero force · 296 broken bonds retained · connectivity epoch 1",
+        "routeWitness": {
+          "route": "kaminos.structural-material.arch-force-volume.v0",
+          "phase": "interactive",
+          "serial": 1,
+          "camera": [
+            0.8000000000000002,
+            0.48000000000000004,
+            2.4500000000000006
+          ],
+          "cases": {
+            "intact": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+              "nodes": 2148,
+              "broken": 307,
+              "components": 1,
+              "travel": 0,
+              "requestedForce": 0,
+              "displayTravel": 0,
+              "displayMode": "unloaded-damaged",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0,
+              "forceMarkerCount": 0,
+              "connectivityEpoch": 1,
+              "renderedInstances": 2148
+            },
+            "outer-notch": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+              "nodes": 2052,
+              "broken": 296,
+              "components": 1,
+              "travel": 0,
+              "requestedForce": 0,
+              "displayTravel": 0,
+              "displayMode": "unloaded-damaged",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0,
+              "forceMarkerCount": 0,
+              "connectivityEpoch": 1,
+              "renderedInstances": 2052
+            }
+          }
+        },
+        "controls": {
+          ".force": {
+            "rect": {
+              "x": 16,
+              "y": 69,
+              "width": 327.140625,
+              "height": 20
+            }
+          },
+          "#solve": {
+            "disabled": false,
+            "rect": {
+              "x": 355.140625,
+              "y": 62,
+              "width": 99.453125,
+              "height": 34
+            }
+          },
+          "#release": {
+            "disabled": true,
+            "rect": {
+              "x": 466.59375,
+              "y": 62,
+              "width": 76.484375,
+              "height": 34
+            }
+          },
+          "#bind": {
+            "disabled": false,
+            "rect": {
+              "x": 555.078125,
+              "y": 62,
+              "width": 54.828125,
+              "height": 34
+            }
+          },
+          "#reset": {
+            "disabled": false,
+            "rect": {
+              "x": 621.90625,
+              "y": 62,
+              "width": 62.609375,
+              "height": 34
+            }
+          },
+          "#status": {
+            "rect": {
+              "x": 445.625,
+              "y": 108,
+              "width": 323.375,
+              "height": 16.796875
+            }
+          }
+        },
+        "canvas": {
+          "x": 16,
+          "y": 137.796875,
+          "width": 753,
+          "height": 426
+        },
+        "viewport": {
+          "width": 800,
+          "height": 600,
+          "documentWidth": 785
+        }
+      }
+    },
+    "bound-at-zero-load": {
+      "path": "/private/tmp/kaminos-burning-demon-arch-repair-source-1001/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r6-2026-10-01-bound-at-zero-load.png",
+      "sha256": "f6dcab156452285943b304d45d378a1dda6d02a17044021bb0ca0d72be64ecf1",
+      "width": 800,
+      "height": 600,
+      "state": {
+        "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?force=2&load=1",
+        "title": "Stone Arch · Structural Volume",
+        "status": "Connections rebound at zero load",
+        "receipt": "Connectivity restored on the released graph; crack history remains recorded.",
+        "routeWitness": {
+          "route": "kaminos.structural-material.arch-force-volume.v0",
+          "phase": "interactive",
+          "serial": 1,
+          "camera": [
+            0.8000000000000002,
+            0.48000000000000004,
+            2.4500000000000006
+          ],
+          "cases": {
+            "intact": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+              "nodes": 2148,
+              "broken": 0,
+              "components": 1,
+              "travel": 0,
+              "requestedForce": 0,
+              "displayTravel": 0,
+              "displayMode": "repaired-graph-equilibrium",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0,
+              "forceMarkerCount": 0,
+              "connectivityEpoch": 2,
+              "renderedInstances": 2148
+            },
+            "outer-notch": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+              "nodes": 2052,
+              "broken": 0,
+              "components": 1,
+              "travel": 0,
+              "requestedForce": 0,
+              "displayTravel": 0,
+              "displayMode": "repaired-graph-equilibrium",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0,
+              "forceMarkerCount": 0,
+              "connectivityEpoch": 2,
+              "renderedInstances": 2052
+            }
+          }
+        },
+        "controls": {
+          ".force": {
+            "rect": {
+              "x": 16,
+              "y": 69,
+              "width": 327.140625,
+              "height": 20
+            }
+          },
+          "#solve": {
+            "disabled": false,
+            "rect": {
+              "x": 355.140625,
+              "y": 62,
+              "width": 99.453125,
+              "height": 34
+            }
+          },
+          "#release": {
+            "disabled": true,
+            "rect": {
+              "x": 466.59375,
+              "y": 62,
+              "width": 76.484375,
+              "height": 34
+            }
+          },
+          "#bind": {
+            "disabled": true,
+            "rect": {
+              "x": 555.078125,
+              "y": 62,
+              "width": 54.828125,
+              "height": 34
+            }
+          },
+          "#reset": {
+            "disabled": false,
+            "rect": {
+              "x": 621.90625,
+              "y": 62,
+              "width": 62.609375,
+              "height": 34
+            }
+          },
+          "#status": {
+            "rect": {
+              "x": 577.609375,
+              "y": 108,
+              "width": 191.390625,
+              "height": 16.796875
+            }
+          }
+        },
+        "canvas": {
+          "x": 16,
+          "y": 137.796875,
+          "width": 753,
+          "height": 426
+        },
+        "viewport": {
+          "width": 800,
+          "height": 600,
+          "documentWidth": 785
+        }
+      }
+    }
+  },
+  "runtimeExceptions": [],
+  "consoleErrors": [],
+  "lastTrustworthyEvidence": "bound-at-zero-load frame and DOM state captured from http://127.0.0.1:18434/structural-material-arch-volume.html?force=2&load=1"
+}
