@@ -1,4 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS } from './volume-inflow-aperture.mjs';
 import {
   detailForceContributionMask,
   detailForceContributionReceipt,
@@ -2019,17 +2020,33 @@ export const INFLOW_UNIFORM_OFFSET = PHYSICAL_COLOR_UNIFORM_FLOATS;
 export const INFLOW_UNIFORM_FLOATS = 12;
 export const VOLUME_UNIFORM_FLOATS = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOATS;
 
+// The aperture pattern (slice 2): which coverage pattern the floor map is built
+// from, its count / ratio / seed, and the swirl (tangential fraction of the
+// inflow velocity). Defaults reproduce the family's own shape with no swirl.
+export function resolveInflowAperturePattern(controls = {}) {
+  const kind = String(controls.emitterAperturePattern ?? 'shape');
+  return {
+    kind: INFLOW_APERTURE_PATTERNS.includes(kind) ? kind : 'shape',
+    count: Math.round(clampFinite(controls.emitterApertureCount, 1, 64, 12)),
+    ratio: clampFinite(controls.emitterApertureRatio, 0, 1, 0.6),
+    seed: Math.round(clampFinite(controls.emitterApertureSeed, 0, 9999, 1)),
+  };
+}
+
 export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, options = {}) {
   const grid = normalizeGridSize(options.grid ?? 64);
   const pressure = resolvePressureSolverConfig(controls).effective;
   const sourceLaw = descriptor ? String(descriptor.sourceLaw ?? 'legacy-volume') : null;
-  const requested = { sourceLaw, family: descriptor?.family ?? null, pressureSolver: pressure.solver, openTop: pressure.openTop };
+  const pattern = resolveInflowAperturePattern(controls);
+  const swirl = clampFinite(controls.emitterSwirl, -1, 1, 0);
+  const requested = { sourceLaw, family: descriptor?.family ?? null, pressureSolver: pressure.solver, openTop: pressure.openTop, pattern, swirl };
   const off = reason => ({
     identity: INFLOW_BOUNDARY_IDENTITY,
     requested,
     effective: {
-      admitted: false, mode: 'off', apertureKind: 'off', center: [0, 0], ringRadius: 0, bandHalfWidth: 0, halfLength: 0, sideAxis: [1, 0],
-      inletVelocity: 0, fuelFraction: 0, inletTemperature: 0, antialiasWidth: 2 / grid, projection: null, reason,
+      admitted: false, mode: 'off', grid, apertureKind: 'off', center: [0, 0], ringRadius: 0, bandHalfWidth: 0, halfLength: 0, sideAxis: [1, 0],
+      inletVelocity: 0, fuelFraction: 0, inletTemperature: 0, antialiasWidth: 2 / grid, projection: null,
+      pattern: { kind: 'shape', count: 12, ratio: 0.6, seed: 1 }, swirl: 0, reason,
     },
   });
   if (!descriptor) return off('no-analytic-emitter');
@@ -2046,6 +2063,7 @@ export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, op
     effective: {
       admitted: true,
       mode: 'inflow-boundary',
+      grid,
       apertureKind: inflow.apertureKind,
       center: [...inflow.center],
       ringRadius: inflow.ringRadius,
@@ -2059,7 +2077,132 @@ export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, op
       // A partial projection gain leaves (1 - gain) of the divergence, inflow
       // included; the receipt keeps that distinct from a fully corrected field.
       projection: pressure.projection,
+      pattern,
+      swirl,
       reason: null,
+    },
+  };
+}
+
+// The floor coverage map for an admitted inflow: the family's aperture geometry
+// drawn by the chosen pattern, one weight per floor cell, averaged over a 4 x 4
+// footprint. Built on the CPU and uploaded; the shader reads the weight.
+export function inflowCoverageMapForConfig(config, options = {}) {
+  const e = config?.effective;
+  if (!e || !e.admitted) return null;
+  return buildInflowCoverageMap({
+    grid: e.grid,
+    supersample: options.supersample ?? 4,
+    spec: {
+      kind: e.apertureKind,
+      pattern: e.pattern.kind,
+      center: e.center,
+      ringRadius: e.ringRadius,
+      bandHalfWidth: e.bandHalfWidth,
+      halfLength: e.halfLength,
+      sideAxis: e.sideAxis,
+      count: e.pattern.count,
+      ratio: e.pattern.ratio,
+      seed: e.pattern.seed,
+      antialias: e.antialiasWidth,
+    },
+  });
+}
+
+export function inflowCoverageSignatureFor(config) {
+  const e = config?.effective;
+  if (!e || !e.admitted) return '';
+  return JSON.stringify([e.grid, e.apertureKind, e.center, e.ringRadius, e.bandHalfWidth, e.halfLength, e.sideAxis, e.pattern, e.antialiasWidth]);
+}
+
+// CPU model of the shader's inflowGhostVelocity: the entering gas moves up at
+// the inflow velocity and, with swirl, around the aperture centre at swirl x
+// that velocity (tangent = (-z, x) of the offset from the centre).
+export function inflowGhostVelocityModel({ position, center = [0, 0], inletVelocity, swirl = 0 }) {
+  const q = [position[0] - center[0], position[1] - center[1]];
+  const length = Math.max(Math.hypot(q[0], q[1]), 1e-4);
+  const tangent = [-q[1] / length, q[0] / length];
+  return [inletVelocity * tangent[0] * swirl, inletVelocity, inletVelocity * tangent[1] * swirl];
+}
+
+// Wind model (slice 2). `steady` is the authored law: one constant strength and
+// angle. `gusty` drives the same two uniforms with a slow stochastic signal:
+// two Ornstein-Uhlenbeck processes (correlated noise with a correlation time
+// of `windGustPeriod` seconds at 60 simulation steps per second), seeded and
+// advanced per simulation step, so a replay at the same seed and step count is
+// the same wind. Gusts are stochastic in nature; this is the standard
+// first-order model of their statistics. No periodic math, no per-cell noise,
+// and the shader is unchanged: strength = base x (1 + gust x s1), angle =
+// base + veer x s2.
+export const WIND_MODEL_IDENTITY = 'kaminos.volume.wind-model.v1';
+export const WIND_MODELS = Object.freeze(['steady', 'gusty']);
+export const WIND_GUST_STEPS_PER_SECOND = 60;
+export class WindGustProcess {
+  constructor(seed = 1) {
+    this.seed = Math.max(1, Math.floor(Number(seed) || 1)) >>> 0;
+    this.reset();
+  }
+  reset() {
+    this.rng = (this.seed * 2654435761 + 1013904223) >>> 0;
+    this.step = 0;
+    this.s1 = 0;
+    this.s2 = 0;
+  }
+  // xorshift32 → uniform, summed twelve times → an approximately normal draw
+  // with unit variance (Irwin–Hall), no transcendental functions.
+  gaussian() {
+    let sum = 0;
+    for (let i = 0; i < 12; i += 1) {
+      let x = this.rng;
+      x ^= x << 13; x >>>= 0;
+      x ^= x >>> 17;
+      x ^= x << 5; x >>>= 0;
+      this.rng = x;
+      sum += x / 4294967296;
+    }
+    return sum - 6;
+  }
+  // The two signals at a simulation step: advanced incrementally from the last
+  // sampled step; a step before the last restarts from the seed. Stationary
+  // standard deviation 0.45, clamped to [-1, 1]; `tauSteps` is the correlation
+  // time in steps.
+  sampleAt(step, tauSteps) {
+    const target = Math.max(0, Math.floor(Number(step) || 0));
+    const tau = Math.max(1, Number(tauSteps) || 1);
+    if (target < this.step) this.reset();
+    const decay = Math.exp(-1 / tau);
+    const kick = 0.45 * Math.sqrt(1 - decay * decay);
+    while (this.step < target) {
+      this.s1 = this.s1 * decay + kick * this.gaussian();
+      this.s2 = this.s2 * decay + kick * this.gaussian();
+      this.step += 1;
+    }
+    return { s1: Math.max(-1, Math.min(1, this.s1)), s2: Math.max(-1, Math.min(1, this.s2)), step: this.step };
+  }
+}
+export function resolveWindConfig(controls = {}, gustSignal = { s1: 0, s2: 0, step: 0 }) {
+  const requestedModel = String(controls.windModel ?? 'steady');
+  const model = WIND_MODELS.includes(requestedModel) ? requestedModel : 'steady';
+  const base = { strength: normalizeWindStrength(controls.windStrength), angleDeg: normalizeWindAngle(controls.windAngle), height: normalizeWindHeight(controls.windHeight) };
+  const gust = clampFinite(controls.windGust, 0, 1, 0.6);
+  const period = clampFinite(controls.windGustPeriod, 2, 30, 8);
+  const veer = clampFinite(controls.windGustVeer, 0, 60, 25);
+  if (model !== 'gusty') {
+    return { identity: WIND_MODEL_IDENTITY, requested: { model: requestedModel, ...base, gust, period, veer }, effective: { model: 'steady', ...base, gust: 0, period, veer: 0, signal: [0, 0], step: null } };
+  }
+  const s1 = Number.isFinite(gustSignal?.s1) ? gustSignal.s1 : 0;
+  const s2 = Number.isFinite(gustSignal?.s2) ? gustSignal.s2 : 0;
+  return {
+    identity: WIND_MODEL_IDENTITY,
+    requested: { model: requestedModel, ...base, gust, period, veer },
+    effective: {
+      model: 'gusty',
+      strength: base.strength * Math.max(0, 1 + gust * s1),
+      angleDeg: base.angleDeg + veer * s2,
+      height: base.height,
+      gust, period, veer,
+      signal: [s1, s2],
+      step: Number.isFinite(gustSignal?.step) ? gustSignal.step : null,
     },
   };
 }
@@ -2098,10 +2241,12 @@ export function inflowFloorCellEntryModel({ scheme = 'first-order', inletVelocit
 export function inflowBoundaryUniformValues(config) {
   const e = config?.effective;
   if (!e || !e.admitted) return new Array(INFLOW_UNIFORM_FLOATS).fill(0);
+  // The third vec4 carries the swirl (tangential fraction of the inflow
+  // velocity) and the antialias width; the shape itself lives in the coverage map.
   return [
     INFLOW_APERTURE_KIND_MODE[e.apertureKind] ?? 0, e.center[0], e.center[1], e.ringRadius,
     e.bandHalfWidth, e.inletVelocity, e.fuelFraction, e.inletTemperature,
-    e.sideAxis[0], e.sideAxis[1], e.halfLength, e.antialiasWidth,
+    e.swirl, 0, 0, e.antialiasWidth,
   ];
 }
 
@@ -2899,7 +3044,7 @@ struct Uniforms {
   inflow_aperture: vec4<f32>,
   // .x band half-width; .y inlet velocity (face flux, field units); .z fuel fraction; .w inlet temperature.
   inflow_state: vec4<f32>,
-  // .x side axis x; .y side axis z; .z half length (rectangle); .w antialias width (one cell, volume units).
+  // .x swirl (tangential fraction of the inflow velocity); .y, .z reserved; .w antialias width (one cell, volume units).
   inflow_shape: vec4<f32>,
 };
 
@@ -2948,6 +3093,8 @@ struct NonRidgeOpticalCaptureRow {
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
 @group(0) @binding(13) var<storage, read> quenchSrc: array<u32>;
 @group(0) @binding(14) var<storage, read_write> quenchDst: array<u32>;
+// Inflow aperture coverage map: one weight per floor cell (x + z * GRID), built on the CPU.
+@group(0) @binding(17) var<storage, read> inflowCoverage: array<f32>;
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 // MacCormack predictor: the forward semi-Lagrangian estimate of every slot,
@@ -3084,44 +3231,14 @@ fn readQuenchField(c: vec3<i32>) -> f32 {
 // inflow state from a ghost cell below the floor (inflowGhostBlend), so
 // momentum, fuel and temperature all enter by transport: no interior
 // increment, no clamp, no birth floor. Mode 0 turns all of it off.
-// Aperture coverage at one point of the floor (volume x, z): a signed distance
-// to the aperture edge through a one-cell smoothstep.
-fn inflowApertureCoverageAt(p: vec2<f32>) -> f32 {
-  let mode = u.inflow_aperture.x;
-  let q = p - u.inflow_aperture.yz;
-  let band = u.inflow_state.x;
-  var signedDistance = length(q) - band;
-  if (mode > 1.5 && mode < 2.5) {
-    signedDistance = abs(length(q) - u.inflow_aperture.w) - band;
-  }
-  if (mode > 2.5) {
-    let side = u.inflow_shape.xy;
-    let along = abs(dot(q, side)) - u.inflow_shape.z;
-    let across = abs(dot(q, vec2<f32>(-side.y, side.x))) - band;
-    signedDistance = max(along, across);
-  }
-  let aa = u.inflow_shape.w;
-  return 1.0 - smoothstep(-0.5 * aa, 0.5 * aa, signedDistance);
-}
-
-// Aperture weight of one floor cell: the coverage averaged over a 4 x 4
-// stratified set of points in the cell's footprint, so a curved aperture edge
-// does not become a staircase of whole cells (the first look at 64 showed the
-// ring's staircase as vertical striations in the plume).
+// Aperture weight of one floor cell, read from the coverage map (the family's
+// shape drawn by the chosen pattern, averaged over the cell's footprint on the
+// CPU). Mode 0 turns the inflow off.
 fn inflowApertureWeight(cell: vec3<i32>) -> f32 {
   if (u.inflow_aperture.x < 0.5) {
     return 0.0;
   }
-  let cellWidth = 2.0 / f32(GRID);
-  let corner = vec2<f32>(f32(cell.x) * cellWidth - 1.0, f32(cell.z) * cellWidth - 1.0);
-  var coverage = 0.0;
-  for (var sx = 0; sx < 4; sx = sx + 1) {
-    for (var sz = 0; sz < 4; sz = sz + 1) {
-      let sample = corner + vec2<f32>((f32(sx) + 0.5) * 0.25, (f32(sz) + 0.5) * 0.25) * cellWidth;
-      coverage = coverage + inflowApertureCoverageAt(sample);
-    }
-  }
-  return coverage * (1.0 / 16.0);
+  return inflowCoverage[u32(clamp(cell.z, 0, i32(GRID) - 1)) * GRID + u32(clamp(cell.x, 0, i32(GRID) - 1))];
 }
 
 fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
@@ -3134,9 +3251,19 @@ fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
 // transport step would admit nothing, and a slower interior would starve the
 // entry); it enters as the face flux in the main kernel (inflowFraction), so
 // every other slot samples the domain.
-fn inflowGhostState(slot: u32, sample: vec4<f32>) -> vec4<f32> {
+// The velocity the entering gas carries: the inflow velocity straight up and,
+// with swirl, swirl x that velocity around the aperture centre (the fire whirl).
+fn inflowGhostVelocity(cellCenter: vec3<f32>) -> vec3<f32> {
+  let p = vec2<f32>(cellCenter.x * (2.0 / f32(GRID)) - 1.0, cellCenter.z * (2.0 / f32(GRID)) - 1.0);
+  let q = p - u.inflow_aperture.yz;
+  let tangent = vec2<f32>(-q.y, q.x) / max(length(q), 1e-4);
+  let swirl = u.inflow_shape.x;
+  return u.inflow_state.y * vec3<f32>(tangent.x * swirl, 1.0, tangent.y * swirl);
+}
+
+fn inflowGhostState(slot: u32, sample: vec4<f32>, cellCenter: vec3<f32>) -> vec4<f32> {
   if (slot == 0u) {
-    return vec4<f32>(0.0, u.inflow_state.y, 0.0, sample.w);
+    return vec4<f32>(inflowGhostVelocity(cellCenter), sample.w);
   }
   return sample;
 }
@@ -3232,7 +3359,7 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let y1 = mix(x01, x11, f.y);
   let sample = mix(y0, y1, f.z);
   let ghost = inflowGhostBlend(cellCenter);
-  return mix(sample, inflowGhostState(slot, sample), ghost);
+  return mix(sample, inflowGhostState(slot, sample, cellCenter), ghost);
 }
 
 fn sampleFluidSlotMasked(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
@@ -3303,7 +3430,7 @@ fn samplePredictSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let y1 = mix(x01, x11, f.y);
   let sample = mix(y0, y1, f.z);
   let ghost = inflowGhostBlend(cellCenter);
-  return mix(sample, inflowGhostState(slot, sample), ghost);
+  return mix(sample, inflowGhostState(slot, sample, cellCenter), ghost);
 }
 
 struct SlotExtrema {
@@ -3348,7 +3475,7 @@ fn slotExtrema(cellCenter: vec3<f32>, slot: u32) -> SlotExtrema {
   // corrected value the inflow produces is not reverted as an overshoot.
   let ghost = inflowGhostBlend(cellCenter);
   if (ghost > 0.0) {
-    let ghostValue = inflowGhostState(slot, lo);
+    let ghostValue = inflowGhostState(slot, lo, cellCenter);
     lo = min(lo, ghostValue);
     hi = max(hi, ghostValue);
   }
@@ -10477,6 +10604,12 @@ export function createKaminosVolumePrototype({
   let boundarySplatControlGeneration = 0;
   let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
+  // Inflow aperture coverage map (one f32 per floor cell), rebuilt with the grid
+  // and rewritten when the admitted aperture or pattern changes.
+  let inflowCoverageBuffer = null;
+  const windGustProcess = new WindGustProcess(1);
+  let inflowCoverageSignature = '';
+  let inflowCoverageMap = null;
   let fluidPredictBuffer = null;
   let fluidPredictBufferBytes = 0;
   // Evidence route only: a calibrated-mode epsilon set through the debug API,
@@ -11049,6 +11182,10 @@ export function createKaminosVolumePrototype({
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of quenchBuffers) buffer.destroy();
+    inflowCoverageBuffer?.destroy();
+    inflowCoverageBuffer = null;
+    inflowCoverageSignature = '';
+    inflowCoverageMap = null;
     for (const buffer of pressureBuffers) buffer.destroy();
     pressureResidualPartialsBuffer?.destroy();
     pressureResidualReadbackBuffer?.destroy();
@@ -11178,6 +11315,7 @@ export function createKaminosVolumePrototype({
         { binding: 14, resource: { buffer: quenchWrite } },
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 16, resource: sceneSolidTextureView },
+        { binding: 17, resource: { buffer: inflowCoverageBuffer } },
       ],
     });
   }
@@ -12201,6 +12339,14 @@ export function createKaminosVolumePrototype({
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
       return buffer;
     });
+    inflowCoverageBuffer = device.createBuffer({
+      label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
+      size: gridSize * gridSize * Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(inflowCoverageBuffer, 0, new Float32Array(gridSize * gridSize));
+    inflowCoverageSignature = '';
+    inflowCoverageMap = null;
     quenchBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos recoverable liquid quench and source state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
@@ -13061,6 +13207,7 @@ export function createKaminosVolumePrototype({
         { binding: 13, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        { binding: 17, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -14156,8 +14303,10 @@ export function createKaminosVolumePrototype({
     updateExternalEmitterDebug(now);
     uniforms[51] = state.coreEmitterSourceMode === 'analytic-only' ? 0 : state.externalEmitterCount;
     uniforms[52] = volumeSceneMode(controlsSnapshot.volumeScene);
-    uniforms[53] = normalizeWindStrength(controlsSnapshot.windStrength);
-    uniforms[54] = normalizeWindAngle(controlsSnapshot.windAngle) * Math.PI / 180;
+    const windConfig = resolveWindConfig(controlsSnapshot, windGustProcess.sampleAt(state.simStepCount ?? 0, clampFinite(controlsSnapshot.windGustPeriod, 2, 30, 8) * WIND_GUST_STEPS_PER_SECOND));
+    uniforms[53] = windConfig.effective.strength;
+    uniforms[54] = windConfig.effective.angleDeg * Math.PI / 180;
+    state.wind = windConfig;
     uniforms[55] = normalizeWindHeight(controlsSnapshot.windHeight);
     uniforms[56] = bonfireAblation.recenter;
     uniforms[57] = bonfireAblation.lateralDamping;
@@ -14486,6 +14635,15 @@ export function createKaminosVolumePrototype({
     const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize });
     uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
     state.inflowBoundary = inflowBoundaryConfig;
+    if (inflowBoundaryConfig.effective.admitted && inflowCoverageBuffer) {
+      const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
+      if (coverageSignature !== inflowCoverageSignature) {
+        inflowCoverageMap = inflowCoverageMapForConfig(inflowBoundaryConfig);
+        device.queue.writeBuffer(inflowCoverageBuffer, 0, inflowCoverageMap.cells);
+        inflowCoverageSignature = coverageSignature;
+      }
+      state.inflowBoundary.effective.coverage = { pattern: inflowCoverageMap.pattern, coveredCells: inflowCoverageMap.coveredCells, totalCoverage: inflowCoverageMap.totalCoverage, peak: inflowCoverageMap.peak };
+    }
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,

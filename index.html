@@ -1838,6 +1838,39 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="volume-emitter-inlet-temperature" data-volume-settings-param="volume_emitter_inlet_temperature" min="0" max="2.4" step="any" value="1.2">
       <span class="slider-val" id="volume-emitter-inlet-temperature-val">1.20</span>
     </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Aperture pattern (inflow)</span>
+      <select id="volume-emitter-aperture-pattern" data-volume-settings-param="volume_emitter_aperture_pattern" class="select-input">
+        <option value="shape">Family shape</option>
+        <option value="jets">Ring of jets</option>
+        <option value="concentric">Concentric rings</option>
+        <option value="slot">Slot</option>
+        <option value="spiral">Spiral</option>
+        <option value="bed">Porous bed</option>
+      </select>
+      <span class="slider-val" id="volume-emitter-aperture-pattern-val">shape</span>
+      <span class="slider-help">Under the inflow law the floor opening is a coverage map built from the chosen pattern on the family's geometry: the ring radius is the pattern's reach, the tube radius its line weight. Count is the number of jets, rings or spiral turns; Ratio is the inner rings' share of the flux; Seed places the jets and shapes the bed. Swirl adds a tangential velocity to the entering gas, which the open-top solve turns into a fire whirl.</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Aperture count</span>
+      <input type="range" id="volume-emitter-aperture-count" data-volume-settings-param="volume_emitter_aperture_count" min="1" max="32" step="1" value="12">
+      <span class="slider-val" id="volume-emitter-aperture-count-val">12</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Aperture ratio</span>
+      <input type="range" id="volume-emitter-aperture-ratio" data-volume-settings-param="volume_emitter_aperture_ratio" min="0" max="1" step="any" value="0.6">
+      <span class="slider-val" id="volume-emitter-aperture-ratio-val">0.60</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Aperture seed</span>
+      <input type="range" id="volume-emitter-aperture-seed" data-volume-settings-param="volume_emitter_aperture_seed" min="0" max="99" step="1" value="1">
+      <span class="slider-val" id="volume-emitter-aperture-seed-val">1</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Swirl (inflow)</span>
+      <input type="range" id="volume-emitter-swirl" data-volume-settings-param="volume_emitter_swirl" min="-1" max="1" step="any" value="0">
+      <span class="slider-val" id="volume-emitter-swirl-val">0.00</span>
+    </div>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
       <input type="checkbox" id="volume-fixed-source-dephase" data-volume-settings-param="volume_fixed_source_dephase" checked>
@@ -1985,6 +2018,30 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-label">Wind Height</span>
       <input type="range" id="volume-wind-height" min="-0.8" max="0.8" step="0.05" value="0.15">
       <span class="slider-val" id="volume-wind-height-val">0.15</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
+      <span class="slider-label">Wind model</span>
+      <select id="volume-wind-model" data-volume-settings-param="volume_wind_model" class="select-input">
+        <option value="steady">Steady</option>
+        <option value="gusty">Gusty</option>
+      </select>
+      <span class="slider-val" id="volume-wind-model-val">steady</span>
+      <span class="slider-help">Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a slow deterministic signal from the simulation clock: strength breathes between (1 − gust) and (1 + gust) times the slider, and the direction veers by up to the veer angle, over the gust period. No per-cell noise; saved basins are unchanged on Steady.</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
+      <span class="slider-label">Gust</span>
+      <input type="range" id="volume-wind-gust" data-volume-settings-param="volume_wind_gust" min="0" max="1" step="any" value="0.6">
+      <span class="slider-val" id="volume-wind-gust-val">0.60</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
+      <span class="slider-label">Gust period (s)</span>
+      <input type="range" id="volume-wind-gust-period" data-volume-settings-param="volume_wind_gust_period" min="2" max="30" step="any" value="8">
+      <span class="slider-val" id="volume-wind-gust-period-val">8.0</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
+      <span class="slider-label">Gust veer (°)</span>
+      <input type="range" id="volume-wind-gust-veer" data-volume-settings-param="volume_wind_gust_veer" min="0" max="60" step="any" value="25">
+      <span class="slider-val" id="volume-wind-gust-veer-val">25</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Input Radius</span>
@@ -20582,6 +20639,10 @@ function readVolumeControls() {
     windStrength: parseFloat(document.getElementById('volume-wind-strength').value),
     windAngle: parseFloat(document.getElementById('volume-wind-angle').value),
     windHeight: parseFloat(document.getElementById('volume-wind-height').value),
+    windModel: document.getElementById('volume-wind-model').value,
+    windGust: parseFloat(document.getElementById('volume-wind-gust').value),
+    windGustPeriod: parseFloat(document.getElementById('volume-wind-gust-period').value),
+    windGustVeer: parseFloat(document.getElementById('volume-wind-gust-veer').value),
     renderScale: readVolumeRenderScaleControlValue(),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
@@ -20594,6 +20655,11 @@ function readVolumeControls() {
     emitterEdgeEntrainment: parseFloat(document.getElementById('volume-emitter-edge-entrainment').value),
     emitterFuelFraction: parseFloat(document.getElementById('volume-emitter-fuel-fraction').value),
     emitterInletTemperature: parseFloat(document.getElementById('volume-emitter-inlet-temperature').value),
+    emitterAperturePattern: document.getElementById('volume-emitter-aperture-pattern').value,
+    emitterApertureCount: parseFloat(document.getElementById('volume-emitter-aperture-count').value),
+    emitterApertureRatio: parseFloat(document.getElementById('volume-emitter-aperture-ratio').value),
+    emitterApertureSeed: parseFloat(document.getElementById('volume-emitter-aperture-seed').value),
+    emitterSwirl: parseFloat(document.getElementById('volume-emitter-swirl').value),
     fixedSourceDephase: document.getElementById('volume-fixed-source-dephase').checked,
     reactionLiveView,
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
@@ -20878,6 +20944,10 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
   document.getElementById('volume-wind-angle-val').textContent = formatVolumeWindDirection(c.windAngle);
   document.getElementById('volume-wind-height-val').textContent = c.windHeight.toFixed(2);
+  document.getElementById('volume-wind-model-val').textContent = c.windModel;
+  document.getElementById('volume-wind-gust-val').textContent = c.windGust.toFixed(2);
+  document.getElementById('volume-wind-gust-period-val').textContent = c.windGustPeriod.toFixed(1);
+  document.getElementById('volume-wind-gust-veer-val').textContent = String(Math.round(c.windGustVeer));
   document.getElementById('volume-render-scale-val').textContent = `${(c.renderScale * 100).toFixed(1)}%`;
   document.getElementById('volume-residual-mode-val').textContent = c.volumeResidualMode === 'webgpu-direct-residual' ? 'direct' : 'off';
   document.getElementById('volume-residual-strength-val').textContent = c.volumeResidualStrength.toFixed(2);
@@ -20895,6 +20965,11 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-edge-entrainment-val').textContent = c.emitterEdgeEntrainment.toFixed(2);
   document.getElementById('volume-emitter-fuel-fraction-val').textContent = c.emitterFuelFraction.toFixed(2);
   document.getElementById('volume-emitter-inlet-temperature-val').textContent = c.emitterInletTemperature.toFixed(2);
+  document.getElementById('volume-emitter-aperture-pattern-val').textContent = c.emitterAperturePattern;
+  document.getElementById('volume-emitter-aperture-count-val').textContent = String(Math.round(c.emitterApertureCount));
+  document.getElementById('volume-emitter-aperture-ratio-val').textContent = c.emitterApertureRatio.toFixed(2);
+  document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
+  document.getElementById('volume-emitter-swirl-val').textContent = c.emitterSwirl.toFixed(2);
   document.getElementById('volume-fixed-source-dephase-val').textContent = c.fixedSourceDephase ? 'on' : 'off';
   document.getElementById('volume-reaction-boundary-fire-clean-color-val').textContent = c.reactionBoundaryFireCleanColor;
   document.getElementById('volume-reaction-boundary-fire-soot-color-val').textContent = c.reactionBoundaryFireSootColor;
