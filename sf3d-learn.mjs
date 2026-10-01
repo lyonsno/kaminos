@@ -77,6 +77,10 @@ const grid = new GridHelper(4, 12, '#9bb9aa', '#c5d6cb');
 grid.rotation.x = Math.PI / 2;
 grid.position.z = -0.9;
 scene.add(grid);
+const constructionPlane = new GridHelper(1.74, 8, '#367e8c', '#7ab6be');
+constructionPlane.rotation.x = Math.PI / 2;
+constructionPlane.visible = false;
+scene.add(constructionPlane);
 
 const target = new Vector3(0, 0, 0);
 let yaw = -0.75;
@@ -153,6 +157,7 @@ function replaceGeometry(vertices, faces, label) {
 }
 
 function clearGeometry() {
+  constructionPlane.visible = false;
   if (mesh) {
     scene.remove(mesh);
     mesh.geometry.dispose();
@@ -337,13 +342,45 @@ runButton.addEventListener('click', async () => {
           console.warn('SF3D Learn projection failed', error);
         },
         onIntermediateTriplane: async ({ stageId, triplanesBuf, decoder, decoderWeights }) => {
+          const label = stageId === 'block-0-fuse-out' ? 'First shape' : 'Forming detail';
           try {
-            const candidate = await decodeSf3dPreviewMesh(producer.device, triplanesBuf, decoder, decoderWeights, resolution);
-            const label = stageId === 'block-0-fuse-out' ? 'First shape' : 'Forming detail';
+            clearGeometry();
+            featurePanel.hidden = true;
+            const candidate = await decodeSf3dPreviewMesh(producer.device, triplanesBuf, decoder, decoderWeights, resolution, 384, {
+              onSlab: async sample => {
+                constructionPlane.visible = true;
+                constructionPlane.position.z = sample.maxZ;
+                const fraction = sample.completedSamples / sample.totalSamples;
+                const row = document.querySelector(`[data-stage="${stageId}"]`);
+                row.dataset.state = 'active';
+                row.querySelector('.stage-time').textContent = `${Math.round(fraction * 100)}%`;
+                progress.value = document.querySelectorAll('#learn-stages [data-state="done"]').length + fraction;
+                setStatus(`${label}: decoding spatial layer ${sample.completedLayers} / ${sample.totalLayers}`);
+                if (sample.mesh.numFaces) await replaceGeometry(sample.mesh.vertices, sample.mesh.faces, `${label}: building surface`);
+                else {
+                  $('learn-view-label').textContent = `${label}: sampling space`;
+                  $('learn-view-empty').hidden = true;
+                  await requestPaint();
+                }
+                window.dispatchEvent(new CustomEvent('sf3d-learn-observation', { detail: {
+                  kind: 'construction', stageId, completedLayers: sample.completedLayers, totalLayers: sample.totalLayers,
+                  completedSamples: sample.completedSamples, totalSamples: sample.totalSamples, maxZ: sample.maxZ,
+                  numVertices: sample.mesh.numVertices, numFaces: sample.mesh.numFaces, atMs: performance.now() - started,
+                  vertices: Array.from(sample.mesh.vertices), faces: Array.from(sample.mesh.faces),
+                } }));
+              },
+            });
+            constructionPlane.visible = false;
             await replaceGeometry(candidate.mesh.vertices, candidate.mesh.faces, label);
             markStage(stageId, 'done', performance.now() - started);
+            window.dispatchEvent(new CustomEvent('sf3d-learn-observation', { detail: {
+              kind: 'construction-complete', stageId, metrics: candidate.metrics, atMs: performance.now() - started,
+            } }));
             setStatus(label);
           } catch (previewError) {
+            constructionPlane.visible = false;
+            $('learn-view-label').textContent = `${label}: preview incomplete`;
+            void requestPaint().catch(showRenderError);
             markStage(stageId, 'skipped');
             setStatus(`${stageId} preview unavailable`);
             console.warn('SF3D Learn preview failed', previewError);

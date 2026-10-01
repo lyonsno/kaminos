@@ -16,4 +16,15 @@ assert.equal(pixels.max, 1);
 assert.notDeepEqual(pixels.pixels.slice(0, 4), pixels.pixels.slice(8, 12));
 assert.throws(() => featurePixels(new Float32Array([NaN]), 1, 1), /Invalid/);
 assert.throws(() => featurePixels(new Float32Array([1]), 2, 2), /Invalid/);
+assert.throws(() => acceptLearnObservations([...samples, mesh], 100, { requireConstruction: true }), /construction/);
+const construction = ['block-0-fuse-out', 'block-1-fuse-out'].flatMap(stageId => [
+  ...[2, 3].map((n, i) => ({ kind: 'construction', stageId, completedLayers: n, totalLayers: 3,
+    completedSamples: n * 9, totalSamples: 27, numFaces: i + 1, atMs: 50 + i })),
+  { kind: 'construction-complete', stageId, atMs: 52, metrics: { slabs: 2 } },
+]);
+const validate = c => acceptLearnObservations([...samples, ...c, mesh], 100, { requireConstruction: true });
+assert.equal(validate(construction).construction.length, 2);
+assert.throws(() => validate(construction.filter((_, i) => i !== 1)), /construction/);
+assert.throws(() => validate(construction.map(s => s.kind === 'construction' ? { ...s, atMs: 90 } : s)), /construction/);
+assert.throws(() => validate(construction.map(s => s.kind === 'construction' ? { ...s, numFaces: 0 } : s)), /construction/);
 console.log('Learn observations reject incomplete/stale-shaped runs and invalid pixels');

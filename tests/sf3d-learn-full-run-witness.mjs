@@ -39,7 +39,17 @@ try {
   browser = await puppeteer.launch({ executablePath: chromePath, headless: false,
     args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--no-first-run', '--no-default-browser-check'] });
   const page = await browser.newPage();
-  await page.exposeFunction('recordLearnObservation', sample => { report.observations.push(sample); write(); });
+  const constructionShots = new Set();
+  const captures = [];
+  await page.exposeFunction('recordLearnObservation', sample => {
+    report.observations.push(sample); write();
+    if (sample.kind === 'construction' && sample.numFaces > 0 && sample.completedLayers < sample.totalLayers
+        && !constructionShots.has(sample.stageId)) {
+      constructionShots.add(sample.stageId);
+      captures.push(page.screenshot({ path: path.join(outputDir, `construction-${sample.stageId}.png`) })
+        .catch(error => { report.events.push({ type: 'capture-error', message: error.message }); }));
+    }
+  });
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
   page.on('pageerror', error => { report.events.push({ type: 'pageerror', message: error.message }); write(); });
   page.on('error', error => { report.events.push({ type: 'page-crash', message: error.message }); write(); });
@@ -131,7 +141,8 @@ try {
   const stageHashes = ['block-0-fuse-out', 'block-1-fuse-out', 'final'].map(id => report.stages[id].canvasSha256);
   if (Object.values(report.stages).some(stage => stage.state !== 'done')) throw new Error('one or more visible stages were skipped');
   if (new Set(stageHashes).size !== stageHashes.length) throw new Error('stage canvases did not change');
-  report.observationSummary = acceptLearnObservations(report.observations, report.stages.export.atMs);
+  report.observationSummary = acceptLearnObservations(report.observations, report.stages.export.atMs, { requireConstruction: true });
+  await Promise.all(captures);
   if (!report.output.visible || report.output.header !== 'glTF' || report.output.byteLength < 1024 || glb.length !== report.output.byteLength) {
     throw new Error('missing, partial, or invalid final GLB');
   }
