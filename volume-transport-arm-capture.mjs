@@ -66,7 +66,7 @@ const report = {
   effective: { source: null, sourceVerified: false },
   // The browser this run spawned and drove; a capture must never attach to
   // another instance (2026-09-26: a fixed port let it attach to an orphan).
-  browser: { executable: null, resolvedExecutable: null, executableSource: null, version: null, pid: null, port: null, profile: null, devtoolsUrl: null },
+  browser: { executable: null, resolvedExecutable: null, executableSource: null, version: null, versionUnavailable: null, pid: null, port: null, profile: null, devtoolsUrl: null },
   cleanupWarning: null,
   admitted: null,
   arms: [],
@@ -136,14 +136,19 @@ try {
   let port = null;
   for (let i = 0; i < 200 && port === null; i++) { if (launchError) fail('browser-launch', `${headlessBrowser.executable} failed to launch: ${String(launchError?.message || launchError)}`); try { const line = readFileSync(`${profile}/DevToolsActivePort`, 'utf8').split('\n')[0].trim(); if (/^\d+$/.test(line)) port = Number(line); } catch { /* not written yet */ } if (port === null) await sleep(100); }
   if (port === null) fail('browser-launch', `the spawned browser (pid ${chrome.pid}) never published DevToolsActivePort in ${profile}`);
-  let pages = null; for (let i = 0; i < 100 && !pages; i++) { try { pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(100); } }
+  let pages = null; for (let i = 0; i < 100 && !pages; i++) { try { pages = await (await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(callTimeoutMs) })).json(); } catch { await sleep(100); } }
   if (!pages) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never answered`);
   const page = pages.find(p => p.type === 'page');
   // The version is read before the socket is opened: an await between
   // constructing the socket and attaching the open listener can miss the open
   // event and wait forever (which is what happened at 5ec49992).
-  let browserVersion = null; try { browserVersion = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json())?.Browser ?? null; } catch { /* recorded as null */ }
-  report.browser = { executable: headlessBrowser.executable, resolvedExecutable: headlessBrowser.resolvedExecutable, executableSource: headlessBrowser.source, version: browserVersion, pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
+  // Optional metadata, bounded like every other launch wait: a pending response
+  // or body is abandoned at --call-timeout-ms and the version recorded as
+  // unavailable, never a stall before the socket timeout starts.
+  let browserVersion = null; let versionUnavailable = null;
+  try { browserVersion = (await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(callTimeoutMs) })).json())?.Browser ?? null; }
+  catch (error) { versionUnavailable = `${String(error?.message || error)} (read bounded by --call-timeout-ms ${callTimeoutMs})`; }
+  report.browser = { executable: headlessBrowser.executable, resolvedExecutable: headlessBrowser.resolvedExecutable, executableSource: headlessBrowser.source, version: browserVersion, versionUnavailable, pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
   writeReport();
   ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((res, rej) => { const timer = setTimeout(() => rej(new PhaseFailure('browser-launch', `devtools socket did not open within ${callTimeoutMs} ms (--call-timeout-ms)`)), callTimeoutMs); ws.addEventListener('open', () => { clearTimeout(timer); res(); }, { once: true }); ws.addEventListener('error', () => { clearTimeout(timer); rej(new PhaseFailure('browser-launch', 'devtools socket error before open')); }, { once: true }); });

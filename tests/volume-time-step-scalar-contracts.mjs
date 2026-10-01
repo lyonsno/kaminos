@@ -199,7 +199,7 @@ test('the arm capture owns its browser: unique port and profile per run, recorde
   assert.match(capture, /mkdtempSync\(/, 'the profile directory is unique per run');
   assert.match(capture, /--remote-debugging-port=0/, 'Chrome picks a free port');
   assert.match(capture, /DevToolsActivePort/, 'the capture reads the port Chrome actually bound, so it cannot attach to another instance');
-  assert.match(capture, /browser: \{ executable: null, resolvedExecutable: null, executableSource: null, version: null, pid: null, port: null, profile: null, devtoolsUrl: null \}/, 'the report carries the browser route, including the effective executable');
+  assert.match(capture, /browser: \{ executable: null, resolvedExecutable: null, executableSource: null, version: null, versionUnavailable: null, pid: null, port: null, profile: null, devtoolsUrl: null \}/, 'the report carries the browser route, including the effective executable');
   assert.match(capture, /process\.on\('SIGTERM'/, 'a killed capture kills its browser');
   assert.match(capture, /rmSync\(profile, \{ recursive: true, force: true, maxRetries: \d+, retryDelay: \d+ \}\)/, 'profile removal retries');
   assert.match(capture, /cleanupWarning/, 'a failed profile removal is recorded, not turned into a failed arm');
