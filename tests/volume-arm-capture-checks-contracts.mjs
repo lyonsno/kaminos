@@ -91,3 +91,41 @@ test('capture: an asynchronous launch error is a terminal browser-launch failure
   assert.ok(!existsSync(report.browser.profile), 'the owned profile is removed');
   assert.doesNotMatch(run.stderr, /Unhandled|triggerUncaughtException/, 'no unhandled error escaped');
 });
+
+// Every launch-phase wait is bounded by --call-timeout-ms, including the
+// optional browser-version read: a pending /json/version response must not
+// hold the capture. The browser is a shell script that publishes a
+// DevToolsActivePort and sleeps; the preload answers runtime-config and
+// /json synthetically and leaves /json/version pending forever. The capture
+// must record the version as unavailable, go on to the socket (which fails at
+// a closed port), and end in its own terminal failure with cleanup, without
+// any external signal.
+test('capture: a pending browser-version response is bounded by --call-timeout-ms and does not hold the capture', () => {
+  const root = mkdtempSync(join(tmpdir(), 'kaminos-capture-version-'));
+  const fake = join(root, 'fake-browser');
+  writeFileSync(fake, '#!/bin/sh\nfor a in "$@"; do case "$a" in --user-data-dir=*) d="${a#--user-data-dir=}";; esac; done\nprintf "1\\n/devtools/browser/x\\n" > "$d/DevToolsActivePort"\nsleep 300\n'); chmodSync(fake, 0o755);
+  const preload = join(root, 'preload.mjs');
+  writeFileSync(preload, `globalThis.fetch = async (url, init) => {
+  const u = String(url);
+  if (u.includes('/api/runtime-config')) return { ok: true, json: async () => ({ source: { repoRoot: ${JSON.stringify(root)}, commit: 'synthetic', dirty: false } }) };
+  if (u.endsWith('/json/version')) return new Promise((_, reject) => { init?.signal?.addEventListener('abort', () => reject(new Error('aborted by the capture')), { once: true }); });
+  if (u.endsWith('/json')) return { ok: true, json: async () => ([{ type: 'page', webSocketDebuggerUrl: 'ws://127.0.0.1:1/devtools/page/x' }]) };
+  throw new Error('no network in this test: ' + u);
+};\n`);
+  const out = join(root, 'out');
+  const started = Date.now();
+  const run = spawnSync(process.execPath, ['--import', preload, new URL('../volume-transport-arm-capture.mjs', import.meta.url).pathname, 'http://127.0.0.1:1/volume-settings-preset.html?preset=x', out, 'arm,volume-speed=1', '5000', '--settle-steps', '1', '--call-timeout-ms', '1500', '--expected-repo-root', root, '--expected-commit', 'synthetic'],
+    { env: { ...process.env, KAMINOS_HEADLESS_BROWSER: fake, TMPDIR: root }, encoding: 'utf8', timeout: 30000 });
+  assert.notEqual(run.signal, 'SIGTERM', 'the capture ended on its own, not by the test timeout');
+  assert.notEqual(run.status, 0, 'nonzero exit');
+  assert.ok(Date.now() - started < 20000, 'ended within a few call timeouts');
+  const report = JSON.parse(readFileSync(join(out, 'report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'browser-launch');
+  assert.match(String(report.failure), /devtools socket/, `the capture reached the socket wait and failed there (${report.failure})`);
+  assert.equal(report.browser.version, null, 'the version is recorded as unavailable');
+  assert.match(String(report.browser.versionUnavailable), /--call-timeout-ms/, 'and says why');
+  assert.ok(report.finishedAt, 'terminal');
+  assert.ok(!existsSync(report.browser.profile), 'the owned profile is removed');
+  assert.doesNotMatch(run.stderr, /Unhandled|triggerUncaughtException/, 'no unhandled error escaped');
+});
