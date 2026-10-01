@@ -4,7 +4,7 @@ import { validateSLatDecoderFixture, compareLearnedSubdivision, compareHalfRound
 import { compareDecoderTensor } from './sparse-decoder-witness-checks.js';
 import { compareOccupancyCoordinates } from './occupancy-coordinate-witness-checks.js';
 import { validateNativePrefixBackend, prefixAdapterName } from './sparse-prefix-witness-checks.js';
-import { preserveSamplerWitnessFailure } from './sparse-sampler-witness-checks.js';
+import { preserveSamplerWitnessFailure, recordSamplerCompletion } from './sparse-sampler-witness-checks.js';
 const hash = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), v => v.toString(16).padStart(2, '0')).join('');
 export async function runSLatDecoderWitness(expectedSha) {
   const report = { status: 'failed', phase: 'fixture', requestedRoute: SLAT_DECODER_ROUTE }, errors = [], owned = [];
@@ -53,7 +53,8 @@ export async function runSLatDecoderWitness(expectedSha) {
     report.phase = 'half-roundtrip';
     const halfJob = route.enqueue({ jobId: 'source-half-bit-conformance', execute: invocation => runtime.runKernel(kernel,
       { stage: 'decoder-half-roundtrip', dispatch: [256, 1, 1], schedulerInvocation: invocation, yieldAfter: true }) });
-    const halfCompleted = await halfJob.completion;if (halfCompleted.status !== 'succeeded') throw Error('native half-roundtrip dispatch failed');
+    const halfCompleted = await halfJob.completion;recordSamplerCompletion(report, halfCompleted);
+    if (halfCompleted.status !== 'succeeded') { preserveSamplerWitnessFailure(report);return report; }
     const guide = plan.mode === 'texture' ? Array.from({ length: plan.subdivisionLevels }, (_, i) => upload('shape-guide' + i, m.subdivisionRows[i], tensors['guide' + i])) : undefined;
     report.phase = 'learned-decoder-construction';
     decoder = createTrellisSLatDecoderAdapter({ route, config: m.config,
@@ -62,7 +63,8 @@ export async function runSLatDecoderWitness(expectedSha) {
     if (decoder.inputs.sample !== sample || decoder.inputs.coordinates !== coordinates) throw Error('exact resident input borrowing required');
     report.phase = 'learned-decoder-execution';const started = performance.now();
     const job = route.enqueue({ jobId: 'actual-learned-' + plan.mode + '-decoder', execute: invocation => decoder.run(invocation) });
-    const completed = await job.completion;if (completed.status !== 'succeeded') throw Error('learned decoder job failed: ' + (completed.error?.message ?? 'unknown'));
+    const completed = await job.completion;recordSamplerCompletion(report, completed);
+    if (completed.status !== 'succeeded') { preserveSamplerWitnessFailure(report);return report; }
     const result = completed.output;report.hostSubmitMs = performance.now() - started;
     report.composition = { exactBorrowedInputIdentity: true, sameSession: true, sessionId: session.snapshot().sessionId,
       convolutionsExecuted: result.convolutionsExecuted, convNeXtBlocksExecuted: result.convNeXtBlocksExecuted,

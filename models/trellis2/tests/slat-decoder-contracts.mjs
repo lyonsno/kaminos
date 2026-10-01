@@ -71,6 +71,8 @@ assert.match(h.runs.find(r => r.options.stage === 'decoder-neighbors').kernel.co
 assert.match(h.runs.find(r => r.options.stage === 'decoder-sparse-conv').kernel.code, /round_f16\(sum\)/,
   'Source sparse convolution rounds every per-neighbor dot to FP16 before the accumulated FP16 add.');
 assert.match(h.runs.find(r => r.options.stage === 'decoder-subdivision-scatter').kernel.code, /child%2u/);
+assert.doesNotMatch(h.runs.find(r => r.options.stage === 'decoder-subdivision-scatter').kernel.code,
+ /\b(?:let|var)\s+target\b/, 'Observed Chrome WGSL grammar reserves target; child row variable must compile.');
 assert.match(h.runs.find(r => r.options.stage === 'decoder-subdivision-scatter').kernel.code, /col\/4u/,
   'Skip repeats each source channel, not the complete vector.');
 assert.equal(adapter.outputs.features, result.features);

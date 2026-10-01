@@ -132,12 +132,12 @@ export function slatDecoderScatterShader(rows, ci, co) {
 ${binding(5, 'new_coordinates', 'i32', true)}${binding(6, 'features', 'f32', true)}${binding(7, 'skip', 'f32', true)}
 ${entry}{${index}if(index>=${rows * 8 * co}u){return;}let col=index%${co}u;let cell=index/${co}u;let child=cell%8u;let row=cell/8u;
  if(logits[row*8u+child]<=0.0){return;}var earlier=0u;for(var j=0u;j<child;j++){if(logits[row*8u+j]>0.0){earlier++;}}
- let target=prefix[row]+earlier;
- if(col==0u){new_coordinates[target*3u]=coordinates[row*3u]*2+i32(child%2u);
-  new_coordinates[target*3u+1u]=coordinates[row*3u+1u]*2+i32((child/2u)%2u);
-  new_coordinates[target*3u+2u]=coordinates[row*3u+2u]*2+i32(child/4u);}
- features[target*${co}u+col]=convolved[(row*8u+child)*${co}u+col];
- skip[target*${co}u+col]=parent[row*${ci}u+child*${perChild}u+col/${repeat}u];
+ let destination=prefix[row]+earlier;
+ if(col==0u){new_coordinates[destination*3u]=coordinates[row*3u]*2+i32(child%2u);
+  new_coordinates[destination*3u+1u]=coordinates[row*3u+1u]*2+i32((child/2u)%2u);
+  new_coordinates[destination*3u+2u]=coordinates[row*3u+2u]*2+i32(child/4u);}
+ features[destination*${co}u+col]=convolved[(row*8u+child)*${co}u+col];
+ skip[destination*${co}u+col]=parent[row*${ci}u+child*${perChild}u+col/${repeat}u];
 }`;
 }
 
