@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import {chromium} from '/private/tmp/beaming-smoke-deps-0926/node_modules/playwright/index.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -8,6 +7,7 @@ const report={requestedUrl:url,executable,status:'running',phase:'load',errors:[
 const save=()=>fs.writeFile(`${out}/report.json`,JSON.stringify(report,null,2));
 await save();let browser,page;
 try {
+  const {chromium}=await import('/private/tmp/beaming-smoke-deps-1001/node_modules/playwright/index.mjs');
   report.runtime=await(await fetch(new URL('/api/runtime-config',url))).json();
   const scene=await fetch(new URL('/api/read?root=scenes&path=cheap-kiln-shared-source.kaminos.json',url));
   assert.ok(scene.ok,'authored kiln scene is not mounted');
@@ -41,7 +41,7 @@ try {
     const fields=await window.__kaminosSceneRadiance.readback();
     const source=await window.__kaminosVolumePrototype.sampleSceneVolumeSource();
     function stats(data){let max=0,sum=0,positive=0;for(let i=0;i<data.length;i+=4){const v=Math.max(data[i],data[i+1],data[i+2]);max=Math.max(max,v);sum+=v;if(v>0)positive++;}return {max,mean:sum/(data.length/4),positive,count:data.length/4};}
-    return {surface:stats(fields.surface.data),smoke:stats(fields.smoke.data),source:stats(source.values),rawSource:source};
+    return {surface:stats(fields.surface.data),surfaceBack:fields.surfaceBack?stats(fields.surfaceBack.data):null,smoke:stats(fields.smoke.data),source:stats(source.values),rawSource:source};
   });await save();
   for(const mode of ['shared','neither']) {
     await page.selectOption('#rendering-light-mode',mode);await page.waitForTimeout(700);
@@ -54,6 +54,27 @@ try {
       await page.evaluate(stops=>{const gain=document.getElementById('rendering-shared-gain');gain.value=String(stops);gain.dispatchEvent(new Event('input',{bubbles:true}));},stops);
       await page.waitForTimeout(700);await page.screenshot({path:`${out}/gain-${stops}.png`});
       report.views.push(await page.evaluate(()=>({mode:'shared',gainStops:Number(document.getElementById('rendering-shared-gain').value),lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()})));await save();
+    }
+  }
+  if(process.argv.includes('--receiving-check')) {
+    report.phase='receiving-and-smoke-mode-comparison';await save();
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.selectOption('#rendering-angular-samples','96');
+    await page.evaluate(()=>{const gain=document.getElementById('rendering-shared-gain');gain.value='4';gain.dispatchEvent(new Event('input',{bubbles:true}));});
+    for(const smokeMode of ['legacy','distributed']) {
+      await page.selectOption('#rendering-smoke-solver',smokeMode);
+      await page.waitForFunction(mode=>{const d=window.__kaminosSceneRadiance.debugState(),v=window.__kaminosVolumePrototype.debugState();return d.directions===96&&d.smokeMode===mode&&d.frame?.volumeReceivers===(mode==='legacy'?0:8192)&&v.physicalColor.incidentLight.legacyDispatched===(mode==='legacy');},smokeMode,{timeout:0});
+      for(const [name,position,target] of [['interior',[0,1,6],[0,.7,0]],['opposite',[-3,2,7],[0,.7,0]],['floor',[3,6,7],[0,-.5,0]],['roof',[0,6,3],[0,1,0]]]) {
+        await page.evaluate(({position,target})=>window.__kaminosSetSceneCameraFrame(position,target),{position,target});
+        await page.waitForTimeout(700);
+        const view=await page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()}));
+        assert.equal(view.lighting.smokeMode,smokeMode);assert.equal(view.lighting.directions,96);
+        assert.equal(view.volume.physicalColor.incidentLight.legacyDispatched,smokeMode==='legacy');
+        assert.equal(view.lighting.frame.volumeReceivers,smokeMode==='legacy'?0:8192);
+        assert.equal(view.volume.error,null);
+        await page.screenshot({path:`${out}/${smokeMode}-${name}.png`});
+        report.views.push({name,smokeMode,position,target,...view});await save();
+      }
     }
   }
   const faviconOnly=report.httpFailures.length>0&&report.httpFailures.every(r=>new URL(r.url).pathname==='/favicon.ico');
