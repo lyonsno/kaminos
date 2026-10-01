@@ -23,10 +23,27 @@ export function acceptLearnObservations(observations, exportObservedMs, { requir
       || !(complete.atMs >= samples.at(-1).atMs && complete.atMs < earlyMesh.atMs)) {
       throw new Error(`missing, incomplete, or unordered construction: ${stageId}`);
     }
+    for (const s of samples) {
+      const expectedZ = -0.87 + 1.74 * (s.completedLayers - 1) / (s.totalLayers - 1);
+      // The existing marching-tet deformation can move known vertices by
+      // 1.74/160 along each axis; interpolation stays within those endpoints.
+      const allowance = 1.74 / 160 + 1e-6;
+      if (!Number.isFinite(s.maxZ) || Math.abs(s.maxZ - expectedZ) > 1e-6
+        || !Number.isSafeInteger(s.numVertices) || s.numVertices < 0
+        || !Number.isSafeInteger(s.numFaces) || s.numFaces < 0
+        || !Array.isArray(s.vertices) || s.vertices.length !== s.numVertices * 3
+        || !Array.isArray(s.faces) || s.faces.length !== s.numFaces * 3
+        || s.vertices.some((v, i) => !Number.isFinite(v) || v < -0.87 - allowance
+          || v > (i % 3 === 2 ? s.maxZ : 0.87) + allowance)
+        || s.faces.some(i => !Number.isSafeInteger(i) || i < 0 || i >= s.numVertices)) {
+        throw new Error(`contradictory construction geometry: ${stageId}`);
+      }
+    }
     construction.push({ stageId, updates: samples.length, firstMs: samples[0].atMs,
       lastMs: samples.at(-1).atMs, metrics: complete.metrics });
   }
   return { readbackBytes: features.reduce((n, sample) => n + sample.values.length * 4, 0),
     gpuReadbackAndReductionMs: features.reduce((n, sample) => n + sample.observationMs, 0),
-    firstFeaturesMs: features[0].atMs, fullMeshMs: earlyMesh.atMs, exportObservedMs, construction };
+    firstFeaturesMs: features[0].atMs, fullMeshMs: earlyMesh.atMs, exportObservedMs, construction,
+    constructionVisualAuthority: 'unverified' };
 }

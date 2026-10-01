@@ -19,11 +19,19 @@ assert.throws(() => featurePixels(new Float32Array([1]), 2, 2), /Invalid/);
 assert.throws(() => acceptLearnObservations([...samples, mesh], 100, { requireConstruction: true }), /construction/);
 const construction = ['block-0-fuse-out', 'block-1-fuse-out'].flatMap(stageId => [
   ...[2, 3].map((n, i) => ({ kind: 'construction', stageId, completedLayers: n, totalLayers: 3,
-    completedSamples: n * 9, totalSamples: 27, numFaces: i + 1, atMs: 50 + i })),
+    completedSamples: n * 9, totalSamples: 27, numFaces: 1, numVertices: 3, atMs: 50 + i,
+    maxZ: i ? 0.87 : 0, vertices: [0, 0, 0, 0.1, 0, 0, 0, 0.1, 0], faces: [0, 1, 2] })),
   { kind: 'construction-complete', stageId, atMs: 52, metrics: { slabs: 2 } },
 ]);
 const validate = c => acceptLearnObservations([...samples, ...c, mesh], 100, { requireConstruction: true });
 assert.equal(validate(construction).construction.length, 2);
+assert.throws(() => validate(construction.map(s => s.kind === 'construction'
+  ? { ...s, vertices: [0, 0, .87, .1, 0, .87, 0, .1, .87] } : s)), /construction/);
+assert.equal(validate(construction).constructionVisualAuthority, 'unverified');
+assert.equal(validate(construction.map(s => s.kind === 'construction'
+  ? { ...s, vertices: [0, 0, .005, .1, 0, .005, 0, .1, .005] } : s)).construction.length, 2);
+assert.throws(() => validate(construction.map(s => s.kind === 'construction' ? { ...s, faces: [0, 1, 9] } : s)), /construction/);
+assert.throws(() => validate(construction.map(s => s.kind === 'construction' ? { ...s, vertices: undefined } : s)), /construction/);
 assert.throws(() => validate(construction.filter((_, i) => i !== 1)), /construction/);
 assert.throws(() => validate(construction.map(s => s.kind === 'construction' ? { ...s, atMs: 90 } : s)), /construction/);
 assert.throws(() => validate(construction.map(s => s.kind === 'construction' ? { ...s, numFaces: 0 } : s)), /construction/);

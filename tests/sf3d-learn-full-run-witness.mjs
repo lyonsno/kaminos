@@ -27,6 +27,9 @@ const report = {
   requested: { baseUrl, page: '/', previewDetail: '32' },
   effective: { sourceCommit, bundleSha256: sha256(bundle), bundleSource: fs.readFileSync('lib/sf3d/LEARN_BUILD.txt', 'utf8').trim(), puppeteerPath, chromePath },
   events: [], statusTrace: [], stages: {}, observations: [],
+  claim: 'model-output-and-construction-geometry-observations',
+  constructionVisualEvidence: { authority: 'unverified', captures: [],
+    reason: 'Opportunistic captures are not synchronized to slab identity; inspect before making a partial-visual claim.' },
 };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 write();
@@ -46,8 +49,13 @@ try {
     if (sample.kind === 'construction' && sample.numFaces > 0 && sample.completedLayers < sample.totalLayers
         && !constructionShots.has(sample.stageId)) {
       constructionShots.add(sample.stageId);
-      captures.push(page.screenshot({ path: path.join(outputDir, `construction-${sample.stageId}.png`) })
-        .catch(error => { report.events.push({ type: 'capture-error', message: error.message }); }));
+      const capture = { file: `construction-${sample.stageId}.png`, status: 'pending',
+        triggerStage: sample.stageId, triggerLayers: sample.completedLayers, depictedState: 'unverified' };
+      report.constructionVisualEvidence.captures.push(capture);
+      captures.push(page.screenshot({ path: path.join(outputDir, capture.file) })
+        .then(() => { capture.status = 'captured'; write(); })
+        .catch(error => { capture.status = 'failed'; capture.error = error.message;
+          report.events.push({ type: 'capture-error', message: error.message }); write(); }));
     }
   });
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
