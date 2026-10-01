@@ -1,4 +1,4 @@
-import { advanceArchStructuralForce, fractureArchStructuralProxy, solveArchStructuralForce } from './structural-material-arch-core.js';
+import { advanceArchStructuralForce, bindArchStructuralProxy, fractureArchStructuralProxy, solveArchStructuralForce } from './structural-material-arch-core.js';
 
 export function advanceArchVolumeLoad(state, load = {}, options = {}) {
   const duration = options.duration ?? 0.1;
@@ -84,4 +84,14 @@ export function releaseArchStructuralLoad(state, load = {}) {
     state: solveArchStructuralForce(state, { ...state.load, ...load, force: 0 }),
     mode: 'unloaded-damaged',
   };
+}
+
+export function bindReleasedArchVolume(state, load = {}) {
+  if (state.load?.requestedForce !== 0 || state.nodes.some(node =>
+    Object.values(node.displacement).some(value => value !== 0))) {
+    throw new Error('arch Bind requires a released reference pose');
+  }
+  const bondIds = state.bonds.filter(bond => !bond.alive).map(bond => bond.id);
+  const repaired = bindArchStructuralProxy(state, { bondIds });
+  return solveArchStructuralForce(repaired, { ...state.load, ...load, force: 0 });
 }

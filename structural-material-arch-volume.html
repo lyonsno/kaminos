@@ -71,8 +71,8 @@
         import('./structural-material-arch-core.js'), import('./structural-material-arch-volume-view.js'),
       ]);
       const { OrbitControls } = controlsModule;
-      const { buildArchStructuralProxy, bindArchStructuralProxy } = core;
-      const { advanceArchVolumeLoad, buildArchVolumeFrame, releaseArchStructuralLoad, resolveArchVolumeEquilibrium } = volume;
+      const { buildArchStructuralProxy } = core;
+      const { advanceArchVolumeLoad, bindReleasedArchVolume, buildArchVolumeFrame, releaseArchStructuralLoad, resolveArchVolumeEquilibrium } = volume;
       const ROUTE = 'kaminos.structural-material.arch-force-volume.v0';
       const profileRoot = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness';
       const load = { x: -0.05, y: 0.29, patchRadius: 0.025, threshold: 0.04, iterations: 600, contactDepthMode: 'camera-facing-surface', contactLayer: 2 };
@@ -262,8 +262,7 @@
       function bind() {
         if (!applied || !released) return;
         const updates = Object.fromEntries(Object.entries(cases).map(([name, item]) => {
-          const bondIds = item.state.bonds.filter(bond => !bond.alive).map(bond => bond.id);
-          const state = bindArchStructuralProxy(item.state, { bondIds });
+          const state = bindReleasedArchVolume(item.state, load);
           return [name, { state, prepared: prepare(state, 0) }];
         }));
         for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
@@ -338,6 +337,7 @@
           brokenBondIds: item.state.bonds.filter(bond => !bond.alive).map(bond => bond.id),
           eventCount: item.state.events.length,
           crackEventCount: item.state.events.filter(event => event.kind === 'crack').length,
+          maxLiveStrain: Math.max(0, ...item.state.bonds.filter(bond => bond.alive).map(bond => bond.lastStrain)),
           loadApplication: item.state.loadApplication ?? null,
           evolution: item.state.load?.evolution ?? null,
           contact: item.state.load?.contact ?? null,

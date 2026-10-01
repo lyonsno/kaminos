@@ -266,7 +266,7 @@ try {
   await evaluate('document.querySelector("#bind").click()');
   state = await waitForWitness();
   report.transitions.bind = state;
-  check('Bind repairs the released graph at zero force', Object.values(state.routeWitness.cases).every((item, index) => item.broken === 0 && item.components === 1 && item.travel === 0 && item.displayMode === 'repaired-graph-equilibrium' && item.connectivityEpoch > released[Object.keys(state.routeWitness.cases)[index]].connectivityEpoch), state.routeWitness.cases);
+  check('Bind repairs the released graph at zero force', Object.values(state.routeWitness.cases).every((item, index) => item.broken === 0 && item.components === 1 && item.travel === 0 && item.maxLiveStrain === 0 && item.displayMode === 'repaired-graph-equilibrium' && item.connectivityEpoch > released[Object.keys(state.routeWitness.cases)[index]].connectivityEpoch), state.routeWitness.cases);
   check('Bind retains the operator camera', JSON.stringify(state.routeWitness.camera) === cameraAtLoad, {before: cameraAtLoad, after: state.routeWitness.camera});
   check('browser reported no uncaught runtime or console errors', report.runtimeExceptions.length === 0 && report.consoleErrors.length === 0, {runtimeExceptions: report.runtimeExceptions, consoleErrors: report.consoleErrors});
   await capture('bound-at-zero-load', state);
@@ -284,6 +284,7 @@ try {
   state = await waitForWitness();
   check('mobile controls remain inside the viewport', Object.values(state.controls).every(control => control && control.rect.x >= 0 && control.rect.x + control.rect.width <= state.viewport.width && control.rect.y + control.rect.height <= state.viewport.height) && state.viewport.documentWidth <= state.viewport.width, {controls: state.controls, viewport: state.viewport});
   await capture('mobile-fracture', state);
+  check('complete sequence has no uncaught runtime or console errors', report.runtimeExceptions.length === 0 && report.consoleErrors.length === 0, {runtimeExceptions: report.runtimeExceptions, consoleErrors: report.consoleErrors});
   report.phase = 'complete';
   report.status = 'passed';
   report.checks = checks;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as volume from '../structural-material-arch-volume-view.js';
 import * as evidence from '../structural-material-arch-volume-evidence.mjs';
-import { advanceArchStructuralForce, bindArchStructuralProxy, buildArchStructuralProxy } from '../structural-material-arch-core.js';
+import { advanceArchStructuralForce, buildArchStructuralProxy, fractureArchStructuralProxy } from '../structural-material-arch-core.js';
 
 assert.equal(typeof volume.advanceArchVolumeLoad, 'function',
   'Apply must advance the existing damaged arch through another force interval');
@@ -65,7 +65,13 @@ for (const name of ['intact', 'outer-notch']) {
   assert.equal(released.events.length, state.events.length);
   const reloaded = volume.advanceArchVolumeLoad(released, { ...load, force: 0.1 });
   for (const id of priorBroken) assert.equal(reloaded.bonds.find(bond => bond.id === id).alive, false);
-  const bound = bindArchStructuralProxy(released, { bondIds: [...priorBroken] });
+  const bound = volume.bindReleasedArchVolume(released, load);
+  assert.equal(bound.maxStrain, 0);
+  assert.ok(bound.bonds.every(bond => bond.alive && bond.lastStrain === 0),
+    'zero-load Bind must refresh repaired-bond strain at the released reference pose');
+  assert.throws(() => volume.bindReleasedArchVolume(state, load), /released/);
+  const reevaluated = fractureArchStructuralProxy(bound, { threshold: load.threshold });
+  assert.equal(reevaluated.events.length, bound.events.length, 'a stress-relieved repair must not break again without new movement');
   const boundLoaded = volume.advanceArchVolumeLoad(bound, { ...load, force: 0.1 });
   const intactLoaded = volume.advanceArchVolumeLoad(base, { ...load, force: 0.1 });
   assert.ok(reloaded.load.travel > boundLoaded.load.travel, 'retained damage must affect renewed force response');
