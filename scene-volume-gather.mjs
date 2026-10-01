@@ -1,5 +1,7 @@
 // Direct distributed emission. Surface irradiance and isotropic smoke mean
 // use the same rays; only their angular weighting differs.
+import {buildSmokeReconstructionCells} from './scene-smoke-reconstruction.mjs';
+export {DISTRIBUTED_SMOKE_WGSL} from './scene-smoke-reconstruction.mjs';
 export function lightingDirections(count=24) {
   if(!Number.isInteger(count)||count<2||count%2) throw new Error('even angular sample count required');
   const result=[];
@@ -31,6 +33,7 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
   const volumeDimensions=[volumeGrid,volumeGrid*2,volumeGrid];
   const volumeCount=volumeDimensions.reduce((a,b)=>a*b,1);
   const total=receivers.length+volumeCount;
+  const reconstructionCells=buildSmokeReconstructionCells(geometry,volumeDimensions);
   const receiverValues=new Float32Array(total*8);
   receivers.forEach((r,i)=>receiverValues.set([...r.position,1,...r.normal,0],i*8));
   for(let z=0;z<volumeGrid;z++) for(let y=0;y<volumeGrid*2;y++) for(let x=0;x<volumeGrid;x++) {
@@ -46,6 +49,10 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
   }
   const nodes=buffer('static kiln BVH nodes',geometry.nodes);
   const triangles=buffer('static kiln BVH triangles',geometry.triangles);
+  const smokeReconstruction={identity:'geometry-visible-trilinear-v1',
+    cellIndices:buffer('smoke reconstruction cell triangle candidates',reconstructionCells.words),triangles,
+    dimensions:reconstructionCells.dimensions,triangleReferences:reconstructionCells.triangleReferences,
+    maxCandidates:reconstructionCells.maxCandidates,emptyCells:reconstructionCells.emptyCells};
   const receiverBuffer=buffer('surface and smoke receivers',receiverValues);
   const directionBuffer=buffer('distributed incident directions',new Float32Array(dirs.flatMap(d=>[...d,0])));
   const distances=buffer('cached first solid distance per receiver ray',new Float32Array(total*directions));
@@ -83,7 +90,7 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
       const pass=encoder.beginComputePass({label:'live distributed flame transport'});
       pass.setPipeline(gather);pass.setBindGroup(0,gatherGroup);pass.dispatchWorkgroups(...receiverDispatch(total,dispatchLimit));pass.end();
       device.queue.submit([encoder.finish()]);
-      return {generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:volumeCount,directions,stepLength,gain,geometryTriangles:geometry.triangleCount};
+      return {generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:volumeCount,directions,stepLength,gain,geometryTriangles:geometry.triangleCount,smokeReconstruction};
     },
     destroy(){for(const b of resources)b.destroy();surface.destroy();smoke.destroy();},
     async readback() {
@@ -184,14 +191,3 @@ fn gatherLight(@builtin(global_invocation_id) global:vec3<u32>) {
   else {let index=id.x-SURFACE_COUNT;textureStore(smokeOut,vec3<i32>(i32(index%VOLUME_GRID),i32((index/VOLUME_GRID)%(2u*VOLUME_GRID)),i32(index/(2u*VOLUME_GRID*VOLUME_GRID))),output);}
 }
 `;
-
-export const DISTRIBUTED_SMOKE_WGSL=`
-@group(2) @binding(0) var distributedIncident:texture_3d<f32>;
-fn distributedMeanIncident(p:vec3<f32>)->vec3<f32> {
-  let dims=textureDimensions(distributedIncident);
-  if(any(p<vec3<f32>(-1.0))||any(p>vec3<f32>(1.0,3.0,1.0))){return vec3<f32>(0.0);}
-  // Nearest receiver avoids blending the lit and shadowed sides of a wall.
-  // Spatial quantization remains visible and is an explicit first-pass limit.
-  let c=clamp(vec3<i32>(floor((p+vec3<f32>(1.0))*f32(dims.x)*0.5)),vec3<i32>(0),vec3<i32>(dims)-1);
-  return textureLoad(distributedIncident,c,0).rgb;
-}`;

@@ -10,6 +10,7 @@ import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, creat
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
 import { DISTRIBUTED_SMOKE_WGSL } from './scene-volume-gather.mjs';
+import { createDistributedSmokeBindings } from './scene-smoke-reconstruction.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
@@ -9716,6 +9717,7 @@ export function createKaminosVolumePrototype({
   let distributedFrame = null;
   let distributedGroup = null;
   let distributedLayout = null;
+  let distributedBindings = null;
   const distributedPipelines = new Map();
   const scenePointPipelines = new Map();
   let sceneSourceFrameConsumer = null;
@@ -24829,8 +24831,9 @@ export function createKaminosVolumePrototype({
     setSceneDistributedLightFrame(input) {
       if(input===null){distributedFrame=null;distributedGroup=null;return;}
       if(!device||!sceneSourceFrameConsumer||input.generation!==sceneVolumeSource?.describe().generation)throw new Error('distributed lighting needs same-generation source');
-      distributedLayout ||= device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}}]});
-      if(distributedFrame?.texture!==input.texture)distributedGroup=device.createBindGroup({layout:distributedLayout,entries:[{binding:0,resource:input.texture.createView()}]});
+      distributedBindings ||= createDistributedSmokeBindings(device);
+      distributedLayout = distributedBindings.layout;
+      distributedGroup = distributedBindings.update(input);
       distributedFrame=input;
     },
     sceneVolumeSourceField() {
