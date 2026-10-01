@@ -86,7 +86,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
       const paused = !state.paused;
       const receipt = volume.setSimulationPaused(paused);
       requireState(receipt.paused === paused, 'Simulation pause failed');
-      publish({paused});
+      publish({paused, simStepCount: volume.debugState().simStepCount});
     },
   };
 }
@@ -105,14 +105,14 @@ export async function mountTimberIgnitionSmoke() {
   const run = section.querySelector('[data-action="run"]');
   const pause = section.querySelector('[data-action="pause"]');
   const phaseLabels = {loading: 'Loading', paused: 'Paused', 'burner-on': 'Burner on',
-    'burner-off-transfer': 'Burner off / transfer', complete: 'Transfer complete', failed: 'Failed'};
+    'burner-off-transfer': 'Burner off / transfer', complete: 'Sequence complete', failed: 'Failed'};
   const volume = window.__kaminosVolumePrototype;
   const smoke = createTimberIgnitionSmoke({volume,
     basin: () => window.__kaminosDefaultVolumeSmokeBasin?.presetId,
     objects: () => window.kaminosSceneObjectDebugState(),
     moveObject: (id, pose) => window.kaminosSetSceneObjectTransform(id, pose),
     onChange(state) {
-      label.textContent = state.error || `${phaseLabels[state.phase]}${state.running && state.paused ? ' (paused)' : ''}${state.simStepCount === null ? '' : ` | Step ${state.simStepCount}`}`;
+      label.textContent = state.error || `${phaseLabels[state.phase]}${state.running && state.paused ? ' (paused)' : ''}${state.simStepCount === null || !state.paused ? '' : ` | Step ${state.simStepCount}`}`;
       label.style.color = state.error ? '#ef9a9a' : '#ccc';
       run.disabled = state.phase !== 'paused';
       pause.disabled = !state.running;
