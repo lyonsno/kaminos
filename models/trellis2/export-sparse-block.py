@@ -25,6 +25,63 @@ def digest(path):
     return value.hexdigest()
 
 
+def load_native_block_input(path, *, block_index, prefix, prefix_sha, conditioning_sha, checkpoint_sha):
+    """Admit observed bytes, not the canonical preceding-block reference."""
+    native = json.loads(path.read_text())
+    result = native.get('result', {})
+    composition = result.get('composition', {})
+    reference = result.get('reference', {})
+    backend = result.get('backend', {})
+    route = 'trellis2.sparse-flow-block.webgpu.v0'
+    if (native.get('commit') != native.get('expectedCommit') or native.get('dirty') != '' or
+            not native.get('finishedAt') or native.get('requestedUrl') != native.get('effectiveUrl') or
+            native.get('serverErrors') or native.get('cleanupErrors') or result.get('errors') != [] or
+            result.get('requestedRoute') != route or result.get('effectiveRoute') != route or
+            backend.get('isFallbackAdapter') is not False or backend.get('vendor') != 'apple' or
+            not str(backend.get('architecture', '')).startswith('metal') or
+            composition.get('observedBlockIndex') != block_index or composition.get('sameSession') is not True or
+            composition.get('sameJob') is not True or composition.get('readbackBetweenBlocks') is not False or
+            composition.get('reusedResidentBlockHidden') is not True or
+            composition.get('incomingHiddenSnapshot') != 'queue-ordered-GPU-copy-before-block1; observer-readback-after-chain' or
+            native.get('prefixFixtureSha256') != prefix_sha or
+            reference.get('source', {}).get('commit') != prefix['source']['commit'] or
+            reference.get('checkpoint', {}).get('sha256') != checkpoint_sha or
+            reference.get('conditioning', {}).get('sha256') != conditioning_sha):
+        raise ValueError('native input route/source/composition identity mismatch')
+    if native.get('status') != 'succeeded' and (native.get('phase') != 'native-block-execution' or
+            native.get('error', {}).get('message') != 'whole-block numerical comparison failed'):
+        raise ValueError('native input witness failed before trustworthy outputs')
+    served = native.get('servedSources', {})
+    required = ['models/trellis2/sparse-block-witness.js', 'models/trellis2/sparse-block.js',
+                'models/trellis2/sparse-prefix.js', 'webgpu-inference-kit/src/inference-runtime.js']
+    if not all(name in served for name in required):
+        raise ValueError('native input lacks required served-source attestation')
+    for name, sha in served.items():
+        blob = subprocess.check_output(['git', '-C', native['repoRoot'], 'show', f'{native["commit"]}:{name}'])
+        if hashlib.sha256(blob).hexdigest() != sha:
+            raise ValueError(f'native served source changed: {name}')
+    values, metadata = {}, {}
+    for name, shape, rows in [(f'block{block_index}.input', [4096, 1536], result.get('inputs', {})),
+                             ('modulation', [1, 9216], result.get('outputs', {}))]:
+        raw = native.get('rawOutputs', {}).get(name, {})
+        observed = rows.get(name, {})
+        file = Path(raw.get('path', ''))
+        size = int(np.prod(shape)) * 4
+        if (observed.get('shape') != shape or observed.get('dtype') != 'f32' or
+                raw.get('byteLength') != size or not file.is_file() or file.stat().st_size != size or
+                raw.get('sha256') != observed.get('sha256') or digest(file) != raw.get('sha256')):
+            raise ValueError(f'native input bytes/shape changed: {name}')
+        array = np.fromfile(file, dtype='<f4').reshape(shape)
+        if not np.isfinite(array).all():
+            raise ValueError(f'nonfinite native input: {name}')
+        values[name] = array
+        metadata[name] = {**raw, 'shape': shape, 'dtype': 'float32'}
+    return values[f'block{block_index}.input'], values['modulation'], {
+        'path': str(path.resolve()), 'sha256': digest(path), 'nativeCommit': native['commit'],
+        'nativeSessionId': result['sessionId'], 'blockIndex': block_index, 'tensors': metadata,
+        'comparisonClass': 'MLX single block on identical captured native hidden and time modulation'}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source-root', type=Path, required=True)
@@ -32,6 +89,7 @@ def main():
     p.add_argument('--conditioning', type=Path, required=True)
     p.add_argument('--block-index', type=int, default=0)
     p.add_argument('--input-block', type=Path, help='Saved preceding canonical block manifest; no preceding block rerun.')
+    p.add_argument('--native-input-report', type=Path, help='Authenticated browser report supplying actual incoming hidden and modulation, instead of canonical inputs.')
     p.add_argument('--out', type=Path, required=True)
     args = p.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -60,7 +118,9 @@ def main():
             raise ValueError('block index outside checkpoint model geometry')
         if args.block_index == 0 and args.input_block is not None:
             raise ValueError('block0 must consume the canonical prefix')
-        if args.block_index > 0:
+        if args.native_input_report is not None and args.input_block is not None:
+            raise ValueError('native and canonical input authorities are mutually exclusive')
+        if args.block_index > 0 and args.native_input_report is None:
             if args.input_block is None:
                 raise ValueError('later block requires preceding canonical block manifest')
             previous = json.loads(args.input_block.read_text())
@@ -144,7 +204,11 @@ def main():
             if digest(file) != descriptor['sha256']:
                 raise ValueError(f'prefix bytes changed: {name}')
             return np.fromfile(file, dtype='<f4').reshape(descriptor['shape'])
-        if previous is None:
+        if args.native_input_report is not None:
+            hidden, modulation, report['nativeInput'] = load_native_block_input(args.native_input_report,
+                block_index=args.block_index, prefix=prefix, prefix_sha=report['prefix']['sha256'],
+                conditioning_sha=report['conditioning']['sha256'], checkpoint_sha=report['checkpoint']['sha256'])
+        elif previous is None:
             hidden = prefix_tensor('expected.projected')
         else:
             descriptor = previous['tensors']['expected.after_mlp']
@@ -157,7 +221,9 @@ def main():
         if not np.isfinite(hidden).all():
             raise ValueError('nonfinite canonical block input')
         projected = mx.array(hidden).astype(mx.bfloat16)
-        mod = mx.array(prefix_tensor('expected.modulation').reshape(-1)).astype(mx.bfloat16)
+        if args.native_input_report is None:
+            modulation = prefix_tensor('expected.modulation')
+        mod = mx.array(modulation.reshape(-1)).astype(mx.bfloat16)
         data = np.load(args.conditioning, allow_pickle=False)
         report['conditioning']['keys'] = list(data.files)
         condition = np.asarray(data['cond'], dtype=np.float32)

@@ -164,6 +164,10 @@ try {
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
   const requiredOutputs = ['projected', 'modulation'];
   if (witness === 'block') requiredOutputs.push(...BLOCK_OBSERVATIONS);
+  if (nextBlockFixture && (!report.rawOutputs?.['block1.input'] ||
+      report.rawOutputs['block1.input'].sha256 !== value.result.inputs?.['block1.input']?.sha256)) {
+    throw new Error('missing or mismatched incoming block1 input evidence');
+  }
   for (const name of requiredOutputs) {
     if (!report.rawOutputs?.[name] || report.rawOutputs[name].sha256 !== value.result.outputs?.[name]?.sha256) {
       throw new Error(`missing or mismatched raw evidence: ${name}`);

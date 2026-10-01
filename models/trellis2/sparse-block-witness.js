@@ -1,10 +1,27 @@
-import { createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/core.js';
+import { createWebGpuInferenceSession, WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js';
 import { createTrellisSparsePrefixAdapter } from './sparse-prefix.js';
 import { createTrellisSparseBlockAdapter, createTrellisSparseBlockWorkspace, SPARSE_BLOCK_ROUTE } from './sparse-block.js';
 import { validatePrefixFixture, validateNativePrefixBackend, prefixAdapterName, comparePrefixTensor } from './sparse-prefix-witness-checks.js';
 import { validateBlockFixture, validateBlockChainFixture, compareBlockTensor, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 
 const hash = async data => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), b => b.toString(16).padStart(2, '0')).join('');
+
+// Offline-only snapshot: queue-ordered GPU copy before the shared workspace is
+// overwritten. The next block still consumes the original resident tensor.
+export function createSparseBlockInputCapture(runtime, source) {
+  if (source?.dtype !== 'f32' || !source.buffer || !(source.usage & U.copySrc) ||
+      source.byteLength !== source.shape?.reduce((a, b) => a * b, 4)) throw new TypeError('complete copyable f32 block input required');
+  const tensor = runtime.createTensor({ name: 'trellis.witness.block1.input', shape: [...source.shape],
+    dtype: 'f32', usage: U.copySrc | U.copyDst });
+  let captured = false, disposed = false;
+  return { tensor, capture() {
+    if (disposed) throw new Error('block input capture disposed');
+    if (captured) throw new Error('block input already captured');
+    const encoder = runtime.device.createCommandEncoder();
+    encoder.copyBufferToBuffer(source.buffer, source.bufferOffset || 0, tensor.buffer, tensor.bufferOffset || 0, source.byteLength);
+    runtime.queue.submit([encoder.finish()]); captured = true;
+  }, dispose() { if (!disposed) { disposed = true; tensor.buffer.destroy(); } } };
+}
 async function loadManifest(path, expectedSha) {
   const response = await fetch(path, { cache: 'no-store' });
   if (!response.ok) throw new Error(`missing manifest ${path}`);
@@ -32,7 +49,7 @@ export async function runSparseBlockWitness(blockSha, prefixSha, nextBlockSha) {
   const report = { status: 'failed', phase: 'fixture', requestedRoute: SPARSE_BLOCK_ROUTE,
     blockFixtureSha256: blockSha, prefixFixtureSha256: prefixSha, nextBlockFixtureSha256: nextBlockSha };
   const errors = [];
-  let device, session, prefixAdapter, blockAdapter, nextAdapter, workspace, errorScope = false;
+  let device, session, prefixAdapter, blockAdapter, nextAdapter, workspace, inputCapture, errorScope = false;
   try {
     const prefixManifest = await loadManifest('/prefix-fixture/manifest.json', prefixSha);
     const blockManifest = await loadManifest('/fixture/manifest.json', blockSha);
@@ -71,6 +88,7 @@ export async function runSparseBlockWitness(blockSha, prefixSha, nextBlockSha) {
       inputs: prefixAdapter.outputs, workspace });
     if (nextManifest) nextAdapter = createTrellisSparseBlockAdapter({ route, config: nextManifest.config, weights: nextTensors,
       inputs: { projected: blockAdapter.outputs.hidden, modulation: prefixAdapter.outputs.modulation }, workspace });
+    if (nextAdapter) inputCapture = createSparseBlockInputCapture(route.runtime, blockAdapter.outputs.hidden);
     report.phase = 'prefix-block-composition';
     const started = performance.now();
     const job = route.enqueue({ jobId: nextManifest ? 'prefix-block0-block1' : 'prefix-block0', execute: async invocation => {
@@ -79,6 +97,7 @@ export async function runSparseBlockWitness(blockSha, prefixSha, nextBlockSha) {
       let output = await blockAdapter.run(invocation);
       if (nextAdapter) {
         if (output.hidden !== blockAdapter.outputs.hidden) throw new Error('resident block0 hidden identity changed');
+        inputCapture.capture();
         output = await nextAdapter.run(invocation);
         if (output.hidden !== blockAdapter.outputs.hidden) throw new Error('shared block-chain exit storage changed');
       }
@@ -92,16 +111,24 @@ export async function runSparseBlockWitness(blockSha, prefixSha, nextBlockSha) {
       activationStorage: 'shared-serialized-block-workspace', executedBlocks: nextManifest ? 2 : 1,
       observedBlockIndex: nextManifest ? 1 : 0, readbackBetweenBlocks: false,
       block0FixtureSha256: blockSha, block1FixtureSha256: nextBlockSha,
-      reusedResidentBlockHidden: Boolean(nextAdapter) };
+      reusedResidentBlockHidden: Boolean(nextAdapter),
+      incomingHiddenSnapshot: nextAdapter ? 'queue-ordered-GPU-copy-before-block1; observer-readback-after-chain' : null };
     report.phase = 'observation-readback';
     report.outputs = {};
+    const observedAt = performance.now();
+    if (inputCapture) {
+      const data = await route.runtime.readTensor(inputCapture.tensor);
+      const response = await fetch('/output/block1.input', { method: 'POST', body: data });
+      if (!response.ok) throw new Error('could not preserve incoming block1 hidden');
+      report.inputs = { 'block1.input': { shape: inputCapture.tensor.shape, dtype: inputCapture.tensor.dtype,
+        sha256: await hash(data), origin: 'actual resident block0 exit consumed by block1' } };
+    }
     const observed = { projected: completion.output.producer.projected, modulation: completion.output.producer.modulation,
       ...Object.fromEntries(BLOCK_OBSERVATIONS.map(key => {
         const tensor = (nextAdapter || blockAdapter).diagnostics[key];
         if (!tensor) throw new Error(`missing block diagnostic ${key}`);
         return [key, tensor];
       })) };
-    const observedAt = performance.now();
     for (const [name, tensor] of Object.entries(observed)) {
       const bytes = await route.runtime.readTensor(tensor), data = bytes instanceof Float32Array ? bytes : new Float32Array(bytes);
       const response = await fetch(`/output/${name}`, { method: 'POST', body: data });
@@ -121,7 +148,7 @@ export async function runSparseBlockWitness(blockSha, prefixSha, nextBlockSha) {
   } catch (error) { report.error = { message: error.message, stack: error.stack }; }
   finally {
     if (errorScope) { const validation = await device.popErrorScope(); if (validation) errors.push(validation.message); }
-    report.errors = errors; nextAdapter?.dispose(); blockAdapter?.dispose(); workspace?.dispose(); prefixAdapter?.dispose();
+    report.errors = errors; inputCapture?.dispose(); nextAdapter?.dispose(); blockAdapter?.dispose(); workspace?.dispose(); prefixAdapter?.dispose();
     if (session) { await session.drain(); session.close(); }
     device?.destroy();
   }
