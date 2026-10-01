@@ -1,0 +1,259 @@
+{
+  "status": "failed",
+  "phase": "emission-on-load",
+  "receiver": "sinter-timber-ignition",
+  "command": [
+    "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/ignition-capture.mjs",
+    "artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001-visible-beauty",
+    "",
+    "artifacts/sinter-authored-mesh-smoke-0923/ignition-beauty-transfer-protocol.json"
+  ],
+  "repoRoot": "/private/tmp/kaminos-sinter-local48-0930",
+  "terminalEvidence": "/private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001-visible-beauty/report.json",
+  "startedAt": "2026-10-01T19:00:16.243Z",
+  "protocol": {
+    "view": "off",
+    "headless": false,
+    "emissionCases": [
+      true
+    ],
+    "warmupSteps": 0,
+    "sourcePose": {
+      "position": [
+        0,
+        -0.5,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0.35
+      ],
+      "scale": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "primeSteps": [
+      120,
+      120
+    ],
+    "primeOnly": false,
+    "transferSourcePose": {
+      "position": [
+        0.4,
+        -0.55,
+        0
+      ]
+    },
+    "transferReceiverPose": {
+      "position": [
+        0.4,
+        0.6,
+        0
+      ]
+    },
+    "transferSteps": [
+      60,
+      120,
+      180
+    ]
+  },
+  "runs": [
+    {
+      "name": "emission-on",
+      "emissionEnabled": true,
+      "frames": [],
+      "phases": [],
+      "scene": {
+        "schema": "kaminos.scene.v1",
+        "version": 5,
+        "timestamp": "2026-10-01T00:00:00.000Z",
+        "objects": [
+          {
+            "id": "sinter-source-timber",
+            "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+            "type": "glb",
+            "fileName": "forked-timber-reliquary-trestle-v0.glb",
+            "label": "Source timber",
+            "transform": {
+              "position": [
+                0,
+                -0.5,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0.35
+              ],
+              "scale": [
+                0.8,
+                0.8,
+                0.8
+              ]
+            },
+            "materials": {
+              "side": 2,
+              "transparent": false,
+              "opacity": 1
+            },
+            "combustionBinding": {
+              "schema": "kaminos.object-combustion-binding.v0",
+              "objectId": "sinter-source-timber",
+              "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+              "structuralProfile": "timber-two-island.v0",
+              "burnRate": 0.003,
+              "emissionEnabled": true
+            }
+          },
+          {
+            "id": "sinter-receiver-timber",
+            "source": "artifacts/sinter-forked-timber-trestle-v0-2026-07-18/promoted/forked-timber-reliquary-trestle-v0.glb",
+            "type": "glb",
+            "fileName": "forked-timber-reliquary-trestle-v0.glb",
+            "label": "Receiver timber",
+            "transform": {
+              "position": [
+                2.5,
+                0.1,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                0.35,
+                0.35,
+                0.35
+              ]
+            },
+            "materials": {
+              "side": 2,
+              "transparent": false,
+              "opacity": 1
+            },
+            "combustionBinding": {
+              "schema": "kaminos.object-combustion-binding.v0",
+              "objectId": "sinter-receiver-timber",
+              "assetIdentity": "sha256:1270054ee62bd3c5c688b13e7334f9ae99280f5868b2121fd317b4dffe5d2b84",
+              "structuralProfile": "timber-two-island.v0",
+              "burnRate": 0.003,
+              "emissionEnabled": true
+            }
+          }
+        ],
+        "groups": [],
+        "activeObjectId": "sinter-source-timber",
+        "activeGroupId": null,
+        "camera": {
+          "position": [
+            3.1,
+            1.4,
+            4
+          ],
+          "target": [
+            0.6,
+            -0.2,
+            0
+          ],
+          "up": [
+            0,
+            1,
+            0
+          ],
+          "near": 0.1,
+          "far": 100,
+          "fov": 45
+        },
+        "environment": {
+          "name": "studio",
+          "exposure": 1.2,
+          "intensity": 1,
+          "rotation": 0,
+          "showBackground": false,
+          "backgroundBlur": 0.4
+        },
+        "volumePrimitives": {
+          "schema": "kaminos.volume-primitives.v0",
+          "primitives": []
+        },
+        "postprocessing": {
+          "ao": {
+            "enabled": false,
+            "radius": 0.4,
+            "intensity": 1,
+            "scale": 1,
+            "thickness": 1,
+            "falloff": 0.7,
+            "farBlend": 0.7
+          },
+          "dof": {
+            "enabled": false,
+            "focus": 8,
+            "aperture": 0.0001,
+            "maxblur": 0.01
+          }
+        },
+        "backdrop": false
+      },
+      "inputSha256": "589592b5426ee95cab99a4629b80080edfac24cfd6b8cbd83fc4202125724e12"
+    }
+  ],
+  "errors": [],
+  "scope": "matched-visual-experiment-inspection-required",
+  "driverSha256": "ef621580cf0e9cd708ed2ae4d8af6a892f5a0b447a91671b633d1db2be8fe04d",
+  "sourceCommit": "fae3efef1bfd09cb67c6883f69ab6e239875854b",
+  "gitStatus": "?? artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001-exposure-navigation-recovered/\n?? artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001-exposure/\n?? artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001-http-recovered/\n?? artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001-visible-beauty/\n?? artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001/\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/off-canvas.png\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/off.png\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/server.log",
+  "server": {
+    "schema": "kaminos.runtime-config.v0",
+    "hybridSplatOverlayModuleUrl": null,
+    "sam3": null,
+    "volumeBasinSessionStore": "/Users/noahlyons/.local/share/kaminos/volume-basin-drive-sessions",
+    "volumeCockpitLayoutStore": "/Users/noahlyons/.local/share/kaminos/volume-cockpit-layouts",
+    "source": {
+      "repoRoot": "/private/tmp/kaminos-sinter-local48-0930",
+      "serverPort": 18100,
+      "branch": "cc/sinter-local48-0930",
+      "commit": "fae3efef1bfd09cb67c6883f69ab6e239875854b",
+      "dirty": true
+    }
+  },
+  "browser": {
+    "executable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+    "profile": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/sinter-ignition48-aLuOye",
+    "args": [
+      "--remote-debugging-port=0",
+      "--user-data-dir=/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/sinter-ignition48-aLuOye",
+      "--no-first-run",
+      "--enable-unsafe-webgpu",
+      "--use-angle=metal",
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--window-size=1600,1100",
+      "about:blank"
+    ],
+    "headless": false,
+    "pid": 40193,
+    "port": 55150,
+    "version": {
+      "Browser": "Chrome/153.0.8010.12",
+      "Protocol-Version": "1.3",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "V8-Version": "15.3.76.4",
+      "WebKit-Version": "537.36 (@971a7443b0c9b0a9b2860529b33331b76077ec62)",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:55150/devtools/browser/a694f3bc-8674-4966-b59f-89988a1275ee"
+    },
+    "command": "/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing --remote-debugging-port=0 --user-data-dir=/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/sinter-ignition48-aLuOye --no-first-run --enable-unsafe-webgpu --use-angle=metal --disable-background-timer-throttling --disable-renderer-backgrounding --window-size=1600,1100 about:blank"
+  },
+  "error": "Error: Page.navigate: DevTools reply timed out after 180000ms\n    at Timeout.<anonymous> (file:///private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-cdp.mjs:35:37)\n    at listOnTimeout (node:internal/timers:605:17)\n    at process.processTimers (node:internal/timers:541:7)",
+  "browserExit": {
+    "code": null,
+    "signal": "SIGKILL"
+  },
+  "finishedAt": "2026-10-01T19:04:41.376Z"
+}
