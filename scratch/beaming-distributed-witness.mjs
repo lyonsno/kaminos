@@ -16,6 +16,17 @@ try {
   await fs.access(executable);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  if(process.argv.includes('--orientation-diagnosis')) {
+    // Owned browser instrumentation only; never changes the operator's tab or source.
+    await page.route('**/scene-distributed-radiance.mjs',async route=>{
+      const response=await route.fetch();const original=await response.text();
+      const needle='material.setupMaterialLightings=function(builder)';
+      assert.ok(original.includes(needle));
+      const body=original.replace(needle,'material.beamingReceived=received; window.__beamingReceiverScene=scene; '+needle);
+      report.instrumentation={url:route.request().url(),original,body};await save();
+      await route.fulfill({response,body});
+    });
+  }
   page.on('response',r=>{if(r.status()>=400){report.httpFailures.push({url:r.url(),status:r.status()});void save();}});
   page.on('pageerror',e=>{report.errors.push(String(e));void save();});
   page.on('console',m=>{if(m.type()==='error'&&!m.location().url.endsWith('/favicon.ico')){report.errors.push(`${m.location().url}: ${m.text()}`);void save();}});
@@ -78,6 +89,7 @@ try {
     }
   }
   if(process.argv.includes('--winding-check')) {
+    if(process.argv.includes('--orientation-diagnosis'))await page.evaluate(async()=>{window.__beamingThree=await import('/lib/three.webgpu.js');});
     report.phase='double-sided-orientation-comparison';await save();
     await page.selectOption('#rendering-light-mode','shared');
     await page.selectOption('#rendering-angular-samples','96');
@@ -102,6 +114,28 @@ try {
       if(originalSource)assert.deepEqual(view.source.values,originalSource,'orientation comparison requires identical raw source coefficients');
       else originalSource=view.source.values;
       await page.screenshot({path:`${out}/orientation-${name}.png`});
+      if(process.argv.includes('--orientation-diagnosis')) {
+        const fields=await page.evaluate(async()=>{
+          const read=await window.__kaminosSceneRadiance.readback();
+          return Object.fromEntries(Object.entries(read).map(([key,value])=>[key,{dimensions:value.dimensions,data:Array.from(value.data)}]));
+        });
+        await fs.writeFile(`${out}/receivers-${name}.json`,JSON.stringify(fields));
+        report.views.at(-1).materialProbe=await page.evaluate(()=>{
+          const THREE=window.__beamingThree; // assigned below through the real module
+          const rows=[];window.__beamingReceiverScene.traverseVisible(mesh=>{
+            if(!mesh.isMesh)return;for(const m of Array.isArray(mesh.material)?mesh.material:[mesh.material]){
+              if(!m.beamingReceived)continue;
+              rows.push({name:mesh.name,side:m.side,metalness:m.metalness,metalnessMap:!!m.metalnessMap,map:!!m.map,normalMap:!!m.normalMap,flatShading:m.flatShading});
+              m.outputNode=THREE.TSL.vec4(m.beamingReceived,1);m.needsUpdate=true;
+            }
+          });return rows;
+        });
+        await page.waitForTimeout(700);await page.screenshot({path:`${out}/irradiance-${name}.png`});
+        await page.evaluate(()=>window.__beamingReceiverScene.traverseVisible(mesh=>{
+          if(!mesh.isMesh)return;for(const m of Array.isArray(mesh.material)?mesh.material:[mesh.material]){if(m.beamingReceived){m.outputNode=null;m.needsUpdate=true;}}
+        }));
+        await save();
+      }
     }
   }
   const faviconOnly=report.httpFailures.length>0&&report.httpFailures.every(r=>new URL(r.url).pathname==='/favicon.ico');
