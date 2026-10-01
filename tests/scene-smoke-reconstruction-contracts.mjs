@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {buildTriangleVisibility} from '../scene-light-visibility.mjs';
 import {buildSmokeReconstructionCells,createDistributedSmokeBindings} from '../scene-smoke-reconstruction.mjs';
+import {createVolumeGather} from '../scene-volume-gather.mjs';
 
 const dimensions=[4,8,4],pitch=.5;
 const triangles=[
@@ -43,6 +44,18 @@ assert.throws(()=>buildSmokeReconstructionCells(packed,[4,0,4]),/positive smoke/
 assert.throws(()=>buildSmokeReconstructionCells({triangles:[],triangleCount:1},dimensions),/packed static/);
 const broken={...packed,triangles:packed.triangles.slice()};broken.triangles[0]=NaN;
 assert.throws(()=>buildSmokeReconstructionCells(broken,dimensions),/finite/);
+
+const capacityGeometry=buildTriangleVisibility([
+  {a:[-1,-1,-1],b:[1,3,-1],c:[1,3,1]},
+  {a:[-1,-1,-1],b:[1,3,1],c:[-1,-1,1]},
+]).packGpu();
+globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2};
+const allocated=[];
+const capacityDevice={limits:{maxStorageBufferBindingSize:128},queue:{writeBuffer(){}},
+  createBuffer(){const b={destroyed:false,destroy(){this.destroyed=true;}};allocated.push(b);return b;}};
+assert.throws(()=>createVolumeGather(capacityDevice,{geometry:capacityGeometry,receivers:[],volumeGrid:1,directions:2}),
+  /smoke reconstruction cell triangle candidates needs 192 bytes; device supports 128/);
+assert.equal(allocated.filter(b=>!b.destroyed).length,0,'candidate capacity failure must leave no undisposed GPU buffers');
 
 globalThis.GPUShaderStage={FRAGMENT:2};
 let groups=0;
