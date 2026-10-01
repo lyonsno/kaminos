@@ -1,0 +1,4757 @@
+{
+  "schema": "kaminos.structural-material.arch-volume-smoke.v1",
+  "status": "failed",
+  "phase": "route-observation",
+  "requestedUrl": "http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3",
+  "effectiveRoute": "kaminos.structural-material.arch-force-volume.v0",
+  "source": {
+    "revision": "15dd491485fb0c0481f836663c403e399c242a25",
+    "dirtyPaths": [
+      "structural-material-arch-core.js",
+      "structural-material-arch-volume-evidence.mjs",
+      "structural-material-arch-volume-smoke.mjs",
+      "structural-material-arch-volume-view.js",
+      "structural-material-arch-volume.html",
+      "tests/structural-material-arch-volume-view-contracts.mjs",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01-continued-crown-separation.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01-damaged-small-reload.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01-mobile-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01-new-contact-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01-repeated-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-braced-smoke-r1-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-coarse-braced-smoke-r1-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-construction-r1-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-construction-r2-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01-continued-crown-separation.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01-damaged-small-reload.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01-mobile-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01-new-contact-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01-repeated-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-sparse-smoke-r1-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r2-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r2-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r2-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r2-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r3-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r3-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r3-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r3-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r5-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r5-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r5-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r5-2026-10-01.json",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r7-2026-10-01-bound-at-zero-load.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r7-2026-10-01-loaded-fracture.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r7-2026-10-01-released-damage-retained.png",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-volume-repair-smoke-r7-2026-10-01.json",
+      "structural-material-arch-construction-assay.mjs",
+      "tests/structural-material-arch-volume-construction-contracts.mjs"
+    ],
+    "expectedSha256": {
+      "structural-material-arch-volume.html": "3c8c7021c6dbbf693fc0413440f26fbda78537babdf39762d25e7637d626197f",
+      "structural-material-arch-volume-view.js": "029ab0146625dcaf63af20e28e9175b9840b8b97edc04dc9bec25d83c3f61328",
+      "structural-material-arch-core.js": "9ec319b9ec5c570325904ddf2254a5081ff0479e372f942076037eb7e8730934",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json": "ed2fd8a8191bf81366028259078f2f8d90aa230f9ce98277544332b2ed0eef37",
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json": "3ed2e83bd82b433d2df6e07185d71eaac636bb8544ea9b178b03cd9d02de3028"
+    },
+    "expectedProfileSourceSha256": {
+      "intact": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+      "outer-notch": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594"
+    },
+    "served": {
+      "structural-material-arch-volume.html": {
+        "status": 200,
+        "sha256": "3c8c7021c6dbbf693fc0413440f26fbda78537babdf39762d25e7637d626197f",
+        "profileSourceSha256": null
+      },
+      "structural-material-arch-volume-view.js": {
+        "status": 200,
+        "sha256": "029ab0146625dcaf63af20e28e9175b9840b8b97edc04dc9bec25d83c3f61328",
+        "profileSourceSha256": null
+      },
+      "structural-material-arch-core.js": {
+        "status": 200,
+        "sha256": "9ec319b9ec5c570325904ddf2254a5081ff0479e372f942076037eb7e8730934",
+        "profileSourceSha256": null
+      },
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json": {
+        "status": 200,
+        "sha256": "ed2fd8a8191bf81366028259078f2f8d90aa230f9ce98277544332b2ed0eef37",
+        "profileSourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5"
+      },
+      "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json": {
+        "status": 200,
+        "sha256": "3ed2e83bd82b433d2df6e07185d71eaac636bb8544ea9b178b03cd9d02de3028",
+        "profileSourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594"
+      }
+    }
+  },
+  "browser": {
+    "requestedExecutable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+    "effectiveExecutable": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+    "version": "Google Chrome for Testing 153.0.8010.12",
+    "cleanupSignal": "SIGTERM sent to the exact owned browser child after evidence capture",
+    "exit": {
+      "code": 143,
+      "signal": null
+    }
+  },
+  "profileResponses": [
+    {
+      "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+      "status": 200
+    }
+  ],
+  "transitions": {
+    "firstInterval": {
+      "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3&force=2&load=1",
+      "title": "Stone Arch · Structural Volume",
+      "status": "Front layer · load 2.00 · interval 1",
+      "receipt": "Front-layer force advanced 0.10 proxy seconds on the existing graph · feet fixed · 0/0 new cracks · cumulative material event energy 0.0000",
+      "routeWitness": {
+        "route": "kaminos.structural-material.arch-force-volume.v0",
+        "phase": "interactive",
+        "serial": 1,
+        "camera": [
+          0.8000000000000002,
+          0.48000000000000004,
+          2.4500000000000006
+        ],
+        "selectedContact": {
+          "x": -0.05,
+          "y": 0.29,
+          "sourceProfile": null,
+          "column": null,
+          "row": null,
+          "layer": null
+        },
+        "construction": "cell-volume-braced",
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 0,
+            "maxHistoryMarkLength": 0,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 0,
+            "components": 1,
+            "travel": 0.000772900690636134,
+            "requestedForce": 2,
+            "displayTravel": 0.000772900690636134,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 0,
+            "renderedInstances": 2148,
+            "brokenBondIds": [],
+            "eventCount": 0,
+            "crackEventCount": 0,
+            "maxLiveStrain": 0.028574982583240902,
+            "loadApplication": {
+              "round": 1,
+              "elapsed": 0.1,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 0
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 2.9300896949177937e-9
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000001316756005543718
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0009094368530217999
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38799055556797,
+                "y": 358.009147927144
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.6705169449637,
+                "y": 363.64426016844857
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 0,
+            "maxHistoryMarkLength": 0,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 0,
+            "components": 1,
+            "travel": 0.0007730477423716303,
+            "requestedForce": 2,
+            "displayTravel": 0.0007730477423716303,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 0,
+            "renderedInstances": 2052,
+            "brokenBondIds": [],
+            "eventCount": 0,
+            "crackEventCount": 0,
+            "maxLiveStrain": 0.02857683825874618,
+            "loadApplication": {
+              "round": 1,
+              "elapsed": 0.1,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 0
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 2.9314466653677684e-9
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.0000013171865620884656
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0009094992893802796
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798627602992,
+                "y": 375.6824031484959
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.2779871302362,
+                "y": 383.3923625768839
+              }
+            }
+          }
+        }
+      },
+      "controls": {
+        ".force": {
+          "rect": {
+            "x": 16,
+            "y": 69,
+            "width": 310,
+            "height": 20
+          }
+        },
+        "#solve": {
+          "disabled": false,
+          "rect": {
+            "x": 338,
+            "y": 62,
+            "width": 94.25,
+            "height": 34
+          }
+        },
+        "#release": {
+          "disabled": false,
+          "rect": {
+            "x": 444.25,
+            "y": 62,
+            "width": 76.484375,
+            "height": 34
+          }
+        },
+        "#bind": {
+          "disabled": true,
+          "rect": {
+            "x": 532.734375,
+            "y": 62,
+            "width": 54.828125,
+            "height": 34
+          }
+        },
+        "#reset": {
+          "disabled": false,
+          "rect": {
+            "x": 599.5625,
+            "y": 62,
+            "width": 62.609375,
+            "height": 34
+          }
+        },
+        "#status": {
+          "rect": {
+            "x": 1064.796875,
+            "y": 70.59375,
+            "width": 184.203125,
+            "height": 16.796875
+          }
+        }
+      },
+      "canvas": {
+        "x": 16,
+        "y": 109,
+        "width": 1233,
+        "height": 639
+      },
+      "viewport": {
+        "width": 1280,
+        "height": 900,
+        "documentWidth": 1265
+      }
+    },
+    "secondApply": {
+      "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3&force=2&load=1",
+      "title": "Stone Arch · Structural Volume",
+      "status": "Front layer · load 2.00 · interval 4",
+      "receipt": "Front-layer force advanced 0.10 proxy seconds on the existing graph · feet fixed · 4/4 new cracks · cumulative material event energy 0.0008",
+      "routeWitness": {
+        "route": "kaminos.structural-material.arch-force-volume.v0",
+        "phase": "interactive",
+        "serial": 4,
+        "camera": [
+          0.8000000000000002,
+          0.48000000000000004,
+          2.4500000000000006
+        ],
+        "selectedContact": {
+          "x": -0.05,
+          "y": 0.29,
+          "sourceProfile": null,
+          "column": null,
+          "row": null,
+          "layer": null
+        },
+        "construction": "cell-volume-braced",
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.002200027453591668,
+            "requestedForce": 2,
+            "displayTravel": 0.002200027453591668,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14145",
+              "b14150",
+              "b14256",
+              "b14257",
+              "b14344",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.03593876331958929,
+            "loadApplication": {
+              "round": 4,
+              "elapsed": 0.4,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 2,
+              "addedCracks": 4
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 7.218626294045911e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000010048932800054103
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.002587549141122604
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38797228137054,
+                "y": 358.0091566557195
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.67051699704786,
+                "y": 363.64426018387536
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.002206959395146075,
+            "requestedForce": 2,
+            "displayTravel": 0.002206959395146075,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13464",
+              "b13469",
+              "b13556",
+              "b13557",
+              "b13623",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.0359694251678496,
+            "loadApplication": {
+              "round": 4,
+              "elapsed": 0.4,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 2,
+              "addedCracks": 4
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 7.285609998504318e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000010109945676732776
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0025918909486705947
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798459037776,
+                "y": 375.6824064675073
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.2779872022695,
+                "y": 383.39236259533766
+              }
+            }
+          }
+        }
+      },
+      "controls": {
+        ".force": {
+          "rect": {
+            "x": 16,
+            "y": 69,
+            "width": 310,
+            "height": 20
+          }
+        },
+        "#solve": {
+          "disabled": false,
+          "rect": {
+            "x": 338,
+            "y": 62,
+            "width": 94.25,
+            "height": 34
+          }
+        },
+        "#release": {
+          "disabled": false,
+          "rect": {
+            "x": 444.25,
+            "y": 62,
+            "width": 76.484375,
+            "height": 34
+          }
+        },
+        "#bind": {
+          "disabled": true,
+          "rect": {
+            "x": 532.734375,
+            "y": 62,
+            "width": 54.828125,
+            "height": 34
+          }
+        },
+        "#reset": {
+          "disabled": false,
+          "rect": {
+            "x": 599.5625,
+            "y": 62,
+            "width": 62.609375,
+            "height": 34
+          }
+        },
+        "#status": {
+          "rect": {
+            "x": 1062.640625,
+            "y": 70.59375,
+            "width": 186.359375,
+            "height": 16.796875
+          }
+        }
+      },
+      "canvas": {
+        "x": 16,
+        "y": 109,
+        "width": 1233,
+        "height": 639
+      },
+      "viewport": {
+        "width": 1280,
+        "height": 900,
+        "documentWidth": 1265
+      }
+    },
+    "newContactApply": {
+      "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3&force=2&load=1",
+      "title": "Stone Arch · Structural Volume",
+      "status": "Front layer · load 2.00 · interval 5",
+      "receipt": "Front-layer force advanced 0.10 proxy seconds on the existing graph · feet fixed · 0/0 new cracks · cumulative material event energy 0.0008",
+      "routeWitness": {
+        "route": "kaminos.structural-material.arch-force-volume.v0",
+        "phase": "interactive",
+        "serial": 5,
+        "camera": [
+          0.8000000000000002,
+          0.48000000000000004,
+          2.4500000000000006
+        ],
+        "selectedContact": {
+          "x": -0.21875,
+          "y": 0.1841666666666667,
+          "sourceProfile": "intact",
+          "column": 13,
+          "row": 26,
+          "layer": 2
+        },
+        "construction": "cell-volume-braced",
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.0008293245066286665,
+            "requestedForce": 2,
+            "displayTravel": 0.0008293245066286665,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14145",
+              "b14150",
+              "b14256",
+              "b14257",
+              "b14344",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.028861565902584516,
+            "loadApplication": {
+              "round": 5,
+              "elapsed": 0.5,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 3,
+              "addedCracks": 0
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 13,
+              "row": 26
+            },
+            "contactCells": [
+              {
+                "column": 13,
+                "row": 25
+              },
+              {
+                "column": 12,
+                "row": 26
+              },
+              {
+                "column": 13,
+                "row": 26
+              },
+              {
+                "column": 14,
+                "row": 26
+              },
+              {
+                "column": 13,
+                "row": 27
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 1.193454613346698e-7
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000012606731413190004
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.00223588650606277
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.40878876329907,
+                "y": 358.34550344171987
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.67051720123555,
+                "y": 363.64426024179136
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.0008742945708887665,
+            "requestedForce": 2,
+            "displayTravel": 0.0008742945708887665,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13464",
+              "b13469",
+              "b13556",
+              "b13557",
+              "b13623",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.029262589900574593,
+            "loadApplication": {
+              "round": 5,
+              "elapsed": 0.5,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 3,
+              "addedCracks": 0
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 13,
+              "row": 26
+            },
+            "contactCells": [
+              {
+                "column": 13,
+                "row": 25
+              },
+              {
+                "column": 12,
+                "row": 26
+              },
+              {
+                "column": 13,
+                "row": 26
+              },
+              {
+                "column": 14,
+                "row": 26
+              },
+              {
+                "column": 13,
+                "row": 27
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 1.211316500866448e-7
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000012738036571547203
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.002242629253401467
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0775582977421,
+                "y": 376.0879574861474
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.2779874851876,
+                "y": 383.3923626645971
+              }
+            }
+          }
+        }
+      },
+      "controls": {
+        ".force": {
+          "rect": {
+            "x": 16,
+            "y": 69,
+            "width": 310,
+            "height": 20
+          }
+        },
+        "#solve": {
+          "disabled": false,
+          "rect": {
+            "x": 338,
+            "y": 62,
+            "width": 94.25,
+            "height": 34
+          }
+        },
+        "#release": {
+          "disabled": false,
+          "rect": {
+            "x": 444.25,
+            "y": 62,
+            "width": 76.484375,
+            "height": 34
+          }
+        },
+        "#bind": {
+          "disabled": true,
+          "rect": {
+            "x": 532.734375,
+            "y": 62,
+            "width": 54.828125,
+            "height": 34
+          }
+        },
+        "#reset": {
+          "disabled": false,
+          "rect": {
+            "x": 599.5625,
+            "y": 62,
+            "width": 62.609375,
+            "height": 34
+          }
+        },
+        "#status": {
+          "rect": {
+            "x": 1062.9375,
+            "y": 70.59375,
+            "width": 186.0625,
+            "height": 16.796875
+          }
+        }
+      },
+      "canvas": {
+        "x": 16,
+        "y": 109,
+        "width": 1233,
+        "height": 639
+      },
+      "viewport": {
+        "width": 1280,
+        "height": 900,
+        "documentWidth": 1265
+      }
+    }
+  },
+  "captures": {
+    "first-subcritical-interval": {
+      "path": "/private/tmp/kaminos-burning-demon-arch-repair-source-1001/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-coarse-braced-smoke-r1-2026-10-01-first-subcritical-interval.png",
+      "sha256": "95028b65de698e42558e393a56889d67e250a73ba0363310e1bd2426fe127a35",
+      "width": 1280,
+      "height": 900,
+      "state": {
+        "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3&force=2&load=1",
+        "title": "Stone Arch · Structural Volume",
+        "status": "Front layer · load 2.00 · interval 1",
+        "receipt": "Front-layer force advanced 0.10 proxy seconds on the existing graph · feet fixed · 0/0 new cracks · cumulative material event energy 0.0000",
+        "routeWitness": {
+          "route": "kaminos.structural-material.arch-force-volume.v0",
+          "phase": "interactive",
+          "serial": 1,
+          "camera": [
+            0.8000000000000002,
+            0.48000000000000004,
+            2.4500000000000006
+          ],
+          "selectedContact": {
+            "x": -0.05,
+            "y": 0.29,
+            "sourceProfile": null,
+            "column": null,
+            "row": null,
+            "layer": null
+          },
+          "construction": "cell-volume-braced",
+          "cases": {
+            "intact": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "construction": {
+                "kind": "cell-volume-braced",
+                "referenceSpacing": 0.021245914639969936,
+                "depthCellAspect": 2,
+                "energy": "dual-volume-vector-spring-v0",
+                "modulus": 2215.3846153846157,
+                "dampingVolume": 0.000009590169802764207
+              },
+              "layers": 3,
+              "depthDiagonalBonds": 5296,
+              "totalMaterialVolume": 0.11635000000000233,
+              "historyMarkBound": 0.006011562932290479,
+              "contactDetached": false,
+              "renderedHistoryMarks": 0,
+              "maxHistoryMarkLength": 0,
+              "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+              "nodes": 2148,
+              "broken": 0,
+              "components": 1,
+              "travel": 0.000772900690636134,
+              "requestedForce": 2,
+              "displayTravel": 0.000772900690636134,
+              "displayMode": "evolving-force-pose",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0.4,
+              "forceMarkerCount": 5,
+              "connectivityEpoch": 0,
+              "renderedInstances": 2148,
+              "brokenBondIds": [],
+              "eventCount": 0,
+              "crackEventCount": 0,
+              "maxLiveStrain": 0.028574982583240902,
+              "loadApplication": {
+                "round": 1,
+                "elapsed": 0.1,
+                "duration": 0.1,
+                "steps": 5,
+                "timeStep": 0.02,
+                "damping": 8,
+                "startingEpoch": 0,
+                "addedCracks": 0
+              },
+              "evolution": {
+                "kind": "overdamped-linear-spring-implicit-euler-v0",
+                "timeStep": 0.02,
+                "damping": 8
+              },
+              "contact": {
+                "column": 21,
+                "row": 31
+              },
+              "contactCells": [
+                {
+                  "column": 21,
+                  "row": 30
+                },
+                {
+                  "column": 20,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 31
+                },
+                {
+                  "column": 22,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 32
+                }
+              ],
+              "depthMotion": [
+                {
+                  "layer": 0,
+                  "maxDisplacement": 2.9300896949177937e-9
+                },
+                {
+                  "layer": 1,
+                  "maxDisplacement": 0.000001316756005543718
+                },
+                {
+                  "layer": 2,
+                  "maxDisplacement": 0.0009094368530217999
+                }
+              ],
+              "pickTargets": {
+                "left-shoulder": {
+                  "column": 13,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 332.38799055556797,
+                  "y": 358.009147927144
+                },
+                "right-shoulder": {
+                  "column": 34,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 470.6705169449637,
+                  "y": 363.64426016844857
+                }
+              }
+            },
+            "outer-notch": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "construction": {
+                "kind": "cell-volume-braced",
+                "referenceSpacing": 0.021245914639969936,
+                "depthCellAspect": 2,
+                "energy": "dual-volume-vector-spring-v0",
+                "modulus": 2215.3846153846157,
+                "dampingVolume": 0.000009590169802764207
+              },
+              "layers": 3,
+              "depthDiagonalBonds": 5032,
+              "totalMaterialVolume": 0.11115000000000207,
+              "historyMarkBound": 0.006011562932290479,
+              "contactDetached": false,
+              "renderedHistoryMarks": 0,
+              "maxHistoryMarkLength": 0,
+              "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+              "nodes": 2052,
+              "broken": 0,
+              "components": 1,
+              "travel": 0.0007730477423716303,
+              "requestedForce": 2,
+              "displayTravel": 0.0007730477423716303,
+              "displayMode": "evolving-force-pose",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0.4,
+              "forceMarkerCount": 5,
+              "connectivityEpoch": 0,
+              "renderedInstances": 2052,
+              "brokenBondIds": [],
+              "eventCount": 0,
+              "crackEventCount": 0,
+              "maxLiveStrain": 0.02857683825874618,
+              "loadApplication": {
+                "round": 1,
+                "elapsed": 0.1,
+                "duration": 0.1,
+                "steps": 5,
+                "timeStep": 0.02,
+                "damping": 8,
+                "startingEpoch": 0,
+                "addedCracks": 0
+              },
+              "evolution": {
+                "kind": "overdamped-linear-spring-implicit-euler-v0",
+                "timeStep": 0.02,
+                "damping": 8
+              },
+              "contact": {
+                "column": 21,
+                "row": 31
+              },
+              "contactCells": [
+                {
+                  "column": 21,
+                  "row": 30
+                },
+                {
+                  "column": 20,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 31
+                },
+                {
+                  "column": 22,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 32
+                }
+              ],
+              "depthMotion": [
+                {
+                  "layer": 0,
+                  "maxDisplacement": 2.9314466653677684e-9
+                },
+                {
+                  "layer": 1,
+                  "maxDisplacement": 0.0000013171865620884656
+                },
+                {
+                  "layer": 2,
+                  "maxDisplacement": 0.0009094992893802796
+                }
+              ],
+              "pickTargets": {
+                "left-shoulder": {
+                  "column": 13,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 766.0798627602992,
+                  "y": 375.6824031484959
+                },
+                "right-shoulder": {
+                  "column": 34,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 955.2779871302362,
+                  "y": 383.3923625768839
+                }
+              }
+            }
+          }
+        },
+        "controls": {
+          ".force": {
+            "rect": {
+              "x": 16,
+              "y": 69,
+              "width": 310,
+              "height": 20
+            }
+          },
+          "#solve": {
+            "disabled": false,
+            "rect": {
+              "x": 338,
+              "y": 62,
+              "width": 94.25,
+              "height": 34
+            }
+          },
+          "#release": {
+            "disabled": false,
+            "rect": {
+              "x": 444.25,
+              "y": 62,
+              "width": 76.484375,
+              "height": 34
+            }
+          },
+          "#bind": {
+            "disabled": true,
+            "rect": {
+              "x": 532.734375,
+              "y": 62,
+              "width": 54.828125,
+              "height": 34
+            }
+          },
+          "#reset": {
+            "disabled": false,
+            "rect": {
+              "x": 599.5625,
+              "y": 62,
+              "width": 62.609375,
+              "height": 34
+            }
+          },
+          "#status": {
+            "rect": {
+              "x": 1064.796875,
+              "y": 70.59375,
+              "width": 184.203125,
+              "height": 16.796875
+            }
+          }
+        },
+        "canvas": {
+          "x": 16,
+          "y": 109,
+          "width": 1233,
+          "height": 639
+        },
+        "viewport": {
+          "width": 1280,
+          "height": 900,
+          "documentWidth": 1265
+        }
+      }
+    },
+    "loaded-fracture": {
+      "path": "/private/tmp/kaminos-burning-demon-arch-repair-source-1001/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-coarse-braced-smoke-r1-2026-10-01-loaded-fracture.png",
+      "sha256": "2d1d5e71da261ff95adbef50aeb46a456e78cbab7c6cee58b848033ff32b5c02",
+      "width": 1280,
+      "height": 900,
+      "state": {
+        "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3&force=2&load=1",
+        "title": "Stone Arch · Structural Volume",
+        "status": "Front layer · load 2.00 · interval 3",
+        "receipt": "Front-layer force advanced 0.10 proxy seconds on the existing graph · feet fixed · 6/6 new cracks · cumulative material event energy 0.0006",
+        "routeWitness": {
+          "route": "kaminos.structural-material.arch-force-volume.v0",
+          "phase": "interactive",
+          "serial": 3,
+          "camera": [
+            0.8000000000000002,
+            0.48000000000000004,
+            2.4500000000000006
+          ],
+          "selectedContact": {
+            "x": -0.05,
+            "y": 0.29,
+            "sourceProfile": null,
+            "column": null,
+            "row": null,
+            "layer": null
+          },
+          "construction": "cell-volume-braced",
+          "cases": {
+            "intact": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "construction": {
+                "kind": "cell-volume-braced",
+                "referenceSpacing": 0.021245914639969936,
+                "depthCellAspect": 2,
+                "energy": "dual-volume-vector-spring-v0",
+                "modulus": 2215.3846153846157,
+                "dampingVolume": 0.000009590169802764207
+              },
+              "layers": 3,
+              "depthDiagonalBonds": 5296,
+              "totalMaterialVolume": 0.11635000000000233,
+              "historyMarkBound": 0.006011562932290479,
+              "contactDetached": false,
+              "renderedHistoryMarks": 12,
+              "maxHistoryMarkLength": 0.006011572670755956,
+              "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+              "nodes": 2148,
+              "broken": 6,
+              "components": 1,
+              "travel": 0.0016941317678144893,
+              "requestedForce": 2,
+              "displayTravel": 0.0016941317678144893,
+              "displayMode": "evolving-force-pose",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0.4,
+              "forceMarkerCount": 5,
+              "connectivityEpoch": 2,
+              "renderedInstances": 2148,
+              "brokenBondIds": [
+                "b14026",
+                "b14029",
+                "b14150",
+                "b14346",
+                "b14347",
+                "b14417"
+              ],
+              "eventCount": 6,
+              "crackEventCount": 6,
+              "maxLiveStrain": 0.03456006834863225,
+              "loadApplication": {
+                "round": 3,
+                "elapsed": 0.30000000000000004,
+                "duration": 0.1,
+                "steps": 5,
+                "timeStep": 0.02,
+                "damping": 8,
+                "startingEpoch": 0,
+                "addedCracks": 6
+              },
+              "evolution": {
+                "kind": "overdamped-linear-spring-implicit-euler-v0",
+                "timeStep": 0.02,
+                "damping": 8
+              },
+              "contact": {
+                "column": 21,
+                "row": 31
+              },
+              "contactCells": [
+                {
+                  "column": 21,
+                  "row": 30
+                },
+                {
+                  "column": 20,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 31
+                },
+                {
+                  "column": 22,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 32
+                }
+              ],
+              "depthMotion": [
+                {
+                  "layer": 0,
+                  "maxDisplacement": 3.6782335956869684e-8
+                },
+                {
+                  "layer": 1,
+                  "maxDisplacement": 0.000006534573139470276
+                },
+                {
+                  "layer": 2,
+                  "maxDisplacement": 0.0019751191596298527
+                }
+              ],
+              "pickTargets": {
+                "left-shoulder": {
+                  "column": 13,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 332.38798621458716,
+                  "y": 358.0091500541065
+                },
+                "right-shoulder": {
+                  "column": 34,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 470.670516951354,
+                  "y": 363.6442601704066
+                }
+              }
+            },
+            "outer-notch": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "construction": {
+                "kind": "cell-volume-braced",
+                "referenceSpacing": 0.021245914639969936,
+                "depthCellAspect": 2,
+                "energy": "dual-volume-vector-spring-v0",
+                "modulus": 2215.3846153846157,
+                "dampingVolume": 0.000009590169802764207
+              },
+              "layers": 3,
+              "depthDiagonalBonds": 5032,
+              "totalMaterialVolume": 0.11115000000000207,
+              "historyMarkBound": 0.006011562932290479,
+              "contactDetached": false,
+              "renderedHistoryMarks": 12,
+              "maxHistoryMarkLength": 0.0060115752527833966,
+              "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+              "nodes": 2052,
+              "broken": 6,
+              "components": 1,
+              "travel": 0.0016974118521689695,
+              "requestedForce": 2,
+              "displayTravel": 0.0016974118521689695,
+              "displayMode": "evolving-force-pose",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0.4,
+              "forceMarkerCount": 5,
+              "connectivityEpoch": 2,
+              "renderedInstances": 2052,
+              "brokenBondIds": [
+                "b13362",
+                "b13365",
+                "b13469",
+                "b13625",
+                "b13626",
+                "b13681"
+              ],
+              "eventCount": 6,
+              "crackEventCount": 6,
+              "maxLiveStrain": 0.034620404255155585,
+              "loadApplication": {
+                "round": 3,
+                "elapsed": 0.30000000000000004,
+                "duration": 0.1,
+                "steps": 5,
+                "timeStep": 0.02,
+                "damping": 8,
+                "startingEpoch": 0,
+                "addedCracks": 6
+              },
+              "evolution": {
+                "kind": "overdamped-linear-spring-implicit-euler-v0",
+                "timeStep": 0.02,
+                "damping": 8
+              },
+              "contact": {
+                "column": 21,
+                "row": 31
+              },
+              "contactCells": [
+                {
+                  "column": 21,
+                  "row": 30
+                },
+                {
+                  "column": 20,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 31
+                },
+                {
+                  "column": 22,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 32
+                }
+              ],
+              "depthMotion": [
+                {
+                  "layer": 0,
+                  "maxDisplacement": 3.696674693388808e-8
+                },
+                {
+                  "layer": 1,
+                  "maxDisplacement": 0.000006556413407551938
+                },
+                {
+                  "layer": 2,
+                  "maxDisplacement": 0.0019771570251708955
+                }
+              ],
+              "pickTargets": {
+                "left-shoulder": {
+                  "column": 13,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 766.0798589445876,
+                  "y": 375.6824039375319
+                },
+                "right-shoulder": {
+                  "column": 34,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 955.277987139055,
+                  "y": 383.39236257922624
+                }
+              }
+            }
+          }
+        },
+        "controls": {
+          ".force": {
+            "rect": {
+              "x": 16,
+              "y": 69,
+              "width": 310,
+              "height": 20
+            }
+          },
+          "#solve": {
+            "disabled": false,
+            "rect": {
+              "x": 338,
+              "y": 62,
+              "width": 94.25,
+              "height": 34
+            }
+          },
+          "#release": {
+            "disabled": false,
+            "rect": {
+              "x": 444.25,
+              "y": 62,
+              "width": 76.484375,
+              "height": 34
+            }
+          },
+          "#bind": {
+            "disabled": true,
+            "rect": {
+              "x": 532.734375,
+              "y": 62,
+              "width": 54.828125,
+              "height": 34
+            }
+          },
+          "#reset": {
+            "disabled": false,
+            "rect": {
+              "x": 599.5625,
+              "y": 62,
+              "width": 62.609375,
+              "height": 34
+            }
+          },
+          "#status": {
+            "rect": {
+              "x": 1062.828125,
+              "y": 70.59375,
+              "width": 186.171875,
+              "height": 16.796875
+            }
+          }
+        },
+        "canvas": {
+          "x": 16,
+          "y": 109,
+          "width": 1233,
+          "height": 639
+        },
+        "viewport": {
+          "width": 1280,
+          "height": 900,
+          "documentWidth": 1265
+        }
+      }
+    },
+    "repeated-fracture": {
+      "path": "/private/tmp/kaminos-burning-demon-arch-repair-source-1001/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/arch-depth-coarse-braced-smoke-r1-2026-10-01-repeated-fracture.png",
+      "sha256": "2d09b4af2155904b80da5a75d5618213e1035a3dbfc99299ea4fa879c30d7177",
+      "width": 1280,
+      "height": 900,
+      "state": {
+        "url": "http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3&force=2&load=1",
+        "title": "Stone Arch · Structural Volume",
+        "status": "Front layer · load 2.00 · interval 4",
+        "receipt": "Front-layer force advanced 0.10 proxy seconds on the existing graph · feet fixed · 4/4 new cracks · cumulative material event energy 0.0008",
+        "routeWitness": {
+          "route": "kaminos.structural-material.arch-force-volume.v0",
+          "phase": "interactive",
+          "serial": 4,
+          "camera": [
+            0.8000000000000002,
+            0.48000000000000004,
+            2.4500000000000006
+          ],
+          "selectedContact": {
+            "x": -0.05,
+            "y": 0.29,
+            "sourceProfile": null,
+            "column": null,
+            "row": null,
+            "layer": null
+          },
+          "construction": "cell-volume-braced",
+          "cases": {
+            "intact": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "construction": {
+                "kind": "cell-volume-braced",
+                "referenceSpacing": 0.021245914639969936,
+                "depthCellAspect": 2,
+                "energy": "dual-volume-vector-spring-v0",
+                "modulus": 2215.3846153846157,
+                "dampingVolume": 0.000009590169802764207
+              },
+              "layers": 3,
+              "depthDiagonalBonds": 5296,
+              "totalMaterialVolume": 0.11635000000000233,
+              "historyMarkBound": 0.006011562932290479,
+              "contactDetached": false,
+              "renderedHistoryMarks": 20,
+              "maxHistoryMarkLength": 0.0060115752527833966,
+              "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+              "nodes": 2148,
+              "broken": 10,
+              "components": 1,
+              "travel": 0.002200027453591668,
+              "requestedForce": 2,
+              "displayTravel": 0.002200027453591668,
+              "displayMode": "evolving-force-pose",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0.4,
+              "forceMarkerCount": 5,
+              "connectivityEpoch": 3,
+              "renderedInstances": 2148,
+              "brokenBondIds": [
+                "b14026",
+                "b14029",
+                "b14145",
+                "b14150",
+                "b14256",
+                "b14257",
+                "b14344",
+                "b14346",
+                "b14347",
+                "b14417"
+              ],
+              "eventCount": 10,
+              "crackEventCount": 10,
+              "maxLiveStrain": 0.03593876331958929,
+              "loadApplication": {
+                "round": 4,
+                "elapsed": 0.4,
+                "duration": 0.1,
+                "steps": 5,
+                "timeStep": 0.02,
+                "damping": 8,
+                "startingEpoch": 2,
+                "addedCracks": 4
+              },
+              "evolution": {
+                "kind": "overdamped-linear-spring-implicit-euler-v0",
+                "timeStep": 0.02,
+                "damping": 8
+              },
+              "contact": {
+                "column": 21,
+                "row": 31
+              },
+              "contactCells": [
+                {
+                  "column": 21,
+                  "row": 30
+                },
+                {
+                  "column": 20,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 31
+                },
+                {
+                  "column": 22,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 32
+                }
+              ],
+              "depthMotion": [
+                {
+                  "layer": 0,
+                  "maxDisplacement": 7.218626294045911e-8
+                },
+                {
+                  "layer": 1,
+                  "maxDisplacement": 0.000010048932800054103
+                },
+                {
+                  "layer": 2,
+                  "maxDisplacement": 0.002587549141122604
+                }
+              ],
+              "pickTargets": {
+                "left-shoulder": {
+                  "column": 13,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 332.38797228137054,
+                  "y": 358.0091566557195
+                },
+                "right-shoulder": {
+                  "column": 34,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 470.67051699704786,
+                  "y": 363.64426018387536
+                }
+              }
+            },
+            "outer-notch": {
+              "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+              "construction": {
+                "kind": "cell-volume-braced",
+                "referenceSpacing": 0.021245914639969936,
+                "depthCellAspect": 2,
+                "energy": "dual-volume-vector-spring-v0",
+                "modulus": 2215.3846153846157,
+                "dampingVolume": 0.000009590169802764207
+              },
+              "layers": 3,
+              "depthDiagonalBonds": 5032,
+              "totalMaterialVolume": 0.11115000000000207,
+              "historyMarkBound": 0.006011562932290479,
+              "contactDetached": false,
+              "renderedHistoryMarks": 20,
+              "maxHistoryMarkLength": 0.006011572670755956,
+              "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+              "nodes": 2052,
+              "broken": 10,
+              "components": 1,
+              "travel": 0.002206959395146075,
+              "requestedForce": 2,
+              "displayTravel": 0.002206959395146075,
+              "displayMode": "evolving-force-pose",
+              "contactDepthMode": "camera-facing-surface",
+              "loadedNodeLayers": [
+                2
+              ],
+              "forcePerNode": 0.4,
+              "forceMarkerCount": 5,
+              "connectivityEpoch": 3,
+              "renderedInstances": 2052,
+              "brokenBondIds": [
+                "b13362",
+                "b13365",
+                "b13464",
+                "b13469",
+                "b13556",
+                "b13557",
+                "b13623",
+                "b13625",
+                "b13626",
+                "b13681"
+              ],
+              "eventCount": 10,
+              "crackEventCount": 10,
+              "maxLiveStrain": 0.0359694251678496,
+              "loadApplication": {
+                "round": 4,
+                "elapsed": 0.4,
+                "duration": 0.1,
+                "steps": 5,
+                "timeStep": 0.02,
+                "damping": 8,
+                "startingEpoch": 2,
+                "addedCracks": 4
+              },
+              "evolution": {
+                "kind": "overdamped-linear-spring-implicit-euler-v0",
+                "timeStep": 0.02,
+                "damping": 8
+              },
+              "contact": {
+                "column": 21,
+                "row": 31
+              },
+              "contactCells": [
+                {
+                  "column": 21,
+                  "row": 30
+                },
+                {
+                  "column": 20,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 31
+                },
+                {
+                  "column": 22,
+                  "row": 31
+                },
+                {
+                  "column": 21,
+                  "row": 32
+                }
+              ],
+              "depthMotion": [
+                {
+                  "layer": 0,
+                  "maxDisplacement": 7.285609998504318e-8
+                },
+                {
+                  "layer": 1,
+                  "maxDisplacement": 0.000010109945676732776
+                },
+                {
+                  "layer": 2,
+                  "maxDisplacement": 0.0025918909486705947
+                }
+              ],
+              "pickTargets": {
+                "left-shoulder": {
+                  "column": 13,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 766.0798459037776,
+                  "y": 375.6824064675073
+                },
+                "right-shoulder": {
+                  "column": 34,
+                  "row": 26,
+                  "layer": 2,
+                  "x": 955.2779872022695,
+                  "y": 383.39236259533766
+                }
+              }
+            }
+          }
+        },
+        "controls": {
+          ".force": {
+            "rect": {
+              "x": 16,
+              "y": 69,
+              "width": 310,
+              "height": 20
+            }
+          },
+          "#solve": {
+            "disabled": false,
+            "rect": {
+              "x": 338,
+              "y": 62,
+              "width": 94.25,
+              "height": 34
+            }
+          },
+          "#release": {
+            "disabled": false,
+            "rect": {
+              "x": 444.25,
+              "y": 62,
+              "width": 76.484375,
+              "height": 34
+            }
+          },
+          "#bind": {
+            "disabled": true,
+            "rect": {
+              "x": 532.734375,
+              "y": 62,
+              "width": 54.828125,
+              "height": 34
+            }
+          },
+          "#reset": {
+            "disabled": false,
+            "rect": {
+              "x": 599.5625,
+              "y": 62,
+              "width": 62.609375,
+              "height": 34
+            }
+          },
+          "#status": {
+            "rect": {
+              "x": 1062.640625,
+              "y": 70.59375,
+              "width": 186.359375,
+              "height": 16.796875
+            }
+          }
+        },
+        "canvas": {
+          "x": 16,
+          "y": 109,
+          "width": 1233,
+          "height": 639
+        },
+        "viewport": {
+          "width": 1280,
+          "height": 900,
+          "documentWidth": 1265
+        }
+      }
+    }
+  },
+  "runtimeExceptions": [],
+  "consoleErrors": [],
+  "lastTrustworthyEvidence": "repeated-fracture frame and DOM state captured from http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3&force=2&load=1",
+  "requestedConstruction": "cell-volume-braced",
+  "requestedLayers": 3,
+  "initialIntervals": 3,
+  "operatorInput": [
+    {
+      "kind": "click",
+      "contact": "intact-left-shoulder",
+      "target": {
+        "column": 13,
+        "row": 26,
+        "layer": 2,
+        "x": 332.38797228137054,
+        "y": 358.0091566557195
+      }
+    }
+  ],
+  "failure": {
+    "phase": "route-observation",
+    "message": "witness predicate failed: new-contact Apply adds injury on the same damaged arch",
+    "stack": "Error: witness predicate failed: new-contact Apply adds injury on the same damaged arch\n    at check (file:///private/tmp/kaminos-burning-demon-arch-repair-source-1001/structural-material-arch-volume-smoke.mjs:45:22)\n    at file:///private/tmp/kaminos-burning-demon-arch-repair-source-1001/structural-material-arch-volume-smoke.mjs:257:3"
+  },
+  "checks": [
+    {
+      "name": "requested route is the local structural-volume consumer",
+      "passed": true,
+      "observed": "http://127.0.0.1:18434/structural-material-arch-volume.html?construction=cell-volume-braced&layers=3&initialIntervals=3"
+    },
+    {
+      "name": "headless browser is independent from installed GUI Chrome",
+      "passed": true,
+      "observed": "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    {
+      "name": "browser executable is a native binary",
+      "passed": true,
+      "observed": "cffaedfe"
+    },
+    {
+      "name": "first-subcritical-interval: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "bytes": 142829,
+        "viewport": {
+          "width": 1280,
+          "height": 900,
+          "documentWidth": 1265
+        }
+      }
+    },
+    {
+      "name": "effective route identity matches the arch volume witness",
+      "passed": true,
+      "observed": "kaminos.structural-material.arch-force-volume.v0"
+    },
+    {
+      "name": "both source profiles were fetched successfully",
+      "passed": true,
+      "observed": [
+        {
+          "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:18434/artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json",
+          "status": 200
+        }
+      ]
+    },
+    {
+      "name": "served implementation and profiles match the local witness inputs",
+      "passed": true,
+      "observed": {
+        "identityIssues": [],
+        "expectedSources": {
+          "structural-material-arch-volume.html": "3c8c7021c6dbbf693fc0413440f26fbda78537babdf39762d25e7637d626197f",
+          "structural-material-arch-volume-view.js": "029ab0146625dcaf63af20e28e9175b9840b8b97edc04dc9bec25d83c3f61328",
+          "structural-material-arch-core.js": "9ec319b9ec5c570325904ddf2254a5081ff0479e372f942076037eb7e8730934",
+          "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json": "ed2fd8a8191bf81366028259078f2f8d90aa230f9ce98277544332b2ed0eef37",
+          "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json": "3ed2e83bd82b433d2df6e07185d71eaac636bb8544ea9b178b03cd9d02de3028"
+        },
+        "servedSources": {
+          "structural-material-arch-volume.html": {
+            "status": 200,
+            "sha256": "3c8c7021c6dbbf693fc0413440f26fbda78537babdf39762d25e7637d626197f",
+            "profileSourceSha256": null
+          },
+          "structural-material-arch-volume-view.js": {
+            "status": 200,
+            "sha256": "029ab0146625dcaf63af20e28e9175b9840b8b97edc04dc9bec25d83c3f61328",
+            "profileSourceSha256": null
+          },
+          "structural-material-arch-core.js": {
+            "status": 200,
+            "sha256": "9ec319b9ec5c570325904ddf2254a5081ff0479e372f942076037eb7e8730934",
+            "profileSourceSha256": null
+          },
+          "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json": {
+            "status": 200,
+            "sha256": "ed2fd8a8191bf81366028259078f2f8d90aa230f9ce98277544332b2ed0eef37",
+            "profileSourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5"
+          },
+          "artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json": {
+            "status": 200,
+            "sha256": "3ed2e83bd82b433d2df6e07185d71eaac636bb8544ea9b178b03cd9d02de3028",
+            "profileSourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594"
+          }
+        },
+        "expectedProfileSourceHashes": {
+          "intact": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "outer-notch": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594"
+        },
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 12,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 6,
+            "components": 1,
+            "travel": 0.0016941317678144893,
+            "requestedForce": 2,
+            "displayTravel": 0.0016941317678144893,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14150",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 6,
+            "crackEventCount": 6,
+            "maxLiveStrain": 0.03456006834863225,
+            "loadApplication": {
+              "round": 3,
+              "elapsed": 0.30000000000000004,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 6
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 3.6782335956869684e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000006534573139470276
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0019751191596298527
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38798621458716,
+                "y": 358.0091500541065
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.670516951354,
+                "y": 363.6442601704066
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 12,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 6,
+            "components": 1,
+            "travel": 0.0016974118521689695,
+            "requestedForce": 2,
+            "displayTravel": 0.0016974118521689695,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13469",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 6,
+            "crackEventCount": 6,
+            "maxLiveStrain": 0.034620404255155585,
+            "loadApplication": {
+              "round": 3,
+              "elapsed": 0.30000000000000004,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 6
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 3.696674693388808e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000006556413407551938
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0019771570251708955
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798589445876,
+                "y": 375.6824039375319
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.277987139055,
+                "y": 383.39236257922624
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "operator controls and status fit without overlap or viewport clipping",
+      "passed": true,
+      "observed": {
+        "controls": {
+          ".force": {
+            "rect": {
+              "x": 16,
+              "y": 69,
+              "width": 310,
+              "height": 20
+            }
+          },
+          "#solve": {
+            "disabled": false,
+            "rect": {
+              "x": 338,
+              "y": 62,
+              "width": 94.25,
+              "height": 34
+            }
+          },
+          "#release": {
+            "disabled": false,
+            "rect": {
+              "x": 444.25,
+              "y": 62,
+              "width": 76.484375,
+              "height": 34
+            }
+          },
+          "#bind": {
+            "disabled": true,
+            "rect": {
+              "x": 532.734375,
+              "y": 62,
+              "width": 54.828125,
+              "height": 34
+            }
+          },
+          "#reset": {
+            "disabled": false,
+            "rect": {
+              "x": 599.5625,
+              "y": 62,
+              "width": 62.609375,
+              "height": 34
+            }
+          },
+          "#status": {
+            "rect": {
+              "x": 1062.828125,
+              "y": 70.59375,
+              "width": 186.171875,
+              "height": 16.796875
+            }
+          }
+        },
+        "viewport": {
+          "width": 1280,
+          "height": 900,
+          "documentWidth": 1265
+        }
+      }
+    },
+    {
+      "name": "both source profiles loaded as populated front-loaded volumes on the declared solver",
+      "passed": true,
+      "observed": {
+        "intact": {
+          "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+          "construction": {
+            "kind": "cell-volume-braced",
+            "referenceSpacing": 0.021245914639969936,
+            "depthCellAspect": 2,
+            "energy": "dual-volume-vector-spring-v0",
+            "modulus": 2215.3846153846157,
+            "dampingVolume": 0.000009590169802764207
+          },
+          "layers": 3,
+          "depthDiagonalBonds": 5296,
+          "totalMaterialVolume": 0.11635000000000233,
+          "historyMarkBound": 0.006011562932290479,
+          "contactDetached": false,
+          "renderedHistoryMarks": 12,
+          "maxHistoryMarkLength": 0.006011572670755956,
+          "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "nodes": 2148,
+          "broken": 6,
+          "components": 1,
+          "travel": 0.0016941317678144893,
+          "requestedForce": 2,
+          "displayTravel": 0.0016941317678144893,
+          "displayMode": "evolving-force-pose",
+          "contactDepthMode": "camera-facing-surface",
+          "loadedNodeLayers": [
+            2
+          ],
+          "forcePerNode": 0.4,
+          "forceMarkerCount": 5,
+          "connectivityEpoch": 2,
+          "renderedInstances": 2148,
+          "brokenBondIds": [
+            "b14026",
+            "b14029",
+            "b14150",
+            "b14346",
+            "b14347",
+            "b14417"
+          ],
+          "eventCount": 6,
+          "crackEventCount": 6,
+          "maxLiveStrain": 0.03456006834863225,
+          "loadApplication": {
+            "round": 3,
+            "elapsed": 0.30000000000000004,
+            "duration": 0.1,
+            "steps": 5,
+            "timeStep": 0.02,
+            "damping": 8,
+            "startingEpoch": 0,
+            "addedCracks": 6
+          },
+          "evolution": {
+            "kind": "overdamped-linear-spring-implicit-euler-v0",
+            "timeStep": 0.02,
+            "damping": 8
+          },
+          "contact": {
+            "column": 21,
+            "row": 31
+          },
+          "contactCells": [
+            {
+              "column": 21,
+              "row": 30
+            },
+            {
+              "column": 20,
+              "row": 31
+            },
+            {
+              "column": 21,
+              "row": 31
+            },
+            {
+              "column": 22,
+              "row": 31
+            },
+            {
+              "column": 21,
+              "row": 32
+            }
+          ],
+          "depthMotion": [
+            {
+              "layer": 0,
+              "maxDisplacement": 3.6782335956869684e-8
+            },
+            {
+              "layer": 1,
+              "maxDisplacement": 0.000006534573139470276
+            },
+            {
+              "layer": 2,
+              "maxDisplacement": 0.0019751191596298527
+            }
+          ],
+          "pickTargets": {
+            "left-shoulder": {
+              "column": 13,
+              "row": 26,
+              "layer": 2,
+              "x": 332.38798621458716,
+              "y": 358.0091500541065
+            },
+            "right-shoulder": {
+              "column": 34,
+              "row": 26,
+              "layer": 2,
+              "x": 470.670516951354,
+              "y": 363.6442601704066
+            }
+          }
+        },
+        "outer-notch": {
+          "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+          "construction": {
+            "kind": "cell-volume-braced",
+            "referenceSpacing": 0.021245914639969936,
+            "depthCellAspect": 2,
+            "energy": "dual-volume-vector-spring-v0",
+            "modulus": 2215.3846153846157,
+            "dampingVolume": 0.000009590169802764207
+          },
+          "layers": 3,
+          "depthDiagonalBonds": 5032,
+          "totalMaterialVolume": 0.11115000000000207,
+          "historyMarkBound": 0.006011562932290479,
+          "contactDetached": false,
+          "renderedHistoryMarks": 12,
+          "maxHistoryMarkLength": 0.0060115752527833966,
+          "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+          "nodes": 2052,
+          "broken": 6,
+          "components": 1,
+          "travel": 0.0016974118521689695,
+          "requestedForce": 2,
+          "displayTravel": 0.0016974118521689695,
+          "displayMode": "evolving-force-pose",
+          "contactDepthMode": "camera-facing-surface",
+          "loadedNodeLayers": [
+            2
+          ],
+          "forcePerNode": 0.4,
+          "forceMarkerCount": 5,
+          "connectivityEpoch": 2,
+          "renderedInstances": 2052,
+          "brokenBondIds": [
+            "b13362",
+            "b13365",
+            "b13469",
+            "b13625",
+            "b13626",
+            "b13681"
+          ],
+          "eventCount": 6,
+          "crackEventCount": 6,
+          "maxLiveStrain": 0.034620404255155585,
+          "loadApplication": {
+            "round": 3,
+            "elapsed": 0.30000000000000004,
+            "duration": 0.1,
+            "steps": 5,
+            "timeStep": 0.02,
+            "damping": 8,
+            "startingEpoch": 0,
+            "addedCracks": 6
+          },
+          "evolution": {
+            "kind": "overdamped-linear-spring-implicit-euler-v0",
+            "timeStep": 0.02,
+            "damping": 8
+          },
+          "contact": {
+            "column": 21,
+            "row": 31
+          },
+          "contactCells": [
+            {
+              "column": 21,
+              "row": 30
+            },
+            {
+              "column": 20,
+              "row": 31
+            },
+            {
+              "column": 21,
+              "row": 31
+            },
+            {
+              "column": 22,
+              "row": 31
+            },
+            {
+              "column": 21,
+              "row": 32
+            }
+          ],
+          "depthMotion": [
+            {
+              "layer": 0,
+              "maxDisplacement": 3.696674693388808e-8
+            },
+            {
+              "layer": 1,
+              "maxDisplacement": 0.000006556413407551938
+            },
+            {
+              "layer": 2,
+              "maxDisplacement": 0.0019771570251708955
+            }
+          ],
+          "pickTargets": {
+            "left-shoulder": {
+              "column": 13,
+              "row": 26,
+              "layer": 2,
+              "x": 766.0798589445876,
+              "y": 375.6824039375319
+            },
+            "right-shoulder": {
+              "column": 34,
+              "row": 26,
+              "layer": 2,
+              "x": 955.277987139055,
+              "y": 383.39236257922624
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "effective volume construction and non-tethering history match the request",
+      "passed": true,
+      "observed": {
+        "constructionIssues": [],
+        "requestedLayers": 3,
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 12,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 6,
+            "components": 1,
+            "travel": 0.0016941317678144893,
+            "requestedForce": 2,
+            "displayTravel": 0.0016941317678144893,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14150",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 6,
+            "crackEventCount": 6,
+            "maxLiveStrain": 0.03456006834863225,
+            "loadApplication": {
+              "round": 3,
+              "elapsed": 0.30000000000000004,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 6
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 3.6782335956869684e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000006534573139470276
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0019751191596298527
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38798621458716,
+                "y": 358.0091500541065
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.670516951354,
+                "y": 363.6442601704066
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 12,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 6,
+            "components": 1,
+            "travel": 0.0016974118521689695,
+            "requestedForce": 2,
+            "displayTravel": 0.0016974118521689695,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13469",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 6,
+            "crackEventCount": 6,
+            "maxLiveStrain": 0.034620404255155585,
+            "loadApplication": {
+              "round": 3,
+              "elapsed": 0.30000000000000004,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 6
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 3.696674693388808e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000006556413407551938
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0019771570251708955
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798589445876,
+                "y": 375.6824039375319
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.277987139055,
+                "y": 383.39236257922624
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "load 2 creates damage during the declared finite force intervals",
+      "passed": true,
+      "observed": {
+        "intact": {
+          "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+          "construction": {
+            "kind": "cell-volume-braced",
+            "referenceSpacing": 0.021245914639969936,
+            "depthCellAspect": 2,
+            "energy": "dual-volume-vector-spring-v0",
+            "modulus": 2215.3846153846157,
+            "dampingVolume": 0.000009590169802764207
+          },
+          "layers": 3,
+          "depthDiagonalBonds": 5296,
+          "totalMaterialVolume": 0.11635000000000233,
+          "historyMarkBound": 0.006011562932290479,
+          "contactDetached": false,
+          "renderedHistoryMarks": 12,
+          "maxHistoryMarkLength": 0.006011572670755956,
+          "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+          "nodes": 2148,
+          "broken": 6,
+          "components": 1,
+          "travel": 0.0016941317678144893,
+          "requestedForce": 2,
+          "displayTravel": 0.0016941317678144893,
+          "displayMode": "evolving-force-pose",
+          "contactDepthMode": "camera-facing-surface",
+          "loadedNodeLayers": [
+            2
+          ],
+          "forcePerNode": 0.4,
+          "forceMarkerCount": 5,
+          "connectivityEpoch": 2,
+          "renderedInstances": 2148,
+          "brokenBondIds": [
+            "b14026",
+            "b14029",
+            "b14150",
+            "b14346",
+            "b14347",
+            "b14417"
+          ],
+          "eventCount": 6,
+          "crackEventCount": 6,
+          "maxLiveStrain": 0.03456006834863225,
+          "loadApplication": {
+            "round": 3,
+            "elapsed": 0.30000000000000004,
+            "duration": 0.1,
+            "steps": 5,
+            "timeStep": 0.02,
+            "damping": 8,
+            "startingEpoch": 0,
+            "addedCracks": 6
+          },
+          "evolution": {
+            "kind": "overdamped-linear-spring-implicit-euler-v0",
+            "timeStep": 0.02,
+            "damping": 8
+          },
+          "contact": {
+            "column": 21,
+            "row": 31
+          },
+          "contactCells": [
+            {
+              "column": 21,
+              "row": 30
+            },
+            {
+              "column": 20,
+              "row": 31
+            },
+            {
+              "column": 21,
+              "row": 31
+            },
+            {
+              "column": 22,
+              "row": 31
+            },
+            {
+              "column": 21,
+              "row": 32
+            }
+          ],
+          "depthMotion": [
+            {
+              "layer": 0,
+              "maxDisplacement": 3.6782335956869684e-8
+            },
+            {
+              "layer": 1,
+              "maxDisplacement": 0.000006534573139470276
+            },
+            {
+              "layer": 2,
+              "maxDisplacement": 0.0019751191596298527
+            }
+          ],
+          "pickTargets": {
+            "left-shoulder": {
+              "column": 13,
+              "row": 26,
+              "layer": 2,
+              "x": 332.38798621458716,
+              "y": 358.0091500541065
+            },
+            "right-shoulder": {
+              "column": 34,
+              "row": 26,
+              "layer": 2,
+              "x": 470.670516951354,
+              "y": 363.6442601704066
+            }
+          }
+        },
+        "outer-notch": {
+          "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+          "construction": {
+            "kind": "cell-volume-braced",
+            "referenceSpacing": 0.021245914639969936,
+            "depthCellAspect": 2,
+            "energy": "dual-volume-vector-spring-v0",
+            "modulus": 2215.3846153846157,
+            "dampingVolume": 0.000009590169802764207
+          },
+          "layers": 3,
+          "depthDiagonalBonds": 5032,
+          "totalMaterialVolume": 0.11115000000000207,
+          "historyMarkBound": 0.006011562932290479,
+          "contactDetached": false,
+          "renderedHistoryMarks": 12,
+          "maxHistoryMarkLength": 0.0060115752527833966,
+          "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+          "nodes": 2052,
+          "broken": 6,
+          "components": 1,
+          "travel": 0.0016974118521689695,
+          "requestedForce": 2,
+          "displayTravel": 0.0016974118521689695,
+          "displayMode": "evolving-force-pose",
+          "contactDepthMode": "camera-facing-surface",
+          "loadedNodeLayers": [
+            2
+          ],
+          "forcePerNode": 0.4,
+          "forceMarkerCount": 5,
+          "connectivityEpoch": 2,
+          "renderedInstances": 2052,
+          "brokenBondIds": [
+            "b13362",
+            "b13365",
+            "b13469",
+            "b13625",
+            "b13626",
+            "b13681"
+          ],
+          "eventCount": 6,
+          "crackEventCount": 6,
+          "maxLiveStrain": 0.034620404255155585,
+          "loadApplication": {
+            "round": 3,
+            "elapsed": 0.30000000000000004,
+            "duration": 0.1,
+            "steps": 5,
+            "timeStep": 0.02,
+            "damping": 8,
+            "startingEpoch": 0,
+            "addedCracks": 6
+          },
+          "evolution": {
+            "kind": "overdamped-linear-spring-implicit-euler-v0",
+            "timeStep": 0.02,
+            "damping": 8
+          },
+          "contact": {
+            "column": 21,
+            "row": 31
+          },
+          "contactCells": [
+            {
+              "column": 21,
+              "row": 30
+            },
+            {
+              "column": 20,
+              "row": 31
+            },
+            {
+              "column": 21,
+              "row": 31
+            },
+            {
+              "column": 22,
+              "row": 31
+            },
+            {
+              "column": 21,
+              "row": 32
+            }
+          ],
+          "depthMotion": [
+            {
+              "layer": 0,
+              "maxDisplacement": 3.696674693388808e-8
+            },
+            {
+              "layer": 1,
+              "maxDisplacement": 0.000006556413407551938
+            },
+            {
+              "layer": 2,
+              "maxDisplacement": 0.0019771570251708955
+            }
+          ],
+          "pickTargets": {
+            "left-shoulder": {
+              "column": 13,
+              "row": 26,
+              "layer": 2,
+              "x": 766.0798589445876,
+              "y": 375.6824039375319
+            },
+            "right-shoulder": {
+              "column": 34,
+              "row": 26,
+              "layer": 2,
+              "x": 955.277987139055,
+              "y": 383.39236257922624
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Release is available after the loaded fracture witness",
+      "passed": true,
+      "observed": {
+        "disabled": false,
+        "rect": {
+          "x": 444.25,
+          "y": 62,
+          "width": 76.484375,
+          "height": 34
+        }
+      }
+    },
+    {
+      "name": "loaded-fracture: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "bytes": 144503,
+        "viewport": {
+          "width": 1280,
+          "height": 900,
+          "documentWidth": 1265
+        }
+      }
+    },
+    {
+      "name": "direct Solve to Bind is unavailable before Release",
+      "passed": true,
+      "observed": {
+        "controls": {
+          "disabled": true,
+          "rect": {
+            "x": 532.734375,
+            "y": 62,
+            "width": 54.828125,
+            "height": 34
+          }
+        },
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 12,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 6,
+            "components": 1,
+            "travel": 0.0016941317678144893,
+            "requestedForce": 2,
+            "displayTravel": 0.0016941317678144893,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14150",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 6,
+            "crackEventCount": 6,
+            "maxLiveStrain": 0.03456006834863225,
+            "loadApplication": {
+              "round": 3,
+              "elapsed": 0.30000000000000004,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 6
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 3.6782335956869684e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000006534573139470276
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0019751191596298527
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38798621458716,
+                "y": 358.0091500541065
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.670516951354,
+                "y": 363.6442601704066
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 12,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 6,
+            "components": 1,
+            "travel": 0.0016974118521689695,
+            "requestedForce": 2,
+            "displayTravel": 0.0016974118521689695,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13469",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 6,
+            "crackEventCount": 6,
+            "maxLiveStrain": 0.034620404255155585,
+            "loadApplication": {
+              "round": 3,
+              "elapsed": 0.30000000000000004,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 6
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 3.696674693388808e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000006556413407551938
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0019771570251708955
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798589445876,
+                "y": 375.6824039375319
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.277987139055,
+                "y": 383.39236257922624
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "second Apply adds fractures while retaining the first injury",
+      "passed": true,
+      "observed": {
+        "secondIssues": [],
+        "before": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 12,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 6,
+            "components": 1,
+            "travel": 0.0016941317678144893,
+            "requestedForce": 2,
+            "displayTravel": 0.0016941317678144893,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14150",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 6,
+            "crackEventCount": 6,
+            "maxLiveStrain": 0.03456006834863225,
+            "loadApplication": {
+              "round": 3,
+              "elapsed": 0.30000000000000004,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 6
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 3.6782335956869684e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000006534573139470276
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0019751191596298527
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38798621458716,
+                "y": 358.0091500541065
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.670516951354,
+                "y": 363.6442601704066
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 12,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 6,
+            "components": 1,
+            "travel": 0.0016974118521689695,
+            "requestedForce": 2,
+            "displayTravel": 0.0016974118521689695,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 2,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13469",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 6,
+            "crackEventCount": 6,
+            "maxLiveStrain": 0.034620404255155585,
+            "loadApplication": {
+              "round": 3,
+              "elapsed": 0.30000000000000004,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 0,
+              "addedCracks": 6
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 3.696674693388808e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000006556413407551938
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0019771570251708955
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798589445876,
+                "y": 375.6824039375319
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.277987139055,
+                "y": 383.39236257922624
+              }
+            }
+          }
+        },
+        "after": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.002200027453591668,
+            "requestedForce": 2,
+            "displayTravel": 0.002200027453591668,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14145",
+              "b14150",
+              "b14256",
+              "b14257",
+              "b14344",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.03593876331958929,
+            "loadApplication": {
+              "round": 4,
+              "elapsed": 0.4,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 2,
+              "addedCracks": 4
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 7.218626294045911e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000010048932800054103
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.002587549141122604
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38797228137054,
+                "y": 358.0091566557195
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.67051699704786,
+                "y": 363.64426018387536
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.002206959395146075,
+            "requestedForce": 2,
+            "displayTravel": 0.002206959395146075,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13464",
+              "b13469",
+              "b13556",
+              "b13557",
+              "b13623",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.0359694251678496,
+            "loadApplication": {
+              "round": 4,
+              "elapsed": 0.4,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 2,
+              "addedCracks": 4
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 7.285609998504318e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000010109945676732776
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0025918909486705947
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798459037776,
+                "y": 375.6824064675073
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.2779872022695,
+                "y": 383.39236259533766
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "repeated-fracture: screenshot matches viewport",
+      "passed": true,
+      "observed": {
+        "bytes": 144630,
+        "viewport": {
+          "width": 1280,
+          "height": 900,
+          "documentWidth": 1265
+        }
+      }
+    },
+    {
+      "name": "visible front-face click selects the intended structural cell without changing damage",
+      "passed": true,
+      "observed": {
+        "target": {
+          "column": 13,
+          "row": 26,
+          "layer": 2,
+          "x": 332.38797228137054,
+          "y": 358.0091566557195
+        },
+        "selectedContact": {
+          "x": -0.21875,
+          "y": 0.1841666666666667,
+          "sourceProfile": "intact",
+          "column": 13,
+          "row": 26,
+          "layer": 2
+        },
+        "cases": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.002200027453591668,
+            "requestedForce": 2,
+            "displayTravel": 0.002200027453591668,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14145",
+              "b14150",
+              "b14256",
+              "b14257",
+              "b14344",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.03593876331958929,
+            "loadApplication": {
+              "round": 4,
+              "elapsed": 0.4,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 2,
+              "addedCracks": 4
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 7.218626294045911e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000010048932800054103
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.002587549141122604
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38797228137054,
+                "y": 358.0091566557195
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.67051699704786,
+                "y": 363.64426018387536
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.002206959395146075,
+            "requestedForce": 2,
+            "displayTravel": 0.002206959395146075,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13464",
+              "b13469",
+              "b13556",
+              "b13557",
+              "b13623",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.0359694251678496,
+            "loadApplication": {
+              "round": 4,
+              "elapsed": 0.4,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 2,
+              "addedCracks": 4
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 7.285609998504318e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000010109945676732776
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0025918909486705947
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798459037776,
+                "y": 375.6824064675073
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.2779872022695,
+                "y": 383.39236259533766
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "new-contact Apply adds injury on the same damaged arch",
+      "passed": false,
+      "observed": {
+        "contactIssues": [
+          "no new persistent fracture event: intact",
+          "no new persistent fracture event: outer-notch"
+        ],
+        "before": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.002200027453591668,
+            "requestedForce": 2,
+            "displayTravel": 0.002200027453591668,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14145",
+              "b14150",
+              "b14256",
+              "b14257",
+              "b14344",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.03593876331958929,
+            "loadApplication": {
+              "round": 4,
+              "elapsed": 0.4,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 2,
+              "addedCracks": 4
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 7.218626294045911e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000010048932800054103
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.002587549141122604
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.38797228137054,
+                "y": 358.0091566557195
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.67051699704786,
+                "y": 363.64426018387536
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.002206959395146075,
+            "requestedForce": 2,
+            "displayTravel": 0.002206959395146075,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13464",
+              "b13469",
+              "b13556",
+              "b13557",
+              "b13623",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.0359694251678496,
+            "loadApplication": {
+              "round": 4,
+              "elapsed": 0.4,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 2,
+              "addedCracks": 4
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 21,
+              "row": 31
+            },
+            "contactCells": [
+              {
+                "column": 21,
+                "row": 30
+              },
+              {
+                "column": 20,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 31
+              },
+              {
+                "column": 22,
+                "row": 31
+              },
+              {
+                "column": 21,
+                "row": 32
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 7.285609998504318e-8
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000010109945676732776
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.0025918909486705947
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0798459037776,
+                "y": 375.6824064675073
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.2779872022695,
+                "y": 383.39236259533766
+              }
+            }
+          }
+        },
+        "after": {
+          "intact": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5296,
+            "totalMaterialVolume": 0.11635000000000233,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.006011572670755956,
+            "sourceSha256": "c65a3cf3dc3b5a053a9a5f25c1f652d7ccd94c13236077220ce42400b765cad5",
+            "nodes": 2148,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.0008293245066286665,
+            "requestedForce": 2,
+            "displayTravel": 0.0008293245066286665,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2148,
+            "brokenBondIds": [
+              "b14026",
+              "b14029",
+              "b14145",
+              "b14150",
+              "b14256",
+              "b14257",
+              "b14344",
+              "b14346",
+              "b14347",
+              "b14417"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.028861565902584516,
+            "loadApplication": {
+              "round": 5,
+              "elapsed": 0.5,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 3,
+              "addedCracks": 0
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 13,
+              "row": 26
+            },
+            "contactCells": [
+              {
+                "column": 13,
+                "row": 25
+              },
+              {
+                "column": 12,
+                "row": 26
+              },
+              {
+                "column": 13,
+                "row": 26
+              },
+              {
+                "column": 14,
+                "row": 26
+              },
+              {
+                "column": 13,
+                "row": 27
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 1.193454613346698e-7
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000012606731413190004
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.00223588650606277
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 332.40878876329907,
+                "y": 358.34550344171987
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 470.67051720123555,
+                "y": 363.64426024179136
+              }
+            }
+          },
+          "outer-notch": {
+            "solverAuthority": "shear-regularized-linear-spring-pcg-v0",
+            "construction": {
+              "kind": "cell-volume-braced",
+              "referenceSpacing": 0.021245914639969936,
+              "depthCellAspect": 2,
+              "energy": "dual-volume-vector-spring-v0",
+              "modulus": 2215.3846153846157,
+              "dampingVolume": 0.000009590169802764207
+            },
+            "layers": 3,
+            "depthDiagonalBonds": 5032,
+            "totalMaterialVolume": 0.11115000000000207,
+            "historyMarkBound": 0.006011562932290479,
+            "contactDetached": false,
+            "renderedHistoryMarks": 20,
+            "maxHistoryMarkLength": 0.0060115752527833966,
+            "sourceSha256": "8072e0226b19283ec26919ddf6da02ea71036423479ad7336272eaf427ccf594",
+            "nodes": 2052,
+            "broken": 10,
+            "components": 1,
+            "travel": 0.0008742945708887665,
+            "requestedForce": 2,
+            "displayTravel": 0.0008742945708887665,
+            "displayMode": "evolving-force-pose",
+            "contactDepthMode": "camera-facing-surface",
+            "loadedNodeLayers": [
+              2
+            ],
+            "forcePerNode": 0.4,
+            "forceMarkerCount": 5,
+            "connectivityEpoch": 3,
+            "renderedInstances": 2052,
+            "brokenBondIds": [
+              "b13362",
+              "b13365",
+              "b13464",
+              "b13469",
+              "b13556",
+              "b13557",
+              "b13623",
+              "b13625",
+              "b13626",
+              "b13681"
+            ],
+            "eventCount": 10,
+            "crackEventCount": 10,
+            "maxLiveStrain": 0.029262589900574593,
+            "loadApplication": {
+              "round": 5,
+              "elapsed": 0.5,
+              "duration": 0.1,
+              "steps": 5,
+              "timeStep": 0.02,
+              "damping": 8,
+              "startingEpoch": 3,
+              "addedCracks": 0
+            },
+            "evolution": {
+              "kind": "overdamped-linear-spring-implicit-euler-v0",
+              "timeStep": 0.02,
+              "damping": 8
+            },
+            "contact": {
+              "column": 13,
+              "row": 26
+            },
+            "contactCells": [
+              {
+                "column": 13,
+                "row": 25
+              },
+              {
+                "column": 12,
+                "row": 26
+              },
+              {
+                "column": 13,
+                "row": 26
+              },
+              {
+                "column": 14,
+                "row": 26
+              },
+              {
+                "column": 13,
+                "row": 27
+              }
+            ],
+            "depthMotion": [
+              {
+                "layer": 0,
+                "maxDisplacement": 1.211316500866448e-7
+              },
+              {
+                "layer": 1,
+                "maxDisplacement": 0.000012738036571547203
+              },
+              {
+                "layer": 2,
+                "maxDisplacement": 0.002242629253401467
+              }
+            ],
+            "pickTargets": {
+              "left-shoulder": {
+                "column": 13,
+                "row": 26,
+                "layer": 2,
+                "x": 766.0775582977421,
+                "y": 376.0879574861474
+              },
+              "right-shoulder": {
+                "column": 34,
+                "row": 26,
+                "layer": 2,
+                "x": 955.2779874851876,
+                "y": 383.3923626645971
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
