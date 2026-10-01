@@ -27,6 +27,15 @@ function fixture(castShadow=true) {
   return {mesh,mount,geometry,material,uploads,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='sides') {
+  const f=fixture();f.mesh.material.side=THREE.DoubleSide;f.prepare();
+  assert.equal(f.uploads[0][3],2,'double-sided receiver requests separate opaque hemispheres');
+  assert.equal(f.mount.debugState().surfaceReceivers,3,'two-sided receiving must reuse the full-sphere visibility cache');
+  f.mesh.material.side=THREE.BackSide;f.mesh.material.needsUpdate=true;f.prepare();
+  assert.equal(f.uploads.at(-1)[3],2,'back-only material also computes the opposite receiving hemisphere');
+  assert.equal(f.uploads.at(-1)[6],1,'receiving basis stays aligned with the authored normal');
+  f.mount.dispose();assert.equal(f.mesh.geometry,f.geometry);
+}
 if(!selected||selected==='edits') {
   const f=fixture();f.prepare();
   f.mesh.geometry.attributes.position.setX(0,.25);f.mesh.geometry.attributes.position.needsUpdate=true;

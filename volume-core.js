@@ -17627,8 +17627,14 @@ export function createKaminosVolumePrototype({
     }
     if (uniforms[368] > 1.5) {
       if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
-      emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
-      state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
+      if(distributedGroup) {
+        state.physicalColor.incidentLight={model:'distributed-volume-direct-radiance-v0',source:'same-generation-raw-emission-extinction',
+          support:'full-height-geometry-visible-receivers',generation:distributedFrame.generation,frame:distributedFrame.frame,
+          receivers:distributedFrame.volumeReceivers,directions:distributedFrame.directions,legacyDispatched:false};
+      } else {
+        emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
+        state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits',legacyDispatched:true };
+      }
     }
     if (uniforms[368] <= 1.5 || !sceneVolumeSourceRequested) sceneVolumeSource?.invalidate('inactive-source-route');
     const pass = encoder.beginRenderPass({

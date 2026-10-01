@@ -5,7 +5,7 @@ import {buildTriangleVisibility} from './scene-light-visibility.mjs';
 import {createVolumeGather} from './scene-volume-gather.mjs';
 
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16}) {
-  let gain=1,handle=null,revision=null,frame=null,external=null,disposed=false;
+  let gain=1,smokeMode='distributed',handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
   const attributeIds=new WeakMap();let nextAttributeId=0;
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
@@ -45,6 +45,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     }
     originals.clear();
     if(external){delete renderer.backend.get(external).texture;external.dispose();external=null;}
+    if(externalBack){delete renderer.backend.get(externalBack).texture;externalBack.dispose();externalBack=null;}
     handle?.destroy();handle=null;
   }
   function build() {
@@ -65,7 +66,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       for(let i=0;i<vertices.count;i++) {
         position.fromBufferAttribute(vertices,i).applyMatrix4(mesh.matrixWorld);
         normal.fromBufferAttribute(normals,i).applyMatrix3(normalMatrix).normalize();
-        ids[i]=receivers.length;receivers.push({position:position.toArray(),normal:normal.toArray()});
+        ids[i]=receivers.length;receivers.push({position:position.toArray(),normal:normal.toArray(),twoSided:materialList.some(m=>m.side!==THREE.FrontSide)});
       }
       const clone=geometry.clone();clone.setAttribute('sceneReceiverIndex',new THREE.BufferAttribute(ids,1));
       originals.set(mesh,{material:mesh.material,geometry,clone,receiverAttribute:geometry.getAttribute('sceneReceiverIndex')});mesh.geometry=clone;
@@ -75,14 +76,25 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     external.image={width:handle.surfaceDimensions[0],height:handle.surfaceDimensions[1]};
     external.format=THREE.RGBAFormat;external.type=THREE.FloatType;external.colorSpace=THREE.NoColorSpace;
     external.minFilter=external.magFilter=THREE.NearestFilter;external.generateMipmaps=false;
-    const {attribute,textureLoad,ivec2,varying}=THREE.TSL;
+    externalBack=new THREE.ExternalTexture(handle.surfaceBack);
+    externalBack.image={...external.image};externalBack.format=external.format;externalBack.type=external.type;externalBack.colorSpace=external.colorSpace;
+    externalBack.minFilter=externalBack.magFilter=THREE.NearestFilter;externalBack.generateMipmaps=false;
+    const {attribute,textureLoad,ivec2,varying,transformNormalToView,positionViewDirection}=THREE.TSL;
     const id=attribute('sceneReceiverIndex','float');
     const irradiance=varying(textureLoad(external,ivec2(id.mod(handle.surfaceDimensions[0]),id.div(handle.surfaceDimensions[0]).floor())).rgb,'distributedSurfaceIrradiance');
+    const backIrradiance=varying(textureLoad(externalBack,ivec2(id.mod(handle.surfaceDimensions[0]),id.div(handle.surfaceDimensions[0]).floor())).rgb,'distributedBackSurfaceIrradiance');
+    // Choose the camera-facing normal hemisphere, independently of winding.
+    // This retains two opaque sides even for inconsistent generated winding;
+    // front/back radiance is never added together. Normal maps remain material
+    // detail rather than changing the cached receiving hemisphere.
+    const receivingNormal=varying(transformNormalToView(attribute('normal','vec3')),'distributedReceivingNormal');
+    const visibleIrradiance=receivingNormal.dot(positionViewDirection).greaterThanEqual(0).select(irradiance,backIrradiance);
     for(const [mesh,row] of originals) {
       const convert=original=>{
         const material=cloneSceneRadianceMaterial(renderer.library,original);
         const setup=material.setupMaterialLightings;
-        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(irradiance)];};
+        const received=original.side===THREE.DoubleSide?visibleIrradiance:original.side===THREE.BackSide?backIrradiance:irradiance;
+        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(received)];};
         return material;
       };
       row.converted=Array.isArray(row.material)?row.material.map(convert):convert(row.material);
@@ -108,16 +120,17 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   function prepare(field) {
     if(disposed)throw new Error('distributed lighting disposed');
     if(!handle||receiverRevision()!==revision)build();
-    frame=handle.encode(field.source,{gain});
-    prototype.setSceneDistributedLightFrame({texture:handle.smoke,...frame});
+    frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed'});
+    prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:handle.smoke,...frame}:null);
     status.status='submitted-awaiting-presentation';
   }
   prototype.setSceneMediumSource(null);
   prototype.setSceneSourceFrameConsumer(prepare);
   return {
     setGain(value){if(!Number.isFinite(value)||value<0)throw new Error('nonnegative light gain required');gain=value;},
+    setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke illumination mode');smokeMode=value;},
     setDirections(value){lightingCount(value);directions=value;status.directions=value;revision=null;},
-    debugState(){return {...status,gain,frame,display:'mesh and flame retain separate camera transforms'};},
+    debugState(){return {...status,gain,smokeMode,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
     canRender(){return !disposed&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
     dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();},
