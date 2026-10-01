@@ -201,7 +201,7 @@ export function createSLatDecoderKernelOps(runtime) {
       while (true) {
         const groups = Math.ceil(n / 256), prefix = allocate('scan-prefix', [n], 'u32'), sums = allocate('scan-sums', [groups], 'u32');
         levels.push({ prefix, sums, n });
-        await dispatch('decoder-child-scan', slatDecoderScanShader(n), [input, prefix, sums], groups, invocation);
+        await dispatch('decoder-child-scan', slatDecoderScanShader(n), [input, prefix, sums], groups, invocation, 1);
         if (groups === 1) break;input = sums;n = groups;
       }
       for (let i = levels.length - 2; i >= 0; i--) await dispatch('decoder-child-scan-add', slatDecoderScanAddShader(levels[i].n),

@@ -1,7 +1,7 @@
 import {createWebGpuInferenceSession,WEBGPU_BUFFER_USAGE as U} from '../../webgpu-inference-kit/src/core.js';
 import {createTrellisSLatFlowAdapter,SLAT_FLOW_ROUTE} from './slat-flow.js';
 import {createTrellisOccupancyCoordinatesAdapter,buildOccupancyCoordinatesPlan} from './occupancy-coordinates.js';
-import {validateSLatFlowFixture,compareFlowTensor} from './sparse-flow-witness-checks.js';
+import {validateSLatFlowFixture,compareFlowTensor,slatWitnessRequiredLimits} from './sparse-flow-witness-checks.js';
 import {comparePrefixTensor,validateNativePrefixBackend,prefixAdapterName} from './sparse-prefix-witness-checks.js';
 import {compareOccupancyCoordinates} from './occupancy-coordinate-witness-checks.js';
 import {preserveSamplerWitnessFailure} from './sparse-sampler-witness-checks.js';
@@ -29,10 +29,8 @@ export async function runSparseSLatWitness(expectedSha){
   report.phase='native-device';const adapter=await navigator.gpu?.requestAdapter();if(!adapter)throw Error('WebGPU unavailable');
   report.backend={vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,
    device:adapter.info.device,isFallbackAdapter:adapter.info.isFallbackAdapter??adapter.isFallbackAdapter};validateNativePrefixBackend(report.backend);
-  const binding=Math.max(134217728,plan.tokenRows*plan.tokenRows*12*4,plan.flow.block.hiddenBytes);
-  report.requiredLimits={maxStorageBufferBindingSize:binding,maxBufferSize:Math.max(268435456,binding)};
   report.adapterLimits={maxStorageBufferBindingSize:adapter.limits.maxStorageBufferBindingSize,maxBufferSize:adapter.limits.maxBufferSize};
-  if(binding>adapter.limits.maxStorageBufferBindingSize)throw Error('complete source geometry exceeds actual adapter binding capacity');
+  report.requiredLimits=slatWitnessRequiredLimits(plan,report.adapterLimits);
   device=await adapter.requestDevice({requiredLimits:report.requiredLimits});
   report.deviceLimits={maxStorageBufferBindingSize:device.limits.maxStorageBufferBindingSize,maxBufferSize:device.limits.maxBufferSize,
    maxComputeWorkgroupsPerDimension:device.limits.maxComputeWorkgroupsPerDimension};

@@ -54,6 +54,13 @@ assert.equal(result.metadataReadbackBytes, 12);
 assert.equal(result.convolutionsExecuted, 3);
 assert.equal(result.convNeXtBlocksExecuted, 1);
 assert.ok(h.runs.every(r => r.options.schedulerInvocation === invocation));
+for (const { kernel, options } of h.runs) {
+  for (const declaration of kernel.code.matchAll(/@binding\((\d+)\)\s+var<storage,(read_write|read)>/g)) {
+    assert.equal(kernel.bindings[Number(declaration[1])].access,
+      declaration[2] === 'read_write' ? 'storage' : 'read-only-storage',
+      `${options.stage}: shader access and actual WebGPU binding layout must agree for every buffer.`);
+  }
+}
 for (const r of h.runs) if (r.options.stage === 'decoder-silu') {
   assert.equal(new Set(r.kernel.bindings.map(b => b.resource.buffer)).size, r.kernel.bindings.length,
     'In-place SiLU must have one writable storage binding, not alias it through a second read-only binding.');

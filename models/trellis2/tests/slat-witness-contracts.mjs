@@ -5,6 +5,22 @@ const imported = await import('../sparse-flow-witness-checks.js');
 assert.equal(typeof imported.validateSLatFlowFixture,'function','Source-identified variable-row SLat forward must have complete reference admission.');
 const { validateSLatFlowFixture, SLAT_REFERENCE_ROUTE } = imported;
 const { buildSLatFlowPlan } = await import('../slat-flow.js');
+assert.equal(typeof imported.slatWitnessRequiredLimits, 'function',
+ 'SLat witness capacity must follow actual reusable per-head buffers, not twelve simultaneous score buffers.');
+const largePlan = buildSLatFlowPlan({ tokenRows: 10000 });
+const adapterLimits = { maxStorageBufferBindingSize: 4294967292, maxBufferSize: 4294967292 };
+assert.ok(largePlan.tokenRows ** 2 * 12 * 4 > adapterLimits.maxStorageBufferBindingSize,
+ 'Regression must expose the old false rejection.');
+assert.deepEqual(imported.slatWitnessRequiredLimits(largePlan, adapterLimits),
+ { maxStorageBufferBindingSize: 400000000, maxBufferSize: 400000000 });
+assert.throws(() => imported.slatWitnessRequiredLimits(largePlan,
+ { ...adapterLimits, maxStorageBufferBindingSize: 399999996 }), /storage binding capacity/);
+assert.throws(() => imported.slatWitnessRequiredLimits(largePlan,
+ { ...adapterLimits, maxBufferSize: 399999996 }), /buffer capacity/);
+assert.deepEqual(imported.slatWitnessRequiredLimits(buildSLatFlowPlan({ tokenRows: 1728 }), adapterLimits),
+ { maxStorageBufferBindingSize: 134217728, maxBufferSize: 268435456 });
+assert.equal(imported.slatWitnessRequiredLimits(buildSLatFlowPlan({ tokenRows: 10000, contextRows: 12000 }), adapterLimits)
+ .maxStorageBufferBindingSize, 480000000, 'Cross attention may be wider than self attention.');
 const { sparseBlockWeightShapes } = await import('../sparse-block.js');
 const hash='a'.repeat(64), shape={tokenRows:1728,mode:'shape',channels:1536,heads:12,contextChannels:1024,contextRows:1029,
  hidden:8192,frequencyDim:256,numBlocks:30};

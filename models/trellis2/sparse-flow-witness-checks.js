@@ -6,6 +6,29 @@ import { buildSLatFlowPlan } from './slat-flow.js';
 export const FLOW_REFERENCE_ROUTE = 'pinned-MLX-GPU-full-sparse-flow/fast-SDPA/two-pass-LN/mlx-sum-QK/real-RoPE/source-BF16-GELU/F32-terminal';
 export const SLAT_REFERENCE_ROUTE = 'pinned-MLX-GPU-full-SLat/fast-SDPA/two-pass-LN/mlx-sum-QK/real-RoPE/source-BF16-GELU/F32-terminal';
 
+export function slatWitnessRequiredLimits(plan, adapterLimits) {
+  const { block: b, prefix: p } = plan.flow, c = b.channels;
+  // Actual storage shapes in the prefix, shared block workspace, terminal
+  // head and coordinate producer. Heads serialize over one score buffer.
+  const shapes = [plan.inputShape, plan.outputShape, plan.coordinateShape, plan.phasesShape,
+    p.inputShape, p.projectedShape, p.modulationShape, [p.frequencyDim], [p.channels],
+    [c, p.inChannels], [c, p.frequencyDim], [c, c], [6 * c, c],
+    [b.rows, 3 * c], [b.rows, b.hidden], [b.rows, Math.max(b.rows, b.contextRows)],
+    [b.contextRows, b.contextChannels], [b.contextRows, 2 * c], [65536],
+    [plan.flow.outChannels, c], ...Object.values(sparseBlockWeightShapes(b)),
+    [64 ** 3], [32 ** 3, 3]];
+  const bytes = shapes.map(shape => shape.reduce((a, n) => a * n, 4));
+  if (!bytes.every(n => Number.isSafeInteger(n) && n > 0)) throw RangeError('invalid SLat storage geometry');
+  const largest = Math.max(...bytes);
+  const required = { maxStorageBufferBindingSize: Math.max(134217728, largest),
+    maxBufferSize: Math.max(268435456, largest) };
+  for (const [field, label] of [['maxStorageBufferBindingSize', 'storage binding'], ['maxBufferSize', 'buffer']]) {
+    if (!Number.isSafeInteger(adapterLimits?.[field]) || required[field] > adapterLimits[field])
+      throw RangeError(`complete source geometry exceeds actual adapter ${label} capacity`);
+  }
+  return required;
+}
+
 export function validateSLatFlowFixture(m) {
   if(m?.schema!=='trellis2.slat-flow-reference.v0'||m.status!=='succeeded')throw Error('complete SLat reference required');
   const p=buildSLatFlowPlan(m.config),f=p.flow,c=f.block.channels,r=p.tokenRows,hash=x=>/^[a-f0-9]{64}$/.test(x);
