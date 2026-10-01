@@ -117,7 +117,11 @@ function connect(endpoint) {
 }
 async function close() {
   if (socket?.readyState === WebSocket.OPEN) socket.close();
-  if (child?.pid && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+  if (child?.pid && child.exitCode === null && child.signalCode === null) {
+    report.browser.cleanupSignal = child.kill('SIGTERM')
+      ? 'SIGTERM sent to the exact owned browser child after evidence capture'
+      : 'owned browser child had already exited before cleanup signal';
+  }
   if (child?.pid) {
     childExit = child.exitCode !== null || child.signalCode !== null
       ? {code: child.exitCode, signal: child.signalCode}
