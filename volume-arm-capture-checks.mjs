@@ -2,7 +2,7 @@
 // controls took effect in the renderer receipt, and which headless browser the
 // capture may launch. Pure functions, no browser, so the negative paths (a
 // missing receipt field, no independent browser) can be exercised by a test.
-import { existsSync, readdirSync } from 'node:fs';
+import { accessSync, constants, existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -70,15 +70,22 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
 // operator machine a headless launch of that bundle absorbs ordinary
 // `open -a` launches and clicked links. Resolution order: the
 // KAMINOS_HEADLESS_BROWSER environment variable, then the newest Playwright
-// Chromium under the Playwright cache. Absence fails visibly.
+// Chromium under the Playwright cache. The refusal is by canonical identity
+// (realpath, so dot segments and symlink aliases resolve), the candidate must
+// be an executable regular file, and absence fails visibly.
 const GUI_CHROME = /\/Applications\/Google Chrome\.app\//;
+function admitExecutable(candidate, source) {
+  let resolved;
+  try { resolved = realpathSync(candidate); } catch { throw new Error(`${source} does not exist: ${candidate}`); }
+  if (GUI_CHROME.test(resolved) || GUI_CHROME.test(candidate)) throw new Error(`${source} names the installed GUI Chrome (${candidate} -> ${resolved}); headless capture needs an independent executable`);
+  let ok = false;
+  try { ok = statSync(resolved).isFile(); if (ok) accessSync(resolved, constants.X_OK); } catch { ok = false; }
+  if (!ok) throw new Error(`${source} is not an executable file: ${candidate} -> ${resolved}`);
+  return { executable: candidate, resolvedExecutable: resolved, source };
+}
 export function resolveHeadlessBrowser({ env = process.env, playwrightRoot = join(homedir(), 'Library', 'Caches', 'ms-playwright') } = {}) {
   const override = env.KAMINOS_HEADLESS_BROWSER;
-  if (override) {
-    if (GUI_CHROME.test(override)) throw new Error(`KAMINOS_HEADLESS_BROWSER names the installed GUI Chrome (${override}); headless capture needs an independent executable`);
-    if (!existsSync(override)) throw new Error(`KAMINOS_HEADLESS_BROWSER does not exist: ${override}`);
-    return { executable: override, source: 'KAMINOS_HEADLESS_BROWSER' };
-  }
+  if (override) return admitExecutable(override, 'KAMINOS_HEADLESS_BROWSER');
   let candidates = [];
   try {
     candidates = readdirSync(playwrightRoot)
@@ -89,5 +96,5 @@ export function resolveHeadlessBrowser({ env = process.env, playwrightRoot = joi
       .filter(path => existsSync(path));
   } catch { candidates = []; }
   if (candidates.length === 0) throw new Error(`no independent headless browser: set KAMINOS_HEADLESS_BROWSER or install Playwright Chromium (looked under ${playwrightRoot})`);
-  return { executable: candidates[0], source: 'playwright-chromium' };
+  return admitExecutable(candidates[0], 'playwright-chromium');
 }
