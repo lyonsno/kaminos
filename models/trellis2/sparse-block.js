@@ -139,8 +139,8 @@ ${affine ? '@group(0) @binding(2) var<storage, read> bias: array<f32>;' : ''}
 var<workgroup> partial: array<f32, 256>;
 ${BF16_WGSL}
 @compute @workgroup_size(256)
-fn main(@builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) wid: vec3<u32>) {
-  let row = wid.x; var sum = 0.0;
+fn main(@builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) wid: vec3<u32>, @builtin(num_workgroups) grid: vec3<u32>) {
+  let row = wid.x + wid.y * grid.x; if (row >= ${rows}u) { return; } var sum = 0.0;
   for (var i = lane; i < ${width}u; i += 256u) { let x = input[row * ${stride}u + i + ${offset}u]; sum += ${rms ? 'x * x' : 'x'}; }
   partial[lane] = sum; workgroupBarrier();
   for (var s = 128u; s > 0u; s /= 2u) { if (lane < s) { partial[lane] += partial[lane + s]; } workgroupBarrier(); }
@@ -207,7 +207,7 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
   const add = (name, code, args, dispatch) => kernels.push({ name, dispatch, kernel: runtime.defineComputeKernel({
     name: `trellis.block.${name}`, code, bindings: args.map((resource, i) => ({ name: `b${i}`, resource,
       access: i === args.length - 1 ? 'storage' : 'read-only-storage' })) }) });
-  const grid = count => { const n = Math.ceil(count / 64), limit = runtime.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65535;
+  const grid = (count, size = 64) => { const n = Math.ceil(count / size), limit = runtime.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65535;
     const x = Math.min(n, limit), y = Math.ceil(n / x); if (y > limit) throw new RangeError('dispatch exceeds device capacity'); return [x, y, 1]; };
   const decl = names => names.map((name, i) => `@group(0) @binding(${i}) var<storage, ${i === names.length - 1 ? 'read_write' : 'read'}> ${name}: array<f32>;`).join('\n');
   const c = plan.channels, r = plan.rows, d = plan.headDim, heads = plan.heads, s = plan.contextRows;
@@ -219,7 +219,7 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
     const mod = activation('modulation', [6 * c]);
     add('block-modulation', elementShader(6 * c, decl(['timestep_mod', 'bias', 'output']), 'output[i] = round_bf16(timestep_mod[i] + bias[i]);'), [inputs.modulation, w.modulation, mod], grid(6 * c));
     const norm = (stage, input, name, affine = false) => { const out = allocate(name); add(stage, normShader({ rows: r, width: c, affine }),
-      affine ? [input, w['norm2.weight'], w['norm2.bias'], out] : [input, out], [r, 1, 1]); return out; };
+      affine ? [input, w['norm2.weight'], w['norm2.bias'], out] : [input, out], grid(r, 1)); return out; };
     const adaln = (stage, input, name, shift, scale) => { const out = allocate(name); add(stage, elementShader(r * c, decl(['input', 'modulation', 'output']),
       `let ch = i % ${c}u; let scale = round_bf16(1.0 + modulation[${scale * c}u + ch]); output[i] = round_bf16(round_bf16(input[i] * scale) + modulation[${shift * c}u + ch]);`), [input, mod, out], grid(r * c)); return out; };
     const linear = (stage, input, name, key, rowCount = r) => { const [outDim, inDim] = shapes[`${key}.weight`], out = allocate(name, rowCount, outDim);
@@ -231,7 +231,7 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
       const shader = normShader({ rows: rowCount * heads, width: d, rms: true })
         .replaceAll('row * ' + d + 'u + i + 0u', `(row / ${heads}u) * ${components * c}u + ${component * c}u + (row % ${heads}u) * ${d}u + i`)
         .replaceAll('HEADS', `${heads}u`);
-      add(stage, shader, [input, w[`${key}.gamma`], out], [rowCount * heads, 1, 1]); return out; };
+      add(stage, shader, [input, w[`${key}.gamma`], out], grid(rowCount * heads, 1)); return out; };
     const rotate = (stage, input, name) => { const out = allocate(name); add(stage, elementShader(r * c / 2, decl(['input', 'phases', 'output']),
       `let token = i / ${c / 2}u; let pair = i % ${d / 2}u; let p = token * ${d}u + pair * 2u;
        let a = input[i * 2u]; let b = input[i * 2u + 1u]; let cs = phases[p]; let sn = phases[p + 1u];

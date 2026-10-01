@@ -149,7 +149,8 @@ fn main(@builtin(workgroup_id) wid:vec3<u32>){
   let mean=mean_sum/${rows}.0;let mean2=mean2_sum/${rows}.0;output[wid.x]=sqrt(mean2 - mean * mean);
 }`;
 
-export function createTrellisSparseSamplerAdapter({route,flow,config={},conditioning,negativeConditioning}){
+export function createTrellisSparseSamplerAdapter({route,flow,config={},conditioning,negativeConditioning,
+  initialSampleTensor,initialStepIndex=0}){
   const runtime=route?.runtime,plan=buildSparseSamplerPlan(config);
   if(!runtime?.createTensor||!runtime?.runKernel||flow?.runtime!==runtime)throw new TypeError('model and sampler must use the same runtime');
   if(flow.routeId!==route.routeId)throw new TypeError('model and sampler must use the same registered route');
@@ -158,12 +159,18 @@ export function createTrellisSparseSamplerAdapter({route,flow,config={},conditio
     if(!tensor?.buffer||tensor.dtype!=='f32'||JSON.stringify(tensor.shape)!==JSON.stringify(plan.shape)||
         tensor.byteLength!==plan.elements*4||!(tensor.usage&U.storage))throw new TypeError('complete resident F32 sparse sample/prediction required');
   }
+  // Explicit producer admission of already initialized GPU state. The sampler
+  // borrows the flow's exact sample; it neither uploads nor substitutes it.
+  // After a failed dispatch this admission cannot reset a poisoned sampler.
+  if(initialSampleTensor!==undefined&&initialSampleTensor!==sample)throw new TypeError('initial resident sample must be the same tensor as the flow sample');
+  if(!Number.isSafeInteger(initialStepIndex)||!plan.steps[initialStepIndex])throw new RangeError('initial step outside complete source schedule');
+  if(initialSampleTensor===undefined&&initialStepIndex!==0)throw new TypeError('initial resident sample required for an initial step');
   const contextCount=flow.plan.block.contextRows*flow.plan.block.contextChannels;
   const validateContext=values=>values instanceof Float32Array&&values.length===contextCount&&values.every(Number.isFinite);
   if(!validateContext(conditioning))throw new TypeError('complete finite positive conditioning required');
   const negative=negativeConditioning??new Float32Array(contextCount);
   if(!validateContext(negative))throw new TypeError('complete finite negative conditioning required');
-  const resources=[];let running=false,disposed=false,nextStep=null,poisoned=false;
+  const resources=[];let running=false,disposed=false,nextStep=initialSampleTensor===undefined?null:initialStepIndex,poisoned=false;
   const tensor=(name,shape=plan.shape)=>{const t=runtime.createTensor({name:`trellis.sampler.${name}`,shape,dtype:'f32',usage:U.storage|U.copyDst|U.copySrc});resources.push(t);return t;};
   const cleanup=()=>{for(const t of resources)t.buffer?.destroy?.();};
   try{
