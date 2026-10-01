@@ -336,17 +336,19 @@ runButton.addEventListener('click', async () => {
         cooperativeTwoStream: true,
         twoStreamDutyGranularity: 'stage',
         intermediateStageIds: ['block-0-fuse-out', 'block-1-fuse-out'],
+        intermediateSpatialRows: 16,
         onIntermediatePreviewError: ({ stageId, error }) => {
           markStage(stageId, 'skipped');
           setStatus(`${stageId} preview unavailable`);
           console.warn('SF3D Learn projection failed', error);
         },
-        onIntermediateTriplane: async ({ stageId, triplanesBuf, decoder, decoderWeights }) => {
+        onIntermediateTriplane: async ({ stageId, triplanesBuf, decoder, decoderWeights, produceRegions }) => {
           const label = stageId === 'block-0-fuse-out' ? 'First shape' : 'Forming detail';
           try {
             clearGeometry();
             featurePanel.hidden = true;
             const candidate = await decodeSf3dPreviewMesh(producer.device, triplanesBuf, decoder, decoderWeights, resolution, 384, {
+              produceRegions,
               onSlab: async sample => {
                 constructionPlane.visible = true;
                 constructionPlane.position.z = sample.maxZ;
