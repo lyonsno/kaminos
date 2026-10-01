@@ -116,11 +116,20 @@ function connect(endpoint) {
   });
 }
 async function close() {
-  if (socket?.readyState === WebSocket.OPEN) {
-    await send('Browser.close').catch(() => {});
-    socket.close();
-  } else if (child?.pid && child.exitCode === null) child.kill('SIGTERM');
-  if (child?.pid && childExit === undefined) childExit = await new Promise(resolvePromise => child.once('exit', (code, signal) => resolvePromise({code, signal})));
+  if (socket?.readyState === WebSocket.OPEN) socket.close();
+  if (child?.pid && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+  if (child?.pid) {
+    childExit = child.exitCode !== null || child.signalCode !== null
+      ? {code: child.exitCode, signal: child.signalCode}
+      : await new Promise(resolvePromise => {
+        const onExit = (code, signal) => resolvePromise({code, signal});
+        child.once('exit', onExit);
+        if (child.exitCode !== null || child.signalCode !== null) {
+          child.removeListener('exit', onExit);
+          resolvePromise({code: child.exitCode, signal: child.signalCode});
+        }
+      });
+  }
   if (profile) rmSync(profile, {recursive: true, force: true});
   report.browser.exit = childExit || null;
 }
@@ -234,6 +243,13 @@ try {
   report.failure = {phase: report.phase, message: error.message, stack: error.stack};
   report.checks = checks;
 } finally {
+  if (report.status === 'running') {
+    report.status = 'failed';
+    report.failure = {phase: report.phase, message: 'witness ended without reaching a terminal status'};
+    report.checks = checks;
+  }
+  if (report.status === 'passed') report.phase = 'complete';
+  save();
   await close().catch(error => { report.cleanupError = error.message; report.status = 'failed'; });
   save();
 }

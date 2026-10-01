@@ -61,11 +61,14 @@ for (const [force, mode] of [[2, 'fracture-event-pose'], [2.5, 'accepted-pose-un
   }
 }
 const page = fs.readFileSync(new URL('../structural-material-arch-volume.html', import.meta.url), 'utf8');
+const smoke = fs.readFileSync(new URL('../structural-material-arch-volume-smoke.mjs', import.meta.url), 'utf8');
 assert.match(page, /id="release"/, 'the operator can release the applied force without resetting damage');
 assert.match(page, /releaseArchStructuralLoad/, 'the release control uses the damage-preserving unload transition');
 assert.match(page, /let released = false/, 'Bind must be gated until an explicit release');
 assert.match(page, /if \(!applied \|\| !released\) return/, 'the Bind handler refuses direct loaded-state binding');
 assert.match(page, /solverAuthority: item\.base\.solverAuthority/, 'the route witness exposes the effective structural solver authority');
+assert.match(smoke, /witness ended without reaching a terminal status/, 'an incomplete browser run becomes an explicit failed report');
+assert.ok(smoke.includes('  save();\n  await close()'), 'the smoke persists its terminal result before cleanup can fail');
 const evidenceModulePath = new URL('../structural-material-arch-volume-evidence.mjs', import.meta.url);
 assert.ok(fs.existsSync(evidenceModulePath), 'the smoke acceptance predicates must be replayable against false source/render claims');
 const evidenceInput = {
