@@ -1,3 +1,4 @@
+import ast
 import importlib.util
 import json
 from pathlib import Path
@@ -11,6 +12,24 @@ SCRIPT = Path(__file__).parents[1] / 'export-sparse-sampler.py'
 
 
 class SamplerTrajectory(unittest.TestCase):
+    def test_actual_complete_schedule_clocks_are_json_serializable(self):
+        # Exercise the exporter's actual clock-construction loop without model
+        # loading. The live failure was numpy.bool_ entering this report.
+        tree = ast.parse(SCRIPT.read_text())
+        loop = next(node for node in ast.walk(tree) if isinstance(node, ast.For)
+            and isinstance(node.target, ast.Name) and node.target.id == 'i'
+            and isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Name)
+            and node.iter.func.id == 'range')
+        config = {'steps': 12, 'guidanceStrength': 7.5, 'guidanceInterval': [.6, 1], 'rescaleT': 5, 'sigmaMin': 1e-5}
+        times = np.linspace(1, 0, 13)
+        times = config['rescaleT'] * times / (1 + (config['rescaleT'] - 1) * times)
+        scope = {'np': np, 'config': config, 'steps': 12, 'times': times, 'report': {'clocks': []}}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[loop], type_ignores=[])), str(SCRIPT), 'exec'), scope)
+        clocks = json.loads(json.dumps(scope['report']))['clocks']
+        self.assertEqual(len(clocks), 12)
+        self.assertEqual([row['guided'] for row in clocks], [True] * 10 + [False] * 2)
+        self.assertTrue(all(type(row['guided']) is bool for row in scope['report']['clocks']))
+
     def test_full_schedule_failure_is_durable(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / 'reference'

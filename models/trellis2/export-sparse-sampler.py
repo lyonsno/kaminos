@@ -156,7 +156,7 @@ def main():
                 report['clocks'].append({'index': i, 'time': float(times[i]), 'previousTime': float(times[i + 1]),
                     'modelTime': float(np.float32(1000 * times[i])), 'dt': float(np.float32(times[i] - times[i + 1])),
                     'coefficient': float(np.float32(coefficient)), 'inverseCoefficient': float(np.float32(1 / coefficient)),
-                    'guided': config['guidanceStrength'] != 1 and config['guidanceInterval'][0] <= times[i] <= config['guidanceInterval'][1]})
+                    'guided': bool(config['guidanceStrength'] != 1 and config['guidanceInterval'][0] <= times[i] <= config['guidanceInterval'][1])})
             report['completeScheduleModelCalls'] = sum(2 if clock['guided'] else 1 for clock in report['clocks'])
         report['phase'] = 'model-load'
         model = SparseStructureFlowModel()
