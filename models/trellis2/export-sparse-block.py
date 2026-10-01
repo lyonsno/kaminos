@@ -37,7 +37,7 @@ def load_native_block_input(path, *, block_index, prefix, prefix_sha, conditioni
             not native.get('finishedAt') or native.get('requestedUrl') != native.get('effectiveUrl') or
             native.get('serverErrors') or native.get('cleanupErrors') or result.get('errors') != [] or
             result.get('requestedRoute') != route or result.get('effectiveRoute') != route or
-            backend.get('isFallbackAdapter') is not False or backend.get('vendor') != 'apple' or
+            backend.get('isFallbackAdapter') is True or backend.get('vendor') != 'apple' or
             not str(backend.get('architecture', '')).startswith('metal') or
             composition.get('observedBlockIndex') != block_index or composition.get('sameSession') is not True or
             composition.get('sameJob') is not True or composition.get('readbackBetweenBlocks') is not False or

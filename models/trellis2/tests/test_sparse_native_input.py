@@ -61,6 +61,11 @@ class NativeInputContract(unittest.TestCase):
                 self.assertEqual(hidden.shape, (4096, 1536))
                 self.assertEqual(modulation.shape, (1, 9216))
                 self.assertEqual(evidence['nativeSessionId'], 'actual-test-session')
+                # Observed Chrome153 Apple metal-3 report omits
+                # GPUAdapter.isFallbackAdapter; native vendor/architecture remain explicit.
+                current_chrome = copy.deepcopy(native)
+                del current_chrome['result']['backend']['isFallbackAdapter']
+                self.assertEqual(load(current_chrome)[0].shape, (4096, 1536))
                 # Synthetic rows test local admission only; live capture establishes the external route.
                 changes = [lambda n: n.update(dirty=' M shader'),
                     lambda n: n.update(commit='f' * 40),
