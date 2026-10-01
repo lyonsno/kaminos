@@ -66,7 +66,7 @@ const report = {
   effective: { source: null, sourceVerified: false },
   // The browser this run spawned and drove; a capture must never attach to
   // another instance (2026-09-26: a fixed port let it attach to an orphan).
-  browser: { executable: null, executableSource: null, pid: null, port: null, profile: null, devtoolsUrl: null },
+  browser: { executable: null, resolvedExecutable: null, executableSource: null, version: null, pid: null, port: null, profile: null, devtoolsUrl: null },
   cleanupWarning: null,
   admitted: null,
   arms: [],
@@ -121,18 +121,23 @@ try {
   // An independent executable, never the installed GUI Chrome (shared operator machine).
   let headlessBrowser;
   try { headlessBrowser = resolveHeadlessBrowser(); } catch (error) { fail('browser-launch', String(error?.message || error)); }
-  report.browser.executable = headlessBrowser.executable; report.browser.executableSource = headlessBrowser.source; writeReport();
+  report.browser.executable = headlessBrowser.executable; report.browser.resolvedExecutable = headlessBrowser.resolvedExecutable; report.browser.executableSource = headlessBrowser.source; report.browser.profile = profile; writeReport();
+  // A launch error Node reports asynchronously (ENOENT, EACCES) must reach the
+  // same failure and cleanup path as everything else, not end the process.
+  let launchError = null;
   chrome = spawn(headlessBrowser.executable, ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
+  chrome.on('error', error => { launchError = error; });
   chrome.stdout.on('data', () => {}); chrome.stderr.on('data', () => {});
   // Chrome publishes the port it actually bound in DevToolsActivePort inside this
   // run's own profile directory, so the capture can only attach to the browser it spawned.
   let port = null;
-  for (let i = 0; i < 200 && port === null; i++) { try { const line = readFileSync(`${profile}/DevToolsActivePort`, 'utf8').split('\n')[0].trim(); if (/^\d+$/.test(line)) port = Number(line); } catch { /* not written yet */ } if (port === null) await sleep(100); }
+  for (let i = 0; i < 200 && port === null; i++) { if (launchError) fail('browser-launch', `${headlessBrowser.executable} failed to launch: ${String(launchError?.message || launchError)}`); try { const line = readFileSync(`${profile}/DevToolsActivePort`, 'utf8').split('\n')[0].trim(); if (/^\d+$/.test(line)) port = Number(line); } catch { /* not written yet */ } if (port === null) await sleep(100); }
   if (port === null) fail('browser-launch', `the spawned browser (pid ${chrome.pid}) never published DevToolsActivePort in ${profile}`);
   let pages = null; for (let i = 0; i < 100 && !pages; i++) { try { pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(100); } }
   if (!pages) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never answered`);
   const page = pages.find(p => p.type === 'page'); ws = new WebSocket(page.webSocketDebuggerUrl);
-  report.browser = { executable: headlessBrowser.executable, executableSource: headlessBrowser.source, pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
+  let browserVersion = null; try { browserVersion = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json())?.Browser ?? null; } catch { /* recorded as null */ }
+  report.browser = { executable: headlessBrowser.executable, resolvedExecutable: headlessBrowser.resolvedExecutable, executableSource: headlessBrowser.source, version: browserVersion, pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
   writeReport();
   await new Promise(res => ws.addEventListener('open', res, { once: true }));
   let id = 0; const pending = new Map();
