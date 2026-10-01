@@ -93,14 +93,15 @@ test('the core carries the pattern and swirl through the resolver, packs them, a
   assert.equal(core.resolveInflowBoundaryConfig({ pressureSolver: 'converged-open-top', projection: 1 }, compiled.descriptor, { grid: 64 }).effective.pattern.kind, 'shape', 'the family shape is the default pattern');
   assert.equal(core.resolveInflowBoundaryConfig({ pressureSolver: 'converged-open-top', projection: 1, emitterSwirl: 3 }, compiled.descriptor, { grid: 64 }).effective.swirl, 1, 'swirl is clamped to [-1, 1]');
   // Shader: the weight is a buffer read, the shape SDFs are gone from WGSL.
-  assert.match(source, /@group\(0\) @binding\(17\) var<storage, read> inflowCoverage: array<f32>;/, 'the coverage map is bound at binding 17');
+  // A texture, not a storage buffer: the compute stage's ten storage buffers are spent (the first live look failed at pipeline-layout creation with eleven).
+  assert.match(source, /@group\(0\) @binding\(17\) var inflowCoverage: texture_2d<f32>;/, 'the coverage map is a 2-D float texture at binding 17');
   const weight = wgslFunction('inflowApertureWeight');
-  assert.match(weight, /inflowCoverage\[u32\(clamp\(cell\.z, 0, i32\(GRID\) - 1\)\) \* GRID \+ u32\(clamp\(cell\.x, 0, i32\(GRID\) - 1\)\)\]/, 'the cell weight is read from the map');
+  assert.match(weight, /textureLoad\(inflowCoverage, vec2<i32>\(clamp\(cell\.x, 0, i32\(GRID\) - 1\), clamp\(cell\.z, 0, i32\(GRID\) - 1\)\), 0\)\.x/, 'the cell weight is read from the map texel');
   assert.doesNotMatch(source, /fn inflowApertureCoverageAt\(/, 'the shader no longer evaluates the aperture shape');
-  assert.match(source, /\{ binding: 17, visibility: GPUShaderStage\.COMPUTE, buffer: \{ type: 'read-only-storage' \} \}/, 'layout entry');
-  assert.match(source, /\{ binding: 17, resource: \{ buffer: inflowCoverageBuffer \} \}/, 'bind group entry');
-  assert.match(source, /inflowCoverageBuffer = device\.createBuffer\(\{\s*label: `kaminos inflow aperture coverage map/, 'the buffer is created with the fluid state');
-  assert.match(source, /device\.queue\.writeBuffer\(inflowCoverageBuffer, 0, inflowCoverageMap\.cells\)/, 'and written when the map changes');
+  assert.match(source, /\{ binding: 17, visibility: GPUShaderStage\.COMPUTE, texture: \{ sampleType: 'unfilterable-float', viewDimension: '2d' \} \}/, 'layout entry: an unfilterable float texture, compute only');
+  assert.match(source, /\{ binding: 17, resource: inflowCoverageTexture\.createView\(\) \}/, 'bind group entry');
+  assert.match(source, /inflowCoverageTexture = device\.createTexture\(\{\s*label: `kaminos inflow aperture coverage map[\s\S]{0,200}format: 'r32float'/, 'the texture is created with the fluid state');
+  assert.match(source, /device\.queue\.writeTexture\(\{ texture: inflowCoverageTexture \}, inflowCoverageMap\.cells, \{ bytesPerRow: gridSize \* Float32Array\.BYTES_PER_ELEMENT \}, \[gridSize, gridSize, 1\]\)/, 'and written when the map changes');
   assert.match(source, /state\.inflowBoundary\.effective\.coverage = /, 'the receipt carries the map summary');
   // Swirl: the ghost velocity gains a tangential component around the aperture centre.
   const ghost = wgslFunction('inflowGhostVelocity');

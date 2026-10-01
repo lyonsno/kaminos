@@ -3093,8 +3093,9 @@ struct NonRidgeOpticalCaptureRow {
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
 @group(0) @binding(13) var<storage, read> quenchSrc: array<u32>;
 @group(0) @binding(14) var<storage, read_write> quenchDst: array<u32>;
-// Inflow aperture coverage map: one weight per floor cell (x + z * GRID), built on the CPU.
-@group(0) @binding(17) var<storage, read> inflowCoverage: array<f32>;
+// Inflow aperture coverage map: one weight per floor cell (texel x, z), built on the CPU.
+// A texture rather than a storage buffer: the compute stage's storage-buffer budget (10) is spent.
+@group(0) @binding(17) var inflowCoverage: texture_2d<f32>;
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 // MacCormack predictor: the forward semi-Lagrangian estimate of every slot,
@@ -3238,7 +3239,7 @@ fn inflowApertureWeight(cell: vec3<i32>) -> f32 {
   if (u.inflow_aperture.x < 0.5) {
     return 0.0;
   }
-  return inflowCoverage[u32(clamp(cell.z, 0, i32(GRID) - 1)) * GRID + u32(clamp(cell.x, 0, i32(GRID) - 1))];
+  return textureLoad(inflowCoverage, vec2<i32>(clamp(cell.x, 0, i32(GRID) - 1), clamp(cell.z, 0, i32(GRID) - 1)), 0).x;
 }
 
 fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
@@ -10611,7 +10612,7 @@ export function createKaminosVolumePrototype({
   let fluidBuffers = [];
   // Inflow aperture coverage map (one f32 per floor cell), rebuilt with the grid
   // and rewritten when the admitted aperture or pattern changes.
-  let inflowCoverageBuffer = null;
+  let inflowCoverageTexture = null;
   const windGustProcess = new WindGustProcess(1);
   let inflowCoverageSignature = '';
   let inflowCoverageMap = null;
@@ -11187,8 +11188,8 @@ export function createKaminosVolumePrototype({
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of quenchBuffers) buffer.destroy();
-    inflowCoverageBuffer?.destroy();
-    inflowCoverageBuffer = null;
+    inflowCoverageTexture?.destroy();
+    inflowCoverageTexture = null;
     inflowCoverageSignature = '';
     inflowCoverageMap = null;
     for (const buffer of pressureBuffers) buffer.destroy();
@@ -11320,7 +11321,7 @@ export function createKaminosVolumePrototype({
         { binding: 14, resource: { buffer: quenchWrite } },
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 16, resource: sceneSolidTextureView },
-        { binding: 17, resource: { buffer: inflowCoverageBuffer } },
+        { binding: 17, resource: inflowCoverageTexture.createView() },
       ],
     });
   }
@@ -12344,12 +12345,13 @@ export function createKaminosVolumePrototype({
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
       return buffer;
     });
-    inflowCoverageBuffer = device.createBuffer({
+    inflowCoverageTexture = device.createTexture({
       label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
-      size: gridSize * gridSize * Float32Array.BYTES_PER_ELEMENT,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      size: [gridSize, gridSize, 1],
+      format: 'r32float',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
-    device.queue.writeBuffer(inflowCoverageBuffer, 0, new Float32Array(gridSize * gridSize));
+    device.queue.writeTexture({ texture: inflowCoverageTexture }, new Float32Array(gridSize * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
     inflowCoverageSignature = '';
     inflowCoverageMap = null;
     quenchBuffers = [0, 1].map(i => {
@@ -13212,7 +13214,7 @@ export function createKaminosVolumePrototype({
         { binding: 13, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
-        { binding: 17, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 17, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -14640,11 +14642,11 @@ export function createKaminosVolumePrototype({
     const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize });
     uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
     state.inflowBoundary = inflowBoundaryConfig;
-    if (inflowBoundaryConfig.effective.admitted && inflowCoverageBuffer) {
+    if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
       const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
       if (coverageSignature !== inflowCoverageSignature) {
         inflowCoverageMap = inflowCoverageMapForConfig(inflowBoundaryConfig);
-        device.queue.writeBuffer(inflowCoverageBuffer, 0, inflowCoverageMap.cells);
+        device.queue.writeTexture({ texture: inflowCoverageTexture }, inflowCoverageMap.cells, { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
         inflowCoverageSignature = coverageSignature;
       }
       state.inflowBoundary.effective.coverage = { pattern: inflowCoverageMap.pattern, coveredCells: inflowCoverageMap.coveredCells, totalCoverage: inflowCoverageMap.totalCoverage, peak: inflowCoverageMap.peak };
