@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { bindArchStructuralProxy, buildArchStructuralProxy, fractureArchStructuralProxy, solveArchStructuralForce } from '../structural-material-arch-core.js';
 import { buildArchVolumeFrame, releaseArchStructuralLoad, resolveArchVolumeEquilibrium } from '../structural-material-arch-volume-view.js';
+import { findArchVolumeEvidenceContradictions } from '../structural-material-arch-volume-evidence.mjs';
 
 const state = {
   layers: 3,
@@ -62,5 +63,32 @@ for (const [force, mode] of [[2, 'fracture-event-pose'], [2.5, 'accepted-pose-un
 const page = fs.readFileSync(new URL('../structural-material-arch-volume.html', import.meta.url), 'utf8');
 assert.match(page, /id="release"/, 'the operator can release the applied force without resetting damage');
 assert.match(page, /releaseArchStructuralLoad/, 'the release control uses the damage-preserving unload transition');
+assert.match(page, /let released = false/, 'Bind must be gated until an explicit release');
+assert.match(page, /if \(!applied \|\| !released\) return/, 'the Bind handler refuses direct loaded-state binding');
 assert.match(page, /solverAuthority: item\.base\.solverAuthority/, 'the route witness exposes the effective structural solver authority');
+const evidenceModulePath = new URL('../structural-material-arch-volume-evidence.mjs', import.meta.url);
+assert.ok(fs.existsSync(evidenceModulePath), 'the smoke acceptance predicates must be replayable against false source/render claims');
+const evidenceInput = {
+  expectedSources: { 'volume.html': 'page-hash', 'profile.json': 'profile-hash' },
+  servedSources: { 'volume.html': { status: 200, sha256: 'page-hash' }, 'profile.json': { status: 200, sha256: 'profile-hash' } },
+  expectedProfileSourceHashes: { intact: 'trellis-intact-hash' },
+  cases: { intact: { sourceSha256: 'trellis-intact-hash', nodes: 24, renderedInstances: 24 } },
+};
+assert.deepEqual(findArchVolumeEvidenceContradictions(evidenceInput), []);
+assert.match(findArchVolumeEvidenceContradictions({
+  ...evidenceInput,
+  cases: { intact: { ...evidenceInput.cases.intact, sourceSha256: 'WRONG-SOURCE-PROFILE' } },
+})[0], /profile source mismatch/, 'the witness rejects a profile identity that differs from the admitted profile');
+assert.match(findArchVolumeEvidenceContradictions({
+  ...evidenceInput,
+  servedSources: { ...evidenceInput.servedSources, 'volume.html': { status: 200, sha256: 'STALE-SERVER-HASH' } },
+})[0], /served source mismatch/, 'the witness rejects source bytes served by a different implementation');
+assert.match(findArchVolumeEvidenceContradictions({
+  ...evidenceInput,
+  servedSources: { ...evidenceInput.servedSources, 'profile.json': { status: 404, sha256: 'profile-hash' } },
+})[0], /served source mismatch/, 'the witness rejects a missing served profile even when its expected bytes are known');
+assert.match(findArchVolumeEvidenceContradictions({
+  ...evidenceInput,
+  cases: { intact: { ...evidenceInput.cases.intact, renderedInstances: 0 } },
+})[0], /rendered population mismatch/, 'the witness rejects a populated graph with no rendered instances');
 console.log('arch volume frame contracts passed');

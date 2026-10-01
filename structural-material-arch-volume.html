@@ -112,6 +112,7 @@
       const markerMaterial = new THREE.MeshBasicMaterial({ color: '#e3bc70' });
       const cases = {};
       let applied = false;
+      let released = false;
       let serial = 0;
 
       function render() { renderer.render(scene, camera); }
@@ -208,9 +209,10 @@
           for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
           for (const [name, update] of Object.entries(updates)) present(name, update.prepared);
           applied = true;
+          released = false;
           serial += 1;
           document.getElementById('release').disabled = false;
-          document.getElementById('bind').disabled = false;
+          document.getElementById('bind').disabled = true;
           status.textContent = Object.values(cases).some(item => item.displayMode === 'accepted-pose-unanchored')
             ? `Front depth layer only · load ${force.toFixed(2)} · unanchored contact has no static display equilibrium`
             : Object.values(cases).some(item => item.displayMode === 'fracture-event-pose')
@@ -228,20 +230,23 @@
         }));
         for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
         for (const [name, update] of Object.entries(updates)) present(name, update.prepared);
+        released = true;
         document.getElementById('release').disabled = true;
+        document.getElementById('bind').disabled = false;
         status.textContent = 'Load released · fracture history and connectivity retained';
         receipt.textContent = `Release at zero force · ${cases['outer-notch'].state.bonds.filter(bond => !bond.alive).length} broken bonds retained · connectivity epoch ${cases['outer-notch'].state.connectivityEpoch}`;
       }
 
       function bind() {
-        if (!applied) return;
+        if (!applied || !released) return;
         const updates = Object.fromEntries(Object.entries(cases).map(([name, item]) => {
           const bondIds = item.state.bonds.filter(bond => !bond.alive).map(bond => bond.id);
           const state = bindArchStructuralProxy(item.state, { bondIds });
-          return [name, { state, prepared: prepare(state, item.state.load?.requestedForce ?? Number(forceInput.value)) }];
+          return [name, { state, prepared: prepare(state, 0) }];
         }));
         for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
         for (const [name, update] of Object.entries(updates)) present(name, update.prepared);
+        released = false;
         document.getElementById('release').disabled = true;
         document.getElementById('bind').disabled = true;
         status.textContent = 'Connections rebound at zero load';
@@ -252,6 +257,7 @@
         if (!cases.intact) return;
         for (const [name, item] of Object.entries(cases)) { item.state = item.base; present(name); }
         applied = false;
+        released = false;
         document.getElementById('release').disabled = true;
         document.getElementById('bind').disabled = true;
         status.textContent = 'Profiles loaded · no load applied';
@@ -262,6 +268,7 @@
         forceOutput.value = Number(forceInput.value).toFixed(2);
         if (applied) {
           applied = false;
+          released = false;
           document.getElementById('release').disabled = true;
           document.getElementById('bind').disabled = true;
           status.textContent = 'Force changed · run a fresh intact-reference trial';
@@ -281,6 +288,7 @@
           broken: item.state.bonds.filter(bond => !bond.alive).length,
           components: item.state.components.length,
           travel: item.state.load?.travel ?? null,
+          requestedForce: item.state.load?.requestedForce ?? null,
           displayTravel: item.displayTravel,
           displayMode: item.displayMode,
           contactDepthMode: item.state.load?.contactDepthMode ?? null,

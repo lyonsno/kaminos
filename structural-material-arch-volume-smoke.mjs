@@ -4,6 +4,7 @@ import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, 
 import { basename, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { findArchVolumeEvidenceContradictions } from './structural-material-arch-volume-evidence.mjs';
 
 const [urlInput, reportInput, browserInput] = process.argv.slice(2);
 if (!urlInput || !reportInput || !browserInput) {
@@ -15,7 +16,7 @@ const reportPath = resolve(process.cwd(), reportInput);
 const artifactPrefix = basename(reportPath, '.json');
 mkdirSync(dirname(reportPath), { recursive: true });
 const report = {
-  schema: 'kaminos.structural-material.arch-volume-smoke.v0',
+  schema: 'kaminos.structural-material.arch-volume-smoke.v1',
   status: 'running',
   phase: 'preflight',
   requestedUrl: urlInput,
@@ -131,7 +132,14 @@ try {
   report.source.revision = execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
   report.source.dirtyPaths = execFileSync('git', ['status', '--porcelain'], {cwd: root, encoding: 'utf8'}).split('\n').filter(Boolean).map(line => line.slice(3));
   const sourcePaths = ['structural-material-arch-volume.html', 'structural-material-arch-volume-view.js', 'structural-material-arch-core.js'];
-  report.source.sha256 = Object.fromEntries(sourcePaths.map(path => [path, sha(readFileSync(resolve(root, path)))]));
+  const profilePaths = {
+    intact: 'artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json',
+    'outer-notch': 'artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/outer-notch-profile.json',
+  };
+  const expectedSources = Object.fromEntries([...sourcePaths, ...Object.values(profilePaths)].map(path => [path, sha(readFileSync(resolve(root, path)))]));
+  const expectedProfileSourceHashes = Object.fromEntries(Object.entries(profilePaths).map(([name, path]) => [name, JSON.parse(readFileSync(resolve(root, path), 'utf8')).source.sha256]));
+  report.source.expectedSha256 = expectedSources;
+  report.source.expectedProfileSourceSha256 = expectedProfileSourceHashes;
   const executable = realpathSync(browserInput);
   report.browser.requestedExecutable = browserInput;
   report.browser.effectiveExecutable = executable;
@@ -166,17 +174,40 @@ try {
   let state = await waitForWitness();
   report.effectiveRoute = state.routeWitness.route;
   check('effective route identity matches the arch volume witness', report.effectiveRoute === 'kaminos.structural-material.arch-force-volume.v0', report.effectiveRoute);
-  check('both source profiles were fetched successfully', report.profileResponses.length === 2 && report.profileResponses.every(response => response.status === 200), report.profileResponses);
+  check('both source profiles were fetched successfully', report.profileResponses.length >= 2 && report.profileResponses.every(response => response.status === 200), report.profileResponses);
+  const servedPaths = [...sourcePaths, ...Object.values(profilePaths)];
+  const servedSources = await evaluate(`(async () => {
+    const paths = ${JSON.stringify(servedPaths)};
+    const entries = await Promise.all(paths.map(async path => {
+      const response = await fetch(new URL(path, location.href), {cache: 'no-store'});
+      const bytes = await response.arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      const sha256 = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+      let profileSourceSha256 = null;
+      if (path.endsWith('.json')) profileSourceSha256 = JSON.parse(new TextDecoder().decode(bytes)).source?.sha256 ?? null;
+      return [path, {status: response.status, sha256, profileSourceSha256}];
+    }));
+    return Object.fromEntries(entries);
+  })()`);
+  report.source.served = servedSources;
+  const identityIssues = findArchVolumeEvidenceContradictions({expectedSources, servedSources, expectedProfileSourceHashes, cases: state.routeWitness.cases});
+  check('served implementation and profiles match the local witness inputs', identityIssues.length === 0, {identityIssues, expectedSources, servedSources, expectedProfileSourceHashes, cases: state.routeWitness.cases});
   const hitTargetRects = Object.values(state.controls).map(control => control?.rect).filter(Boolean);
   const hitTargetsContained = hitTargetRects.every(rect => rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= state.viewport.width && rect.y + rect.height <= state.viewport.height);
   const hitTargetsSeparated = hitTargetRects.every((rect, index) => hitTargetRects.slice(index + 1).every(other => rect.x + rect.width <= other.x || other.x + other.width <= rect.x || rect.y + rect.height <= other.y || other.y + other.height <= rect.y));
   check('operator controls and status fit without overlap or viewport clipping', hitTargetsContained && hitTargetsSeparated && state.viewport.documentWidth <= state.viewport.width, {controls: state.controls, viewport: state.viewport});
-  check('both source profiles loaded as populated three-layer structures on the declared solver', Object.keys(state.routeWitness.cases || {}).length === 2 && Object.values(state.routeWitness.cases).every(item => item.nodes > 0 && item.solverAuthority === 'shear-regularized-linear-spring-pcg-v0' && item.loadedNodeLayers.length === 1 && item.loadedNodeLayers[0] === 2 && item.contactDepthMode === 'camera-facing-surface'), state.routeWitness.cases);
+  check('both source profiles loaded as populated three-layer structures on the declared solver', Object.keys(state.routeWitness.cases || {}).length === 2 && Object.values(state.routeWitness.cases).every(item => item.nodes > 0 && item.renderedInstances === item.nodes && item.solverAuthority === 'shear-regularized-linear-spring-pcg-v0' && item.loadedNodeLayers.length === 1 && item.loadedNodeLayers[0] === 2 && item.contactDepthMode === 'camera-facing-surface'), state.routeWitness.cases);
   check('load 2 creates damage without unsupported post-fracture equilibrium', Object.values(state.routeWitness.cases).every(item => item.broken > 0 && item.displayMode === 'fracture-event-pose' && item.displayTravel <= item.travel + 1e-9), state.routeWitness.cases);
   check('Release is available after the loaded fracture witness', state.controls['#release']?.disabled === false, state.controls['#release']);
   const cameraAtLoad = JSON.stringify(state.routeWitness.camera);
   state = await capture('loaded-fracture', state);
   const preRelease = state.routeWitness.cases;
+  await evaluate('document.querySelector("#bind").click()');
+  state = await waitForWitness();
+  check('direct Solve to Bind is unavailable before Release', state.controls['#bind']?.disabled === true && Object.values(state.routeWitness.cases).every((item, index) => {
+    const prior = Object.values(preRelease)[index];
+    return item.requestedForce === 2 && item.broken === prior.broken && item.connectivityEpoch === prior.connectivityEpoch && item.displayMode === 'fracture-event-pose';
+  }), {controls: state.controls['#bind'], cases: state.routeWitness.cases});
   await evaluate('document.querySelector("#release").click()');
   state = await waitForWitness();
   report.transitions.release = state;
