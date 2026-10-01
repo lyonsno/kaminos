@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 218,
+  "controlCount": 227,
   "controls": [
     { "key": "volume-physical-material-law", "param": "volume_physical_material_law", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
     { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
@@ -263,6 +263,78 @@
       "type": "range",
       "additiveDefault": 1.2,
       "additiveSinceControlCount": 218
+    },
+    {
+      "key": "volume-emitter-aperture-pattern",
+      "param": "volume_emitter_aperture_pattern",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "shape",
+      "additiveSinceControlCount": 219
+    },
+    {
+      "key": "volume-emitter-aperture-count",
+      "param": "volume_emitter_aperture_count",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 12,
+      "additiveSinceControlCount": 220
+    },
+    {
+      "key": "volume-emitter-aperture-ratio",
+      "param": "volume_emitter_aperture_ratio",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.6,
+      "additiveSinceControlCount": 221
+    },
+    {
+      "key": "volume-emitter-aperture-seed",
+      "param": "volume_emitter_aperture_seed",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1,
+      "additiveSinceControlCount": 222
+    },
+    {
+      "key": "volume-emitter-swirl",
+      "param": "volume_emitter_swirl",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 223
+    },
+    {
+      "key": "volume-wind-model",
+      "param": "volume_wind_model",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "steady",
+      "additiveSinceControlCount": 224
+    },
+    {
+      "key": "volume-wind-gust",
+      "param": "volume_wind_gust",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.6,
+      "additiveSinceControlCount": 225
+    },
+    {
+      "key": "volume-wind-gust-period",
+      "param": "volume_wind_gust_period",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 8,
+      "additiveSinceControlCount": 226
+    },
+    {
+      "key": "volume-wind-gust-veer",
+      "param": "volume_wind_gust_veer",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 25,
+      "additiveSinceControlCount": 227
     },
     {
       "key": "volume-pyro-compare",

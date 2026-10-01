@@ -153,7 +153,7 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(packed.length, 12);
   assert.deepEqual([...packed.slice(0, 4)], [core.INFLOW_APERTURE_KIND_MODE.annulus, 0.1, -0.05, 0.7]);
   assert.deepEqual([...packed.slice(4, 8)], [0.14, 0.3, 0.6, 1.1]);
-  assert.deepEqual([...packed.slice(8, 11)], [1, 0, 0]);
+  assert.deepEqual([...packed.slice(8, 11)], [0, 0, 0], 'slice 2: the third vec4 carries swirl (0 here); the shape lives in the coverage map');
   assert.ok(Math.abs(packed[11] - 2 / 64) < 1e-12);
   assert.deepEqual([...core.inflowBoundaryUniformValues(closedTop)], new Array(12).fill(0), 'a refused inflow packs mode 0');
   // Fresh review of 51b856f5, finding 1: the solver name is not the solve. When
@@ -178,21 +178,20 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
 test('the shader carries the inflow as a face flux at the floor, a ghost state below it, and no sponge on the aperture', () => {
   const face = wgslFunction('compactFaceVelocity');
   assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'the ghost face below the floor carries the prescribed inflow, other lower faces none');
-  const coverage = wgslFunction('inflowApertureCoverageAt');
-  assert.match(coverage, /abs\(length\(q\) - u\.inflow_aperture\.w\) - band/, 'annulus');
-  assert.match(coverage, /length\(q\) - band/, 'disc');
-  assert.match(coverage, /max\(along, across\)/, 'rectangle');
-  assert.match(coverage, /1\.0 - smoothstep\(-0\.5 \* aa, 0\.5 \* aa, signedDistance\)/, 'one-cell antialias from the packed width');
+  // Slice 2: the aperture shape left the shader. The cell weight is read from
+  // the CPU-built coverage map (volume-inflow-aperture.mjs: the family shape or
+  // a pattern, averaged over a 4 x 4 footprint); mode 0 still turns it off.
   const weight = wgslFunction('inflowApertureWeight');
   assert.match(weight, /u\.inflow_aperture\.x < 0\.5/, 'reads the aperture mode');
-  assert.match(weight, /for \(var sx = 0; sx < 4; sx = sx \+ 1\)[\s\S]*for \(var sz = 0; sz < 4; sz = sz \+ 1\)[\s\S]*inflowApertureCoverageAt\(sample\)[\s\S]*coverage \* \(1\.0 \/ 16\.0\)/, 'the cell weight is the coverage averaged over a 4 x 4 stratified footprint, not the value at the cell centre (first look: the ring staircase showed as vertical striations)');
+  assert.match(weight, /return inflowCoverage\[/, 'the cell weight is read from the coverage map');
+  assert.doesNotMatch(source, /fn inflowApertureCoverageAt\(/, 'no shape evaluation in WGSL');
   assert.match(wgslFunction('inflowFaceVelocity'), /u\.inflow_state\.y \* inflowApertureWeight\(cell\)/);
   const ghost = wgslFunction('inflowGhostState');
-  assert.match(ghost, /vec4<f32>\(0\.0, u\.inflow_state\.y, 0\.0, sample\.w\)/, 'ghost velocity is the inflow, straight up; density carried');
+  assert.match(ghost, /vec4<f32>\(inflowGhostVelocity\(cellCenter\), sample\.w\)/, 'ghost velocity is the inflow (up, plus swirl around the centre); density carried');
   // Confirmation 2 of 27ed6465: material must not depend on the cell's own
   // backtrace (from rest the first transport step admitted nothing). The ghost
   // carries momentum only; scalars enter as the face flux, below.
-  assert.match(ghost, /if \(slot == 0u\) \{\s*return vec4<f32>\(0\.0, u\.inflow_state\.y, 0\.0, sample\.w\);\s*\}\s*return sample;/, 'the ghost carries momentum only; every other slot samples the domain');
+  assert.match(ghost, /if \(slot == 0u\) \{\s*return vec4<f32>\(inflowGhostVelocity\(cellCenter\), sample\.w\);\s*\}\s*return sample;/, 'the ghost carries momentum only; every other slot samples the domain');
   assert.doesNotMatch(ghost, /u\.inflow_state\.w, u\.inflow_state\.z/, 'no ghost material');
   const main0 = mainKernel();
   assert.match(main0, /if \(cellI\.y == 0 && u\.inflow_aperture\.x > 0\.5\) \{[\s\S]{0,600}let inflowFraction = clamp\(u\.inflow_state\.y \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);[\s\S]{0,300}heat = mix\(heat, u\.inflow_state\.w, inflowFraction\);\s*\n\s*fuel = mix\(fuel, u\.inflow_state\.z, inflowFraction\);/, 'the floor cells receive the inflow as the face flux: a fraction v_in x coverage x backtraceScale x dt of the cell volume becomes pure inflow each step, independent of the cell velocity');
@@ -255,12 +254,12 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   for (const sampler of ['sampleFluidSlot', 'samplePredictSlot']) {
     const body = wgslFunction(sampler);
     assert.match(body, /let ghost = inflowGhostBlend\(cellCenter\);/, `${sampler} blends toward the ghost`);
-    assert.match(body, /return mix\([a-zA-Z0-9_(), .]+, inflowGhostState\(slot, [a-zA-Z0-9_]+\), ghost\);/, `${sampler} returns the blended sample`);
+    assert.match(body, /return mix\([a-zA-Z0-9_(), .]+, inflowGhostState\(slot, [a-zA-Z0-9_]+, cellCenter\), ghost\);/, `${sampler} returns the blended sample`);
   }
   const macCormack = wgslFunction('macCormackSlot');
   assert.match(macCormack, /let predicted = fluidPredict\[idx \* SLOTS_PER_CELL \+ slot\];[\s\S]{0,600}if \(inflowGhostBlend\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}\s*let reversed = samplePredictSlot\(forwardCell, slot\);/, 'a floor cell fed by the ghost keeps the first-order prediction: the reverse trace cannot measure an error against a reservoir outside the domain (confirmation 1 of 22e2c61e: the corrector removed ~27 % of the entering fuel)');
   const extrema = wgslFunction('slotExtrema');
-  assert.match(extrema, /inflowGhostState\(slot, lo\)/, 'the MacCormack limiter range admits the ghost state so the inflow is not reverted at the floor');
+  assert.match(extrema, /inflowGhostState\(slot, lo, cellCenter\)/, 'the MacCormack limiter range admits the ghost state so the inflow is not reverted at the floor');
   const main = mainKernel();
   assert.match(main, /let floorExempt = select\(0\.0, inflowApertureWeight\(cellI\), p\.y < -0\.8\);\s*\n\s*let verticalWall = max\(mix\(-p\.y, -1\.0, floorExempt\), p\.y - expandedTopY \+ 1\.0\);/, 'the wall sponge does not act on the floor inside the aperture (evaluated only in the floor band)');
   assert.match(source, /inflow_aperture: vec4<f32>,\s*\n[\s\S]{0,400}inflow_state: vec4<f32>,\s*\n[\s\S]{0,400}inflow_shape: vec4<f32>,/, 'three inflow vec4s in the uniform struct');
@@ -283,7 +282,7 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.ok(keys.includes('volume-emitter-inlet-temperature'));
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-fuel-fraction').additiveDefault, 0.56);
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-inlet-temperature').additiveDefault, 1.2);
-  assert.equal(schema.controlCount, 218);
+  assert.equal(schema.controlCount, 227);
   assert.match(source, /state\.inflowBoundary = inflowBoundaryConfig;/, 'the receipt carries the resolved inflow');
   assert.match(index, /id="volume-inflow-boundary-state"/, 'the cockpit shows the inflow admission');
   assert.match(index, /NOT admitted: \$\{inflow\.effective\.reason\}/, 'a requested but refused inflow looks refused');

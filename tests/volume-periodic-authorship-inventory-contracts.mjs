@@ -33,6 +33,12 @@ const admitted = new Map([
   ['volume-core.js', [
     { class: 'operator-authored wind angle to direction', line: /windDirection = vec3<f32>\(cos\(windAngle\), 0\.0, sin\(windAngle\)\);/, calls: 2 },
   ]],
+  ['volume-inflow-aperture.mjs', [
+    // Static authored geometry of the inflow aperture coverage map: jets placed
+    // on the ring circle, and the porous bed's fixed directional field. Built
+    // once per pattern on the CPU; nothing here animates a uniform.
+    { class: 'inflow aperture static coverage geometry', line: /Math\.(?:cos|sin)\((?:angle\) \* circle|direction\)|\(q\[0\] \* Math\.cos\(direction\))/, calls: 5 },
+  ]],
   ['selective-head-live-runtime.mjs', [
     { class: 'frozen-model static Fourier coordinate representation', line: /standardize\((?:sin|cos)\(phase\), featureIndex\)/, calls: 2 },
   ]],
@@ -94,6 +100,7 @@ function assertPeriodicAuthorshipInventory(entries) {
       'diagnostic camera holdout geometry',
       'diagnostic camera orbit geometry',
       'frozen-model static Fourier coordinate representation',
+      'inflow aperture static coverage geometry',
       'offline model-probe static Fourier coordinate representation',
       'offline trainer static Fourier x/y coordinate representation',
       'operator-authored wind angle to direction',
