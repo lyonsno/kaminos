@@ -24,6 +24,15 @@ def digest(path):
     return h.hexdigest()
 
 
+def model_timestep_from_sampler_capture(timestep):
+    """FlowEuler stores normalized t; sparse model receives float32 1000*t."""
+    values = np.asarray(timestep)
+    if values.size != 1 or not np.isfinite(values).all():
+        raise ValueError('sampler capture must contain one finite normalized timestep')
+    # Match the source's Python-scalar multiplication before its float32 cast.
+    return np.array([1000 * float(values.reshape(-1)[0])], dtype=np.float32)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source-root', type=Path, required=True)
@@ -48,7 +57,8 @@ def main():
             raise ValueError('reference source worktree must be clean')
         report['checkpoint'] = {'path': str(args.checkpoint.resolve()), 'sha256': digest(args.checkpoint)}
         report['sample'] = {'path': str(args.sample.resolve()), 'sha256': digest(args.sample)}
-        for file in ('trellmlx/models/sparse_structure_flow.py', 'trellmlx/weight_loader.py'):
+        for file in ('trellmlx/models/sparse_structure_flow.py', 'trellmlx/weight_loader.py',
+                     'trellmlx/samplers.py'):
             report['source'][file] = digest(root / file)
         sys.path.insert(0, str(root))
         import mlx.core as mx
@@ -92,7 +102,11 @@ def main():
         sample = np.asarray(data['sample_in'], dtype=np.float32)
         if sample.shape != (1, 8, 16, 16, 16):
             raise ValueError(f'unexpected real sample shape {sample.shape}')
-        timestep = np.asarray(data['t'], dtype=np.float32).reshape(1)
+        timestep = model_timestep_from_sampler_capture(data['t'])
+        report['timeConvention'] = {'captureField': 't', 'captureSpace': 'normalized-sampler-time',
+            'captureValue': float(np.asarray(data['t']).reshape(-1)[0]),
+            'modelMultiplier': 1000, 'modelValue': float(timestep[0]),
+            'modelDtype': 'float32', 'source': 'trellmlx/samplers.py:flow_euler_sample'}
         save('sample', sample)
         save('timestep', timestep)
         with mx.stream(mx.cpu):
