@@ -41,4 +41,16 @@ assert.equal(compareLearnedSubdivision(new Float32Array([.1, -.1, .00001]), b).s
 assert.throws(() => compareLearnedSubdivision(new Float32Array(), new Float32Array()), /empty/);
 assert.equal(compareHalfRoundTrip(new Float32Array([0, -0, Infinity, NaN]), new Float32Array([0, -0, Infinity, NaN])).passed, true);
 assert.equal(compareHalfRoundTrip(new Float32Array([0]), new Float32Array([-0])).passed, false);
+const { compareSLatDecoderObservation } = await import('../slat-decoder-witness-checks.js');
+assert.equal(typeof compareSLatDecoderObservation, 'function',
+ 'Different learned child counts must remain negative evidence without aborting the remaining raw observations.');
+const changedCount = compareSLatDecoderObservation('features', new Float32Array([1, 2]), new Float32Array([1]));
+assert.equal(changedCount.passed, false);
+assert.equal(changedCount.actualCount, 2);
+assert.equal(changedCount.expectedCount, 1);
+assert.match(changedCount.error, /length|shape/);
+assert.equal(compareSLatDecoderObservation('subdivision0', new Float32Array([.1]), new Float32Array([-.00001])).passed, false);
+assert.equal(compareSLatDecoderObservation('features', new Float32Array([NaN]), new Float32Array([1])).passed, false);
+assert.equal(compareSLatDecoderObservation('coordinates', new Int32Array([0, 1, 2]), new Int32Array([0, 1, 2])).passed, true);
+assert.throws(() => compareSLatDecoderObservation('unknown', new Float32Array([1]), new Float32Array([1])), /unknown/);
 console.log('Learned decoder admission rejects source/route/precision/count/partial-evidence substitution; exact subdivision signs and half bits are load-bearing. Metadata is not live conformance.');

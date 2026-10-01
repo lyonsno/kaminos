@@ -1,8 +1,6 @@
 import { createWebGpuInferenceSession, WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js';
 import { createTrellisSLatDecoderAdapter, SLAT_DECODER_ROUTE } from './slat-decoder.js';
-import { validateSLatDecoderFixture, compareLearnedSubdivision, compareHalfRoundTrip } from './slat-decoder-witness-checks.js';
-import { compareDecoderTensor } from './sparse-decoder-witness-checks.js';
-import { compareOccupancyCoordinates } from './occupancy-coordinate-witness-checks.js';
+import { validateSLatDecoderFixture, compareSLatDecoderObservation } from './slat-decoder-witness-checks.js';
 import { validateNativePrefixBackend, prefixAdapterName } from './sparse-prefix-witness-checks.js';
 import { preserveSamplerWitnessFailure, recordSamplerCompletion } from './sparse-sampler-witness-checks.js';
 const hash = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), v => v.toString(16).padStart(2, '0')).join('');
@@ -79,8 +77,8 @@ export async function runSLatDecoderWitness(expectedSha) {
       const raw = await runtime.readTensor(t), data = name === 'coordinates' ? new Int32Array(raw) : new Float32Array(raw),
         saved = await fetch('/output/' + name, { method: 'POST', headers: { 'X-Tensor-Dtype': t.dtype }, body: data });
       if (!saved.ok) throw Error('raw learned decoder observation not saved ' + name);
-      const expected = tensors[name === 'halfRoundTrip' ? 'halfInputs' : 'expected.' + name], comparison = name === 'coordinates' ? compareOccupancyCoordinates(data, expected) :
-        name === 'halfRoundTrip' ? compareHalfRoundTrip(data, expected) : name.startsWith('subdivision') ? compareLearnedSubdivision(data, expected) : compareDecoderTensor(data, expected);
+      const expected = tensors[name === 'halfRoundTrip' ? 'halfInputs' : 'expected.' + name],
+        comparison = compareSLatDecoderObservation(name, data, expected);
       report.outputs[name] = { shape: t.shape, dtype: t.dtype, sha256: await hash(data), comparison };
     }
     report.numericalStatus = Object.values(report.outputs).every(r => r.comparison.passed) ? 'passed' : 'failed';

@@ -1,5 +1,6 @@
 import { buildSLatDecoderPlan, slatDecoderWeightShapes } from './slat-decoder.js';
 import { compareDecoderTensor } from './sparse-decoder-witness-checks.js';
+import { compareOccupancyCoordinates } from './occupancy-coordinate-witness-checks.js';
 export const SLAT_DECODER_REFERENCE_ROUTE = 'pinned-MLX-GPU-source-SLat-decoder/native-FP16-torso-F32-endpoints';
 const sha = v => /^[a-f0-9]{64}$/.test(v ?? '');
 export function slatDecoderObservationShapes(manifest) {
@@ -58,4 +59,16 @@ export function compareHalfRoundTrip(actual, expected) {
   const a = new Uint32Array(actual.buffer, actual.byteOffset, actual.length), b = new Uint32Array(expected.buffer, expected.byteOffset, expected.length);let failures = 0;
   for (let i = 0; i < actual.length; i++) if (!(Number.isNaN(actual[i]) && Number.isNaN(expected[i])) && a[i] !== b[i]) failures++;
   return { passed: failures === 0, failures, count: actual.length, contract: 'exact finite/infinity/zero bits; NaN class, not payload' };
+}
+
+export function compareSLatDecoderObservation(name, actual, expected) {
+  const compare = name === 'features' ? compareDecoderTensor : name === 'coordinates' ? compareOccupancyCoordinates :
+    name === 'halfRoundTrip' ? compareHalfRoundTrip : /^subdivision\d+$/.test(name) ? compareLearnedSubdivision : null;
+  if (!compare) throw Error('unknown learned decoder observation ' + name);
+  try { return compare(actual, expected); }
+  catch (error) {
+    // A count/sign/numerical mismatch is negative evidence, not permission to
+    // stop retaining the other post-serving outputs of this same execution.
+    return { passed: false, error: error.message, actualCount: actual?.length, expectedCount: expected?.length };
+  }
 }
