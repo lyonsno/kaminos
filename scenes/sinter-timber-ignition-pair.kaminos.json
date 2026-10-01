@@ -26,7 +26,7 @@
       "type": "glb",
       "fileName": "forked-timber-reliquary-trestle-v0.glb",
       "label": "Receiver timber",
-      "transform": {"position": [2.5, 0.1, 0], "rotation": [0, 0, 0], "scale": [0.35, 0.35, 0.35]},
+      "transform": {"position": [0.6, 0.1, 0], "rotation": [0, 0, 0], "scale": [0.35, 0.35, 0.35]},
       "materials": {"side": 2, "transparent": false, "opacity": 1},
       "combustionBinding": {
         "schema": "kaminos.object-combustion-binding.v0",

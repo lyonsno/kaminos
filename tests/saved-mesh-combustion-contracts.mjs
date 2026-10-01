@@ -117,6 +117,15 @@ const actualTrestleSurface = buildSavedMeshStructuralSurface({
 });
 const trestleState = createLayeredStructuralMaterial({ columns: 11, rows: 11, layers: 11, notch: false });
 const actualTrestleSkin = createStructuralMeshSkinBinding({ mesh: actualTrestleSurface.meshSurface, state: trestleState });
+const ignitionScene = JSON.parse(readFileSync(new URL('../scenes/sinter-timber-ignition-pair.kaminos.json', import.meta.url), 'utf8'));
+for (const sceneObject of ignitionScene.objects) {
+  for (const [axis, domainMin, domainMax] of [[0, -1, 1], [1, -1, 3], [2, -1, 1]]) {
+    const endpoints = [-0.5, 0.5].map(sign =>
+      (actualTrestleSurface.worldOffset[axis] + sign * actualTrestleSurface.displayScale[axis]) * sceneObject.transform.scale[axis] + sceneObject.transform.position[axis]);
+    assert.ok(endpoints.every(value => value >= domainMin && value < domainMax),
+      `${sceneObject.id} default material support must lie inside the actual tall Pyro domain`);
+  }
+}
 assert.equal(actualTrestleSkin.vertexCount, 448);
 assert.equal(actualTrestleSkin.islandCount, 2);
 assert.deepEqual(actualTrestleSurface.meshSurface.islands.map(island => island.sourceLabel), [
