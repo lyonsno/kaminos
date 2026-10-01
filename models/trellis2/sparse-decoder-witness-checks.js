@@ -1,6 +1,7 @@
 import {buildSparseDecoderPlan,sparseDecoderWeightShapes} from './sparse-decoder.js';
 import {compareSamplerTensor} from './sparse-sampler-witness-checks.js';
 export { validateOccupancyCoordinateFixture, compareOccupancyCoordinates } from './occupancy-coordinate-witness-checks.js';
+export { validateSLatDecoderFixture, SLAT_DECODER_REFERENCE_ROUTE, compareLearnedSubdivision, compareHalfRoundTrip } from './slat-decoder-witness-checks.js';
 export const DECODER_REFERENCE_ROUTE='pinned-MLX-GPU-source-sparse-decoder/F32';
 export const compareDecoderTensor=(actual,expected)=>compareSamplerTensor('sample',actual,expected);
 export function decoderObservationShapes(plan){
