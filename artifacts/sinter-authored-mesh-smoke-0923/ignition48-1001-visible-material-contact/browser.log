@@ -1,0 +1,9 @@
+2026-10-01 14:49:18.751 Google Chrome for Testing Helper[47743:206017789] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+
+DevTools listening on ws://127.0.0.1:51506/devtools/browser/e0f63fa8-f445-4a87-ae2c-c372f6aa2879
+2026-10-01 14:49:18.817 Google Chrome for Testing Helper[47743:206017789] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+[47663:206017462:1001/144918.978372:ERROR:chrome/browser/ui/views/user_education/impl/browser_user_education_interface_impl.cc:186] Attempting to show IPH IPH_BatterySaverMode before browser initialization complete; IPH will not be shown.
+[47663:206017668:1001/144920.868614:ERROR:components/os_crypt/common/keychain_password_mac.mm:102] Keychain lookup failed: Error Domain=NSOSStatusErrorDomain Code=-128 "userCanceledErr" (-128)
+[47663:206017693:1001/144920.873031:ERROR:components/password_manager/core/browser/password_store/login_database_async_helper.cc:99] Encryption is not available.
+[47663:206017694:1001/144920.873033:ERROR:components/password_manager/core/browser/password_store/login_database_async_helper.cc:99] Encryption is not available.
+[47663:206017760:1001/144924.193670:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
