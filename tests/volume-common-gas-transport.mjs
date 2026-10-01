@@ -59,6 +59,9 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const thermalAdvectionRiseDirection = 1, fireLayerRiseDirection = 1, microdetailRiseDirection = 1;
   const readSlot = () => vec(0.4,heat,0.3,0.2);
   const sampleFluidSlot = (p,slot) => {calls.push({slot,p:[p.x,p.y,p.z]}); return vec(0.4,heat,0.3,0.2);};
+  // The inflow law's transport sampler is the plain sampler plus a ghost below
+  // the floor; inactive in this block (no inflow), so it is the same sample.
+  const sampleFluidSlotInflow = sampleFluidSlot;
   const sampleFrontField = p => {calls.push({slot:'front',p:[p.x,p.y,p.z]}); return 0.5;};
   ${translate(helpers)}
   ${translate(core.slice(mainStart, mainEnd))}

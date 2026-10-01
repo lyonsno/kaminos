@@ -74,7 +74,7 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
   assert.doesNotMatch(fluidLayout, /binding: 16/, 'predictor must not be added to the shared fluid bind group layout');
   assert.ok(source.includes('fn csTransportPredict('), 'predictor entry point must exist');
   const predict = wgslFunction('csTransportPredict');
-  assert.match(predict, /fluidPredict\[base \+ slot\] = sampleFluidSlot\(backCell, slot\)/, 'predictor writes the forward semi-Lagrangian estimate for every slot');
+  assert.match(predict, /fluidPredict\[base \+ slot\] = sampleFluidSlotInflow\(backCell, slot\)/, 'predictor writes the forward semi-Lagrangian estimate for every slot (through the transport sampler, which adds the inflow ghost below the floor when the inflow law is admitted)');
   const corrector = wgslFunction('macCormackSlot');
   assert.ok(corrector, 'macCormackSlot must exist');
   assert.match(corrector, /samplePredictSlot\(forwardCell, slot\)/, 'corrector re-advects the prediction backwards along the same characteristic');
