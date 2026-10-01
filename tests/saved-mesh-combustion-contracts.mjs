@@ -39,7 +39,7 @@ assert.match(
 );
 assert.match(sceneHost, /hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion/,
   'saved mesh scenes activate the shared volume consumer without regressing composed scenes');
-const activationBranch = sceneHost.match(/if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion\) \{[\s\S]*?\n  \}/)[0];
+const activationBranch = sceneHost.match(/if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion(?: \|\| [^\n]+)?\) \{[\s\S]*?\n  \}/)[0];
 for (const activeSceneComposition of [false, true]) {
   const selectedTabs = [];
   const activations = [];

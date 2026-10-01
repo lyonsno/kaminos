@@ -27188,6 +27188,10 @@ sceneInitialization.then(() => {
       if (preset !== plan.composition.flame.presetId) throw new Error('Mounted basin does not match the saved scene');
     }
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
+    if (new URLSearchParams(location.search).get('timber_ignition_smoke') === '1') {
+      const { mountTimberIgnitionSmoke } = await import('./timber-ignition-smoke.mjs');
+      await mountTimberIgnitionSmoke();
+    }
   }).catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
     // their own failure reporting (the volume route reports separately).
