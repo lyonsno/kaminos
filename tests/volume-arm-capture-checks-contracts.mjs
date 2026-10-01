@@ -55,6 +55,13 @@ test('headless browser: an independent executable is required; the installed GUI
   assert.doesNotMatch(capture, /Google Chrome\.app/, 'the capture no longer names the GUI app');
   assert.match(capture, /resolveHeadlessBrowser\(/, 'the capture resolves its executable through the shared resolver');
   assert.match(capture, /executable: headlessBrowser\.executable/, 'the report records the effective executable');
+  // The devtools socket is constructed only after the last await that precedes
+  // its open listener, and the open wait is bounded by --call-timeout-ms.
+  const versionFetch = capture.indexOf('/json/version'); const socket = capture.indexOf('ws = new WebSocket(page.webSocketDebuggerUrl)'); const openWait = capture.indexOf("ws.addEventListener('open'");
+  assert.ok(versionFetch > 0 && versionFetch < socket && socket < openWait, 'version fetch, then socket construction, then the open listener, with no await between the last two');
+  const between = capture.slice(socket, openWait); const awaits = between.match(/await/g) || [];
+  assert.ok(awaits.length === 1 && /await new Promise\(\(res, rej\) => \{ const timer/.test(between), 'the only await between constructing the socket and listening for open is the bounded open wait itself');
+  assert.match(capture.slice(openWait - 400, openWait + 400), /devtools socket did not open within \$\{callTimeoutMs\} ms/, 'the open wait is bounded');
 });
 
 // A launch that fails after validation (an executable script whose interpreter

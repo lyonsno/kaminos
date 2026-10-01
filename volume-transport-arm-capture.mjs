@@ -135,11 +135,15 @@ try {
   if (port === null) fail('browser-launch', `the spawned browser (pid ${chrome.pid}) never published DevToolsActivePort in ${profile}`);
   let pages = null; for (let i = 0; i < 100 && !pages; i++) { try { pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(100); } }
   if (!pages) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never answered`);
-  const page = pages.find(p => p.type === 'page'); ws = new WebSocket(page.webSocketDebuggerUrl);
+  const page = pages.find(p => p.type === 'page');
+  // The version is read before the socket is opened: an await between
+  // constructing the socket and attaching the open listener can miss the open
+  // event and wait forever (which is what happened at 5ec49992).
   let browserVersion = null; try { browserVersion = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json())?.Browser ?? null; } catch { /* recorded as null */ }
   report.browser = { executable: headlessBrowser.executable, resolvedExecutable: headlessBrowser.resolvedExecutable, executableSource: headlessBrowser.source, version: browserVersion, pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
   writeReport();
-  await new Promise(res => ws.addEventListener('open', res, { once: true }));
+  ws = new WebSocket(page.webSocketDebuggerUrl);
+  await new Promise((res, rej) => { const timer = setTimeout(() => rej(new PhaseFailure('browser-launch', `devtools socket did not open within ${callTimeoutMs} ms (--call-timeout-ms)`)), callTimeoutMs); ws.addEventListener('open', () => { clearTimeout(timer); res(); }, { once: true }); ws.addEventListener('error', () => { clearTimeout(timer); rej(new PhaseFailure('browser-launch', 'devtools socket error before open')); }, { once: true }); });
   let id = 0; const pending = new Map();
   const callTimeout = (ms, label) => new Error(`${label} after ${ms} ms (--call-timeout-ms)`);
   ws.addEventListener('message', ev => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; } if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300)); if (m.method === 'Runtime.exceptionThrown') errors.push('exception: ' + (m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text).slice(0, 300)); });
