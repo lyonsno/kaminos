@@ -114,6 +114,13 @@ try {
       if(originalSource)assert.deepEqual(view.source.values,originalSource,'orientation comparison requires identical raw source coefficients');
       else originalSource=view.source.values;
       await page.screenshot({path:`${out}/orientation-${name}.png`});
+      if(process.argv.includes('--orientation-ao-check')) {
+        const enabled=await page.isChecked('#ao-toggle');
+        await page.uncheck('#ao-toggle');await page.waitForTimeout(700);
+        await page.screenshot({path:`${out}/ao-off-${name}.png`});
+        report.views.at(-1).aoCheck={wasEnabled:enabled,effectiveEnabled:await page.isChecked('#ao-toggle')};await save();
+        if(enabled)await page.check('#ao-toggle');
+      }
       if(process.argv.includes('--orientation-diagnosis')) {
         const fields=await page.evaluate(async()=>{
           const read=await window.__kaminosSceneRadiance.readback();
