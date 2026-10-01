@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { validateBlockFixture, validateBlockChainFixture, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
-import { finalizeSparseWitness } from './sparse-witness-finalize.mjs';
+import { finalizeSparseWitness, persistSparseWitnessResult, admitSparseWitnessResult } from './sparse-witness-finalize.mjs';
 import { validateFlowFixture } from './sparse-flow-witness-checks.js';
 import { validateSamplerFixture, validateSamplerTrajectoryFixture, SAMPLER_OBSERVATIONS } from './sparse-sampler-witness-checks.js';
 import { validateDecoderFixture, decoderObservationShapes } from './sparse-decoder-witness-checks.js';
@@ -34,9 +34,17 @@ let server, child, cdp, profile;
 // Built-in CDP client: no dependency on an operator Chrome profile or GUI app.
 async function connect(url) {
   const socket = new WebSocket(url), pending = new Map(), listeners = new Map();
-  let nextId = 0;
+  let nextId = 0, failure;
+  const rejectWaiters = message => {
+    failure ||= new Error(message);
+    for (const entry of pending.values()) entry.reject(failure);
+    pending.clear();
+    for (const entries of listeners.values()) for (const entry of entries) entry.reject(failure);
+    listeners.clear();
+  };
   await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true });
-    socket.addEventListener('error', reject, { once: true }); });
+    socket.addEventListener('error', () => reject(new Error('browser CDP connection error')), { once: true });
+    socket.addEventListener('close', () => reject(new Error('browser CDP connection closed before open')), { once: true }); });
   socket.addEventListener('message', event => {
     const row = JSON.parse(event.data);
     if (row.id) {
@@ -44,21 +52,23 @@ async function connect(url) {
       if (row.error) entry?.reject(new Error(JSON.stringify(row.error))); else entry?.resolve(row.result);
     } else {
       const key = `${row.sessionId || ''}:${row.method}`;
-      for (const resolve of listeners.get(key) || []) resolve(row.params);
+      for (const entry of listeners.get(key) || []) entry.resolve(row.params);
       listeners.delete(key);
     }
   });
-  socket.addEventListener('close', () => {
-    for (const entry of pending.values()) entry.reject(new Error('browser CDP connection closed'));
-  });
+  socket.addEventListener('close', () => rejectWaiters('browser CDP connection closed'));
+  socket.addEventListener('error', () => rejectWaiters('browser CDP connection error'));
   return {
     call(method, params = {}, sessionId) { return new Promise((resolve, reject) => {
+      if (failure || socket.readyState !== WebSocket.OPEN) { reject(failure || new Error('browser CDP connection closed')); return; }
       const id = ++nextId; pending.set(id, { resolve, reject });
-      socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+      try { socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })); }
+      catch (error) { pending.delete(id); reject(error); rejectWaiters('browser CDP connection error'); }
     }); },
-    once(method, sessionId) { return new Promise(resolve => {
+    once(method, sessionId) { return new Promise((resolve, reject) => {
+      if (failure || socket.readyState !== WebSocket.OPEN) { reject(failure || new Error('browser CDP connection closed')); return; }
       const key = `${sessionId || ''}:${method}`;
-      listeners.set(key, [...(listeners.get(key) || []), resolve]);
+      listeners.set(key, [...(listeners.get(key) || []), { resolve, reject }]);
     }); },
     close() { socket.close(); },
   };
@@ -126,6 +136,13 @@ try {
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
       if (pathname === '/favicon.ico') { res.writeHead(204).end(); return; }
+      if (req.method === 'POST' && pathname === '/witness-result') {
+        const chunks = []; for await (const chunk of req) chunks.push(chunk);
+        const receipt = await persistSparseWitnessResult({ report, bytes: Buffer.concat(chunks),
+          outputPath: path.join(path.dirname(output), 'browser-result.json'), write: fs.writeFile });
+        await persist();
+        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(receipt)); return;
+      }
       if (req.method === 'POST' && /^\/output\/[\w.-]+$/.test(pathname)) {
         const chunks = []; for await (const chunk of req) chunks.push(chunk);
         const bytes = Buffer.concat(chunks), name = pathname.split('/').at(-1);
@@ -184,11 +201,15 @@ try {
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
     const { ${isSampler ? 'runSparseSamplerWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
-    return { url: location.href, result: await ${isSampler ? 'runSparseSamplerWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''}) };
+    const result = await ${isSampler ? 'runSparseSamplerWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''});
+    const saved = await fetch('/witness-result', { method: 'POST', body: JSON.stringify(result) });
+    if (!saved.ok) throw new Error('browser result was not durably saved');
+    return { url: location.href, receipt: await saved.json() };
   })()`, awaitPromise: true, returnByValue: true }, sessionId);
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   const value = result.result.value;
-  report.effectiveUrl = value.url; report.result = value.result;
+  report.effectiveUrl = value.url;
+  value.result = admitSparseWitnessResult(report, value.receipt);
   if (value.url !== report.requestedUrl) throw new Error('effective browser URL differs from requested route');
   if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));

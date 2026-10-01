@@ -16,15 +16,17 @@ export function roundBfloat16(value) {
 }
 
 export function buildSparsePrefixPlan({ resolution = 16, inChannels = 8,
-  channels = 1536, frequencyDim = 256 } = {}) {
+  channels = 1536, frequencyDim = 256, tokenRows } = {}) {
   for (const [name, value] of Object.entries({ resolution, inChannels, channels, frequencyDim })) {
     if (!Number.isSafeInteger(value) || value < 1) throw new RangeError(`${name} must be a positive integer`);
   }
   if (frequencyDim % 2) throw new RangeError('frequencyDim must be even');
-  const rows = resolution ** 3;
+  if (tokenRows !== undefined && (!Number.isSafeInteger(tokenRows) || tokenRows < 1)) throw new RangeError('tokenRows must be a positive integer');
+  const rows = tokenRows ?? resolution ** 3;
   if (!Number.isSafeInteger(rows * channels * 4)) throw new RangeError('tensor size exceeds integer addressing');
   return Object.freeze({ resolution, inChannels, channels, frequencyDim, rows,
-    inputShape: [1, inChannels, resolution, resolution, resolution],
+    inputShape: tokenRows === undefined ? [1, inChannels, resolution, resolution, resolution] : [rows, inChannels],
+    inputLayout: tokenRows === undefined ? 'ncdhw' : 'token-major',
     projectedShape: [rows, channels], modulationShape: [1, 6 * channels],
     outputArithmetic: 'bf16-values-in-f32-storage',
     stages: ['noise-input-projection', 'timestep-embedding', 'time-linear-0',
@@ -76,7 +78,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>,
   let channel = index % ${plan.channels}u;
   var sum = 0.0;
   for (var k = 0u; k < ${plan.inChannels}u; k++) {
-    sum += noise[k * ${plan.rows}u + row] * weight[channel * ${plan.inChannels}u + k];
+    sum += noise[${plan.inputLayout === 'token-major' ? `row * ${plan.inChannels}u + k` : `k * ${plan.rows}u + row`}] * weight[channel * ${plan.inChannels}u + k];
   }
   projected[index] = round_bf16(sum + bias[channel]);
 }`;
@@ -106,7 +108,7 @@ export function createTrellisSparsePrefixAdapter({ route, weights, config = {}, 
   if (sampleTensor && (!sampleTensor.buffer || sampleTensor.dtype !== 'f32' ||
       JSON.stringify(sampleTensor.shape) !== JSON.stringify(plan.inputShape) ||
       !(sampleTensor.usage & U.storage))) {
-    throw new TypeError('borrowed sample tensor must be complete F32 NCDHW storage');
+    throw new TypeError(`borrowed sample tensor must be complete F32 ${plan.inputLayout} storage`);
   }
   const resources = [];
   let disposed = false;
@@ -161,7 +163,7 @@ export function createTrellisSparsePrefixAdapter({ route, weights, config = {}, 
         if (disposed) throw new Error('sparse prefix adapter is disposed');
         if (sampleTensor && sample !== undefined) throw new TypeError('borrowed sample tensor is caller-owned; do not upload a CPU replacement');
         if (!sampleTensor && (!(sample instanceof Float32Array) || sample.length !== plan.rows * plan.inChannels || !sample.every(Number.isFinite))) {
-          throw new TypeError('sample must contain the complete finite NCDHW noise tensor');
+          throw new TypeError(`sample must contain the complete finite ${plan.inputLayout} noise tensor`);
         }
         if (!Number.isFinite(timestep)) throw new TypeError('timestep must be finite');
         if (!sampleTensor) runtime.uploadTensor(noise, sample);

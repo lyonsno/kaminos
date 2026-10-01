@@ -26,10 +26,15 @@ export function buildSparseSamplerPlan(config={}){
       dt:Math.fround(time-times[i+1]),coefficient:Math.fround(coefficient),inverseCoefficient:Math.fround(1/coefficient),
       guided:guidanceStrength!==1&&time>=guidanceInterval[0]&&time<=guidanceInterval[1]});
   });
+  const {tokenRows}=config;
+  if(tokenRows!==undefined&&(!Number.isSafeInteger(tokenRows)||tokenRows<1))throw new RangeError('tokenRows must be a positive integer');
+  const elements=tokenRows===undefined?32768:tokenRows*32;
+  if(!Number.isSafeInteger(elements*4)||elements*4>=2**32)throw new RangeError('sampler exceeds WebGPU u32 byte addressing');
   return Object.freeze({steps:Object.freeze(schedule),guidanceStrength,guidanceRescale,
-    guidanceInterval:Object.freeze([...guidanceInterval]),rescaleT,sigmaMin,elements:32768,shape:[1,8,16,16,16],
+    guidanceInterval:Object.freeze([...guidanceInterval]),rescaleT,sigmaMin,elements,shape:tokenRows===undefined?[1,8,16,16,16]:[tokenRows,32],
     stages:SPARSE_SAMPLER_STAGES,stdLogicalThreads:512,stdHardwareThreads:256,
-    stdAlgorithm:'pytorch-2.10-cuda-welford-vt2-block512/emulated512-logical-lanes/source-MLX-reference',
+    stdAlgorithm:tokenRows===undefined?'pytorch-2.10-cuda-welford-vt2-block512/emulated512-logical-lanes/source-MLX-reference':
+      'source-sparse-token-population-moment-row-tree-segment',
     arithmetic:'f32-cfg-rescale-and-euler/source-double-schedule-f32-controls'});
 }
 
@@ -123,6 +128,27 @@ const updateShader=`
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid:vec3<u32>){let i=gid.x;if(i<32768u){sample[i]=sample[i]-delta[i];}}`;
 
+// SparseTensor.std uses a 32-channel row tree, then serial row means and
+// second moments. It is population variance, unlike dense torch.std's Bessel
+// correction. Preserve this explicit source schedule without token caps.
+const sparseTokenStdShader=rows=>`
+@group(0) @binding(0) var<storage,read> positive:array<f32>;
+@group(0) @binding(1) var<storage,read> guided:array<f32>;
+@group(0) @binding(2) var<storage,read_write> output:array<f32>;
+@compute @workgroup_size(1)
+fn main(@builtin(workgroup_id) wid:vec3<u32>){
+  var mean_sum=0.0;var mean2_sum=0.0;
+  for(var row=0u;row < ${rows}u;row++){
+    var values:array<f32,32>;var squares:array<f32,32>;
+    for(var channel=0u;channel<32u;channel++){let i=row*32u+channel;
+      let value=select(positive[i],guided[i],wid.x==1u);values[channel]=value;squares[channel]=value*value;}
+    for(var offset=16u;offset>0u;offset/=2u){for(var channel=0u;channel<offset;channel++){
+      values[channel]=values[channel]+values[channel+offset];squares[channel]=squares[channel]+squares[channel+offset];}}
+    mean_sum=mean_sum+values[0]*0.03125;mean2_sum=mean2_sum+squares[0]*0.03125;
+  }
+  let mean=mean_sum/${rows}.0;let mean2=mean2_sum/${rows}.0;output[wid.x]=sqrt(mean2 - mean * mean);
+}`;
+
 export function createTrellisSparseSamplerAdapter({route,flow,config={},conditioning,negativeConditioning}){
   const runtime=route?.runtime,plan=buildSparseSamplerPlan(config);
   if(!runtime?.createTensor||!runtime?.runKernel||flow?.runtime!==runtime)throw new TypeError('model and sampler must use the same runtime');
@@ -145,12 +171,17 @@ export function createTrellisSparseSamplerAdapter({route,flow,config={},conditio
     const stds=tensor('stds',[2]),rescaled=tensor('x0-rescaled'),mixed=tensor('x0-mixed'),final=tensor('prediction-final');
     const delta=tensor('delta'),controls=tensor('controls',[8]);
     const R='read-only-storage',W='storage';
-    const define=(name,code,bindings,dispatch=[128,1,1])=>({name,dispatch,kernel:runtime.defineComputeKernel({name:`trellis.${name}`,code,
+    const groups=Math.ceil(plan.elements/256),limit=runtime.device?.limits?.maxComputeWorkgroupsPerDimension??65535;
+    const x=Math.min(groups,limit),y=Math.ceil(groups/x);if(y>limit)throw new RangeError('sampler exceeds device dispatch capacity');
+    const elementCode=code=>config.tokenRows===undefined?code:code.replaceAll('32768u',`${plan.elements}u`)
+      .replaceAll('gid:vec3<u32>)','gid:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>)')
+      .replaceAll('let i=gid.x;','let i=gid.x+gid.y*grid.x*256u;');
+    const define=(name,code,bindings,dispatch=[x,y,1])=>({name,dispatch,kernel:runtime.defineComputeKernel({name:`trellis.${name}`,code:elementCode(code),
       bindings:bindings.map(([resource,access],i)=>({name:`b${i}`,resource,access}))})});
     const operations={positive:define('sampler-positive-snapshot',copyShader,[[modelPrediction,R],[positive,W]]),
       guidance:define('sampler-guidance',guidanceShader,[[positive,R],[modelPrediction,R],[controls,R],[guided,W]]),
       xstart:define('sampler-xstart',xstartShader,[[sample,R],[positive,R],[guided,R],[controls,R],[x0Positive,W],[x0Guided,W]]),
-      std:define('sampler-guidance-std',stdShader,[[x0Positive,R],[x0Guided,R],[stds,W]],[2,1,1]),
+      std:define('sampler-guidance-std',config.tokenRows===undefined?stdShader:sparseTokenStdShader(config.tokenRows),[[x0Positive,R],[x0Guided,R],[stds,W]],[2,1,1]),
       rescale:define('sampler-guidance-rescale',rescaleShader,[[sample,R],[x0Guided,R],[stds,R],[controls,R],[rescaled,W],[mixed,W],[final,W]]),
       positiveFinal:define('sampler-final-snapshot',copyShader,[[positive,R],[final,W]]),
       guidedFinal:define('sampler-final-snapshot',copyShader,[[guided,R],[final,W]]),

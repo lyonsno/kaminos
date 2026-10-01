@@ -12,7 +12,7 @@ export function buildSparseFlowPlan(config = {}) {
     if (!Number.isSafeInteger(value) || value < 1) throw new RangeError(`${name} must be a positive integer`);
   }
   return Object.freeze({ prefix, block, numBlocks, outChannels,
-    outputShape:[1,outChannels,block.resolution,block.resolution,block.resolution],
+    outputShape:config.tokenRows === undefined ? [1,outChannels,block.resolution,block.resolution,block.resolution] : [block.rows,outChannels],
     stages:[...prefix.stages,...Array.from({length:numBlocks},()=>block.stages).flat(),
       'terminal-layernorm','terminal-output-projection'],
     arithmetic:'bf16-torso/f32-terminal-layernorm-and-output', terminalEpsilon:1e-5 });
@@ -37,7 +37,7 @@ fn main(@builtin(local_invocation_index) lane:u32,@builtin(workgroup_id) wid:vec
 }`;
 
 // Native [out,in] F32 head. Scatter directly to source NCDHW, not BF16.
-const terminalProjectionShader = (rows,width,columns) => `
+const terminalProjectionShader = (rows,width,columns,tokenMajor = false) => `
 @group(0) @binding(0) var<storage,read> input:array<f32>;
 @group(0) @binding(1) var<storage,read> weight:array<f32>;
 @group(0) @binding(2) var<storage,read> bias:array<f32>;
@@ -54,10 +54,10 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>,@builtin(workgroup_id) wid:v
     tile_a[lid.y*16u+lid.x]=a;tile_b[lid.y*16u+lid.x]=b;workgroupBarrier();
     for(var k=0u;k<16u;k++){sum+=tile_a[lid.y*16u+k]*tile_b[k*16u+lid.x];}workgroupBarrier();
   }
-  if(row<${rows}u&&col<${columns}u){output[col * ${rows}u + row]=sum+bias[col];}
+  if(row<${rows}u&&col<${columns}u){output[${tokenMajor ? `row * ${columns}u + col` : `col * ${rows}u + row`}]=sum+bias[col];}
 }`;
 
-export function createTrellisSparseFlowAdapter({ route, config={}, weights, conditioning, phases, sampleTensor }) {
+export function createTrellisSparseFlowAdapter({ route, config={}, weights, conditioning, phases, phaseTensor, sampleTensor }) {
   const plan=buildSparseFlowPlan(config),runtime=route?.runtime;
   if(!runtime?.createTensor||!runtime?.runKernel)throw new TypeError('registered WebGPU runtime required');
   if(!Array.isArray(weights?.blocks)||weights.blocks.length!==plan.numBlocks)throw new TypeError('complete source block weight sets required');
@@ -71,7 +71,7 @@ export function createTrellisSparseFlowAdapter({ route, config={}, weights, cond
   try{
     const sample=sampleTensor??tensor('sample',plan.prefix.inputShape);
     prefix=createTrellisSparsePrefixAdapter({route,config,weights:weights.prefix,sampleTensor:sample});
-    workspace=createTrellisSparseBlockWorkspace({route,config,conditioning,phases});
+    workspace=createTrellisSparseBlockWorkspace({route,config,conditioning,phases,phaseTensor});
     let hidden=prefix.outputs.projected;
     for(const blockWeights of weights.blocks){const block=createTrellisSparseBlockAdapter({route,config,weights:blockWeights,
       inputs:{projected:hidden,modulation:prefix.outputs.modulation},workspace});blocks.push(block);hidden=block.outputs.hidden;}
@@ -82,7 +82,7 @@ export function createTrellisSparseFlowAdapter({ route, config={}, weights, cond
     const define=(name,code,args,dispatch)=>({name,dispatch,kernel:runtime.defineComputeKernel({name:`trellis.flow.${name}`,code,
       bindings:args.map((resource,i)=>({name:`b${i}`,resource,access:i===args.length-1?'storage':'read-only-storage'}))})});
     const terminal=[define('terminal-layernorm',terminalNormShader(plan.block.rows,plan.block.channels),[hidden,normalized],[plan.block.rows,1,1]),
-      define('terminal-output-projection',terminalProjectionShader(plan.block.rows,plan.block.channels,plan.outChannels),[normalized,weight,bias,prediction],
+      define('terminal-output-projection',terminalProjectionShader(plan.block.rows,plan.block.channels,plan.outChannels,config.tokenRows !== undefined),[normalized,weight,bias,prediction],
         [Math.ceil(plan.outChannels/16),Math.ceil(plan.block.rows/16),1])];
     return Object.freeze({plan,runtime,routeId:route.routeId,inputs:Object.freeze({sample}),outputs:Object.freeze({prediction}),
       diagnostics:Object.freeze({hidden,normalized,...prefix.outputs}),
@@ -91,7 +91,7 @@ export function createTrellisSparseFlowAdapter({ route, config={}, weights, cond
         if(!Number.isFinite(timestep))throw new TypeError('finite model timestep required');
         if(sampleTensor&&cpuSample!==undefined)throw new TypeError('borrowed sampler state must not be CPU-reuploaded');
         if(cpuSample!==undefined&&(!(cpuSample instanceof Float32Array)||cpuSample.length!==plan.block.rows*plan.prefix.inChannels||
-            !cpuSample.every(Number.isFinite)))throw new TypeError('complete finite NCDHW sample required');
+            !cpuSample.every(Number.isFinite)))throw new TypeError(`complete finite ${plan.prefix.inputLayout} sample required`);
         if(!initialized&&cpuSample===undefined)throw new TypeError('initial sample upload required');
         running=true;
         try{

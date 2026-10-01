@@ -4,12 +4,13 @@ import { BF16_WGSL, roundBfloat16 } from './sparse-prefix.js';
 export const SPARSE_BLOCK_ROUTE = 'trellis2.sparse-flow-block.webgpu.v0';
 
 export function buildSparseBlockPlan({ resolution = 16, channels = 1536, heads = 12,
-  contextChannels = 1024, contextRows = 1029, hidden = 8192 } = {}) {
+  contextChannels = 1024, contextRows = 1029, hidden = 8192, tokenRows } = {}) {
   for (const [name, value] of Object.entries({ resolution, channels, heads, contextChannels, contextRows, hidden })) {
     if (!Number.isSafeInteger(value) || value < 1) throw new RangeError(`${name} must be a positive integer`);
   }
   if (channels % heads) throw new RangeError('channels must be divisible by heads');
-  const headDim = channels / heads, rows = resolution ** 3;
+  if (tokenRows !== undefined && (!Number.isSafeInteger(tokenRows) || tokenRows < 1)) throw new RangeError('tokenRows must be a positive integer');
+  const headDim = channels / heads, rows = tokenRows ?? resolution ** 3;
   if (headDim % 2) throw new RangeError('RoPE requires an even head dimension');
   const stages = ['block-modulation', 'self-layernorm', 'self-adaln', 'self-qkv', 'self-q-norm', 'self-k-norm', 'self-q-rope', 'self-k-rope'];
   for (let h = 0; h < heads; h++) stages.push(`self-score-${h}`, `self-softmax-${h}`, `self-value-${h}`);
@@ -43,11 +44,16 @@ const workspaceStates = new WeakMap();
 // One named activation set across serialized blocks. Diagnostics and hidden
 // are borrowed views: the next block overwrites them after their last use.
 // Offline observers may snapshot them; serving does not retain per-block copies.
-export function createTrellisSparseBlockWorkspace({ route, config = {}, conditioning, phases }) {
+export function createTrellisSparseBlockWorkspace({ route, config = {}, conditioning, phases, phaseTensor }) {
   const runtime = route?.runtime, plan = buildSparseBlockPlan(config);
   if (!runtime?.createTensor || !runtime?.uploadTensor) throw new TypeError('registered WebGPU runtime required');
+  if (phaseTensor && (phases !== undefined || !phaseTensor.buffer || phaseTensor.dtype !== 'f32' ||
+    phaseTensor.byteLength !== plan.rows * plan.headDim * 4 || !(phaseTensor.usage & U.storage) ||
+    JSON.stringify(phaseTensor.shape) !== JSON.stringify([plan.rows, plan.headDim / 2, 2]))) {
+    throw new TypeError('borrowed phases must be complete F32 storage; CPU replacement is forbidden');
+  }
   for (const [name, values, count] of [['conditioning', conditioning, plan.contextRows * plan.contextChannels],
-    ['phases', phases, plan.rows * plan.headDim]]) {
+    ...(!phaseTensor ? [['phases', phases, plan.rows * plan.headDim]] : [])]) {
     if (!(values instanceof Float32Array) || values.length !== count || !values.every(Number.isFinite)) throw new TypeError(`complete finite ${name} required`);
   }
   const resources = new Map(); let disposed = false, inUse = false;
@@ -71,9 +77,9 @@ export function createTrellisSparseBlockWorkspace({ route, config = {}, conditio
   };
   try {
     const context = allocate('conditioning', [plan.contextRows, plan.contextChannels]);
-    const rope = allocate('rope-phases', [plan.rows, plan.headDim / 2, 2]);
+    const rope = phaseTensor ?? allocate('rope-phases', [plan.rows, plan.headDim / 2, 2]);
     runtime.uploadTensor(context, Float32Array.from(conditioning, roundBfloat16));
-    runtime.uploadTensor(rope, phases);
+    if (!phaseTensor) runtime.uploadTensor(rope, phases);
     const workspace = Object.freeze({ plan, conditioning: context, phases: rope, dispose,
       setConditioning(values) {
         available(); if (inUse) throw new Error('sparse block workspace in use');
