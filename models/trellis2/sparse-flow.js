@@ -84,7 +84,7 @@ export function createTrellisSparseFlowAdapter({ route, config={}, weights, cond
     const terminal=[define('terminal-layernorm',terminalNormShader(plan.block.rows,plan.block.channels),[hidden,normalized],[plan.block.rows,1,1]),
       define('terminal-output-projection',terminalProjectionShader(plan.block.rows,plan.block.channels,plan.outChannels),[normalized,weight,bias,prediction],
         [Math.ceil(plan.outChannels/16),Math.ceil(plan.block.rows/16),1])];
-    return Object.freeze({plan,inputs:Object.freeze({sample}),outputs:Object.freeze({prediction}),
+    return Object.freeze({plan,runtime,routeId:route.routeId,inputs:Object.freeze({sample}),outputs:Object.freeze({prediction}),
       diagnostics:Object.freeze({hidden,normalized,...prefix.outputs}),
       async run({sample:cpuSample,timestep,conditioning:nextConditioning}={},invocation){
         if(disposed)throw new Error('sparse flow adapter disposed');if(running)throw new Error('sparse flow adapter in use');
