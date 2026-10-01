@@ -98,7 +98,8 @@ test('the core carries the pattern and swirl through the resolver, packs them, a
   const weight = wgslFunction('inflowApertureWeight');
   assert.match(weight, /textureLoad\(inflowCoverage, vec2<i32>\(clamp\(cell\.x, 0, i32\(GRID\) - 1\), clamp\(cell\.z, 0, i32\(GRID\) - 1\)\), 0\)\.x/, 'the cell weight is read from the map texel');
   assert.doesNotMatch(source, /fn inflowApertureCoverageAt\(/, 'the shader no longer evaluates the aperture shape');
-  assert.match(source, /\{ binding: 17, visibility: GPUShaderStage\.COMPUTE, texture: \{ sampleType: 'unfilterable-float', viewDimension: '2d' \} \}/, 'layout entry: an unfilterable float texture, compute only');
+  // The raymarch fragment entry point samples the fluid through sampleFluidSlot and so reaches the map: both stages must be visible (the second live look failed pipeline validation with compute-only).
+  assert.match(source, /\{ binding: 17, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, texture: \{ sampleType: 'unfilterable-float', viewDimension: '2d' \} \}/, 'layout entry: an unfilterable float texture visible to fragment and compute');
   assert.match(source, /\{ binding: 17, resource: inflowCoverageTexture\.createView\(\) \}/, 'bind group entry');
   assert.match(source, /inflowCoverageTexture = device\.createTexture\(\{\s*label: `kaminos inflow aperture coverage map[\s\S]{0,200}format: 'r32float'/, 'the texture is created with the fluid state');
   assert.match(source, /device\.queue\.writeTexture\(\{ texture: inflowCoverageTexture \}, inflowCoverageMap\.cells, \{ bytesPerRow: gridSize \* Float32Array\.BYTES_PER_ELEMENT \}, \[gridSize, gridSize, 1\]\)/, 'and written when the map changes');

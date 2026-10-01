@@ -13214,7 +13214,9 @@ export function createKaminosVolumePrototype({
         { binding: 13, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
-        { binding: 17, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
+        // The raymarch fragment stage samples the fluid through sampleFluidSlot,
+        // which reads the coverage map below the floor, so both stages see it.
+        { binding: 17, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
