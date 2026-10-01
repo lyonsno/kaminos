@@ -257,6 +257,13 @@ try {
   check('new-contact Apply advances the same damaged arch without requiring a subcritical fracture', contactIssues.length === 0 && state.routeWitness.cases.intact.contact.column === target.column && state.routeWitness.cases.intact.contact.row === target.row, {contactIssues, before: preRelease, after: state.routeWitness.cases});
   check('front-only load reaches unloaded depth layers through surviving bonds', Object.values(state.routeWitness.cases).every(item => item.loadedNodeLayers.length === 1 && item.loadedNodeLayers[0] === item.layers - 1 && item.depthMotion.every(layer => layer.maxDisplacement > 0) && item.depthMotion.at(-1).maxDisplacement > item.depthMotion[0].maxDisplacement), state.routeWitness.cases);
   await capture('new-contact-fracture', state);
+  const crown = state.routeWitness.cases.intact.pickTargets.crown;
+  report.operatorInput.push({kind: 'click', contact: 'injured-crown-for-reload-comparison', target: crown});
+  save();
+  await send('Input.dispatchMouseEvent', {type: 'mousePressed', x: crown.x, y: crown.y, button: 'left', clickCount: 1});
+  await send('Input.dispatchMouseEvent', {type: 'mouseReleased', x: crown.x, y: crown.y, button: 'left', clickCount: 1});
+  state = await waitForWitness();
+  check('reload comparison selects the previously injured crown', state.routeWitness.selectedContact.column === crown.column && state.routeWitness.selectedContact.row === crown.row, {crown, selected: state.routeWitness.selectedContact});
   preRelease = state.routeWitness.cases;
   await evaluate('document.querySelector("#release").click()');
   state = await waitForWitness();

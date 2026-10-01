@@ -372,7 +372,7 @@
             const nodes = item.state.nodes.filter(node => node.layer === layer);
             return { layer, maxDisplacement: Math.max(...nodes.map(node => Math.hypot(...Object.values(node.displacement)))) };
           }),
-          pickTargets: Object.fromEntries([['left-shoulder', -0.22, 0.18], ['right-shoulder', 0.22, 0.18]].map(([label, x, y]) => {
+          pickTargets: Object.fromEntries([['left-shoulder', -0.22, 0.18], ['right-shoulder', 0.22, 0.18], ['crown', -0.05, 0.29]].map(([label, x, y]) => {
             const node = item.state.nodes.filter(node => node.layer === item.state.layers - 1 && !node.pinned).reduce((best, next) =>
               Math.hypot(next.x - x, next.y - y) < Math.hypot(best.x - x, best.y - y) ? next : best);
             const point = new THREE.Vector3(node.x + node.displacement.x, node.y + node.displacement.y,
