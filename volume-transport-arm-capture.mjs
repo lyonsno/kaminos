@@ -122,10 +122,13 @@ try {
   let headlessBrowser;
   try { headlessBrowser = resolveHeadlessBrowser(); } catch (error) { fail('browser-launch', String(error?.message || error)); }
   report.browser.executable = headlessBrowser.executable; report.browser.resolvedExecutable = headlessBrowser.resolvedExecutable; report.browser.executableSource = headlessBrowser.source; report.browser.profile = profile; writeReport();
+  // --use-mock-keychain: a fresh Chrome binary otherwise raises the macOS
+  // keychain (Chrome Safe Storage) password dialog on the operator's screen and
+  // the page sits behind the modal (2026-10-01: Page.navigate timed out that way).
   // A launch error Node reports asynchronously (ENOENT, EACCES) must reach the
   // same failure and cleanup path as everything else, not end the process.
   let launchError = null;
-  chrome = spawn(headlessBrowser.executable, ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
+  chrome = spawn(headlessBrowser.executable, ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check','--use-mock-keychain','--password-store=basic','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
   chrome.on('error', error => { launchError = error; });
   chrome.stdout.on('data', () => {}); chrome.stderr.on('data', () => {});
   // Chrome publishes the port it actually bound in DevToolsActivePort inside this
