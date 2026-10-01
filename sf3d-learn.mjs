@@ -344,13 +344,17 @@ runButton.addEventListener('click', async () => {
         },
         onIntermediateTriplane: async ({ stageId, triplanesBuf, decoder, decoderWeights, produceRegions }) => {
           const label = stageId === 'block-0-fuse-out' ? 'First shape' : 'Forming detail';
+          let revealed = false;
+          const retainedLabel = !featurePanel.hidden ? 'Showing image features' : mesh ? 'Showing preceding shape' : null;
           try {
-            clearGeometry();
-            featurePanel.hidden = true;
+            constructionPlane.visible = false;
+            if (retainedLabel) $('learn-view-label').textContent = `${retainedLabel}; preparing next surface`;
+            await requestPaint();
             const candidate = await decodeSf3dPreviewMesh(producer.device, triplanesBuf, decoder, decoderWeights, resolution, 384, {
               produceRegions,
               onSlab: async sample => {
-                constructionPlane.visible = true;
+                const retaining = !revealed && !!retainedLabel && !sample.mesh.numFaces;
+                constructionPlane.visible = !retaining;
                 constructionPlane.position.z = sample.maxZ;
                 const fraction = sample.completedSamples / sample.totalSamples;
                 const row = document.querySelector(`[data-stage="${stageId}"]`);
@@ -358,7 +362,11 @@ runButton.addEventListener('click', async () => {
                 row.querySelector('.stage-time').textContent = `${Math.round(fraction * 100)}%`;
                 progress.value = document.querySelectorAll('#learn-stages [data-state="done"]').length + fraction;
                 setStatus(`${label}: decoding spatial layer ${sample.completedLayers} / ${sample.totalLayers}`);
-                if (sample.mesh.numFaces) await replaceGeometry(sample.mesh.vertices, sample.mesh.faces, `${label}: building surface`);
+                if (sample.mesh.numFaces) {
+                  revealed = true;
+                  await replaceGeometry(sample.mesh.vertices, sample.mesh.faces, `${label}: building surface`);
+                }
+                else if (retaining) await requestPaint();
                 else {
                   $('learn-view-label').textContent = `${label}: sampling space`;
                   $('learn-view-empty').hidden = true;
@@ -381,7 +389,8 @@ runButton.addEventListener('click', async () => {
             setStatus(label);
           } catch (previewError) {
             constructionPlane.visible = false;
-            $('learn-view-label').textContent = `${label}: preview incomplete`;
+            $('learn-view-label').textContent = !revealed && retainedLabel
+              ? `${retainedLabel}; next preview unavailable` : `${label}: preview incomplete`;
             void requestPaint().catch(showRenderError);
             markStage(stageId, 'skipped');
             setStatus(`${stageId} preview unavailable`);

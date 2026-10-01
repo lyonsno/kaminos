@@ -15,22 +15,32 @@ const chromePath = value('--chrome', '/Applications/Google Chrome.app/Contents/M
 const width = Number(value('--width', '1440'));
 const height = Number(value('--height', '900'));
 const featureReplay = value('--feature-replay', '');
+const constructionContinuity = args.includes('--construction-continuity');
 const featureSample = featureReplay ? JSON.parse(fs.readFileSync(featureReplay, 'utf8')).observations.find(sample => sample.completedBlocks === 12) : null;
 fs.mkdirSync(outputDir, { recursive: true });
 const reportPath = path.join(outputDir, 'report.json');
 const report = {
   schema: 'kaminos.sf3d-learn-lifecycle.v0', ok: false, phase: 'preflight',
   sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-  effective: { baseUrl, width, height, producerRoute: 'synthetic-response-intercept', featureReplay, puppeteerPath, chromePath },
+  effective: { baseUrl, width, height, producerRoute: 'synthetic-response-intercept', featureReplay, constructionContinuity, puppeteerPath, chromePath },
   events: [],
 };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 write();
 const fakeProducer = `
 let runCount = 0;
+let previewCount = 0;
 globalThis.__learnFake = { resumeSecond: null };
 const mesh = { vertices: new Float32Array([-0.7, -0.5, 0, 0.7, -0.5, 0, 0, 0.7, 0.5]), faces: new Uint32Array([0, 1, 2]) };
-export async function decodeSf3dPreviewMesh() { return { mesh }; }
+export async function decodeSf3dPreviewMesh(...args) {
+  if (${constructionContinuity} && runCount === 1) {
+    previewCount++;
+    await args[6].onSlab({ mesh: { vertices: new Float32Array(), faces: new Uint32Array(), numFaces: 0, numVertices: 0 },
+      completedLayers: 6, totalLayers: 33, completedSamples: 6534, totalSamples: 35937, maxZ: -.6 });
+    await new Promise(resolve => { globalThis.__learnFake.resumeConstruction = resolve; });
+  }
+  return { mesh };
+}
 export async function createSf3dProducer() {
   return {
     device: {},
@@ -86,6 +96,26 @@ try {
     }));
     if (!report.featureView.visible || report.featureView.pageWidth > report.featureView.viewportWidth) throw new Error('feature replay is hidden or overflowing');
     await frame.evaluate(() => globalThis.__learnFake.resumeFeatures());
+  }
+  if (constructionContinuity) {
+    if (!featureSample) throw new Error('construction continuity requires feature replay');
+    report.retainedViews = [];
+    for (let stage = 0; stage < 2; stage++) {
+      await frame.waitForFunction(() => globalThis.__learnFake?.resumeConstruction);
+      const retained = await frame.evaluate(() => ({
+        featuresVisible: !document.querySelector('#learn-features').hidden,
+        emptyVisible: !document.querySelector('#learn-view-empty').hidden,
+        label: document.querySelector('#learn-view-label').textContent,
+        count: document.querySelector('#learn-mesh-count').textContent,
+      }));
+      report.retainedViews.push(retained); write();
+      if (retained.emptyVisible || (stage === 0 ? !retained.featuresVisible : retained.count === 'No geometry yet')) {
+        throw new Error(`previous result erased before replacement at preview ${stage}`);
+      }
+      await page.screenshot({ path: path.join(outputDir, `retained-preview-${stage}.png`) });
+      await frame.evaluate(() => { const resume = globalThis.__learnFake.resumeConstruction;
+        globalThis.__learnFake.resumeConstruction = null; resume(); });
+    }
   }
   await frame.waitForFunction(() => document.querySelector('#learn-stages [data-stage="final"]').dataset.state === 'done');
   report.first = await frame.evaluate(() => ({ label: document.querySelector('#learn-view-label').textContent, count: document.querySelector('#learn-mesh-count').textContent }));
