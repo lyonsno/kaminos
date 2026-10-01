@@ -4,6 +4,7 @@ import {
   Uint32BufferAttribute, Vector3, WebGPURenderer,
 } from './lib/three.webgpu.js';
 import { createSf3dProducer, decodeSf3dPreviewMesh } from './lib/sf3d/sf3d-learn-producer.js';
+import { featurePixels, similarityColor } from './sf3d-learn-features.mjs';
 
 const $ = id => document.getElementById(id);
 const source = $('learn-source');
@@ -17,7 +18,13 @@ const progress = $('learn-progress');
 const download = $('learn-download');
 const errorBox = $('learn-error');
 const viewer = $('learn-viewer');
-const stageIds = ['block-0-fuse-out', 'block-1-fuse-out', 'final'];
+const stageIds = ['encoder', 'block-0-fuse-out', 'block-1-fuse-out', 'final', 'export'];
+const featurePanel = $('learn-features');
+const featureCanvas = $('learn-feature-map');
+const featureContext = featureCanvas.getContext('2d');
+const scalePixels = new Uint8ClampedArray(256 * 4);
+for (let i = 0; i < 256; i++) scalePixels.set([...similarityColor(i / 255), 255], i * 4);
+$('learn-feature-scale').getContext('2d').putImageData(new ImageData(scalePixels, 256, 1), 0, 0);
 
 function setStatus(message) {
   status.textContent = message;
@@ -138,6 +145,7 @@ function replaceGeometry(vertices, faces, label) {
   }
   mesh = new Mesh(geometry, new MeshStandardMaterial({ color: label === 'Final mesh' ? '#79b998' : '#7c9eb0', metalness: 0.08, roughness: 0.72, side: 2 }));
   scene.add(mesh);
+  featurePanel.hidden = true;
   $('learn-view-empty').hidden = true;
   $('learn-view-label').textContent = label;
   $('learn-mesh-count').textContent = `${vertices.length / 3} vertices / ${faces.length / 3} faces`;
@@ -166,6 +174,10 @@ function markStage(stageId, state, elapsedMs = null) {
 
 function resetStages() {
   clearGeometry();
+  featurePanel.hidden = true;
+  featureCanvas.dataset.block = '';
+  featureContext.clearRect(0, 0, featureCanvas.width, featureCanvas.height);
+  $('learn-feature-source').src = source.src;
   for (const id of stageIds) markStage(id, 'waiting');
   progress.value = 0;
   errorBox.hidden = true;
@@ -278,6 +290,37 @@ runButton.addEventListener('click', async () => {
       runId: `learn-${Date.now()}`,
       onProgress: message => { setStatus(String(message)); },
       routeOverrides: {
+        cooperativeDino: true,
+        dinoChunkBlocks: 1,
+        onEncoderFeatures: async sample => {
+          const { pixels, min } = featurePixels(sample.values, sample.width, sample.height);
+          featureCanvas.width = sample.width;
+          featureCanvas.height = sample.height;
+          featureContext.putImageData(new ImageData(pixels, sample.width, sample.height), 0, 0);
+          featureCanvas.dataset.block = String(sample.completedBlocks);
+          $('learn-feature-step').textContent = `Block ${sample.completedBlocks} / ${sample.totalBlocks}`;
+          $('learn-feature-min').textContent = min.toFixed(2);
+          $('learn-feature-time').textContent = `${((performance.now() - started) / 1000).toFixed(1)}s`;
+          featurePanel.hidden = false;
+          $('learn-view-empty').hidden = true;
+          $('learn-view-label').textContent = 'Encoding image';
+          if (sample.completedBlocks === sample.totalBlocks) markStage('encoder', 'done', performance.now() - started);
+          window.dispatchEvent(new CustomEvent('sf3d-learn-observation', { detail: {
+            kind: 'encoder', ...sample, values: Array.from(sample.values), atMs: performance.now() - started,
+          } }));
+        },
+        onMeshExtracted: async ({ vertices, faces }) => {
+          await replaceGeometry(vertices, faces, 'Final mesh');
+          markStage('final', 'done', performance.now() - started);
+          setStatus('Shape complete; finishing materials and texture');
+          window.dispatchEvent(new CustomEvent('sf3d-learn-observation', { detail: {
+            kind: 'mesh', numVertices: vertices.length / 3, numFaces: faces.length / 3, atMs: performance.now() - started,
+          } }));
+        },
+        onObservationError: ({ stageId, error }) => {
+          if (stageId.startsWith('dino-')) markStage('encoder', 'skipped');
+          console.warn('SF3D Learn observation unavailable', stageId, error);
+        },
         cooperativeTwoStream: true,
         twoStreamDutyGranularity: 'stage',
         intermediateStageIds: ['block-0-fuse-out', 'block-1-fuse-out'],
@@ -301,9 +344,12 @@ runButton.addEventListener('click', async () => {
         },
       },
     });
-    await replaceGeometry(result.vertices, result.faces, 'Final mesh');
-    markStage('final', 'done', performance.now() - started);
-    setStatus('Mesh complete');
+    if (document.querySelector('[data-stage="final"]').dataset.state !== 'done') {
+      await replaceGeometry(result.vertices, result.faces, 'Final mesh');
+      markStage('final', 'done', performance.now() - started);
+    }
+    markStage('export', 'done', performance.now() - started);
+    setStatus('Textured mesh complete');
     outputUrl = URL.createObjectURL(new Blob([result.glb], { type: 'model/gltf-binary' }));
     download.href = outputUrl;
     download.hidden = false;

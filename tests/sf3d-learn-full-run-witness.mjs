@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { assertServedSourceIdentity } from './served-source-contract.mjs';
+import { acceptLearnObservations } from './learn-observation-acceptance.mjs';
 
 const args = process.argv.slice(2);
 const value = (flag, fallback) => {
@@ -14,6 +15,7 @@ const outputDir = path.resolve(value('--output-dir', '/private/tmp/kaminos-sf3d-
 const baseUrl = value('--url', 'http://127.0.0.1:8179');
 const puppeteerPath = value('--puppeteer', '');
 const chromePath = value('--chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+const imagePath = value('--image', '');
 const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
 const bundle = fs.readFileSync('lib/sf3d/sf3d-learn-producer.js');
@@ -24,7 +26,7 @@ const report = {
   schema: 'kaminos.sf3d-learn-full-run.v0', ok: false, phase: 'preflight',
   requested: { baseUrl, page: '/', previewDetail: '32' },
   effective: { sourceCommit, bundleSha256: sha256(bundle), bundleSource: fs.readFileSync('lib/sf3d/LEARN_BUILD.txt', 'utf8').trim(), puppeteerPath, chromePath },
-  events: [], statusTrace: [], stages: {},
+  events: [], statusTrace: [], stages: {}, observations: [],
 };
 const write = () => fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 write();
@@ -37,6 +39,7 @@ try {
   browser = await puppeteer.launch({ executablePath: chromePath, headless: false,
     args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--no-first-run', '--no-default-browser-check'] });
   const page = await browser.newPage();
+  await page.exposeFunction('recordLearnObservation', sample => { report.observations.push(sample); write(); });
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
   page.on('pageerror', error => { report.events.push({ type: 'pageerror', message: error.message }); write(); });
   page.on('error', error => { report.events.push({ type: 'page-crash', message: error.message }); write(); });
@@ -69,19 +72,33 @@ try {
   report.effective.page = identity.page;
   if (!identity.sourceLoaded || !identity.runEnabled || identity.resolution !== '32' || identity.error) throw new Error(`Learn first screen invalid: ${JSON.stringify(identity)}`);
   const canvas = await frame.$('#learn-viewer canvas');
+  await frame.evaluate(() => window.addEventListener('sf3d-learn-observation', event => {
+    void window.recordLearnObservation(event.detail);
+  }));
+  if (imagePath) {
+    await (await frame.$('#learn-file')).uploadFile(imagePath);
+    await frame.waitForFunction(() => !document.querySelector('#learn-run').disabled);
+    report.effective.input = { path: imagePath, sha256: sha256(fs.readFileSync(imagePath)) };
+  }
   const started = Date.now();
   await canvas.screenshot({ path: path.join(outputDir, 'empty.png') });
   report.phase = 'inference'; write();
   await frame.click('#learn-run');
-  const stageIds = ['block-0-fuse-out', 'block-1-fuse-out', 'final'];
+  const stageIds = ['encoder', 'block-0-fuse-out', 'block-1-fuse-out', 'final', 'export'];
+  const capturedBlocks = new Set();
   while (Object.keys(report.stages).length < stageIds.length) {
     const state = await frame.evaluate(() => ({
       status: document.querySelector('#learn-status').textContent,
       error: document.querySelector('#learn-error').hidden ? null : document.querySelector('#learn-error').textContent,
       running: document.querySelector('#learn-run').disabled,
+      block: Number(document.querySelector('#learn-feature-map').dataset.block),
       stages: Object.fromEntries([...document.querySelectorAll('#learn-stages [data-stage]')].map(row => [row.dataset.stage, row.dataset.state])),
     }));
     if (report.statusTrace.at(-1)?.text !== state.status) { report.statusTrace.push({ atMs: Date.now() - started, text: state.status }); write(); }
+    if (state.block && !capturedBlocks.has(state.block) && !report.stages['block-0-fuse-out']) {
+      await page.screenshot({ path: path.join(outputDir, `features-${state.block}.png`) });
+      capturedBlocks.add(state.block);
+    }
     for (const stageId of stageIds) {
       if (report.stages[stageId] || !['done', 'skipped'].includes(state.stages[stageId])) continue;
       const file = `${stageId}.png`;
@@ -111,9 +128,10 @@ try {
   report.output = { visible: outputPayload.visible, byteLength: outputPayload.byteLength, header: outputPayload.header,
     meshCount: outputPayload.meshCount, sha256: glb ? sha256(glb) : null, file: glb ? 'result.glb' : null };
   if (glb) fs.writeFileSync(path.join(outputDir, 'result.glb'), glb);
-  const stageHashes = Object.values(report.stages).map(stage => stage.canvasSha256);
+  const stageHashes = ['block-0-fuse-out', 'block-1-fuse-out', 'final'].map(id => report.stages[id].canvasSha256);
   if (Object.values(report.stages).some(stage => stage.state !== 'done')) throw new Error('one or more visible stages were skipped');
   if (new Set(stageHashes).size !== stageHashes.length) throw new Error('stage canvases did not change');
+  report.observationSummary = acceptLearnObservations(report.observations, report.stages.export.atMs);
   if (!report.output.visible || report.output.header !== 'glTF' || report.output.byteLength < 1024 || glb.length !== report.output.byteLength) {
     throw new Error('missing, partial, or invalid final GLB');
   }

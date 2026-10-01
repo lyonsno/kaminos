@@ -24,11 +24,13 @@
       <button id="learn-unload" type="button" disabled>Release model</button>
       <button id="learn-reload" type="button" hidden>Reload to recover</button>
       <p id="learn-status" role="status" aria-live="polite">Image loaded</p>
-      <progress id="learn-progress" max="3" value="0" aria-label="Geometry stages"></progress>
+      <progress id="learn-progress" max="5" value="0" aria-label="Generation milestones"></progress>
       <ol id="learn-stages" aria-label="Mesh progression">
+        <li data-stage="encoder"><span class="stage-mark"></span><span class="stage-name">Image features</span><span class="stage-time">Waiting</span></li>
         <li data-stage="block-0-fuse-out"><span class="stage-mark"></span><span class="stage-name">First shape</span><span class="stage-time">Waiting</span></li>
         <li data-stage="block-1-fuse-out"><span class="stage-mark"></span><span class="stage-name">Forming detail</span><span class="stage-time">Waiting</span></li>
         <li data-stage="final"><span class="stage-mark"></span><span class="stage-name">Final mesh</span><span class="stage-time">Waiting</span></li>
+        <li data-stage="export"><span class="stage-mark"></span><span class="stage-name">Textured download</span><span class="stage-time">Waiting</span></li>
       </ol>
       <a id="learn-download" hidden download="sf3d-mesh.glb">Download mesh</a>
       <p id="learn-error" role="alert" hidden></p>
@@ -36,6 +38,15 @@
     <section class="viewer-panel" aria-label="Evolving 3D mesh">
       <div class="viewer-header"><span>Live mesh</span><span id="learn-view-label">Awaiting first shape</span></div>
       <div id="learn-viewer"><div id="learn-view-empty">The mesh will appear here</div></div>
+      <section id="learn-features" aria-label="Live image features" hidden>
+        <div class="feature-heading"><h2>Image features</h2><span id="learn-feature-step">Awaiting encoder</span></div>
+        <div class="feature-pair">
+          <figure><div class="feature-square"><img id="learn-feature-source" src="./fixtures/sf3d-demo-chair.png" alt="Encoder input with the reference patch marked"><span class="reference-patch"></span></div><figcaption>Reference patch</figcaption></figure>
+          <figure><div class="feature-square feature-map"><canvas id="learn-feature-map" width="36" height="36" aria-label="Cosine similarity to the marked image patch"></canvas><span class="reference-patch"></span></div><figcaption>Patch similarity</figcaption></figure>
+        </div>
+        <div class="feature-scale"><span id="learn-feature-min">Lower</span><canvas id="learn-feature-scale" width="256" height="1" aria-hidden="true"></canvas><span>1.00</span></div>
+        <div class="feature-meta"><span>Cosine similarity / current block range</span><span id="learn-feature-time"></span></div>
+      </section>
       <div class="viewer-footer"><span>SF3D / WebGPU</span><span id="learn-mesh-count">No geometry yet</span></div>
     </section>
   </main>

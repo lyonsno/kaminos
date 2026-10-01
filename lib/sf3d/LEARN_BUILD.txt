@@ -1,5 +1,5 @@
 Experimental SF3D Learn bundle only; the product producer remains sf3d-producer.js.
-Source: lyonsno/sf3d-webgpu cc/cranial-geometry-preview-multistage-0927 at a370072
+Source: lyonsno/sf3d-webgpu cc/cranial-geometry-preview-multistage-0927 at 7d47326
 Build: npx vite build -c vite.lib.config.js
 Output: dist-lib/sf3d-producer.js copied to sf3d-learn-producer.js
 Workers and tetrahedral grid resolve beside this file in assets/ and tets/.
