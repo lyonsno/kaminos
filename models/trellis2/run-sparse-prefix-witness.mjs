@@ -7,6 +7,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { validateBlockFixture, validateBlockChainFixture, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 import { finalizeSparseWitness } from './sparse-witness-finalize.mjs';
+import { validateFlowFixture } from './sparse-flow-witness-checks.js';
 
 const { values } = parseArgs({ options: Object.fromEntries(
   ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture'].map(name => [name, { type: 'string' }])) });
@@ -66,7 +67,7 @@ try {
   report.phase = 'fixture-admission';
   fixture = await fs.realpath(values.fixture); report.fixtureRoot = fixture;
   report.phase = 'witness-admission'; report.witness = witness;
-  if (!['prefix', 'block'].includes(witness)) throw new Error('--witness must be prefix or block');
+  if (!['prefix', 'block', 'flow'].includes(witness)) throw new Error('--witness must be prefix, block or flow');
   if (values['next-block-fixture'] && witness !== 'block') throw new Error('--next-block-fixture requires block witness');
   if (witness === 'block') {
     if (!values['prefix-fixture']) throw new Error('--prefix-fixture is required for a block witness');
@@ -82,7 +83,9 @@ try {
   report.commit = git(['rev-parse', 'HEAD']);
   report.dirty = git(['status', '--porcelain']);
   if (report.commit !== report.expectedCommit || report.dirty) throw new Error('source revision must be the exact clean requested commit');
+  if (witness === 'flow') { report.phase = 'flow-reference-admission'; report.schema = 'trellis2.sparse-flow-browser.v0'; }
   report.fixtureSha256 = digest(await fs.readFile(path.join(fixture, 'manifest.json')));
+  if (witness === 'flow') validateFlowFixture(JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')));
   if (witness === 'block') {
     report.phase = 'block-reference-admission';
     validateBlockFixture(JSON.parse(await fs.readFile(path.join(fixture, 'manifest.json'), 'utf8')),
@@ -153,8 +156,8 @@ try {
   await loaded;
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
-    const { ${witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${witness}-witness.js');
-    return { url: location.href, result: await ${witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''}) };
+    const { ${witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${witness}-witness.js');
+    return { url: location.href, result: await ${witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''}) };
   })()`, awaitPromise: true, returnByValue: true }, sessionId);
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   const value = result.result.value;
@@ -163,6 +166,13 @@ try {
   if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
   const requiredOutputs = ['projected', 'modulation'];
+  if (witness === 'flow') {
+    requiredOutputs.push('hidden', 'normalized', 'prediction');
+    for (const name of ['models/trellis2/sparse-flow.js', 'models/trellis2/sparse-flow-witness.js', 'models/trellis2/sparse-flow-witness-checks.js',
+      'models/trellis2/sparse-prefix.js', 'models/trellis2/sparse-block.js', 'webgpu-inference-kit/src/inference-runtime.js']) {
+      if (!report.servedSources[name]) throw new Error(`missing full flow served-source attestation:${name}`);
+    }
+  }
   if (witness === 'block') requiredOutputs.push(...BLOCK_OBSERVATIONS);
   if (nextBlockFixture && (!report.rawOutputs?.['block1.input'] ||
       report.rawOutputs['block1.input'].sha256 !== value.result.inputs?.['block1.input']?.sha256)) {

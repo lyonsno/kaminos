@@ -74,7 +74,13 @@ export function createTrellisSparseBlockWorkspace({ route, config = {}, conditio
     const rope = allocate('rope-phases', [plan.rows, plan.headDim / 2, 2]);
     runtime.uploadTensor(context, Float32Array.from(conditioning, roundBfloat16));
     runtime.uploadTensor(rope, phases);
-    const workspace = Object.freeze({ plan, conditioning: context, phases: rope, dispose });
+    const workspace = Object.freeze({ plan, conditioning: context, phases: rope, dispose,
+      setConditioning(values) {
+        available(); if (inUse) throw new Error('sparse block workspace in use');
+        if (!(values instanceof Float32Array) || values.length !== plan.contextRows * plan.contextChannels ||
+            !values.every(Number.isFinite)) throw new TypeError('complete finite conditioning required');
+        runtime.uploadTensor(context, Float32Array.from(values, roundBfloat16));
+      } });
     workspaceStates.set(workspace, { runtime, plan, allocate, available,
       acquire() { available(); if (inUse) throw new Error('sparse block workspace in use'); inUse = true; },
       release() { inUse = false; } });

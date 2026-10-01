@@ -98,11 +98,16 @@ function dispatch1D(count, workgroupSize, limit) {
   return [x, y, 1];
 }
 
-export function createTrellisSparsePrefixAdapter({ route, weights, config = {} }) {
+export function createTrellisSparsePrefixAdapter({ route, weights, config = {}, sampleTensor }) {
   const runtime = route?.runtime;
   if (!runtime?.createTensor || !runtime?.defineComputeKernel) throw new TypeError('a registered WebGPU route runtime is required');
   const plan = buildSparsePrefixPlan(config);
   const sizes = validateSparsePrefixWeights(plan, weights);
+  if (sampleTensor && (!sampleTensor.buffer || sampleTensor.dtype !== 'f32' ||
+      JSON.stringify(sampleTensor.shape) !== JSON.stringify(plan.inputShape) ||
+      !(sampleTensor.usage & U.storage))) {
+    throw new TypeError('borrowed sample tensor must be complete F32 NCDHW storage');
+  }
   const resources = [];
   let disposed = false;
   const tensor = (name, shape, dtype = 'f32', usage = U.storage | U.copyDst | U.copySrc) => {
@@ -119,7 +124,7 @@ export function createTrellisSparsePrefixAdapter({ route, weights, config = {} }
     for (const [name, count] of Object.entries(sizes)) {
       w[name] = tensor(name, [count]); runtime.uploadTensor(w[name], weights[name]);
     }
-    const noise = tensor('noise', plan.inputShape);
+    const noise = sampleTensor ?? tensor('noise', plan.inputShape);
     const time = tensor('time', [1]);
     const projected = tensor('input-projected', plan.projectedShape);
     const embedding = tensor('time-embedding', [plan.frequencyDim]);
@@ -154,11 +159,13 @@ export function createTrellisSparsePrefixAdapter({ route, weights, config = {} }
     return Object.freeze({ plan, outputs: Object.freeze({ projected, modulation }),
       async run({ sample, timestep }, invocation) {
         if (disposed) throw new Error('sparse prefix adapter is disposed');
-        if (!(sample instanceof Float32Array) || sample.length !== plan.rows * plan.inChannels || !sample.every(Number.isFinite)) {
+        if (sampleTensor && sample !== undefined) throw new TypeError('borrowed sample tensor is caller-owned; do not upload a CPU replacement');
+        if (!sampleTensor && (!(sample instanceof Float32Array) || sample.length !== plan.rows * plan.inChannels || !sample.every(Number.isFinite))) {
           throw new TypeError('sample must contain the complete finite NCDHW noise tensor');
         }
         if (!Number.isFinite(timestep)) throw new TypeError('timestep must be finite');
-        runtime.uploadTensor(noise, sample); runtime.uploadTensor(time, new Float32Array([timestep]));
+        if (!sampleTensor) runtime.uploadTensor(noise, sample);
+        runtime.uploadTensor(time, new Float32Array([timestep]));
         for (const { name, kernel, dispatch } of kernels) {
           await runtime.runKernel(kernel, { stage: name, dispatch, schedulerInvocation: invocation, yieldAfter: true });
         }
