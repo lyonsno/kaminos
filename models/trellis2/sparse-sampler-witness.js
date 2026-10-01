@@ -1,8 +1,8 @@
 import {createWebGpuInferenceSession} from '../../webgpu-inference-kit/src/core.js';
 import {createTrellisSparseFlowAdapter} from './sparse-flow.js';
-import {createTrellisSparseSamplerAdapter,SPARSE_SAMPLER_ROUTE,SPARSE_SAMPLER_STAGES} from './sparse-sampler.js';
+import {createTrellisSparseSamplerAdapter,SPARSE_SAMPLER_ROUTE} from './sparse-sampler.js';
 import {validateFlowFixture} from './sparse-flow-witness-checks.js';
-import {validateSamplerFixture,compareSamplerTensor,SAMPLER_OBSERVATIONS} from './sparse-sampler-witness-checks.js';
+import {validateSamplerFixture,compareSamplerTensor,SAMPLER_OBSERVATIONS,requiredSamplerWitnessStages,finishSamplerWitnessObservation} from './sparse-sampler-witness-checks.js';
 import {validateNativePrefixBackend,prefixAdapterName} from './sparse-prefix-witness-checks.js';
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
 
@@ -44,7 +44,7 @@ export async function runSparseSamplerWitness(flowSha,samplerSha){
     device.pushErrorScope('validation');errorScope=true;
     device.addEventListener('uncapturederror',event=>errors.push(event.error.message));
     session=await createWebGpuInferenceSession({sessionId:`sparse-sampler-${crypto.randomUUID()}`,adapter,device,adapterName:prefixAdapterName(adapter.info)});
-    const route=await session.registerRoute({routeId:SPARSE_SAMPLER_ROUTE,runtimeOptions:{requiredStages:[...new Set([...flowPlan.stages,...SPARSE_SAMPLER_STAGES])],
+    const route=await session.registerRoute({routeId:SPARSE_SAMPLER_ROUTE,runtimeOptions:{requiredStages:requiredSamplerWitnessStages(flowPlan,plan,0),
       kernel:{profile:'trellis2-sparse-first-step-bf16-model-f32-sampler-v0'}}});
     report.effectiveRoute=route.routeId;if(report.effectiveRoute!==SPARSE_SAMPLER_ROUTE)throw new Error('effective sampler route mismatch');
     const prefix=Object.fromEntries(Object.entries(tensors).filter(([name])=>name.startsWith('prefix.')).map(([name,v])=>[name.slice(7),v]));
@@ -75,9 +75,7 @@ export async function runSparseSamplerWitness(flowSha,samplerSha){
     report.observerReadbackAndSaveMs=performance.now()-observer;
     const validation=await device.popErrorScope();errorScope=false;if(validation)errors.push(validation.message);
     if(errors.length)throw new Error(errors.join('\n'));
-    report.profile=route.runtime.finishProfile({evidence:{mode:'live',source:'sparse-first-step-exact-source-reference'}});
-    report.numericalStatus=Object.values(report.outputs).every(row=>row.comparison.passed)?'passed':'failed';
-    if(report.numericalStatus!=='passed')throw new Error('first sparse sampler numerical comparison failed');
+    finishSamplerWitnessObservation(report,()=>route.runtime.finishProfile({evidence:{mode:'live',source:'sparse-first-step-exact-source-reference'}}));
     report.status='succeeded';report.phase=null;
   }catch(error){report.error={message:error.message,stack:error.stack};}
   finally{

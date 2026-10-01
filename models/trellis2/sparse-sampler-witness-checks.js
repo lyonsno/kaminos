@@ -4,6 +4,25 @@ import {compareFlowTensor} from './sparse-flow-witness-checks.js';
 export const SAMPLER_REFERENCE_ROUTE='pinned-MLX-GPU-source-first-step-sampler/fast-SDPA/two-pass-LN/mlx-sum-QK/F32-CFG-Euler';
 export const SAMPLER_OBSERVATIONS=Object.freeze(['positive','negative','guided','x0Positive','x0Guided','stds','rescaled','mixed','final','sample']);
 export const SAMPLE_TOLERANCE=Object.freeze({atol:0.001,rtol:0.001});
+export function requiredSamplerWitnessStages(flowPlan,plan,stepIndex=0){
+  const step=plan.steps[stepIndex];if(!step)throw new RangeError('witness step outside source schedule');
+  const stages=['sampler-positive-snapshot'];
+  if(step.guided){
+    stages.push('sampler-guidance');
+    if(plan.guidanceRescale>0)stages.push('sampler-xstart','sampler-guidance-std','sampler-guidance-rescale');
+    else stages.push('sampler-final-snapshot');
+  }else stages.push('sampler-final-snapshot');
+  return [...new Set([...flowPlan.stages,...stages,'sampler-euler-delta','sampler-euler-update'])];
+}
+export function finishSamplerWitnessObservation(report,finishProfile){
+  // Numerical evidence exists independently of profile validation. Never hide
+  // it behind a bookkeeping exception or accept an empty/partial output set.
+  report.numericalStatus=SAMPLER_OBSERVATIONS.every(name=>report.outputs?.[name]?.comparison?.passed===true)?'passed':'failed';
+  report.profileStatus='failed';
+  try{report.profile=finishProfile();report.profileStatus='passed';}
+  catch(error){report.profileError={message:error.message,stack:error.stack};throw error;}
+  if(report.numericalStatus!=='passed')throw new Error('first sparse sampler numerical comparison failed');
+}
 export function compareSamplerTensor(name,actual,expected){
   if(!SAMPLER_OBSERVATIONS.includes(name))throw new Error('unknown sampler observation');
   if(name!=='sample')return compareFlowTensor(actual,expected);
