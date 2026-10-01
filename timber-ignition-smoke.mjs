@@ -35,6 +35,10 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
     state.receipts.push(receipt);
     publish({simStepCount: target});
   };
+  const presentPausedSimulation = () => {
+    requireState(volume.setSimulationPaused(true).paused === true, 'Simulation inspection pause failed');
+    requireState(volume.setSelectiveHeadLiveCapturePaused(false).paused === false, 'Live camera presentation failed');
+  };
   const fail = error => {
     volume.setSimulationPaused(true);
     publish({phase: 'failed', running: false, paused: true, error: String(error.message || error)});
@@ -51,6 +55,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
           && equal(source.transform.scale, [0.8, 0.8, 0.8]) && equal(receiver.transform.position, [2.5, 0.1, 0])
           && equal(receiver.transform.scale, [0.35, 0.35, 0.35]), 'Unexpected initial timber pose');
         await advance(1);
+        presentPausedSimulation();
         publish({phase: 'paused'});
       } catch (error) { fail(error); }
     },
@@ -72,6 +77,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
         }
         publish({phase: 'burner-off-transfer'});
         await advance(360);
+        presentPausedSimulation();
         publish({phase: 'complete', running: false, paused: true});
       } catch (error) { fail(error); }
     },

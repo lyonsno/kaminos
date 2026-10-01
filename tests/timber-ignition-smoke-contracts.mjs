@@ -24,8 +24,10 @@ function fixture() {
     debugState: () => structuredClone(state),
     pauseSelectiveHeadLiveAtSimStep: async target => {
       events.push(['advance', target]); state.simStepCount = target;
+      state.selectiveHeadLiveCapturePaused = true;
       return {ok: true, gpuComplete: true, paused: true, effectiveSimStepCount: target};
     },
+    setSelectiveHeadLiveCapturePaused: paused => {state.selectiveHeadLiveCapturePaused = paused; return {paused};},
     setSimulationPaused: paused => {state.simulationPaused = paused; return {paused};},
     setControls: controls => {events.push(['controls', controls]); Object.assign(state.controls, controls);},
     setAnalyticEmitterDescriptor: descriptor => {
@@ -44,6 +46,8 @@ const good = fixture();
 await good.smoke.initialize();
 assert.equal(good.smoke.status().phase, 'paused');
 assert.equal(good.state.simStepCount, 3);
+assert.equal(good.state.simulationPaused, true, 'cold scene inspection must not consume the material');
+assert.equal(good.state.selectiveHeadLiveCapturePaused, false, 'cold scene must keep presenting camera movement');
 await good.smoke.run();
 assert.deepEqual(good.events, [
   ['advance', 3], ['advance', 243], ['controls', {flowRate: 0}], ['emitter', null],
@@ -53,6 +57,8 @@ assert.deepEqual(good.events, [
 assert.equal(good.smoke.status().phase, 'complete');
 assert.equal(good.smoke.status().running, false);
 assert.equal(good.smoke.status().simStepCount, 603);
+assert.equal(good.state.simulationPaused, true, 'completed sequence must retain its material endpoint');
+assert.equal(good.state.selectiveHeadLiveCapturePaused, false, 'completed sequence must keep presenting camera movement');
 assert.ok(!JSON.stringify(good.smoke.status()).includes('ignited'), 'scripted completion cannot assert a material result');
 await assert.rejects(good.smoke.run(), /reset/);
 for (const mutate of [
