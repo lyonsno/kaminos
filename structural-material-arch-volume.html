@@ -47,7 +47,7 @@
   </style>
 </head>
 <body>
-  <header><h1>Stone arch</h1><span class="identity">TRELLIS silhouettes · front-layer load · 3-layer volume</span></header>
+  <header><h1>Stone arch</h1><span class="identity" id="construction-identity">TRELLIS silhouettes · front-layer load</span></header>
   <main>
     <div class="controls">
       <div class="force"><label for="force">Load · proxy units</label><input id="force" type="range" min="0.1" max="3" step="0.05" value="0.75"><output id="force-value" for="force">0.75</output></div>
@@ -74,8 +74,11 @@
       const { buildArchStructuralProxy } = core;
       const { advanceArchVolumeLoad, bindReleasedArchVolume, buildArchVolumeFrame, releaseArchStructuralLoad, resolveArchVolumeEquilibrium } = volume;
       const ROUTE = 'kaminos.structural-material.arch-force-volume.v0';
+      const params = new URLSearchParams(location.search);
+      const construction = params.get('construction') ?? 'sparse-depth';
+      const requestedLayers = params.has('layers') ? Number(params.get('layers')) : undefined;
       const profileRoot = './artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness';
-      const load = { x: -0.05, y: 0.29, patchRadius: 0.025, threshold: 0.04, iterations: 600, contactDepthMode: 'camera-facing-surface', contactLayer: 2 };
+      const load = { x: -0.05, y: 0.29, patchRadius: 0.025, threshold: 0.04, iterations: 600, contactDepthMode: 'camera-facing-surface' };
       const forceInput = document.getElementById('force');
       const forceOutput = document.getElementById('force-value');
       const canvas = document.getElementById('view');
@@ -108,13 +111,13 @@
       const cool = new THREE.Color('#a6c4bb');
       const warm = new THREE.Color('#d6c7a2');
       const hot = new THREE.Color('#f06b57');
-      const crackMaterial = new THREE.LineBasicMaterial({ color: '#f56e59', depthTest: false, transparent: true, opacity: 0.92 });
+      const crackMaterial = new THREE.LineBasicMaterial({ color: '#f56e59', depthTest: true, transparent: true, opacity: 0.92 });
       const markerMaterial = new THREE.MeshBasicMaterial({ color: '#e3bc70' });
       const cases = {};
       let applied = false;
       let released = false;
       let serial = 0;
-      let selectedContact = { x: load.x, y: load.y, sourceProfile: null, column: null, row: null, layer: 2 };
+      let selectedContact = { x: load.x, y: load.y, sourceProfile: null, column: null, row: null, layer: null };
       const raycaster = new THREE.Raycaster();
       let pointerStart = null;
 
@@ -128,10 +131,10 @@
 
       function moveContactMarkers() {
         for (const item of Object.values(cases)) {
-          const node = item.state.nodes.filter(node => node.layer === 2 && !node.pinned).reduce((best, next) =>
+          const node = item.state.nodes.filter(node => node.layer === item.state.layers - 1 && !node.pinned).reduce((best, next) =>
             Math.hypot(next.x - load.x, next.y - load.y) < Math.hypot(best.x - load.x, best.y - load.y) ? next : best);
           item.contactMarker.position.set(node.x + node.displacement.x, node.y + node.displacement.y,
-            (node.z + node.displacement.z) * (2 / 3) + 0.061);
+            (node.z + node.displacement.z) * (2 / 3) + item.faceOffset + 0.001);
         }
       }
 
@@ -172,6 +175,11 @@
           dummy.position.set(node.position[0], node.position[1], node.position[2] * (2 / 3));
           dummy.rotation.set(0, 0, 0);
           dummy.scale.setScalar(1);
+          if (item.state.construction.kind === 'cell-volume-braced' &&
+              (node.layer === 0 || node.layer === item.state.layers - 1)) {
+            dummy.scale.z = 0.5;
+            dummy.position.z += (node.layer === 0 ? 1 : -1) * item.blockDepth / 4;
+          }
           dummy.updateMatrix();
           item.blocks.setMatrixAt(index, dummy.matrix);
           color.copy(name === 'intact' ? cool : warm).lerp(hot, Math.min(1, node.strain / 0.12) * 0.88);
@@ -182,10 +190,11 @@
         item.blocks.computeBoundingSphere();
         if (item.cracks) { item.group.remove(item.cracks); item.cracks.geometry.dispose(); }
         const positions = [];
-        for (const segment of frame.brokenSegments) {
-          const front = segment[2] >= 0;
-          const faceZ = front ? 0.187 : -0.187;
-          positions.push(segment[0], segment[1], faceZ, segment[3], segment[4], faceZ);
+        for (const [index, segment] of frame.brokenSegments.entries()) {
+          const front = frame.brokenSegmentLayers[index] === item.state.layers - 1;
+          const faceOffset = (front ? 1 : -1) * (item.faceOffset + 0.0004);
+          positions.push(segment[0], segment[1], segment[2] * (2 / 3) + faceOffset,
+            segment[3], segment[4], segment[5] * (2 / 3) + faceOffset);
         }
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -207,10 +216,12 @@
           arrow.visible = nodeIndex !== undefined && item.state.load?.requestedForce > 0;
           if (nodeIndex === undefined) continue;
           const [x, y, z] = frame.nodes[nodeIndex].position;
-          arrow.position.set(x, y + 0.13, z);
+          arrow.position.set(x, y + 0.13, z * (2 / 3) + item.faceOffset + 0.002);
           arrow.setLength(0.11, 0.032, 0.022);
         }
         const broken = item.state.bonds.filter(bond => !bond.alive).length;
+        const supported = new Set(item.state.nodes.filter(node => node.pinned).map(node => node.componentId));
+        item.contactDetached = loadedIndices.length > 0 && loadedIndices.some(index => !supported.has(item.state.nodes[index].componentId));
         const travel = item.state.load ? item.state.load.travel.toFixed(4) : '—';
         const displayTravel = item.displayTravel === null ? '' :
           item.displayMode === 'evolving-force-pose' ? ` · force interval ${item.state.loadApplication.round} · +${item.state.loadApplication.addedCracks} cracks` :
@@ -219,7 +230,7 @@
           item.displayMode === 'accepted-pose-unanchored' ? ' · unanchored contact, accepted pose' :
           ` · ${item.displayMode === 'broken-graph-equilibrium' ? 'post-break' : item.displayMode === 'repaired-graph-equilibrium' ? 'repaired' : 'loaded'} equilibrium ${item.displayTravel.toFixed(4)}`;
         document.getElementById(name === 'intact' ? 'intact-metric' : 'notched-metric').textContent =
-          `contact travel ${travel}${displayTravel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}`;
+          `contact travel ${travel}${displayTravel} · peak strain ${(item.state.maxStrain ?? 0).toFixed(4)} · broken ${broken} · components ${item.state.components.length}${item.contactDetached ? ' · detached contact' : ''}`;
         moveContactMarkers();
         render();
       }
@@ -229,7 +240,7 @@
         try {
           const force = Number(forceInput.value);
           const updates = Object.fromEntries(Object.entries(cases).map(([name, item]) => {
-            const state = advanceArchVolumeLoad(item.state, { ...load, force });
+            const state = advanceArchVolumeLoad(item.state, { ...load, force, contactLayer: item.state.layers - 1 });
             return [name, { state, prepared: prepare(state, force) }];
           }));
           for (const [name, update] of Object.entries(updates)) cases[name].state = update.state;
@@ -303,7 +314,7 @@
         if (!hit || hit.instanceId === undefined) return;
         const [name, item] = Object.entries(cases).find(([, value]) => value.blocks === hit.object);
         const node = item.state.nodes[hit.instanceId];
-        if (node.layer !== 2 || node.pinned) return;
+        if (node.layer !== item.state.layers - 1 || node.pinned) return;
         load.x = node.x;
         load.y = node.y;
         selectedContact = { x: node.x, y: node.y, sourceProfile: name, column: node.column, row: node.row, layer: node.layer };
@@ -317,9 +328,24 @@
       document.getElementById('reset').addEventListener('click', reset);
       window.addEventListener('resize', resize);
       window.__archVolumeWitness = () => ({
-        route: ROUTE, phase, serial, camera: camera.position.toArray(), selectedContact,
+        route: ROUTE, phase, serial, camera: camera.position.toArray(), selectedContact, construction,
         cases: Object.fromEntries(Object.entries(cases).map(([name, item]) => [name, {
           solverAuthority: item.base.solverAuthority,
+          construction: item.base.construction,
+          layers: item.state.layers,
+          depthDiagonalBonds: item.base.bonds.filter(bond => bond.kind === 'depth-diagonal').length,
+          totalMaterialVolume: item.base.nodes.reduce((sum, node) => sum + (node.materialVolume ?? 0), 0),
+          historyMarkBound: Math.hypot((item.profile.bounds.max[0] - item.profile.bounds.min[0]) / item.profile.columns,
+            (item.profile.bounds.max[1] - item.profile.bounds.min[1]) / item.profile.rows) * 0.2,
+          contactDetached: item.contactDetached,
+          renderedHistoryMarks: item.cracks?.geometry.attributes.position.count / 2,
+          maxHistoryMarkLength: item.cracks ? (() => {
+            const positions = item.cracks.geometry.attributes.position.array;
+            let max = 0;
+            for (let index = 0; index < positions.length; index += 6) max = Math.max(max,
+              Math.hypot(positions[index + 3] - positions[index], positions[index + 4] - positions[index + 1], positions[index + 5] - positions[index + 2]));
+            return max;
+          })() : 0,
           sourceSha256: item.profile.source.sha256,
           nodes: item.state.nodes.length,
           broken: item.state.bonds.filter(bond => !bond.alive).length,
@@ -347,10 +373,10 @@
             return { layer, maxDisplacement: Math.max(...nodes.map(node => Math.hypot(...Object.values(node.displacement)))) };
           }),
           pickTargets: Object.fromEntries([['left-shoulder', -0.22, 0.18], ['right-shoulder', 0.22, 0.18]].map(([label, x, y]) => {
-            const node = item.state.nodes.filter(node => node.layer === 2 && !node.pinned).reduce((best, next) =>
+            const node = item.state.nodes.filter(node => node.layer === item.state.layers - 1 && !node.pinned).reduce((best, next) =>
               Math.hypot(next.x - x, next.y - y) < Math.hypot(best.x - x, best.y - y) ? next : best);
             const point = new THREE.Vector3(node.x + node.displacement.x, node.y + node.displacement.y,
-              (node.z + node.displacement.z) * (2 / 3) + 0.06).add(item.group.position).project(camera);
+              (node.z + node.displacement.z) * (2 / 3) + item.faceOffset).add(item.group.position).project(camera);
             const rect = canvas.getBoundingClientRect();
             return [label, { column: node.column, row: node.row, layer: node.layer,
               x: rect.x + (point.x + 1) / 2 * rect.width, y: rect.y + (1 - point.y) / 2 * rect.height }];
@@ -366,11 +392,13 @@
         if (profile.source?.kind !== 'trellis-glb' || profile.occupancy?.length !== profile.columns * profile.rows) {
           throw new Error(`${name} structural profile identity or shape mismatch`);
         }
-        const base = buildArchStructuralProxy(profile, { layers: 3 });
+        const base = buildArchStructuralProxy(profile, { construction, layers: requestedLayers });
         const stepX = (profile.bounds.max[0] - profile.bounds.min[0]) / profile.columns;
         const stepY = (profile.bounds.max[1] - profile.bounds.min[1]) / profile.rows;
+        const blockDepth = base.depth / (base.layers - 1) * (2 / 3) * 0.98;
+        const faceOffset = construction === 'cell-volume-braced' ? 0 : blockDepth / 2;
         const blocks = new THREE.InstancedMesh(
-          new THREE.BoxGeometry(stepX * 0.98, stepY * 0.98, 0.118),
+          new THREE.BoxGeometry(stepX * 0.98, stepY * 0.98, blockDepth),
           new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95, metalness: 0.02 }),
           base.nodes.length,
         );
@@ -378,11 +406,11 @@
         const group = new THREE.Group();
         group.add(blocks);
         for (const side of [-1, 1]) {
-          const pinned = base.nodes.filter(node => node.pinned && node.layer === 2 && Math.sign(node.x) === side);
+          const pinned = base.nodes.filter(node => node.pinned && node.layer === base.layers - 1 && Math.sign(node.x) === side);
           if (!pinned.length) continue;
           const minX = Math.min(...pinned.map(node => node.x)) - stepX / 2;
           const maxX = Math.max(...pinned.map(node => node.x)) + stepX / 2;
-          const support = new THREE.Mesh(new THREE.BoxGeometry(maxX - minX, 0.009, 0.42), markerMaterial);
+          const support = new THREE.Mesh(new THREE.BoxGeometry(maxX - minX, 0.009, base.depth * (2 / 3) + 2 * faceOffset), markerMaterial);
           support.position.set((minX + maxX) / 2, Math.min(...pinned.map(node => node.y)) - stepY / 2 - 0.012, 0);
           group.add(support);
         }
@@ -391,14 +419,14 @@
           new THREE.MeshBasicMaterial({ color: '#72dac4', depthTest: false }));
         group.add(contactMarker);
         scene.add(group);
-        cases[name] = { profile, base, state: base, blocks, group, contactMarker, cracks: null, forceArrows, displayTravel: null, displayMode: 'unloaded' };
+        cases[name] = { profile, base, state: base, blocks, blockDepth, faceOffset, group, contactMarker, cracks: null, forceArrows, displayTravel: null, displayMode: 'unloaded' };
         present(name);
       }
       phase = 'interactive';
       document.getElementById('solve').disabled = false;
       document.getElementById('reset').disabled = false;
       status.textContent = 'Profiles loaded · no load applied';
-      const params = new URLSearchParams(location.search);
+      document.getElementById('construction-identity').textContent = `TRELLIS silhouettes · front-only load · ${construction === 'cell-volume-braced' ? 'volume-weighted braced' : 'sparse baseline'} · ${cases.intact.state.layers} layers`;
       if (params.has('force')) {
         forceInput.value = String(Math.min(3, Math.max(0.1, Number(params.get('force')) || 0.75)));
         forceOutput.value = Number(forceInput.value).toFixed(2);

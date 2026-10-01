@@ -87,6 +87,11 @@ const prior = { intact: { broken: 1, brokenBondIds: ['a'], crackEventCount: 1, e
 const after = { intact: { broken: 2, brokenBondIds: ['a', 'b'], crackEventCount: 2, eventCount: 2,
   connectivityEpoch: 2, loadApplication: { round: 2, elapsed: 0.2 } } };
 assert.deepEqual(evidence.findArchVolumeContinuationContradictions(prior, after), []);
+const subcritical = { intact: { ...prior.intact, loadApplication: { round: 2, elapsed: 0.2 } } };
+assert.deepEqual(evidence.findArchVolumeContinuationContradictions(prior, subcritical, { requireNewFracture: false }), [],
+  'a subcritical new contact can advance retained state without inventing a fracture');
+assert.ok(evidence.findArchVolumeContinuationContradictions(prior, prior, { requireNewFracture: false }).length > 0,
+  'allowing subcritical motion must not admit a stale interval');
 for (const corrupt of [
   {},
   { intact: { ...after.intact, brokenBondIds: ['b', 'c'] } },

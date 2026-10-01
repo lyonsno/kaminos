@@ -142,9 +142,17 @@ export function buildArchStructuralProxy(profile, options = {}) {
     throw new Error('arch profile occupancy shape mismatch');
   }
   if (occupancy.some(value => typeof value !== 'boolean')) throw new Error('arch occupancy must be boolean');
-  const layers = options.layers ?? 3;
-  if (!Number.isInteger(layers) || layers < 2) throw new Error('arch proxy requires at least two depth layers');
+  const construction = options.construction ?? 'sparse-depth';
+  if (!['sparse-depth', 'cell-volume-braced'].includes(construction)) throw new Error('unsupported arch construction');
+  const dx = (bounds.max[0] - bounds.min[0]) / columns;
+  const dy = (bounds.max[1] - bounds.min[1]) / rows;
+  const referenceSpacing = Math.sqrt(dx * dy);
   const depth = finite(options.depth ?? 0.36, 'depth');
+  const depthCellAspect = finite(options.depthCellAspect ?? 2, 'depth cell aspect');
+  if (depthCellAspect <= 0) throw new Error('depth cell aspect must be positive');
+  const layers = options.layers ?? (construction === 'cell-volume-braced'
+    ? Math.ceil(depth / (depthCellAspect * Math.min(dx, dy))) + 1 : 3);
+  if (!Number.isInteger(layers) || layers < 2) throw new Error('arch proxy requires at least two depth layers');
   if (depth <= 0) throw new Error('arch depth must be positive');
   const depthMode = options.depthMode ?? 'uniform';
   if (!['uniform', 'surface-envelope'].includes(depthMode)) throw new Error('unsupported arch depth mode');
@@ -250,6 +258,9 @@ export function buildArchStructuralProxy(profile, options = {}) {
           pinned: column < midColumn ? row === leftFootRow : row === rightFootRow,
           voussoirId,
           displacement: { x: 0, y: 0, z: 0 },
+          ...(construction === 'cell-volume-braced' ? { materialVolume: dx * dy *
+            (envelope ? envelope.maxZ - envelope.minZ : depth) / (layers - 1) *
+            (layer === 0 || layer === layers - 1 ? 0.5 : 1) } : {}),
         });
         byGrid.set(key(column, row, layer), index);
       }
@@ -260,6 +271,7 @@ export function buildArchStructuralProxy(profile, options = {}) {
   }
   const bonds = [];
   const offsets = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, -1, 0]];
+  if (construction === 'cell-volume-braced') offsets.push([1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1]);
   for (const node of nodes) {
     for (const [dc, dr, dl] of offsets) {
       const next = byGrid.get(key(node.column + dc, node.row + dr, node.layer + dl));
@@ -270,12 +282,17 @@ export function buildArchStructuralProxy(profile, options = {}) {
       const rest = Math.hypot(...delta);
       const crossesJoint = node.voussoirId !== null && other.voussoirId !== null &&
         node.voussoirId !== other.voussoirId;
+      const diagonal = [dc, dr, dl].filter(Boolean).length > 1;
+      // Dual-volume energy E V |du|^2 / length^2; E fixes the old cubic-cell unit.
+      const stiffness = construction === 'cell-volume-braced'
+        ? (node.materialVolume + other.materialVolume) / (2 * referenceSpacing ** 2 * rest) * (diagonal ? 0.5 : 1)
+        : dl ? 0.6 : 1;
       bonds.push({
         id: `b${bonds.length}`, a: byGrid.get(key(node.column, node.row, node.layer)), b: next,
         rest, direction: delta.map(value => value / rest),
         midpoint: { x: (node.x + other.x) / 2, y: (node.y + other.y) / 2, z: (node.z + other.z) / 2 },
-        kind: crossesJoint ? 'joint' : dl ? 'depth' : dc && dr ? 'diagonal' : 'axis',
-        stiffness: (dl ? 0.6 : 1) * (crossesJoint ? jointStiffnessRatio : 1),
+        kind: crossesJoint ? 'joint' : dl ? diagonal ? 'depth-diagonal' : 'depth' : diagonal ? 'diagonal' : 'axis',
+        stiffness: stiffness * (crossesJoint ? jointStiffnessRatio : 1),
         ...(crossesJoint ? { strength: jointStrength } : {}),
         alive: true, lastStrain: 0,
       });
@@ -290,6 +307,9 @@ export function buildArchStructuralProxy(profile, options = {}) {
     visualAuthority: 'glb-consumer-not-structural-truth-v0',
     source: profile.source || null,
     columns, rows, layers, depth, depthMode, interiorMode, interiorConstruction,
+    construction: { kind: construction, referenceSpacing, depthCellAspect,
+      ...(construction === 'cell-volume-braced' ? { energy: 'dual-volume-vector-spring-v0',
+        modulus: 1 / referenceSpacing ** 2, dampingVolume: referenceSpacing ** 3 } : {}) },
     depthSource: profile.depthSource || null,
     inferredDepthCells,
     occupancy: [...occupancy], bounds,
@@ -377,9 +397,14 @@ function solveArchLinearSystem(state, load, mode, evolution = null) {
     }
   }
   const shearWeight = 0.18;
-  const drag = evolution ? evolution.damping / evolution.timeStep : 0;
+  const drag = new Float64Array(count);
+  if (evolution) for (let index = 0; index < state.nodes.length; index += 1) {
+    const volumeScale = state.construction?.kind === 'cell-volume-braced'
+      ? state.nodes[index].materialVolume / state.construction.dampingVolume : 1;
+    drag.fill(evolution.damping / evolution.timeStep * volumeScale, index * 3, index * 3 + 3);
+  }
   const diagonal = new Float64Array(count);
-  if (evolution) diagonal.fill(drag);
+  if (evolution) diagonal.set(drag);
   const liveBonds = state.bonds.filter(bond => bond.alive);
   for (const bond of liveBonds) {
     const stiffness = bond.stiffness / bond.rest;
@@ -393,7 +418,7 @@ function solveArchLinearSystem(state, load, mode, evolution = null) {
     const result = new Float64Array(count);
     if (evolution) {
       for (let index = 0; index < count; index += 1) {
-        if (!fixed[index]) result[index] = drag * vector[index];
+        if (!fixed[index]) result[index] = drag[index] * vector[index];
       }
     }
     for (const bond of liveBonds) {
@@ -423,7 +448,7 @@ function solveArchLinearSystem(state, load, mode, evolution = null) {
     for (let index = 0; index < state.nodes.length; index += 1) {
       const previous = state.nodes[index].displacement;
       for (const [axis, name] of ['x', 'y', 'z'].entries()) {
-        if (!fixed[index * 3 + axis]) rhs[index * 3 + axis] += drag * previous[name];
+        if (!fixed[index * 3 + axis]) rhs[index * 3 + axis] += drag[index * 3 + axis] * previous[name];
       }
     }
   }

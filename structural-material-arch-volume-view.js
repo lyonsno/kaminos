@@ -46,18 +46,29 @@ export function buildArchVolumeFrame(state, equilibrium = state) {
     strain: 0,
   }));
   const brokenSegments = [];
+  const brokenSegmentLayers = [];
   for (const bond of state.bonds) {
-    const value = bond.lastStrain || 0;
+    const value = bond.alive ? bond.lastStrain || 0 : 0;
     strain[bond.a] = Math.max(strain[bond.a], value);
     strain[bond.b] = Math.max(strain[bond.b], value);
     const a = state.nodes[bond.a];
     const b = state.nodes[bond.b];
     if (!bond.alive && a.layer === b.layer && (a.layer === 0 || a.layer === state.layers - 1)) {
-      brokenSegments.push([...nodes[bond.a].position, ...nodes[bond.b].position]);
+      const direction = bond.direction ?? [b.x - a.x, b.y - a.y, b.z - a.z];
+      const rest = bond.rest ?? Math.hypot(...direction);
+      const norm = Math.hypot(...direction);
+      if (!norm) continue;
+      // Broken history stays with each end; it must never span a separated gap.
+      for (const [index, sign] of [[bond.a, 1], [bond.b, -1]]) {
+        const position = nodes[index].position;
+        brokenSegments.push([...position, ...position.map((value, axis) =>
+          value + sign * direction[axis] / norm * rest * 0.2)]);
+        brokenSegmentLayers.push(state.nodes[index].layer);
+      }
     }
   }
   for (let index = 0; index < nodes.length; index += 1) nodes[index].strain = strain[index];
-  return { nodes, brokenSegments };
+  return { nodes, brokenSegments, brokenSegmentLayers };
 }
 
 export function resolveArchVolumeEquilibrium(state, load) {

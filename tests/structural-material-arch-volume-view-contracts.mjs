@@ -18,10 +18,11 @@ const frame = buildArchVolumeFrame(state);
 assert.equal(frame.nodes.length, 2);
 assert.deepEqual(frame.nodes[0].position, [0.02, -0.03, 0.18]);
 assert.equal(frame.nodes[0].componentId, 0);
-assert.equal(frame.nodes[0].strain, 0.08);
+assert.equal(frame.nodes[0].strain, 0);
 assert.equal(frame.nodes[1].pinned, true);
-assert.equal(frame.brokenSegments.length, 1);
-assert.deepEqual(frame.brokenSegments[0], [0.02, -0.03, 0.18, 0.1, 0, 0.18]);
+assert.equal(frame.brokenSegments.length, 2);
+assert.deepEqual(frame.brokenSegments[0], [0.02, -0.03, 0.18, 0.04000000000000001, -0.03, 0.18]);
+assert.deepEqual(frame.brokenSegments[1], [0.1, 0, 0.18, 0.08, 0, 0.18]);
 const equilibrium = {
   ...state,
   nodes: state.nodes.map((node, index) => ({
@@ -31,7 +32,7 @@ const equilibrium = {
 };
 const opened = buildArchVolumeFrame(state, equilibrium);
 assert.deepEqual(opened.nodes[0].position, [0.04, -0.09, 0.18]);
-assert.deepEqual(opened.brokenSegments[0], [0.04, -0.09, 0.18, 0.1, 0, 0.18]);
+assert.deepEqual(opened.brokenSegments[0], [0.04, -0.09, 0.18, 0.060000000000000005, -0.09, 0.18]);
 assert.equal(opened.nodes[0].componentId, state.nodes[0].componentId);
 const profile = JSON.parse(fs.readFileSync(new URL('../artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json', import.meta.url)));
 const base = buildArchStructuralProxy(profile, { layers: 3 });

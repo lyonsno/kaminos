@@ -4,7 +4,7 @@ import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, 
 import { basename, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { findArchVolumeContinuationContradictions, findArchVolumeEvidenceContradictions } from './structural-material-arch-volume-evidence.mjs';
+import { findArchVolumeConstructionContradictions, findArchVolumeContinuationContradictions, findArchVolumeEvidenceContradictions } from './structural-material-arch-volume-evidence.mjs';
 
 const [urlInput, reportInput, browserInput] = process.argv.slice(2);
 if (!urlInput || !reportInput || !browserInput) {
@@ -140,6 +140,11 @@ async function close() {
 
 try {
   const url = new URL(urlInput);
+  report.requestedConstruction = url.searchParams.get('construction') ?? 'sparse-depth';
+  report.requestedLayers = url.searchParams.has('layers') ? Number(url.searchParams.get('layers')) : null;
+  const initialIntervals = Number(url.searchParams.get('initialIntervals') ?? 1);
+  if (!Number.isInteger(initialIntervals) || initialIntervals < 1) throw new Error('initialIntervals must be a positive integer');
+  report.initialIntervals = initialIntervals;
   check('requested route is the local structural-volume consumer', ['127.0.0.1', 'localhost'].includes(url.hostname) && url.pathname === '/structural-material-arch-volume.html', url.href);
   report.effectiveRoute = 'local structural-volume consumer pending runtime identity';
   report.source.revision = execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
@@ -181,10 +186,18 @@ try {
   if (!page?.webSocketDebuggerUrl) throw new Error('browser exposed no page target');
   await connect(page.webSocketDebuggerUrl);
   await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable');
-  url.search = '?force=2&load=1';
+  await send('Emulation.setDeviceMetricsOverride', {width: 1280, height: 900, deviceScaleFactor: 1, mobile: false});
+  url.searchParams.set('force', '2');
+  url.searchParams.set('load', '1');
   await send('Page.navigate', {url: url.href});
   report.phase = 'route-observation';
   let state = await waitForWitness();
+  report.transitions.firstInterval = state;
+  if (initialIntervals > 1) {
+    await capture('first-subcritical-interval', state);
+    await evaluate(`for (let interval = 1; interval < ${initialIntervals}; interval += 1) document.querySelector('#solve').click()`);
+    state = await waitForWitness();
+  }
   report.effectiveRoute = state.routeWitness.route;
   check('effective route identity matches the arch volume witness', report.effectiveRoute === 'kaminos.structural-material.arch-force-volume.v0', report.effectiveRoute);
   check('both source profiles were fetched successfully', report.profileResponses.length >= 2 && report.profileResponses.every(response => response.status === 200), report.profileResponses);
@@ -209,8 +222,10 @@ try {
   const hitTargetsContained = hitTargetRects.every(rect => rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= state.viewport.width && rect.y + rect.height <= state.viewport.height);
   const hitTargetsSeparated = hitTargetRects.every((rect, index) => hitTargetRects.slice(index + 1).every(other => rect.x + rect.width <= other.x || other.x + other.width <= rect.x || rect.y + rect.height <= other.y || other.y + other.height <= rect.y));
   check('operator controls and status fit without overlap or viewport clipping', hitTargetsContained && hitTargetsSeparated && state.viewport.documentWidth <= state.viewport.width, {controls: state.controls, viewport: state.viewport});
-  check('both source profiles loaded as populated three-layer structures on the declared solver', Object.keys(state.routeWitness.cases || {}).length === 2 && Object.values(state.routeWitness.cases).every(item => item.nodes > 0 && item.renderedInstances === item.nodes && item.solverAuthority === 'shear-regularized-linear-spring-pcg-v0' && item.loadedNodeLayers.length === 1 && item.loadedNodeLayers[0] === 2 && item.contactDepthMode === 'camera-facing-surface'), state.routeWitness.cases);
-  check('load 2 creates damage during a finite force interval', Object.values(state.routeWitness.cases).every(item => item.broken > 0 && item.displayMode === 'evolving-force-pose' && item.displayTravel === item.travel && item.loadApplication?.round === 1 && item.evolution?.kind === 'overdamped-linear-spring-implicit-euler-v0'), state.routeWitness.cases);
+  check('both source profiles loaded as populated front-loaded volumes on the declared solver', Object.keys(state.routeWitness.cases || {}).length === 2 && Object.values(state.routeWitness.cases).every(item => item.nodes > 0 && item.renderedInstances === item.nodes && item.solverAuthority === 'shear-regularized-linear-spring-pcg-v0' && item.loadedNodeLayers.length === 1 && item.loadedNodeLayers[0] === item.layers - 1 && item.contactDepthMode === 'camera-facing-surface'), state.routeWitness.cases);
+  const constructionIssues = findArchVolumeConstructionContradictions(report.requestedConstruction, state.routeWitness.cases);
+  check('effective volume construction and non-tethering history match the request', constructionIssues.length === 0 && state.routeWitness.construction === report.requestedConstruction && Object.values(state.routeWitness.cases).every(item => report.requestedLayers === null || item.layers === report.requestedLayers), {constructionIssues, requestedLayers: report.requestedLayers, cases: state.routeWitness.cases});
+  check('load 2 creates damage during the declared finite force intervals', Object.values(state.routeWitness.cases).every(item => item.broken > 0 && item.displayMode === 'evolving-force-pose' && item.displayTravel === item.travel && item.loadApplication?.round === initialIntervals && item.evolution?.kind === 'overdamped-linear-spring-implicit-euler-v0'), state.routeWitness.cases);
   check('Release is available after the loaded fracture witness', state.controls['#release']?.disabled === false, state.controls['#release']);
   const cameraAtLoad = JSON.stringify(state.routeWitness.camera);
   state = await capture('loaded-fracture', state);
@@ -238,9 +253,9 @@ try {
   await evaluate('document.querySelector("#solve").click()');
   state = await waitForWitness();
   report.transitions.newContactApply = state;
-  const contactIssues = findArchVolumeContinuationContradictions(preRelease, state.routeWitness.cases);
-  check('new-contact Apply adds injury on the same damaged arch', contactIssues.length === 0 && state.routeWitness.cases.intact.contact.column === target.column && state.routeWitness.cases.intact.contact.row === target.row, {contactIssues, before: preRelease, after: state.routeWitness.cases});
-  check('front-only load reaches unloaded depth layers through surviving bonds', Object.values(state.routeWitness.cases).every(item => item.loadedNodeLayers.length === 1 && item.loadedNodeLayers[0] === 2 && item.depthMotion.every(layer => layer.maxDisplacement > 0) && item.depthMotion[2].maxDisplacement > item.depthMotion[0].maxDisplacement), state.routeWitness.cases);
+  const contactIssues = findArchVolumeContinuationContradictions(preRelease, state.routeWitness.cases, { requireNewFracture: false });
+  check('new-contact Apply advances the same damaged arch without requiring a subcritical fracture', contactIssues.length === 0 && state.routeWitness.cases.intact.contact.column === target.column && state.routeWitness.cases.intact.contact.row === target.row, {contactIssues, before: preRelease, after: state.routeWitness.cases});
+  check('front-only load reaches unloaded depth layers through surviving bonds', Object.values(state.routeWitness.cases).every(item => item.loadedNodeLayers.length === 1 && item.loadedNodeLayers[0] === item.layers - 1 && item.depthMotion.every(layer => layer.maxDisplacement > 0) && item.depthMotion.at(-1).maxDisplacement > item.depthMotion[0].maxDisplacement), state.routeWitness.cases);
   await capture('new-contact-fracture', state);
   preRelease = state.routeWitness.cases;
   await evaluate('document.querySelector("#release").click()');
@@ -279,6 +294,15 @@ try {
   report.transitions.intactReload = state;
   check('bound and fresh arches have the same small-force response', Object.entries(state.routeWitness.cases).every(([name, item]) => item.broken === 0 && Math.abs(item.travel - report.transitions.boundReload.routeWitness.cases[name].travel) < 1e-10), {fresh: state.routeWitness.cases, bound: report.transitions.boundReload.routeWitness.cases});
   check('all force, fracture, selection, Release, and Bind transitions retain the camera', JSON.stringify(state.routeWitness.camera) === cameraAtLoad, {before: cameraAtLoad, after: state.routeWitness.camera});
+  await send('Page.navigate', {url: url.href});
+  state = await waitForWitness();
+  report.operatorInput.push({kind: 'repeated-apply', contact: 'default-crown', totalIntervals: 20, force: 2});
+  save();
+  await evaluate('for (let interval = 1; interval < 20; interval += 1) document.querySelector("#solve").click()');
+  state = await waitForWitness();
+  report.transitions.continuedCrown = state;
+  check('continued crown pull records support state without visual tethers', Object.values(state.routeWitness.cases).every(item => item.loadApplication.round === 20 && typeof item.contactDetached === 'boolean' && (!item.contactDetached || item.components > 1)) && findArchVolumeConstructionContradictions(report.requestedConstruction, state.routeWitness.cases).length === 0, state.routeWitness.cases);
+  await capture('continued-crown-response', state);
   await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 1, mobile: true});
   await send('Page.navigate', {url: url.href});
   state = await waitForWitness();
@@ -288,7 +312,7 @@ try {
   report.phase = 'complete';
   report.status = 'passed';
   report.checks = checks;
-  report.lastTrustworthyEvidence = 'repeated and new-contact fractures, damage-conditioned reloading, zero-load Bind, restored transmission, and mobile frame observed on the identified structural-volume route';
+  report.lastTrustworthyEvidence = 'requested depth construction, repeated and new-contact injury, zero-load repair, continued crown detachment without history tethers, and mobile frame observed on the identified route';
 } catch (error) {
   report.status = 'failed';
   report.failure = {phase: report.phase, message: error.message, stack: error.stack};
