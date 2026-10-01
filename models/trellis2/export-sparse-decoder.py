@@ -14,6 +14,20 @@ def digest(path):
         for chunk in iter(lambda:file.read(1024*1024),b''):h.update(chunk)
     return h.hexdigest()
 
+def source_occupancy_coordinates(logits):
+    """Pinned generate.py policy: strict sign, complete2³any, np.argwhere."""
+    if logits.dtype != np.float32 or logits.ndim != 5 or logits.shape[:2] != (1, 1):
+        raise ValueError('complete F32 cubic logits shape required')
+    resolution = logits.shape[2]
+    if resolution < 2 or resolution % 2 or logits.shape[2:] != (resolution,) * 3:
+        raise ValueError('positive even cubic logits shape required')
+    if not np.isfinite(logits).all():
+        raise ValueError('finite occupancy logits required')
+    small = resolution // 2
+    decoded = logits[0, 0] > 0
+    flags = decoded.reshape(small, 2, small, 2, small, 2).any(axis=(1, 3, 5))
+    return np.argwhere(flags).astype(np.int32), flags.astype(np.uint32).reshape(-1)
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ('repo-root','source-root','out'):parser.add_argument('--'+name,type=Path,required=True)

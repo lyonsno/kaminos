@@ -1,6 +1,7 @@
 // Dense occupancy decoder. Effective pinned MLX arithmetic is F32, including
 // its F16-stored checkpoint weights cast to constructor destination dtypes.
 import {WEBGPU_BUFFER_USAGE as U} from '../../webgpu-inference-kit/src/core.js';
+export { createTrellisOccupancyCoordinatesAdapter, buildOccupancyCoordinatesPlan } from './occupancy-coordinates.js';
 export const SPARSE_DECODER_ROUTE='trellis2.sparse-decoder.webgpu.v0';
 
 export function buildSparseDecoderPlan({resolution=16,latentChannels=8,outChannels=1,
