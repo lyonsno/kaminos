@@ -9,13 +9,12 @@ import {cdpRequest} from './diagnostic-cdp.mjs';
 import {assertIgnitionCaptureState} from './ignition-capture-contract.mjs';
 
 const out = resolve(process.argv[2] || 'artifacts/sinter-authored-mesh-smoke-0923/ignition48-1001');
-const protocol = process.argv[4] ? JSON.parse(readFileSync(process.argv[4], 'utf8')) : {
+let protocol = {
   view: 'material', emissionCases: [false, true], primeSteps: [140], warmupSteps: 0,
   sourcePose: null, primeOnly: false,
   transferSourcePose: {position: [0.6, -0.55, 0]},
   transferReceiverPose: {position: [0.6, 0.1, 0]}, transferSteps: [60, 120, 180],
 };
-assert.ok(['material', 'exposure', 'off'].includes(protocol.view));
 mkdirSync(out, {recursive: true});
 const report = {status: 'running', phase: 'preflight', receiver: 'sinter-timber-ignition',
   command: process.argv, repoRoot: process.cwd(), terminalEvidence: join(out, 'report.json'),
@@ -48,6 +47,10 @@ const wait = async predicate => {
   }
 };
 try {
+  if (process.argv[4]) protocol = JSON.parse(readFileSync(process.argv[4], 'utf8'));
+  report.protocol = protocol;
+  assert.ok(['material', 'exposure', 'off'].includes(protocol.view), 'unsupported capture view');
+  report.driverSha256 = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
   report.sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8'}).trim();
   report.gitStatus = execFileSync('git', ['status', '--short'], {encoding: 'utf8'}).trim();
   report.server = await (await fetch('http://127.0.0.1:18100/api/runtime-config')).json();

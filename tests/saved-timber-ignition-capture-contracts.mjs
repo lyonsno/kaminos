@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {existsSync, mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {assertIgnitionCaptureState} from '../artifacts/sinter-authored-mesh-smoke-0923/ignition-capture-contract.mjs';
 
 const expected = {emissionEnabled: true, objectIds: ['source', 'receiver'], view: 'material'};
@@ -32,4 +36,19 @@ for (const bad of [
 const quiet = {...state, assembly: {...state.assembly, emittingObjectIds: []}, objects: state.objects.map(object => ({...object, combustionBinding: {emissionEnabled: false}}))};
 assert.doesNotThrow(() => assertIgnitionCaptureState(quiet, {...expected, emissionEnabled: false}));
 assert.throws(() => assertIgnitionCaptureState({...quiet, assembly: state.assembly}, {...expected, emissionEnabled: false}));
+const scratch = mkdtempSync(join(tmpdir(), 'timber-ignition-preflight-'));
+for (const [name, input] of [['malformed', '{'], ['unsupported-view', '{"view":"not-a-view"}']]) {
+  const protocolPath = join(scratch, `${name}.json`);
+  const output = join(scratch, name);
+  writeFileSync(protocolPath, input);
+  const result = spawnSync(process.execPath, ['artifacts/sinter-authored-mesh-smoke-0923/ignition-capture.mjs', output, '', protocolPath], {encoding: 'utf8'});
+  assert.equal(result.status, 1, result.stderr);
+  assert.ok(existsSync(join(output, 'report.json')), 'protocol preflight failure must preserve a terminal report');
+  const report = JSON.parse(readFileSync(join(output, 'report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.phase, 'preflight');
+  assert.equal(report.browser, undefined, 'invalid protocol must fail before browser launch');
+  assert.deepEqual(report.runs, []);
+  assert.match(report.error, name === 'malformed' ? /SyntaxError/ : /unsupported capture view/);
+}
 console.log('saved timber ignition capture contracts: ok');
