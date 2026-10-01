@@ -54,6 +54,7 @@ test('headless browser: an independent executable is required; the installed GUI
   assert.throws(() => resolveHeadlessBrowser({ env: {}, playwrightRoot: join(root, 'nowhere') }), /no independent headless browser/, 'absence fails visibly');
   assert.doesNotMatch(capture, /Google Chrome\.app/, 'the capture no longer names the GUI app');
   assert.match(capture, /resolveHeadlessBrowser\(/, 'the capture resolves its executable through the shared resolver');
+  assert.match(capture, /'--use-mock-keychain','--password-store=basic'/, 'the browser never raises the macOS keychain dialog on the operator screen');
   assert.match(capture, /executable: headlessBrowser\.executable/, 'the report records the effective executable');
   // The devtools socket is constructed only after the last await that precedes
   // its open listener, and the open wait is bounded by --call-timeout-ms.
