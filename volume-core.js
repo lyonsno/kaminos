@@ -3381,7 +3381,9 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
 // the floor (momentum only). Only the transport kernels use it, so the raymarch,
 // sidecar and irradiance passes never touch the coverage texture.
 fn sampleFluidSlotInflow(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
-  let sample = sampleFluidSlot(cellCenter, slot);
+  // Composed with the kiln collision mask: the backtrace sample excludes solid
+  // cells first, then the inflow ghost blends in below the floor aperture.
+  let sample = sampleFluidSlotMasked(cellCenter, slot);
   let ghost = inflowGhostBlend(cellCenter);
   return mix(sample, inflowGhostState(slot, sample, cellCenter), ghost);
 }
