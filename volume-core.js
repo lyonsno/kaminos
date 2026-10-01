@@ -3358,7 +3358,13 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let x11 = mix(c011, c111, f.x);
   let y0 = mix(x00, x10, f.y);
   let y1 = mix(x01, x11, f.y);
-  let sample = mix(y0, y1, f.z);
+  return mix(y0, y1, f.z);
+}
+// The transport sampler: the plain sample blended toward the inflow ghost below
+// the floor (momentum only). Only the transport kernels use it, so the raymarch,
+// sidecar and irradiance passes never touch the coverage texture.
+fn sampleFluidSlotInflow(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  let sample = sampleFluidSlot(cellCenter, slot);
   let ghost = inflowGhostBlend(cellCenter);
   return mix(sample, inflowGhostState(slot, sample, cellCenter), ghost);
 }
@@ -5284,7 +5290,7 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
-    fluidPredict[base + slot] = sampleFluidSlotMasked(backCell, slot);
+    fluidPredict[base + slot] = sampleFluidSlotInflow(backCell, slot);
   }
 }
 
@@ -5406,7 +5412,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = sampleFluidSlotMasked(backCell, 3u);
     }
   } else {
-    advected = sampleFluidSlotMasked(backCell, 0u);
+    advected = sampleFluidSlotInflow(backCell, 0u);
     if (commonGasTransport) {
       material = sampleFluidSlotMasked(backCell, 1u);
       fireLayer = sampleFluidSlotMasked(backCell, 2u);

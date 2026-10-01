@@ -251,7 +251,14 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
     assert.ok(Math.abs(slower.fuel - 0.56 * 0.15 * 0.5 * 3.1) < 1e-9, `${scheme}: a slower interior admits the covered flux`);
     assert.ok(Math.abs(slower.heat - 1.2 * 0.15 * 0.5 * 3.1) < 1e-9);
   }
-  for (const sampler of ['sampleFluidSlot', 'samplePredictSlot']) {
+  // The ghost blend lives in the transport sampler only (sampleFluidSlotInflow,
+  // used by the main kernel's velocity transport and the predictor); the plain
+  // sampler the raymarch, sidecar and irradiance passes use never reaches the
+  // coverage texture, so their pipelines' layouts stay as they were.
+  assert.doesNotMatch(wgslFunction('sampleFluidSlot'), /inflowGhost/, 'the plain sampler has no ghost');
+  assert.match(mainKernel(), /advected = sampleFluidSlotInflow\(backCell, 0u\);/, 'the main kernel transports velocity through the inflow sampler');
+  assert.match(source, /fluidPredict\[base \+ slot\] = sampleFluidSlotInflow\(backCell, slot\);/, 'so does the predictor');
+  for (const sampler of ['sampleFluidSlotInflow', 'samplePredictSlot']) {
     const body = wgslFunction(sampler);
     assert.match(body, /let ghost = inflowGhostBlend\(cellCenter\);/, `${sampler} blends toward the ghost`);
     assert.match(body, /return mix\([a-zA-Z0-9_(), .]+, inflowGhostState\(slot, [a-zA-Z0-9_]+, cellCenter\), ghost\);/, `${sampler} returns the blended sample`);
