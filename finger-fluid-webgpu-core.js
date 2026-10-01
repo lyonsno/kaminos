@@ -5939,6 +5939,7 @@ fn toyFloorNormal(p: vec3<f32>) -> vec3<f32> {
 `;
 
 const KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN = '__KAMINOS_FINGER_FLUID_MAX_SPEED__';
+const KAMINOS_FINGER_FLUID_UNIFORM_INTERFACE_KERNEL_TOKEN = '__KAMINOS_FINGER_FLUID_UNIFORM_INTERFACE_KERNEL__';
 const KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN = '__KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS__';
 const KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN = '__KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS__';
 const ANALYTIC_SUPPORT_BINDINGS_WGSL = '';
@@ -6246,6 +6247,7 @@ struct Params {
 }
 
 const solverMaximumSpeed: f32 = ${KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN};
+const uniformInterfaceKernel: bool = ${KAMINOS_FINGER_FLUID_UNIFORM_INTERFACE_KERNEL_TOKEN};
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(1) var<storage, read_write> cellHeads: array<atomic<i32>>;
@@ -6858,6 +6860,17 @@ fn adaptive_pair_kernel_gradient(index: u32, neighborIndex: u32, offset: vec3<f3
 fn density_volume_scale(index: u32) -> f32 {
   if (params.densityControl.w > 0.5) { return params.densityControl.x; }
   return adaptive_volume_scale(index);
+}
+
+fn interface_pair_kernel_weight(index: u32, neighborIndex: u32, distance: f32) -> f32 {
+  if (uniformInterfaceKernel) {
+    let supportRadius = params.fluid.x * params.densityControl.y;
+    let q = distance / max(supportRadius, 0.00001);
+    if (q >= 1.0) { return 0.0; }
+    let x = 1.0 - q * q;
+    return params.densityControl.x * params.densityControl.z * x * x * x;
+  }
+  return adaptive_pair_kernel_weight(index, neighborIndex, distance);
 }
 
 fn density_radius_scale(index: u32) -> f32 {
@@ -8219,7 +8232,7 @@ fn estimate_interface_curvature(index: u32, position: vec3<f32>, interfaceNormal
           let offset = position - particles[neighborIndex].position.xyz;
           let distance = length(offset);
           let neighborConfidence = restStates[neighborIndex].x;
-          let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance) * neighborConfidence;
+          let weight = interface_pair_kernel_weight(index, neighborIndex, distance) * neighborConfidence;
           if (distance > 0.00001 && weight > 0.0 && neighborConfidence >= ${INTERFACE_THRESHOLD}) {
             let normalOffset = dot(offset, interfaceNormal);
             let tangentOffset = offset - interfaceNormal * dot(offset, interfaceNormal);
@@ -8282,7 +8295,7 @@ fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].position.xyz;
             let distance = length(offset);
-            let weight = adaptive_pair_kernel_weight(index, neighborIndex, distance);
+            let weight = interface_pair_kernel_weight(index, neighborIndex, distance);
             if (distance > 0.00001 && weight > 0.0) {
               supportWeight = supportWeight + weight;
               directionalSupport = directionalSupport + offset / distance * weight;
@@ -12985,6 +12998,7 @@ export async function createWebGPUFingerFluidSolver({
   densityIterations = 3,
   densityCellRejection = false,
   uniformVolumeDensityKernel = false,
+  uniformVolumeInterfaceKernel = false,
   energyDiagnosticsMode = 'every_step',
   substeps = 1,
   truthScene = 'multi_regime_playground',
@@ -13020,6 +13034,9 @@ export async function createWebGPUFingerFluidSolver({
   }
   if (typeof uniformVolumeDensityKernel !== 'boolean') {
     throw new TypeError(`Finger Fluid uniform volume density kernel must be a boolean: ${String(uniformVolumeDensityKernel)}`);
+  }
+  if (typeof uniformVolumeInterfaceKernel !== 'boolean') {
+    throw new TypeError(`Finger Fluid uniform volume interface kernel must be a boolean: ${String(uniformVolumeInterfaceKernel)}`);
   }
   const effectiveEnergyDiagnosticsMode = resolveFingerFluidEnergyDiagnosticsMode(energyDiagnosticsMode);
   const energyDiagnosticsEnabled = effectiveEnergyDiagnosticsMode === 'every_step';
@@ -13153,6 +13170,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
   const safeDensityCellRejection = densityCellRejection === true && !safeAdaptiveDensity;
   const safeUniformVolumeDensityKernel = uniformVolumeDensityKernel === true && !safeAdaptiveDensity;
+  const safeUniformVolumeInterfaceKernel = uniformVolumeInterfaceKernel === true && !safeAdaptiveDensity;
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
   const safeWaterfallOraclePreset = resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset);
@@ -13417,6 +13435,7 @@ export async function createWebGPUFingerFluidSolver({
   device.queue.writeBuffer(dynamicReflectionMeshIndexBuffer, 0, dynamicReflectionMeshData.indices);
 
   const computeShader = COMPUTE_SHADER
+    .replace(KAMINOS_FINGER_FLUID_UNIFORM_INTERFACE_KERNEL_TOKEN, String(safeUniformVolumeInterfaceKernel))
     .replaceAll(
       KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN,
       String(safeMaxFluidSpeed),
@@ -15970,6 +15989,11 @@ export async function createWebGPUFingerFluidSolver({
       requestedUniformVolumeDensityKernel: uniformVolumeDensityKernel,
       uniformVolumeDensityKernel: safeUniformVolumeDensityKernel,
       uniformVolumeDensityKernelBypassReason: uniformVolumeDensityKernel && safeAdaptiveDensity
+        ? 'adaptive_density_has_variable_particle_volumes'
+        : null,
+      requestedUniformVolumeInterfaceKernel: uniformVolumeInterfaceKernel,
+      uniformVolumeInterfaceKernel: safeUniformVolumeInterfaceKernel,
+      uniformVolumeInterfaceKernelBypassReason: uniformVolumeInterfaceKernel && safeAdaptiveDensity
         ? 'adaptive_density_has_variable_particle_volumes'
         : null,
       adaptiveDensityPassCount,
