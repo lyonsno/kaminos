@@ -30,13 +30,13 @@ export function createArchCollapse(profile, options = {}) {
     layers: 3, depth: 0.65, scale: 4, density: 1, gravity: 9.81,
     timeStep: 1 / 60, solverIterations: 20, solverTolerance: 1e-8,
     stiffness: 1e6, strength: 160, friction: 0.65, restitution: 0.03,
-    gripStiffness: 250, gripDamping: 5, ...options,
+    gripStiffness: 250, gripDamping: 5, gripRadius: 0.55, ...options,
   };
   for (const name of ['depth', 'scale', 'density', 'timeStep', 'stiffness', 'strength', 'gripStiffness']) {
     if (!Number.isFinite(config[name]) || config[name] <= 0) throw new Error(`${name} must be positive and finite`);
   }
   if (!Number.isFinite(config.gravity) || config.gravity < 0) throw new Error('gravity must be nonnegative and finite');
-  for (const name of ['friction', 'restitution', 'gripDamping', 'solverTolerance']) {
+  for (const name of ['friction', 'restitution', 'gripDamping', 'gripRadius', 'solverTolerance']) {
     if (!Number.isFinite(config[name]) || config[name] < 0) throw new Error(`${name} must be nonnegative and finite`);
   }
   if (!Number.isInteger(config.solverIterations) || config.solverIterations <= 0) {
@@ -100,7 +100,7 @@ export function createArchCollapse(profile, options = {}) {
     const midpoint = cell.rest.vadd(cells[b].rest).scale(0.5);
     const bond = { id: `connection:${bonds.length}`, a: cell.index, b, area, normal,
       anchorA: midpoint.vsub(cell.rest), anchorB: midpoint.vsub(cells[b].rest),
-      reaction: 0, stress: 0, alive: true, lastBreakStep: null };
+      reaction: 0, bendingReaction: 0, stress: 0, alive: true, lastBreakStep: null };
     attach(bond);
     bonds.push(bond);
   }
@@ -128,7 +128,7 @@ export function createArchCollapse(profile, options = {}) {
     stepIndex++;
     if (hand) {
       const force = new CANNON.Vec3();
-      for (const equation of hand.joint.equations) {
+      for (const member of hand.members) for (const equation of member.joint.equations) {
         force.vadd(equation.jacobianElementA.spatial.scale(equation.multiplier), force);
       }
       hand.force = xyz(force);
@@ -139,9 +139,12 @@ export function createArchCollapse(profile, options = {}) {
       const force = new CANNON.Vec3(), torque = new CANNON.Vec3();
       for (const equation of bond.joint.equations) {
         force.vadd(equation.jacobianElementB.spatial.scale(equation.multiplier), force);
+      }
+      for (const equation of [bond.joint.rotationalEquation1, bond.joint.rotationalEquation2, bond.joint.rotationalEquation3]) {
         torque.vadd(equation.jacobianElementB.rotational.scale(equation.multiplier), torque);
       }
       bond.reaction = force.length();
+      bond.bendingReaction = torque.length();
       const normal = cells[bond.a].body.vectorToWorldFrame(bond.normal);
       const axial = force.dot(normal);
       const shear = Math.sqrt(Math.max(0, force.lengthSquared() - axial * axial));
@@ -153,8 +156,9 @@ export function createArchCollapse(profile, options = {}) {
     for (const bond of failed) {
       world.removeConstraint(bond.joint); bond.joint = null; bond.alive = false; bond.lastBreakStep = stepIndex;
       events.push({ kind: 'crack', id: bond.id, step: stepIndex, time: stepIndex * config.timeStep,
-        epoch: connectivityEpoch, reaction: bond.reaction, stress: bond.stress, area: bond.area,
-        energyProxy: bond.reaction * cells[bond.a].body.velocity.vsub(cells[bond.b].body.velocity).length() * config.timeStep,
+        epoch: connectivityEpoch, reaction: bond.reaction, bendingReaction: bond.bendingReaction, stress: bond.stress, area: bond.area,
+        energyProxy: (bond.reaction * cells[bond.a].body.velocity.vsub(cells[bond.b].body.velocity).length() +
+          bond.bendingReaction * cells[bond.a].body.angularVelocity.vsub(cells[bond.b].body.angularVelocity).length()) * config.timeStep,
         handActive: Boolean(hand) });
     }
     samples.push({ step: stepIndex, milliseconds: performance.now() - started, cracks: failed.length,
@@ -163,6 +167,27 @@ export function createArchCollapse(profile, options = {}) {
   function setHand(index, target, localPoint = { x: 0, y: 0, z: 0 }) {
     const cell = cells[index];
     if (!cell || cell.layer !== config.layers - 1 || cell.pinned) throw new Error('hand requires unpinned front-layer cell');
+    setGrip(index, target, localPoint, { x: 0, y: 0, z: 1 });
+  }
+  const faceNormals = [new CANNON.Vec3(1, 0, 0), new CANNON.Vec3(-1, 0, 0), new CANNON.Vec3(0, 1, 0),
+    new CANNON.Vec3(0, -1, 0), new CANNON.Vec3(0, 0, 1), new CANNON.Vec3(0, 0, -1)];
+  function isExposedFace(index, normal) {
+    if (!cells[index] || !faceNormals.some(face => face.distanceTo(vector(normal)) < 1e-8)) return false;
+    return !bonds.some(bond => bond.alive && (bond.a === index && bond.normal.dot(vector(normal)) > 0.99 ||
+      bond.b === index && bond.normal.dot(vector(normal)) < -0.99));
+  }
+  function setSurfaceHand(index, target, localPoint, normal) {
+    const cell = cells[index];
+    if (!cell || cell.pinned || !isExposedFace(index, normal)) throw new Error('surface hand requires unpinned exposed face');
+    const expected = Math.abs(normal.x) * cell.half.x + Math.abs(normal.y) * cell.half.y + Math.abs(normal.z) * cell.half.z;
+    if (Math.abs(vector(localPoint).dot(vector(normal)) - expected) > 1e-6 ||
+        Math.abs(localPoint.x) > cell.half.x + 1e-6 || Math.abs(localPoint.y) > cell.half.y + 1e-6 || Math.abs(localPoint.z) > cell.half.z + 1e-6) {
+      throw new Error('surface hand point must lie on exposed face');
+    }
+    setGrip(index, target, localPoint, normal);
+  }
+  function setGrip(index, target, localPoint, normal) {
+    const cell = cells[index];
     if ([target.x, target.y, target.z, localPoint.x, localPoint.y, localPoint.z].some(value => !Number.isFinite(value))) {
       throw new Error('hand coordinates must be finite');
     }
@@ -170,15 +195,42 @@ export function createArchCollapse(profile, options = {}) {
       release();
       const anchor = new CANNON.Body({ mass: 0, position: vector(target) });
       world.addBody(anchor);
-      const joint = new CANNON.PointToPointConstraint(cell.body, vector(localPoint), anchor, new CANNON.Vec3());
-      for (const equation of joint.equations) equation.setSpookParams(config.gripStiffness, config.gripDamping, config.timeStep);
-      world.addConstraint(joint);
-      hand = { index, target: anchor.position, anchor, joint, localPoint: vector(localPoint), layers: [cell.layer], force: { x: 0, y: 0, z: 0 } };
+      const contact = cell.body.pointToWorldFrame(vector(localPoint));
+      const worldNormal = cell.body.vectorToWorldFrame(vector(normal));
+      const candidates = [], points = [];
+      for (const other of cells) {
+        if (other.pinned) continue;
+        if (other.index === index) { candidates.push(other); points.push(vector(localPoint)); continue; }
+        const face = faceNormals.find(direction => isExposedFace(other.index, direction) &&
+          other.body.vectorToWorldFrame(direction).dot(worldNormal) > 0.97);
+        if (!face) continue;
+        const point = new CANNON.Vec3(face.x * other.half.x, face.y * other.half.y, face.z * other.half.z);
+        const offset = other.body.pointToWorldFrame(point).vsub(contact);
+        if (offset.length() >= config.gripRadius || Math.abs(offset.dot(worldNormal)) > Math.min(dx, dy, dz) * 0.5) continue;
+        candidates.push(other); points.push(point);
+      }
+      const weights = candidates.map((other, i) => other.index === index ? 1 :
+        1 - other.body.pointToWorldFrame(points[i]).distanceTo(contact) / config.gripRadius);
+      const total = weights.reduce((sum, weight) => sum + weight, 0);
+      const members = candidates.map((other, i) => {
+        const offset = other.body.pointToWorldFrame(points[i]).vsub(contact);
+        const weight = weights[i] / total;
+        const joint = new CANNON.PointToPointConstraint(other.body, points[i], anchor, offset);
+        for (const equation of joint.equations) equation.setSpookParams(config.gripStiffness * weight, config.gripDamping, config.timeStep);
+        world.addConstraint(joint);
+        return { index: other.index, weight, joint };
+      });
+      hand = { index, target: anchor.position, anchor, members, localPoint: vector(localPoint), normal: xyz(normal),
+        layers: [...new Set(candidates.map(other => other.layer))], force: { x: 0, y: 0, z: 0 } };
     }
-    hand.target.copy(vector(target)); hand.localPoint.copy(vector(localPoint)); hand.joint.pivotA.copy(hand.localPoint);
+    hand.target.copy(vector(target));
+  }
+  function moveHand(target) {
+    if (!hand || [target.x, target.y, target.z].some(value => !Number.isFinite(value))) throw new Error('move requires active hand and finite target');
+    hand.target.copy(vector(target));
   }
   function release() {
-    if (hand) { world.removeConstraint(hand.joint); world.removeBody(hand.anchor); }
+    if (hand) { for (const member of hand.members) world.removeConstraint(member.joint); world.removeBody(hand.anchor); }
     hand = null;
   }
   function bind(index, radius = Math.max(dx, dy) * 2) {
@@ -203,10 +255,13 @@ export function createArchCollapse(profile, options = {}) {
     const graph = components();
     return { route: ARCH_COLLAPSE_ROUTE, backend: 'cannon-es-cpu', engineVersion: '0.20.0', config,
       step: stepIndex, time: stepIndex * config.timeStep, connectivityEpoch, floorY, dimensions: { dx, dy, dz },
-      hand: hand ? { index: hand.index, layers: hand.layers, target: xyz(hand.target), force: hand.force } : null,
+      hand: hand ? { index: hand.index, indices: hand.members.map(member => member.index),
+        weights: hand.members.map(member => member.weight), radius: config.gripRadius,
+        layers: hand.layers, normal: hand.normal, target: xyz(hand.target), force: hand.force } : null,
       bodies: cells.map(cell => ({ index: cell.index, id: cell.id, column: cell.column, row: cell.row,
         layer: cell.layer, pinned: cell.pinned, mass: cell.body.mass, volume: cell.volume,
         position: xyz(cell.body.position), rest: xyz(cell.rest), velocity: xyz(cell.body.velocity),
+        angularVelocity: xyz(cell.body.angularVelocity),
         quaternion: { ...xyz(cell.body.quaternion), w: cell.body.quaternion.w },
         component: graph.labels[cell.index], stress: Math.max(0, ...bonds.filter(bond =>
           bond.alive && (bond.a === cell.index || bond.b === cell.index)).map(bond => bond.stress)) })),
@@ -216,7 +271,8 @@ export function createArchCollapse(profile, options = {}) {
       events: events.map(event => ({ ...event })), samples: samples.map(sample => ({ ...sample })),
     };
   }
-  return { world, cells, bonds, step, setHand, bind, release, snapshot,
+  return { world, cells, bonds, step, setHand, setSurfaceHand, moveHand, isExposedFace, bind, release, snapshot,
+    setStrength: value => { if (!Number.isFinite(value) || value <= 0) throw new Error('strength must be positive and finite'); config.strength = value; },
     worldToLocalPoint: (index, point) => {
       if (!cells[index] || [point.x, point.y, point.z].some(value => !Number.isFinite(value))) {
         throw new Error('world point requires known cell and finite coordinates');

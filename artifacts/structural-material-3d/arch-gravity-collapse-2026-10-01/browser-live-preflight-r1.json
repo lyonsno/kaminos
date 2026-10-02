@@ -1,0 +1,47 @@
+{
+  "status": "failed",
+  "phase": "preflight",
+  "requestedUrl": "http://127.0.0.1:18434/structural-material-arch-collapse.html",
+  "effectiveUrl": null,
+  "root": "/private/tmp/kaminos-burning-demon-arch-repair-source-1001",
+  "command": [
+    "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "/private/tmp/kaminos-burning-demon-arch-repair-source-1001/structural-material-arch-collapse-smoke.mjs",
+    "http://127.0.0.1:18434/structural-material-arch-collapse.html",
+    "artifacts/structural-material-3d/arch-gravity-collapse-2026-10-01/browser-live-preflight-r1.json",
+    "/Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+  ],
+  "sourceRevision": "9ef22a58e345674ff093e73ffe5d995b634287d4",
+  "browser": {
+    "exit": null,
+    "stderr": ""
+  },
+  "sources": {},
+  "inputs": [],
+  "captures": {},
+  "checks": [
+    {
+      "name": "requested cohesion is positive and finite",
+      "passed": true,
+      "observed": 80
+    },
+    {
+      "name": "exact local collapse route",
+      "passed": false,
+      "observed": "http://127.0.0.1:18434/structural-material-arch-collapse.html"
+    }
+  ],
+  "errors": [],
+  "lastTrustworthyEvidence": "invocation only",
+  "requestedConfig": {
+    "strength": 80,
+    "layers": 3,
+    "timeStep": 0.016666666666666666,
+    "gripRadius": 0.55
+  },
+  "error": {
+    "message": "predicate failed: exact local collapse route",
+    "stack": "Error: predicate failed: exact local collapse route\n    at check (file:///private/tmp/kaminos-burning-demon-arch-repair-source-1001/structural-material-arch-collapse-smoke.mjs:20:117)\n    at file:///private/tmp/kaminos-burning-demon-arch-repair-source-1001/structural-material-arch-collapse-smoke.mjs:75:3\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)"
+  },
+  "finished": "2026-10-02T02:31:39.072Z"
+}

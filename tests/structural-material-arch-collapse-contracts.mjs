@@ -34,6 +34,27 @@ assert.notDeepEqual(model.snapshot().bodies[front.index].position, initial.bodie
   'release must not reset pose');
 model.dispose();
 
+const patch = createArchCollapse(profile, { layers: 2, depth: 0.6, gravity: 0, gripRadius: 2 });
+const contact = patch.cells.find(cell => !cell.pinned && cell.layer === 1);
+patch.setHand(contact.index, contact.body.position);
+const patchHand = patch.snapshot().hand;
+assert((patchHand.indices ?? [patchHand.index]).length > 1,
+  'a finite front-face grip must hold a contact patch rather than silently falling back to one cell');
+assert(patchHand.indices.every(index => patch.cells[index].layer === 1 && !patch.cells[index].pinned));
+assert(Math.abs(patchHand.weights.reduce((sum, value) => sum + value, 0) - 1) < 1e-12);
+patch.dispose();
+
+const surfaces = createArchCollapse(profile, { layers: 2, depth: 0.6, gravity: 0 });
+const rearSurface = surfaces.cells.find(cell => !cell.pinned && cell.layer === 0);
+assert.throws(() => surfaces.setHand(rearSurface.index, rearSurface.body.position), /front/);
+assert.equal(surfaces.isExposedFace?.(rearSurface.index, { x: 0, y: 0, z: -1 }) ?? false, true,
+  'a fallen piece must remain pickable through its exposed outer face, not its original layer label');
+surfaces.setSurfaceHand(rearSurface.index, rearSurface.body.position, { x: 0, y: 0, z: -rearSurface.half.z }, { x: 0, y: 0, z: -1 });
+assert(surfaces.snapshot().hand.indices.every(index => surfaces.cells[index].layer === 0));
+assert.throws(() => surfaces.setSurfaceHand(rearSurface.index, rearSurface.body.position,
+  { x: 0, y: 0, z: rearSurface.half.z }, { x: 0, y: 0, z: 1 }), /exposed/);
+surfaces.dispose();
+
 const repair = createArchCollapse(profile, { layers: 2, depth: 0.6, gravity: 0 });
 const connection = repair.bonds.find(bond => !repair.cells[bond.a].pinned && !repair.cells[bond.b].pinned);
 repair.world.removeConstraint(connection.joint);
@@ -43,6 +64,12 @@ const offset = b.rest.vsub(a.rest);
 b.body.position.copy(a.body.position.vsub(offset));
 assert.equal(repair.bind(a.index).length, 0,
   'equal center distance is not enough: the original opposing connection faces must meet');
+b.body.position.copy(b.rest);
+const beforeBind = repair.snapshot().bodies.map(body => ({ position: body.position, quaternion: body.quaternion }));
+assert(repair.bind(a.index).includes(connection.id));
+assert.deepEqual(repair.snapshot().bodies.map(body => ({ position: body.position, quaternion: body.quaternion })), beforeBind,
+  'matching-face Bind restores a connection at the current pose without teleportation');
+assert(connection.alive && connection.joint && repair.snapshot().events.some(event => event.kind === 'bind' && event.id === connection.id));
 for (const option of [{ solverIterations: 0 }, { friction: NaN }, { gripDamping: -1 }]) {
   assert.throws(() => createArchCollapse(profile, option), /finite|positive|nonnegative/);
 }

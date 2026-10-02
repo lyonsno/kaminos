@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createArchCollapse, coarsenArchProfile } from './structural-material-arch-collapse.js';
+import * as CANNON from 'cannon-es';
+import { inspectArchCollapseState } from './structural-material-arch-collapse-evidence.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const output = process.argv[2];
@@ -29,13 +31,14 @@ try {
       for (let i = 0; i < 120; i++) model.step();
       result.frames.push({ name: 'standing', state: model.snapshot() });
       const target = model.cells.find(cell => cell.layer === 2 && cell.row === 1 && !cell.pinned);
-      const start = { ...target.body.position };
+      const localPoint = { x: 0, y: 0, z: target.half.z };
+      const start = { ...target.body.pointToWorldFrame(new CANNON.Vec3(0, 0, target.half.z)) };
       result.contact = { id: target.id, index: target.index, start };
       for (let i = 0; i < 60; i++) {
         if (injured) {
           const point = { x: start.x - 1.5 * (i + 1) / 60, y: start.y, z: start.z + 0.5 * (i + 1) / 60 };
-          result.inputs.push({ step: 121 + i, index: target.index, target: point, localPoint: { x: 0, y: 0, z: 0 } });
-          model.setHand(target.index, point);
+          result.inputs.push({ step: 121 + i, index: target.index, target: point, localPoint });
+          model.setHand(target.index, point, localPoint);
         }
         model.step();
       }
@@ -46,6 +49,9 @@ try {
         if ((i + 1) % 60 === 0) result.frames.push({ name: `after-release-${(i + 1) / 60}s`, state: model.snapshot() });
       }
       const final = result.frames.at(-1).state;
+      result.integrity = result.frames.map(frame => ({ frame: frame.name,
+        ...inspectArchCollapseState(frame.state, { strength, layers: 3, timeStep: 1/60, solverIterations: 20 }) }));
+      if (result.integrity.some(item => item.errors.length)) throw new Error('invalid physics state; see frame integrity');
       result.summary = { standingBroken: result.frames[0].state.broken, finalBroken: final.broken,
         postReleaseCracks: final.events.filter(event => event.kind === 'crack' && event.step > 180).length,
         maximumCrownDrop: Math.max(...final.bodies.filter(body => body.row >= 8).map(body => body.rest.y - body.position.y)),
