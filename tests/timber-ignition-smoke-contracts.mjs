@@ -54,12 +54,21 @@ assert.deepEqual(good.events, [
   ['move', 'sinter-source-timber', {position: [0.4, -0.55, 0]}],
   ['move', 'sinter-receiver-timber', {position: [0.4, 0.6, 0]}], ['advance', 603],
 ]);
-assert.equal(good.smoke.status().phase, 'complete');
-assert.equal(good.smoke.status().running, false);
+assert.equal(good.smoke.status().phase, 'live', 'the prescribed sequence must enter the continuing operator preview');
+assert.equal(good.smoke.status().running, true);
 assert.equal(good.smoke.status().simStepCount, 603);
-assert.equal(good.state.simulationPaused, true, 'completed sequence must retain its material endpoint');
+assert.equal(good.state.simulationPaused, false, 'the operator preview must continue computing beyond the receipt endpoint');
 assert.equal(good.state.selectiveHeadLiveCapturePaused, false, 'completed sequence must keep presenting camera movement');
 assert.ok(!JSON.stringify(good.smoke.status()).includes('ignited'), 'scripted completion cannot assert a material result');
+const beforePause = structuredClone(good.events);
+good.smoke.togglePause();
+assert.equal(good.state.simulationPaused, true, 'operator pause must work after the finite sequence');
+assert.equal(good.state.selectiveHeadLiveCapturePaused, false, 'operator pause must retain a live camera');
+assert.equal(good.smoke.status().paused, true);
+good.smoke.togglePause();
+assert.equal(good.state.simulationPaused, false);
+assert.equal(good.smoke.status().paused, false);
+assert.deepEqual(good.events, beforePause, 'pause/resume must not restore the burner or reposition timbers');
 await assert.rejects(good.smoke.run(), /reset/);
 for (const mutate of [
   state => {state.backend = 'unavailable';},
@@ -86,4 +95,8 @@ await assert.rejects(burner.smoke.run(), /burner/);
 assert.ok(!burner.events.some(event => event[0] === 'move'), 'failed burner shutdown must prevent transfer placement');
 const stale = fixture(); stale.objects[1].transform.position = [0.4, 0.6, 0];
 await assert.rejects(stale.smoke.initialize(), /pose/);
+const continuation = fixture(); await continuation.smoke.initialize();
+continuation.volume.setSimulationPaused = () => ({paused:true});
+await assert.rejects(continuation.smoke.run(), /Live simulation continuation failed/);
+assert.equal(continuation.smoke.status().phase, 'failed', 'a rejected continuation cannot look like a live preview');
 console.log('timber ignition operator smoke contracts: ok');

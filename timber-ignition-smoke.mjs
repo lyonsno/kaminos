@@ -77,12 +77,13 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
         }
         publish({phase: 'burner-off-transfer'});
         await advance(360);
-        presentPausedSimulation();
-        publish({phase: 'complete', running: false, paused: true});
+        requireState(volume.setSimulationPaused(false).paused === false, 'Live simulation continuation failed');
+        requireState(volume.setSelectiveHeadLiveCapturePaused(false).paused === false, 'Live camera presentation failed');
+        publish({phase: 'live', running: true, paused: false});
       } catch (error) { fail(error); }
     },
     togglePause() {
-      requireState(state.running, 'Pause is available during the sequence');
+      requireState(state.running, 'Pause is available while the preview is live');
       const paused = !state.paused;
       const receipt = volume.setSimulationPaused(paused);
       requireState(receipt.paused === paused, 'Simulation pause failed');
@@ -99,13 +100,12 @@ export async function mountTimberIgnitionSmoke() {
   section.dataset.volumeBasinDriveIgnore = '';
   section.dataset.volumeCockpitLayoutUi = '';
   section.style.cssText = 'padding:8px 0 12px;border-bottom:1px solid #444;margin-bottom:10px;';
-  section.innerHTML = '<strong style="font-size:13px">Timber ignition</strong><div role="status" style="font-size:11px;line-height:1.5;margin:7px 0;overflow-wrap:anywhere">Loading</div><div class="volume-actions"><button class="btn" data-action="run" disabled>Run</button><button class="btn" data-action="pause" disabled>Pause</button><button class="btn" data-action="reset">Reset</button></div>';
+  section.innerHTML = '<strong style="font-size:13px">Timber ignition</strong><div role="status" style="font-size:11px;line-height:1.5;margin:7px 0;overflow-wrap:anywhere">Loading</div><div class="volume-actions"><button class="btn" data-action="pause" disabled>Pause</button><button class="btn" data-action="reset">Restart</button></div>';
   root.prepend(section);
   const label = section.querySelector('[role="status"]');
-  const run = section.querySelector('[data-action="run"]');
   const pause = section.querySelector('[data-action="pause"]');
   const phaseLabels = {loading: 'Loading', paused: 'Paused', 'burner-on': 'Burner on',
-    'burner-off-transfer': 'Burner off / transfer', complete: 'Sequence complete', failed: 'Failed'};
+    'burner-off-transfer': 'Burner off / transfer', live: 'Burner off / live', failed: 'Failed'};
   const volume = window.__kaminosVolumePrototype;
   const smoke = createTimberIgnitionSmoke({volume,
     basin: () => window.__kaminosDefaultVolumeSmokeBasin?.presetId,
@@ -114,13 +114,11 @@ export async function mountTimberIgnitionSmoke() {
     onChange(state) {
       label.textContent = state.error || `${phaseLabels[state.phase]}${state.running && state.paused ? ' (paused)' : ''}${state.simStepCount === null || !state.paused ? '' : ` | Step ${state.simStepCount}`}`;
       label.style.color = state.error ? '#ef9a9a' : '#ccc';
-      run.disabled = state.phase !== 'paused';
       pause.disabled = !state.running;
-      pause.textContent = state.paused ? 'Resume' : 'Pause';
+      pause.textContent = state.running && state.paused ? 'Resume' : 'Pause';
     },
   });
   window.__kaminosTimberIgnitionSmoke = smoke;
-  run.addEventListener('click', () => smoke.run().catch(error => console.error('Timber ignition sequence failed:', error)));
   pause.addEventListener('click', () => smoke.togglePause());
   section.querySelector('[data-action="reset"]').addEventListener('click', () => location.reload());
   try {
@@ -131,6 +129,7 @@ export async function mountTimberIgnitionSmoke() {
       await new Promise(requestAnimationFrame);
     }
     await smoke.initialize();
+    void smoke.run().catch(error => console.error('Timber ignition sequence failed:', error));
   } catch (error) {
     label.textContent = `Failed: ${error.message || error}`;
     throw error;
