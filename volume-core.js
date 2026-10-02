@@ -24618,6 +24618,7 @@ export function createKaminosVolumePrototype({
       // (state.confinement) proves application on the next frame.
       return { confinementEpsilonOverride, appliesOn: 'next-frame', previous: state.confinement };
     },
+    emissiveCameraState() { return state.physicalColor ? {...state.physicalColor} : null; },
     debugState() {
       return {
         ...state,

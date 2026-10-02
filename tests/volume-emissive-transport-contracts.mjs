@@ -63,6 +63,8 @@ assert.ok(camera.includes('linear*12.92,linear <= vec3<f32>(0.0031308)'));
 assert.doesNotMatch(camera, /physicalDisplay\(|neutral|mappedPeak/);
 assert.equal(displayEmissiveRGB([20,.5,.02])[2],displayEmissiveRGB([2,.5,.02])[2]);
 assert.deepEqual(displayEmissiveRGB([0,0,0]),[0,0,0]);
+assert.deepEqual(displayEmissiveRGB([.1,.2,.3],0,.6,[[0,1,0],[0,0,1],[1,0,0]]),
+  displayEmissiveRGB([.2,.3,.1],0,.6),'shared display must balance linear radiance before the shoulder');
 for (const x of [.1,.6,1,10]) {
   const neutral = displayEmissiveRGB([x,x,x]);
   assert.equal(neutral[0],neutral[1]); assert.equal(neutral[1],neutral[2]);

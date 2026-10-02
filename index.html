@@ -3250,6 +3250,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" id="rendering-angular-swap" disabled>Swap previous direction count</button>
         <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation</option><option value="spatial">Stable spatial jitter (experimental)</option></select>
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
+        <label class="import-mode"><input type="checkbox" id="rendering-match-flame-camera"><span>Match flame camera on scene (experimental)</span></label>
+        <p class="rendering-description" id="rendering-camera-status">Off: scene uses its existing camera transform. Matching applies the flame's white balance, EV and highlight shoulder to the whole mesh scene, including environment and rim light; source energy is unchanged.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Lighting-only emission smoothing passes. Zero is unfiltered; more passes soften fine source detail without changing visible flame emission, extinction, or solid ray stops. Geometry-touching source cells stay unfiltered. Saved flame settings are unchanged.</p>
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
@@ -3313,6 +3315,8 @@ import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
+import { createSceneEmissiveCamera } from './scene-emissive-camera.mjs';
+import { renderOutput } from 'three/tsl';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
@@ -10462,6 +10466,15 @@ async function initScene() {
   } else {
     renderPipeline.outputNode = baseSceneOutput;
   }
+  let sceneEmissiveCamera=null;
+  if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
+    const rawOutput=renderPipeline.outputNode;
+    sceneEmissiveCamera=createSceneEmissiveCamera(rawOutput,renderOutput(rawOutput,null,null),{TSL:{uniform,vec3,vec4,float},THREE});
+    renderPipeline.outputNode=sceneEmissiveCamera.outputNode;
+    renderPipeline.outputColorTransform=false; // Both arms already produce display sRGB.
+  }
+  window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
+  let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
     ? fireLightFieldPass.debugState()
     : {
@@ -10658,6 +10671,12 @@ async function initScene() {
     const t0 = performance.now();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
+    if(sceneEmissiveCamera) {
+      const requested=document.getElementById('rendering-match-flame-camera').checked;
+      const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
+      const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
+      if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
+    }
     renderPipeline.render();
     sceneFrameCount++;
     const frameMs = performance.now() - t0;

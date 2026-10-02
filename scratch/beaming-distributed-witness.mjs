@@ -234,6 +234,34 @@ try {
     }
     assert.notEqual(softened[0],softened[1],'independent softness control must affect light');
   }
+  if(process.argv.includes('--camera-match-check')) {
+    report.phase='held-camera-match';await save();
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([2,1.5,6],[0,.7,0]));
+    const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
+    let sourceHash,surfaceHash;
+    for(const [name,enabled,ev,white,knee] of [['host',false,0,6500,.6],['matched',true,0,6500,.6],['ev',true,1,6500,.6],['white',true,0,4000,.6],['knee',true,0,6500,.2],['restored',false,0,6500,.6]]) {
+      await page.setChecked('#rendering-match-flame-camera',enabled);
+      await page.evaluate(({ev,white,knee})=>{
+        for(const [id,value] of [['volume-physical-exposure',ev],['volume-physical-white',white],['volume-physical-knee',knee]]) {
+          const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));
+        }
+      },{ev,white,knee});
+      const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);
+      await page.waitForFunction(f=>{const v=window.__kaminosVolumePrototype.debugState();return v.error||window.__kaminosSceneRadianceSetup?.status==='failed'||v.frameCount>=f+3;},f,{timeout:0});
+      const state=await page.evaluate(()=>({camera:window.kaminosSceneEmissiveCameraDebugState(),volume:window.__kaminosVolumePrototype.debugState(),lighting:window.__kaminosSceneRadiance.debugState()}));
+      report.lastTrustworthyState=state;await save();assert.equal(state.volume.error,null);
+      assert.equal(state.camera.effective,enabled);assert.equal(state.camera.requested,enabled);
+      assert.equal(state.volume.physicalColor.exposureEV,ev);assert.equal(state.volume.physicalColor.whiteBalanceKelvin,white);assert.equal(state.volume.physicalColor.highlightKnee,knee);
+      if(enabled){assert.equal(state.camera.exposureEV,ev);assert.equal(state.camera.whiteBalanceKelvin,white);assert.equal(state.camera.highlightKnee,knee);}
+      const signal=await page.evaluate(async()=>({source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from((await window.__kaminosSceneRadiance.readback()).surface.data)}));
+      await fs.writeFile(`${out}/camera-${name}-signal.json`,JSON.stringify(signal));
+      const sh=digest(signal.source.values),rh=digest(signal.surface);
+      if(!sourceHash){sourceHash=sh;surfaceHash=rh;}assert.equal(sh,sourceHash);assert.equal(rh,surfaceHash,'camera must not alter raw received light');
+      await page.screenshot({path:`${out}/camera-${name}.png`});
+      report.views.push({name:`camera-${name}`,...state,sourceHash:sh,surfaceHash:rh});await save();
+    }
+  }
   if(process.argv.includes('--angular-pattern-check')) {
     report.phase='held-angular-pattern';await save();
     const lit=process.argv.includes('--angular-lit-check');

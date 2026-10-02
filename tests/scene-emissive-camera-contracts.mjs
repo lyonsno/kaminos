@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {resolveSceneEmissiveCamera} from '../scene-emissive-camera.mjs';
+const actual={effective:'emissive-transport-v2',exposureEV:-.2,highlightKnee:.68,whiteBalanceKelvin:7063};
+assert.equal(resolveSceneEmissiveCamera(false,actual).effective,false);
+assert.equal(resolveSceneEmissiveCamera(true).reason,'requires-effective-emissive-transport-v2');
+assert.equal(resolveSceneEmissiveCamera(true,{...actual,effective:'legacy',requested:'emissive-transport-v2'}).effective,false);
+for(const key of ['exposureEV','highlightKnee','whiteBalanceKelvin'])assert.equal(resolveSceneEmissiveCamera(true,{...actual,[key]:NaN}).reason,'invalid-effective-camera-state');
+for(const highlightKnee of [-1,1])assert.equal(resolveSceneEmissiveCamera(true,{...actual,highlightKnee}).effective,false);
+assert.deepEqual(resolveSceneEmissiveCamera(true,actual),{requested:true,effective:true,reason:null,transform:'fixed-bradford-white-channel-shoulder-srgb-v4',exposureEV:-.2,highlightKnee:.68,whiteBalanceKelvin:7063});
+console.log('scene camera effective-route and display-parameter contracts passed');

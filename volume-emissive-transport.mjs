@@ -3,8 +3,8 @@ import { CIE_1931_2DEG } from './cie-1931-observer.mjs';
 
 const referenceY = blackbodyXYZ(1900)[1];
 // Independent sensor-channel saturation; no exposure-dependent white is added.
-export function displayEmissiveRGB(rgb, ev = 0, knee = .6) {
-  return rgb.map(v => {
+export function displayEmissiveRGB(rgb, ev = 0, knee = .6, white = [[1,0,0],[0,1,0],[0,0,1]]) {
+  return white.map(row => row.reduce((sum,v,i)=>sum+v*rgb[i],0)).map(v => {
     let x = Math.max(0, v * 2 ** ev);
     if (x > knee) x = 1 - (1-knee)**2 / (x+1-2*knee);
     return x <= .0031308 ? x*12.92 : 1.055*x**(1/2.4)-.055;
