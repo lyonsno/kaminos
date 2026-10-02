@@ -114,3 +114,52 @@ export function validateSLatProjectionResult(result,plan) {
       row.comparison?.passed!==true||row.comparison.count!==plan.rows*plan.co)throw Error('complete compared projection output '+name+' required');
   }
 }
+
+export const SLAT_CONVOLUTION_ROUTE='trellis2.slat-decoder.first-convolution.webgpu.v0';
+export const SLAT_CONVOLUTION_REFERENCE_ROUTE='pinned-MLX-GPU-SLat-first-convolution/F16-per-offset';
+export function validateSLatConvolutionFixture(m,parent,projection) {
+  const p=validateSLatDecoderFixture(parent);validateSLatProjectionFixture(projection,parent);
+  const plan={rows:p.tokenRows,ci:p.channels[0],co:p.channels[0],resolution:p.resolution};
+  if(m?.schema!=='trellis2.slat-convolution-reference.v0'||m.status!=='succeeded'||
+    m.referenceRoute!==SLAT_CONVOLUTION_REFERENCE_ROUTE||m.operationCalls!==1||m.fullDecoderCalls!==0||
+    m.parentReference?.sha256!==projection.parentReference.sha256||!sha(m.projectionReference?.sha256)||
+    !/^[\w.-]+$/.test(m.parentReference?.file??'')||!/^[\w.-]+$/.test(m.projectionReference?.file??''))
+    throw Error('complete same-input first-convolution reference required');
+  for(const name of ['source','producer'])if(!/^[a-f0-9]{40}$/.test(m[name]?.commit??'')||m[name].dirty!==''||
+    m[name+'After']?.commit!==m[name].commit||m[name+'After'].dirty!=='')throw Error('clean unchanged convolution source/producer required');
+  const b=m.effectiveBackend;
+  if(m.source.commit!==parent.source.commit||b?.device!=='Device(gpu, 0)'||
+    b.operation!=='actual SparseConv3d.__call__'||b.neighborBuilder!=='actual build_neighbor_map'||
+    b.arithmetic!=='source-F16-per-offset-matmul-scatter-add-bias'||b.sparseConvMatmulBackend!=='native'||
+    typeof b.mlxVersion!=='string'||!b.mlxVersion)throw Error('actual matching native F16 convolution required');
+  const originals={input:projection.tensors['expected.f16'],coordinates:parent.tensors.coordinates,
+    'weight.blocks.0.0.conv.weight':parent.tensors['weight.blocks.0.0.conv.weight'],
+    'weight.blocks.0.0.conv.bias':parent.tensors['weight.blocks.0.0.conv.bias']};
+  for(const [name,original] of Object.entries(originals)){
+    const a=m.tensors?.[name];
+    for(const key of ['shape','dtype','sourceDtype','byteLength','sha256'])if(JSON.stringify(a?.[key])!==JSON.stringify(original[key]))
+      throw Error('changed convolution input '+name+'.'+key);
+    if(!/^[\w.-]+$/.test(a?.file??''))throw Error('safe convolution input file required');
+  }
+  for(const [name,shape,integer] of [['neighbors',[plan.rows,27],true],['convolution',[plan.rows,plan.co],false]]){
+    const row=m.tensors?.['expected.'+name];
+    if(!row||JSON.stringify(row.shape)!==JSON.stringify(shape)||row.dtype!==(integer?'int32':'float32')||
+      row.sourceDtype!==(integer?'int32':'float16')||row.byteLength!==shape.reduce((a,b)=>a*b,4)||
+      !sha(row.sha256)||!/^[\w.-]+$/.test(row.file??''))throw Error('complete convolution output '+name+' required');
+  }
+  return plan;
+}
+export function validateSLatConvolutionResult(result,plan) {
+  const c=result?.composition;
+  if(result?.requestedRoute!==SLAT_CONVOLUTION_ROUTE||result.effectiveRoute!==SLAT_CONVOLUTION_ROUTE||
+    result.numericalStatus!=='passed'||result.profileStatus!=='passed'||c?.rows!==plan.rows||c.ci!==plan.ci||
+    c.co!==plan.co||c.resolution!==plan.resolution||c.convolutionsExecuted!==1||c.fullDecoderCalls!==0||
+    c.metadataReadbackBytes!==4)throw Error('complete production neighbor/convolution execution required');
+  validateNativePrefixBackend(result.backend);
+  if(result.backend.isFallbackAdapter!==false)throw Error('explicit observed nonfallback adapter required');
+  for(const [name,columns,dtype] of [['neighbors',27,'i32'],['convolution',plan.co,'f32']]){
+    const row=result.outputs?.[name];
+    if(row?.dtype!==dtype||JSON.stringify(row.shape)!==JSON.stringify([plan.rows,columns])||!sha(row.sha256)||
+      row.comparison?.passed!==true||row.comparison.count!==plan.rows*columns)throw Error('complete compared convolution output '+name+' required');
+  }
+}

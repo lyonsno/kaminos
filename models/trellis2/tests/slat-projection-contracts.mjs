@@ -49,3 +49,4 @@ for(const change of [a=>a.effectiveRoute='fallback',a=>a.profileStatus='failed',
   const changed=structuredClone(result);change(changed);assert.throws(()=>checks.validateSLatProjectionResult(changed,plan));
 }
 console.log('Projection-only evidence rejects changed input/route/precision, hidden row loss, absent or blank output and full-decoder substitution.');
+export {parent,m as projectionFixture,row,identity};
