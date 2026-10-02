@@ -11082,13 +11082,13 @@ export function createKaminosVolumePrototype({
       if (key === sceneSolidRevisionKey) return;
       const started = performance.now();
       const extraction = trianglesFromSceneObject(source.object, productTransform);
+      let outerField = null;
       if (outerSmoke) {
         const outerTriangles=extraction.triangles.map(t=>t.map(p=>p.map(v=>v/outerConfig.extent)));
-        const outerField=voxelizeTriangleSolid(outerTriangles,outerConfig.grid);
-        outerSmoke.setSolids(packSolidTextureRows(outerField.cells,outerConfig.grid),revision);
+        outerField=voxelizeTriangleSolid(outerTriangles,outerConfig.grid);
       }
       const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
-      if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
+      if (field.surfaceCellCount === 0 && !outerField?.surfaceCellCount) throw new Error('authored-solid-does-not-intersect-volume');
       const sourceBounds = analyticEmitterDispatch;
       let sourceBoundsSolidCells = 0;
       if (sourceBounds.active) {
@@ -11107,6 +11107,7 @@ export function createKaminosVolumePrototype({
       if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) {
         throw new Error('authored-solid-occludes-emitter-source-support');
       }
+      if (outerField) outerSmoke.setSolids(packSolidTextureRows(outerField.cells,outerConfig.grid),revision);
       installSceneSolidTexture(field);
       rebuildSceneSolidBindingViews();
       sceneSolidRevisionKey = key;
@@ -11118,6 +11119,9 @@ export function createKaminosVolumePrototype({
         interiorCellCount: field.interiorCellCount,
         solidCellCount: field.surfaceCellCount + field.interiorCellCount,
         blockedFaceCount: field.blockedFaceCount,
+        outerGrid: outerField ? outerConfig.grid : null,
+        outerSolidCellCount: outerField ? outerField.surfaceCellCount + outerField.interiorCellCount : 0,
+        outerBlockedFaceCount: outerField?.blockedFaceCount || 0,
         sourceBoundsSolidCells,
         sourceBoundsCellCount: sourceBounds.cellCount,
         sourceSupport,
@@ -14880,7 +14884,7 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
-  function encodeSim(encoder, options = {}) {
+  function assertOuterRoute() {
     const outerPressure = outerRequested ? resolvePressureSolverConfig(controlsSnapshot).effective : null;
     if(outerRequested && (productFrameOwner !== 'prototype' || uniforms[368] !== 2
       || outerPressure.solver !== PRESSURE_SOLVER_CONVERGED || outerPressure.dispatch === 'disabled'
@@ -14888,6 +14892,10 @@ export function createKaminosVolumePrototype({
       || !resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic)) {
       throw new Error('outer smoke requires ordinary emissive raymarch, converged pressure and common-gas transport');
     }
+  }
+
+  function encodeSim(encoder, options = {}) {
+    assertOuterRoute();
     refreshSceneCollision();
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
@@ -18056,6 +18064,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    assertOuterRoute();
     if (!ordinarySceneDepthFallback) {
       ordinarySceneDepthFallback = device.createTexture({label:'ordinary depth unoccluded fallback',
         size:[1,1], format:'depth32float', usage:GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT});

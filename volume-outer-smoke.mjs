@@ -17,7 +17,17 @@ export function outerDonorBounds(c) {
   return {min:[-1+inset,-1+inset,-1+inset],max:[1-inset,3-inset,1-inset]};
 }
 export function validateOuterSmokeDevice(c,limits) {
-  outerDonorBounds(c);
+  const donor=outerDonorBounds(c);
+  // A continuous overlap can fall entirely between the coarse sample lattices.
+  // Require scalar centers and each staggered component, not just box volume.
+  const samples=(a,offset,hi)=>{
+    const first=Math.max(0,Math.floor((donor.min[a]-c.min[a])/c.cellWidth-offset)+1);
+    const last=Math.min(hi,Math.ceil((donor.max[a]-c.min[a])/c.cellWidth-offset)-1);
+    return Math.max(0,last-first+1);
+  };
+  if(c.shape.some((n,a)=>samples(a,.5,n-1)===0 || samples(a,0,n)===0)) {
+    throw new Error('outer donor has no support on the chosen sample lattice; increase grid resolution or reduce extent');
+  }
   const count=(c.grid+1)*(2*c.grid+1)*(c.grid+1);
   if(Math.max(...c.shape)>limits.maxTextureDimension3D)throw new Error('outer smoke texture exceeds device capacity');
   if(count*32>Math.min(limits.maxBufferSize,limits.maxStorageBufferBindingSize))throw new Error('outer smoke state exceeds device buffer capacity');

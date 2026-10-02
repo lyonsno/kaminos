@@ -9,7 +9,9 @@ export function assertEffectiveSceneCollision(receipt, expectedSourceId) {
   requireCondition(receipt?.sourceId === expectedSourceId, 'scene collision source identity mismatch');
   requireCondition(typeof receipt?.geometryRevision === 'string' && receipt.geometryRevision.length > 0,
     'scene collision geometry/transform revision missing');
-  requireCondition(receipt?.triangleCount > 0 && receipt?.solidCellCount > 0 && receipt?.blockedFaceCount > 0,
+  const nearBlocks = receipt?.solidCellCount > 0 && receipt?.blockedFaceCount > 0;
+  const outerBlocks = receipt?.outerGrid >= 2 && receipt?.outerSolidCellCount > 0 && receipt?.outerBlockedFaceCount > 0;
+  requireCondition(receipt?.triangleCount > 0 && (nearBlocks || outerBlocks),
     'authored scene collider has no occupied and blocking geometry');
   requireCondition(receipt?.sourceSupport?.fluidSupportCells > 0,
     'actual emitter signed-distance support is fully occluded');
