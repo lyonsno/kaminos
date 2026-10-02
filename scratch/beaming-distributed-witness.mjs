@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {assertSofteningView} from './beaming-softening-evidence.mjs';
+import {assertCameraPixels} from './beaming-camera-pixels.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -18,6 +19,26 @@ try {
   await fs.access(executable);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  if(process.argv.includes('--camera-match-check')) {
+    // Independent native reference in this owned browser only. Bypass the feature
+    // node/selector for a reference, then restore the exact prior pipeline state.
+    await page.route(u=>u.pathname==='/'||u.pathname==='/index.html',async route=>{
+      const response=await route.fetch(),original=await response.text();
+      const needle='    renderPipeline.render();';assert.equal(original.split(needle).length,2);
+      assert.equal(original.split('  function renderSceneFrame() {').length,2);
+      const body=original.replace('  function renderSceneFrame() {','  let beamingSavedCamera=null;\n  function renderSceneFrame() {').replace(needle,`
+    if(window.__beamingNativeCamera) {
+      if(!beamingSavedCamera)beamingSavedCamera={node:renderPipeline.outputNode,transform:renderPipeline.outputColorTransform};
+      renderPipeline.outputNode=rawSceneOutput;renderPipeline.outputColorTransform=true;renderPipeline.needsUpdate=true;
+      window.__beamingNativeCameraFrames=(window.__beamingNativeCameraFrames||0)+1;
+    } else if(beamingSavedCamera) {
+      renderPipeline.outputNode=beamingSavedCamera.node;renderPipeline.outputColorTransform=beamingSavedCamera.transform;renderPipeline.needsUpdate=true;beamingSavedCamera=null;
+    }
+${needle}`);
+      report.cameraInstrumentation={url:route.request().url(),original,body};await save();
+      await route.fulfill({response,body});
+    });
+  }
   if(process.argv.includes('--orientation-diagnosis')) {
     // Owned browser instrumentation only; never changes the operator's tab or source.
     await page.route('**/scene-distributed-radiance.mjs',async route=>{
@@ -239,6 +260,8 @@ try {
     await page.selectOption('#rendering-light-mode','shared');
     await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([2,1.5,6],[0,.7,0]));
     const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
+    const {PNG}=await import('/private/tmp/beaming-smoke-deps-1001/node_modules/playwright-core/lib/utilsBundle.js');
+    const pixels={};let nativeReference;
     let sourceHash,surfaceHash;
     for(const [name,enabled,ev,white,knee] of [['host',false,0,6500,.6],['matched',true,0,6500,.6],['ev',true,1,6500,.6],['white',true,0,4000,.6],['knee',true,0,6500,.2],['restored',false,0,6500,.6]]) {
       await page.setChecked('#rendering-match-flame-camera',enabled);
@@ -258,9 +281,19 @@ try {
       await fs.writeFile(`${out}/camera-${name}-signal.json`,JSON.stringify(signal));
       const sh=digest(signal.source.values),rh=digest(signal.surface);
       if(!sourceHash){sourceHash=sh;surfaceHash=rh;}assert.equal(sh,sourceHash);assert.equal(rh,surfaceHash,'camera must not alter raw received light');
-      await page.screenshot({path:`${out}/camera-${name}.png`});
+      pixels[name]=PNG.sync.read(await page.screenshot({path:`${out}/camera-${name}.png`}));
+      if(name==='host') {
+        await page.evaluate(()=>{window.__beamingNativeCamera=true;});
+        await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        assert.ok(await page.evaluate(()=>window.__beamingNativeCameraFrames>0),'independent native pipeline reference must actually render');
+        nativeReference=PNG.sync.read(await page.screenshot({path:`${out}/camera-native-reference.png`}));
+        await page.evaluate(()=>{window.__beamingNativeCamera=false;});
+        await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      }
       report.views.push({name:`camera-${name}`,...state,sourceHash:sh,surfaceHash:rh});await save();
     }
+    report.cameraPixelVerification={status:'checking-independent-native-reference'};await save();
+    report.cameraPixelVerification={status:'passed',...assertCameraPixels(nativeReference,pixels)};await save();
   }
   if(process.argv.includes('--angular-pattern-check')) {
     report.phase='held-angular-pattern';await save();
