@@ -12,8 +12,10 @@ export function bindSceneLightEditInteraction({document,window,getLighting}) {
   for(const event of ['pointerup','pointercancel'])on(window,event,e=>set(`input-pointer:${e.pointerId}`,false));
   on(document,'keydown',e=>{if(input(e)&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End'].includes(e.key))set(`input-key:${e.key}`,true);});
   on(window,'keyup',e=>set(`input-key:${e.key}`,false));
-  // Typed/programmatic input events without a held pointer/key end on commit.
-  on(document,'input',e=>{if(input(e)&&!held.size)set(e.target,true);});
+  // Only real typing creates a transaction without pointer/key custody.
+  // Scene/preset restoration also sends input notifications, without a later
+  // change event; treating those as human edits would strand the preview.
+  on(document,'input',e=>{if(e.isTrusted&&input(e)&&!held.size)set(e.target,true);});
   for(const event of ['change','focusout'])on(document,event,e=>{if(input(e))set(e.target,false);});
   on(window,'blur',()=>{for(const key of [...held])set(key,false);set('gizmo',false);});
   return ()=>{for(const stop of listeners)stop();for(const key of [...held])set(key,false);};

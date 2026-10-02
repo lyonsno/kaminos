@@ -241,6 +241,7 @@ try {
     const effective=()=>page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),badge:document.getElementById('lighting-edit-status').textContent,objects:window.kaminosSceneObjectDebugState()}));
     const settle=async()=>{const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().frameCount>=f+3,f,{timeout:0});};
     const original=await effective();
+    assert.equal(original.lighting.previewStale,false,'restored scene must not be stranded in an unfinished edit');
     const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
     let first12;
     for(const count of [12,16,24,12]) {

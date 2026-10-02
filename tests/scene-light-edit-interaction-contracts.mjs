@@ -9,14 +9,15 @@ class Events {
 const document=new Events(),window=new Events(),active=new Set();
 const target={matches:()=>true};
 const dispose=bindSceneLightEditInteraction({document,window,getLighting:()=>({setEditing(k,on){on?active.add(k):active.delete(k);}})});
+document.send('input',{target,isTrusted:false});assert.equal(active.size,0,'route restore input notifications are not unfinished human edits');
 document.send('pointerdown',{target,pointerId:7});document.send('input',{target});
 assert.deepEqual([...active],['input-pointer:7']);
 window.send('pointerup',{pointerId:7});assert.equal(active.size,0);
 document.send('keydown',{target,key:'ArrowRight'});document.send('input',{target});document.send('change',{target});
 assert.equal(active.size,1,'range change while keyboard held cannot commit geometry');
 window.send('keyup',{key:'ArrowRight'});assert.equal(active.size,0);
-document.send('input',{target});assert.ok(active.has(target));document.send('change',{target});assert.equal(active.size,0);
-document.send('input',{target});window.send('blur');assert.equal(active.size,0,'lost focus cannot strand edit state');
+document.send('input',{target,isTrusted:true});assert.ok(active.has(target));document.send('change',{target});assert.equal(active.size,0);
+document.send('input',{target,isTrusted:true});window.send('blur');assert.equal(active.size,0,'lost focus cannot strand edit state');
 document.send('pointerdown',{target,pointerId:8});window.send('pointercancel',{pointerId:8});assert.equal(active.size,0);
 assert.match(lightingEditStatus({previewStale:true}),/previous geometry/);
 assert.match(lightingEditStatus({status:'rebuild-pending'}),/Rebuilding/);
