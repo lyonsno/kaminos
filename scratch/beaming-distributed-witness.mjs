@@ -194,13 +194,16 @@ try {
   }
   if(process.argv.includes('--softening-check')) {
     report.phase='held-source-softening';await save();
+    const thin=process.argv.includes('--softening-thin');
+    report.softeningProfile={thin,directions:24,gain:thin?4:16,position:thin?[3,2,9]:[0,1,6],target:[0,.7,0]};await save();
     await page.selectOption('#rendering-light-mode','shared');
     await page.selectOption('#rendering-angular-samples','24');
     await page.selectOption('#rendering-smoke-solver','distributed');
-    await page.evaluate(()=>{
-      window.__kaminosSetSceneCameraFrame([0,1,6],[0,.7,0]);
-      const gain=document.getElementById('rendering-shared-gain');gain.value='4';gain.dispatchEvent(new Event('input',{bubbles:true}));
-    });
+    await page.evaluate(thin=>{
+      window.__kaminosSetSceneCameraFrame(thin?[3,2,9]:[0,1,6],[0,.7,0]);
+      const gain=document.getElementById('rendering-shared-gain');gain.value=thin?'2':'4';gain.dispatchEvent(new Event('input',{bubbles:true}));
+      if(thin)for(const [id,value] of [['volume-density',.35],['volume-physical-smoke-extinction',.1]]){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
+    },thin);
     const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
     let baselineSource,baselineSurface;const softened=[];
     for(const [name,passes] of [['baseline',0],['soft4',4],['soft16',16],['restored',0]]){
@@ -216,7 +219,8 @@ try {
       });
       await fs.writeFile(`${out}/softening-${name}-signal.json`,JSON.stringify(signal));
       assert.equal(signal.volume.error,null);assert.equal(signal.lighting.frame.sourceSoftness,passes);
-      assert.equal(signal.lighting.directions,24);assert.equal(signal.lighting.gain,16);
+      assert.equal(signal.lighting.directions,24);assert.equal(signal.lighting.gain,thin?4:16);
+      if(thin){assert.equal(signal.volume.controls.density,.35);assert.equal(signal.volume.controls.physicalSmokeExtinction,.1);}
       const sourceHash=digest(signal.source.values),surfaceHash=digest(signal.surface);
       if(name==='baseline'){baselineSource=sourceHash;baselineSurface=surfaceHash;}
       else assert.equal(sourceHash,baselineSource,'softness must leave actual raw emission/extinction unchanged');
