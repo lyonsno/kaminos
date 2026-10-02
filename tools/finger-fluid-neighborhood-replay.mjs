@@ -1,4 +1,5 @@
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import {dirname,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
@@ -9,7 +10,8 @@ const sha=b=>createHash('sha256').update(b).digest('hex');
 const result={schema:'soggy.offline-neighborhood-geometry.v1',status:'failed',phase:'inputs',route:'CPU replay of retained native particle readbacks; no GPU timing',snapshots:[]};
 try {
   if(!reports.length)throw Error('at least one observed report required');
-  result.auditSource={repoRoot:process.cwd(),commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),moduleSha256:sha(readFileSync(new URL('./finger-fluid-neighborhood-audit.mjs',import.meta.url))),runnerSha256:sha(readFileSync(new URL(import.meta.url)))};
+  const repoRoot=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+  result.auditSource={repoRoot,invocationCwd:process.cwd(),commit:execFileSync('git',['rev-parse','HEAD'],{cwd:repoRoot,encoding:'utf8'}).trim(),moduleSha256:sha(readFileSync(new URL('./finger-fluid-neighborhood-audit.mjs',import.meta.url))),runnerSha256:sha(readFileSync(new URL(import.meta.url)))};
   const config={boundsMin:[-3.4,-1.2,-3.4],boundsMax:[3.4,3,3.4],radius:.185};
   result.geometryConfig={...config,provenance:'finger-fluid-webgpu-core.js unit-volume playground constants; source snapshots below; CPU f64 replay, not WGSL f32 parity'};
   for(const reportPath of reports){

@@ -24,3 +24,10 @@ for(const [name,input,expected] of cases){
  assert.equal(p.status,1,name);const result=JSON.parse(readFileSync(out));assert.equal(result.status,'failed');assert.match(result.error,expected);assert.notEqual(result.phase,'complete');
 }
 console.log(`replay negative contracts passed (${cases.length}); synthetic admission fixtures only`);
+const foreignOutput=join(dir,'foreign-result.json');
+const foreign=spawnSync(process.execPath,[join(process.cwd(),'tools/finger-fluid-neighborhood-replay.mjs'),foreignOutput,join(dir,'missing-primary.json')],{cwd:dir,encoding:'utf8'});
+assert.equal(foreign.status,1);
+const foreignReport=JSON.parse(readFileSync(foreignOutput));
+assert.equal(foreignReport.auditSource?.repoRoot,process.cwd(),'source root belongs to executing module, not invocation cwd');
+assert.equal(foreignReport.auditSource.invocationCwd,dir);
+assert.match(foreignReport.error,/missing particle readback/);
