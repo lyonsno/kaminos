@@ -3777,6 +3777,11 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     throw new RangeError(`Finger Fluid density cell rejection must be 0 or 1: ${requestedDensityCellRejectionValue}`);
   }
   const requestedDensityCellRejection = requestedDensityCellRejectionValue === '1';
+  const requestedPackedDensityValue = params.get('finger_fluid_packed_density');
+  if (requestedPackedDensityValue !== null && !['0', '1'].includes(requestedPackedDensityValue)) {
+    throw new RangeError(`Finger Fluid packed density must be 0 or 1: ${requestedPackedDensityValue}`);
+  }
+  const requestedPackedDensity = requestedPackedDensityValue === '1';
   const requestedUniformVolumeDensityKernelValue = params.get('finger_fluid_uniform_volume_density_kernel');
   if (requestedUniformVolumeDensityKernelValue !== null
     && !['0', '1'].includes(requestedUniformVolumeDensityKernelValue)) {
@@ -3900,6 +3905,9 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     densityCellRejectionBypassReason: requestedDensityCellRejection && requestedAdaptiveDensity
       ? 'adaptive_density_neighbor_radius'
       : null,
+    requestedPackedDensity,
+    effectivePackedDensity: requestedPackedDensity && !requestedAdaptiveDensity,
+    packedDensityBypassReason: requestedPackedDensity && requestedAdaptiveDensity ? "adaptive_density_variable_population" : null,
     requestedUniformVolumeDensityKernel,
     effectiveUniformVolumeDensityKernel: requestedUniformVolumeDensityKernel && !requestedAdaptiveDensity,
     uniformVolumeDensityKernelBypassReason: requestedUniformVolumeDensityKernel && requestedAdaptiveDensity
@@ -12855,6 +12863,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveDensityCellRejection = gpuState.densityCellRejection;
   gpuState.densityCellRejectionBypassReason = fingerFluidBenchConfig.densityCellRejectionBypassReason;
   gpuState.requestedUniformVolumeDensityKernel = fingerFluidBenchConfig.requestedUniformVolumeDensityKernel;
+  gpuState.effectivePackedDensity = gpuState.packedDensity;
   gpuState.effectiveUniformVolumeDensityKernel = gpuState.uniformVolumeDensityKernel;
   gpuState.uniformVolumeDensityKernelBypassReason = fingerFluidBenchConfig.uniformVolumeDensityKernelBypassReason;
   gpuState.requestedWitnessTargetStep = fingerFluidBenchConfig.requestedWitnessTargetStep;
@@ -13084,6 +13093,7 @@ async function startFingerFluidBench() {
       fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
       densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection,
+      packedDensity: fingerFluidBenchConfig.effectivePackedDensity,
       uniformVolumeDensityKernel: fingerFluidBenchConfig.effectiveUniformVolumeDensityKernel,
       energyDiagnosticsMode: fingerFluidBenchConfig.effectiveEnergyDiagnosticsMode,
       substeps: 1,
@@ -13187,6 +13197,11 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
+  window.kaminosFingerFluidBenchCapturePackedDensityForWitness = () => {
+    if (!fingerFluidBenchSimulationPaused) throw new Error('Pause the fluid bench before frozen packed-density capture');
+    if (!fingerFluidBenchSolver?.available) throw new Error('Fluid solver unavailable');
+    return fingerFluidBenchSolver.capturePackedDensityForWitness();
+  };
   window.kaminosFingerFluidBenchBeginSolverTimestampCaptureForWitness = (querySet, firstQueryIndex, pairCount) => {
     if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver is unavailable for timestamp capture');
     return fingerFluidBenchSolver.armSolverGpuTimestampCaptureForWitness(querySet, firstQueryIndex, pairCount);

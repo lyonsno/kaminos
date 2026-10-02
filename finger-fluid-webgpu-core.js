@@ -1,3 +1,5 @@
+import {capturePackedDensityWitness} from './finger-fluid-packed-density-witness.mjs';
+import {createPackedDensityLayout, PACKED_DENSITY_WGSL} from './finger-fluid-packed-density.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
 export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';
@@ -6261,6 +6263,7 @@ const solverMaximumSpeed: f32 = ${KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN};
 @group(0) @binding(11) var<uniform> liveInletPacket: LiveInletPacket;
 ${KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN}
 
+${PACKED_DENSITY_WGSL}
 ${PLAYGROUND_WGSL}
 ${KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN}
 
@@ -7199,6 +7202,7 @@ fn build_linked_cell_grid(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (index >= params.particleCount) { return; }
   if (particles[index].velocity.w < 0.0) {
     particleNext[index] = -1;
+    if (packedDensityEnabled) { particles[index].predicted.w = 0.0; particles[index].delta.w = 0.0; }
     return;
   }
   let gridIndex = cellIndex(gridCoord(particles[index].predicted.xyz));
@@ -7322,7 +7326,7 @@ fn interface_density_constraint(densityRatio: f32, priorSurfaceFactor: f32) -> f
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
 fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+  let index = density_query_particle(gid.x);
   if (index >= params.particleCount) { return; }
   if (particles[index].velocity.w < 0.0 || density_volume_scale(index) <= 0.0) {
     particles[index].predicted.w = 0.0;
@@ -7342,11 +7346,11 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
         let neighborCell = baseCell + vec3<i32>(x, y, z);
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
         if (!density_neighbor_cell_might_contribute(position, neighborCell, selfRadiusScale)) { continue; }
-        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        var current = density_cell_first(neighborCell);
         while (current >= 0) {
-          let neighborIndex = u32(current);
+          let neighborIndex = density_neighbor_id(current);
           if (neighborIndex != index) {
-            let offset = position - particles[neighborIndex].predicted.xyz;
+            let offset = position - density_neighbor_position(current, neighborIndex);
             let distance = length(offset);
             let weight = density_pair_kernel_weight(index, neighborIndex, distance);
             density = density + weight;
@@ -7354,7 +7358,7 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
             gradientSelf = gradientSelf + gradient;
             gradientSquared = gradientSquared + dot(gradient, gradient);
           }
-          current = particleNext[neighborIndex];
+          current = density_cell_next(current, neighborIndex, neighborCell);
         }
       }
     }
@@ -7372,7 +7376,7 @@ fn compute_density_lambda(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
 fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+  let index = density_query_particle(gid.x);
   if (index >= params.particleCount) { return; }
   if (particles[index].velocity.w < 0.0 || density_volume_scale(index) <= 0.0) { return; }
   let position = particles[index].predicted.xyz;
@@ -7391,16 +7395,16 @@ fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
         let neighborCell = baseCell + vec3<i32>(x, y, z);
         if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
         if (!density_neighbor_cell_might_contribute(position, neighborCell, selfRadiusScale)) { continue; }
-        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        var current = density_cell_first(neighborCell);
         while (current >= 0) {
-          let neighborIndex = u32(current);
+          let neighborIndex = density_neighbor_id(current);
           if (neighborIndex != index) {
-            let offset = position - particles[neighborIndex].predicted.xyz;
+            let offset = position - density_neighbor_position(current, neighborIndex);
             let weight = density_pair_kernel_weight(index, neighborIndex, length(offset));
             let tensile = -0.0012 * pow(weight / referenceWeight, 4.0);
             correction = correction + (lambda + particles[neighborIndex].predicted.w + tensile) * density_pair_kernel_gradient(index, neighborIndex, offset);
           }
-          current = particleNext[neighborIndex];
+          current = density_cell_next(current, neighborIndex, neighborCell);
         }
       }
     }
@@ -12985,6 +12989,7 @@ export async function createWebGPUFingerFluidSolver({
   densityIterations = 3,
   densityCellRejection = false,
   uniformVolumeDensityKernel = false,
+  packedDensity = false,
   energyDiagnosticsMode = 'every_step',
   substeps = 1,
   truthScene = 'multi_regime_playground',
@@ -13017,6 +13022,9 @@ export async function createWebGPUFingerFluidSolver({
 } = {}) {
   if (typeof densityCellRejection !== 'boolean') {
     throw new TypeError(`Finger Fluid density cell rejection must be a boolean: ${String(densityCellRejection)}`);
+  }
+  if (typeof packedDensity !== 'boolean') {
+    throw new TypeError('Finger Fluid packed density must be a boolean');
   }
   if (typeof uniformVolumeDensityKernel !== 'boolean') {
     throw new TypeError(`Finger Fluid uniform volume density kernel must be a boolean: ${String(uniformVolumeDensityKernel)}`);
@@ -13152,6 +13160,8 @@ export async function createWebGPUFingerFluidSolver({
   }
   const safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
   const safeDensityCellRejection = densityCellRejection === true && !safeAdaptiveDensity;
+  const safePackedDensity = packedDensity && !safeAdaptiveDensity;
+  const packedDensityLayout = createPackedDensityLayout(safeParticleCount, GRID_CELL_COUNT);
   const safeUniformVolumeDensityKernel = uniformVolumeDensityKernel === true && !safeAdaptiveDensity;
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
@@ -13254,13 +13264,13 @@ export async function createWebGPUFingerFluidSolver({
   });
   const cellHeadsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-cellHeads',
-    size: GRID_CELL_COUNT * 4,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    size: (safePackedDensity ? packedDensityLayout.headWords : GRID_CELL_COUNT) * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
   const particleNextBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-particleNext',
-    size: safeParticleCount * 4,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    size: (safePackedDensity ? packedDensityLayout.particleWords : safeParticleCount) * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
@@ -13417,6 +13427,7 @@ export async function createWebGPUFingerFluidSolver({
   device.queue.writeBuffer(dynamicReflectionMeshIndexBuffer, 0, dynamicReflectionMeshData.indices);
 
   const computeShader = COMPUTE_SHADER
+    .replaceAll("__PACKED_DENSITY_ENABLED__", String(safePackedDensity))
     .replaceAll(
       KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN,
       String(safeMaxFluidSpeed),
@@ -13468,6 +13479,11 @@ export async function createWebGPUFingerFluidSolver({
       clear: await pipelineFor('clear_grid'),
       predict: await pipelineFor('predict_positions'),
       build: await pipelineFor('build_linked_cell_grid'),
+      ...(safePackedDensity ? {
+        packedScan: await pipelineFor('scan_packed_cell_blocks'),
+        packedTotals: await pipelineFor('scan_packed_block_totals'),
+        packedRecords: await pipelineFor('pack_density_cell_records'),
+      } : {}),
       lambda: await pipelineFor('compute_density_lambda'),
       delta: await pipelineFor('solve_position_delta'),
       applyDelta: await pipelineFor('apply_position_delta'),
@@ -13495,12 +13511,10 @@ export async function createWebGPUFingerFluidSolver({
   } catch (error) {
     return failFingerFluidInitialization(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
   }
+  let computeBindingEntries;
   let computeBindGroup;
   try {
-    computeBindGroup = device.createBindGroup({
-      label: 'kaminos-finger-fluid-compute-bind-group',
-      layout: computeLayout,
-      entries: [
+    computeBindingEntries = [
         { binding: 0, resource: { buffer: particleBuffer } },
         { binding: 1, resource: { buffer: cellHeadsBuffer } },
         { binding: 2, resource: { buffer: particleNextBuffer } },
@@ -13517,7 +13531,11 @@ export async function createWebGPUFingerFluidSolver({
           { binding: 12, resource: movingHillSupportProvider.sampleTextureView },
           { binding: 13, resource: { buffer: movingHillSupportProvider.paramsBuffer } },
         ] : []),
-      ],
+      ];
+    computeBindGroup = device.createBindGroup({
+      label: 'kaminos-finger-fluid-compute-bind-group',
+      layout: computeLayout,
+      entries: computeBindingEntries,
     });
   } catch (error) {
     return failFingerFluidInitialization(`WebGPU compute bind group validation failed: ${error.message || String(error)}`);
@@ -14636,6 +14654,12 @@ export async function createWebGPUFingerFluidSolver({
         dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
         advanceStage(2 + (iteration * 5));
         dispatch(pass, pipelines.build, safeParticleCount);
+        if (safePackedDensity) {
+          dispatch(pass, pipelines.packedScan, GRID_CELL_COUNT);
+          pass.setPipeline(pipelines.packedTotals);
+          pass.dispatchWorkgroups(1);
+          dispatch(pass, pipelines.packedRecords, GRID_CELL_COUNT);
+        }
         advanceStage(3 + (iteration * 5));
         dispatch(pass, pipelines.lambda, safeParticleCount);
         advanceStage(4 + (iteration * 5));
@@ -15967,6 +15991,11 @@ export async function createWebGPUFingerFluidSolver({
       densityCellRejectionBypassReason: densityCellRejection && safeAdaptiveDensity
         ? 'adaptive_density_neighbor_radius'
         : null,
+      requestedPackedDensity: packedDensity,
+      packedDensity: safePackedDensity,
+      packedDensityBypassReason: packedDensity && safeAdaptiveDensity ? "adaptive_density_variable_population" : null,
+      densityNeighborLayout: safePackedDensity ? "packed_xyz_id_chain_order_spatial_queries_v1" : "linked_cell_v0",
+      packedDensityStorageBytes: safePackedDensity ? (packedDensityLayout.headWords + packedDensityLayout.particleWords) * 4 : 0,
       requestedUniformVolumeDensityKernel: uniformVolumeDensityKernel,
       uniformVolumeDensityKernel: safeUniformVolumeDensityKernel,
       uniformVolumeDensityKernelBypassReason: uniformVolumeDensityKernel && safeAdaptiveDensity
@@ -16646,6 +16675,7 @@ export async function createWebGPUFingerFluidSolver({
     body_transport_mode: safeBodyTransportMode,
     interface_frequency_mode: safeInterfaceFrequencyMode,
     step,
+    capturePackedDensityForWitness: () => capturePackedDensityWitness({device,shader:computeShader,layout:computeLayout,buffers:computeBindingEntries,count:safeParticleCount,cells:GRID_CELL_COUNT,packedLayout:packedDensityLayout,stepCount}),
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,
     armSolverStageGpuTimestampCaptureForWitness,

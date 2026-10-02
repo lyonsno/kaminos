@@ -14,7 +14,7 @@ assert.match(shaderSource, /let cellPadding = cellWidth \* 0\.001;[\s\S]*select\
 assert.match(shaderSource, /select\(cellMin - cellPadding, min\(cellMin - cellPadding, position\), neighborCell == vec3<i32>\(0\)\)/, 'minimum edge-cell sides include clamped out-of-domain particles');
 assert.match(shaderSource, /select\(cellMax \+ cellPadding, max\(cellMax \+ cellPadding, position\), neighborCell == vec3<i32>\(params\.gridDims\.xyz\) - vec3<i32>\(1\)\)/, 'maximum edge-cell sides include clamped out-of-domain particles');
 for (const [name, stage] of [['lambda', lambda], ['correction', delta]]) {
-  assert.match(stage, /if \(!density_neighbor_cell_might_contribute\(position, neighborCell, selfRadiusScale\)\) \{ continue; \}[\s\S]*atomicLoad\(&cellHeads\[cellIndex\(neighborCell\)\]\)/, `${name} skips irrelevant cells before following the linked list`);
+  assert.match(stage, /if \(!density_neighbor_cell_might_contribute\(position, neighborCell, selfRadiusScale\)\) \{ continue; \}[\s\S]*density_cell_first\(neighborCell\)/, `${name} skips irrelevant cells before entering either neighbor representation`);
 }
 assert.match(shaderSource, /view\.setUint32\(188, safeDensityCellRejection \? 1 : 0, true\)/, 'effective route selection reaches the shader uniform');
 assert.ok(browserSource.includes("params.get('finger_fluid_density_cell_rejection')"), 'the browser route exposes the comparison switch');
