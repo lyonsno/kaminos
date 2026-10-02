@@ -252,8 +252,8 @@ try {
       const state=await page.evaluate(()=>({camera:window.kaminosSceneEmissiveCameraDebugState(),volume:window.__kaminosVolumePrototype.debugState(),lighting:window.__kaminosSceneRadiance.debugState()}));
       report.lastTrustworthyState=state;await save();assert.equal(state.volume.error,null);
       assert.equal(state.camera.effective,enabled);assert.equal(state.camera.requested,enabled);
-      assert.equal(state.volume.physicalColor.exposureEV,ev);assert.equal(state.volume.physicalColor.whiteBalanceKelvin,white);assert.equal(state.volume.physicalColor.highlightKnee,knee);
-      if(enabled){assert.equal(state.camera.exposureEV,ev);assert.equal(state.camera.whiteBalanceKelvin,white);assert.equal(state.camera.highlightKnee,knee);}
+      assert.equal(state.volume.physicalColor.exposureEV,Math.fround(ev));assert.equal(state.volume.physicalColor.whiteBalanceKelvin,white);assert.equal(state.volume.physicalColor.highlightKnee,Math.fround(knee));
+      if(enabled){assert.equal(state.camera.exposureEV,Math.fround(ev));assert.equal(state.camera.whiteBalanceKelvin,white);assert.equal(state.camera.highlightKnee,Math.fround(knee));}
       const signal=await page.evaluate(async()=>({source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from((await window.__kaminosSceneRadiance.readback()).surface.data)}));
       await fs.writeFile(`${out}/camera-${name}-signal.json`,JSON.stringify(signal));
       const sh=digest(signal.source.values),rh=digest(signal.surface);
