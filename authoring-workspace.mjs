@@ -1,0 +1,132 @@
+// One live set of controls, projected into two workspaces. Slots retain node,
+// listener, and value identity; no second scene model or simulation lifecycle.
+export function createControlSlots(document, entries) {
+  const slots = entries.map(({ node, destination }) => {
+    if (!node || !destination) throw new Error('Workspace control or destination is missing');
+    const marker = document.createComment(`workspace:${node.id || node.tagName}`);
+    node.before(marker);
+    return { node, destination, marker };
+  });
+  return {
+    showAuthoring() { for (const { node, destination } of slots) destination.append(node); },
+    showWorkbench() { for (const { node, marker } of slots) marker.after(node); },
+  };
+}
+
+export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, openWorkbenchTab, edits }) {
+  const byId = id => document.getElementById(id);
+  const header = document.createElement('header');
+  header.id = 'authoring-header';
+  header.innerHTML = `<strong class="authoring-brand">Kaminos</strong>
+    <nav class="workspace-switch" aria-label="Workspace"><button type="button" data-workspace-mode="authoring">Authoring</button><button type="button" data-workspace-mode="workbench">Workbench</button></nav>
+    <div id="authoring-document-actions" aria-label="Document commands"></div>
+    <div class="authoring-header-spacer"></div>
+    <button type="button" data-workbench-tab="assets" title="Import assets and browse the full workbench">Assets</button>
+    <button type="button" data-workbench-tab="generate">Generate</button>`;
+  const hierarchy = document.createElement('aside');
+  hierarchy.id = 'authoring-hierarchy'; hierarchy.setAttribute('aria-label', 'Scene hierarchy');
+  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Scene</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Select in the scene or viewport</p></div>`;
+  const inspector = document.createElement('aside');
+  inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
+  inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Object</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
+    <div id="authoring-object-properties" class="authoring-inspector-body"><div id="authoring-transform-slot"></div><div id="authoring-type-slot"></div><details id="authoring-object-tools"><summary>Object tools</summary></details></div>
+    <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><h2>Composition</h2><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><details id="authoring-burner-slot"><summary>Burner</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
+  const toolbar = document.createElement('div'); toolbar.id = 'authoring-viewport-tools';
+  toolbar.innerHTML = `<div id="authoring-add-slot"></div><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><div class="authoring-header-spacer"></div><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
+  document.body.prepend(header);
+  document.body.append(hierarchy, inspector);
+  byId('viewport').prepend(toolbar);
+  const entries = [];
+  const move = (node, destination) => entries.push({ node, destination: byId(destination) });
+  move(byId('scene-object-list').closest('.panel'), 'authoring-tree');
+  move(byId('transform-inspector'), 'authoring-transform-slot');
+  move(byId('selected-light-properties'), 'authoring-type-slot');
+  move(byId('selected-flame-properties'), 'authoring-type-slot');
+  move(byId('authoring-source-environment'), 'authoring-world-slot');
+  move(byId('authoring-source-render'), 'authoring-render-slot');
+  move(byId('authoring-source-fire-light'), 'authoring-render-slot');
+  move(byId('authoring-source-burner'), 'authoring-burner-slot');
+  move(byId('local-liquid-performance'), 'authoring-water-slot');
+  move(byId('composition-label').closest('.authoring-controls'), 'authoring-composition-slot');
+  move(byId('scene-add-menu').closest('nav'), 'authoring-add-slot');
+  move(byId('navigation-input-mode').closest('label'), 'authoring-navigation-slot');
+  // Child slots precede their parent slot so restoring is independent of order.
+  for (const button of document.querySelectorAll('#transform-bar > button')) {
+    const action = button.getAttribute('onclick') || '';
+    if (/saveScene|scene-file-input/.test(action)) move(button, 'authoring-document-actions');
+    else if (/setGizmoMode/.test(action)) move(button, 'authoring-gizmo-slot');
+  }
+  move(byId('composition-capture'), 'authoring-document-actions');
+  move(byId('transform-bar'), 'authoring-object-tools');
+  const slots = createControlSlots(document, entries);
+  let mode = null;
+  function setContext(context) {
+    const object = context === 'object';
+    byId('authoring-object-properties').hidden = !object;
+    byId('authoring-scene-properties').hidden = object;
+    inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspectorContext === context)));
+  }
+  function setMode(next) {
+    if (!['authoring', 'workbench'].includes(next)) throw new Error('Unknown workspace');
+    if (mode === next) return true;
+    if (beforeSwitch(next) === false) return false;
+    // Blurring commits a normal field edit through its existing handler.
+    document.activeElement?.blur?.();
+    if (next === 'authoring') slots.showAuthoring(); else slots.showWorkbench();
+    mode = next;
+    document.body.dataset.workspace = mode;
+    header.querySelectorAll('[data-workspace-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspaceMode === mode)));
+    return true;
+  }
+  header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.workspaceMode)));
+  header.querySelectorAll('[data-workbench-tab]').forEach(button => button.addEventListener('click', () => { if (setMode('workbench')) openWorkbenchTab(button.dataset.workbenchTab); }));
+  inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.addEventListener('click', () => setContext(button.dataset.inspectorContext)));
+  byId('authoring-frame').onclick = () => { document.defaultView.kaminosFrameSelected?.(); byId('authoring-frame').blur(); };
+  for (const action of ['undo', 'redo']) byId(`authoring-${action}`).onclick = () => {
+    try { edits[action](); } catch (error) { byId('info-bar').textContent = error.message; }
+    byId(`authoring-${action}`).blur();
+  };
+  const updateHistory = () => {
+    const state = edits.state();
+    byId('authoring-undo').disabled = !!state.active || state.replaying || !state.undoCount;
+    byId('authoring-redo').disabled = !!state.active || state.replaying || !state.redoCount;
+  };
+  edits.subscribe(updateHistory); updateHistory();
+  // Selection already has a canonical inspector projection. Observe only its
+  // identity, never write scene selection from layout code.
+  const Observer = document.defaultView.MutationObserver;
+  let selectionKey;
+  const observer = new Observer(() => {
+    const source = byId('transform-inspector');
+    const key = `${source.dataset.selectedObjectId}/${source.dataset.selectedGroupId}`;
+    if (key === selectionKey) return;
+    selectionKey = key;
+    setContext('object');
+
+  });
+  observer.observe(byId('transform-inspector'), { attributes: true, attributeFilter: ['data-selected-object-id', 'data-selected-group-id'] });
+  const updateCount = () => {
+    const count = byId('scene-object-list').querySelectorAll('[data-scene-object-id]').length;
+    byId('authoring-object-count').textContent = `${count} ${count === 1 ? 'object' : 'objects'}`;
+  };
+  const treeObserver = new Observer(updateCount);
+  treeObserver.observe(byId('scene-object-list'), { childList: true }); updateCount();
+
+  // Native splitters change viewport geometry; existing ResizeObserver owns
+  // camera aspect and render targets.
+  for (const [side, label] of [['left', 'Scene hierarchy width'], ['right', 'Properties width']]) {
+    const splitter = document.createElement('div'); splitter.className = `authoring-splitter ${side}`;
+    splitter.tabIndex = 0; splitter.setAttribute('role', 'separator'); splitter.setAttribute('aria-label', label); splitter.setAttribute('aria-orientation', 'vertical');
+    document.body.append(splitter);
+    const panel = side === 'left' ? hierarchy : inspector;
+    const resize = value => { const width = Math.max(180, Math.min(document.body.clientWidth * .4, value)); document.body.style.setProperty(`--authoring-${side}`, `${width}px`); splitter.setAttribute('aria-valuenow', String(Math.round(width))); };
+    splitter.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight'].includes(event.key)) { event.preventDefault(); resize(panel.clientWidth + (event.key === 'ArrowRight' ? 10 : -10) * (side === 'left' ? 1 : -1)); } });
+    let drag;
+    splitter.addEventListener('pointerdown', event => { if (event.button !== 0) return; event.preventDefault(); drag = { x: event.clientX, width: panel.clientWidth }; splitter.setPointerCapture(event.pointerId); });
+    splitter.addEventListener('pointermove', event => { if (drag) resize(drag.width + (event.clientX - drag.x) * (side === 'left' ? 1 : -1)); });
+    splitter.addEventListener('pointerup', () => { drag = null; }); splitter.addEventListener('pointercancel', () => { drag = null; });
+  }
+  document.body.classList.add('has-authoring-workspace');
+  setMode(initialMode);
+  return { setMode, setContext, state: () => ({ mode, context: byId('authoring-object-properties').hidden ? 'scene' : 'object' }) };
+}

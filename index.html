@@ -690,6 +690,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   body.composition-authoring #transform-bar > * { flex-shrink: 0; }
 }
 </style>
+<link rel="stylesheet" href="./authoring-workspace.css">
 </head>
 <body>
 
@@ -766,6 +767,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input id="composition-ground-height" type="number" step="0.05" value="-0.85" class="transform-input">
     </div>
 
+    <section id="authoring-source-burner">
     <h2>Burner</h2>
     <label class="import-mode"><input id="burner-enabled" type="checkbox"><span>Annular bed</span></label>
     <div id="burner-controls" hidden>
@@ -777,6 +779,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div id="burner-status" role="status"></div>
 
+    </section>
     <section id="local-liquid-performance" hidden>
       <h2>Water Simulation</h2>
       <div class="panel">
@@ -833,6 +836,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </section>
     <section id="selected-flame-properties" hidden><h2>Selected Flame</h2><div id="selected-flame-fields"></div></section>
 
+    <section id="authoring-source-fire-light">
     <h2>Fire Light</h2>
     <div class="panel">
       <label class="import-mode">
@@ -846,6 +850,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
     </div>
 
+    </section>
     <h2>Transform</h2>
     <div class="panel transform-inspector" id="transform-inspector" data-selected-object-id="">
       <div id="transform-inspector-empty" class="transform-inspector-empty">No object selected</div>
@@ -966,6 +971,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="view-modes"></div>
     </div>
 
+    <section id="authoring-source-environment">
     <h2>Environment</h2>
     <div class="env-grid" id="env-buttons"></div>
 
@@ -1009,6 +1015,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
     <button class="btn" id="env-reset" title="Reset this environment's lighting recipe">Reset Map</button>
 
+    </section>
+    <section id="authoring-source-render">
     <h2>Post Processing</h2>
     <div class="slider-row">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
@@ -1076,6 +1084,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <span class="slider-val" id="dof-maxblur-val">0.01</span>
       </div>
     </div>
+    </section>
   </div>
 
   <!-- Forge Tab -->
@@ -3553,8 +3562,10 @@ import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
+import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe } from './scene-rim-light.mjs';
 
+let authoringWorkspace = null;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
 const publishVolumeCockpitLayoutPhase = phase => {
@@ -11198,7 +11209,7 @@ async function initScene() {
       if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after,
         event.operation === 'commit' ? null : event.afterContext);
     },
-    historyScopes: [document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
+    historyScopes: [document.getElementById('transform-inspector'), document.getElementById('selected-light-properties'), document.getElementById('selected-flame-properties'), document.getElementById('authoring-source-burner'), document.getElementById('authoring-source-environment'), document.getElementById('authoring-source-render'), document.getElementById('authoring-source-fire-light'), document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
   });
   scenePlacementTools.edits.register('@burner-controls', {
     read: readBurnerControlHistoryState,
@@ -11219,6 +11230,27 @@ async function initScene() {
   installAuthoringParameterEditing();
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
+  await volumeCockpitLayoutReady;
+  const workspaceParam = initialViewerParams.get('workspace');
+  const authoredRoute = new URLSearchParams(location.hash.slice(1)).get('authoring') === '1';
+  authoringWorkspace = installAuthoringWorkspace({
+    document, edits: scenePlacementTools.edits,
+    initialMode: workspaceParam === 'authoring' || (authoredRoute && workspaceParam !== 'workbench') ? 'authoring' : 'workbench',
+    beforeSwitch: next => {
+      // Never relocate a control under an unresolved modal gesture/replay.
+      authoringControlSessions.forEach(session => session.commit());
+      if (scenePlacementTools.edits.state().active || scenePlacementTools.edits.state().replaying) {
+        setInfo('Finish or cancel the current edit before switching workspace'); return false;
+      }
+      if (next === 'authoring' && !['assets', 'volume'].includes(window.__kaminosActiveTab())) {
+        setActiveTab('assets', { reveal: false });
+      }
+      return true;
+    },
+    openWorkbenchTab: tab => setActiveTab(tab),
+  });
+  window.kaminosWorkspace = authoringWorkspace;
+
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
     || isAuthoredKilnCollisionRoute();
 
@@ -11943,7 +11975,8 @@ function ensureFingerJuiceTabFrameLoaded() {
   fingerJuiceFrame.src = fingerJuiceFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
 }
 
-function setActiveTab(tabName) {
+function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
+  if (reveal && authoringWorkspace?.state().mode === 'authoring' && !authoringWorkspace.setMode('workbench')) return;
   document.body.classList.toggle('sam-image-active', tabName === 'masks');
   document.getElementById('sam-image-viewport').hidden = tabName !== 'masks';
   samImageTools?.setActive(tabName === 'masks');
@@ -23872,7 +23905,7 @@ async function initKaminosVolumeRoute() {
   };
 
   if (params.get('kaminos_volume_smoke') === '1') {
-    setActiveTab('volume');
+    setActiveTab('volume', { reveal: false });
     if (camera && controls) frameVolumeCamera();
     try {
       await volumePrototype.setActive(true);
@@ -27716,7 +27749,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
   if (hasVolumePrimitiveScene || activeSceneComposition || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1') {
-    setActiveTab(activeSceneComposition ? 'assets' : 'volume');
+    setActiveTab(activeSceneComposition ? 'assets' : 'volume', { reveal: false });
     await volumePrototype?.setActive?.(true);
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   } else {
@@ -27919,7 +27952,7 @@ sceneInitialization.then(() => {
     const hash = new URLSearchParams(location.hash.slice(1));
     if (hash.get('authoring') !== '1') return;
     document.body.classList.add('composition-authoring');
-    setActiveTab('assets');
+    setActiveTab('assets', { reveal: false });
     const sceneFile = hash.get('scene');
     if (!sceneFile) return;
     sceneSaveBlockedByFailedRestore = true;
