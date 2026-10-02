@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {assertSofteningView} from './beaming-softening-evidence.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -224,6 +225,7 @@ try {
       const sourceHash=digest(signal.source.values),surfaceHash=digest(signal.surface);
       if(name==='baseline'){baselineSource=sourceHash;baselineSurface=surfaceHash;}
       else assert.equal(sourceHash,baselineSource,'softness must leave actual raw emission/extinction unchanged');
+      assertSofteningView(signal,{passes,gain:thin?4:16,sourceHash,baselineSource,surfaceHash,baselineSurface,thin});
       if(passes>0){assert.notEqual(surfaceHash,baselineSurface,'softness must actually change receiver light');softened.push(surfaceHash);
         assert.equal(signal.lighting.frame.sourceSoftening.staticPreparations,1);}
       if(name==='restored')assert.equal(surfaceHash,baselineSurface,'zero must restore exact surface transport');

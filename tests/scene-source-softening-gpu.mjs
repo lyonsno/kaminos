@@ -54,12 +54,15 @@ try{
     const validation=await device.popErrorScope();device.destroy();return {info,rows,errors,losses,validation:validation?.message??null};
   },report.fixtures);await save();
   assert.equal(report.signal.validation,null);assert.deepEqual(report.signal.errors,[]);assert.deepEqual(report.signal.losses,[]);
+  assert.deepEqual(report.signal.rows.map(r=>r.name),['empty','plane','reversed']);
   for(const row of report.signal.rows){
+    assert.equal(row.outputs.length,6);assert.equal(row.occupied.length,1024);
     assert.equal(row.metadata.staticPreparations,1);assert.equal(row.metadata.updates,4);
     row.occupied.forEach((v,i)=>assert.equal(v,row.name==='empty'?0:([3,4].includes(i%8)?1:0),'actual SAT occupancy'));
     for(const output of row.outputs){
       const input=Float32Array.from(row.input,(v,i)=>i%4===3?v:v*output.scale);
       const expected=softenEmissionReference(input,row.dims,row.occupied,output.passes);
+      assert.equal(output.values.length,expected.length);
       output.values.forEach((v,i)=>assert.ok(Number.isFinite(v)&&Math.abs(v-expected[i])<2e-6,`${row.name} pass${output.passes} component${i}: ${v} vs ${expected[i]}`));
       if(output.passes===0)assert.equal(output.identity,true);
       if(row.name!=='empty')for(let i=0;i<1024;i++)if(i%8>=3)assert.equal(output.values[i*4],0,'wall blocks emission redistribution');
