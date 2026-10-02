@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,readFileSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -29,5 +29,5 @@ const foreign=spawnSync(process.execPath,[join(process.cwd(),'tools/finger-fluid
 assert.equal(foreign.status,1);
 const foreignReport=JSON.parse(readFileSync(foreignOutput));
 assert.equal(foreignReport.auditSource?.repoRoot,process.cwd(),'source root belongs to executing module, not invocation cwd');
-assert.equal(foreignReport.auditSource.invocationCwd,dir);
+assert.equal(foreignReport.auditSource.invocationCwd,realpathSync(dir));
 assert.match(foreignReport.error,/missing particle readback/);
