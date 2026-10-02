@@ -6,6 +6,7 @@ import {
   normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
+import { outerSmokeConfig, createOuterSmoke } from './volume-outer-smoke.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
@@ -2670,6 +2671,9 @@ override GRID_Y: u32 = 128u;
 override TRANSPARENT_CANVAS: f32 = 0.0;
 override IRRADIANCE_GRID: u32 = 32u;
 override LEAN_STOCK_RAYMARCH: bool = false;
+const OUTER_SMOKE: bool = false;
+const OUTER_EXTENT: f32 = 4.0;
+@group(0) @binding(17) var outerSmokeOptical: texture_3d<f32>;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -6302,6 +6306,24 @@ fn ordinarySceneDepthEndT(in: VSOut) -> f32 {
   return max(0.0, dot(world.xyz / world.w - ro, rd));
 }
 
+fn outerInsideNear(p:vec3<f32>)->bool {
+  return all(p>=vec3<f32>(-1.0)) && all(p<=vec3<f32>(1.0,3.0,1.0));
+}
+fn outerSmokeBlend(p:vec3<f32>,width:f32)->f32 {
+  let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,3.0-p.y));
+  return 1.0-smoothstep(0.0,width,d);
+}
+fn sampleOuterSmoke(p:vec3<f32>)->vec4<f32>{
+  let dims=vec3<i32>(textureDimensions(outerSmokeOptical));
+  let q=(p+OUTER_EXTENT)*(f32(dims.x)/(2.0*OUTER_EXTENT))-.5;
+  let b=vec3<i32>(floor(q));let f=fract(q);var result=vec4<f32>(0.0);
+  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
+    let c=b+vec3<i32>(x,y,z);if(any(c<vec3<i32>(0))||any(c>=dims)){continue;}
+    let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));result+=textureLoad(outerSmokeOptical,c,0)*w.x*w.y*w.z;
+  }}}return result;
+}
+fn outerSmokeAmbient()->vec3<f32>{return vec3<f32>(u.emissive_material.z);}
+
 fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && nonRidgeOpticalCaptureHeader.mode >= 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
@@ -6313,7 +6335,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
-  let hit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));
+  let nearHit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));
+  var hit = nearHit;
+  if (OUTER_SMOKE) { hit = boxHit(ro-vec3<f32>(0.0,OUTER_EXTENT,0.0),rd,vec3<f32>(OUTER_EXTENT,2.0*OUTER_EXTENT,OUTER_EXTENT)); }
   if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
@@ -6450,7 +6474,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let endT = select(min(hit.y, sceneDepthEndT), 4.0, fullGridCapture);
   // Keep ordinary sample positions stable; clipping removes hidden samples,
   // rather than resampling the visible fire at a different density.
-  let dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;
+  var dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;
+  if (OUTER_SMOKE) { dtBase = max(2.0/f32(GRID),max(0.0,nearHit.y-max(0.0,nearHit.x))/steps); }
   let jitter = dtBase * 0.5;
   var t = startT + jitter;
   var trans = 1.0;
@@ -6484,11 +6509,12 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
   let expensiveSampleBudget = u32(ceil(steps));
-  let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u;
+  let outerWidth = 2.0*OUTER_EXTENT/f32(textureDimensions(outerSmokeOptical).x);
+  let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u + select(0u,u32(ceil(max(0.0,endT-startT)/(outerWidth*.5)))+4u,OUTER_SMOKE);
   var expensiveSamples = 0u;
   var traversalSteps = 0u;
   loop {
-    if (expensiveSamples >= expensiveSampleBudget || traversalSteps >= maxTraversalSteps) { break; }
+    if ((!OUTER_SMOKE && expensiveSamples >= expensiveSampleBudget) || traversalSteps >= maxTraversalSteps) { break; }
     if (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT)) { break; }
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
@@ -6496,10 +6522,21 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID_Y))), GRID_Y - 1u);
     let fullGridP = cellToWorld(vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5));
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
+    if (OUTER_SMOKE && !outerInsideNear(p)) {
+      var ds = min(outerWidth*.5,max(0.0001,endT-t));
+      if(t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t+0.00001;}
+      var r:FlowReconstructionSample;r.material=sampleOuterSmoke(p);
+      let medium=emissiveMaterial(r,0.0,1.0-effectiveRaymarchSmokeSuppressed);
+      let sigma=medium.absorption+medium.scattering;
+      // Ambient only outside the near lighting lattice. Never repeat a clamped
+      // near-cell light sample across the entire atmosphere.
+      color+=trans*medium.scattering*outerSmokeAmbient()*emissionIntegral(sigma,ds);
+      trans*=exp(-sigma*ds);t+=ds;continue;
+    }
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     let directSupport = directCellOpticalSupport(p);
-    if (!fullGridCapture && directSupport <= 0.0001) {
+    if (!fullGridCapture && directSupport <= 0.0001 && (!OUTER_SMOKE || sampleOuterSmoke(p).x<=0.0001)) {
       let cellExit = directCellExitDistance(p, rd);
       let emptyCellAdvance = mix(
         dtBase,
@@ -6514,6 +6551,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       reconstructed = sampleWorldFlowReconstruction(p);
     } else {
       reconstructed = sampleWorldFlowReconstructionRaw(p);
+    }
+    if(OUTER_SMOKE){
+      let w=outerSmokeBlend(p,outerWidth);
+      reconstructed.material.x=mix(reconstructed.material.x,sampleOuterSmoke(p).x,w);
+      reconstructed.material.w*=1.0-w;reconstructed.microLayer.x*=1.0-w;
     }
     expensiveSamples = expensiveSamples + 1u;
     let state = reconstructed.velocityDensity;
@@ -9260,6 +9302,7 @@ export function createKaminosVolumePrototype({
   externalColorFormat = null,
   externalDepthFormat = 'depth24plus',
   externalProductTransform = { translate: [0, 0, 0], scale: 1 },
+  surroundingSmoke = null,
 }) {
   if (productFrameOwner !== 'prototype' && productFrameOwner !== 'caller') {
     throw new Error(`unsupported-product-frame-owner:${productFrameOwner}`);
@@ -9314,6 +9357,17 @@ export function createKaminosVolumePrototype({
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
   let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
+  const outerRoute = new URLSearchParams(`${globalThis.location?.search?.slice(1)||''}&${globalThis.location?.hash?.slice(1)||''}`);
+  const outerRequested = surroundingSmoke !== null || outerRoute.get('volume_outer_smoke') === '1';
+  const outerConfig = outerRequested ? outerSmokeConfig(surroundingSmoke || {
+    grid:Number(outerRoute.get('volume_outer_grid') || 32),
+    extent:Number(outerRoute.get('volume_outer_extent') || 4),
+    pressureIterations:Number(outerRoute.get('volume_outer_pressure') || 24),
+  }) : null;
+  function activeVolumeShader() {
+    return WGSL.replace('const OUTER_SMOKE: bool = false;',`const OUTER_SMOKE: bool = ${outerRequested};`)
+      .replace('const OUTER_EXTENT: f32 = 4.0;',`const OUTER_EXTENT: f32 = ${(outerConfig?.extent || 4).toFixed(9)};`);
+  }
   let volumePresentationModeRequestedRaw = 'beauty';
   let volumePresentationModeRequested = 'beauty';
   let volumePresentationModeEffective = 'beauty';
@@ -10184,6 +10238,8 @@ export function createKaminosVolumePrototype({
   let boundarySplatControlGeneration = 0;
   let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
+  let outerSmoke = null;
+  let outerSmokeFallback = null;
   let fluidPredictBuffer = null;
   let fluidPredictBufferBytes = 0;
   // Evidence route only: a calibrated-mode epsilon set through the debug API,
@@ -10742,6 +10798,8 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    outerSmoke?.destroy();outerSmoke=null;
+    outerSmokeFallback?.destroy();outerSmokeFallback=null;
     sceneSolidTexture?.destroy();
     sceneSolidTexture = null;
     sceneSolidTextureView = null;
@@ -10884,6 +10942,7 @@ export function createKaminosVolumePrototype({
         { binding: 14, resource: { buffer: quenchWrite } },
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 16, resource: sceneSolidTextureView },
+        { binding: 17, resource: (outerSmoke?.optical || outerSmokeFallback).createView() },
       ],
     });
   }
@@ -11005,6 +11064,7 @@ export function createKaminosVolumePrototype({
     if (reason || !requested) {
       const key = `${requested}:${sourceId}:${reason}`;
       if (sceneSolidRevisionKey !== key) {
+        outerSmoke?.clearSolids();
         if (sceneSolidCellsCpu) {
           installSceneSolidTexture();
           rebuildSceneSolidBindingViews();
@@ -11022,6 +11082,11 @@ export function createKaminosVolumePrototype({
       if (key === sceneSolidRevisionKey) return;
       const started = performance.now();
       const extraction = trianglesFromSceneObject(source.object, productTransform);
+      if (outerSmoke) {
+        const outerTriangles=extraction.triangles.map(t=>t.map(p=>p.map(v=>v/outerConfig.extent)));
+        const outerField=voxelizeTriangleSolid(outerTriangles,outerConfig.grid);
+        outerSmoke.setSolids(packSolidTextureRows(outerField.cells,outerConfig.grid),revision);
+      }
       const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
       if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
       const sourceBounds = analyticEmitterDispatch;
@@ -11061,6 +11126,7 @@ export function createKaminosVolumePrototype({
         rebuildStep: state.simStepCount,
       };
     } catch (error) {
+      outerSmoke?.clearSolids();
       if (sceneSolidCellsCpu) {
         installSceneSolidTexture();
         rebuildSceneSolidBindingViews();
@@ -12361,6 +12427,8 @@ export function createKaminosVolumePrototype({
     }
     ensureNonRidgeOpticalCaptureBuffers();
     installSceneSolidTexture();
+    if(outerRequested){outerSmoke=createOuterSmoke(device,outerConfig,gridSize,fluidBuffers);}
+    else{outerSmokeFallback=device.createTexture({label:'outer smoke disabled',size:[1,1,1],dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING});}
     emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
@@ -12609,7 +12677,7 @@ export function createKaminosVolumePrototype({
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
-    shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: WGSL });
+    shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: activeVolumeShader() });
     state.gpuInitStage = 'fluid-shader-compilation';
     const compilationInfo = await shader.getCompilationInfo();
     const compilationErrors = compilationInfo.messages.filter(message => message.type === 'error');
@@ -12767,6 +12835,7 @@ export function createKaminosVolumePrototype({
         { binding: 13, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        { binding: 17, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -14812,6 +14881,13 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeSim(encoder, options = {}) {
+    const outerPressure = outerRequested ? resolvePressureSolverConfig(controlsSnapshot).effective : null;
+    if(outerRequested && (productFrameOwner !== 'prototype' || uniforms[368] !== 2
+      || outerPressure.solver !== PRESSURE_SOLVER_CONVERGED || outerPressure.dispatch === 'disabled'
+      || outerPressure.projection !== 'full' || gridHeight !== 2*gridSize
+      || !resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic)) {
+      throw new Error('outer smoke requires ordinary emissive raymarch, converged pressure and common-gas transport');
+    }
     refreshSceneCollision();
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
@@ -14848,6 +14924,14 @@ export function createKaminosVolumePrototype({
     const finalTimestampWritten = encodePressureProjection(encoder, {
       timestampWrites: options.finalTimestampWrites,
     });
+    if(outerSmoke){
+      if(state.sceneCollision.requested && state.sceneCollision.effective!=='mesh-voxel-solid'){
+        throw new Error(`outer smoke collider unavailable: ${state.sceneCollision.reason}`);
+      }
+      outerSmoke.encode(encoder,currentFluid,resolveTimeStepConfig(controlsSnapshot).effective);
+      state.outerSmoke={...outerSmoke.receipt(),nearBoundary:'existing-pressure-regime-one-way-overlap',
+        lighting:'authored-ambient-only-outside-near-field',resetPolicy:'reset-with-near-domain',transform:{...productTransform}};
+    }
     state.simStepCount += 1;
     updateSimCostLedger();
     return finalTimestampWritten;
@@ -17992,7 +18076,7 @@ export function createKaminosVolumePrototype({
         // Compiled on first MSAA scene-depth draw: a second full volume shader
         // module is only needed when the host supplies multisampled depth.
         ordinaryMultisampleShader ||= device.createShaderModule({label:'ordinary emissive MSAA scene-depth shader',
-          code:WGSL.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
+          code:activeVolumeShader().replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
             .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',
               `var depth = textureLoad(productSceneDepth, pixel, 0);
            for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
@@ -24406,6 +24490,7 @@ export function createKaminosVolumePrototype({
 
   return {
     sampleSharedTransmittanceContributions,
+    async readOuterSmokeState(){if(!outerSmoke)throw new Error('outer smoke inactive');return {receipt:outerSmoke.receipt(),values:await outerSmoke.readState()};},
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives) {
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
       if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
