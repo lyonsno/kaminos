@@ -3,10 +3,11 @@ import { createSLatDecoderKernelOps } from './slat-decoder-ops.js';
 export const SLAT_DECODER_ROUTE = 'trellis2.slat-decoder.webgpu.v0';
 
 export function buildSLatDecoderPlan({ tokenRows, resolution = 32, latentChannels = 32,
-  channels = [1024, 512, 256, 128, 64], numBlocks = [4, 16, 8, 4, 0], mode = 'shape' } = {}) {
+  channels = [1024, 512, 256, 128, 64], numBlocks = [4, 16, 8, 4, 0], mode = 'shape', structureOnly = false } = {}) {
   for (const [name, value] of Object.entries({ tokenRows, resolution, latentChannels }))
     if (!Number.isSafeInteger(value) || value < 1) throw RangeError(`${name} must be a positive integer`);
   if (!['shape', 'texture'].includes(mode)) throw RangeError('shape or texture decoder mode required');
+  if (typeof structureOnly !== 'boolean' || (structureOnly && mode !== 'shape')) throw TypeError('structure-only pass requires the learned shape decoder');
   if (!Array.isArray(channels) || !channels.length || channels.some(c => !Number.isSafeInteger(c) || c < 1)) throw RangeError('positive decoder channels required');
   if (!Array.isArray(numBlocks) || numBlocks.length !== channels.length || numBlocks.some(n => !Number.isSafeInteger(n) || n < 0)) throw RangeError('matching decoder blocks required');
   for (let i = 0; i < channels.length - 1; i++) if (channels[i] % 8 || channels[i + 1] % (channels[i] / 8)) throw RangeError('source channel-to-spatial repeat-interleave channels required');
@@ -14,7 +15,7 @@ export function buildSLatDecoderPlan({ tokenRows, resolution = 32, latentChannel
   if (!Number.isSafeInteger(outputResolution ** 3) || outputResolution ** 3 >= 2 ** 32 - 1 || tokenRows * latentChannels * 4 >= 2 ** 32 || tokenRows > resolution ** 3) throw RangeError('decoder coordinates/rows exceed u32 addressing');
   const stages = ['decoder-linear', 'decoder-hash-clear', 'decoder-hash-insert', 'decoder-neighbors', 'decoder-sparse-conv',
     'decoder-layernorm', 'decoder-silu', 'decoder-residual', 'decoder-child-counts', 'decoder-child-scan', 'decoder-child-scan-add', 'decoder-subdivision-scatter'];
-  return Object.freeze({ tokenRows, resolution, latentChannels, channels: Object.freeze([...channels]), numBlocks: Object.freeze([...numBlocks]), mode,
+  return Object.freeze({ tokenRows, resolution, latentChannels, channels: Object.freeze([...channels]), numBlocks: Object.freeze([...numBlocks]), mode, structureOnly,
     outChannels: mode === 'shape' ? 7 : 6, predSubdiv: mode === 'shape', outputResolution, subdivisionLevels: channels.length - 1,
     arithmetic: 'semantic-f16-torso-f32-endpoints', storage: 'f32-physical-with-explicit-half-rounding',
     weightLayout: 'source-Co-kD-kH-kW-Ci', coordinateOrder: 'parent-row-then-child-z-bit0-y-bit1-x-bit2',
@@ -26,7 +27,7 @@ export function slatDecoderWeightShapes(plan) {
     conv = (name, ci, co) => { shapes[`${name}.weight`] = [co, 3, 3, 3, ci];shapes[`${name}.bias`] = [co]; },
     norm = (name, c) => { shapes[`${name}.weight`] = [c];shapes[`${name}.bias`] = [c]; };
   linear('from_latent', plan.latentChannels, plan.channels[0]);
-  for (let level = 0; level < plan.channels.length; level++) {
+  for (let level = 0; level < plan.channels.length - (plan.structureOnly ? 1 : 0); level++) {
     const c = plan.channels[level];
     for (let block = 0; block < plan.numBlocks[level]; block++) {
       const key = `blocks.${level}.${block}`;conv(key + '.conv', c, c);norm(key + '.norm', c);
@@ -38,7 +39,7 @@ export function slatDecoderWeightShapes(plan) {
       if (plan.predSubdiv) linear(key + '.to_subdiv', c, 8);
     }
   }
-  linear('output_layer', plan.channels.at(-1), plan.outChannels);return shapes;
+  if (!plan.structureOnly) linear('output_layer', plan.channels.at(-1), plan.outChannels);return shapes;
 }
 
 export function createTrellisSLatDecoderAdapter({ route, config, weights, siluTable, sampleTensor, coordinateTensor, guideSubdivisions }) {
@@ -74,8 +75,9 @@ export function createTrellisSLatDecoderAdapter({ route, config, weights, siluTa
             current = ops.allocate('initial-projected', [rows, plan.channels[0]]), neighbors;
           const subdivisions = [], levels = [];
           await linear('from_latent', sampleTensor, current, true, invocation);
-          neighbors = await ops.neighbors(coordinates, resolution, invocation);
+          neighbors = (!plan.structureOnly || plan.subdivisionLevels) ? await ops.neighbors(coordinates, resolution, invocation) : undefined;
           for (let level = 0; level < plan.channels.length; level++) {
+            if (plan.structureOnly && level === plan.subdivisionLevels) break;
             const channels = plan.channels[level], blocks = plan.numBlocks[level],
               next = blocks ? ops.allocate('next-state', [rows, channels]) : undefined,
               normalized = (blocks || level < plan.subdivisionLevels) ? ops.allocate('normalized', [rows, channels]) : undefined,
@@ -116,13 +118,17 @@ export function createTrellisSLatDecoderAdapter({ route, config, weights, siluTa
             if (coordinates !== coordinateTensor) ops.release(coordinates);
             current = result;coordinates = nextCoordinates;neighbors = nextNeighbors;rows = count;resolution *= 2;
           }
-          const normalized = ops.allocate('terminal-normalized', current.shape), features = ops.allocate('decoded-features', [rows, plan.outChannels]);
-          await ops.norm(current, undefined, undefined, normalized, false, 1e-5, invocation);
-          await linear('output_layer', normalized, features, false, invocation);await ops.settle();
+          let normalized, features;
+          if (!plan.structureOnly) {
+            normalized = ops.allocate('terminal-normalized', current.shape);features = ops.allocate('decoded-features', [rows, plan.outChannels]);
+            await ops.norm(current, undefined, undefined, normalized, false, 1e-5, invocation);
+            await linear('output_layer', normalized, features, false, invocation);
+          }
+          await ops.settle();
           ops.release(current);ops.release(neighbors);ops.release(normalized);
           output = Object.freeze({ features, coordinates, subdivisions: Object.freeze(subdivisions), levels: Object.freeze(levels),
             convNeXtBlocksExecuted, convolutionsExecuted: ops.convolutionsExecuted, metadataReadbackBytes: ops.metadataReadbackBytes,
-            featureBytesToCPUDuringServing: 0, coordinateBytesToCPUDuringServing: 0, arithmetic: plan.arithmetic, resolution });
+            featureBytesToCPUDuringServing: 0, coordinateBytesToCPUDuringServing: 0, arithmetic: plan.arithmetic, resolution, structureOnly: plan.structureOnly });
           state = 'completed';return output;
         } catch (error) { state = 'failed';output = undefined;throw error; } finally { running = false; }
       },

@@ -1,4 +1,5 @@
 import { WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js';
+export {buildSLatRegridPlan,createTrellisSLatRegridAdapter,SLAT_REGRID_SOURCE} from './slat-regrid.js';
 
 export const OCCUPANCY_COORDINATES_ROUTE = 'trellis2.occupancy-coordinates.webgpu.v0';
 export function buildOccupancyCoordinatesPlan({ resolution = 64 } = {}) {

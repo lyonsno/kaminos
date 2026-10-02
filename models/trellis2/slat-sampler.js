@@ -1,5 +1,6 @@
 import { buildSparseSamplerPlan, createTrellisSparseSamplerAdapter } from './sparse-sampler.js';
 export {buildSLatScalePlan,createTrellisSLatScaleAdapter,SLAT_NORMALIZATION_SOURCE} from './slat-scale.js';
+export {createTrellisSLatCascadeSupportAdapter} from './slat-cascade.js';
 
 export const SLAT_SAMPLER_ROUTE = 'trellis2.slat-sampler.webgpu.v0';
 
