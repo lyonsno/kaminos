@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {dirname,resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {auditNeighborhood} from './finger-fluid-neighborhood-audit.mjs';
+import {auditNeighborhood,decodeParticleReadback} from './finger-fluid-neighborhood-audit.mjs';
 const [output,...reports]=process.argv.slice(2);
 if(!output)throw Error('Usage: node tools/finger-fluid-neighborhood-replay.mjs output.json observed-report.json [...]');
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -26,13 +26,7 @@ try {
       if(!receipt)throw Error('missing particle readback');
       const data=readFileSync(receipt.path);
       if(data.length!==36864*64||data.length!==receipt.byteLength||sha(data)!==receipt.sha256)throw Error('particle readback size/hash mismatch');
-      const points=[];let inactive=0,positionPredictionMismatches=0,interfaceParticles=0;
-      for(let i=0;i<36864;i++){
-        if(data.readFloatLE(i*64+28)<0){inactive++;continue;}
-        points.push([0,1,2].map(a=>data.readFloatLE(i*64+a*4)));
-        if([0,1,2].some(a=>data.readFloatLE(i*64+a*4)!==data.readFloatLE(i*64+32+a*4)))positionPredictionMismatches++;
-        if(data.readFloatLE(i*64+44)>=.32)interfaceParticles++;
-      }
+      const {points,inactive,positionPredictionMismatches,interfaceParticles}=decodeParticleReadback(data);
       const row={report:resolve(reportPath),reportSha256:sha(bytes),sourceCommit:source.expectedCommit,sourceIdentity:source.sourceIdentity,recordedStep:sample.stepCount,readback:receipt,activeParticles:points.length,inactiveParticles:inactive,positionPredictionMismatches,interfaceParticlesAtThreshold032:interfaceParticles,arms:[]};
       result.snapshots.push(row);result.phase='enumerate';
       for(const gridDimensions of [[32,20,32],[36,22,36],[73,45,73]])row.arms.push(auditNeighborhood(points,{...config,gridDimensions}));

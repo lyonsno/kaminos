@@ -48,3 +48,15 @@ export function auditNeighborhood(points, {boundsMin:lo,boundsMax:hi,gridDimensi
   }
   return {gridDimensions:dims,cellWidth:width,searchRadius,particleCount:n,packedParticleCount:offsets[cellCount],packedOrderMatchesLinked,occupiedCells,maxCellOccupancy,visitedCells,nonemptyCellsVisited,candidates,prunedCandidates,acceptedPairs,acceptedAfterCellRejection,maxAcceptedNeighbors,meanCandidates:candidates/n,meanPrunedCandidates:prunedCandidates/n,meanAcceptedNeighbors:acceptedPairs/n,meanWithinCellSourceIndexJump:sourceIndexJumpSum/Math.max(1,sourceIndexJumps),memoryBytes:{linkedIndex:n*4+cellCount*4,packedIndex:n*4+(cellCount+1)*4,packedConstructionCountsAndCursors:cellCount*8,packedHotPositionAndId:n*16,neighborOffsets:(n+1)*4,neighborIds:acceptedPairs*4,neighborIdWeightGradient32:acceptedPairs*32}};
 }
+
+export function decodeParticleReadback(data) {
+  if(data.length%64!==0)throw Error('partial particle record');
+  const points=[];let inactive=0,positionPredictionMismatches=0,interfaceParticles=0;
+  for(let i=0;i<data.length/64;i++){
+    if(data.readFloatLE(i*64+44)<0){inactive++;continue;}
+    points.push([0,1,2].map(a=>data.readFloatLE(i*64+a*4)));
+    if([0,1,2].some(a=>data.readFloatLE(i*64+a*4)!==data.readFloatLE(i*64+16+a*4)))positionPredictionMismatches++;
+    if(data.readFloatLE(i*64+28)>=.32)interfaceParticles++;
+  }
+  return {points,inactive,positionPredictionMismatches,interfaceParticles};
+}

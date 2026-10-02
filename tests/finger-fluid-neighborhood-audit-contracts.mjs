@@ -20,3 +20,14 @@ const d=auditNeighborhood(dense,{...config,radius:.1});
 assert.equal(d.acceptedPairs,300*299,'no per-particle or per-cell truncation');
 assert.equal(d.maxAcceptedNeighbors,299);
 console.log('neighborhood audit contracts passed');
+const {decodeParticleReadback}=await import('../tools/finger-fluid-neighborhood-audit.mjs');
+// Canonical Particle layout in COMPUTE_SHADER and native diagnostic consumer:
+// position vec4, predicted vec4, velocity vec4, delta vec4.
+const raw=Buffer.alloc(128);
+[1,2,3,0,1,2,3,.5,9,8,7,1,0,0,0,1].forEach((v,i)=>raw.writeFloatLE(v,i*4));
+raw.writeFloatLE(-1,64+44);
+const decoded=decodeParticleReadback(raw);
+assert.equal(decoded.inactive,1,'velocity.w is the active flag');
+assert.equal(decoded.positionPredictionMismatches,0,'predicted starts at byte16');
+assert.equal(decoded.interfaceParticles,1,'predicted.w stores surface factor');
+assert.deepEqual(decoded.points,[[1,2,3]]);
