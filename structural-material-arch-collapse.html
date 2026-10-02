@@ -12,13 +12,13 @@
     button:hover { background: #344a45; } button[aria-pressed=true] { background: #547c6a; border-color: #95c4a8; }
     .modes { display: flex; gap: 4px; } .icon { width: 36px; padding: 7px; } .icon svg { width: 19px; height: 19px; vertical-align: middle; }
     footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 9px 16px; display: flex; flex-wrap: wrap; gap: 8px 20px; background: #101717df; color: #acc7bd; font: 12px ui-monospace,monospace; }
-    #status { color: #d3e8dd; } #error { color: #ff9d83; } @media(max-width:600px) { header { gap: 7px; padding: 9px; } h1 { width: 100%; } footer { padding: 8px; } }
+    #status { color: #d3e8dd; } #error { color: #ff9d83; overflow-wrap: anywhere; } input[aria-invalid=true] { border-color: #ff9d83; } @media(max-width:600px) { header { gap: 7px; padding: 9px; } h1 { width: 100%; } footer { padding: 8px; } }
   </style>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/","cannon-es":"./node_modules/cannon-es/dist/cannon-es.js","lucide":"https://cdn.jsdelivr.net/npm/lucide@0.468.0/+esm"}}</script>
 </head>
 <body>
   <div id="viewport"></div>
-  <header><h1>Arch Collapse</h1><div class="modes"><button id="shear" aria-pressed="true">Shear</button><button id="bind" aria-pressed="false">Bind</button></div><button id="pause" class="icon" title="Pause" aria-label="Pause"></button><button id="reset" class="icon" title="Reset structure" aria-label="Reset structure"></button><button id="zoom-in" class="icon" title="Zoom in" aria-label="Zoom in"></button><button id="zoom-out" class="icon" title="Zoom out" aria-label="Zoom out"></button><label>Cohesion <input id="strength" type="number" min="1" step="10" value="80"></label><span id="status">Loading</span></header>
+  <header><h1>Arch Collapse</h1><div class="modes"><button id="shear" aria-pressed="true">Shear</button><button id="bind" aria-pressed="false">Bind</button></div><button id="pause" class="icon" title="Pause" aria-label="Pause"></button><button id="reset" class="icon" title="Reset structure" aria-label="Reset structure"></button><button id="zoom-in" class="icon" title="Zoom in" aria-label="Zoom in"></button><button id="zoom-out" class="icon" title="Zoom out" aria-label="Zoom out"></button><label>Cohesion <input id="strength" type="number" min="0" step="any" value="80"></label><span id="status">Loading</span></header>
   <footer><span>cannon-es 0.20.0 · CPU experiment</span><span id="receipt"></span><span id="error"></span></footer>
   <script type="module" src="./structural-material-arch-collapse-view.js"></script>
 </body>

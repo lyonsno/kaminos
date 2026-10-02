@@ -7,6 +7,21 @@ const profilePath = './artifacts/structural-material-3d/stone-arch-source-pair-2
 const status = document.querySelector('#status'), receipt = document.querySelector('#receipt');
 const params = new URLSearchParams(location.search);
 const smoke = params.get('smoke') === '1';
+const errorNode = document.querySelector('#error');
+let phase = 'loading', failure = null, model, paused = smoke, failurePaused = null;
+const failures = [];
+function recordFailure(operation, error) {
+  if (failurePaused === null) failurePaused = paused;
+  paused = true; phase = 'failed';
+  failure = { operation, message: error.message || String(error), stack: error.stack || null,
+    observedAt: new Date().toISOString(), step: model?.snapshot().step ?? null };
+  failures.push(failure);
+  status.textContent = `${operation === 'startup' ? 'Startup' : operation} failed`;
+  errorNode.textContent = failure.message;
+  receipt.textContent = model ? 'paused after failure' : 'simulation inactive';
+  console.error(error);
+}
+try {
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#101717');
 const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.03, 100);
 camera.position.set(5.4, 3.2, 8.3);
@@ -32,43 +47,72 @@ const grip = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), new THREE.M
 grip.renderOrder = 10; grip.visible = false; scene.add(grip);
 const tether = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xe1b567, depthTest: false }));
 tether.renderOrder = 9; tether.visible = false; scene.add(tether);
-let model, meshes = [], geometry, floor, mode = 'shear', paused = smoke, grab = null, lastTime = performance.now(), simulationRate = 1;
+let meshes = [], geometry, floor, mode = 'shear', grab = null, lastTime = performance.now(), simulationRate = 1;
 let modelConfig;
 let edges;
-let source, profile, latestStepCost = 0, phase = 'loading', bindCount = 0;
+let source, profile, latestStepCost = 0, bindCount = 0;
 let lastPick = null;
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const toThree = value => new THREE.Vector3(value.x, value.y, value.z);
 function icon(node, definition) { node.replaceChildren(createElement(definition)); }
 function pauseIcon() { const button = document.querySelector('#pause'); icon(button, paused ? Play : Pause); button.title = button.ariaLabel = paused ? 'Resume' : 'Pause'; }
+function action(operation, callback) {
+  return (...args) => {
+    if (phase !== 'interactive' && !['Reset', 'Cohesion'].includes(operation)) return;
+    try { return callback(...args); }
+    catch (error) { recordFailure(operation, error); pauseIcon(); }
+  };
+}
+function readStrength() {
+  const input = document.querySelector('#strength');
+  input.setCustomValidity('');
+  const value = Number(input.value);
+  if (!input.value.trim() || !Number.isFinite(value) || value <= 0 || !input.validity.valid) {
+    input.setCustomValidity('Cohesion must be positive and finite.'); input.setAttribute('aria-invalid', 'true');
+    errorNode.textContent = `Invalid cohesion. ${model ? `Effective cohesion remains ${model.snapshot().config.strength}.` : 'Enter a positive finite value.'}`;
+    return null;
+  }
+  input.removeAttribute('aria-invalid');
+  if (!failure) errorNode.textContent = '';
+  return value;
+}
 icon(document.querySelector('#reset'), RotateCcw); pauseIcon();
 icon(document.querySelector('#zoom-in'), ZoomIn); icon(document.querySelector('#zoom-out'), ZoomOut);
 function zoom(factor) { camera.position.sub(controls.target).multiplyScalar(factor).add(controls.target); controls.update(); synchronize(); }
-document.querySelector('#zoom-in').onclick = () => zoom(1/1.2);
-document.querySelector('#zoom-out').onclick = () => zoom(1.2);
+document.querySelector('#zoom-in').onclick = action('Zoom', () => zoom(1/1.2));
+document.querySelector('#zoom-out').onclick = action('Zoom', () => zoom(1.2));
 function rebuild() {
+  const strength = readStrength(); if (strength === null) return false;
+  let nextModel, nextGeometry, nextEdges, nextMeshes;
+  // Construct the entire replacement before releasing the current physical object.
+  try {
+    nextModel = createArchCollapse(profile, { strength });
+    const { dx, dy, dz } = nextModel.snapshot().dimensions;
+    nextGeometry = new THREE.BoxGeometry(dx * 0.98, dy * 0.98, dz * 0.98);
+    nextEdges = new THREE.EdgesGeometry(nextGeometry);
+    nextMeshes = nextModel.cells.map(cell => {
+      const mesh = new THREE.Mesh(nextGeometry, cell.pinned ? Array(6).fill(pinnedMaterial) : [...materials]);
+      mesh.userData.index = cell.index; mesh.castShadow = true; mesh.receiveShadow = true;
+      const outline = new THREE.LineSegments(nextEdges, outlineMaterial);
+      outline.visible = false; mesh.add(outline); mesh.userData.outline = outline;
+      return mesh;
+    });
+  } catch (error) { nextModel?.dispose(); nextGeometry?.dispose(); nextEdges?.dispose(); throw error; }
   if (model) model.dispose();
   for (const mesh of meshes) scene.remove(mesh);
-  geometry?.dispose(); meshes = [];
-  model = createArchCollapse(profile, { strength: Number(document.querySelector('#strength').value) });
-  const initial = model.snapshot(); modelConfig = initial.config;
-  const { dx, dy, dz } = initial.dimensions;
-  geometry = new THREE.BoxGeometry(dx * 0.98, dy * 0.98, dz * 0.98);
-  edges?.dispose(); edges = new THREE.EdgesGeometry(geometry);
-  meshes = model.cells.map(cell => {
-    const mesh = new THREE.Mesh(geometry, cell.pinned ? Array(6).fill(pinnedMaterial) : [...materials]);
-    mesh.userData.index = cell.index; mesh.castShadow = true; mesh.receiveShadow = true;
-    const outline = new THREE.LineSegments(edges, outlineMaterial);
-    outline.visible = false; mesh.add(outline); mesh.userData.outline = outline;
-    scene.add(mesh); return mesh;
-  });
+  geometry?.dispose(); edges?.dispose();
+  model = nextModel; geometry = nextGeometry; edges = nextEdges; meshes = nextMeshes;
+  modelConfig = model.snapshot().config;
+  scene.add(...meshes);
   if (!floor) {
     floor = new THREE.Mesh(new THREE.PlaneGeometry(22, 18), new THREE.MeshStandardMaterial({ color: 0x33393b, roughness: 1 }));
     floor.rotation.x = -Math.PI / 2; floor.position.y = model.snapshot().floorY - 0.003;
     floor.receiveShadow = true; scene.add(floor);
   }
   grab = null; controls.enabled = true; lastTime = performance.now(); bindCount = 0;
-  synchronize();
+  if (failurePaused !== null) paused = failurePaused;
+  phase = 'interactive'; failure = null; failurePaused = null; errorNode.textContent = ''; pauseIcon();
+  synchronize(); return true;
 }
 function synchronize() {
   for (const cell of model.cells) {
@@ -107,7 +151,7 @@ function ray(event) {
   pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1);
   raycaster.setFromCamera(pointer, camera); return raycaster.ray;
 }
-renderer.domElement.addEventListener('pointerdown', event => {
+renderer.domElement.addEventListener('pointerdown', action('Grab', event => {
   if (phase !== 'interactive' || event.button !== 0) return;
   ray(event);
   const hit = raycaster.intersectObjects(meshes, false)[0];
@@ -125,50 +169,54 @@ renderer.domElement.addEventListener('pointerdown', event => {
   grab.indices = model.snapshot().hand.indices;
   if (mode === 'bind') bindCount += model.bind(cell.index).length;
   synchronize();
-}, true);
-renderer.domElement.addEventListener('pointermove', event => {
+}), true);
+renderer.domElement.addEventListener('pointermove', action('Drag', event => {
   if (!grab || event.pointerId !== grab.pointerId) return;
   const target = ray(event).intersectPlane(grab.plane, new THREE.Vector3());
   if (!target) return;
   grab.target.copy(target); model.moveHand(target);
   event.stopImmediatePropagation(); event.preventDefault(); synchronize();
-}, true);
+}), true);
 function release(event) {
   if (!grab || event && event.pointerId !== grab.pointerId) return;
   if (mode === 'bind') bindCount += model.bind(grab.index).length;
   model.release(); grab = null; controls.enabled = true; synchronize();
 }
-renderer.domElement.addEventListener('pointerup', release, true);
-renderer.domElement.addEventListener('pointercancel', release, true);
-renderer.domElement.addEventListener('lostpointercapture', release, true);
-for (const name of ['shear', 'bind']) document.querySelector(`#${name}`).onclick = () => {
+renderer.domElement.addEventListener('pointerup', action('Release', release), true);
+renderer.domElement.addEventListener('pointercancel', action('Release', release), true);
+renderer.domElement.addEventListener('lostpointercapture', action('Release', release), true);
+for (const name of ['shear', 'bind']) document.querySelector(`#${name}`).onclick = action('Mode', () => {
   release(); mode = name;
   for (const other of ['shear', 'bind']) document.querySelector(`#${other}`).setAttribute('aria-pressed', String(other === mode));
-};
-document.querySelector('#pause').onclick = () => { paused = !paused; lastTime = performance.now(); pauseIcon(); synchronize(); };
-document.querySelector('#reset').onclick = rebuild;
-document.querySelector('#strength').onchange = event => {
-  if (!event.target.validity.valid) return;
-  model.setStrength(Number(event.target.value)); synchronize();
-};
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); synchronize();
 });
+document.querySelector('#pause').onclick = action('Pause', () => { paused = !paused; lastTime = performance.now(); pauseIcon(); synchronize(); });
+document.querySelector('#reset').onclick = action('Reset', rebuild);
+document.querySelector('#strength').onchange = action('Cohesion', () => {
+  const value = readStrength(); if (value === null) return;
+  model.setStrength(value); if (phase === 'interactive') synchronize();
+});
+addEventListener('resize', action('Resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); synchronize();
+}));
 document.addEventListener('visibilitychange', () => { lastTime = performance.now(); });
 function frame(now) {
-  const elapsed = (now - lastTime) / 1000; lastTime = now;
-  if (model && !paused && !document.hidden) {
-    // The measured 10-17ms physics cost makes a render-paced simulation clock preferable to an unbounded catch-up loop.
-    simulationRate = elapsed > 0 ? modelConfig.timeStep / elapsed : 1;
-    advance(1);
-  }
-  controls.update(); if (model) synchronize(); requestAnimationFrame(frame);
+  try {
+    const elapsed = (now - lastTime) / 1000; lastTime = now;
+    if (phase === 'interactive') {
+      if (model && !paused && !document.hidden) {
+        // The measured 10-17ms physics cost makes a render-paced simulation clock preferable to an unbounded catch-up loop.
+        simulationRate = elapsed > 0 ? modelConfig.timeStep / elapsed : 1;
+        advance(1);
+      }
+      controls.update(); if (model) synchronize();
+    }
+  } catch (error) { recordFailure('Simulation', error); pauseIcon(); }
+  finally { requestAnimationFrame(frame); }
 }
-try {
   const response = await fetch(profilePath); if (!response.ok) throw new Error(`profile HTTP ${response.status}`);
   source = await response.json(); profile = coarsenArchProfile(source, 14, 10);
   if (params.has('strength')) document.querySelector('#strength').value = params.get('strength');
-  rebuild(); phase = 'interactive';
+  if (!rebuild()) throw new Error('Initial cohesion is invalid.');
   const project = point => { const p = toThree(point).project(camera); return { x: (p.x + 1) * innerWidth / 2, y: (1 - p.y) * innerHeight / 2 }; };
   function targets() {
     const result = [], normals = [new THREE.Vector3(1,0,0),new THREE.Vector3(-1,0,0),new THREE.Vector3(0,1,0),new THREE.Vector3(0,-1,0),new THREE.Vector3(0,0,1),new THREE.Vector3(0,0,-1)];
@@ -195,19 +243,23 @@ try {
     return { bright, total: size.x * size.y, fraction: bright / (size.x * size.y), glError: gl.getError() };
   }
   window.__archCollapse = {
-    advance, reset: rebuild, release: () => { release(); model.release(); synchronize(); },
+    advance: action('Advance', advance), reset: action('Reset', rebuild), release: action('Release', () => { release(); model.release(); synchronize(); }),
     projectWorld: project,
     setHand: (index, target) => { const cell = model.cells[index]; model.setHand(index, target, { x: 0, y: 0, z: cell.half.z }); },
     bind: index => model.bind(index),
     witness: () => {
       const surfaces = targets();
-      return { phase, route: ARCH_COLLAPSE_ROUTE, effectiveUrl: location.href,
+      return { phase, failure, failures: [...failures], route: ARCH_COLLAPSE_ROUTE, effectiveUrl: location.href,
       profilePath, constructionSource: profile.constructionSource, source: source.source,
-      viewport: { width: innerWidth, height: innerHeight }, paused, mode, lastPick, clock: { kind: 'one-fixed-physics-step-per-render-frame', simulationRate }, camera: { position: camera.position.toArray(), quaternion: camera.quaternion.toArray() },
+      viewport: { width: innerWidth, height: innerHeight }, paused, mode, lastPick, clock: { kind: 'one-fixed-physics-step-per-render-frame', simulationRate, active: phase === 'interactive' && !paused && !document.hidden }, camera: { position: camera.position.toArray(), quaternion: camera.quaternion.toArray() },
       state: model.snapshot(), rendererPoses: meshes.map(mesh => ({ index: mesh.userData.index, position: mesh.position.toArray(), quaternion: mesh.quaternion.toArray() })),
       pixels: pixels(), surfaceTargets: surfaces,
       pickTargets: surfaces.filter(item => item.layer === 2 && item.normal[2] === 1),
     }; },
   };
   requestAnimationFrame(frame);
-} catch (error) { phase = 'failed'; status.textContent = 'Startup failed'; document.querySelector('#error').textContent = error.stack || error.message; console.error(error); }
+} catch (error) {
+  recordFailure('startup', error);
+  window.__archCollapse = { witness: () => ({ phase, route: ARCH_COLLAPSE_ROUTE, effectiveUrl: location.href,
+    failure, failures: [...failures], clock: { active: false }, state: model?.snapshot() ?? null }) };
+}

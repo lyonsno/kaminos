@@ -12,6 +12,7 @@ const root = path.dirname(fileURLToPath(import.meta.url)), hash = bytes => creat
 const report = { status: 'running', phase: 'preflight', requestedUrl: urlInput, effectiveUrl: null,
   root, command: process.argv, sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
   browser: {}, sources: {}, inputs: [], captures: {}, checks: [], errors: [], lastTrustworthyEvidence: 'invocation only' };
+report.harnessSha256 = hash(fs.readFileSync(fileURLToPath(import.meta.url)));
 fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
 const save = () => fs.writeFileSync(output, JSON.stringify(report, null, 2));
 let child, socket, profile, nextId = 0, stderr = '';
@@ -50,6 +51,8 @@ async function waitForLoad() {
     if (Date.now() > loadDeadline) throw new Error(await evaluate('document.body.innerText'));
     await new Promise(resolve => setTimeout(resolve, 100));
   }
+  const loaded = await witness();
+  if (loaded.phase !== 'interactive') throw new Error(`page startup ${loaded.phase}: ${loaded.failure?.message ?? 'no retained failure detail'}`);
 }
 async function pointerInjury(pick, delta = { x: -1.5, y: 0, z: 0.5 }) {
   await input({ type: 'mousePressed', x: pick.screen.x, y: pick.screen.y, button: 'left', buttons: 1, clickCount: 1 });
@@ -91,6 +94,7 @@ try {
   child = spawn(executable, ['--headless=new', '--enable-automation', '--no-first-run', '--no-default-browser-check', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'pipe', 'pipe'] });
   child.stderr.setEncoding('utf8').on('data', value => { stderr += value; });
   await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
+  report.browser.pid = child.pid; report.browser.profile = profile; save();
   const deadline = Date.now() + 30000;
   while (!fs.existsSync(path.join(profile, 'DevToolsActivePort'))) {
     if (child.exitCode !== null || Date.now() > deadline) throw new Error(`browser endpoint unavailable: ${stderr}`);
@@ -198,6 +202,64 @@ try {
   await act('document.querySelector("#pause").click()'); const liveRest = await capture('live-after-release');
   report.liveEffectiveUrl = liveRest.effectiveUrl;
   check('live object injury leaves camera under operator ownership', JSON.stringify(liveStanding.camera) === JSON.stringify(liveRest.camera), liveRest.camera);
+  report.phase = 'controls-and-startup-failure'; save();
+  const controlFailures = [];
+  function controlCheck(name, passed, observed) {
+    report.checks.push({ name, passed, observed }); if (!passed) controlFailures.push(name); save();
+  }
+  const poses = state => state.bodies.map(body => ({ position: body.position, quaternion: body.quaternion }));
+  const originalPoses = poses(liveRest.state);
+  for (const value of [80, 120, 160]) {
+    await act(`document.querySelector('#strength').value='${value}';document.querySelector('#strength').dispatchEvent(new Event('change',{bubbles:true}))`);
+    const edited = await witness();
+    controlCheck(`cohesion ${value} is natively valid and effective`, await evaluate('document.querySelector("#strength").validity.valid') && edited.state.config.strength === value, { displayed: await evaluate('document.querySelector("#strength").value'), effective: edited.state.config.strength });
+    controlCheck(`cohesion ${value} preserves injury and pose`, edited.state.broken === liveRest.state.broken && JSON.stringify(poses(edited.state)) === JSON.stringify(originalPoses), edited.state.broken);
+  }
+  const retainedStrength = (await witness()).state.config.strength;
+  expectedStrength = retainedStrength;
+  for (const value of ['', '0', '-1']) {
+    await act(`document.querySelector('#strength').value=${JSON.stringify(value)};document.querySelector('#strength').dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('#reset').click()`);
+    let retained;
+    try { retained = await witness(); } catch (error) { retained = { error: error.message }; }
+    report.lastControlState = retained;
+    controlCheck(`invalid cohesion ${JSON.stringify(value)} and Reset retain the object`, retained.state?.config.strength === retainedStrength && retained.state.broken === liveRest.state.broken && JSON.stringify(poses(retained.state)) === JSON.stringify(originalPoses), retained.error ?? { strength: retained.state?.config.strength, broken: retained.state?.broken });
+    controlCheck(`invalid cohesion ${JSON.stringify(value)} has an honest visible disposition`, await evaluate(`document.querySelector('#error').textContent.includes('Effective cohesion remains ${retainedStrength}.') && document.querySelector('#strength').value === ${JSON.stringify(value)} && document.querySelector('#strength').getAttribute('aria-invalid') === 'true'`), await evaluate('({message:document.querySelector("#error").textContent,value:document.querySelector("#strength").value})'));
+  }
+  if (!controlFailures.length) await capture('invalid-edit-retained');
+  await act(`(async () => { document.querySelector('#strength').value='${retainedStrength}';document.querySelector('#strength').dispatchEvent(new Event('change',{bubbles:true})); const engine=await import('cannon-es');const original=engine.World.prototype.addBody;engine.World.prototype.addBody=function(...args){engine.World.prototype.addBody=original;throw new Error('injected replacement construction failure');};document.querySelector('#reset').click(); })()`);
+  const replacementFailure = await witness(); report.injectedReplacementFailure = replacementFailure; save();
+  controlCheck('replacement construction failure retains the old physical and rendered object', replacementFailure.phase === 'failed' && replacementFailure.failure?.message === 'injected replacement construction failure' && replacementFailure.state.broken === liveRest.state.broken && JSON.stringify(poses(replacementFailure.state)) === JSON.stringify(originalPoses) && replacementFailure.rendererPoses.length === replacementFailure.state.bodies.length, { phase: replacementFailure.phase, failure: replacementFailure.failure, broken: replacementFailure.state.broken, rendered: replacementFailure.rendererPoses.length });
+  await act('document.querySelector("#strength").value="80";document.querySelector("#strength").dispatchEvent(new Event("change",{bubbles:true}));document.querySelector("#reset").click()');
+  expectedStrength = 80;
+  const recovered = await witness();
+  await act('document.querySelector("#pause").click()'); await wait(1000);
+  const recoveryClock = await witness();
+  controlCheck('valid Reset retains a continuously recoverable frame loop', recovered.state.broken === 0 && recoveryClock.state.step > recovered.state.step && recoveryClock.phase === 'interactive', { reset: recovered.state.step, later: recoveryClock.state.step, phase: recoveryClock.phase });
+  await act(`(async () => { const engine=await import('cannon-es');const original=engine.World.prototype.step;engine.World.prototype.step=function(...args){engine.World.prototype.step=original;throw new Error('injected frame failure');}; })()`);
+  await wait(500); const failedClock = await witness(); report.injectedFrameFailure = failedClock; save();
+  controlCheck('frame failure pauses with a retained diagnostic', failedClock.phase === 'failed' && failedClock.clock.active === false && failedClock.failure?.message === 'injected frame failure', { phase: failedClock.phase, clock: failedClock.clock, failure: failedClock.failure });
+  await act('document.querySelector("#reset").click()'); const frameRecovery = await witness();
+  await wait(1000); const runningAgain = await witness();
+  controlCheck('Reset after frame failure restores the previously live clock', runningAgain.phase === 'interactive' && runningAgain.clock.active && runningAgain.state.step > frameRecovery.state.step && runningAgain.failures.some(item => item.message === 'injected frame failure'), { reset: frameRecovery.state.step, later: runningAgain.state.step, clock: runningAgain.clock });
+  if (!runningAgain.paused) await act('document.querySelector("#pause").click()');
+  if (!controlFailures.length) await capture('controls-recovered');
+  const denialSource = `(() => { const original = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function(kind,...args) { if (kind === 'webgl' || kind === 'webgl2' || kind === 'experimental-webgl') { window.__rendererDenied = true; return null; } return original.call(this,kind,...args); }; })()`;
+  report.inputs.push({ method: 'Page.addScriptToEvaluateOnNewDocument', source: denialSource, observedAt: new Date().toISOString() }); save();
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: denialSource });
+  await send('Page.navigate', { url: controlledUrl.href });
+  const denialDeadline = Date.now() + 30000;
+  while (!await evaluate('Boolean(window.__rendererDenied)')) {
+    if (Date.now() > denialDeadline) throw new Error('renderer-denial injection never reached the constructor');
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  const startup = await evaluate('({status:document.querySelector("#status").textContent,error:document.querySelector("#error").textContent,witness:window.__archCollapse?.witness()})');
+  report.injectedStartupFailure = startup; save();
+  controlCheck('renderer constructor failure has an explicit retained failed state', startup.witness?.phase === 'failed' && startup.witness.failure?.message && startup.witness.clock.active === false && /failed/i.test(startup.status) && startup.error.length > 0, startup);
+  const failureFrame = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  const failureBytes = Buffer.from(failureFrame.data, 'base64');
+  const failurePath = `${output.slice(0,-5)}-renderer-failure.png`;
+  fs.writeFileSync(failurePath, failureBytes); report.failureCapture = { path: failurePath, sha256: hash(failureBytes) }; save();
+  if (controlFailures.length) throw new Error(`control repair predicates failed: ${controlFailures.join('; ')}`);
   check('no browser exceptions', report.errors.length === 0, report.errors);
   report.status = 'passed'; report.phase = 'complete';
 } catch (error) { report.status = 'failed'; report.error = { message: error.message, stack: error.stack }; process.exitCode = 1; }
