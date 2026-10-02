@@ -19,7 +19,7 @@ export function getPivotViewState(camera, point, width, height) {
 }
 
 export function installScenePlacementTools({
-  viewport, camera, controls, gizmo, selected, read, write, object, refresh,
+  viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, frameSelected = () => {},
   settled = () => {}, captureContext = () => null,
 }) {
@@ -35,6 +35,7 @@ export function installScenePlacementTools({
   let field = null;
   let lastPointer = { x: 0, y: 0 };
   let hover = false;
+  let historyScopeArmed = false;
   let suppressClick = false;
   let gizmoEditing = false;
   let gizmoPrior = null;
@@ -173,7 +174,8 @@ export function installScenePlacementTools({
         : '';
     hud.dataset.alert = String(!!pivotHint);
     hud.dataset.active = String(!!edits.state().active);
-    if (current) {
+    if (edits.state().replaying) hud.textContent = 'Restoring scene object…';
+    else if (current) {
       const value = current.numeric || (current.operation === 'rotate' ? `${((current.amount || 0) * 180 / Math.PI).toFixed(1)}°` : (current.amount ?? (current.operation === 'scale' ? 1 : 0)).toFixed(3));
       hud.textContent = `${{ translate: 'Move', rotate: 'Rotate', scale: 'Scale' }[current.operation]} ${current.axis ? (current.plane ? 'plane ⟂ ' : '') + current.axis.toUpperCase() : ''} · ${current.axis ? current.frame : 'view'} · ${value} · ${current.snap ? 'Snap ' + (current.operation === 'rotate' ? '5°' : '0.1') + ' · ' : ''}Enter / LMB confirm · Esc / RMB cancel`;
     } else if (field) hud.textContent = 'Edit value · drag axis label to adjust · Enter confirm · Esc cancel';
@@ -210,6 +212,15 @@ export function installScenePlacementTools({
   new ResizeObserver(draw).observe(viewport);
   viewport.addEventListener('pointerenter', () => { hover = true; });
   viewport.addEventListener('pointerleave', () => { hover = false; });
+  historyScope?.addEventListener('pointerdown', () => { historyScopeArmed = true; }, true);
+  document.addEventListener('pointerdown', event => {
+    if (!historyScope?.contains(event.target)) historyScopeArmed = false;
+  }, true);
+  document.addEventListener('pointermove', event => {
+    if (historyScopeArmed && !historyScope?.contains(event.target) && !viewport.contains(event.target)) {
+      historyScopeArmed = false;
+    }
+  }, true);
   document.addEventListener('pointermove', event => {
     lastPointer = { x: event.clientX, y: event.clientY };
     if (modal) {
@@ -263,8 +274,17 @@ export function installScenePlacementTools({
     // body. Its transform keys should work without a second viewport hover;
     // focused sidebar controls still retain their own keyboard input.
     const neutralPageFocus = document.activeElement === document.body;
-    if (!(hover || viewport.contains(document.activeElement) || neutralPageFocus) || !allowed() || busy()) return;
-    if ((event.ctrlKey || event.metaKey) && key === 'z') { steal(event); try { event.shiftKey ? edits.redo() : edits.undo(); } catch (error) { hud.textContent = error.message; } return; }
+    const viewportScoped = hover || viewport.contains(document.activeElement);
+    const historyScopedUndo = historyScopeArmed && (event.ctrlKey || event.metaKey) && key === 'z';
+    if (!(viewportScoped || neutralPageFocus || historyScopedUndo) || !allowed() || busy()) return;
+    if ((event.ctrlKey || event.metaKey) && key === 'z') {
+      steal(event);
+      try {
+        const replay = event.shiftKey ? edits.redo() : edits.undo();
+        if (replay && typeof replay.then === 'function') replay.catch(error => { hud.textContent = error.message; });
+      } catch (error) { hud.textContent = error.message; }
+      return;
+    }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (key === 'f' || event.code === 'NumpadDecimal') { steal(event); frameSelected(); draw(); return; }
     if (['g', 'r', 's'].includes(key)) { steal(event); start({ g: 'translate', r: 'rotate', s: 'scale' }[key]); }

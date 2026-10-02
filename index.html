@@ -3497,6 +3497,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
+import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -3934,6 +3935,9 @@ let fingerFluidBenchState = createFingerFluidBenchState({
 window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 let sceneObjects = [];
+let sceneNavigation = null;
+const sceneMembershipEditTargets = new Set();
+const sceneMembershipRetainedObjects = new Map();
 let sceneImportStatus = null;
 let sceneGroups = [];
 let activeSceneObjectId = null;
@@ -6661,6 +6665,7 @@ function registerSceneObject(object, metadata = {}) {
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
+  sceneNavigation?.prepare(object);
   if (metadata.groupLabel) {
     createSceneGroupForObjects([id], metadata.groupLabel, {
       source: metadata.groupSource ?? metadata.source,
@@ -9686,15 +9691,151 @@ window.kaminosGeneratedPoseTemporalDebugState = function() {
   };
 };
 
-window.removeSceneObject = function(id) {
+function membershipEditTargetId(id) {
+  return `@scene-membership:${encodeURIComponent(id)}`;
+}
+
+function releaseUnreferencedSceneMembershipObjects() {
+  for (const [id, entry] of sceneMembershipRetainedObjects) {
+    const editId = membershipEditTargetId(id);
+    if (scenePlacementTools?.edits?.hasHistoryEntry(editId)) continue;
+    sceneMembershipRetainedObjects.delete(id);
+    if (!sceneObjects.some(record => record.id === id && record.object === entry.object)) {
+      disposeObjectTree(entry.object);
+    }
+  }
+}
+
+function sceneObjectMembershipSnapshot(id) {
+  const index = sceneObjects.findIndex(obj => obj.id === id);
+  if (index < 0) return null;
+  const entry = sceneObjects[index];
+  const record = serializeSceneObject(entry);
+  if (record.type !== 'glb' || !isReloadableSceneObjectRecord(record)) return null;
+  return {
+    record,
+    index,
+    groups: sceneGroups.flatMap((group, groupIndex) => group.objectIds.includes(id)
+      ? [{ ...group, groupIndex, objectIds: [...group.objectIds] }]
+      : []),
+    selection: { objectId: activeSceneObjectId, groupId: activeSceneGroupId },
+  };
+}
+
+function checkedSceneObjectMembership(value, id) {
+  if (value == null) return null;
+  if (!value || typeof value !== 'object' || !value.record || value.record.id !== id
+      || value.record.type !== 'glb' || !isReloadableSceneObjectRecord(value.record)
+      || !Number.isInteger(value.index) || value.index < 0 || !Array.isArray(value.groups)
+      || value.groups.some(group => !group || typeof group.id !== 'string'
+        || !Number.isInteger(group.groupIndex) || group.groupIndex < 0
+        || !Array.isArray(group.objectIds) || !group.objectIds.includes(id))
+      || !value.selection
+      || !(value.selection.objectId === null || typeof value.selection.objectId === 'string')
+      || !(value.selection.groupId === null || typeof value.selection.groupId === 'string')) {
+    throw new Error(`Scene object "${id}" cannot be restored from its retained source`);
+  }
+  return {
+    record: structuredClone(value.record),
+    index: value.index,
+    groups: value.groups.map(group => ({ ...structuredClone(group), objectIds: [...group.objectIds] })),
+    selection: structuredClone(value.selection),
+  };
+}
+
+function restoreSceneObjectGroups(entry, groups) {
+  sceneGroups = restoreSceneObjectGroupsState(
+    sceneGroups,
+    groups,
+    entry.id,
+    sceneObjects.map(record => record.id),
+  );
+  const restoredGroup = sceneGroups.find(group => group.objectIds.includes(entry.id));
+  setSceneObjectGroupId(entry, restoredGroup?.id || null);
+  pruneSceneGroups();
+}
+
+async function restoreSceneObjectMembership(snapshot) {
+  const { record, index, groups, selection } = snapshot;
+  if (sceneObjects.some(entry => entry.id === record.id)) {
+    throw new Error(`Scene object "${record.id}" is already present`);
+  }
+  const retainedEntry = sceneMembershipRetainedObjects.get(record.id);
+  let object;
+  if (retainedEntry) {
+    object = retainedEntry.object;
+    scene.add(object);
+    sceneObjects.push(retainedEntry);
+    sceneNavigation?.prepare(object);
+    sceneSaveBlockedByFailedRestore = false;
+  } else {
+    object = await addSceneObjectFromSource(record);
+  }
+  const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
+  if (!entry || object !== entry.object) throw new Error(`Scene object "${record.id}" did not restore its retained identity`);
+  applySceneObjectTransformState(object, record.transform);
+  applyMaterialStateToObject(object, record.materials);
+  sceneObjects.splice(sceneObjects.indexOf(entry), 1);
+  sceneObjects.splice(Math.min(index, sceneObjects.length), 0, entry);
+  restoreSceneObjectGroups(entry, groups);
+  if (selection.groupId && sceneGroups.some(group => group.id === selection.groupId)) {
+    setActiveSceneGroup(selection.groupId);
+  } else if (selection.objectId && sceneObjects.some(record => record.id === selection.objectId)) {
+    setActiveSceneObject(selection.objectId);
+  } else {
+    clearActiveSceneObjectSelection();
+  }
+  window._kaminosDirty?.();
+  return true;
+}
+
+function ensureSceneObjectMembershipTarget(id) {
+  const editId = membershipEditTargetId(id);
+  if (!scenePlacementTools) throw new Error('Scene edit history is not installed');
+  if (!sceneMembershipEditTargets.has(editId)) {
+    scenePlacementTools.edits.register(editId, {
+      allowMissing: true,
+      read: () => sceneObjectMembershipSnapshot(id),
+      check: value => checkedSceneObjectMembership(value, id),
+      write: value => value == null
+        ? removeSceneObjectInternal(id, { recordHistory: false, preserveForMembershipHistory: true })
+        : restoreSceneObjectMembership(value),
+    });
+    sceneMembershipEditTargets.add(editId);
+  }
+  return editId;
+}
+
+async function recordSceneObjectInsertion(id) {
+  const after = sceneObjectMembershipSnapshot(id);
+  if (!after) return false;
+  const editId = ensureSceneObjectMembershipTarget(id);
+  return scenePlacementTools.edits.recordAppliedWhenAvailable(
+    editId, null, after, `Add ${after.record.label || after.record.fileName || id}`,
+  );
+}
+
+window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
+
+function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
   if (id === FLAME_EMITTER_ID) {
     setInfo('Use flame flow to turn off this source; its simulation domain stays in the scene');
     return false;
   }
+  if (recordHistory && scenePlacementTools?.edits.state().replaying) {
+    setInfo('Wait for the current scene history action to finish');
+    return false;
+  }
   scenePlacementTools?.finish(false);
-  scenePlacementTools?.edits.discard(entry => entry.id === id);
   const index = sceneObjects.findIndex(obj => obj.id === id);
   if (index < 0) return;
+  const before = recordHistory ? sceneObjectMembershipSnapshot(id) : null;
+  const editId = before ? ensureSceneObjectMembershipTarget(id) : null;
+  if (editId) {
+    try { scenePlacementTools.edits.assertCanRecordApplied(editId); }
+    catch (error) { setInfo(error.message); return false; }
+  }
+  if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
   const [entry] = sceneObjects.splice(index, 1);
   if (hybridSplatOverlayState.objectId === entry.id) {
     stopHybridSplatOverlay({ silent: true });
@@ -9714,7 +9855,13 @@ window.removeSceneObject = function(id) {
     transformControls.visible = false;
   }
   scene.remove(entry.object);
-  disposeObjectTree(entry.object);
+  const retainForMembershipHistory = Boolean(editId) || (
+    !recordHistory
+    && scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))
+    && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
+  );
+  if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
+  else disposeObjectTree(entry.object);
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
   if (activeGroupSurvives) {
     setActiveSceneGroup(previousActiveGroupId);
@@ -9725,7 +9872,15 @@ window.removeSceneObject = function(id) {
     updateTransformInspector();
   }
   setInfo(`Removed: ${entry.label || entry.fileName || entry.id}`);
+  if (editId) {
+    scenePlacementTools.edits.recordApplied(editId, before, null, `Remove ${entry.label || entry.fileName || id}`);
+  }
   window._kaminosDirty?.();
+  return true;
+}
+
+window.removeSceneObject = function(id) {
+  return removeSceneObjectInternal(id);
 };
 
 function shouldIgnoreSceneObjectDeleteShortcut(e) {
@@ -9962,9 +10117,12 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const metaTextureNode = texture(metaExternalTexture);
   const isolateMix = uniform(isFireLightFieldIsolateRoute(routeParams) ? 1.0 : 0.0);
   const atlasGrid = uniform(32.0);
+  const atlasGridY = uniform(64.0);
+  const fieldWorldMin = uniform(new THREE.Vector3(-1, -1, -1));
+  const fieldWorldMax = uniform(new THREE.Vector3(1, 3, 1));
+  const fieldCellPitch = uniform(2.0 / 32.0);
   const atlasTilesX = uniform(8.0);
   const atlasTexelSize = uniform(new THREE.Vector2(1 / 256, 1 / 128));
-  const flameDomainOrigin = uniform(new THREE.Vector3());
 
   const atlasTextureNode = texture(atlasExternalTexture);
   const depthSampleNode = sceneDepthNode.sample(viewportUV).r;
@@ -9977,21 +10135,20 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const viewPositionNode = getViewPosition(viewportUV, depthSampleNode, sceneProjectionMatrixInverse);
   const worldPositionNode = sceneCameraWorldMatrix.mul(vec4(viewPositionNode, 1.0)).xyz;
 
-  // Trilinear sample of the 32^3 lattice through its 2D tile atlas. The
-  // lattice spans the [-1,1]^3 world cube, the lower cube of the tall raymarch box.
+  // Trilinear sample of the rectangular equal-pitch lattice through its 2D tile atlas.
   const sampleLatticeAt = (positionNode) => {
-    const uvw = positionNode.sub(flameDomainOrigin).mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+    const uvw = positionNode.sub(fieldWorldMin).div(fieldWorldMax.sub(fieldWorldMin)).clamp(vec3(0.0), vec3(1.0));
     const sliceCoord = uvw.z.mul(atlasGrid).sub(0.5);
     const slice0 = floor(sliceCoord).clamp(float(0.0), atlasGrid.sub(1.0));
     const slice1 = slice0.add(1.0).clamp(float(0.0), atlasGrid.sub(1.0));
     const sliceMix = sliceCoord.sub(slice0).clamp(0.0, 1.0);
-    const inTileTexel = uvw.xy.mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+    const inTileTexel = vec2(uvw.x.mul(atlasGrid), uvw.y.mul(atlasGridY)).clamp(vec2(0.5), vec2(atlasGrid, atlasGridY).sub(0.5));
     const atlasUvForSlice = (sliceIndex) => {
       const tileX = mod(sliceIndex, atlasTilesX);
       const tileY = floor(sliceIndex.div(atlasTilesX));
       return vec2(
         tileX.mul(atlasGrid).add(inTileTexel.x),
-        tileY.mul(atlasGrid).add(inTileTexel.y)
+        tileY.mul(atlasGridY).add(inTileTexel.y)
       ).mul(atlasTexelSize);
     };
     return mix(
@@ -10000,7 +10157,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
       sliceMix
     );
   };
-  const latticeUvw = worldPositionNode.sub(flameDomainOrigin).mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+  const latticeUvw = worldPositionNode.sub(fieldWorldMin).div(fieldWorldMax.sub(fieldWorldMin)).clamp(vec3(0.0), vec3(1.0));
   const latticeSample = sampleLatticeAt(worldPositionNode);
 
   // Directional shading: the irradiance field's luminance gradient points
@@ -10010,7 +10167,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   // which lit surfaces by screen orientation instead of the fire-to-surface
   // vector (operator-reported as proximity glow with no above/below response).
   const lumaWeights = vec3(0.2126, 0.7152, 0.0722);
-  const gradientEps = float(2.0 / 32.0);
+  const gradientEps = fieldCellPitch;
   const lumaAt = (positionNode) => sampleLatticeAt(positionNode).rgb.dot(lumaWeights);
   const latticeGradient = vec3(
     lumaAt(worldPositionNode.add(vec3(gradientEps, 0.0, 0.0))).sub(lumaAt(worldPositionNode.sub(vec3(gradientEps, 0.0, 0.0)))),
@@ -10022,7 +10179,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
 
   // Outside the lattice box, attenuate continuously with exterior distance so
   // nearby receivers keep light while the far scene falls off.
-  const exteriorNode = worldPositionNode.sub(flameDomainOrigin).abs().sub(vec3(1.0)).max(vec3(0.0));
+  const exteriorNode = fieldWorldMin.sub(worldPositionNode).max(worldPositionNode.sub(fieldWorldMax)).max(vec3(0.0));
   const exteriorDistance = exteriorNode.length();
   const exteriorFalloff = float(1.0).div(
     exteriorDistance.mul(exteriorDistance).mul(3.0).add(exteriorDistance.mul(1.5)).add(1.0)
@@ -10052,7 +10209,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   // so side walls and out-of-box geometry receive real fire light.
   const metaCore = metaTextureNode.sample(vec2(0.25, 0.5));
   const metaColor = metaTextureNode.sample(vec2(0.75, 0.5));
-  const fireCenterWorld = metaCore.xyz.mul(2.0).sub(vec3(1.0)).add(flameDomainOrigin);
+  const fireCenterWorld = fieldWorldMin.add(metaCore.xyz.mul(fieldWorldMax.sub(fieldWorldMin)));
   const fireShadow = createFireLightFieldShadow({renderer,scene,
     sourceNode:fireCenterWorld,receiverNode:worldPositionNode,normalNode:worldNormalNode,
     requested:routeParams.get('volume_light_field_shadows') === '1'});
@@ -10111,11 +10268,11 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     outputNode = vec4(primaryHit, altHit, backgroundMask.mul(0.5), 1.0);
   } else if (debugView === 'slab') {
     // Exercise the exact tile/trilinear math over a fixed mid-depth slab.
-    const slabTexel = vec2(viewportUV.x, float(1.0).sub(viewportUV.y)).mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+    const slabTexel = vec2(viewportUV.x.mul(atlasGrid), float(1.0).sub(viewportUV.y).mul(atlasGridY)).clamp(vec2(0.5), vec2(atlasGrid, atlasGridY).sub(0.5));
     const slabSliceCoord = float(0.5).mul(atlasGrid).sub(0.5);
     const slabSlice0 = floor(slabSliceCoord);
     const slabTile = vec2(mod(slabSlice0, atlasTilesX), floor(slabSlice0.div(atlasTilesX)));
-    const slabUv = slabTile.mul(atlasGrid).add(slabTexel).mul(atlasTexelSize);
+    const slabUv = vec2(slabTile.x.mul(atlasGrid).add(slabTexel.x), slabTile.y.mul(atlasGridY).add(slabTexel.y)).mul(atlasTexelSize);
     outputNode = vec4(atlasTextureNode.sample(slabUv).rgb.mul(4.0), 1.0);
   }
 
@@ -10207,13 +10364,16 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
         passState.adoptionKey = adoptionKey;
         passState.farFieldIdentity = lightField.farFieldIdentity ?? null;
         atlasGrid.value = lightField.grid;
+        atlasGridY.value = lightField.gridY;
+        fieldWorldMin.value.set(...lightField.worldMin);
+        fieldWorldMax.value.set(...lightField.worldMax);
+        fieldCellPitch.value = (lightField.worldMax[0] - lightField.worldMin[0]) / lightField.grid;
         atlasTilesX.value = lightField.tilesX;
         atlasTexelSize.value.set(1 / lightField.atlasWidth, 1 / lightField.atlasHeight);
       }
       passState.effective = true;
       passState.reason = null;
       passState.sameDevice = true;
-      flameDomainOrigin.value.set(...lightField.worldMin.map(value => value + 1));
       fireLightFieldStrength.value = passState.witnessMuted ? 0 : passState.baseStrength * Math.pow(2, passState.gainStops || 0);
       return true;
     },
@@ -10665,24 +10825,31 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object), groundPlane],
-    frameAll: () => { frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); markDirty(); },
-    frameSelected: () => { if (frameSceneObjectRecord(sceneObjects.find(entry => entry.id === activeSceneObjectId), camera, controls)) markDirty(); },
+    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object),
+      ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
+    occluders: () => groundPlane ? [groundPlane] : [],
+    frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
+    frameSelected: () => { const framed = frameSceneObjectRecord(sceneObjects.find(entry => entry.id === activeSceneObjectId), camera, controls); if (framed) markDirty(); return framed; },
     blocked: () => transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
   });
+  sceneNavigation = navigation;
+  for (const entry of sceneObjects) navigation.prepare(entry.object);
+  if (currentMesh && !sceneObjects.some(entry => entry.object === currentMesh)) navigation.prepare(currentMesh);
   navigationInput.addEventListener('change', () => {
     try { localStorage.setItem('kaminos.navigationInput', navigationInput.value); } catch {}
     updateNavigationHint(''); navigationInput.blur(); markDirty();
   });
   window.kaminosNavigationState = navigation.state;
+  window.kaminosNavigationIndexState = navigation.indexState;
   window.kaminosFrameSelected = () => {
     const entry = sceneObjects.find(item => item.id === activeSceneObjectId);
     const changed = frameSceneObjectRecord(entry, camera, controls); if (changed) markDirty(); return changed;
   };
   scenePlacementTools = installScenePlacementTools({
     viewport: viewportEl,
+    historyScope: document.getElementById('scene-object-list'),
     camera,
     controls,
     gizmo: transformControls,
@@ -10702,11 +10869,13 @@ async function initScene() {
         event.operation === 'commit' ? null : event.afterContext);
     },
   });
+  scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
     || isAuthoredKilnCollisionRoute();
+
   let sceneRenderedForVolume = false;
   let foregroundServiceActive = false;
   let insideForegroundFrame = false;
@@ -10802,9 +10971,16 @@ async function initScene() {
       const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
       const saved = await response.json();
       if (!response.ok || saved.sha256 !== sha256) throw new Error(saved.error || 'generated mesh persistence hash mismatch');
+      await scenePlacementTools.edits.waitForReplay();
       const object = await showGLB(saved.source, {clear:false, metadata:{source:saved.source,type:'glb',fileName:`${sha256}.glb`,label:`SF3D chair · ${runId}`}});
       const entry = sceneObjects.find(row => row.object === object);
       if (!entry) throw new Error('SF3D output was not registered in the host scene');
+      try {
+        if (!await recordSceneObjectInsertion(entry.id)) throw new Error('SF3D output has no retained scene-membership history target');
+      } catch (error) {
+        removeSceneObjectInternal(entry.id, { recordHistory: false });
+        throw error;
+      }
       window._kaminosDirty?.();
       return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
     },
@@ -10968,6 +11144,8 @@ function clearScene() {
     disposeObjectTree(flameDomainGuide);
     flameDomainGuide = null;
   }
+  for (const editId of sceneMembershipEditTargets) scenePlacementTools.edits.unregister(editId);
+  sceneMembershipEditTargets.clear();
   sceneMutationToken++;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
@@ -11187,6 +11365,7 @@ async function showGLB(file, options = {}) {
           label: metadata.label ?? metadata.fileName ?? glbFileName,
         };
         currentMesh = model;
+        sceneNavigation?.prepare(model);
         if (transformControls) {
           transformControls.attach(model);
           transformControls.visible = true;
@@ -24160,6 +24339,7 @@ window.reverseWinding = function() {
       }
     }
   });
+  sceneNavigation?.invalidate(currentMesh);
   setInfo('Winding order reversed');
 };
 
@@ -24328,6 +24508,7 @@ window.cullSmallFaces = function() {
       }
     }
   });
+  sceneNavigation?.invalidate(currentMesh);
   setInfo(`Culled ${totalRemoved} debris triangles (< 5% median area)`);
 };
 
@@ -26538,8 +26719,6 @@ window.captureComposition = () => withAuthoringAction(async () => {
   try {
     if (helper) helper.visible = false;
     if (emitterHandle) emitterHandle.visible = false;
-    scenePlacementTools?.suspendVisuals(true);
-    selectionFeedback?.suspend(true);
     window._kaminosDirty?.();
     // The second callback samples after both render loops have had a turn.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -26556,8 +26735,6 @@ window.captureComposition = () => withAuthoringAction(async () => {
   } finally {
     if (helper) helper.visible = visible;
     if (emitterHandle) emitterHandle.visible = emitterVisible;
-    scenePlacementTools?.suspendVisuals(false);
-    selectionFeedback?.suspend(false);
     window._kaminosDirty?.();
   }
   if (!await saveToServer(data, null)) throw new Error('Capture was not saved');
@@ -26755,6 +26932,10 @@ function sceneIsEmpty() {
 }
 
 function sceneSaveIsBlocked() {
+  if (scenePlacementTools?.edits.state().replaying) {
+    setInfo('Wait for the current scene history action to finish');
+    return true;
+  }
   if (greenroomPreviewIsActive()) {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;
@@ -26823,6 +27004,10 @@ function claimLoadedSceneFile(file) {
 async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (authoringBusy) {
     setInfo('Wait for the current capture or save');
+    return;
+  }
+  if (scenePlacementTools?.edits.state().replaying) {
+    setInfo('Wait for the current scene history action to finish');
     return;
   }
   const previousSceneFile = currentSceneFile;

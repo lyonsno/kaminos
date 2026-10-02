@@ -57,7 +57,7 @@ assert.equal(contextFor(false, hostShared), hostShared, 'ordinary and kiln route
 const lightFieldPrototype = createKaminosVolumePrototype({ THREE: stub(), viewport: stub(), camera: stub(), controls: stub(),
   getControls: () => ({}), onStatus: () => {}, sharedGpuContext: hostShared });
 const lightField = lightFieldPrototype.fireIrradianceLightField();
-assert.deepEqual(lightField.worldMax, [1, 1, 1]);
+assert.deepEqual(lightField.worldMax, [1, 3, 1]);
 assert.deepEqual(lightField.raymarchWorldMax, [1, 3, 1], 'default tall domain reaches world y = 3');
-assert.equal(lightField.worldBoundsAuthority, 'lower-unit-cube-of-tall-raymarch-domain-v0');
+assert.equal(lightField.worldBoundsAuthority, 'full-volume-domain-equal-cell-pitch-v1');
 console.log('liquid fire contact shared-device contracts passed');

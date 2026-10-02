@@ -222,6 +222,62 @@ async function runMeshAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
+async function runNavigationDepthIndexScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-navigation-depth-index';
+  lastEvidence.navigationDepth = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      let index;
+      for (let i = 0; i < 400; i++) {
+        index = window.kaminosNavigationIndexState?.();
+        if (index?.failed) throw new Error('navigation index worker failed: ' + JSON.stringify(index));
+        if (index?.indexed > 0 && index.building === 0) break;
+        await wait(125);
+      }
+      if (!index?.indexed || index.building) throw new Error('navigation index did not complete: ' + JSON.stringify(index));
+      const canvas = document.getElementById('kaminos-host-renderer-canvas');
+      if (!canvas) throw new Error('navigation viewport canvas missing');
+      const rect = canvas.getBoundingClientRect();
+      const depths = [];
+      const sampleMs = [];
+      for (const [x, y] of [[.5,.5],[.4,.5],[.6,.5],[.5,.4],[.5,.6]]) {
+        const started = performance.now();
+        canvas.dispatchEvent(new WheelEvent('wheel', {bubbles: true, cancelable: true,
+          clientX: rect.left + rect.width*x, clientY: rect.top + rect.height*y, deltaY: 0}));
+        sampleMs.push(performance.now() - started);
+        depths.push(window.kaminosNavigationState?.().depth);
+      }
+      if (!depths.some(depth => depth?.source === 'mesh-surface')) {
+        throw new Error('indexed kiln did not yield a surface depth: ' + JSON.stringify({index, depths, navigation: window.kaminosNavigationState?.()}));
+      }
+      const input = document.getElementById('navigation-input-mode');
+      if (!input) throw new Error('navigation input selector missing');
+      input.value = 'trackpad';
+      input.dispatchEvent(new Event('change', {bubbles: true}));
+      const before = window.kaminosNavigationState?.();
+      const movingMs = [], movingDepths = [];
+      for (let i = 0; i < 20; i++) {
+        const started = performance.now();
+        canvas.dispatchEvent(new WheelEvent('wheel', {bubbles: true, cancelable: true,
+          clientX: rect.left + rect.width*.5, clientY: rect.top + rect.height*.5,
+          deltaX: 3, deltaY: 2}));
+        movingMs.push(performance.now() - started);
+        movingDepths.push(window.kaminosNavigationState?.().depth?.source);
+      }
+      const after = window.kaminosNavigationState?.();
+      if (!before?.position || !after?.position ||
+        Math.hypot(...before.position.map((v, i) => v - after.position[i])) < .001) {
+        throw new Error('navigation camera did not move: ' + JSON.stringify({before, after}));
+      }
+      if (movingDepths.filter(source => source === 'mesh-surface').length < 10) {
+        throw new Error('moving navigation lost mesh-surface depth: ' + JSON.stringify({index, movingDepths, before, after}));
+      }
+      return {index, depths, sampleMs, movingMs, movingDepths, before, after};
+    })()
+  `, {timeoutMs: 70000});
+}
+
 async function runModalPivotVisibilityScenario(ws) {
   phase = 'scenario-modal-pivot-visibility';
   await runMeshAssetLinkScenario(ws);
@@ -5045,6 +5101,8 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'navigation-depth-index') {
+    await runNavigationDepthIndexScenario(ws);
   } else if (scenario === 'modal-pivot-visibility') {
     await runModalPivotVisibilityScenario(ws);
   } else if (scenario === 'splat-asset-link') {
