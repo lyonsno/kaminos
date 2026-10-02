@@ -3553,7 +3553,7 @@ import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
-import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose } from './scene-rim-light.mjs';
+import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe } from './scene-rim-light.mjs';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -24103,12 +24103,7 @@ function updateRimLight() {
 }
 
 function setRimLight(recipe = null) {
-  const settings = { ...RIM_DEFAULTS, ...recipe };
-  if (typeof settings.enabled !== 'boolean' || !/^#[\da-f]{6}$/i.test(settings.color)
-    || !Array.isArray(settings.target) || settings.target.length !== 3 || !settings.target.every(Number.isFinite)) throw new Error('Invalid rim light');
-  for (const key of rimFields.slice(0, 6)) if (!Number.isFinite(settings[key])) throw new Error(`Invalid rim ${key}`);
-  if (settings.intensity < 0 || settings.distance < 0.1 || Math.abs(settings.elevation) > 90
-    || settings.angle < 1 || settings.angle > 89 || settings.penumbra < 0 || settings.penumbra > 1) throw new Error('Invalid rim light range');
+  const settings = checkedRimRecipe({ ...RIM_DEFAULTS, ...recipe });
   document.getElementById('rim-enabled').checked = settings.enabled;
   document.getElementById('rim-color').value = settings.color;
   for (const key of rimFields) {
@@ -24127,12 +24122,13 @@ for (const key of rimFields) {
   number.step = 'any';
   range.addEventListener('input', () => { number.value = range.value; updateRimLight(); });
   number.addEventListener('input', () => {
-    if (number.value === '' || !number.validity.valid || !Number.isFinite(number.valueAsNumber)) { number.value = range.value; return; }
+    if (number.value === '' || !number.validity.valid || !Number.isFinite(number.valueAsNumber)) return;
     range.min = Math.min(Number(range.min), number.valueAsNumber);
     range.max = Math.max(Number(range.max), number.valueAsNumber);
     range.value = number.value;
     updateRimLight();
   });
+  number.addEventListener('change', () => { number.value = range.value; });
 }
 document.getElementById('rim-enabled').addEventListener('change', updateRimLight);
 document.getElementById('rim-color').addEventListener('input', updateRimLight);
@@ -24225,7 +24221,7 @@ function installAuthoringParameterEditing() {
   };
   bind('@rim-settings',{
     controls:document.querySelectorAll('#rim-enabled, #rim-color, #rim-controls input'),label:'Tune rim light',
-    read:readRimLightSettings,write:setRimLight,check:value=>structuredClone(value),
+    read:readRimLightSettings,write:setRimLight,check:checkedRimRecipe,
   });
   for(const control of collectVolumeCockpitControlElements(document)) {
     if(['volume-input-radius','volume-flow-rate'].includes(control.id))continue; // existing paired Burner adapter

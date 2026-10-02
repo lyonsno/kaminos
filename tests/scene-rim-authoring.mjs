@@ -36,3 +36,21 @@ test('selected flame shortcuts bind controls present in the Volume cockpit',()=>
  const body=html.slice(html.indexOf('function createFlameQuickFields()'),html.indexOf('function installAuthoringParameterEditing()'));
  for(const match of body.matchAll(/\['(volume-[^']+)'\s*,/g))assert.ok(html.includes(`id="${match[1]}"`),`missing source control ${match[1]}`);
 });
+
+test('rim input keeps incomplete keyboard text until commit and rejects invalid script settings before opening history',async()=>{
+ const {checkedRimRecipe}=await import('../scene-rim-light.mjs');
+ assert.equal(typeof checkedRimRecipe,'function');
+ const {createSceneEdits}=await import('../scene-edit-session.mjs');
+ let value={...recipe,color:'#d6e5ff'};
+ const edits=createSceneEdits({read:()=>value,write:next=>{value=next;}});
+ edits.register('@rim-settings',{read:()=>value,write:next=>{value=next;},check:checkedRimRecipe});
+ assert.throws(()=>edits.apply('@rim-settings',{distance:-1}),/rim light range/i);
+ assert.equal(edits.state().active,null);assert.equal(value.distance,6);
+ const block=html.slice(html.indexOf("for (const key of rimFields) {",html.indexOf('function setRimLight')),html.indexOf("document.getElementById('rim-enabled').addEventListener"));
+ const handlers={};const number={value:'',validity:{valid:false},valueAsNumber:NaN,addEventListener:(type,fn)=>handlers[type]=fn};
+ const range={value:'135',addEventListener(){}};
+ // Evaluate the actual input binding independently of scene initialization.
+ const begin=block.indexOf("for (const key of rimFields) {",block.indexOf('updateRimLight();'));
+ Function('rimFields','document','updateRimLight',block.slice(begin))(['azimuth'],{getElementById:id=>id.endsWith('-number')?number:range},()=>{});
+ handlers.input();assert.equal(number.value,'','empty partial text survives input');handlers.change();assert.equal(number.value,'135');
+});

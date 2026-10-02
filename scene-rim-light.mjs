@@ -17,3 +17,12 @@ export function rimRecipeFromPose(recipe,value) {
  return {...recipe,target:new Vector3(...pose.position).addScaledVector(offset,-recipe.distance).toArray(),
   azimuth:deg(Math.atan2(offset.x,offset.z)),elevation:deg(Math.asin(Math.max(-1,Math.min(1,offset.y))))};
 }
+
+export function checkedRimRecipe(settings) {
+ if (typeof settings?.enabled !== 'boolean' || !/^#[\da-f]{6}$/i.test(settings.color)
+   || !Array.isArray(settings.target) || settings.target.length !== 3 || !settings.target.every(Number.isFinite)) throw new Error('Invalid rim light');
+ for (const key of ['intensity','azimuth','elevation','distance','angle','penumbra']) if (!Number.isFinite(settings[key])) throw new Error(`Invalid rim ${key}`);
+ if (settings.intensity < 0 || settings.distance < 0.1 || Math.abs(settings.elevation) > 90
+   || settings.angle < 1 || settings.angle > 89 || settings.penumbra < 0 || settings.penumbra > 1) throw new Error('Invalid rim light range');
+ return structuredClone(settings);
+}
