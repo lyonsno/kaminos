@@ -21,13 +21,16 @@ try {
       if(url.searchParams.get(k)!==v)throw Error(`unsupported observed configuration ${k}`);
     for(const sample of source.samples){
       result.phase='validate-readback';
+      const effective=sample.debugState?.config;
+      for(const [key,value] of Object.entries({effectiveTruthScene:'multi_regime_playground',effectiveParticleCount:36864,effectiveFixedVolumeReferenceParticleCount:36864,effectivePressureIterations:3,effectiveAdaptiveDensity:false,waterfallOracleConfig:null}))
+        if(effective?.[key]!==value)throw Error(`unsupported effective configuration ${key}`);
       if(!Number.isSafeInteger(sample.stepCount)||sample.stepCount<1||sample.diagnosticsReceipt?.diagnosticsStepCount!==sample.stepCount)throw Error('unmatched readback step receipt');
       const receipt=sample.readbacks?.['kaminos-finger-fluid-diagnostics-readback'];
       if(!receipt)throw Error('missing particle readback');
       const data=readFileSync(receipt.path);
       if(data.length!==36864*64||data.length!==receipt.byteLength||sha(data)!==receipt.sha256)throw Error('particle readback size/hash mismatch');
       const {points,inactive,positionPredictionMismatches,interfaceParticles}=decodeParticleReadback(data);
-      const row={report:resolve(reportPath),reportSha256:sha(bytes),sourceCommit:source.expectedCommit,sourceIdentity:source.sourceIdentity,recordedStep:sample.stepCount,readback:receipt,activeParticles:points.length,inactiveParticles:inactive,positionPredictionMismatches,interfaceParticlesAtThreshold032:interfaceParticles,arms:[]};
+      const row={report:resolve(reportPath),reportSha256:sha(bytes),sourceCommit:source.expectedCommit,sourceIdentity:source.sourceIdentity,recordedStep:sample.stepCount,observedEffectiveConfig:effective,readback:receipt,activeParticles:points.length,inactiveParticles:inactive,positionPredictionMismatches,interfaceParticlesAtThreshold032:interfaceParticles,arms:[]};
       result.snapshots.push(row);result.phase='enumerate';
       for(const gridDimensions of [[32,20,32],[36,22,36],[73,45,73]])row.arms.push(auditNeighborhood(points,{...config,gridDimensions}));
       if(new Set(row.arms.map(a=>a.acceptedPairs)).size!==1)throw Error('grid change changed contributing-pair count');
