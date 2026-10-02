@@ -11,7 +11,9 @@
 // where an arm is name[,controlId=value,...]. A control id starting with `@` is
 // a debug-API request instead of a DOM control: `@confinementEpsilon=<value|null>`
 // calls setConfinementEpsilonOverride so a calibration sweep can vary the
-// calibrated epsilon without a persisted knob; the receipt names the override.
+// calibrated epsilon without a persisted knob; the receipt names the override;
+// `@savePreset=<label>` saves the arm's controls as a basin through the
+// cockpit's Save button and records the preset id the cockpit reports.
 // During each settle the capture samples the renderer receipt every 2 s
 // (steps, enstrophy, divergence) so a trend is visible, not just an endpoint.
 // Frames are admission and attribution evidence for the implementer; the
@@ -184,6 +186,27 @@ try {
         if (applied_ !== (value === 'null' ? 'null' : String(Number(value)))) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, `${cid} requested ${value} but the receipt holds ${JSON.stringify(applied_)}`); }
         continue;
       }
+      if (cid === '@savePreset') {
+        // Save the arm's current controls as a basin through the cockpit's own
+        // Save button: the cockpit builds the authoritative payload and the
+        // server content-addresses it. The cockpit's status line is the receipt
+        // (`<label> | <vsp-id> | …`); no id, or its failure text, fails the arm.
+        const label = String(value || '').trim();
+        if (!label) fail(report.failurePhase, '@savePreset needs a label');
+        await evaluate(op(`(() => { const i = d.getElementById('settings-preset-label'); i.value = ${JSON.stringify(label)}; i.dispatchEvent(new Event('input', { bubbles: true })); d.getElementById('settings-preset-save').click(); return true; })()`));
+        let status = '';
+        for (let i = 0; i < 100; i++) {
+          status = String(await evaluate(op(`d.getElementById('volume-settings-preset-state')?.textContent || ''`)));
+          if (status.startsWith(`${label} | vsp-`) || /PRESET SAVE FAILED/.test(status)) break;
+          await sleep(200);
+        }
+        if (/PRESET SAVE FAILED/.test(status)) fail(report.failurePhase, `@savePreset ${value}: ${status}`);
+        const presetId = (status.match(/\|\s*(vsp-[0-9a-f]{64})/) || [])[1] || null;
+        if (!presetId) fail(report.failurePhase, `@savePreset ${value} did not produce a saved preset id (status: ${JSON.stringify(status)})`);
+        (arm.presetSaves ||= []).push({ label, presetId, status });
+        applied.push([cid, value, presetId]);
+        continue;
+      }
       if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);
       if (cid === 'volume-confinement') expectedMode = value;
       const domValue = await setControl(cid, value);
@@ -208,7 +231,7 @@ try {
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();

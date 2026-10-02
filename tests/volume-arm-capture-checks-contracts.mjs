@@ -130,3 +130,18 @@ test('capture: a pending browser-version response is bounded by --call-timeout-m
   assert.ok(!existsSync(report.browser.profile), 'the owned profile is removed');
   assert.doesNotMatch(run.stderr, /Unhandled|triggerUncaughtException/, 'no unhandled error escaped');
 });
+
+// `@savePreset=<label>` saves the arm's current controls as a basin through the
+// cockpit's own Save button (the cockpit builds the authoritative payload; the
+// server content-addresses it), waits for the cockpit's own saved status, and
+// records the label and preset id in the arm. A status that never names a
+// `vsp-` id is a failure, not a pass.
+test('capture: @savePreset saves through the cockpit and records the write receipt, failing when no id appears', () => {
+  assert.match(capture, /cid === '@savePreset'/, 'the capture knows the debug action');
+  assert.match(capture, /settings-preset-label/, 'it sets the cockpit label input');
+  assert.match(capture, /settings-preset-save/, 'and presses the cockpit Save button');
+  assert.match(capture, /volume-settings-preset-state/, 'it reads the cockpit status for the receipt');
+  assert.match(capture, /presetSaves/, 'the arm records the saves');
+  assert.match(capture, /@savePreset \$\{value\} did not produce a saved preset id/, 'a missing id fails the arm');
+  assert.match(capture, /PRESET SAVE FAILED/, 'a cockpit-reported failure fails the arm');
+});
