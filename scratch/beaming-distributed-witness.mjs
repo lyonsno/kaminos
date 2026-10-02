@@ -171,8 +171,8 @@ try {
     }
     for(const [name,density,extinction,position,target] of [
       ['authored',null,null,[0,1,6],[0,.7,0]],
-      ['thin-smoke',.35,.1,[0,1,3],[0,1,0]],
-      ['zero-extinction',.35,0,[0,3,3],[0,.3,0]],
+      ['thin-smoke',.35,.1,[0,1,6],[0,.7,0]],
+      ['zero-extinction',.35,0,[0,1,6],[0,.7,0]],
       ['roof',.35,0,[0,6,3],[0,1,0]],
     ]) {
       await page.evaluate(({density,extinction,position,target})=>{
@@ -182,7 +182,12 @@ try {
       await settled();const state=await effective();
       assert.equal(state.volume.error,null);assert.equal(state.lighting.frame.smokeReconstruction.identity,'prepared-geometry-visible-v1');
       assert.equal(state.lighting.frame.smokeReconstruction.staticPreparations,1);assert.ok(state.lighting.frame.smokeReconstruction.updates>0);
-      if(density!==null){assert.equal(state.density,density);assert.equal(state.extinction,extinction);}
+      assert.equal(state.lighting.smokeMode,'distributed');assert.equal(state.lighting.directions,96);assert.equal(state.lighting.frame.volumeReceivers,8192);
+      assert.equal(JSON.stringify(state.lighting.frame.smokeReconstruction.dimensions),'[64,128,64]');
+      assert.equal(state.lighting.frame.smokeReconstruction.cameraTriangleTests,0);assert.equal(state.volume.physicalColor.incidentLight.legacyDispatched,false);
+      if(density!==null){assert.equal(state.density,density);assert.equal(state.extinction,extinction);
+        assert.equal(state.volume.controls.density,density);assert.equal(state.volume.controls.physicalSmokeExtinction,extinction);
+        assert.ok(Math.abs(state.volume.physicalColor.material.smokeExtinction-extinction)<1e-6,'effective material extinction must match control');}
       await page.screenshot({path:`${out}/prepared-${name}.png`});
       report.views.push({name:`prepared-${name}`,position,target,...state});await save();
     }

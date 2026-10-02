@@ -15,7 +15,10 @@ try {
   report.runtime=await page.evaluate(()=>JSON.parse(document.body.innerText));
   const plane=[{a:[0,-2,-2],b:[0,4,-2],c:[0,4,2]},{a:[0,-2,-2],b:[0,4,2],c:[0,-2,2]}];
   const oblique=plane.map(t=>Object.fromEntries(Object.entries(t).map(([k,p])=>[k,[.1-.3*p[1],p[1],p[2]]])));
-  report.fixtures=Object.fromEntries(Object.entries({empty:[],plane,oblique,reversed:plane.map(t=>({...t,b:t.c,c:t.b}))}).map(([name,triangles])=>{
+  const corners=Array.from({length:8},(_,i)=>[(i&1)?.3:-.3,(i&2)?1.3:.7,(i&4)?.3:-.3]);
+  const faces=[[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]];
+  const cage=faces.flatMap(([a,b,c,d])=>[{a:corners[a],b:corners[b],c:corners[c]},{a:corners[a],b:corners[c],c:corners[d]}]);
+  report.fixtures=Object.fromEntries(Object.entries({empty:[],plane,oblique,reversed:plane.map(t=>({...t,b:t.c,c:t.b})),cage}).map(([name,triangles])=>{
     const p=buildTriangleVisibility(triangles).packGpu();return [name,{...p,nodes:Array.from(p.nodes),triangles:Array.from(p.triangles),
       // Preserve u32 escape/leaf words independently of f32 JSON subnormals.
       nodeWords:Array.from(new Uint32Array(p.nodes.buffer))}];
@@ -46,7 +49,7 @@ try {
         const nodes=buffer(new Uint32Array(g.nodeWords)),triangles=buffer(new Float32Array(g.triangles));
         const source=device.createTexture({dimension:'3d',size:[2,4,2],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});owned.push(source);
         prepared=createPreparedSmoke(device,{nodes,triangles,nodeCount:g.nodeCount,source,coarseDimensions:[2,4,2],factor:8});
-        const positions=name==='empty'?[[-.25,1.25,.1],[-1,-1,-1],[1,3,1],[0,3.01,0]]:name==='oblique'?[[-.35,0,0],[.45,0,0],[.1,0,0]]:[[-.2,1,0],[.2,1,0],[0,1,0]];
+        const positions=name==='cage'?[[0,1,0]]:name==='empty'?[[-.25,1.25,.1],[-1,-1,-1],[1,3,1],[0,3.01,0]]:name==='oblique'?[[-.35,0,0],[.45,0,0],[.1,0,0]]:[[-.2,1,0],[.2,1,0],[0,1,0]];
         const query=buffer(new Float32Array(positions.flatMap(p=>[...p,0]))),result=buffer(new Float32Array(positions.length*4),GPUBufferUsage.COPY_SRC);
         const read=device.createBuffer({size:positions.length*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});owned.push(read);
         const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:prepared.texture.createView()},...[prepared.metadata.masks,query,result].map((b,i)=>({binding:i+1,resource:{buffer:b}}))]});
@@ -70,10 +73,10 @@ try {
     const validation=await device.popErrorScope();device.destroy();return {adapter:info,rows,errors,losses,validation:validation?.message??null,shader};
   },report.fixtures);await save();
   assert.equal(report.signal.validation,null);assert.deepEqual(report.signal.errors,[]);assert.deepEqual(report.signal.losses,[]);
-  assert.equal(report.signal.rows.length,4);
+  assert.equal(report.signal.rows.length,5);assert.ok(report.fixtures.cage.nodeCount>1,'cage must exercise internal BVH escape traversal');
   for(const row of report.signal.rows){
     assert.equal(row.metadata.staticPreparations,1);assert.equal(row.metadata.updates,2);assert.equal(row.metadata.cameraTriangleTests,0);
-    const expected=row.name==='empty'?[1.75,4.25,4.1,1,1.5,2.5,3.5,1,2.5,5.5,4.5,1,0,0,0,1]:[2,2,2,1,100,100,100,1,0,0,0,1];
+    const expected=row.name==='cage'?[0,0,0,1]:row.name==='empty'?[1.75,4.25,4.1,1,1.5,2.5,3.5,1,2.5,5.5,4.5,1,0,0,0,1]:[2,2,2,1,100,100,100,1,0,0,0,1];
     for(let j=0;j<2;j++){
       assert.equal(row.outputs[j].length,expected.length);
       row.outputs[j].forEach((v,i)=>assert.ok(Number.isFinite(v)&&Math.abs(v-expected[i]*(i%4===3?1:j+1))<.0001,`${row.name} update${j} component${i}: ${v}`));
