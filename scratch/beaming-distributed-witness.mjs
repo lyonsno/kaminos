@@ -206,7 +206,7 @@ try {
       if(thin)for(const [id,value] of [['volume-density',.35],['volume-physical-smoke-extinction',.1]]){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
     },thin);
     const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
-    let baselineSource,baselineSurface;const softened=[];
+    let baselineSource,baselineSurface,baselineSmoke;const softened=[];
     for(const [name,passes] of [['baseline',0],['soft4',4],['soft16',16],['restored',0]]){
       await page.evaluate(passes=>{const e=document.getElementById('rendering-source-softness');e.value=String(passes);e.dispatchEvent(new Event('input',{bubbles:true}));},passes);
       const prior=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);
@@ -216,21 +216,21 @@ try {
       const signal=await page.evaluate(async()=>{
         const fields=await window.__kaminosSceneRadiance.readback();
         return {lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),
-          source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from(fields.surface.data),surfaceBack:Array.from(fields.surfaceBack.data)};
+          source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from(fields.surface.data),surfaceBack:Array.from(fields.surfaceBack.data),smoke:Array.from(fields.smoke.data)};
       });
       await fs.writeFile(`${out}/softening-${name}-signal.json`,JSON.stringify(signal));
       assert.equal(signal.volume.error,null);assert.equal(signal.lighting.frame.sourceSoftness,passes);
       assert.equal(signal.lighting.directions,24);assert.equal(signal.lighting.gain,thin?4:16);
       if(thin){assert.equal(signal.volume.controls.density,.35);assert.equal(signal.volume.controls.physicalSmokeExtinction,.1);}
-      const sourceHash=digest(signal.source.values),surfaceHash=digest(signal.surface);
-      if(name==='baseline'){baselineSource=sourceHash;baselineSurface=surfaceHash;}
+      const sourceHash=digest(signal.source.values),surfaceHash=digest(signal.surface),smokeHash=digest(signal.smoke);
+      if(name==='baseline'){baselineSource=sourceHash;baselineSurface=surfaceHash;baselineSmoke=smokeHash;}
       else assert.equal(sourceHash,baselineSource,'softness must leave actual raw emission/extinction unchanged');
-      assertSofteningView(signal,{passes,gain:thin?4:16,sourceHash,baselineSource,surfaceHash,baselineSurface,thin});
+      assertSofteningView(signal,{passes,gain:thin?4:16,sourceHash,baselineSource,surfaceHash,baselineSurface,smokeHash,baselineSmoke,thin});
       if(passes>0){assert.notEqual(surfaceHash,baselineSurface,'softness must actually change receiver light');softened.push(surfaceHash);
         assert.equal(signal.lighting.frame.sourceSoftening.staticPreparations,1);}
       if(name==='restored')assert.equal(surfaceHash,baselineSurface,'zero must restore exact surface transport');
       await page.screenshot({path:`${out}/softening-${name}.png`});
-      report.views.push({name:`softening-${name}`,passes,sourceHash,surfaceHash,lighting:signal.lighting,volume:signal.volume});await save();
+      report.views.push({name:`softening-${name}`,passes,sourceHash,surfaceHash,smokeHash,lighting:signal.lighting,volume:signal.volume});await save();
     }
     assert.notEqual(softened[0],softened[1],'independent softness control must affect light');
   }

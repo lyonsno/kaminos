@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {buildTriangleVisibility} from '../scene-light-visibility.mjs';
-import {softenEmissionReference} from '../scene-source-softening.mjs';
+import {assertSofteningGpuSignal} from './scene-source-softening-gpu-evidence.mjs';
 const [url,out]=process.argv.slice(2);assert.ok(url&&out);
 await fs.mkdir(out,{recursive:true});
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
@@ -53,23 +53,7 @@ try{
     }
     const validation=await device.popErrorScope();device.destroy();return {info,rows,errors,losses,validation:validation?.message??null};
   },report.fixtures);await save();
-  assert.equal(report.signal.validation,null);assert.deepEqual(report.signal.errors,[]);assert.deepEqual(report.signal.losses,[]);
-  assert.deepEqual(report.signal.rows.map(r=>r.name),['empty','plane','reversed']);
-  for(const row of report.signal.rows){
-    assert.equal(row.outputs.length,6);assert.equal(row.occupied.length,1024);
-    assert.equal(row.metadata.staticPreparations,1);assert.equal(row.metadata.updates,4);
-    row.occupied.forEach((v,i)=>assert.equal(v,row.name==='empty'?0:([3,4].includes(i%8)?1:0),'actual SAT occupancy'));
-    for(const output of row.outputs){
-      const input=Float32Array.from(row.input,(v,i)=>i%4===3?v:v*output.scale);
-      const expected=softenEmissionReference(input,row.dims,row.occupied,output.passes);
-      assert.equal(output.values.length,expected.length);
-      output.values.forEach((v,i)=>assert.ok(Number.isFinite(v)&&Math.abs(v-expected[i])<2e-6,`${row.name} pass${output.passes} component${i}: ${v} vs ${expected[i]}`));
-      if(output.passes===0)assert.equal(output.identity,true);
-      if(row.name!=='empty')for(let i=0;i<1024;i++)if(i%8>=3)assert.equal(output.values[i*4],0,'wall blocks emission redistribution');
-      for(let c=0;c<3;c++)assert.ok(Math.abs(output.values.reduce((s,v,i)=>s+(i%4===c?v:0),0)-[8,4,2][c]*output.scale)<1e-5);
-      for(let i=0;i<1024;i++)assert.equal(output.values[i*4+3],row.input[i*4+3]);
-    }
-  }
+  assertSofteningGpuSignal(report.signal);
   report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack||e);process.exitCode=1;}
 finally{await save();await browser?.close();}
