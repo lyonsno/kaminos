@@ -188,8 +188,19 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
     forceGroup.collapsed = false;
     forceGroup.controlIds = forceContributionIds;
   }
+  // Shape and resolution share one DOM row. Its existing authored placement
+  // owns both controls; assigning shape to a later group moves the whole row.
+  const gridGroup = reconciled.groups.find(group => group.controlIds.includes('volume-resolution'));
+  const colocateShape = authorableSet.has('volume-domain-shape') && Boolean(gridGroup);
+  if (colocateShape) {
+    for (const group of reconciled.groups) {
+      group.controlIds = group.controlIds.filter(id => id !== 'volume-domain-shape');
+    }
+    gridGroup.controlIds.splice(gridGroup.controlIds.indexOf('volume-resolution'), 0, 'volume-domain-shape');
+  }
   const ordinaryMissingControlIds = receipt.missingControlIds
-    .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId));
+    .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId)
+      && !(colocateShape && controlId === 'volume-domain-shape'));
   if (ordinaryMissingControlIds.length) {
     let newControls = reconciled.groups.find(group => group.id === 'new-controls');
     if (!newControls) {
@@ -386,7 +397,7 @@ const ORGANIZED_GROUPS = [
   ['budget', 'Raymarch budget', /^volume-(steps|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
   ['force', 'Force contributions', /^volume-(procedural-detail-forces|force-(micro-carrier|interface-shred|fine-breakup)|fine-breakup-localization)$/],
-  ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail|advection-scheme|confinement|time-step|common-gas-transport)$/],
+  ['simulation', 'Simulation dynamics', /^volume-(resolution|domain-shape|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail|advection-scheme|confinement|time-step|common-gas-transport)$/],
   ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|boundary-splat-.+|flow-kernel-.+|residual-.+|grid-overlay|flow-debug|oracle-.+|pyro-compare|look-freeze)$/],
   ['shell', 'Shell renderer', /^volume-shell-.+/],
   ['capture', 'Capture extractor', /^volume-reaction-.+/],
