@@ -8,7 +8,7 @@ globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
 function fixture(castShadow=true) {
   const uploads=[];
   const pipeline={getBindGroupLayout(){return {};}};
-  const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxComputeWorkgroupsPerDimension:65535},
+  const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
     queue:{writeBuffer(buffer,offset,data){if(buffer.label==='surface and smoke receivers')uploads.push(new Float32Array(data));},submit(){}},
     createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
     createShaderModule(){return {};},createComputePipeline(){return pipeline;},createBindGroup(){return {};},

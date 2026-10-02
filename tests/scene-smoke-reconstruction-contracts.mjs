@@ -54,18 +54,20 @@ const allocated=[];
 const capacityDevice={limits:{maxStorageBufferBindingSize:128},queue:{writeBuffer(){}},
   createBuffer(){const b={destroyed:false,destroy(){this.destroyed=true;}};allocated.push(b);return b;}};
 assert.throws(()=>createVolumeGather(capacityDevice,{geometry:capacityGeometry,receivers:[],volumeGrid:1,directions:2}),
-  /smoke reconstruction cell triangle candidates needs 192 bytes; device supports 128/);
+  /prepared smoke weights needs 4096 bytes; device supports 128/);
 assert.equal(allocated.filter(b=>!b.destroyed).length,0,'candidate capacity failure must leave no undisposed GPU buffers');
 
 globalThis.GPUShaderStage={FRAGMENT:2};
 let groups=0;
 const device={createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
 const bindings=createDistributedSmokeBindings(device);
-const texture={createView:()=>({})},r={identity:'geometry-visible-trilinear-v1',cellIndices:{},triangles:{}};
+const texture={createView:()=>({})},r={identity:'prepared-geometry-visible-v1',texture,masks:{},staticPreparations:1,updates:1};
 const frame={texture,smokeReconstruction:r};
 bindings.update(frame);bindings.update({...frame,generation:2});assert.equal(groups,1,'live coefficient update does not rebuild static bindings');
-bindings.update({...frame,smokeReconstruction:{...r,cellIndices:{}}});assert.equal(groups,2,'same texture with new visibility must rebind');
-bindings.update({...frame,smokeReconstruction:{...r,triangles:{}}});assert.equal(groups,3);
+bindings.update({...frame,smokeReconstruction:{...r,masks:{}}});assert.equal(groups,2,'same texture with new visibility must rebind');
+bindings.update({...frame,smokeReconstruction:{...r,texture:{createView:()=>({})}}});assert.equal(groups,3);
+assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:0}}),/reconstruction resources/);
+assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,updates:0}}),/reconstruction resources/);
 assert.throws(()=>bindings.update({texture}),/reconstruction resources/);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,identity:'old'}}),/reconstruction resources/);
 console.log(`smoke reconstruction bins preserve ${segmentCount} reference segments, uncapped candidates and binding lifetime`);

@@ -11,7 +11,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
     source:'actual-material-emission-extinction',coordinates:'identity-world-and-volume-local',
-    limitations:['vertex-surface-receivers','geometry-visible-trilinear-smoke-receivers','no-surface-bounce','independent-consumer-display']};
+    limitations:['vertex-surface-receivers','prepared-smoke-zero-at-solid-cells','static-geometry-rebuild-on-edit','no-surface-bounce','independent-consumer-display']};
   function retire() {
     prototype.setSceneDistributedLightFrame(null);
     const uses=new Map();

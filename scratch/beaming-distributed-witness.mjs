@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -110,7 +111,7 @@ try {
       report.views.push({name,operation,...view});await save();
       assert.equal(view.doubleSided,true);assert.ok(view.objects.some(o=>o.id==='kiln'&&o.active),'orientation operation must target kiln');
       assert.equal(view.volume.error,null);assert.equal(view.lighting.smokeMode,'distributed');
-      assert.equal(view.lighting.frame.smokeReconstruction.identity,'geometry-visible-trilinear-v1');
+      assert.equal(view.lighting.frame.smokeReconstruction.identity,'prepared-geometry-visible-v1');
       if(originalSource)assert.deepEqual(view.source.values,originalSource,'orientation comparison requires identical raw source coefficients');
       else originalSource=view.source.values;
       await page.screenshot({path:`${out}/orientation-${name}.png`});
@@ -143,6 +144,47 @@ try {
         }));
         await save();
       }
+    }
+  }
+  if(process.argv.includes('--prepared-check')) {
+    report.phase='prepared-smoke-consumer';await save();
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.selectOption('#rendering-angular-samples','96');
+    await page.evaluate(()=>{const gain=document.getElementById('rendering-shared-gain');gain.value='4';gain.dispatchEvent(new Event('input',{bubbles:true}));});
+    const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
+    const fields=async name=>{
+      const values=await page.evaluate(async()=>{const r=await window.__kaminosSceneRadiance.readback();return Object.fromEntries(Object.entries(r).map(([k,v])=>[k,{dimensions:v.dimensions,data:Array.from(v.data)}]));});
+      await fs.writeFile(`${out}/${name}-receivers.json`,JSON.stringify(values));
+      return Object.fromEntries(Object.entries(values).map(([k,v])=>[k,{dimensions:v.dimensions,sha256:digest(v.data)}]));
+    };
+    const effective=()=>page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),
+      density:Number(document.getElementById('volume-density').value),extinction:Number(document.getElementById('volume-physical-smoke-extinction').value)}));
+    const settled=async()=>{const prior=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(p=>window.__kaminosVolumePrototype.debugState().frameCount>=p+10,prior,{timeout:0});};
+    let heldSurface;
+    for(const mode of ['legacy','distributed']) {
+      await page.selectOption('#rendering-smoke-solver',mode);await settled();
+      const state=await effective();const values=await fields(`prepared-${mode}`);
+      assert.equal(state.lighting.smokeMode,mode);assert.equal(state.volume.physicalColor.incidentLight.legacyDispatched,mode==='legacy');
+      if(heldSurface){assert.equal(values.surface.sha256,heldSurface.surface.sha256);assert.equal(values.surfaceBack.sha256,heldSurface.surfaceBack.sha256);}
+      else heldSurface=values;
+      report.views.push({name:`prepared-${mode}`,fields:values,...state});await save();
+    }
+    for(const [name,density,extinction,position,target] of [
+      ['authored',null,null,[0,1,6],[0,.7,0]],
+      ['thin-smoke',.35,.1,[0,1,3],[0,1,0]],
+      ['zero-extinction',.35,0,[0,3,3],[0,.3,0]],
+      ['roof',.35,0,[0,6,3],[0,1,0]],
+    ]) {
+      await page.evaluate(({density,extinction,position,target})=>{
+        for(const [id,value] of [['volume-density',density],['volume-physical-smoke-extinction',extinction]])if(value!==null){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
+        window.__kaminosSetSceneCameraFrame(position,target);
+      },{density,extinction,position,target});
+      await settled();const state=await effective();
+      assert.equal(state.volume.error,null);assert.equal(state.lighting.frame.smokeReconstruction.identity,'prepared-geometry-visible-v1');
+      assert.equal(state.lighting.frame.smokeReconstruction.staticPreparations,1);assert.ok(state.lighting.frame.smokeReconstruction.updates>0);
+      if(density!==null){assert.equal(state.density,density);assert.equal(state.extinction,extinction);}
+      await page.screenshot({path:`${out}/prepared-${name}.png`});
+      report.views.push({name:`prepared-${name}`,position,target,...state});await save();
     }
   }
   const faviconOnly=report.httpFailures.length>0&&report.httpFailures.every(r=>new URL(r.url).pathname==='/favicon.ico');

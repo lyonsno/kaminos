@@ -38,16 +38,15 @@ export function createDistributedSmokeBindings(device) {
   const layout=device.createBindGroupLayout({entries:[
     {binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
     {binding:1,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
-    {binding:2,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
   ]});
   let last=null,group=null;
   return {layout, update(frame) {
     const r=frame.smokeReconstruction;
-    if(!frame.texture || r?.identity!=='geometry-visible-trilinear-v1' || !r.cellIndices || !r.triangles) throw new Error('distributed smoke requires current reconstruction resources');
-    const handles=[frame.texture,r.cellIndices,r.triangles];
+    if(!frame.texture || r?.identity!=='prepared-geometry-visible-v1' || !r.texture || !r.masks || r.staticPreparations!==1 || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
+    const handles=[r.texture,r.masks];
     if(!last || handles.some((h,i)=>h!==last[i])) {
-      group=device.createBindGroup({layout,entries:[{binding:0,resource:frame.texture.createView()},
-        {binding:1,resource:{buffer:r.cellIndices}},{binding:2,resource:{buffer:r.triangles}}]});
+      group=device.createBindGroup({layout,entries:[{binding:0,resource:r.texture.createView()},
+        {binding:1,resource:{buffer:r.masks}}]});
       last=handles;
     }
     return group;
@@ -56,41 +55,25 @@ export function createDistributedSmokeBindings(device) {
 
 export const DISTRIBUTED_SMOKE_WGSL=`
 @group(2) @binding(0) var distributedIncident:texture_3d<f32>;
-@group(2) @binding(1) var<storage,read> smokeReconstructionCells:array<u32>;
-struct SmokeReconstructionTriangle {a:vec4<f32>,e1:vec4<f32>,e2:vec4<f32>}
-@group(2) @binding(2) var<storage,read> smokeReconstructionTriangles:array<SmokeReconstructionTriangle>;
-fn smokeReceiverVisible(p:vec3<f32>,receiver:vec3<f32>,start:u32,count:u32)->bool {
-  let delta=receiver-p;
-  if(dot(delta,delta)==0.0){return true;}
-  for(var i=0u;i<count;i++) {
-    let tri=smokeReconstructionTriangles[smokeReconstructionCells[start+i]];
-    let h=cross(delta,tri.e2.xyz);let det=dot(tri.e1.xyz,h);
-    if(abs(det)<=1e-12*length(tri.e1.xyz)*length(tri.e2.xyz)*length(delta)){continue;}
-    let s=p-tri.a.xyz;let u=dot(s,h)/det;let q=cross(s,tri.e1.xyz);let v=dot(delta,q)/det;
-    let t=dot(tri.e2.xyz,q)/det;
-    // Conservative f32 edge tolerance prevents cracks at shared triangle edges.
-    let edgeTolerance=0.000002;
-    if(u>=-edgeTolerance&&v>=-edgeTolerance&&u+v<=1.0+edgeTolerance&&t>=0.0&&t<=1.0){return false;}
-  }
-  return true;
-}
+@group(2) @binding(1) var<storage,read> smokeBoundaryMasks:array<u32>;
 fn distributedMeanIncident(p:vec3<f32>)->vec3<f32> {
   let dims=textureDimensions(distributedIncident);let pitch=2.0/f32(dims.x);
   let lo=vec3<f32>(-1.0);let hi=lo+vec3<f32>(dims)*pitch;
   if(any(p<lo)||any(p>hi)){return vec3<f32>(0.0);}
   let q=(p-lo)/pitch-vec3<f32>(0.5);let base=vec3<i32>(floor(q));let w=fract(q);
+  let nearest=vec3<u32>(clamp(vec3<i32>(floor((p-lo)/pitch)),vec3<i32>(0),vec3<i32>(dims)-vec3<i32>(1)));
+  let nearestId=nearest.x+dims.x*(nearest.y+dims.y*nearest.z);
+  // A wall-intersected cell is unknown, not permission to leak light across it.
+  if(smokeBoundaryMasks[nearestId]!=0u){return vec3<f32>(0);}
   let bin=vec3<u32>(clamp(base+vec3<i32>(1),vec3<i32>(0),vec3<i32>(dims)));
   let binDims=dims+vec3<u32>(1u);let id=bin.x+binDims.x*(bin.y+binDims.y*bin.z);
-  let start=smokeReconstructionCells[id*2u];let count=smokeReconstructionCells[id*2u+1u];
-  var sum=vec3<f32>(0.0);var weightSum=0.0;
+  if(smokeBoundaryMasks[dims.x*dims.y*dims.z+id]!=0u){return textureLoad(distributedIncident,vec3<i32>(nearest),0).rgb;}
+  var sum=vec3<f32>(0.0);
   for(var z=0u;z<2u;z++){for(var y=0u;y<2u;y++){for(var x=0u;x<2u;x++){
     let weight=select(1.0-w.x,w.x,x==1u)*select(1.0-w.y,w.y,y==1u)*select(1.0-w.z,w.z,z==1u);
     if(weight==0.0){continue;}
     let c=clamp(base+vec3<i32>(i32(x),i32(y),i32(z)),vec3<i32>(0),vec3<i32>(dims)-vec3<i32>(1));
-    let receiver=lo+(vec3<f32>(c)+vec3<f32>(0.5))*pitch;
-    if(count>0u&&!smokeReceiverVisible(p,receiver,start,count)){continue;}
-    sum+=textureLoad(distributedIncident,c,0).rgb*weight;weightSum+=weight;
+    sum+=textureLoad(distributedIncident,c,0).rgb*weight;
   }}}
-  if(weightSum==0.0){return vec3<f32>(0.0);}
-  return sum/weightSum;
+  return sum;
 }`;

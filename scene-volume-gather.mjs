@@ -1,6 +1,6 @@
 // Direct distributed emission. Surface irradiance and isotropic smoke mean
 // use the same rays; only their angular weighting differs.
-import {buildSmokeReconstructionCells} from './scene-smoke-reconstruction.mjs';
+import {createPreparedSmoke,preparedSmokePlan} from './scene-prepared-smoke.mjs';
 export {DISTRIBUTED_SMOKE_WGSL} from './scene-smoke-reconstruction.mjs';
 export function lightingDirections(count=24) {
   if(!Number.isInteger(count)||count<2||count%2) throw new Error('even angular sample count required');
@@ -28,14 +28,13 @@ export function receiverDispatch(count,limit) {
   return [Math.min(groups,limit),Math.ceil(groups/limit)];
 }
 
-export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,directions=24}) {
+export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,directions=24,smokeRefinement=4}) {
   const dirs=lightingDirections(directions);
   const volumeDimensions=[volumeGrid,volumeGrid*2,volumeGrid];
   const volumeCount=volumeDimensions.reduce((a,b)=>a*b,1);
   const total=receivers.length+volumeCount;
-  const reconstructionCells=buildSmokeReconstructionCells(geometry,volumeDimensions);
-  const reconstructionBytes=Math.max(16,reconstructionCells.words.byteLength);
-  if(reconstructionBytes>device.limits.maxStorageBufferBindingSize) throw new Error(`smoke reconstruction cell triangle candidates needs ${reconstructionBytes} bytes; device supports ${device.limits.maxStorageBufferBindingSize}`);
+  // Capacity rejection precedes all allocation. No hidden refinement downgrade.
+  preparedSmokePlan(volumeDimensions,smokeRefinement,device.limits);
   const receiverValues=new Float32Array(total*8);
   receivers.forEach((r,i)=>receiverValues.set([...r.position,r.twoSided?2:1,...r.normal,0],i*8));
   for(let z=0;z<volumeGrid;z++) for(let y=0;y<volumeGrid*2;y++) for(let x=0;x<volumeGrid;x++) {
@@ -51,10 +50,6 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
   }
   const nodes=buffer('static kiln BVH nodes',geometry.nodes);
   const triangles=buffer('static kiln BVH triangles',geometry.triangles);
-  const smokeReconstruction={identity:'geometry-visible-trilinear-v1',
-    cellIndices:buffer('smoke reconstruction cell triangle candidates',reconstructionCells.words),triangles,
-    dimensions:reconstructionCells.dimensions,triangleReferences:reconstructionCells.triangleReferences,
-    maxCandidates:reconstructionCells.maxCandidates,emptyCells:reconstructionCells.emptyCells};
   const receiverBuffer=buffer('surface and smoke receivers',receiverValues);
   const directionBuffer=buffer('distributed incident directions',new Float32Array(dirs.flatMap(d=>[...d,0])));
   const distances=buffer('cached first solid distance per receiver ray',new Float32Array(total*directions));
@@ -65,6 +60,8 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
   const surface=device.createTexture({label:'direct flame surface irradiance',size:[surfaceWidth,surfaceHeight],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const surfaceBack=device.createTexture({label:'direct flame back surface irradiance',size:[surfaceWidth,surfaceHeight],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const smoke=device.createTexture({label:'direct flame mean incident radiance',dimension:'3d',size:volumeDimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
+  const preparedSmoke=createPreparedSmoke(device,{nodes,triangles,nodeCount:geometry.nodeCount,source:smoke,coarseDimensions:volumeDimensions,factor:smokeRefinement});
+  const smokeReconstruction=preparedSmoke.metadata;
   const dispatchLimit=device.limits.maxComputeWorkgroupsPerDimension;
   const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;const DIRECTION_COUNT:u32=${directions}u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
   const module=device.createShaderModule({label:'distributed volume ray gather',code:constants+GATHER_WGSL});
@@ -92,10 +89,11 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
       }
       const pass=encoder.beginComputePass({label:'live distributed flame transport'});
       pass.setPipeline(gather);pass.setBindGroup(0,gatherGroup);pass.dispatchWorkgroups(...receiverDispatch(smokeEnabled?total:receivers.length,dispatchLimit));pass.end();
+      if(smokeEnabled)preparedSmoke.encode(encoder);
       device.queue.submit([encoder.finish()]);
       return {generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,allocatedVolumeReceivers:volumeCount,directions,stepLength,gain,geometryTriangles:geometry.triangleCount,smokeReconstruction};
     },
-    destroy(){for(const b of resources)b.destroy();surface.destroy();surfaceBack.destroy();smoke.destroy();},
+    destroy(){preparedSmoke.destroy();for(const b of resources)b.destroy();surface.destroy();surfaceBack.destroy();smoke.destroy();},
     async readback() {
       const staging=[];
       const encoder=device.createCommandEncoder({label:'distributed receiver evidence'});
