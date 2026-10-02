@@ -30,6 +30,15 @@ function fixture(){
    beginDrag(){emit(viewport,'pointerdown',{pointerId:7,button:0});viewport.setPointerCapture(7);gizmo.dragging=true;controls.enabled=false;gizmo.dispatchEvent({type:'mouseDown'});pose.position[0]=2;},
    lateMove(){if(gizmo.dragging)pose.position[0]=9;gizmo.pointerUp();}};
 }
+test('scene history undo remains available after sidebar selection returns focus to the page',()=>{
+ const f=fixture();
+ f.document.body=new Element();f.document.activeElement=f.document.body;
+ f.tools.edits.apply('kiln',{position:[2,0,0]});
+ emit(f.document,'keydown',{key:'z',ctrlKey:true});
+ assert.deepEqual(f.pose.position,[0,0,0],'page-focused undo must restore the authored scene pose');
+ assert.equal(f.frames,0,'undo must not also frame the selected object');
+});
+
 test('pivot projection distinguishes visible, behind-camera, and off-viewport objects',()=>{
  assert.equal(typeof placementTools.getPivotViewState,'function','placement feedback must expose its camera-visibility decision');
  const camera=new PerspectiveCamera(45,4/3,.1,100);camera.position.z=10;camera.updateMatrixWorld(true);

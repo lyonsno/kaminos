@@ -1,6 +1,7 @@
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
   flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
+import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 export const SCENE_VERSION = 5;
@@ -35,6 +36,8 @@ function normalizeSceneObjectRecord(record) {
     renderRoute: record.renderRoute ?? null,
     renderCapabilities: cloneJson(record.renderCapabilities ?? null),
     renderHandoffSchema: record.renderHandoffSchema ?? null,
+    ...(record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE
+      ? { localLiquidEmitter: cloneJson(record.localLiquidEmitter) } : {}),
   };
 }
 
@@ -103,13 +106,15 @@ export function hasVolumePrimitives(data) {
 
 export function sceneDocumentIsLoadable(data) {
   if (!data?.version) return false;
-  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition);
+  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition)
+    || !!normalizeLocalLiquidSetup(data.localLiquid);
 }
 
 export function isReloadableSceneObjectRecord(record) {
   const type = record?.type || 'glb';
   const source = record?.source;
   if (type === FLAME_EMITTER_TYPE) return record.id === FLAME_EMITTER_ID && source === FLAME_EMITTER_SOURCE;
+  if (type === LOCAL_LIQUID_EMITTER_TYPE) return source === LOCAL_LIQUID_EMITTER_SOURCE;
   if (!['glb', 'pbr', 'splat', 'image'].includes(type) || typeof source !== 'string') return false;
   if (type === 'pbr') return source.startsWith('demos/');
   if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
@@ -131,6 +136,10 @@ export function planSceneRestore(data) {
   if (flameSources.length && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation)) {
     throw new Error('Saved flame source lies outside its authored simulation domain');
   }
+  const localLiquid = normalizeLocalLiquidSetup(data.localLiquid);
+  if (objects.some(record => record.type === LOCAL_LIQUID_EMITTER_TYPE) && !localLiquid) {
+    throw new Error('Authored water emitters require a saved local liquid domain');
+  }
   const groups = getSceneGroupRecords(data, objects);
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
@@ -147,6 +156,7 @@ export function planSceneRestore(data) {
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
     flameDomainTranslation,
+    localLiquid,
   };
 }
 
@@ -160,6 +170,7 @@ export function buildSceneDocument({
   provenance = null,
   composition = null,
   flameDomainTranslation = undefined,
+  localLiquid = null,
   capture = null,
   camera = null,
   environment = null,
@@ -168,6 +179,10 @@ export function buildSceneDocument({
   backdropBrightness = undefined,
 } = {}) {
   const sceneObjects = objects.map(normalizeSceneObjectRecord);
+  const liquidSetup = normalizeLocalLiquidSetup(localLiquid);
+  if (sceneObjects.some(record => record.type === LOCAL_LIQUID_EMITTER_TYPE) && !liquidSetup) {
+    throw new Error('Authored water emitters require a saved local liquid domain');
+  }
   const sceneGroups = getSceneGroupRecords({ groups }, sceneObjects);
   const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || sceneObjects[0] || null;
   const activeGroup = sceneGroups.find(group => group.id === activeGroupId) || null;
@@ -196,6 +211,7 @@ export function buildSceneDocument({
     provenance: cloneJson(provenance),
     composition: normalizeComposition(composition),
     ...(flameSource ? { flameDomainTranslation: authoredFlameDomain } : {}),
+    localLiquid: liquidSetup,
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),

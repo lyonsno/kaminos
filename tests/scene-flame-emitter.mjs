@@ -27,7 +27,7 @@ test('a rejected agent placement leaves no active transaction and preserves an e
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const start=html.indexOf('window.kaminosSetSceneObjectTransform =');
   const source=html.slice(start,html.indexOf('window.kaminosSetSplatCorrectionDebug',start));
-  const context={scenePlacementTools:{edits},window:{kaminosSceneObjectDebugState:()=>[]}};
+  const context={scenePlacementTools:{edits},sceneObjects:[],LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',window:{kaminosSceneObjectDebugState:()=>[]}};
   vm.runInNewContext(source,context);
   const before=edits.state();
   assert.throws(()=>context.window.kaminosSetSceneObjectTransform('flame-emitter',{position:[99,0,0]}),/bounds/);
@@ -89,12 +89,13 @@ test('a legacy cluster composition reopens without placing an analytic source', 
 
 test('clearing a scene removes its old flame member before the next scene saves', () => {
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  const start=html.indexOf('function clearScene() {');
+  const start=html.indexOf('function clearScene({loadRequestId = null} = {}) {');
   const end=html.indexOf('function loadTexture(file)',start);
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
   const context={FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
+    sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},
     greenroomPreviewState:null,currentMesh:null,sceneGroups:[],activeSceneObjectId:flame.id,
     activeSceneGroupId:null,glbSourceScene:null,transformControls:null,
