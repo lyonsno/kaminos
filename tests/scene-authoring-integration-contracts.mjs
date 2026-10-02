@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const editTools = readFileSync(new URL('../scene-placement-tools.mjs', import.meta.url), 'utf8');
+const persistence = readFileSync(new URL('../scene-persistence-core.js', import.meta.url), 'utf8');
 
 test('viewport modal edits read and write the same scene-object pose that save serializes', () => {
   assert.match(html, /import \{ installScenePlacementTools \} from '\.\/scene-placement-tools\.mjs'/);
@@ -24,11 +25,15 @@ test('F frames the selected authored object through generic geometry bounds', ()
   assert.doesNotMatch(framing, /record\?\.type\s*===?\s*['"]splat['"]/);
 });
 
-test('clearing resets scene history while reloadable object removal becomes a chronological history action', () => {
+test('clearing resets scene history while typed water objects join chronological membership history', () => {
   assert.match(html, /window\.removeSceneObject = function\(id\) \{\s*return removeSceneObjectInternal\(id\);/);
-  assert.match(html, /function sceneObjectMembershipSnapshot\(id\)[\s\S]*record\.type !== 'glb' \|\| !isReloadableSceneObjectRecord\(record\)/);
+  assert.match(html, /function sceneObjectMembershipSnapshot\(id\)[\s\S]*!isReloadableSceneObjectRecord\(record\)/);
+  assert.doesNotMatch(html, /record\.type !== 'glb' \|\| !isReloadableSceneObjectRecord\(record\)/);
+  assert.match(persistence, /if \(type === LOCAL_LIQUID_EMITTER_TYPE\) return source === LOCAL_LIQUID_EMITTER_SOURCE/);
+  assert.match(html, /record\.type === LOCAL_LIQUID_EMITTER_TYPE && record\.source === LOCAL_LIQUID_EMITTER_SOURCE/);
+  assert.match(html, /mergeAndValidateLocalLiquidEmitterPose\(entry\.localLiquidEmitter, sceneObjectTransformState\(entry\.object\), transform\)/,
+    'partial scene transform patches are checked against the full accepted emitter pose');
   assert.match(html, /function removeSceneObjectInternal\(id, \{ recordHistory = true, preserveForMembershipHistory = false \} = \{\}\)[\s\S]*if \(recordHistory && !editId\) scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\)/);
-  assert.match(html, /write: value => value == null\s*\? removeSceneObjectInternal\(id, \{ recordHistory: false, preserveForMembershipHistory: true \}\)/);
   assert.match(html, /recordApplied\(editId, before, null, `Remove/);
   const removeStart = html.indexOf('function removeSceneObjectInternal(');
   const removeEnd = html.indexOf('window.removeSceneObject = function', removeStart);
@@ -37,19 +42,22 @@ test('clearing resets scene history while reloadable object removal becomes a ch
   const removalIndex = removeSource.indexOf('sceneObjects.splice(index, 1)');
   assert.ok(admissionIndex >= 0 && admissionIndex < removalIndex, 'membership history admission must succeed before the scene object is removed');
   assert.match(removeSource, /catch \(error\) \{ setInfo\(error\.message\); return false; \}/, 'a rejected admission must leave a visible reason and preserve scene membership');
-  const clearSource = html.slice(html.indexOf('function clearScene()'), html.indexOf('function clearScene()') + 1000);
-  const clearHistory = clearSource.indexOf('scenePlacementTools?.clear()');
-  const releaseTargets = clearSource.indexOf('for (const editId of sceneMembershipEditTargets) scenePlacementTools.edits.unregister(editId)');
-  const clearTargets = clearSource.indexOf('sceneMembershipEditTargets.clear()');
-  const mutateScene = clearSource.indexOf('sceneMutationToken++');
-  assert.ok(clearHistory >= 0 && releaseTargets > clearHistory && clearTargets > releaseTargets && mutateScene > clearTargets,
-    'clear history before releasing retained membership targets and mutating the scene');
+  const clearStart = html.indexOf('function clearScene(');
+  assert.ok(clearStart >= 0, 'scene clear must remain present');
+  const clearSource = html.slice(clearStart, clearStart + 2000);
+  const clearSteps = ['sceneLoadRequests.invalidate()', 'scenePlacementTools?.clear()',
+    'scenePlacementTools.edits.unregister(editId)', 'sceneMembershipEditTargets.clear()', 'sceneMutationToken++'];
+  let lastClearStep = -1;
+  for (const step of clearSteps) {
+    const index = clearSource.indexOf(step);
+    assert.ok(index > lastClearStep, `clear must execute ${step} after the preceding history/load step`);
+    lastClearStep = index;
+  }
   assert.match(html, /if \(id !== activeSceneObjectId\) scenePlacementTools\?\.selectionChanged\(\);/);
   assert.match(html, /historyScope: document\.getElementById\('scene-object-list'\)/);
-  assert.match(editTools, /historyScope\?\.addEventListener\('pointerdown'.*historyScopeArmed = true/);
-  assert.match(editTools, /const viewportScoped = hover \|\| viewport\.contains\(document\.activeElement\);/);
-  assert.match(editTools, /const historyScopedUndo = historyScopeArmed && \(event\.ctrlKey \|\| event\.metaKey\) && key === 'z';/);
-  assert.doesNotMatch(editTools, /viewportScoped \|\| historyScopeArmed/);
+  assert.match(editTools, /const neutralPageFocus = document\.activeElement === document\.body/);
+  assert.match(editTools, /modal\.awaitViewportEntry = !pointerInViewport\(lastPointer\)/);
+  assert.match(editTools, /if \(modal\.awaitViewportEntry\)[\s\S]*pointerInViewport\(lastPointer\)/);
   assert.match(html, /selection: \{ objectId: activeSceneObjectId, groupId: activeSceneGroupId \}/);
   assert.match(html, /selection\.groupId[\s\S]*setActiveSceneGroup\(selection\.groupId\)[\s\S]*selection\.objectId[\s\S]*setActiveSceneObject\(selection\.objectId\)/);
   assert.match(html, /group\.groupIndex\) \|\| group\.groupIndex < 0[\s\S]*group\.objectIds\.includes\(id\)/);

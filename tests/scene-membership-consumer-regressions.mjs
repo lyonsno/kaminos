@@ -32,6 +32,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
   const context = vm.createContext({
     structuredClone,
     FLAME_EMITTER_ID: '@flame-emitter',
+    LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter',
     sceneObjects,
     sceneGroups,
     scene,

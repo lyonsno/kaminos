@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { countChangedVisibleWaterPixels, countVisibleWaterPixels } from './screenshot-png-rgb.mjs';
+import { compositionRestoreUrl } from './scene-authoring.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -1034,6 +1036,343 @@ async function runSaveLoadRoundtripScenario(ws) {
       };
     })()
   `, { timeoutMs: 60000 });
+}
+
+function assertLocalLiquidPerformanceEvidence(evidence) {
+  const {before, paused, after, saved} = evidence;
+  for (const state of [before, after]) {
+    if (!state.mounted || state.backend !== 'WebGPUBackend' || state.failure
+        || state.effectiveRoute !== 'kaminos/finger-fluid/local-analytic-host-frame-v0'
+        || !state.lastFrame?.submittedByHost || !state.lastFrame?.presentedByHost) throw Error('Water performance witness lost its live host route');
+  }
+  if (!paused.paused || paused.stepBefore !== paused.stepAfter) throw Error('Pause still advances water');
+  if (after.setup.particleCount !== 12288 || after.setup.densityIterations !== 1
+      || after.solver.particleCount !== 12288 || after.solver.densityIterationsPerStep !== 1
+      || !(after.solver.stepCount > 0)) throw Error('Draft budget did not reach live solver work');
+  if (JSON.stringify(before.emitters) !== JSON.stringify(after.emitters)) throw Error('Restart changed authored emitters');
+  if (saved.localLiquid?.particleCount !== 12288 || saved.localLiquid?.densityIterations !== 1) throw Error('Saved budget differs from live budget');
+}
+
+async function runLocalLiquidPerformanceScenario(ws) {
+  phase = 'scenario-local-liquid-performance';
+  lastEvidence.performance = await evaluate(ws, `(async () => {
+    const wait = ms => new Promise(resolve=>setTimeout(resolve,ms));
+    const until = async (fn, label) => {
+      for (let i=0;i<240;i++) { if(fn())return; await wait(125); }
+      throw Error(label);
+    };
+    await until(()=>window.kaminosLocalLiquidState && window.kaminosSetLocalLiquidPerformance,'Water controls did not initialize');
+    if(new URLSearchParams(location.hash.slice(1)).get('scene')) {
+      await until(()=>document.getElementById('info-bar').textContent.startsWith('Scene loaded:'),'Saved scene did not load');
+    }
+    if(!window.kaminosLocalLiquidState().setup) document.getElementById('scene-add-water-emitter').click();
+    await until(()=>window.kaminosLocalLiquidState().lastFrame?.frameId,'Water host did not present');
+    const before=window.kaminosLocalLiquidState();
+    document.getElementById('local-liquid-pause').click();
+    const stepBefore=window.kaminosLocalLiquidState().solver.stepCount;
+    for(let i=0;i<8;i++){window._kaminosDirty?.();await wait(125);}
+    const stopped=window.kaminosLocalLiquidState();
+    const paused={paused:stopped.paused,stepBefore,stepAfter:stopped.solver.stepCount};
+    document.getElementById('local-liquid-pause').click();
+    document.querySelector('[data-water-budget="12288,1"]').click();
+    document.getElementById('local-liquid-apply').click();
+    await until(()=>{const s=window.kaminosLocalLiquidState();return s.solver?.particleCount===12288 && s.lastFrame?.frameId;},'Draft solver failed to mount');
+    await wait(1500);
+    const after=window.kaminosLocalLiquidState();
+    const listing=await (await fetch('/api/browse?root=scenes&path=')).json();
+    const previous=new Set((listing.entries||[]).map(e=>e.name));
+    if(!await window.saveSceneAs())throw Error('Saving performance scene failed');
+    const updated=await (await fetch('/api/browse?root=scenes&path=')).json();
+    const files=(updated.entries||[]).filter(e=>e.name.endsWith('.json')&&!previous.has(e.name));
+    if(files.length!==1)throw Error('Save did not identify one new document');
+    const saved=await (await fetch('/api/read?root=scenes&path='+encodeURIComponent(files[0].name))).json();
+    document.getElementById('local-liquid-performance').scrollIntoView({block:'center'});
+    return {before,paused,after,saved,savedFile:files[0].name,origin:location.origin};
+  })()`, {timeoutMs:60000});
+  assertLocalLiquidPerformanceEvidence(lastEvidence.performance);
+  await capturePngScreenshot(ws,siblingPngPath('-draft-controls'));
+  const e=lastEvidence.performance;
+  const reopenUrl=compositionRestoreUrl(e.saved.composition,e.savedFile,e.origin);
+  const epoch=await evaluate(ws,'performance.timeOrigin');
+  await wsRequest(ws,'Page.navigate',{url:'about:blank'});
+  await delay(500);
+  await wsRequest(ws,'Page.navigate',{url:reopenUrl});
+  for(let i=0;i<240;i++) {
+    await delay(125);
+    try {
+      const state=await evaluate(ws,`({epoch:performance.timeOrigin,state:window.kaminosLocalLiquidState?.(),info:document.getElementById('info-bar')?.textContent})`);
+      if(state.epoch>epoch && state.state?.lastFrame?.frameId && state.info?.startsWith('Scene loaded:')) {
+        lastEvidence.performance.reopened=state;
+        break;
+      }
+    }catch{}
+  }
+  const reopened=lastEvidence.performance.reopened?.state;
+  if(!reopened || reopened.solver?.particleCount!==12288 || reopened.solver?.densityIterationsPerStep!==1
+      || reopened.backend!=='WebGPUBackend' || reopened.effectiveRoute!==e.after.effectiveRoute
+      || JSON.stringify(reopened.emitters)!==JSON.stringify(e.after.emitters)) throw Error('Fresh reopen did not restore live Draft budget and emitter identity');
+  await evaluate(ws,`document.getElementById('local-liquid-performance').scrollIntoView({block:'center'})`);
+}
+
+async function runLocalLiquidLiveHostScenario(ws) {
+  phase = 'scenario-local-liquid-live-host';
+  const first = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const savedScene = new URLSearchParams(location.hash.slice(1)).get('scene');
+      if (savedScene) {
+        let loaded = false;
+        for (let i = 0; i < 160; i++) {
+          const rows = window.kaminosSceneObjectDebugState?.() || [];
+          const info = document.getElementById('info-bar')?.textContent || '';
+          if (rows.some(row => row.type === 'flame-emitter') && rows.some(row => row.type === 'glb')
+              && info.startsWith('Scene loaded:')) { loaded = true; break; }
+          if (info.includes('failed') || info.includes('FAILED')) throw new Error('Saved kiln scene failed before Add: '+info);
+          await wait(125);
+        }
+        if (!loaded) throw new Error('Saved kiln scene did not finish registering flame and geometry before Add');
+      }
+      let state = window.kaminosLocalLiquidState?.() || null;
+      if (!state?.setup) {
+        const trigger = document.getElementById('scene-add-menu-trigger');
+        if (!trigger) throw new Error('Scene Add menu is missing');
+        trigger.click();
+        const action = document.querySelector('#scene-add-menu-popup [data-scene-add="water-emitter"]');
+        if (trigger.getAttribute('aria-expanded') !== 'true' || !action || action.closest('[hidden]')) {
+          throw new Error('Water Emitter action did not open in the Scene Add menu');
+        }
+        action.click();
+        if (trigger.getAttribute('aria-expanded') !== 'false') throw new Error('Scene Add menu stayed open after adding water');
+      }
+      for (let i = 0; i < 160; i++) {
+        await wait(125);
+        state = window.kaminosLocalLiquidState?.() || null;
+        if (state?.lastFrame?.frameId) break;
+      }
+      if (!state?.lastFrame?.frameId) throw new Error('Kaminos local-water host did not produce its first frame');
+      const canvas = document.getElementById('kaminos-host-renderer-canvas');
+      if (!canvas) throw new Error('Kaminos host canvas is missing');
+      const canvasRect = canvas.getBoundingClientRect();
+      return {
+        frameId:state.lastFrame.frameId,
+        frameCount:state.frameCount,
+        stepCount:state.solver?.stepCount,
+        cameraIdentity:state.lastFrame.cameraIdentity,
+        width:state.lastFrame.width,
+        height:state.lastFrame.height,
+        canvasBounds:{x:canvasRect.x,y:canvasRect.y,width:canvasRect.width,height:canvasRect.height,
+          viewportWidth:window.innerWidth,viewportHeight:window.innerHeight},
+      };
+    })()
+  `, {timeoutMs:60000});
+  const firstShot = await capturePngScreenshot(ws, siblingPngPath('-local-water-first'));
+  lastEvidence.localLiquidLiveHost = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const first = ${JSON.stringify(first)};
+      await wait(8000);
+      const state = window.kaminosLocalLiquidState?.() || null;
+      if (!state) throw new Error('Kaminos local-water state probe is unavailable');
+      const requestedRoute = state.requestedRoute;
+      if (state.backend !== 'WebGPUBackend') {
+        throw new Error('local-water smoke used an unexpected renderer backend: ' + JSON.stringify(state));
+      }
+      if (state.mounted !== true || state.effectiveRoute !== requestedRoute) {
+        throw new Error('local-water host did not mount on its requested effective route: ' + JSON.stringify(state));
+      }
+      if (state.failure || !state.lastFrame || state.lastFrame.submittedByHost !== true || state.lastFrame.presentedByHost !== true) {
+        throw new Error('local-water frame was not submitted and presented by the current host: ' + JSON.stringify(state));
+      }
+      if (state.lastFrame.cameraIdentity !== first.cameraIdentity
+        || state.lastFrame.width !== first.width || state.lastFrame.height !== first.height) {
+        throw new Error('local-water temporal pixel comparison crossed a camera or render extent change: '
+          + JSON.stringify({firstCameraIdentity:first.cameraIdentity,firstExtent:{width:first.width,height:first.height},lastFrame:state.lastFrame}));
+      }
+      if (!Number.isSafeInteger(first.frameCount) || !Number.isSafeInteger(state.frameCount)
+        || state.frameCount <= first.frameCount || state.lastFrame.frameId === first.frameId) {
+        throw new Error('local-water host did not advance to a new presented frame during the observation interval: '
+          + JSON.stringify({firstFrameId:first.frameId,frameId:state.lastFrame.frameId,firstFrameCount:first.frameCount,frameCount:state.frameCount}));
+      }
+      if (state.lastFrame.route !== requestedRoute || !state.lastFrame.frameId) {
+        throw new Error('local-water final frame has stale or substituted route identity: ' + JSON.stringify(state.lastFrame));
+      }
+      const rows = [...document.querySelectorAll('[data-scene-object-id]')];
+      const emitterIds = state.emitters.map(emitter => emitter.id);
+      if (emitterIds.length !== 1 || !rows.some(row => emitterIds.includes(row.dataset.sceneObjectId))) {
+        throw new Error('live local-water source is not one visible authored scene object: ' + JSON.stringify({emitterIds, rows:rows.map(row=>row.dataset.sceneObjectId)}));
+      }
+      const solver = state.solver || {};
+      if (!Number.isSafeInteger(first.stepCount) || !Number.isSafeInteger(solver.stepCount) || solver.stepCount <= first.stepCount) {
+        throw new Error('local-water host mounted but the solver did not advance: ' + JSON.stringify({lastFrame:state.lastFrame,stepCount:solver.stepCount}));
+      }
+      const encodedHostFrameId = state.hostFrameCompositionEvidence?.hostFrameId || null;
+      if (encodedHostFrameId !== state.lastFrame.frameId
+        || state.hostFrameCompositionEvidence?.effectiveRoute !== requestedRoute
+        || state.hostFrameCompositionEvidence?.primaryCommandEncoded !== true) {
+        throw new Error('local-water presented frame does not match solver host-frame encoding evidence: '
+          + JSON.stringify({frameId:state.lastFrame.frameId,hostFrameCompositionEvidence:state.hostFrameCompositionEvidence}));
+      }
+      const canvas = document.getElementById('kaminos-host-renderer-canvas');
+      if (!canvas) throw new Error('Kaminos host canvas is missing');
+      const canvasRect = canvas.getBoundingClientRect();
+      const canvasBounds = {x:canvasRect.x,y:canvasRect.y,width:canvasRect.width,height:canvasRect.height,
+        viewportWidth:window.innerWidth,viewportHeight:window.innerHeight};
+      for (const key of Object.keys(first.canvasBounds)) {
+        if (canvasBounds[key] !== first.canvasBounds[key]) {
+          throw new Error('local-water temporal pixel comparison crossed a canvas or viewport resize: '
+            + JSON.stringify({first: first.canvasBounds,last:canvasBounds}));
+        }
+      }
+      let savedFile = null;
+      {
+        const before = await (await fetch('/api/browse?root=scenes&path=')).json();
+        if (before.error) throw new Error('local-water scene listing failed: ' + before.error);
+        const previous = new Set((before.entries || []).filter(entry=>entry.name.endsWith('.json')).map(entry=>entry.name));
+        await window.saveSceneAs();
+        for (let i = 0; i < 120; i++) {
+          const after = await (await fetch('/api/browse?root=scenes&path=')).json();
+          if (after.error) throw new Error('local-water saved-scene listing failed: ' + after.error);
+          const created=(after.entries || []).filter(entry=>entry.name.endsWith('.json')&&!previous.has(entry.name));
+          if (created.length===1) {savedFile=created[0].name;break;}
+          await wait(125);
+        }
+        if (!savedFile) throw new Error('local-water save did not create exactly one scene document');
+      }
+      const savedRead=await (await fetch('/api/read?root=scenes&path='+encodeURIComponent(savedFile))).json();
+      if (savedRead.error) throw new Error('local-water saved scene read failed: '+savedRead.error);
+      if (savedRead.localLiquid?.schema !== state.setup.schema
+        || savedRead.objects?.filter(object => object.type === 'local-liquid-emitter').length !== 1
+        || !savedRead.objects?.some(object => object.id === state.emitters[0]?.id)) {
+        throw new Error('local-water scene document did not preserve the mounted setup and emitter identity: '
+          +JSON.stringify({savedFile,localLiquid:savedRead.localLiquid,objects:savedRead.objects?.map(object=>({id:object.id,type:object.type}))}));
+      }
+      return {
+        requestedRoute,
+        effectiveRoute:state.effectiveRoute,
+        backend:state.backend,
+        mounted:state.mounted,
+        failure:state.failure,
+        emitterIds,
+        lastFrame:state.lastFrame,
+        firstFrameId:first.frameId,
+        firstFrameCount:first.frameCount,
+        firstStepCount:first.stepCount,
+        firstCameraIdentity:first.cameraIdentity,
+        firstHostExtent:{width:first.width,height:first.height},
+        hostFrameCount:state.frameCount,
+        encodedHostFrameId,
+        solverStepCount:solver.stepCount,
+        canvasBounds,
+        liveInlets:solver.liveInlets || null,
+        particleDrawCount:solver.particleDrawCount ?? null,
+        screenSpaceSurfaceRenderFrameCount:solver.screenSpaceSurfaceRenderFrameCount ?? null,
+        screenSpaceRefractionRenderFrameCount:solver.screenSpaceRefractionRenderFrameCount ?? null,
+        hostFrameComposition:solver.hostFrameComposition ?? null,
+        hostFrameEvidence:solver.hostFrameCompositionEvidence ?? null,
+        supportContact:solver.supportContact ?? null,
+        presentation:solver.presentationEvidence ?? null,
+        savedFile,
+        savedComposition:savedRead.composition || null,
+        savedSceneUrl:location.origin+location.pathname+location.search+'#authoring=1&scene='+encodeURIComponent(savedFile),
+        savedSetupSchema:savedRead.localLiquid.schema,
+        sceneRows:rows.map(row=>row.dataset.sceneObjectId),
+        info:document.getElementById('info-bar')?.textContent?.trim() || null,
+      };
+    })()
+  `, {timeoutMs:60000});
+  const visibleShot = await capturePngScreenshot(ws, siblingPngPath('-local-water-visible'));
+  const canvasBounds = lastEvidence.localLiquidLiveHost.canvasBounds;
+  const pngPixels = countVisibleWaterPixels({
+    png:readFileSync(visibleShot.path), bounds:canvasBounds,
+    viewportWidth:canvasBounds.viewportWidth, viewportHeight:canvasBounds.viewportHeight,
+    minimumPixels:2000,
+  });
+  const changedPixels = countChangedVisibleWaterPixels({
+    beforePng:readFileSync(firstShot.path), afterPng:readFileSync(visibleShot.path), bounds:canvasBounds,
+    viewportWidth:canvasBounds.viewportWidth, viewportHeight:canvasBounds.viewportHeight,
+    minimumPixels:500,
+  });
+  Object.assign(lastEvidence.localLiquidLiveHost, {
+    firstWaterScreenshot:firstShot.path,
+    visibleWaterScreenshot:visibleShot.path,
+    visibleWaterPixelCount:pngPixels.visibleWaterPixelCount,
+    visibleWaterChangedPixelCount:changedPixels.changedWaterPixelCount,
+    sampledCanvasPixels:pngPixels.sampledPixels,
+    changedSampledCanvasPixels:changedPixels.sampledPixels,
+  });
+  if (pngPixels.visibleWaterPixelCount < pngPixels.minimumPixels) {
+    throw new Error('local-water live host produced too few blue/cyan canvas pixels to prove visible water: '
+      + JSON.stringify({canvasBounds,pngPixels}));
+  }
+  if (changedPixels.changedWaterPixelCount < changedPixels.minimumPixels) {
+    throw new Error('local-water live host changed too few water-colored canvas pixels to distinguish moving liquid from stationary cyan support: '
+      + JSON.stringify({canvasBounds,changedPixels}));
+  }
+  phase = 'local-water-menu-shortcut-history-reopen';
+  await evaluate(ws, 'document.activeElement?.blur?.()');
+  await wsRequest(ws, 'Input.dispatchKeyEvent', { type:'keyDown', key:'A', code:'KeyA', modifiers:8, windowsVirtualKeyCode:65, nativeVirtualKeyCode:65 });
+  await wsRequest(ws, 'Input.dispatchKeyEvent', { type:'keyUp', key:'A', code:'KeyA', modifiers:8, windowsVirtualKeyCode:65, nativeVirtualKeyCode:65 });
+  const shortcutOpened = await evaluate(ws, `document.getElementById('scene-add-menu-trigger')?.getAttribute('aria-expanded') === 'true'`);
+  if (!shortcutOpened) throw new Error('Shift+A did not open the scene Add menu');
+  await wsRequest(ws, 'Input.dispatchKeyEvent', { type:'keyDown', key:'Escape', code:'Escape', windowsVirtualKeyCode:27, nativeVirtualKeyCode:27 });
+  await wsRequest(ws, 'Input.dispatchKeyEvent', { type:'keyUp', key:'Escape', code:'Escape', windowsVirtualKeyCode:27, nativeVirtualKeyCode:27 });
+  lastEvidence.localLiquidLiveHost.undoRedo = await evaluate(ws, `
+    (async () => {
+      const id = ${JSON.stringify(lastEvidence.localLiquidLiveHost.emitterIds[0])};
+      await window.kaminosSceneEdits.undo();
+      const afterUndo = window.kaminosLocalLiquidState();
+      if (afterUndo.emitters.length !== 0 || document.querySelector('[data-scene-object-id="'+id+'"]')) {
+        throw new Error('Undo did not remove the authored water source and its scene row');
+      }
+      await window.kaminosSceneEdits.redo();
+      const afterRedo = window.kaminosLocalLiquidState();
+      if (afterRedo.emitters.length !== 1 || afterRedo.emitters[0].id !== id
+          || !document.querySelector('[data-scene-object-id="'+id+'"]')) {
+        throw new Error('Redo did not restore the same authored water source and scene row');
+      }
+      return { afterUndoCount:afterUndo.emitters.length, afterRedoIds:afterRedo.emitters.map(emitter=>emitter.id) };
+    })()
+  `);
+  const saved = lastEvidence.localLiquidLiveHost;
+  const reopenUrl = new URL(saved.savedComposition
+    ? compositionRestoreUrl(saved.savedComposition, saved.savedFile, new URL(saved.savedSceneUrl).origin)
+    : saved.savedSceneUrl);
+  const beforeReopenEpoch = await evaluate(ws, 'performance.timeOrigin');
+  await wsRequest(ws, 'Page.navigate', { url:'about:blank' });
+  for (let attempt = 0; attempt < 80; attempt++) {
+    if (await evaluate(ws, 'location.href').catch(() => null) === 'about:blank') break;
+    await delay(125);
+  }
+  if (await evaluate(ws, 'location.href') !== 'about:blank') throw new Error('Fresh-reopen witness did not leave the old document');
+  await wsRequest(ws, 'Page.navigate', { url:reopenUrl.href });
+  let reopened = null;
+  let lastReopenObservation = null;
+  for (let attempt = 0; attempt < 160; attempt++) {
+    await delay(125);
+    try {
+      lastReopenObservation = await evaluate(ws, `(() => {
+        const state = window.kaminosLocalLiquidState?.();
+        const id = ${JSON.stringify(lastEvidence.localLiquidLiveHost.emitterIds[0])};
+        return {url:location.href, documentEpoch:performance.timeOrigin,
+          id:state?.emitters?.[0]?.id || null, count:state?.emitters?.length ?? null,
+          frameId:state?.lastFrame?.frameId || null, route:state?.effectiveRoute || null,
+          backend:state?.backend || null, mounted:state?.mounted || false,
+          row:!!document.querySelector('[data-scene-object-id="'+id+'"]'),
+          info:document.getElementById('info-bar')?.textContent || null};
+      })()`);
+      if (lastReopenObservation.documentEpoch > beforeReopenEpoch
+          && lastReopenObservation.mounted && lastReopenObservation.frameId
+          && lastReopenObservation.count === 1 && lastReopenObservation.id === lastEvidence.localLiquidLiveHost.emitterIds[0]
+          && lastReopenObservation.row) { reopened = lastReopenObservation; break; }
+    } catch {}
+  }
+  if (!reopened || reopened.documentEpoch <= beforeReopenEpoch
+      || reopened.route !== lastEvidence.localLiquidLiveHost.requestedRoute || reopened.backend !== 'WebGPUBackend') {
+    throw new Error('Saved water emitter did not reopen as the same live source on its effective host route: '
+      + JSON.stringify({ beforeReopenEpoch, lastReopenObservation }));
+  }
+  lastEvidence.localLiquidLiveHost.shortcutOpened = shortcutOpened;
+  lastEvidence.localLiquidLiveHost.reopened = reopened;
 }
 
 async function runTransformInspectorScenario(ws) {
@@ -5048,6 +5387,7 @@ try {
   }
 
   phase = 'launching-chrome';
+  if (headless && chrome.startsWith('/Applications/Google Chrome.app/')) throw Error('Headless witness requires an independent browser executable via KAMINOS_CHROME');
   chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
@@ -5078,17 +5418,30 @@ try {
   browserVersion = launchResult.version;
 
   phase = 'opening-target';
-  const targets = await cdpFetch('/json/list');
-  const target = targets.find(t => t.type === 'page') || targets[0];
-  if (!target?.webSocketDebuggerUrl) throw new Error('No debuggable page target');
+  const requestedHref = normalizeUrlForWitness(url);
+  let target = null;
+  let targets = [];
+  for (let attempt = 0; attempt < 40; attempt++) {
+    targets = await cdpFetch('/json/list');
+    target = targets.find(t => t.type === 'page' && normalizeUrlForWitness(t.url) === requestedHref);
+    if (target) break;
+    await delay(125);
+  }
+  if (!target?.webSocketDebuggerUrl) {
+    throw new Error(`Requested browser page did not open: ${requestedHref}; observed ${JSON.stringify(targets.map(t => ({type:t.type,url:t.url})))}`);
+  }
   ws = new WebSocket(target.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
   await wsRequest(ws, 'Runtime.enable');
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Page.bringToFront');
+  for (let attempt=0;attempt<240;attempt++) {
+    effectiveUrl = await evaluate(ws, 'location.href').catch(()=>null);
+    if (effectiveUrl && effectiveUrl !== 'about:blank') break;
+    await delay(125);
+  }
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'location.href');
-  const requestedHref = normalizeUrlForWitness(url);
   const effectiveHref = normalizeUrlForWitness(effectiveUrl);
   if (requestedHref !== effectiveHref) {
     throw new Error(`effective URL mismatch: requested ${requestedHref} but browser loaded ${effectiveHref}`);
@@ -5127,6 +5480,10 @@ try {
     await runSelectedDeleteShortcutScenario(ws);
   } else if (scenario === 'save-load-roundtrip') {
     await runSaveLoadRoundtripScenario(ws);
+  } else if (scenario === 'local-liquid-performance') {
+    await runLocalLiquidPerformanceScenario(ws);
+  } else if (scenario === 'local-liquid-live-host') {
+    await runLocalLiquidLiveHostScenario(ws);
   } else if (scenario === 'transform-inspector') {
     await runTransformInspectorScenario(ws);
   } else if (scenario === 'object-groups-roundtrip') {

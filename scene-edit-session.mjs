@@ -161,7 +161,8 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
       throw new Error(`Applied scene edit "${label}" does not match target "${id}"`);
     }
     if (JSON.stringify(checkedBefore) === JSON.stringify(checkedAfter)) return false;
-    past.push({ id, label, before: checkedBefore, after: checkedAfter });
+    past.push({ id, label, before: checkedBefore, after: checkedAfter,
+      beforeContext: null, afterContext: clone(captureContext(id)) });
     future = [];
     notify();
     return true;

@@ -332,7 +332,7 @@ assert.match(
 );
 assert.match(
   source,
-  /schema:\s*KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA[\s\S]*hostFrameId:[\s\S]*deviceIdentity:[\s\S]*cameraIdentity:[\s\S]*cameraGeneration:[\s\S]*pipelineIdentity:[\s\S]*remapGeneration:[\s\S]*sceneColorAttachmentId:[\s\S]*sceneDepthAttachmentId:[\s\S]*environmentAttachmentId:[\s\S]*environmentWidth:[\s\S]*environmentHeight:[\s\S]*targetAttachmentId:/,
+  /schema: localAnalyticHostComposition[\s\S]*KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA,[\s\S]*hostFrameId:[\s\S]*deviceIdentity:[\s\S]*cameraIdentity:[\s\S]*cameraGeneration:[\s\S]*pipelineIdentity:[\s\S]*remapGeneration:[\s\S]*sceneColorAttachmentId:[\s\S]*sceneDepthAttachmentId:[\s\S]*environmentAttachmentId:[\s\S]*environmentWidth:[\s\S]*environmentHeight:[\s\S]*targetAttachmentId:/,
   'the host encode receipt must preserve every load-bearing frame identity',
 );
 assert.match(
