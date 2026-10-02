@@ -236,19 +236,28 @@ try {
   }
   if(process.argv.includes('--angular-pattern-check')) {
     report.phase='held-angular-pattern';await save();
+    const lit=process.argv.includes('--angular-lit-check');
+    report.angularProfile={camera:lit?[2,1.5,6]:[3,2,9],target:[0,.7,0],gainStops:lit?4:2,softness:5,density:.35,smokeExtinction:.1};await save();
     await page.selectOption('#rendering-light-mode','shared');
-    await page.evaluate(()=>{
-      window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);
-      for(const [id,value] of [['rendering-shared-gain',2],['rendering-source-softness',5],['volume-density',.35],['volume-physical-smoke-extinction',.1]]) {
+    await page.evaluate(profile=>{
+      window.__kaminosSetSceneCameraFrame(profile.camera,profile.target);
+      for(const [id,value] of [['rendering-shared-gain',profile.gainStops],['rendering-source-softness',profile.softness],['volume-density',profile.density],['volume-physical-smoke-extinction',profile.smokeExtinction]]) {
         const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));
       }
-    });
+    },report.angularProfile);
     let sourceHash,baselineSurface,builds;
     const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
     for(const [name,count,pattern,rotation] of [['fixed24',24,'fixed',0],['rotated24',24,'fixed',.7],['restored24',24,'fixed',0],['spatial24',24,'spatial',0],['spatial16',16,'spatial',0],['spatial12',12,'spatial',0]]) {
-      await page.evaluate(({count,pattern,rotation})=>{window.__kaminosSceneRadiance.setDirections(count);window.__kaminosSceneRadiance.setAngularPattern(pattern,rotation);},{count,pattern,rotation});
+      await page.selectOption('#rendering-angular-samples',String(count));
+      await page.selectOption('#rendering-angular-pattern',pattern);
+      await page.evaluate(({pattern,rotation})=>{window.__kaminosSceneRadiance.setAngularPattern(pattern,rotation);},{pattern,rotation});
       const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);
-      await page.waitForFunction(f=>{const v=window.__kaminosVolumePrototype.debugState();return v.error||v.frameCount>=f+3;},f,{timeout:0});
+      await page.waitForFunction(f=>{const v=window.__kaminosVolumePrototype.debugState();return v.error||window.__kaminosSceneRadianceSetup?.status==='failed'||v.frameCount>=f+3;},f,{timeout:0});
+      report.lastTrustworthyState=await page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),setup:window.__kaminosSceneRadianceSetup}));await save();
+      assert.equal(report.lastTrustworthyState.volume.error,null);
+      assert.notEqual(report.lastTrustworthyState.setup?.status,'failed');
+      assert.equal(await page.$eval('#rendering-angular-samples',e=>Number(e.value)),count);
+      assert.equal(await page.$eval('#rendering-angular-pattern',e=>e.value),pattern);
       const signal=await page.evaluate(async()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from((await window.__kaminosSceneRadiance.readback()).surface.data)}));
       await fs.writeFile(`${out}/angular-${name}-signal.json`,JSON.stringify(signal));
       assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
