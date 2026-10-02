@@ -52,7 +52,7 @@ function validateBorrowed(tensor, shape, dtype, label) {
   }
 }
 
-export function createTrellisSLatFlowAdapter({ route, config = {}, weights, conditioning, coordinates,
+export function createTrellisSLatFlowAdapter({ route, config = {}, weights, conditioning, conditioningTensor, coordinates,
   coordinateTensor, sampleTensor, concatTensor, concatConditioning, ropeFrequencies }) {
   const plan = buildSLatFlowPlan(config), runtime = route?.runtime;
   if (!runtime?.createTensor || !runtime?.runKernel) throw new TypeError('registered WebGPU runtime required');
@@ -99,11 +99,12 @@ export function createTrellisSLatFlowAdapter({ route, config = {}, weights, cond
       packed = tensor('texture-model-input', [plan.tokenRows, 64]);
       concatOperation = define('slat-texture-concat', concatShader(plan.tokenRows), [sample, shape, packed], grid(plan.tokenRows * 32));
     }
-    flow = createTrellisSparseFlowAdapter({ route, config: plan.flowConfig, weights, conditioning, phaseTensor: phases, sampleTensor: packed });
+    flow = createTrellisSparseFlowAdapter({ route, config: plan.flowConfig, weights, conditioning, conditioningTensor, phaseTensor: phases, sampleTensor: packed });
     const dispatch = (op, invocation) => runtime.runKernel(op.kernel, { stage: op.stage, dispatch: op.dispatch, schedulerInvocation: invocation, yieldAfter: true });
     return Object.freeze({ plan: Object.freeze({ ...plan, block: flow.plan.block }), runtime, routeId: route.routeId,
-      inputs: Object.freeze({ sample, coordinates: coords }), outputs: flow.outputs, diagnostics: Object.freeze({ ...flow.diagnostics, phases }),
-      async run({ sample: initial, timestep, conditioning: nextConditioning } = {}, invocation) {
+      inputs: Object.freeze({ sample, coordinates: coords,
+        ...(conditioningTensor!==undefined?{conditioning:conditioningTensor}:{}) }), outputs: flow.outputs, diagnostics: Object.freeze({ ...flow.diagnostics, phases }),
+      async run({ sample: initial, timestep, conditioning: nextConditioning, zeroConditioning = false } = {}, invocation) {
         if (disposed) throw new Error('SLat flow adapter disposed'); if (running) throw new Error('SLat flow adapter in use');
         if (!Number.isFinite(timestep)) throw new TypeError('finite model timestep required');
         if (sampleTensor && initial !== undefined) throw new TypeError('borrowed SLat sample forbids CPU reupload');
@@ -115,7 +116,7 @@ export function createTrellisSLatFlowAdapter({ route, config = {}, weights, cond
           if (initial !== undefined) { runtime.uploadTensor(sample, initial); initialized = true; }
           if (!phasesInitialized) { await dispatch(phaseOperation, invocation); phasesInitialized = true; }
           if (concatOperation) await dispatch(concatOperation, invocation);
-          return await flow.run({ timestep, conditioning: nextConditioning }, invocation);
+          return await flow.run({ timestep, conditioning: nextConditioning, zeroConditioning }, invocation);
         } finally { running = false; }
       },
       dispose() { if (running) throw new Error('SLat flow adapter in use'); if (disposed) return; disposed = true; cleanup(); }

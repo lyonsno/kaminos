@@ -149,7 +149,7 @@ fn main(@builtin(workgroup_id) wid:vec3<u32>){
   let mean=mean_sum/${rows}.0;let mean2=mean2_sum/${rows}.0;output[wid.x]=sqrt(mean2 - mean * mean);
 }`;
 
-export function createTrellisSparseSamplerAdapter({route,flow,config={},conditioning,negativeConditioning,
+export function createTrellisSparseSamplerAdapter({route,flow,config={},conditioning,conditioningTensor,negativeConditioning,
   initialSampleTensor,initialStepIndex=0}){
   const runtime=route?.runtime,plan=buildSparseSamplerPlan(config);
   if(!runtime?.createTensor||!runtime?.runKernel||flow?.runtime!==runtime)throw new TypeError('model and sampler must use the same runtime');
@@ -167,9 +167,14 @@ export function createTrellisSparseSamplerAdapter({route,flow,config={},conditio
   if(initialSampleTensor===undefined&&initialStepIndex!==0)throw new TypeError('initial resident sample required for an initial step');
   const contextCount=flow.plan.block.contextRows*flow.plan.block.contextChannels;
   const validateContext=values=>values instanceof Float32Array&&values.length===contextCount&&values.every(Number.isFinite);
-  if(!validateContext(conditioning))throw new TypeError('complete finite positive conditioning required');
-  const negative=negativeConditioning??new Float32Array(contextCount);
-  if(!validateContext(negative))throw new TypeError('complete finite negative conditioning required');
+  const resident=conditioningTensor!==undefined;
+  if(resident){
+    if(conditioning!==undefined||negativeConditioning!==undefined)throw TypeError('resident conditioning forbids CPU replacement; negative context is source GPU zeros');
+    if(conditioningTensor!==flow.inputs?.conditioning)throw TypeError('sampler conditioning must be the same resident producer tensor as the flow');
+  }else if(flow.inputs?.conditioning!==undefined)throw TypeError('resident flow requires the same conditioning producer tensor');
+  else if(!validateContext(conditioning))throw new TypeError('complete finite positive conditioning required');
+  const negative=resident?undefined:negativeConditioning??new Float32Array(contextCount);
+  if(!resident&&!validateContext(negative))throw new TypeError('complete finite negative conditioning required');
   const resources=[];let running=false,disposed=false,nextStep=initialSampleTensor===undefined?null:initialStepIndex,poisoned=false;
   const tensor=(name,shape=plan.shape)=>{const t=runtime.createTensor({name:`trellis.sampler.${name}`,shape,dtype:'f32',usage:U.storage|U.copyDst|U.copySrc});resources.push(t);return t;};
   const cleanup=()=>{for(const t of resources)t.buffer?.destroy?.();};
@@ -207,10 +212,11 @@ export function createTrellisSparseSamplerAdapter({route,flow,config={},conditio
         1-plan.sigmaMin,step.coefficient,step.inverseCoefficient,step.dt]);
       runtime.uploadTensor(controls,values);
       try{
-        await flow.run({...(initial===undefined?{}:{sample:initial}),timestep:step.modelTime,conditioning},invocation);
+        await flow.run({...(initial===undefined?{}:{sample:initial}),timestep:step.modelTime,
+          ...(resident?{zeroConditioning:false}:{conditioning})},invocation);
         await dispatch(operations.positive,invocation);
         if(step.guided){
-          await flow.run({timestep:step.modelTime,conditioning:negative},invocation);
+          await flow.run({timestep:step.modelTime,...(resident?{zeroConditioning:true}:{conditioning:negative})},invocation);
           await dispatch(operations.guidance,invocation);
           if(plan.guidanceRescale>0){
             await dispatch(operations.xstart,invocation);await dispatch(operations.std,invocation);await dispatch(operations.rescale,invocation);

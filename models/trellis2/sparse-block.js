@@ -44,7 +44,7 @@ const workspaceStates = new WeakMap();
 // One named activation set across serialized blocks. Diagnostics and hidden
 // are borrowed views: the next block overwrites them after their last use.
 // Offline observers may snapshot them; serving does not retain per-block copies.
-export function createTrellisSparseBlockWorkspace({ route, config = {}, conditioning, phases, phaseTensor }) {
+export function createTrellisSparseBlockWorkspace({ route, config = {}, conditioning, conditioningTensor, phases, phaseTensor }) {
   const runtime = route?.runtime, plan = buildSparseBlockPlan(config);
   if (!runtime?.createTensor || !runtime?.uploadTensor) throw new TypeError('registered WebGPU runtime required');
   if (phaseTensor && (phases !== undefined || !phaseTensor.buffer || phaseTensor.dtype !== 'f32' ||
@@ -52,7 +52,14 @@ export function createTrellisSparseBlockWorkspace({ route, config = {}, conditio
     JSON.stringify(phaseTensor.shape) !== JSON.stringify([plan.rows, plan.headDim / 2, 2]))) {
     throw new TypeError('borrowed phases must be complete F32 storage; CPU replacement is forbidden');
   }
-  for (const [name, values, count] of [['conditioning', conditioning, plan.contextRows * plan.contextChannels],
+  const resident = conditioningTensor !== undefined, contextShape = [plan.contextRows, plan.contextChannels],
+    contextCount = plan.contextRows * plan.contextChannels;
+  if (resident && (conditioning !== undefined || !conditioningTensor?.buffer || conditioningTensor.dtype !== 'f32' ||
+      !(conditioningTensor.usage & U.storage) || conditioningTensor.byteLength !== contextCount * 4 ||
+      ![JSON.stringify(contextShape), JSON.stringify([1, ...contextShape])].includes(JSON.stringify(conditioningTensor.shape)))) {
+    throw new TypeError('complete resident F32 conditioning required; CPU replacement is forbidden');
+  }
+  for (const [name, values, count] of [...(!resident ? [['conditioning', conditioning, contextCount]] : []),
     ...(!phaseTensor ? [['phases', phases, plan.rows * plan.headDim]] : [])]) {
     if (!(values instanceof Float32Array) || values.length !== count || !values.every(Number.isFinite)) throw new TypeError(`complete finite ${name} required`);
   }
@@ -78,11 +85,38 @@ export function createTrellisSparseBlockWorkspace({ route, config = {}, conditio
   try {
     const context = allocate('conditioning', [plan.contextRows, plan.contextChannels]);
     const rope = phaseTensor ?? allocate('rope-phases', [plan.rows, plan.headDim / 2, 2]);
-    runtime.uploadTensor(context, Float32Array.from(conditioning, roundBfloat16));
+    let contextCast, contextZero, contextDispatch;
+    if (resident) {
+      if (!runtime.defineComputeKernel || !runtime.runKernel) throw TypeError('resident context requires the registered compute runtime');
+      const groups = Math.ceil(contextCount / 64), limit = runtime.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65535,
+        x = Math.min(groups, limit), y = Math.ceil(groups / x);
+      if (y > limit) throw RangeError('complete conditioning exceeds effective dispatch capacity');
+      contextDispatch = [x, y, 1];
+      contextCast = runtime.defineComputeKernel({ name: 'trellis.flow-resident-conditioning-bf16',
+        code: elementShader(contextCount,
+          '@group(0) @binding(0) var<storage,read> input:array<f32>;\n@group(0) @binding(1) var<storage,read_write> output:array<f32>;',
+          'output[i] = round_bf16(input[i]);'),
+        bindings: [{ name: 'b0', resource: conditioningTensor, access: 'read-only-storage' },
+          { name: 'b1', resource: context, access: 'storage' }] });
+      contextZero = runtime.defineComputeKernel({ name: 'trellis.flow-resident-negative-zero',
+        code: elementShader(contextCount, '@group(0) @binding(0) var<storage,read_write> output:array<f32>;', 'output[i] = 0.0;'),
+        bindings: [{ name: 'b0', resource: context, access: 'storage' }] });
+    } else runtime.uploadTensor(context, Float32Array.from(conditioning, roundBfloat16));
     if (!phaseTensor) runtime.uploadTensor(rope, phases);
-    const workspace = Object.freeze({ plan, conditioning: context, phases: rope, dispose,
+    const workspace = Object.freeze({ plan, conditioning: context, sourceConditioning: conditioningTensor, phases: rope, dispose,
+      async prepareConditioning(negative = false, invocation) {
+        available(); if (inUse) throw Error('sparse block workspace in use');
+        if (typeof negative !== 'boolean') throw TypeError('explicit conditioning polarity required');
+        if (!resident) { if (negative) throw TypeError('GPU-zero context requires resident conditioning'); return; }
+        inUse = true;
+        try { await runtime.runKernel(negative ? contextZero : contextCast, {
+          stage: negative ? 'flow-resident-negative-zero' : 'flow-resident-conditioning-bf16',
+          dispatch: contextDispatch, schedulerInvocation: invocation, yieldAfter: true });
+        } finally { inUse = false; }
+      },
       setConditioning(values) {
         available(); if (inUse) throw new Error('sparse block workspace in use');
+        if (resident) throw TypeError('borrowed resident conditioning forbids CPU replacement');
         if (!(values instanceof Float32Array) || values.length !== plan.contextRows * plan.contextChannels ||
             !values.every(Number.isFinite)) throw new TypeError('complete finite conditioning required');
         runtime.uploadTensor(context, Float32Array.from(values, roundBfloat16));

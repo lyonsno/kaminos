@@ -57,7 +57,7 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>,@builtin(workgroup_id) wid:v
   if(row<${rows}u&&col<${columns}u){output[${tokenMajor ? `row * ${columns}u + col` : `col * ${rows}u + row`}]=sum+bias[col];}
 }`;
 
-export function createTrellisSparseFlowAdapter({ route, config={}, weights, conditioning, phases, phaseTensor, sampleTensor }) {
+export function createTrellisSparseFlowAdapter({ route, config={}, weights, conditioning, conditioningTensor, phases, phaseTensor, sampleTensor }) {
   const plan=buildSparseFlowPlan(config),runtime=route?.runtime;
   if(!runtime?.createTensor||!runtime?.runKernel)throw new TypeError('registered WebGPU runtime required');
   if(!Array.isArray(weights?.blocks)||weights.blocks.length!==plan.numBlocks)throw new TypeError('complete source block weight sets required');
@@ -71,7 +71,7 @@ export function createTrellisSparseFlowAdapter({ route, config={}, weights, cond
   try{
     const sample=sampleTensor??tensor('sample',plan.prefix.inputShape);
     prefix=createTrellisSparsePrefixAdapter({route,config,weights:weights.prefix,sampleTensor:sample});
-    workspace=createTrellisSparseBlockWorkspace({route,config,conditioning,phases,phaseTensor});
+    workspace=createTrellisSparseBlockWorkspace({route,config,conditioning,conditioningTensor,phases,phaseTensor});
     let hidden=prefix.outputs.projected;
     for(const blockWeights of weights.blocks){const block=createTrellisSparseBlockAdapter({route,config,weights:blockWeights,
       inputs:{projected:hidden,modulation:prefix.outputs.modulation},workspace});blocks.push(block);hidden=block.outputs.hidden;}
@@ -84,11 +84,15 @@ export function createTrellisSparseFlowAdapter({ route, config={}, weights, cond
     const terminal=[define('terminal-layernorm',terminalNormShader(plan.block.rows,plan.block.channels),[hidden,normalized],[plan.block.rows,1,1]),
       define('terminal-output-projection',terminalProjectionShader(plan.block.rows,plan.block.channels,plan.outChannels,config.tokenRows !== undefined),[normalized,weight,bias,prediction],
         [Math.ceil(plan.outChannels/16),Math.ceil(plan.block.rows/16),1])];
-    return Object.freeze({plan,runtime,routeId:route.routeId,inputs:Object.freeze({sample}),outputs:Object.freeze({prediction}),
+    return Object.freeze({plan,runtime,routeId:route.routeId,inputs:Object.freeze({sample,
+      ...(conditioningTensor!==undefined?{conditioning:conditioningTensor}:{})}),outputs:Object.freeze({prediction}),
       diagnostics:Object.freeze({hidden,normalized,...prefix.outputs}),
-      async run({sample:cpuSample,timestep,conditioning:nextConditioning}={},invocation){
+      async run({sample:cpuSample,timestep,conditioning:nextConditioning,zeroConditioning=false}={},invocation){
         if(disposed)throw new Error('sparse flow adapter disposed');if(running)throw new Error('sparse flow adapter in use');
         if(!Number.isFinite(timestep))throw new TypeError('finite model timestep required');
+        if(typeof zeroConditioning!=='boolean')throw TypeError('explicit conditioning polarity required');
+        if(conditioningTensor!==undefined&&nextConditioning!==undefined)throw TypeError('borrowed resident conditioning forbids CPU replacement');
+        if(conditioningTensor===undefined&&zeroConditioning)throw TypeError('GPU-zero context requires resident conditioning');
         if(sampleTensor&&cpuSample!==undefined)throw new TypeError('borrowed sampler state must not be CPU-reuploaded');
         if(cpuSample!==undefined&&(!(cpuSample instanceof Float32Array)||cpuSample.length!==plan.block.rows*plan.prefix.inChannels||
             !cpuSample.every(Number.isFinite)))throw new TypeError(`complete finite ${plan.prefix.inputLayout} sample required`);
@@ -96,6 +100,7 @@ export function createTrellisSparseFlowAdapter({ route, config={}, weights, cond
         running=true;
         try{
           if(nextConditioning!==undefined)workspace.setConditioning(nextConditioning);
+          await workspace.prepareConditioning(zeroConditioning,invocation);
           if(cpuSample!==undefined){runtime.uploadTensor(sample,cpuSample);initialized=true;}
           await prefix.run({timestep},invocation);
           for(const block of blocks)await block.run(invocation);
