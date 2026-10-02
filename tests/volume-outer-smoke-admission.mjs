@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {test} from 'node:test';
-import {outerSmokeConfig, validateOuterSmokeDevice} from '../volume-outer-smoke.mjs';
+import {outerSmokeConfig, outerSmokeShader, validateOuterSmokeDevice} from '../volume-outer-smoke.mjs';
 import {voxelizeTriangleSolid, packSolidTextureRows, assertEffectiveSceneCollision} from '../volume-scene-solid.mjs';
 
 const limits={maxTextureDimension3D:2048,maxBufferSize:1e9,maxStorageBufferBindingSize:1e9,maxComputeWorkgroupsPerDimension:65535};
@@ -11,6 +11,44 @@ test('accepted outer lattices have actual donor samples',()=>{
     assert.throws(()=>validateOuterSmokeDevice(outerSmokeConfig({grid,extent}),limits),/donor.*lattice/);
   }
   assert.doesNotThrow(()=>validateOuterSmokeDevice(outerSmokeConfig(),limits));
+});
+
+test('donor admission rejects support confined to unstable float32 boundaries',()=>{
+  // Native Dawn Metal on cb00a407 returned [0,4,4,4] x/y/z/scalar
+  // donors for 9/3: mathematically equivalent coordinate operations can round
+  // a face onto the strict boundary. Multiples share the same geometry.
+  for(const [grid,extent] of [[9,3],[27,9],[33,11]]) {
+    assert.throws(()=>validateOuterSmokeDevice(outerSmokeConfig({grid,extent}),limits),/donor.*lattice/);
+  }
+  for(const [grid,extent] of [[16,2],[32,4],[64,4]]) {
+    assert.doesNotThrow(()=>validateOuterSmokeDevice(outerSmokeConfig({grid,extent}),limits));
+  }
+});
+
+test('admitted transfer samples survive rounded and fused shader coordinates',()=>{
+  // Read the effective constants from WGSL, independently of host interval
+  // admission. This is arithmetic coverage, not a substitute for native Metal.
+  const f=Math.fround;
+  for(const [grid,extent] of [[11,3],[16,2],[32,4],[33,4],[64,4]]) {
+    const c=outerSmokeConfig({grid,extent});
+    validateOuterSmokeDevice(c,limits);
+    const shader=outerSmokeShader(c,16);
+    const h=f(Number(shader.match(/const H:f32=([^;]+);/)[1]));
+    const lo=f(Number(shader.match(/const LO=vec3<f32>\(([^)]+)\)/)[1]));
+    const bounds=[...shader.matchAll(/all\(p[><]vec3<f32>\(([^)]+)\)/g)]
+      .map(m=>m[1].split(',').map(x=>f(Number(x))));
+    for(let a=0;a<3;a++)for(const face of [false,true]) {
+      let supported=0;
+      for(let i=0;i<c.shape[a]+Number(face);i++) {
+        const center=f(lo+f(f(i+.5)*h));
+        const fusedCenter=f(lo+f(i+.5)*h);
+        const values=face?[f(center-f(.5*h)),f(fusedCenter-f(.5*h)),f(lo+i*h)]
+          :[center,fusedCenter];
+        if(values.every(p=>p>bounds[0][a]&&p<bounds[1][a]))supported++;
+      }
+      assert.ok(supported>0,`${grid}/${extent} axis ${a} ${face?'face':'center'}`);
+    }
+  }
 });
 
 // Execute the actual browser admission functions with allocation/draw boundaries

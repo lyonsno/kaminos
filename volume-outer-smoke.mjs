@@ -19,10 +19,17 @@ export function outerDonorBounds(c) {
 export function validateOuterSmokeDevice(c,limits) {
   const donor=outerDonorBounds(c);
   // A continuous overlap can fall entirely between the coarse sample lattices.
-  // Require scalar centers and each staggered component, not just box volume.
+  // Use emitted f32 constants and require interior support away from rounding
+  // of LO + (i + .5) * H and the subsequent face subtraction. Eight f32 epsilons
+  // of the operand scale cover these operations, including fused/unfused forms;
+  // this rejects boundary-only support without changing the shader's donor box.
+  const emitted=x=>Math.fround(Number(x.toFixed(9)));
+  const h=emitted(c.cellWidth);
   const samples=(a,offset,hi)=>{
-    const first=Math.max(0,Math.floor((donor.min[a]-c.min[a])/c.cellWidth-offset)+1);
-    const last=Math.min(hi,Math.ceil((donor.max[a]-c.min[a])/c.cellWidth-offset)-1);
+    const lo=emitted(c.min[a]);
+    const margin=8*2**-23*Math.max(1,Math.abs(lo)+(hi+1)*Math.abs(h));
+    const first=Math.max(0,Math.floor((emitted(donor.min[a])+margin-lo)/h-offset)+1);
+    const last=Math.min(hi,Math.ceil((emitted(donor.max[a])-margin-lo)/h-offset)-1);
     return Math.max(0,last-first+1);
   };
   if(c.shape.some((n,a)=>samples(a,.5,n-1)===0 || samples(a,0,n)===0)) {
