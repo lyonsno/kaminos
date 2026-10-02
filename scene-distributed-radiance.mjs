@@ -3,9 +3,10 @@ import {cloneSceneRadianceMaterial} from './scene-radiance.mjs';
 import {collectStaticSceneGeometry,staticSceneGeometryRevision} from './scene-light-geometry.mjs';
 import {buildTriangleVisibility} from './scene-light-visibility.mjs';
 import {createVolumeGather} from './scene-volume-gather.mjs';
+import {validateSourceSoftness} from './scene-source-softening.mjs';
 
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16}) {
-  let gain=1,smokeMode='distributed',handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
+  let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
   const attributeIds=new WeakMap();let nextAttributeId=0;
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
@@ -120,7 +121,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   function prepare(field) {
     if(disposed)throw new Error('distributed lighting disposed');
     if(!handle||receiverRevision()!==revision)build();
-    frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed'});
+    frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness});
     prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:handle.smoke,...frame}:null);
     status.status='submitted-awaiting-presentation';
   }
@@ -129,8 +130,9 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   return {
     setGain(value){if(!Number.isFinite(value)||value<0)throw new Error('nonnegative light gain required');gain=value;},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke illumination mode');smokeMode=value;},
+    setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
     setDirections(value){lightingCount(value);directions=value;status.directions=value;revision=null;},
-    debugState(){return {...status,gain,smokeMode,frame,display:'mesh and flame retain separate camera transforms'};},
+    debugState(){return {...status,gain,smokeMode,sourceSoftness,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
     canRender(){return !disposed&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
     dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();},

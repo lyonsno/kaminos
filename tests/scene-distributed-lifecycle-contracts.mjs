@@ -27,6 +27,17 @@ function fixture(castShadow=true) {
   return {mesh,mount,geometry,material,uploads,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='softness') {
+  const f=fixture();f.prepare();
+  for(const value of [1,4,0,8,0]){
+    f.mount.setSourceSoftness(value);f.prepare();
+    const state=f.mount.debugState();
+    assert.equal(state.sourceSoftness,value);assert.equal(state.frame.sourceSoftness,value);
+    assert.equal(f.uploads.length,1,'softness never rebuilds receiver visibility');
+    assert.equal(state.frame.sourceSoftening.staticPreparations,1,'source geometry prepared once');
+  }
+  assert.throws(()=>f.mount.setSourceSoftness(-1),/nonnegative integer/);f.mount.dispose();
+}
 if(!selected||selected==='sides') {
   const f=fixture();f.mesh.material.side=THREE.DoubleSide;f.prepare();
   assert.equal(f.uploads[0][3],2,'double-sided receiver requests separate opaque hemispheres');

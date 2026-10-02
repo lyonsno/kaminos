@@ -192,6 +192,42 @@ try {
       report.views.push({name:`prepared-${name}`,position,target,...state});await save();
     }
   }
+  if(process.argv.includes('--softening-check')) {
+    report.phase='held-source-softening';await save();
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.selectOption('#rendering-angular-samples','24');
+    await page.selectOption('#rendering-smoke-solver','distributed');
+    await page.evaluate(()=>{
+      window.__kaminosSetSceneCameraFrame([0,1,6],[0,.7,0]);
+      const gain=document.getElementById('rendering-shared-gain');gain.value='4';gain.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
+    let baselineSource,baselineSurface;const softened=[];
+    for(const [name,passes] of [['baseline',0],['soft4',4],['soft16',16],['restored',0]]){
+      await page.evaluate(passes=>{const e=document.getElementById('rendering-source-softness');e.value=String(passes);e.dispatchEvent(new Event('input',{bubbles:true}));},passes);
+      const prior=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);
+      await page.waitForFunction(({passes,prior})=>{
+        const d=window.__kaminosSceneRadiance.debugState();return d.frame?.sourceSoftness===passes&&d.directions===24&&window.__kaminosVolumePrototype.debugState().frameCount>=prior+10;
+      },{passes,prior},{timeout:0});
+      const signal=await page.evaluate(async()=>{
+        const fields=await window.__kaminosSceneRadiance.readback();
+        return {lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),
+          source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from(fields.surface.data),surfaceBack:Array.from(fields.surfaceBack.data)};
+      });
+      await fs.writeFile(`${out}/softening-${name}-signal.json`,JSON.stringify(signal));
+      assert.equal(signal.volume.error,null);assert.equal(signal.lighting.frame.sourceSoftness,passes);
+      assert.equal(signal.lighting.directions,24);assert.equal(signal.lighting.gain,16);
+      const sourceHash=digest(signal.source.values),surfaceHash=digest(signal.surface);
+      if(name==='baseline'){baselineSource=sourceHash;baselineSurface=surfaceHash;}
+      else assert.equal(sourceHash,baselineSource,'softness must leave actual raw emission/extinction unchanged');
+      if(passes>0){assert.notEqual(surfaceHash,baselineSurface,'softness must actually change receiver light');softened.push(surfaceHash);
+        assert.equal(signal.lighting.frame.sourceSoftening.staticPreparations,1);}
+      if(name==='restored')assert.equal(surfaceHash,baselineSurface,'zero must restore exact surface transport');
+      await page.screenshot({path:`${out}/softening-${name}.png`});
+      report.views.push({name:`softening-${name}`,passes,sourceHash,surfaceHash,lighting:signal.lighting,volume:signal.volume});await save();
+    }
+    assert.notEqual(softened[0],softened[1],'independent softness control must affect light');
+  }
   const faviconOnly=report.httpFailures.length>0&&report.httpFailures.every(r=>new URL(r.url).pathname==='/favicon.ico');
   const materialErrors=report.errors.filter(e=>!(faviconOnly&&e.includes('Failed to load resource: the server responded with a status of 404')));
   assert.deepEqual(materialErrors,[]);

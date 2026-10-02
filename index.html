@@ -3241,6 +3241,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
       <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>24</option><option>48</option><option>96</option></select>
+        <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
+        <p class="rendering-description">Lighting-only emission smoothing passes. Zero is unfiltered; more passes soften fine source detail without changing visible flame emission, extinction, or solid ray stops. Geometry-touching source cells stay unfiltered. Saved flame settings are unchanged.</p>
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
         <p class="rendering-description">The smoke solvers are exclusive. Source gain affects distributed receiving, not direct visible flame emission or legacy smoke illumination. Legacy comparison stops live distributed smoke gathering; distributed mode stops the old smoke solve. Surface bounce is not implemented.</p></div>
       <h2>Flame field</h2>
@@ -3365,6 +3367,7 @@ function refreshRenderingControls() {
   document.getElementById('rendering-source-title').textContent=distributed ? 'Distributed flame source' : 'Shared point source';
   if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
   if(distributed)source.setSmokeMode(document.getElementById('rendering-smoke-solver').value);
+  if(distributed)source.setSourceSoftness(Number(document.getElementById('rendering-source-softness').value));
   if (source && !distributed) {
     renderingSourceIntensity ||= source.debugState().source.intensity.slice();
     renderingSourcePosition ||= source.debugState().source.position.slice();
@@ -11358,6 +11361,10 @@ document.getElementById('rendering-angular-samples').addEventListener('change',e
   refreshRenderingControls();
 });
 document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-source-softness').addEventListener('input',event=>{
+  document.getElementById('rendering-source-softness-value').textContent=event.target.value;
+  refreshRenderingControls();
+});
 for (const axis of ['x', 'y', 'z']) {
   document.getElementById(`rendering-source-${axis}`).addEventListener('change', () => {
     const input = ['x', 'y', 'z'].map(name => document.getElementById(`rendering-source-${name}`).value).join(',');
