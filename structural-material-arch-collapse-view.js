@@ -52,6 +52,7 @@ let modelConfig;
 let edges;
 let source, profile, latestStepCost = 0, bindCount = 0;
 let lastPick = null;
+let contactPointer = null;
 const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
 const toThree = value => new THREE.Vector3(value.x, value.y, value.z);
 function icon(node, definition) { node.replaceChildren(createElement(definition)); }
@@ -109,7 +110,7 @@ function rebuild() {
     floor.rotation.x = -Math.PI / 2; floor.position.y = model.snapshot().floorY - 0.003;
     floor.receiveShadow = true; scene.add(floor);
   }
-  grab = null; controls.enabled = true; lastTime = performance.now(); bindCount = 0;
+  grab = null; contactPointer = null; controls.enabled = true; lastTime = performance.now(); bindCount = 0;
   if (failurePaused !== null) paused = failurePaused;
   phase = 'interactive'; failure = null; failurePaused = null; errorNode.textContent = ''; pauseIcon();
   synchronize(); return true;
@@ -134,7 +135,7 @@ function synchronize() {
   } else { grip.visible = tether.visible = false; }
   const broken = model.bonds.filter(bond => !bond.alive).length;
   status.textContent = `${broken} broken · ${bindCount} bound`;
-  receipt.textContent = `${model.cells.length} blocks · ${grab ? `${grab.indices.length}-block grip` : 'surface contact'} · ${paused ? 'paused' : `live ${simulationRate.toFixed(2)}x`} · ${latestStepCost.toFixed(1)} ms/step`;
+  receipt.textContent = `${model.cells.length} blocks · ${grab ? `${grab.indices.length}-block grip` : contactPointer !== null ? `${lastPick.eligibility} contact` : 'surface contact'} · ${paused ? 'paused' : `live ${simulationRate.toFixed(2)}x`} · ${latestStepCost.toFixed(1)} ms/step`;
   scene.updateMatrixWorld(true); renderer.render(scene, camera);
 }
 function advance(count) {
@@ -159,9 +160,11 @@ renderer.domElement.addEventListener('pointerdown', action('Grab', event => {
     point: hit.point.toArray(), screen: { x: event.clientX, y: event.clientY } } : { hit: false, screen: { x: event.clientX, y: event.clientY } };
   if (!hit) return;
   const cell = model.cells[hit.object.userData.index];
-  if (cell.pinned || !model.isExposedFace(cell.index, hit.face.normal)) return;
+  lastPick.eligibility = cell.pinned ? 'anchored' : model.isExposedFace(cell.index, hit.face.normal) ? 'surface' : 'connected-interior';
   event.stopImmediatePropagation(); event.preventDefault(); controls.enabled = false;
   renderer.domElement.setPointerCapture(event.pointerId);
+  contactPointer = event.pointerId;
+  if (lastPick.eligibility !== 'surface') { synchronize(); return; }
   const local = model.worldToLocalPoint(cell.index, hit.point);
   const normal = new THREE.Vector3(); camera.getWorldDirection(normal);
   grab = { index: cell.index, local, target: hit.point.clone(), plane: new THREE.Plane().setFromNormalAndCoplanarPoint(normal, hit.point), pointerId: event.pointerId };
@@ -178,9 +181,12 @@ renderer.domElement.addEventListener('pointermove', action('Drag', event => {
   event.stopImmediatePropagation(); event.preventDefault(); synchronize();
 }), true);
 function release(event) {
-  if (!grab || event && event.pointerId !== grab.pointerId) return;
-  if (mode === 'bind') bindCount += model.bind(grab.index).length;
-  model.release(); grab = null; controls.enabled = true; synchronize();
+  if (contactPointer === null || event && event.pointerId !== contactPointer) return;
+  if (grab) {
+    if (mode === 'bind') bindCount += model.bind(grab.index).length;
+    model.release();
+  }
+  grab = null; contactPointer = null; controls.enabled = true; synchronize();
 }
 renderer.domElement.addEventListener('pointerup', action('Release', release), true);
 renderer.domElement.addEventListener('pointercancel', action('Release', release), true);
@@ -251,7 +257,7 @@ function frame(now) {
       const surfaces = targets();
       return { phase, failure, failures: [...failures], route: ARCH_COLLAPSE_ROUTE, effectiveUrl: location.href,
       profilePath, constructionSource: profile.constructionSource, source: source.source,
-      viewport: { width: innerWidth, height: innerHeight }, paused, mode, lastPick, clock: { kind: 'one-fixed-physics-step-per-render-frame', simulationRate, active: phase === 'interactive' && !paused && !document.hidden }, camera: { position: camera.position.toArray(), quaternion: camera.quaternion.toArray() },
+      viewport: { width: innerWidth, height: innerHeight }, paused, mode, lastPick, contactPointer, clock: { kind: 'one-fixed-physics-step-per-render-frame', simulationRate, active: phase === 'interactive' && !paused && !document.hidden }, camera: { position: camera.position.toArray(), quaternion: camera.quaternion.toArray() },
       state: model.snapshot(), rendererPoses: meshes.map(mesh => ({ index: mesh.userData.index, position: mesh.position.toArray(), quaternion: mesh.quaternion.toArray() })),
       pixels: pixels(), surfaceTargets: surfaces,
       pickTargets: surfaces.filter(item => item.layer === 2 && item.normal[2] === 1),
