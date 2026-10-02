@@ -5,14 +5,16 @@ import {buildTriangleVisibility} from './scene-light-visibility.mjs';
 import {createVolumeGather} from './scene-volume-gather.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16}) {
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,onStatus=()=>{}}) {
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
+  const editing=new Set();let editCommitted=false,rebuildAnnounced=false,retainComparisons=false;
   const attributeIds=new WeakMap();let nextAttributeId=0;
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
     source:'actual-material-emission-extinction',coordinates:'identity-world-and-volume-local',
-    limitations:['vertex-surface-receivers','prepared-smoke-zero-at-solid-cells','static-geometry-rebuild-on-edit','no-surface-bounce','independent-consumer-display']};
+    previewStale:false,geometryBuilds:0,lastGeometryBuildMs:null,
+    limitations:['vertex-surface-receivers','prepared-smoke-zero-at-solid-cells','static-geometry-rebuild-on-committed-edit','no-surface-bounce','independent-consumer-display']};
   function retire() {
     prototype.setSceneDistributedLightFrame(null);
     const uses=new Map();
@@ -50,6 +52,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     handle?.destroy();handle=null;
   }
   function build() {
+    const started=performance.now();
     retire();status.status='building-static-visibility';
     const geometry=collectStaticSceneGeometry(scene);
     const packed=buildTriangleVisibility(geometry.triangles).packGpu();
@@ -73,6 +76,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       originals.set(mesh,{material:mesh.material,geometry,clone,receiverAttribute:geometry.getAttribute('sceneReceiverIndex')});mesh.geometry=clone;
     });
     handle=createVolumeGather(device,{geometry:packed,receivers,volumeGrid,directions});
+    handle.setRetainComparisons(retainComparisons);
     external=new THREE.ExternalTexture(handle.surface);
     external.image={width:handle.surfaceDimensions[0],height:handle.surfaceDimensions[1]};
     external.format=THREE.RGBAFormat;external.type=THREE.FloatType;external.colorSpace=THREE.NoColorSpace;
@@ -104,6 +108,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     }
     revision=receiverRevision();
     status.staticTriangles=packed.triangleCount;status.surfaceReceivers=receivers.length;
+    status.geometryBuilds++;status.lastGeometryBuildMs=performance.now()-started;
   }
   function receiverRevision() {
     const solid=staticSceneGeometryRevision(scene);
@@ -120,10 +125,25 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   }
   function prepare(field) {
     if(disposed)throw new Error('distributed lighting disposed');
-    if(!handle||receiverRevision()!==revision)build();
+    const changed=!handle||receiverRevision()!==revision;
+    status.previewStale=changed;
+    if(changed&&editing.size) {
+      status.status='editing-stale-preview';
+    } else if(changed&&editCommitted&&!rebuildAnnounced) {
+      // Let the browser present status before the synchronous CPU preparation.
+      status.status='rebuild-pending';rebuildAnnounced=true;
+    } else if(changed) {
+      status.status='building-static-visibility';onStatus({...status});
+      try{build();}catch(error){status.status='rebuild-failed';status.error=String(error.message);onStatus({...status});throw error;}
+      status.previewStale=false;delete status.error;editCommitted=false;rebuildAnnounced=false;
+    } else {editCommitted=false;rebuildAnnounced=false;}
+    if(!handle){onStatus({...status});return;}
+    handle.setDirections(directions);
     frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness});
+    frame.previewStale=status.previewStale;
     prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:handle.smoke,...frame}:null);
-    status.status='submitted-awaiting-presentation';
+    if(!status.previewStale)status.status='submitted-awaiting-presentation';
+    onStatus({...status});
   }
   prototype.setSceneMediumSource(null);
   prototype.setSceneSourceFrameConsumer(prepare);
@@ -131,7 +151,9 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setGain(value){if(!Number.isFinite(value)||value<0)throw new Error('nonnegative light gain required');gain=value;},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke illumination mode');smokeMode=value;},
     setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
-    setDirections(value){lightingCount(value);directions=value;status.directions=value;revision=null;},
+    setDirections(value){lightingCount(value);directions=value;status.directions=value;},
+    setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
+    setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
     debugState(){return {...status,gain,smokeMode,sourceSoftness,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
     canRender(){return !disposed&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},

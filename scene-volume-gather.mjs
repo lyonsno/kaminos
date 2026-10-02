@@ -30,7 +30,7 @@ export function receiverDispatch(count,limit) {
 }
 
 export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,directions=24,smokeRefinement=4}) {
-  const dirs=lightingDirections(directions);
+  lightingDirections(directions); // Validate before allocating shared resources.
   const volumeDimensions=[volumeGrid,volumeGrid*2,volumeGrid];
   const volumeCount=volumeDimensions.reduce((a,b)=>a*b,1);
   const total=receivers.length+volumeCount;
@@ -43,17 +43,15 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
     receiverValues.set([-1+(x+.5)*2/volumeGrid,-1+(y+.5)*2/volumeGrid,-1+(z+.5)*2/volumeGrid,0,0,0,0,0],id*8);
   }
   const resources=[];
-  function buffer(label,data,usage=GPUBufferUsage.STORAGE) {
+  function buffer(label,data,usage=GPUBufferUsage.STORAGE,owner=resources) {
     const size=Math.max(16,data.byteLength);
     if(size>device.limits.maxStorageBufferBindingSize) throw new Error(`${label} needs ${size} bytes; device supports ${device.limits.maxStorageBufferBindingSize}`);
     const b=device.createBuffer({label,size,usage:usage|GPUBufferUsage.COPY_DST});
-    device.queue.writeBuffer(b,0,data);resources.push(b);return b;
+    device.queue.writeBuffer(b,0,data);owner.push(b);return b;
   }
   const nodes=buffer('static kiln BVH nodes',geometry.nodes);
   const triangles=buffer('static kiln BVH triangles',geometry.triangles);
   const receiverBuffer=buffer('surface and smoke receivers',receiverValues);
-  const directionBuffer=buffer('distributed incident directions',new Float32Array(dirs.flatMap(d=>[...d,0])));
-  const distances=buffer('cached first solid distance per receiver ray',new Float32Array(total*directions));
   const params=buffer('distributed transport parameters',new Float32Array(4),GPUBufferUsage.UNIFORM);
   const surfaceWidth=Math.min(1024,device.limits.maxTextureDimension2D);
   const surfaceHeight=Math.max(1,Math.ceil(receivers.length/surfaceWidth));
@@ -64,17 +62,39 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
   const preparedSmoke=createPreparedSmoke(device,{nodes,triangles,nodeCount:geometry.nodeCount,source:smoke,coarseDimensions:volumeDimensions,factor:smokeRefinement});
   const smokeReconstruction=preparedSmoke.metadata;
   const dispatchLimit=device.limits.maxComputeWorkgroupsPerDimension;
-  const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;const DIRECTION_COUNT:u32=${directions}u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
-  const module=device.createShaderModule({label:'distributed volume ray gather',code:constants+GATHER_WGSL});
-  const cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry'}});
-  const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}}))});
-  const gather=device.createComputePipeline({label:'integrate actual flame emission to receivers',layout:'auto',compute:{module,entryPoint:'gatherLight'}});
-  let sourceTexture=null,gatherGroup=null,cacheBuilt=false,softening=null,softeningDimensions=null;
+  // Geometry, material bindings, outputs and smoke reconstruction are shared.
+  // Only direction-specific pipelines/ray distances change with angular quality.
+  const angularStates=new Map();let retainComparisons=false,visibilityPreparations=0;
+  let softening=null,softeningDimensions=null;
+  function angularState() {
+    if(angularStates.has(directions))return angularStates.get(directions);
+    const owned=[];
+    try {
+      receiverDispatch(total*directions,dispatchLimit);
+      const directionBuffer=buffer('distributed incident directions',new Float32Array(lightingDirections(directions).flatMap(d=>[...d,0])),GPUBufferUsage.STORAGE,owned);
+      const distances=buffer('cached first solid distance per receiver ray',new Float32Array(total*directions),GPUBufferUsage.STORAGE,owned);
+      const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;const DIRECTION_COUNT:u32=${directions}u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
+      const module=device.createShaderModule({label:'distributed volume ray gather',code:constants+GATHER_WGSL});
+      const cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry'}});
+      const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}}))});
+      const gather=device.createComputePipeline({label:'integrate actual flame emission to receivers',layout:'auto',compute:{module,entryPoint:'gatherLight'}});
+      const state={owned,directionBuffer,distances,cache,cacheGroup,gather,sourceTexture:null,gatherGroup:null,cacheBuilt:false};
+      angularStates.set(directions,state);
+      if(!retainComparisons)pruneComparisons();
+      return state;
+    }catch(error){for(const b of owned)b.destroy();throw error;}
+  }
+  function pruneComparisons() {
+    for(const [count,state] of angularStates)if(count!==directions){for(const b of state.owned)b.destroy();angularStates.delete(count);}
+  }
   return {surface,surfaceBack,smoke,surfaceDimensions:[surfaceWidth,surfaceHeight],volumeDimensions,
+    setDirections(value){lightingDirections(value);directions=value;},
+    setRetainComparisons(value){retainComparisons=!!value;if(!retainComparisons)pruneComparisons();},
     encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0}={}) {
       if(field.status!=='encoded'||!field.texture) throw new Error('distributed gather needs current raw emission/extinction');
       if(field.localMax[1]!==3) throw new Error('first distributed gather requires tall identity volume');
       validateSourceSoftness(sourceSoftness);
+      const state=angularState();
       const encoder=device.createCommandEncoder({label:'same-state distributed flame lighting'});
       if(softening&&softeningDimensions!==field.dimensions.join(',')){softening.destroy();softening=null;}
       if(sourceSoftness>0&&!softening){
@@ -83,25 +103,26 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
       }
       const lightingTexture=softening?softening.encode(encoder,field.texture,sourceSoftness):field.texture;
       device.queue.writeBuffer(params,0,new Float32Array([gain,stepLength,smokeEnabled?total:receivers.length,0]));
-      if(sourceTexture!==lightingTexture) {
-        sourceTexture=lightingTexture;
-        gatherGroup=device.createBindGroup({layout:gather.getBindGroupLayout(0),entries:[
-          {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:directionBuffer}},
-          {binding:4,resource:{buffer:distances}},{binding:5,resource:sourceTexture.createView()},
+      if(state.sourceTexture!==lightingTexture) {
+        state.sourceTexture=lightingTexture;
+        state.gatherGroup=device.createBindGroup({layout:state.gather.getBindGroupLayout(0),entries:[
+          {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:state.directionBuffer}},
+          {binding:4,resource:{buffer:state.distances}},{binding:5,resource:lightingTexture.createView()},
           {binding:6,resource:surface.createView()},{binding:7,resource:smoke.createView()},
           {binding:8,resource:{buffer:params}},{binding:9,resource:surfaceBack.createView()}]});
       }
-      if(!cacheBuilt) {
+      if(!state.cacheBuilt) {
         const pass=encoder.beginComputePass({label:'static kiln visibility preparation'});
-        pass.setPipeline(cache);pass.setBindGroup(0,cacheGroup);pass.dispatchWorkgroups(...receiverDispatch(total*directions,dispatchLimit));pass.end();cacheBuilt=true;
+        pass.setPipeline(state.cache);pass.setBindGroup(0,state.cacheGroup);pass.dispatchWorkgroups(...receiverDispatch(total*directions,dispatchLimit));pass.end();state.cacheBuilt=true;visibilityPreparations++;
       }
       const pass=encoder.beginComputePass({label:'live distributed flame transport'});
-      pass.setPipeline(gather);pass.setBindGroup(0,gatherGroup);pass.dispatchWorkgroups(...receiverDispatch(smokeEnabled?total:receivers.length,dispatchLimit));pass.end();
+      pass.setPipeline(state.gather);pass.setBindGroup(0,state.gatherGroup);pass.dispatchWorkgroups(...receiverDispatch(smokeEnabled?total:receivers.length,dispatchLimit));pass.end();
       if(smokeEnabled)preparedSmoke.encode(encoder);
       device.queue.submit([encoder.finish()]);
-      return {generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,allocatedVolumeReceivers:volumeCount,directions,stepLength,gain,sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction};
+      return {generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,allocatedVolumeReceivers:volumeCount,directions,stepLength,gain,sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction,
+        angularCache:{retained:retainComparisons,counts:[...angularStates.keys()],visibilityPreparations,bytes:[...angularStates.keys()].reduce((sum,n)=>sum+n*(total*4+16),0)}};
     },
-    destroy(){softening?.destroy();preparedSmoke.destroy();for(const b of resources)b.destroy();surface.destroy();surfaceBack.destroy();smoke.destroy();},
+    destroy(){for(const state of angularStates.values())for(const b of state.owned)b.destroy();angularStates.clear();softening?.destroy();preparedSmoke.destroy();for(const b of resources)b.destroy();surface.destroy();surfaceBack.destroy();smoke.destroy();},
     async readback() {
       const staging=[];
       const encoder=device.createCommandEncoder({label:'distributed receiver evidence'});

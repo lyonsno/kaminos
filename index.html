@@ -2936,6 +2936,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </div>
 
 <div id="viewport">
+  <div id="lighting-edit-status" role="status" aria-live="polite" hidden style="position:absolute;bottom:48px;left:50%;transform:translateX(-50%);z-index:30;padding:8px 12px;background:#202020e8;color:#eee;border:1px solid #666;border-radius:6px;pointer-events:none;font-size:12px"></div>
   <div id="navigation-hint" aria-live="polite">Two-finger orbit · Shift pan · Cmd/Ctrl zoom · F frame selected · Home frame all</div>
   <div id="sam-image-viewport" hidden>
     <div class="sam-image-viewbar">
@@ -3240,7 +3241,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <label for="rendering-source-z">Z<input type="number" id="rendering-source-z" step="0.1" value="0.7"></label>
       </div>
       <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
-      <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>24</option><option>48</option><option>96</option></select>
+      <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
+        <label class="import-mode"><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
+        <button type="button" id="rendering-angular-swap" disabled>Swap previous direction count</button>
+        <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Lighting-only emission smoothing passes. Zero is unfiltered; more passes soften fine source detail without changing visible flame emission, extinction, or solid ray stops. Geometry-touching source cells stay unfiltered. Saved flame settings are unchanged.</p>
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
@@ -3303,6 +3307,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
+import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
@@ -3368,6 +3373,7 @@ function refreshRenderingControls() {
   if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
   if(distributed)source.setSmokeMode(document.getElementById('rendering-smoke-solver').value);
   if(distributed)source.setSourceSoftness(Number(document.getElementById('rendering-source-softness').value));
+  if(distributed)source.setRetainComparisons(document.getElementById('rendering-retain-comparisons').checked);
   if (source && !distributed) {
     renderingSourceIntensity ||= source.debugState().source.intensity.slice();
     renderingSourcePosition ||= source.debugState().source.position.slice();
@@ -10378,6 +10384,7 @@ async function initScene() {
   transformControls = new TransformControls(camera, renderer.domElement);
   transformControls.addEventListener('dragging-changed', e => {
     transformGizmoDragging = e.value;
+    window.__kaminosSceneRadiance?.setEditing?.('gizmo',e.value);
     controls.enabled = !e.value; // disable orbit while dragging gizmo
   });
   transformControls.setSize(0.75);
@@ -11356,10 +11363,18 @@ document.getElementById('rendering-shared-gain').addEventListener('input', event
   document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
   refreshRenderingControls();
 });
-document.getElementById('rendering-angular-samples').addEventListener('change',event=>{
-  window.__kaminosSceneRadiance?.setDirections?.(Number(event.target.value));
+let previousAngularCount=null,currentAngularCount=24;
+function selectAngularCount(value) {
+  if(value!==currentAngularCount){previousAngularCount=currentAngularCount;currentAngularCount=value;}
+  document.getElementById('rendering-angular-samples').value=String(value);
+  document.getElementById('rendering-angular-swap').disabled=previousAngularCount===null;
+  document.getElementById('rendering-angular-swap').textContent=previousAngularCount===null?'Swap previous direction count':`Swap to ${previousAngularCount} directions`;
+  window.__kaminosSceneRadiance?.setDirections?.(value);
   refreshRenderingControls();
-});
+}
+document.getElementById('rendering-angular-samples').addEventListener('change',event=>selectAngularCount(Number(event.target.value)));
+document.getElementById('rendering-angular-swap').addEventListener('click',()=>{if(previousAngularCount!==null)selectAngularCount(previousAngularCount);});
+document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-source-softness').addEventListener('input',event=>{
   document.getElementById('rendering-source-softness-value').textContent=event.target.value;
@@ -21996,8 +22011,19 @@ async function initKaminosVolumeRoute() {
     if(distributed)renderingMode='shared';
     import(distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
       window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device})
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,onStatus:state=>{
+          const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
+          if(badge.textContent!==message)badge.textContent=message;
+          badge.hidden=!message;
+          const cache=window.__kaminosSceneRadiance?.debugState().frame?.angularCache;
+          if(cache){
+            const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
+            const label=document.getElementById('rendering-angular-cache');
+            if(label.textContent!==text)label.textContent=text;
+          }
+        }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
+      if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
       window.__kaminosSceneRadianceSetup.status='mounted';
       refreshRenderingControls();
     }).catch(error=>{

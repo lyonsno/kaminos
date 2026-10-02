@@ -18,7 +18,7 @@ const blocked = integrateVolumeRay(source,bvh.trace([0,0,0],[0,0,1]).distance,.1
 assert.ok(blocked.every((v,i)=>Math.abs(v-[2,1,.5][i])<1e-12));
 const behindWall = integrateVolumeRay(t => t>1 ? [100,0,0,0] : [0,0,0,0],1,.1);
 assert.deepEqual(behindWall,[0,0,0]);
-for(const count of [24,48,96]) {
+for(const count of [12,16,24,48,96]) {
   const dirs = lightingDirections(count);
   assert.equal(dirs.length,count);
   for(const d of dirs) assert.ok(Math.abs(Math.hypot(...d)-1)<1e-12);

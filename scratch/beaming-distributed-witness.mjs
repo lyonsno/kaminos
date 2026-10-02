@@ -234,6 +234,43 @@ try {
     }
     assert.notEqual(softened[0],softened[1],'independent softness control must affect light');
   }
+  if(process.argv.includes('--edit-budget-check')) {
+    report.phase='edit-budget-consumer';await save();
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.check('#rendering-retain-comparisons');
+    const effective=()=>page.evaluate(()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),badge:document.getElementById('lighting-edit-status').textContent,objects:window.kaminosSceneObjectDebugState()}));
+    const settle=async()=>{const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().frameCount>=f+3,f,{timeout:0});};
+    const original=await effective();
+    const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
+    let first12;
+    for(const count of [12,16,24,12]) {
+      const started=performance.now();await page.selectOption('#rendering-angular-samples',String(count));await settle();
+      const state=await effective();
+      assert.equal(state.lighting.geometryBuilds,original.lighting.geometryBuilds,'direction switch rebuilt geometry');
+      assert.equal(state.lighting.frame.directions,count);
+      assert.equal(state.lighting.frame.angularCache.retained,true);
+      const signal=await page.evaluate(async()=>({source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from((await window.__kaminosSceneRadiance.readback()).surface.data)}));
+      const sourceHash=digest(signal.source.values),surfaceHash=digest(signal.surface);
+      if(count===12){if(first12){assert.equal(surfaceHash,first12.surfaceHash);assert.equal(sourceHash,first12.sourceHash);assert.equal(state.lighting.frame.angularCache.visibilityPreparations,first12.preparations+1);}else first12={sourceHash,surfaceHash,preparations:state.lighting.frame.angularCache.visibilityPreparations};}
+      const name=`budget-${report.views.length}-${count}`;
+      await fs.writeFile(`${out}/${name}-signal.json`,JSON.stringify(signal));await page.screenshot({path:`${out}/${name}.png`});
+      report.views.push({name,elapsedMs:performance.now()-started,sourceHash,surfaceHash,...state});await save();
+    }
+    // Real authoring range event path, held across multiple animation frames.
+    await page.evaluate(()=>document.getElementById('burner-outerRadius-slider').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:19})));
+    const radius=await page.$eval('#burner-outerRadius-slider',e=>Number(e.value));
+    for(const offset of [.01,.02,.03]) {
+      await page.$eval('#burner-outerRadius-slider',(e,value)=>{e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));},radius+offset);await settle();
+      const state=await effective();assert.equal(state.lighting.geometryBuilds,original.lighting.geometryBuilds);assert.equal(state.lighting.previewStale,true);assert.match(state.badge,/previous geometry/);
+      report.views.push({name:`editing-${offset}`,...state});await save();
+    }
+    await page.screenshot({path:`${out}/editing-preview.png`});
+    await page.evaluate(()=>window.dispatchEvent(new PointerEvent('pointerup',{pointerId:19})));
+    await settle();const final=await effective();
+    assert.equal(final.lighting.geometryBuilds,original.lighting.geometryBuilds+1);assert.equal(final.lighting.previewStale,false);assert.equal(final.badge,'');
+    assert.deepEqual(final.lighting.frame.angularCache.counts,[12]);assert.equal(final.volume.error,null);
+    report.views.push({name:'committed-edit',...final});await page.screenshot({path:`${out}/committed-edit.png`});await save();
+  }
   const faviconOnly=report.httpFailures.length>0&&report.httpFailures.every(r=>new URL(r.url).pathname==='/favicon.ico');
   const materialErrors=report.errors.filter(e=>!(faviconOnly&&e.includes('Failed to load resource: the server responded with a status of 404')));
   assert.deepEqual(materialErrors,[]);

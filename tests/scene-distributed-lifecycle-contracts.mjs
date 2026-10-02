@@ -27,6 +27,39 @@ function fixture(castShadow=true) {
   return {mesh,mount,geometry,material,uploads,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='interaction') {
+  const f=fixture();f.prepare();
+  f.mount.setEditing?.('gizmo',true);
+  for(const x of [.2,.4,.6]){f.mesh.position.x=x;f.prepare();}
+  assert.equal(f.uploads.length,1,'continuous geometry editing must not rebuild visibility');
+  assert.equal(f.mount.debugState().previewStale,true,'stale geometry must be explicit');
+  f.mount.setEditing('gizmo',false);
+  f.prepare();
+  assert.equal(f.uploads.length,1,'queue one presentation of rebuilding status before blocking preparation');
+  assert.equal(f.mount.debugState().status,'rebuild-pending');
+  f.prepare();
+  assert.equal(f.uploads.length,2,'committed edit builds once');
+  assert.equal(f.uploads.at(-1)[0],Math.fround(.6),'latest authored position is built');
+  assert.equal(f.mount.debugState().previewStale,false);
+  f.prepare();assert.equal(f.uploads.length,2);f.mount.dispose();
+}
+if(!selected||selected==='angular') {
+  const f=fixture();f.prepare();
+  f.mount.setRetainComparisons(true);
+  for(const count of [12,16,24,12]) {
+    f.mount.setDirections(count);f.prepare();
+    assert.equal(f.uploads.length,1,'angular changes reuse geometry and surface receivers');
+    assert.equal(f.mount.debugState().frame.directions,count);
+  }
+  assert.equal(f.mount.debugState().frame.angularCache.visibilityPreparations,3,'returning to a retained count reuses its exact visibility');
+  assert.deepEqual(f.mount.debugState().frame.angularCache.counts,[24,12,16]);
+  f.mount.setRetainComparisons(false);f.prepare();
+  assert.deepEqual(f.mount.debugState().frame.angularCache.counts,[12],'explicitly leaving comparison mode releases other states');
+  f.mesh.position.x=.5;f.prepare();
+  assert.equal(f.uploads.length,2,'geometry change invalidates all angular states');
+  assert.deepEqual(f.mount.debugState().frame.angularCache.counts,[12]);
+  f.mount.dispose();
+}
 if(!selected||selected==='softness') {
   const f=fixture();f.prepare();
   for(const value of [1,4,0,8,0]){
