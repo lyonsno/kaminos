@@ -71,9 +71,26 @@ export async function runSLatDecoderWitness(expectedSha, {meshOutput=false}={}) 
       metadataReadbackBytes: result.metadataReadbackBytes, featureBytesToCPUDuringServing: result.featureBytesToCPUDuringServing,
       coordinateBytesToCPUDuringServing: result.coordinateBytesToCPUDuringServing, arithmetic: result.arithmetic,
       storage: plan.storage, inputHandoff: 'offline exact-source codes/coordinates; actual GPU decoder borrowing, not live sampler composition' };
+    report.phase = 'observation-readback';report.outputs = {};
+    // Retain completed decoder evidence before any downstream mesh exception.
+    // Cache by the exact borrowed tensor, not by a filename or substitute input.
+    const retained=new Map(),readOnce=async t=>{
+      if(!retained.has(t))retained.set(t,await runtime.readTensor(t));return retained.get(t);
+    };
+    const observed = { features: result.features, coordinates: result.coordinates, halfRoundTrip,
+      ...Object.fromEntries(result.subdivisions.map((t, i) => ['subdivision' + i, t])) };
+    for (const [name, t] of Object.entries(observed)) {
+      const raw = await readOnce(t), data = name === 'coordinates' ? new Int32Array(raw) : new Float32Array(raw),
+        saved = await fetch('/output/' + name, { method: 'POST', headers: { 'X-Tensor-Dtype': t.dtype }, body: data });
+      if (!saved.ok) throw Error('raw learned decoder observation not saved ' + name);
+      const expected = tensors[name === 'halfRoundTrip' ? 'halfInputs' : 'expected.' + name],
+        comparison = compareSLatDecoderObservation(name, data, expected);
+      report.outputs[name] = { shape: t.shape, dtype: t.dtype, sha256: await hash(data), comparison };
+    }
+    report.numericalStatus = Object.values(report.outputs).every(r => r.comparison.passed) ? 'passed' : 'failed';
     if (meshOutput) {
       report.phase='learned-mesh-consumer';
-      const consumer=createTrellisMeshAdapter({runtime,decoded:result});
+      const consumer=createTrellisMeshAdapter({runtime:{device:runtime.device,readTensor:readOnce},decoded:result});
       try {
         const mesh=await consumer.run(),glb=encodeTrellisGeometryGLB(mesh,{provenance:{
           decoderRoute:report.effectiveRoute,input:report.reference.input,inputHandoff:report.composition.inputHandoff,
@@ -86,18 +103,6 @@ export async function runSLatDecoderWitness(expectedSha, {meshOutput=false}={}) 
           metadata:mesh.metadata,handoff:mesh.handoff,artifact,material:'neutral diagnostic; no texture/PBR proof'};
       } finally {consumer.dispose();}
     }
-    report.phase = 'observation-readback';report.outputs = {};
-    const observed = { features: result.features, coordinates: result.coordinates, halfRoundTrip,
-      ...Object.fromEntries(result.subdivisions.map((t, i) => ['subdivision' + i, t])) };
-    for (const [name, t] of Object.entries(observed)) {
-      const raw = await runtime.readTensor(t), data = name === 'coordinates' ? new Int32Array(raw) : new Float32Array(raw),
-        saved = await fetch('/output/' + name, { method: 'POST', headers: { 'X-Tensor-Dtype': t.dtype }, body: data });
-      if (!saved.ok) throw Error('raw learned decoder observation not saved ' + name);
-      const expected = tensors[name === 'halfRoundTrip' ? 'halfInputs' : 'expected.' + name],
-        comparison = compareSLatDecoderObservation(name, data, expected);
-      report.outputs[name] = { shape: t.shape, dtype: t.dtype, sha256: await hash(data), comparison };
-    }
-    report.numericalStatus = Object.values(report.outputs).every(r => r.comparison.passed) ? 'passed' : 'failed';
     const validation = await device.popErrorScope();scope = false;if (validation) errors.push(validation.message);
     report.profileStatus = 'failed';report.profile = runtime.finishProfile({ evidence: { mode: 'live', source: 'source-matched-learned-sparse-decoder' } });report.profileStatus = 'passed';
     if (errors.length) throw Error(errors.join('\n'));if (report.numericalStatus !== 'passed') throw Error('complete learned decoder numerical/sign/coordinate/half comparison failed');

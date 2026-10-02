@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import numpy as np
+from slat_reference_admission import admit_decoder_reference
 
 def digest(path):
     h = hashlib.sha256()
@@ -34,8 +35,8 @@ def main():
         report['producer']['scriptSha256'] = digest(__file__)
         report['phase'] = 'decoder-input-admission'
         ref = args.decoder_reference.resolve(); manifest_path = ref / 'manifest.json'
-        m = json.loads(manifest_path.read_text())
-        if m.get('schema') != 'trellis2.slat-decoder-reference.v0' or m.get('status') != 'succeeded' or m.get('config', {}).get('mode') != 'shape' or m.get('source', {}).get('commit') != args.expected_source:
+        m, plan = admit_decoder_reference(manifest_path, producer)
+        if plan['mode'] != 'shape' or m['source']['commit'] != args.expected_source:
             raise ValueError('complete matching actual-source learned shape decoder reference required')
         report['decoderReference'] = {'path': str(manifest_path), 'sha256': digest(manifest_path)}
         arrays = {}
@@ -64,7 +65,8 @@ def main():
         if faces.size and faces.max() > np.iinfo(np.uint32).max: raise ValueError('GLB uint32 index format exceeded')
         for name, value in [('vertices', np.asarray(vertices, dtype='<f4')), ('triangles', np.asarray(faces, dtype='<u4'))]:
             file = args.out / (name + ('.f32' if name == 'vertices' else '.u32')); value.tofile(file)
-            report['tensors'][name] = {'file': file.name, 'shape': list(value.shape), 'byteLength': value.nbytes, 'sha256': digest(file)}
+            report['tensors'][name] = {'file': file.name, 'shape': list(value.shape), 'byteLength': value.nbytes, 'sha256': digest(file),
+                'dtype': 'float32' if name == 'vertices' else 'uint32'}
         report['vertexCount'] = len(vertices); report['triangleCount'] = len(faces); report['surfaceEmpty'] = not len(faces)
         report['phase'] = 'post-source-admission'
         for name, folder in [('source', source), ('producer', producer)]:

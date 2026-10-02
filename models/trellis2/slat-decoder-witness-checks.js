@@ -1,6 +1,7 @@
 import { buildSLatDecoderPlan, slatDecoderWeightShapes } from './slat-decoder.js';
 import { compareDecoderTensor } from './sparse-decoder-witness-checks.js';
 import { compareOccupancyCoordinates } from './occupancy-coordinate-witness-checks.js';
+import { validateNativePrefixBackend } from './sparse-prefix-witness-checks.js';
 export const SLAT_DECODER_REFERENCE_ROUTE = 'pinned-MLX-GPU-source-SLat-decoder/native-FP16-torso-F32-endpoints';
 const sha = v => /^[a-f0-9]{64}$/.test(v ?? '');
 export function slatDecoderObservationShapes(manifest) {
@@ -70,5 +71,46 @@ export function compareSLatDecoderObservation(name, actual, expected) {
     // A count/sign/numerical mismatch is negative evidence, not permission to
     // stop retaining the other post-serving outputs of this same execution.
     return { passed: false, error: error.message, actualCount: actual?.length, expectedCount: expected?.length };
+  }
+}
+
+export const SLAT_PROJECTION_ROUTE='trellis2.slat-decoder.from-latent.webgpu.v0';
+export const SLAT_PROJECTION_REFERENCE_ROUTE='pinned-MLX-GPU-SLat-from_latent/F32-then-F16';
+export function validateSLatProjectionFixture(m,parent) {
+  const p=validateSLatDecoderFixture(parent),plan={rows:p.tokenRows,ci:p.latentChannels,co:p.channels[0]};
+  if(m?.schema!=='trellis2.slat-projection-reference.v0'||m.status!=='succeeded'||
+    m.referenceRoute!==SLAT_PROJECTION_REFERENCE_ROUTE||m.operationCalls!==1||m.fullDecoderCalls!==0||
+    !sha(m.parentReference?.sha256)||!/^[\w.-]+$/.test(m.parentReference?.file??''))throw Error('complete same-input projection reference required');
+  for(const name of ['source','producer'])if(!/^[a-f0-9]{40}$/.test(m[name]?.commit??'')||m[name].dirty!==''||
+    m[name+'After']?.commit!==m[name].commit||m[name+'After'].dirty!=='')throw Error('clean unchanged projection source/producer required');
+  const b=m.effectiveBackend;
+  if(m.source.commit!==parent.source.commit||b?.device!=='Device(gpu, 0)'||
+    b.operation!=='actual SLatDecoder.from_latent + astype(float16)'||b.arithmetic!=='F32-addmm-then-F16-cast'||
+    typeof b.mlxVersion!=='string'||!b.mlxVersion)throw Error('actual matching F32 source projection then F16 cast required');
+  for(const name of ['sample','weight.from_latent.weight','weight.from_latent.bias']){
+    const a=m.tensors?.[name],original=parent.tensors[name];
+    for(const key of ['shape','dtype','sourceDtype','byteLength','sha256'])if(JSON.stringify(a?.[key])!==JSON.stringify(original[key]))
+      throw Error('changed projection input '+name+'.'+key);
+    if(!/^[\w.-]+$/.test(a?.file??''))throw Error('safe projection input file required');
+  }
+  for(const name of ['f32','f16']){
+    const row=m.tensors?.['expected.'+name];
+    if(!row||JSON.stringify(row.shape)!==JSON.stringify([plan.rows,plan.co])||row.dtype!=='float32'||
+      row.sourceDtype!==(name==='f32'?'float32':'float16')||row.byteLength!==plan.rows*plan.co*4||
+      !sha(row.sha256)||!/^[\w.-]+$/.test(row.file??''))throw Error('complete projection output '+name+' required');
+  }
+  return plan;
+}
+export function validateSLatProjectionResult(result,plan) {
+  const c=result?.composition;
+  if(result?.requestedRoute!==SLAT_PROJECTION_ROUTE||result.effectiveRoute!==SLAT_PROJECTION_ROUTE||
+    result.numericalStatus!=='passed'||result.profileStatus!=='passed'||c?.rows!==plan.rows||c.ci!==plan.ci||
+    c.co!==plan.co||c.operationKernelRuns!==2||c.fullDecoderCalls!==0)throw Error('complete production projection execution required');
+  validateNativePrefixBackend(result.backend);
+  if(result.backend.isFallbackAdapter!==false)throw Error('explicit observed nonfallback adapter required');
+  for(const name of ['f32','f16']){
+    const row=result.outputs?.[name];
+    if(row?.dtype!=='f32'||JSON.stringify(row.shape)!==JSON.stringify([plan.rows,plan.co])||!sha(row.sha256)||
+      row.comparison?.passed!==true||row.comparison.count!==plan.rows*plan.co)throw Error('complete compared projection output '+name+' required');
   }
 }

@@ -5,6 +5,7 @@ import path from 'node:path';
 import {parseArgs} from 'node:util';
 import {createHash} from 'node:crypto';
 import {extractTrellisDualGridMesh,compareTrellisMeshes} from './trellis-mesh.js';
+import {validateSLatDecoderFixture} from './slat-decoder-witness-checks.js';
 const {values}=parseArgs({options:Object.fromEntries(['decoder-reference','mesh-reference','out'].map(n=>[n,{type:'string'}]))});
 for(const name of ['decoder-reference','mesh-reference','out']) if(!values[name]) throw Error('--'+name+' required');
 const out=path.resolve(values.out),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -15,11 +16,27 @@ try {
   const decoderRoot=await fs.realpath(values['decoder-reference']),meshRoot=await fs.realpath(values['mesh-reference']),
     decoderBytes=await fs.readFile(path.join(decoderRoot,'manifest.json')),meshBytes=await fs.readFile(path.join(meshRoot,'manifest.json')),
     d=JSON.parse(decoderBytes),m=JSON.parse(meshBytes);
+  const plan=validateSLatDecoderFixture(d);
   if(d.status!=='succeeded'||d.schema!=='trellis2.slat-decoder-reference.v0'||m.status!=='succeeded'||m.schema!=='trellis2.mesh-reference.v0'||
     m.effectiveRoute!=='pinned-MLX-source-CUDA-exp-sigmoid/NumPy-dual-grid-topology'||m.source?.commit!==d.source?.commit||
     m.source?.dirty!==''||m.sourceAfter?.dirty!==''||m.sourceAfter?.commit!==m.source.commit||m.decoderReference?.sha256!==hash(decoderBytes)||
-    m.resolution!==d.outputResolution||m.voxelMargin!==.5||m.modelCalls!==0||m.surfaceEmpty!==false)
+    plan.mode!=='shape'||m.device!=='Device(gpu, 0)'||m.resolution!==d.outputResolution||m.voxelMargin!==.5||m.modelCalls!==0||m.surfaceEmpty!==false)
     throw Error('complete actual-source matched-input mesh conversion required');
+  for(const name of ['source','producer'])if(!/^[a-f0-9]{40}$/.test(m[name]?.commit??'')||m[name].dirty!==''||
+    m[name+'After']?.commit!==m[name].commit||m[name+'After'].dirty!=='')throw Error('clean unchanged mesh source/producer required');
+  for(const [name,count,dtype] of [['vertices',m.vertexCount,'float32'],['triangles',m.triangleCount,'uint32']]){
+    const row=m.tensors?.[name];
+    // v0 observed exporter has implicit F32 vertices/U32 triangles. A present
+    // dtype may confirm that schema law but may never contradict it.
+    if(!Number.isSafeInteger(count)||count<1||!row||JSON.stringify(row.shape)!==JSON.stringify([count,3])||
+      row.byteLength!==count*12||!/^[a-f0-9]{64}$/.test(row.sha256??'')||!/^[\w.-]+$/.test(row.file??'')||
+      (row.dtype!==undefined&&row.dtype!==dtype))throw Error('complete matching mesh descriptor '+name+' required');
+  }
+  for(const [name,dtype] of [['features','<f4'],['coordinates','<i4']]){
+    const row=m.tensors?.['input.'+name],original=d.tensors['expected.'+name];
+    if(row?.sha256!==original.sha256||row.dtype!==dtype||JSON.stringify(row.shape)!==JSON.stringify(original.shape))
+      throw Error('identical learned geometry input semantics required');
+  }
   report.reference={decoderManifestSha256:hash(decoderBytes),meshManifestSha256:hash(meshBytes),source:m.source,producer:m.producer,resolution:m.resolution};
   const read=async(root,descriptor,type)=>{
     if(!descriptor?.file||path.basename(descriptor.file)!==descriptor.file)throw Error('safe complete tensor path required');

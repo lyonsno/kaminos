@@ -4,8 +4,23 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import importlib.util
 
 class TrellisMeshReference(unittest.TestCase):
+    def test_exporter_uses_existing_decoder_admission(self):
+        script = Path(__file__).parents[1] / 'export-trellis-mesh.py'
+        sys.path.insert(0, str(script.parent))
+        spec = importlib.util.spec_from_file_location('mesh_export_admission', script)
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        self.assertTrue(callable(getattr(module, 'admit_decoder_reference', None)),
+            'Source conversion must use the same complete decoder-reference admission as the browser, before GPU work.')
+        with tempfile.TemporaryDirectory() as folder:
+            manifest = Path(folder) / 'manifest.json'
+            manifest.write_text(json.dumps({'schema': 'trellis2.slat-decoder-reference.v0', 'status': 'succeeded',
+                'effectiveBackend': {'device': 'Device(cpu, 0)'},
+                'tensors': {'expected.features': {'dtype': 'int32'}}}))
+            with self.assertRaises(ValueError): module.admit_decoder_reference(manifest, script.parents[2])
+
     def test_mesh_capture_failure_is_durable_without_model_execution(self):
         decoder = Path(__file__).parents[1] / 'export-slat-decoder.py'
         self.assertTrue(decoder.is_file())
