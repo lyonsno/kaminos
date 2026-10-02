@@ -235,7 +235,10 @@ canvas { display: block; }
 .volume-layout-editing .volume-layout-group-body:not([hidden]) { min-height: 24px; }
 .slider-label { font-size: 10px; color: #666; min-width: 60px; user-select: none; -webkit-user-select: none; }
 .slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; user-select: none; -webkit-user-select: none; }
-.slider-help { display: block; margin: -2px 0 6px 68px; color: #4f6470; font-size: 9px; line-height: 1.25; user-select: none; -webkit-user-select: none; }
+.slider-help { display: none; position: fixed; z-index: 60; max-width: 300px; padding: 7px 9px; border: 1px solid #3a4a52; border-radius: 6px; background: rgba(16,21,23,0.97); color: #9fb1b8; font-size: 10px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,0.45); user-select: none; -webkit-user-select: none; }
+.slider-help[data-open="true"] { display: block; }
+.slider-info { display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; margin-left: 4px; border: 1px solid #3f4d53; border-radius: 50%; color: #6f8188; font: 8px/1 'SF Mono', monospace; cursor: help; flex: none; }
+.slider-info:hover, .slider-info:focus-visible { border-color: #7fa3ad; color: #d7e6ea; outline: none; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
 .slider-row input[type="range"] { min-height: 24px; cursor: grab; touch-action: pan-y; }
 .slider-row input[type="range"]:active { cursor: grabbing; }
@@ -1291,6 +1294,31 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   <!-- Volume Tab -->
   <div class="tab-content" id="tab-volume">
     <div id="volume-primary-control-root" data-volume-control-root="primary">
+    <div class="panel" id="volume-basin-panel" aria-label="Basin save and load">
+      <h2>Basins</h2>
+      <div class="volume-actions">
+        <input id="settings-preset-label" class="search-input" type="text" placeholder="Preset name" aria-label="Preset name">
+        <button class="btn" id="settings-preset-save">Save</button>
+      </div>
+      <div class="volume-actions">
+        <select id="settings-preset-select" class="select-input" aria-label="Saved volume preset">
+          <option value="">Loading presets...</option>
+        </select>
+      </div>
+      <div class="volume-actions">
+        <button class="btn" id="settings-preset-load-here">Load Here</button>
+        <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
+      </div>
+      <div class="volume-actions">
+        <select id="settings-preset-view" class="select-input" aria-label="Preset renderer view">
+          <option value="splat-only">Splat only</option>
+          <option value="raymarch-only" selected>Raymarch only</option>
+          <option value="smoke-hybrid">Smoke hybrid</option>
+          <option value="full-hybrid-diagnostic">Full hybrid diagnostic</option>
+        </select>
+        <button class="btn" id="settings-preset-inspect-fresh">Inspect Fresh</button>
+      </div>
+    </div>
     <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
       <div class="volume-cockpit-layout-toolbar-row">
         <select id="volume-cockpit-layout-select" data-volume-layout-control aria-label="Saved cockpit layout"></select>
@@ -1343,28 +1371,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button class="btn" id="volume-fit-camera">Frame</button>
         <button class="btn" id="volume-basin-warm-cap">Warm Cap</button>
         <button class="btn" id="volume-basin-bonfire-family">Bonfire</button>
-      </div>
-      <div class="volume-actions">
-        <input id="settings-preset-label" class="search-input" type="text" placeholder="Preset name" aria-label="Preset name">
-        <button class="btn" id="settings-preset-save">Save</button>
-      </div>
-      <div class="volume-actions">
-        <select id="settings-preset-select" class="select-input" aria-label="Saved volume preset">
-          <option value="">Loading presets...</option>
-        </select>
-      </div>
-      <div class="volume-actions">
-        <button class="btn" id="settings-preset-load-here">Load Here</button>
-        <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
-      </div>
-      <div class="volume-actions">
-        <select id="settings-preset-view" class="select-input" aria-label="Preset renderer view">
-          <option value="splat-only">Splat only</option>
-          <option value="raymarch-only" selected>Raymarch only</option>
-          <option value="smoke-hybrid">Smoke hybrid</option>
-          <option value="full-hybrid-diagnostic">Full hybrid diagnostic</option>
-        </select>
-        <button class="btn" id="settings-preset-inspect-fresh">Inspect Fresh</button>
       </div>
       <div class="volume-actions">
         <input id="basin-promotion-handle" class="search-input" type="text" placeholder="Handle" aria-label="Basin promotion handle">
@@ -28756,6 +28762,47 @@ sceneInitialization.then(() => {
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });
+</script>
+<script>
+// Help text lives behind a small info mark on each control row: the
+// `.slider-help` span stays where it was authored (the layout editor moves it
+// with its row and the contracts read it), hidden until the mark is hovered or
+// focused, then shown as a floating box under the row.
+(function installVolumeHelpMarks() {
+  let open = null;
+  const close = () => { if (open) { open.removeAttribute('data-open'); open.style.top = ''; open.style.left = ''; open = null; } };
+  const show = (help, row) => {
+    close();
+    const r = row.getBoundingClientRect();
+    help.setAttribute('data-open', 'true');
+    help.style.left = `${Math.max(8, Math.min(r.left + 8, window.innerWidth - 316))}px`;
+    help.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 16)}px`;
+    const h = help.getBoundingClientRect().height;
+    if (r.bottom + 4 + h > window.innerHeight) help.style.top = `${Math.max(8, r.top - h - 4)}px`;
+    open = help;
+  };
+  const install = help => {
+    if (help.dataset.helpMark === 'installed') return;
+    const row = help.previousElementSibling;
+    if (!row || !row.classList.contains('slider-row')) return;
+    const label = row.querySelector('.slider-label') || row.firstElementChild;
+    if (!label) return;
+    const mark = document.createElement('span');
+    mark.className = 'slider-info'; mark.textContent = 'i'; mark.tabIndex = 0; mark.setAttribute('role', 'img');
+    mark.setAttribute('aria-label', 'help'); mark.title = '';
+    mark.addEventListener('mouseenter', () => show(help, row));
+    mark.addEventListener('focus', () => show(help, row));
+    mark.addEventListener('mouseleave', close);
+    mark.addEventListener('blur', close);
+    label.appendChild(mark);
+    help.dataset.helpMark = 'installed';
+  };
+  const installAll = () => document.querySelectorAll('.slider-help').forEach(install);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installAll, { once: true }); else installAll();
+  new MutationObserver(installAll).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('scroll', close, true);
+  window.addEventListener('resize', close);
+})();
 </script>
 </body>
 </html>
