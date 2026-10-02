@@ -275,7 +275,7 @@ try {
     },report.angularProfile);
     let sourceHash,baselineSurface,builds;
     const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
-    for(const [name,count,pattern,rotation] of [['fixed24',24,'fixed',0],['rotated24',24,'fixed',.7],['restored24',24,'fixed',0],['spatial24',24,'spatial',0],['spatial16',16,'spatial',0],['spatial12',12,'spatial',0]]) {
+    for(const [name,count,pattern,rotation] of [['fixed24',24,'fixed',0],['rotated24',24,'fixed',.7],['restored24',24,'fixed',0],['fixed16',16,'fixed',0],['fixed12',12,'fixed',0],['spatial24',24,'spatial',0],['spatial16',16,'spatial',0],['spatial12',12,'spatial',0]]) {
       await page.selectOption('#rendering-angular-samples',String(count));
       await page.selectOption('#rendering-angular-pattern',pattern);
       await page.evaluate(({pattern,rotation})=>{window.__kaminosSceneRadiance.setAngularPattern(pattern,rotation);},{pattern,rotation});

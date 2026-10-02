@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {resolveSceneEmissiveCamera} from '../scene-emissive-camera.mjs';
+import * as camera from '../scene-emissive-camera.mjs';
+const {resolveSceneEmissiveCamera}=camera;
 const actual={effective:'emissive-transport-v2',exposureEV:-.2,highlightKnee:.68,whiteBalanceKelvin:7063};
 assert.equal(resolveSceneEmissiveCamera(false,actual).effective,false);
 assert.equal(resolveSceneEmissiveCamera(true).reason,'requires-effective-emissive-transport-v2');
@@ -8,3 +9,12 @@ for(const key of ['exposureEV','highlightKnee','whiteBalanceKelvin'])assert.equa
 for(const highlightKnee of [-1,1])assert.equal(resolveSceneEmissiveCamera(true,{...actual,highlightKnee}).effective,false);
 assert.deepEqual(resolveSceneEmissiveCamera(true,actual),{requested:true,effective:true,reason:null,transform:'fixed-bradford-white-channel-shoulder-srgb-v4',exposureEV:-.2,highlightKnee:.68,whiteBalanceKelvin:7063});
 console.log('scene camera effective-route and display-parameter contracts passed');
+const raw={},matched={},pipeline={outputNode:raw,outputColorTransform:true,needsUpdate:false};
+assert.equal(typeof camera.applySceneEmissiveCamera,'function','off must restore the native host pipeline, not a conditional shader arm');
+camera.applySceneEmissiveCamera(pipeline,raw,matched,false);
+assert.equal(pipeline.outputNode,raw);assert.equal(pipeline.outputColorTransform,true);assert.equal(pipeline.needsUpdate,false);
+camera.applySceneEmissiveCamera(pipeline,raw,matched,true);
+assert.equal(pipeline.outputNode,matched);assert.equal(pipeline.outputColorTransform,false);assert.equal(pipeline.needsUpdate,true);
+pipeline.needsUpdate=false;camera.applySceneEmissiveCamera(pipeline,raw,matched,true);assert.equal(pipeline.needsUpdate,false);
+camera.applySceneEmissiveCamera(pipeline,raw,matched,false);
+assert.equal(pipeline.outputNode,raw);assert.equal(pipeline.outputColorTransform,true);assert.equal(pipeline.needsUpdate,true);

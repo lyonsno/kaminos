@@ -11,9 +11,16 @@ export function resolveSceneEmissiveCamera(requested, physical) {
   return {...base,effective:true,reason:null,transform:'fixed-bradford-white-channel-shoulder-srgb-v4',exposureEV,highlightKnee,whiteBalanceKelvin};
 }
 
-export function createSceneEmissiveCamera(input,legacy,{TSL,THREE}) {
+export function applySceneEmissiveCamera(pipeline,raw,matched,effective) {
+  const output=effective?matched:raw,transform=!effective;
+  if(pipeline.outputNode!==output||pipeline.outputColorTransform!==transform) {
+    pipeline.outputNode=output;pipeline.outputColorTransform=transform;pipeline.needsUpdate=true;
+  }
+}
+
+export function createSceneEmissiveCamera(input,{TSL,THREE}) {
   const {uniform,vec3,vec4,float}=TSL;
-  const enabled=uniform(0),exposure=uniform(1),knee=uniform(.6);
+  const exposure=uniform(1),knee=uniform(.6);
   const rows=[0,1,2].map(i=>uniform(new THREE.Vector3(...[0,1,2].map(j=>Number(i===j)))));
   const alpha=input.a.clamp(0,1);
   const straight=input.rgb.div(alpha.max(1e-6));
@@ -22,11 +29,11 @@ export function createSceneEmissiveCamera(input,legacy,{TSL,THREE}) {
   const shoulder=vec3(1).sub(d.mul(d).div(exposed.add(float(1).sub(knee.mul(2))).max(d)));
   const linear=exposed.greaterThan(knee).select(shoulder,exposed);
   const srgb=linear.lessThanEqual(.0031308).select(linear.mul(12.92),linear.pow(1/2.4).mul(1.055).sub(.055));
-  const outputNode=enabled.greaterThan(.5).select(vec4(srgb.mul(alpha),alpha),legacy);
+  const outputNode=vec4(srgb.mul(alpha),alpha);
   let state=resolveSceneEmissiveCamera(false),lastWhite=null;
   return {outputNode,
     update(requested,physical) {
-      state=resolveSceneEmissiveCamera(requested,physical);enabled.value=Number(state.effective);
+      state=resolveSceneEmissiveCamera(requested,physical);
       if(state.effective) {
         exposure.value=2**state.exposureEV;knee.value=state.highlightKnee;
         if(lastWhite!==state.whiteBalanceKelvin) {

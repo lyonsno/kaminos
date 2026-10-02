@@ -3315,8 +3315,7 @@ import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
-import { createSceneEmissiveCamera } from './scene-emissive-camera.mjs';
-import { renderOutput } from 'three/tsl';
+import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
@@ -10467,11 +10466,9 @@ async function initScene() {
     renderPipeline.outputNode = baseSceneOutput;
   }
   let sceneEmissiveCamera=null;
+  const rawSceneOutput=renderPipeline.outputNode;
   if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
-    const rawOutput=renderPipeline.outputNode;
-    sceneEmissiveCamera=createSceneEmissiveCamera(rawOutput,renderOutput(rawOutput,null,null),{TSL:{uniform,vec3,vec4,float},THREE});
-    renderPipeline.outputNode=sceneEmissiveCamera.outputNode;
-    renderPipeline.outputColorTransform=false; // Both arms already produce display sRGB.
+    sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float},THREE});
   }
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
   let sceneCameraStatusText='';
@@ -10674,6 +10671,7 @@ async function initScene() {
     if(sceneEmissiveCamera) {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
       const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
+      applySceneEmissiveCamera(renderPipeline,rawSceneOutput,sceneEmissiveCamera.outputNode,state.effective);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
     }
