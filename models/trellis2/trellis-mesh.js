@@ -107,7 +107,9 @@ export function encodeTrellisGeometryGLB(mesh,{provenance={}}={}) {
     for(const base of [a,b,c])for(let axis=0;axis<3;axis++)normals[base+axis]+=cross[axis];
   }
   for(let i=0;i<normals.length;i+=3){const length=Math.hypot(normals[i],normals[i+1],normals[i+2]);
-    if(length)for(let axis=0;axis<3;axis++)normals[i+axis]/=length;}
+    if(length)for(let axis=0;axis<3;axis++)normals[i+axis]/=length;
+    else normals[i+2]=1; // Unit fallback only where topology supplies no normal; preserve all source vertices/indices.
+  }
   const views=[{buffer:0,byteOffset:0,byteLength:vertices.byteLength,target:34962},
     {buffer:0,byteOffset:vertices.byteLength,byteLength:triangles.byteLength,target:34963},
     {buffer:0,byteOffset:vertices.byteLength+triangles.byteLength,byteLength:normals.byteLength,target:34962}],
@@ -117,7 +119,8 @@ export function encodeTrellisGeometryGLB(mesh,{provenance={}}={}) {
       materials:[{name:'Geometry diagnostic — no learned material',pbrMetallicRoughness:{baseColorFactor:[.65,.65,.65,1],metallicFactor:0,roughnessFactor:1}}],
       buffers:[{byteLength:binLength}],bufferViews:views,accessors:[{bufferView:0,componentType:5126,count:n,type:'VEC3',min,max},
         {bufferView:1,componentType:5125,count:triangles.length,type:'SCALAR'},{bufferView:2,componentType:5126,count:n,type:'VEC3'}],
-      extras:{trellis:{stage:'learned-geometry-only',material:'diagnostic neutral; not texture-decoder/PBR evidence',provenance,geometry:mesh.metadata}}},
+      extras:{trellis:{stage:'learned-geometry-only',material:'diagnostic neutral; not texture-decoder/PBR evidence',
+        normals:'area-weighted unit; +Z only for zero accumulated area',provenance,geometry:mesh.metadata}}},
     json=new TextEncoder().encode(JSON.stringify(document)),jsonLength=Math.ceil(json.byteLength/4)*4,
     buffer=new ArrayBuffer(12+8+jsonLength+8+binLength),header=new DataView(buffer),bytes=new Uint8Array(buffer),binStart=28+jsonLength;
   header.setUint32(0,0x46546c67,true);header.setUint32(4,2,true);header.setUint32(8,buffer.byteLength,true);

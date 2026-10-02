@@ -49,4 +49,14 @@ assert.equal(gltf.meshes[0].primitives[0].mode,4);assert.equal(gltf.materials[0]
 assert.equal(gltf.extras.trellis.provenance.inputHandoff,'saved latent; native decoder; browser mesh');
 const binStart=20+jsonLength+8;assert.deepEqual(new Float32Array(bytes,binStart,12),mesh.vertices);
 assert.deepEqual(new Uint32Array(bytes,binStart+48,6),mesh.triangles);
+for (const surface of [
+  {...mesh, vertices: new Float32Array([...mesh.vertices, 0, 0, 0])},
+  {...mesh, triangles: new Uint32Array([0,0,0])},
+]) {
+  const glb = encodeTrellisGeometryGLB(surface), header = new DataView(glb), length = header.getUint32(12,true),
+    doc = JSON.parse(new TextDecoder().decode(new Uint8Array(glb,20,length))), accessor = doc.accessors[2],
+    normalView = doc.bufferViews[accessor.bufferView], normals = new Float32Array(glb,28+length+normalView.byteOffset,accessor.count*3);
+  for (let i=0;i<normals.length;i+=3) assert.ok(Math.abs(Math.hypot(...normals.subarray(i,i+3))-1)<2e-7,
+    'GLTF NORMAL vectors must remain finite and normalized for unused or degenerate vertices.');
+}
 console.log('Learned dual-grid channels yield source-ordered weighted quads, truthful no-surface/refusal, explicit GPU-to-mesh handoff and GLB2 geometry; local fixtures are not full checkpoint parity.');

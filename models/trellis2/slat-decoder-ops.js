@@ -131,7 +131,7 @@ export function slatDecoderScatterShader(rows, ci, co) {
   return `${binding(0, 'coordinates', 'i32')}${binding(1, 'parent')}${binding(2, 'convolved')}${binding(3, 'logits')}${binding(4, 'prefix', 'u32')}
 ${binding(5, 'new_coordinates', 'i32', true)}${binding(6, 'features', 'f32', true)}${binding(7, 'skip', 'f32', true)}
 ${entry}{${index}if(index>=${rows * 8 * co}u){return;}let col=index%${co}u;let cell=index/${co}u;let child=cell%8u;let row=cell/8u;
- if(logits[row*8u+child]<=0.0){return;}var earlier=0u;for(var j=0u;j<child;j++){if(logits[row*8u+j]>0.0){earlier++;}}
+ if(!(logits[row*8u+child]>0.0)){return;}var earlier=0u;for(var j=0u;j<child;j++){if(logits[row*8u+j]>0.0){earlier++;}}
  let destination=prefix[row]+earlier;
  if(col==0u){new_coordinates[destination*3u]=coordinates[row*3u]*2+i32(child%2u);
   new_coordinates[destination*3u+1u]=coordinates[row*3u+1u]*2+i32((child/2u)%2u);
