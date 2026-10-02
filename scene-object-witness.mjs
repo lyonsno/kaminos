@@ -1389,10 +1389,21 @@ async function runLocalLiquidSelectionContinuityScenario(ws) {
   assert.deepEqual(saved.doc.objects.map(row=>row.id),ids,'save must retain both source identities');
   lastEvidence.localLiquidSelection.saved=saved;
   phase='local-water-fresh-reopen';
+  const beforeReopenEpoch=await evaluate(ws,'performance.timeOrigin');
+  lastEvidence.localLiquidSelection.beforeReopenEpoch=beforeReopenEpoch;
+  await wsRequest(ws,'Page.navigate',{url:'about:blank'});
+  for(let attempt=0;attempt<80;attempt++) {
+    if(await evaluate(ws,'location.href').catch(()=>null)==='about:blank') break;
+    await delay(125);
+  }
+  assert.equal(await evaluate(ws,'location.href'),'about:blank','fresh reopen must leave the old document');
   await wsRequest(ws,'Page.navigate',{url:saved.url});
   await delay(settleMs);
   effectiveUrl=await evaluate(ws,'location.href');
   assert.equal(effectiveUrl,saved.url,'fresh reopen must use the exact saved document URL');
+  const reopenedEpoch=await evaluate(ws,'performance.timeOrigin');
+  lastEvidence.localLiquidSelection.reopenedEpoch=reopenedEpoch;
+  assert.ok(reopenedEpoch>beforeReopenEpoch,'fresh reopen must replace the document, not only change its hash');
   await evaluate(ws, `(async()=>{const started=Date.now();while(!window.kaminosLocalLiquidState?.()?.lastFrame?.frameId){if(Date.now()-started>30000)throw Error('fresh document water mount failed');await new Promise(r=>setTimeout(r,100));}return true})()`,{timeoutMs:40000});
   const reopened=await probe('fresh-reopen');
   assert.deepEqual(reopened.water.emitters.map(row=>row.id),ids);
