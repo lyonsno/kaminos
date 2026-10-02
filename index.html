@@ -8592,6 +8592,7 @@ function retainedMotionStatus(message) {
 async function loadMotionPanelRetainedClip(source, expectedSha256 = '') {
   const generation = ++retainedMotionLoadGeneration;
   retainedMotionClip = null;
+  window.__kaminosRetainedMotionClip = { status: 'loading', authority: 'retained-motion-playback' };
   document.getElementById('motion-panel-play-retained').disabled = true;
   retainedMotionStatus('Loading retained generated clip…');
   try {
@@ -8632,13 +8633,14 @@ function focusRetainedMotionRig(target = selectRetainedMotionRig()) {
   const restoreMeshes = focusRigMeshes(sceneObjectSkinnedMeshes(target.objectId), target.mesh);
   const helper = target.helperState?.helper;
   const helperVisible = helper?.visible;
-  const gizmoVisible = transformControls?.visible;
+  const gizmo = transformControls?.getHelper();
+  const gizmoVisible = gizmo?.visible;
   if (helper) helper.visible = false;
-  if (transformControls) transformControls.visible = false;
+  if (gizmo) gizmo.visible = false;
   restoreRetainedRigFocus = () => {
     restoreMeshes();
     if (helper) helper.visible = helperVisible;
-    if (transformControls) transformControls.visible = gizmoVisible;
+    if (gizmo) gizmo.visible = gizmoVisible;
   };
   target.mesh.computeBoundingBox();
   frameObject(target.mesh, camera, controls);

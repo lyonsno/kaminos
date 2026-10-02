@@ -346,29 +346,40 @@ async function runCatRetainedPlaybackScenario(ws) {
     const point = await evaluate(ws, `(() => { const e = document.getElementById(${JSON.stringify(id)}); e?.scrollIntoView({block:'center'}); const r = e?.getBoundingClientRect(); if (!e || e.disabled || !r?.width || !r?.height) throw new Error('control unavailable: ' + ${JSON.stringify(id)}); const point = {x:r.x+r.width/2,y:r.y+r.height/2}; if (!e.contains(document.elementFromPoint(point.x,point.y))) throw new Error('control occluded: ' + ${JSON.stringify(id)}); return point; })()`);
     await dispatchMouseClick(ws, point);
   };
+  // This imported pair faces down. Exercise the existing scene-object toolbar;
+  // leave source bytes, bind pose and correspondence unchanged.
+  const rotatePoint = await evaluate(ws, `(() => { const e = document.querySelector('[title="Rotate 90 around X"]'); const r = e?.getBoundingClientRect(); if (!r?.width || !r?.height) throw new Error('object orientation control unavailable'); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+  await dispatchMouseClick(ws, rotatePoint);
+  await dispatchMouseClick(ws, rotatePoint);
   await click('motion-panel-focus-rig');
   await delay(300);
   const rest = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
   const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-retained-before'));
-  await click('motion-panel-play-retained');
   const frames = [];
-  for (let index = 0; index < 8; index++) {
+  const evidence = lastEvidence.catRetainedPlayback = { clip, rest, beforeShot, frames, presentation: 'two existing Rot X toolbar clicks on the registered object; source asset unchanged', sourceRoute: 'real retained JSON URL; ordinary visible controls' };
+  await click('motion-panel-play-retained');
+  const startedAt = performance.now();
+  for (let index = 0; ; index++) {
     await delay(500);
     const state = await evaluate(ws, 'window.kaminosMotionRigPreviewDebugState()');
-    assert.equal(state.active, true, 'playback must be live during the captured sequence');
-    frames.push({ elapsedMs: index * 500 + 500, state, screenshot: await capturePngScreenshot(ws, siblingPngPath(`-retained-${index}`)) });
+    if (!state.active) {
+      evidence.completed = await evaluate(ws, 'window.__kaminosMotionRigPreview ?? null');
+      assert.equal(evidence.completed?.stopReason, 'clip-complete', 'inactive playback must be natural completion, not an early stop or failure');
+      break;
+    }
+    const frame = { elapsedMs: performance.now() - startedAt, state };
+    frames.push(frame);
+    frame.screenshot = await capturePngScreenshot(ws, siblingPngPath(`-retained-${index}`));
   }
   assert.ok(new Set(frames.map(frame => frame.state.frame)).size > 1, 'motion frames must advance');
+  await click('motion-panel-play-retained');
+  await delay(250);
   await click('motion-panel-stop-wriggle');
   const restored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  evidence.restored = restored;
   assert.deepEqual(restored.meshes.map(mesh => mesh.boneQuaternions), rest.meshes.map(mesh => mesh.boneQuaternions), 'Stop restores both imported casts');
-  const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-retained-restored'));
-  await click('motion-panel-play-retained');
-  await delay(clip.frameCount / clip.fps * 1000 + 300);
-  const completed = await evaluate(ws, 'window.kaminosMotionRigPreviewDebugState()');
-  assert.equal(completed.active, false, 'the complete clip reaches natural completion');
+  evidence.restoredShot = await capturePngScreenshot(ws, siblingPngPath('-retained-restored'));
   await click('motion-panel-show-pair');
-  lastEvidence.catRetainedPlayback = { clip, rest, beforeShot, frames, restored, restoredShot, completed, sourceRoute: 'real retained JSON URL; ordinary visible controls' };
 }
 
 async function runCatMotionRetargetScenario(ws) {
@@ -5393,7 +5404,15 @@ async function runAoRouteDeltaScenario(ws) {
 let chromeProcess = null;
 let ws = null;
 
+function assertIndependentHeadlessBrowser() {
+  if (headless && /\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome$/.test(chrome)) {
+    throw new Error('Headless smoke requires an independent browser; set KAMINOS_CHROME to Chrome for Testing or Playwright Chromium, not installed GUI Chrome');
+  }
+}
+
 try {
+  phase = 'checking-browser-isolation';
+  assertIndependentHeadlessBrowser();
   phase = 'checking-debug-port';
   if (await isCdpEndpointOpen()) {
     throw new Error(`CDP debug port already in use before launch: ${port}`);
@@ -5403,12 +5422,13 @@ try {
   chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
+    '--use-mock-keychain',
     ...(headless ? ['--headless=new'] : ['--no-first-run', '--no-default-browser-check', '--disable-extensions']),
     '--disable-gpu-sandbox',
     '--enable-unsafe-webgpu',
     '--enable-features=Vulkan,UseSkiaRenderer',
     '--window-size=1468,960',
-    url,
+    scenario === 'cat-retained-playback' ? 'about:blank' : url,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
   const chromeLaunchSignal = new Promise(resolveLaunch => {

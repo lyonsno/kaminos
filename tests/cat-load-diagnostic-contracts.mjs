@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const body = source.slice(source.indexOf('async function loadMotionPanelRetainedClip('), source.indexOf('function selectRetainedMotionRig('));
+const window = { __kaminosRetainedMotionClip: { sha256: 'old', frameCount: 180 } };
+let release;
+const pending = new Promise(resolve => { release = resolve; });
+const run = Function('window', 'document', 'loadRetainedMotionClip', `let retainedMotionLoadGeneration=0, retainedMotionClip; function retainedMotionStatus() {} ${body}; return loadMotionPanelRetainedClip;`)(window, { getElementById: () => ({ disabled: false }) }, () => pending);
+const result = run('/replacement', 'new');
+assert.equal(window.__kaminosRetainedMotionClip.status, 'loading', 'replacement loading cannot expose the previous successful clip');
+assert.equal(window.__kaminosRetainedMotionClip.sha256, undefined);
+release({ sha256: 'new', frameCount: 180, fps: 30, authority: 'retained-motion-playback' });
+await result;
+assert.equal(window.__kaminosRetainedMotionClip.sha256, 'new');
+console.log('cat load diagnostic contracts passed');

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const body = source.slice(source.indexOf('function focusRetainedMotionRig('), source.indexOf('function playRetainedMotionRig('));
+const gizmo = { visible: true }, skeleton = { visible: true };
+const target = { objectId: 'cat', mesh: { computeBoundingBox() {} }, helperState: { helper: skeleton } };
+const run = Function('transformControls', 'focusRigMeshes', 'sceneObjectSkinnedMeshes', 'frameObject', 'camera', 'controls', 'window', `let restoreRetainedRigFocus; function restoreRetainedMotionPairView() {} ${body}; focusRetainedMotionRig(arguments[7]); return restoreRetainedRigFocus;`);
+const restore = run({ getHelper: () => gizmo }, () => () => {}, () => [target.mesh], () => {}, {}, {}, {}, target);
+assert.equal(gizmo.visible, false, 'focus hides the rendered TransformControls helper');
+assert.equal(skeleton.visible, false);
+restore();
+assert.equal(gizmo.visible, true);
+assert.equal(skeleton.visible, true);
+console.log('cat focus helper contracts passed');
