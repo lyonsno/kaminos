@@ -113,3 +113,18 @@ test('parameter preview occupies the shared edit session until commit and repeat
   assert.equal(f.edits.state().undoCount,2);
   f.edits.undo();assert.equal(f.value.flow,1.1);
 });
+
+test('a relative label drag suppresses the label click that would open a second empty edit',async()=>{
+ const {installRelativeNumberDrag}=await import('../scene-control-history.mjs');
+ const f=fixture(),grip=new Control();grip.style={};grip.setPointerCapture=()=>{};grip.hasPointerCapture=()=>false;
+ f.control.value='1';globalThis.window=new Control();globalThis.document=new Control();
+ try {
+  installRelativeNumberDrag({grip,input:f.control,step:1});
+  grip.fire('pointerdown',{button:0,pointerId:1,clientX:10});
+  f.value.flow=2;grip.fire('pointermove',{clientX:11});grip.fire('pointerup');
+  const click=grip.fire('click');
+  if(!click.defaultPrevented)f.control.fire('focusin'); // browser label activation
+  assert.equal(f.edits.state().active,null);
+  assert.equal(f.edits.undo(),true);
+ }finally{delete globalThis.window;delete globalThis.document;}
+});

@@ -5967,6 +5967,7 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
 window.restoreAuthoredSceneFromPreview = restoreAuthoredSceneFromPreview;
 
 function sceneObjectReloadabilityLabel(record) {
+  if (record.id === RIM_LIGHT_ID) return 'scene recipe';
   if (isReloadableSceneObjectRecord(record)) return 'reloadable';
   if (!record.source) return 'unsourced';
   if (record.type === 'pbr') return 'procedural';
@@ -24119,6 +24120,7 @@ function setRimLight(recipe = null) {
 
 for (const key of rimFields) {
   const range = document.getElementById(`rim-${key}`), number = document.getElementById(`rim-${key}-number`);
+  number.dataset.authoringDragStep = number.step;
   number.step = 'any';
   range.addEventListener('input', () => { number.value = range.value; updateRimLight(); });
   number.addEventListener('input', () => {
@@ -24185,7 +24187,7 @@ function updateAuthoringPropertySelection() {
   if(light)light.hidden=activeSceneObjectId!==RIM_LIGHT_ID;
   if(flame)flame.hidden=activeSceneObjectId!==FLAME_EMITTER_ID;
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
-    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB/.test(button.getAttribute('onclick'))) button.hidden=activeSceneObjectId===RIM_LIGHT_ID;
+    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=activeSceneObjectId===RIM_LIGHT_ID;
   });
 }
 function createFlameQuickFields() {
@@ -24259,7 +24261,7 @@ function installAuthoringParameterEditing() {
       const row=input.closest('.slider-row,.burner-field');const grip=row?.querySelector('label');if(!grip)continue;
       const source=row.querySelector('input[type=range]');
       // Number edits preview through the same preexisting setter used on commit.
-      const step=source?.step && source.step!=='any'?Number(source.step):.01;
+      const step=Number(input.dataset.authoringDragStep) || (source?.step && source.step!=='any'?Number(source.step):.01);
       installRelativeNumberDrag({grip,input,step,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
     }
   }

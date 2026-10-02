@@ -47,7 +47,7 @@ test('rim input keeps incomplete keyboard text until commit and rejects invalid 
  assert.throws(()=>edits.apply('@rim-settings',{distance:-1}),/rim light range/i);
  assert.equal(edits.state().active,null);assert.equal(value.distance,6);
  const block=html.slice(html.indexOf("for (const key of rimFields) {",html.indexOf('function setRimLight')),html.indexOf("document.getElementById('rim-enabled').addEventListener"));
- const handlers={};const number={value:'',validity:{valid:false},valueAsNumber:NaN,addEventListener:(type,fn)=>handlers[type]=fn};
+ const handlers={};const number={dataset:{},value:'',validity:{valid:false},valueAsNumber:NaN,addEventListener:(type,fn)=>handlers[type]=fn};
  const range={value:'135',addEventListener(){}};
  // Evaluate the actual input binding independently of scene initialization.
  const begin=block.indexOf("for (const key of rimFields) {",block.indexOf('updateRimLight();'));

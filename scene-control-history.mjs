@@ -45,6 +45,8 @@ export function installSceneControlHistory({controls, edits, id, label='Edit con
 /** Drag a field label relatively; keep the number itself available for ordinary typing. */
 export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=()=>{}}) {
   let drag=null;
+  // Label activation after pointerup would focus the range and start a second edit.
+  grip.addEventListener('click',event=>event.preventDefault());
   grip.style.cursor='ew-resize';grip.style.touchAction='none';
   grip.title='Drag to adjust · Shift for fine · Esc to cancel';
   grip.addEventListener('pointerdown',event=>{
