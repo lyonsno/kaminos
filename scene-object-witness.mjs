@@ -343,7 +343,7 @@ async function runCatRetainedPlaybackScenario(ws) {
   assert.equal(clip?.authority, 'retained-motion-playback');
   assert.ok(clip.frameCount > 1);
   const click = async id => {
-    const point = await evaluate(ws, `(() => { const e = document.getElementById(${JSON.stringify(id)}); const r = e?.getBoundingClientRect(); if (!e || e.disabled || !r?.width || !r?.height) throw new Error('control unavailable: ' + ${JSON.stringify(id)}); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+    const point = await evaluate(ws, `(() => { const e = document.getElementById(${JSON.stringify(id)}); e?.scrollIntoView({block:'center'}); const r = e?.getBoundingClientRect(); if (!e || e.disabled || !r?.width || !r?.height) throw new Error('control unavailable: ' + ${JSON.stringify(id)}); const point = {x:r.x+r.width/2,y:r.y+r.height/2}; if (!e.contains(document.elementFromPoint(point.x,point.y))) throw new Error('control occluded: ' + ${JSON.stringify(id)}); return point; })()`);
     await dispatchMouseClick(ws, point);
   };
   await click('motion-panel-focus-rig');
