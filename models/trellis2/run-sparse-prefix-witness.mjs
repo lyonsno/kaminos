@@ -13,8 +13,9 @@ import { validateDecoderFixture, decoderObservationShapes } from './sparse-decod
 import { validateOccupancyCoordinateFixture } from './occupancy-coordinate-witness-checks.js';
 import { validateSLatDecoderFixture, slatDecoderObservationShapes } from './slat-decoder-witness-checks.js';
 
-const { values } = parseArgs({ options: Object.fromEntries(
-  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture'].map(name => [name, { type: 'string' }])) });
+const { values } = parseArgs({ options: { ...Object.fromEntries(
+  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture'].map(name => [name, { type: 'string' }])),
+  'mesh-output': { type: 'boolean', default: false } } });
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
   if (!values[name]) throw new Error(`--${name} is required`);
 }
@@ -85,6 +86,7 @@ try {
   if (!['prefix', 'block', 'flow', 'sampler', 'sampler-full', 'decoder', 'coordinates', 'slat', 'slat-decoder'].includes(witness)) throw new Error('--witness must be prefix, block, flow, sampler, sampler-full, decoder, coordinates, slat or slat-decoder');
   if (values['sampler-fixture'] && !isSampler) throw new Error('--sampler-fixture requires sampler witness');
   if (values['trajectory-fixture'] && witness !== 'sampler-full') throw new Error('--trajectory-fixture requires sampler-full witness');
+  if (values['mesh-output'] && witness !== 'slat-decoder') throw Error('--mesh-output requires the learned shape decoder');
   if (isSampler) {
     if (!values['sampler-fixture']) throw new Error('--sampler-fixture is required for sampler witness');
     samplerFixture=await fs.realpath(values['sampler-fixture']); report.samplerFixtureRoot=samplerFixture;
@@ -117,6 +119,7 @@ try {
     report.phase='learned-decoder-reference-admission';report.schema='trellis2.slat-decoder-browser.v0';
     slatDecoderManifest=JSON.parse(await fs.readFile(path.join(fixture,'manifest.json'),'utf8'));
     slatDecoderPlan=validateSLatDecoderFixture(slatDecoderManifest);
+    if (values['mesh-output'] && slatDecoderPlan.mode !== 'shape') throw Error('--mesh-output requires seven learned geometry channels');
   }
   if (witness === 'slat') {
     report.phase='SLat-reference-admission';report.schema='trellis2.slat-flow-browser.v0';
@@ -157,6 +160,15 @@ try {
           outputPath: path.join(path.dirname(output), 'browser-result.json'), write: fs.writeFile });
         await persist();
         res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(receipt)); return;
+      }
+      if (req.method === 'POST' && pathname === '/mesh-output') {
+        if (!values['mesh-output']) throw Error('mesh output was not requested');
+        const chunks=[];for await (const chunk of req) chunks.push(chunk);const bytes=Buffer.concat(chunks);
+        if (bytes.length < 28 || bytes.toString('ascii',0,4)!=='glTF' || bytes.readUInt32LE(4)!==2 || bytes.readUInt32LE(8)!==bytes.length)
+          throw Error('complete GLB2 mesh output required');
+        const target=path.join(path.dirname(output),'geometry.glb');await fs.writeFile(target,bytes);
+        report.meshArtifact={path:target,byteLength:bytes.length,sha256:digest(bytes),class:'learned-geometry-only/neutral-diagnostic-material'};
+        await persist();res.setHeader('Content-Type','application/json');res.end(JSON.stringify(report.meshArtifact));return;
       }
       if (req.method === 'POST' && /^\/output\/[\w.-]+$/.test(pathname)) {
         const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -218,7 +230,7 @@ try {
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
     const { ${isSampler ? 'runSparseSamplerWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
-    const result = await ${isSampler ? 'runSparseSamplerWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : ''});
+    const result = await ${isSampler ? 'runSparseSamplerWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? `, {meshOutput:${JSON.stringify(values['mesh-output'])}}` : ''});
     const saved = await fetch('/witness-result', { method: 'POST', body: JSON.stringify(result) });
     if (!saved.ok) throw new Error('browser result was not durably saved');
     return { url: location.href, receipt: await saved.json() };
@@ -233,6 +245,9 @@ try {
   const requiredOutputs = slatDecoderPlan ? Object.keys(slatDecoderObservationShapes(slatDecoderManifest)) : coordinatePlan ? ['coordinates'] : isSampler ? [...SAMPLER_OBSERVATIONS] : decoderPlan ? Object.keys(decoderObservationShapes(decoderPlan)) : ['projected', 'modulation'];
   const observedOutputs={...value.result.outputs};
   if (slatDecoderPlan) {
+    if(values['mesh-output'] && (value.result.mesh?.artifact?.sha256!==report.meshArtifact?.sha256 ||
+      !(value.result.mesh?.vertexCount>0) || !(value.result.mesh?.triangleCount>0) ||
+      !report.servedSources['models/trellis2/trellis-mesh.js'])) throw Error('complete native learned-mesh consumer evidence required');
     const c=value.result.composition;
     if(value.result.effectiveRoute!=='trellis2.slat-decoder.webgpu.v0'||value.result.numericalStatus!=='passed'||value.result.profileStatus!=='passed'||
       c?.outputRows!==slatDecoderManifest.outputRows||c.outputResolution!==slatDecoderPlan.outputResolution||

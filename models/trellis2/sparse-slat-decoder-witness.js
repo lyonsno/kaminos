@@ -3,8 +3,9 @@ import { createTrellisSLatDecoderAdapter, SLAT_DECODER_ROUTE } from './slat-deco
 import { validateSLatDecoderFixture, compareSLatDecoderObservation } from './slat-decoder-witness-checks.js';
 import { validateNativePrefixBackend, prefixAdapterName } from './sparse-prefix-witness-checks.js';
 import { preserveSamplerWitnessFailure, recordSamplerCompletion } from './sparse-sampler-witness-checks.js';
+import { createTrellisMeshAdapter, encodeTrellisGeometryGLB } from './trellis-mesh.js';
 const hash = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), v => v.toString(16).padStart(2, '0')).join('');
-export async function runSLatDecoderWitness(expectedSha) {
+export async function runSLatDecoderWitness(expectedSha, {meshOutput=false}={}) {
   const report = { status: 'failed', phase: 'fixture', requestedRoute: SLAT_DECODER_ROUTE }, errors = [], owned = [];
   let device, session, decoder, scope = false;
   try {
@@ -70,6 +71,21 @@ export async function runSLatDecoderWitness(expectedSha) {
       metadataReadbackBytes: result.metadataReadbackBytes, featureBytesToCPUDuringServing: result.featureBytesToCPUDuringServing,
       coordinateBytesToCPUDuringServing: result.coordinateBytesToCPUDuringServing, arithmetic: result.arithmetic,
       storage: plan.storage, inputHandoff: 'offline exact-source codes/coordinates; actual GPU decoder borrowing, not live sampler composition' };
+    if (meshOutput) {
+      report.phase='learned-mesh-consumer';
+      const consumer=createTrellisMeshAdapter({runtime,decoded:result});
+      try {
+        const mesh=await consumer.run(),glb=encodeTrellisGeometryGLB(mesh,{provenance:{
+          decoderRoute:report.effectiveRoute,input:report.reference.input,inputHandoff:report.composition.inputHandoff,
+          referenceManifestSha256:expectedSha,sessionId:session.snapshot().sessionId}}),
+          saved=await fetch('/mesh-output',{method:'POST',body:glb});
+        if(!saved.ok)throw Error('learned geometry GLB was not durably saved');
+        const artifact=await saved.json();if(artifact.sha256!==await hash(glb)||artifact.byteLength!==glb.byteLength)
+          throw Error('changed learned geometry GLB handoff');
+        report.mesh={vertexCount:mesh.vertices.length/3,triangleCount:mesh.triangles.length/3,quadCount:mesh.quadCount,
+          metadata:mesh.metadata,handoff:mesh.handoff,artifact,material:'neutral diagnostic; no texture/PBR proof'};
+      } finally {consumer.dispose();}
+    }
     report.phase = 'observation-readback';report.outputs = {};
     const observed = { features: result.features, coordinates: result.coordinates, halfRoundTrip,
       ...Object.fromEntries(result.subdivisions.map((t, i) => ['subdivision' + i, t])) };

@@ -8,7 +8,8 @@ try {
   await fs.writeFile(path.join(folder, 'manifest.json'), '{}');const report = path.join(folder, 'report.json');
   const run = spawnSync(process.execPath, [path.join(root, 'models/trellis2/run-sparse-prefix-witness.mjs'), '--repo-root', root,
     '--expected-commit', '0'.repeat(40), '--fixture', folder, '--witness', 'slat-decoder', '--chrome', path.join(folder, 'absent-browser'),
-    '--report', report, '--receiver', 'learned-decoder-test'], { encoding: 'utf8' });
+    '--report', report, '--receiver', 'learned-decoder-test', '--mesh-output'], { encoding: 'utf8' });
+  assert.doesNotMatch(run.stderr, /Unknown option/, 'The resident learned-decoder witness must exercise its actual mesh consumer.');
   assert.notEqual(run.status, 0);const result = JSON.parse(await fs.readFile(report, 'utf8'));
   assert.doesNotMatch(result.error?.message ?? '', /--witness must be/, 'The learned-decoder hardware witness needs an admitted class.');
   assert.equal(result.status, 'failed');assert.ok(result.phase && result.finishedAt);assert.ok(!result.ownedBrowserPid);
