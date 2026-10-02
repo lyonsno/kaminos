@@ -18,16 +18,16 @@ export function validatePackedDensityWitness(capture) {
   assert.equal(head(c+cell),slot,'noncontiguous cell start');let id=head(cell),local=0;
   while(id>=0){
    assert.ok(id<n&&!seen.has(id),'invalid or duplicate linked ID');seen.add(id);
-   assert.ok(b.source.readFloatLE(id*64+28)>=0,'inactive linked ID');
+   assert.ok(b.source.readFloatLE(id*64+44)>=0,'inactive linked ID');
    assert.ok(slot<n,'packed capacity overflow');const w=n+slot*4;
    assert.equal(record(w+3),id,'packed chain order/ID mismatch');
-   assert.ok(b.records.subarray(w*4,w*4+12).equals(b.source.subarray(id*64+32,id*64+44)),'packed xyz mismatch');
+   assert.ok(b.records.subarray(w*4,w*4+12).equals(b.source.subarray(id*64+16,id*64+28)),'packed xyz mismatch');
    id=record(id);slot++;local++;
   }
   assert.equal(id,-1,'invalid chain terminator');assert.equal(head(2*c+cell),local,'cell count');maxCellCount=Math.max(maxCellCount,local);
  }
  assert.equal(head(layout.totalOffset),slot,'total count');
- for(let id=0;id<n;id++)assert.equal(seen.has(id),b.source.readFloatLE(id*64+28)>=0,'active ID completeness');
+ for(let id=0;id<n;id++)assert.equal(seen.has(id),b.source.readFloatLE(id*64+44)>=0,'active ID completeness');
  let maxAbsoluteDifference=0;
  // xyz, velocity, lambda, density and correction all remain canonical-ID keyed.
  for(const id of seen)for(let word=0;word<16;word++){
