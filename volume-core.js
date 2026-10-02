@@ -6307,10 +6307,10 @@ fn ordinarySceneDepthEndT(in: VSOut) -> f32 {
 }
 
 fn outerInsideNear(p:vec3<f32>)->bool {
-  return all(p>=vec3<f32>(-1.0)) && all(p<=vec3<f32>(1.0,3.0,1.0));
+  return all(p>=vec3<f32>(-1.0)) && all(p<=vec3<f32>(1.0,2.0*f32(GRID_Y)/f32(GRID)-1.0,1.0));
 }
 fn outerSmokeBlend(p:vec3<f32>,width:f32)->f32 {
-  let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,3.0-p.y));
+  let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,2.0*f32(GRID_Y)/f32(GRID)-1.0-p.y));
   return 1.0-smoothstep(0.0,width,d);
 }
 fn sampleOuterSmoke(p:vec3<f32>)->vec4<f32>{
@@ -6335,7 +6335,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
-  let nearHit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));
+  let halfHeight = f32(GRID_Y)/f32(GRID);
+  let nearHit = boxHit(ro - vec3<f32>(0.0, halfHeight-1.0, 0.0), rd, vec3<f32>(1.0, halfHeight, 1.0));
   var hit = nearHit;
   if (OUTER_SMOKE) { hit = boxHit(ro-vec3<f32>(0.0,OUTER_EXTENT,0.0),rd,vec3<f32>(OUTER_EXTENT,2.0*OUTER_EXTENT,OUTER_EXTENT)); }
   if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
@@ -9310,8 +9311,7 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
-  const VERTICAL_DOMAIN_EXTENT_MULTIPLIER = VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
-  const gridHeightForSize = size => size * VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+  const gridHeightForSize = size => size * (controlsSnapshot.domainShape === 'cube' ? 1 : VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER);
   const gridShapeLabel = size => `${size}x${gridHeightForSize(size)}x${size}`;
   function gridCellCount(size) {
     return size * gridHeightForSize(size) * size;
@@ -10033,7 +10033,7 @@ export function createKaminosVolumePrototype({
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
     if (field) {
-      const packed = packSolidTextureRows(field.cells, gridSize);
+      const packed = packSolidTextureRows(field.cells, gridSize, gridHeight);
       device.queue.writeTexture({texture}, packed.data,
         {bytesPerRow: packed.bytesPerRow, rowsPerImage: packed.rowsPerImage},
         {width: gridSize, height: gridHeight, depthOrArrayLayers: gridSize});
@@ -11087,7 +11087,7 @@ export function createKaminosVolumePrototype({
         const outerTriangles=extraction.triangles.map(t=>t.map(p=>p.map(v=>v/outerConfig.extent)));
         outerField=voxelizeTriangleSolid(outerTriangles,outerConfig.grid);
       }
-      const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
+      const field = voxelizeTriangleSolid(extraction.triangles, gridSize, gridHeight);
       if (field.surfaceCellCount === 0 && !outerField?.surfaceCellCount) throw new Error('authored-solid-does-not-intersect-volume');
       const sourceBounds = analyticEmitterDispatch;
       let sourceBoundsSolidCells = 0;
@@ -11103,7 +11103,7 @@ export function createKaminosVolumePrototype({
       // Match the shader's signed-distance chemistry gate at cell centers;
       // open cells in the conservative dispatch box are not enough to fuel gas.
       const sourceSupport = countEmitterChemicalSupport(
-        analyticEmitterDescriptor, sourceBounds, field.cells, gridSize);
+        analyticEmitterDescriptor, sourceBounds, field.cells, gridSize, gridHeight);
       if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) {
         throw new Error('authored-solid-occludes-emitter-source-support');
       }
@@ -12431,9 +12431,9 @@ export function createKaminosVolumePrototype({
     }
     ensureNonRidgeOpticalCaptureBuffers();
     installSceneSolidTexture();
-    if(outerRequested){outerSmoke=createOuterSmoke(device,outerConfig,gridSize,fluidBuffers);}
+    if(outerRequested){outerSmoke=createOuterSmoke(device,{...outerConfig,nearHeightRatio:gridHeight/gridSize},gridSize,fluidBuffers);}
     else{outerSmokeFallback=device.createTexture({label:'outer smoke disabled',size:[1,1,1],dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING});}
-    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
+    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers, gridSize, gridHeight);
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)} ${index}`,
@@ -14888,7 +14888,7 @@ export function createKaminosVolumePrototype({
     const outerPressure = outerRequested ? resolvePressureSolverConfig(controlsSnapshot).effective : null;
     if(outerRequested && (productFrameOwner !== 'prototype' || uniforms[368] !== 2
       || outerPressure.solver !== PRESSURE_SOLVER_CONVERGED || outerPressure.dispatch === 'disabled'
-      || outerPressure.projection !== 'full' || gridHeight !== 2*gridSize
+      || outerPressure.projection !== 'full' || ![gridSize,2*gridSize].includes(gridHeight)
       || !resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic)) {
       throw new Error('outer smoke requires ordinary emissive raymarch, converged pressure and common-gas transport');
     }
@@ -24543,6 +24543,7 @@ export function createKaminosVolumePrototype({
     },
     setControls(next) {
       const previousGrid = gridSize;
+      const previousHeight = gridHeight;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       const controlRetirement = stripRetiredRaymarchControls({ ...controlsSnapshot, ...next });
@@ -24579,7 +24580,7 @@ export function createKaminosVolumePrototype({
         && requestedGrid === previousGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && requestedGrid !== previousGrid) {
+      if (device && (requestedGrid !== previousGrid || gridHeightForSize(requestedGrid) !== previousHeight)) {
         rebuildFluidState(requestedGrid);
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, 'canonical-source-control-change');

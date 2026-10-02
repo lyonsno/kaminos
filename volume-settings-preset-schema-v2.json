@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 216,
+  "controlCount": 217,
   "controls": [
     { "key": "volume-physical-material-law", "param": "volume_physical_material_law", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
     { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
@@ -248,6 +248,7 @@
       ],
       "additiveSinceControlCount": 216
     },
+    {"key":"volume-domain-shape","param":"volume_domain_shape","tagName":"SELECT","type":"select-one","additiveDefault":"tall","allowedValues":["cube","tall"],"additiveSinceControlCount":217},
     {
       "key": "volume-pyro-compare",
       "param": "volume_pyro_compare",

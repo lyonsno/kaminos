@@ -181,8 +181,8 @@ test('cockpit, schema and layout carry the time-step mode', () => {
   assert.equal(control.additiveDefault, 'legacy');
   assert.deepEqual(control.allowedValues, ['legacy', 'uniform']);
   assert.equal(control.additiveSinceControlCount, 216);
-  assert.equal(schema.controlCount, 216);
-  assert.equal(schema.controls.length, 216);
+  assert.ok(schema.controlCount >= control.additiveSinceControlCount);
+  assert.equal(schema.controls.length, schema.controlCount);
 });
 
 test('the arm capture records and checks the time-step mode', () => {

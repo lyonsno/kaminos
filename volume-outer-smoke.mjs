@@ -1,10 +1,11 @@
 // One-way coarse atmosphere. All positions are in the detailed domain's local
 // metric; velocities are local distance per reference transport tick, not cells.
-export function outerSmokeConfig({grid=32, extent=4, pressureIterations=24}={}) {
+export function outerSmokeConfig({grid=32, extent=4, pressureIterations=24, nearHeightRatio=2}={}) {
+  if (![1,2].includes(nearHeightRatio)) throw new Error('near height ratio must be 1 or 2');
   if (!Number.isInteger(grid) || grid<2) throw new Error('outer grid must be an integer >= 2');
   if (!Number.isFinite(extent) || extent<=1) throw new Error('outer extent must exceed the near domain');
   if (!Number.isInteger(pressureIterations) || pressureIterations<1) throw new Error('outer pressure iterations must be positive');
-  return {grid,extent,pressureIterations,shape:[grid,2*grid,grid],min:[-extent,-extent,-extent],
+  return {grid,extent,pressureIterations,nearHeightRatio,shape:[grid,2*grid,grid],min:[-extent,-extent,-extent],
     max:[extent,3*extent,extent],cellWidth:2*extent/grid};
 }
 export const outerCellCenter=(c,xyz)=>xyz.map((v,a)=>c.min[a]+(v+.5)*c.cellWidth);
@@ -14,7 +15,7 @@ export const nearVelocityToLocal=(v,grid)=>v.map(x=>x*2/grid);
 export function outerDonorBounds(c) {
   const inset=Math.max(.25,c.cellWidth);
   if(inset>=1)throw new Error('outer cells must resolve an interior donor region (cell width < 1)');
-  return {min:[-1+inset,-1+inset,-1+inset],max:[1-inset,3-inset,1-inset]};
+  return {min:[-1+inset,-1+inset,-1+inset],max:[1-inset,2*(c.nearHeightRatio??2)-1-inset,1-inset]};
 }
 export function validateOuterSmokeDevice(c,limits) {
   const donor=outerDonorBounds(c);
@@ -43,11 +44,11 @@ export function validateOuterSmokeDevice(c,limits) {
 export function nearCellRange(c,xyz,grid) {
   const lo=xyz.map((v,a)=>c.min[a]+v*c.cellWidth);
   const min=lo.map((v,a)=>Math.max(0,Math.floor((v+1)*grid/2)));
-  const max=lo.map((v,a)=>Math.min(a===1?2*grid:grid,Math.ceil((v+c.cellWidth+1)*grid/2)));
+  const max=lo.map((v,a)=>Math.min(a===1?(c.nearHeightRatio??2)*grid:grid,Math.ceil((v+c.cellWidth+1)*grid/2)));
   return min.some((v,a)=>v>=max[a])?null:{min,max};
 }
-export function outerBlend(p,width) {
-  const d=Math.min(1-Math.abs(p[0]),p[1]+1,3-p[1],1-Math.abs(p[2]));
+export function outerBlend(p,width,nearHeightRatio=2) {
+  const d=Math.min(1-Math.abs(p[0]),p[1]+1,2*nearHeightRatio-1-p[1],1-Math.abs(p[2]));
   const t=Math.max(0,Math.min(1,d/width));
   return 1-t*t*(3-2*t);
 }
@@ -60,6 +61,7 @@ const STORAGE=N+vec3<i32>(1);
 const H:f32=${c.cellWidth.toFixed(9)};
 const LO=vec3<f32>(${(-c.extent).toFixed(9)});
 const NEAR:i32=${nearGrid};
+const NEAR_HEIGHT:i32=${nearGrid*(c.nearHeightRatio??2)};
 struct Cell { velocity:vec4<f32>, material:vec4<f32> }
 struct Params { stepScale:f32, transportScale:f32, buoyancy:f32, cooling:f32 }
 @group(0) @binding(0) var<uniform> params:Params;
@@ -86,8 +88,8 @@ fn validFace(c:vec3<i32>,a:i32)->bool {
 fn blocked(c:vec3<i32>,a:i32)->bool{return solid(c)||solid(c-unit(a));}
 fn nearFace(c:vec3<i32>,a:i32)->bool{return nearPoint(facePoint(c,a));}
 fn nearIndex(c:vec3<i32>)->u32{
-  let q=clamp(c,vec3<i32>(0),vec3<i32>(NEAR-1,NEAR*2-1,NEAR-1));
-  return u32(q.x+NEAR*(q.y+NEAR*2*q.z))*4u;
+  let q=clamp(c,vec3<i32>(0),vec3<i32>(NEAR-1,NEAR_HEIGHT-1,NEAR-1));
+  return u32(q.x+NEAR*(q.y+NEAR_HEIGHT*q.z))*4u;
 }
 fn nearSample(p:vec3<f32>,slot:u32)->vec4<f32>{
   let q=(p+1.0)*f32(NEAR)*.5-.5;let base=vec3<i32>(floor(q));let f=fract(q);
@@ -105,7 +107,7 @@ fn prescribedFace(c:vec3<i32>,a:i32)->f32{
 fn nearMaterial(c:vec3<i32>)->vec4<f32>{
   let lo=point(c)-.5*H;let hi=lo+H;
   let first=max(vec3<i32>(0),vec3<i32>(floor((lo+1.0)*f32(NEAR)*.5)));
-  let last=min(vec3<i32>(NEAR,NEAR*2,NEAR),vec3<i32>(ceil((hi+1.0)*f32(NEAR)*.5)));
+  let last=min(vec3<i32>(NEAR,NEAR_HEIGHT,NEAR),vec3<i32>(ceil((hi+1.0)*f32(NEAR)*.5)));
   let h=2.0/f32(NEAR);var sum=vec4<f32>(0.0);var weight=0.0;
   for(var z=first.z;z<last.z;z++){for(var y=first.y;y<last.y;y++){for(var x=first.x;x<last.x;x++){
     let q=vec3<i32>(x,y,z);let cellLo=vec3<f32>(q)*h-1.0;

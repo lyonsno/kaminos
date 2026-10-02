@@ -2052,6 +2052,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row">
       <span class="slider-label">Grid</span>
+      <select id="volume-domain-shape" class="select-input" aria-label="Simulation domain shape (changing resets simulation)">
+        <option value="cube">Cube</option>
+        <option value="tall" selected>Tall</option>
+      </select>
       <select id="volume-resolution" class="select-input">
         <option value="32">32×64×32</option>
         <option value="48">48×96×48</option>
@@ -15469,6 +15473,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['occupancySkip', 'volume_occupancy_skip'],
   ['renderScale', 'volume_render_scale'],
   ['resolution', 'volume_resolution'],
+  ['domainShape', 'volume_domain_shape'],
   ['flowDebug', 'volume_flow_debug'],
   ['oracleActivityCue', 'volume_oracle_activity_cue'],
   ['oracleActivityDisplay', 'volume_oracle_activity_display'],
@@ -20680,6 +20685,7 @@ function readVolumeControls() {
     shellSoftClip: parseFloat(document.getElementById('volume-shell-soft-clip').value),
     shellSmoke: parseFloat(document.getElementById('volume-shell-smoke').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
+    domainShape: document.getElementById('volume-domain-shape').value,
     volumeResidualMode: document.getElementById('volume-residual-mode').value || 'off',
     volumeResidualModelUrl: document.getElementById('volume-residual-model-url').value || '',
     volumeResidualStrength: parseFloat(document.getElementById('volume-residual-strength').value),
@@ -20903,7 +20909,12 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-shell-exposure-val').textContent = c.shellExposure.toFixed(2);
   document.getElementById('volume-shell-soft-clip-val').textContent = c.shellSoftClip.toFixed(2);
   document.getElementById('volume-shell-smoke-val').textContent = c.shellSmoke.toFixed(2);
-  document.getElementById('volume-resolution-val').textContent = `${c.resolution}×${c.resolution * 2}×${c.resolution}`;
+  const domainHeightRatio = c.domainShape === 'cube' ? 1 : 2;
+  for (const option of document.getElementById('volume-resolution').options) {
+    const n = Number(option.value);
+    option.textContent = `${n}×${n * domainHeightRatio}×${n}`;
+  }
+  document.getElementById('volume-resolution-val').textContent = `${c.resolution}×${c.resolution * domainHeightRatio}×${c.resolution}`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);
   document.getElementById('volume-flow-debug-val').textContent = c.flowDebug.toFixed(2);
   document.getElementById('volume-oracle-activity-cue-val').textContent = c.oracleActivityCue >= 0.5 ? 'on' : 'off';
@@ -21452,6 +21463,9 @@ async function initKaminosVolumeRoute() {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
+  const routeDomainShape = params.get('volume_domain_shape') || 'tall';
+  if (!['cube','tall'].includes(routeDomainShape)) throw new Error(`unsupported volume domain shape: ${routeDomainShape}`);
+  document.getElementById('volume-domain-shape').value = routeDomainShape;
   if ([32, 48, 64, 96, 128, 136, 140, 160].includes(routeResolution)) {
     document.getElementById('volume-resolution').value = String(routeResolution);
   }
@@ -22285,6 +22299,7 @@ async function initKaminosVolumeRoute() {
     'volume-time-step',
     'volume-advection-scheme',
     'volume-common-gas-transport',
+    'volume-domain-shape',
   ]);
   const syncControls = event => {
     if (event?.target?.id === 'volume-render-scale' && event.isTrusted === true) adoptVolumeRenderScaleSliderValue();
@@ -22336,6 +22351,7 @@ async function initKaminosVolumeRoute() {
     'volume-confinement',
     'volume-time-step',
     'volume-common-gas-transport',
+    'volume-domain-shape',
   ]) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
