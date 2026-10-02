@@ -77,9 +77,10 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
         }
         publish({phase: 'burner-off-transfer'});
         await advance(360);
-        requireState(volume.setSimulationPaused(false).paused === false, 'Live simulation continuation failed');
+        const paused = state.paused;
+        requireState(volume.setSimulationPaused(paused).paused === paused, 'Live simulation continuation failed');
         requireState(volume.setSelectiveHeadLiveCapturePaused(false).paused === false, 'Live camera presentation failed');
-        publish({phase: 'live', running: true, paused: false});
+        publish({phase: 'live', running: true, paused});
       } catch (error) { fail(error); }
     },
     togglePause() {

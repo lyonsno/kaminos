@@ -70,6 +70,30 @@ assert.equal(good.state.simulationPaused, false);
 assert.equal(good.smoke.status().paused, false);
 assert.deepEqual(good.events, beforePause, 'pause/resume must not restore the burner or reposition timbers');
 await assert.rejects(good.smoke.run(), /reset/);
+const completing = fixture();
+await completing.smoke.initialize();
+const exactPause = completing.volume.pauseSelectiveHeadLiveAtSimStep;
+let finishCompletion;
+completing.volume.pauseSelectiveHeadLiveAtSimStep = async target => {
+  const receipt = await exactPause(target);
+  if (target === 603) await new Promise(resolve => { finishCompletion = resolve; });
+  return receipt;
+};
+const completingRun = completing.smoke.run();
+while (!finishCompletion) await new Promise(setImmediate);
+completing.smoke.togglePause();
+assert.equal(completing.state.simulationPaused, true);
+finishCompletion();
+await completingRun;
+assert.equal(completing.state.simulationPaused, true, 'operator pause must survive final GPU completion');
+assert.equal(completing.smoke.status().phase, 'live');
+assert.equal(completing.smoke.status().paused, true);
+assert.equal(completing.state.selectiveHeadLiveCapturePaused, false, 'GPU completion must release presentation even when explicitly paused');
+const completedEvents = structuredClone(completing.events);
+completing.smoke.togglePause();
+assert.equal(completing.state.simulationPaused, false, 'explicit resume must release the retained operator pause');
+assert.equal(completing.smoke.status().paused, false);
+assert.deepEqual(completing.events, completedEvents, 'late resume must not repeat shutdown or placement');
 for (const mutate of [
   state => {state.backend = 'unavailable';},
   state => {state.effectiveRoute = 'fallback';},
