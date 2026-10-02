@@ -23,6 +23,7 @@ export function bindSceneLightEditInteraction({document,window,getLighting}) {
 
 export function lightingEditStatus(state) {
   if(state.status==='rebuild-failed')return `Lighting rebuild failed: ${state.error}`;
+  if(state.status==='preparation-failed')return `Lighting preparation failed (${state.directions} directions): ${state.error}`;
   if(state.status==='rebuild-pending'||state.status==='building-static-visibility')return 'Rebuilding lighting — previous geometry preview';
   if(state.previewStale)return 'Editing — lighting preview uses previous geometry; rebuild on release';
   return '';

@@ -22,11 +22,26 @@ function fixture(castShadow=true) {
   const material=new THREE.MeshStandardMaterial();
   const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=castShadow;
   const scene=new THREE.Scene();scene.add(mesh);
-  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2});
+  const statuses=[];
+  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
-  return {mesh,mount,geometry,material,uploads,prepare(){consume(field);}};
+  return {mesh,mount,geometry,material,uploads,device,statuses,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='failure') {
+  const f=fixture();f.prepare();
+  const previous=f.mount.debugState().frame;
+  f.device.limits.maxStorageBufferBindingSize=4096;
+  f.mount.setDirections(96);
+  assert.throws(()=>f.prepare(),/cached first solid distance/);
+  const state=f.mount.debugState();
+  assert.equal(state.status,'preparation-failed','failed angular preparation must not retain successful status');
+  assert.equal(state.directions,96);assert.equal(state.frame.directions,24);
+  assert.equal(state.frame,previous,'last effective frame retained for diagnosis');
+  assert.match(state.error,/cached first solid distance/);
+  assert.equal(f.statuses.at(-1).status,'preparation-failed');
+  f.mount.dispose();
+}
 if(!selected||selected==='interaction') {
   const f=fixture();f.prepare();
   f.mount.setEditing?.('gizmo',true);

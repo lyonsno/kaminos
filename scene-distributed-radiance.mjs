@@ -138,8 +138,14 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       status.previewStale=false;delete status.error;editCommitted=false;rebuildAnnounced=false;
     } else {editCommitted=false;rebuildAnnounced=false;}
     if(!handle){onStatus({...status});return;}
-    handle.setDirections(directions);
-    frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness});
+    try {
+      handle.setDirections(directions);
+      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness});
+    } catch(error) {
+      status.status='preparation-failed';status.error=String(error.message);
+      onStatus({...status});throw error;
+    }
+    delete status.error;
     frame.previewStale=status.previewStale;
     prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:handle.smoke,...frame}:null);
     if(!status.previewStale)status.status='submitted-awaiting-presentation';
@@ -156,7 +162,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
     debugState(){return {...status,gain,smokeMode,sourceSoftness,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
-    canRender(){return !disposed&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
+    canRender(){return !disposed&&!status.error&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
     dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();},
   };
 }
