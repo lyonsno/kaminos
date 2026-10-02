@@ -982,6 +982,82 @@ async function runSaveLoadRoundtripScenario(ws) {
   `, { timeoutMs: 60000 });
 }
 
+function assertLocalLiquidPerformanceEvidence(evidence) {
+  const {before, paused, after, saved} = evidence;
+  for (const state of [before, after]) {
+    if (!state.mounted || state.backend !== 'WebGPUBackend' || state.failure
+        || state.effectiveRoute !== 'kaminos/finger-fluid/local-analytic-host-frame-v0'
+        || !state.lastFrame?.submittedByHost || !state.lastFrame?.presentedByHost) throw Error('Water performance witness lost its live host route');
+  }
+  if (!paused.paused || paused.stepBefore !== paused.stepAfter) throw Error('Pause still advances water');
+  if (after.setup.particleCount !== 12288 || after.setup.densityIterations !== 1
+      || after.solver.particleCount !== 12288 || after.solver.densityIterationsPerStep !== 1
+      || !(after.solver.stepCount > 0)) throw Error('Draft budget did not reach live solver work');
+  if (JSON.stringify(before.emitters) !== JSON.stringify(after.emitters)) throw Error('Restart changed authored emitters');
+  if (saved.localLiquid?.particleCount !== 12288 || saved.localLiquid?.densityIterations !== 1) throw Error('Saved budget differs from live budget');
+}
+
+async function runLocalLiquidPerformanceScenario(ws) {
+  phase = 'scenario-local-liquid-performance';
+  lastEvidence.performance = await evaluate(ws, `(async () => {
+    const wait = ms => new Promise(resolve=>setTimeout(resolve,ms));
+    const until = async (fn, label) => {
+      for (let i=0;i<240;i++) { if(fn())return; await wait(125); }
+      throw Error(label);
+    };
+    await until(()=>window.kaminosLocalLiquidState && window.kaminosSetLocalLiquidPerformance,'Water controls did not initialize');
+    if(new URLSearchParams(location.hash.slice(1)).get('scene')) {
+      await until(()=>document.getElementById('info-bar').textContent.startsWith('Scene loaded:'),'Saved scene did not load');
+    }
+    if(!window.kaminosLocalLiquidState().setup) document.getElementById('scene-add-water-emitter').click();
+    await until(()=>window.kaminosLocalLiquidState().lastFrame?.frameId,'Water host did not present');
+    const before=window.kaminosLocalLiquidState();
+    document.getElementById('local-liquid-pause').click();
+    const stepBefore=window.kaminosLocalLiquidState().solver.stepCount;
+    for(let i=0;i<8;i++){window._kaminosDirty?.();await wait(125);}
+    const stopped=window.kaminosLocalLiquidState();
+    const paused={paused:stopped.paused,stepBefore,stepAfter:stopped.solver.stepCount};
+    document.getElementById('local-liquid-pause').click();
+    document.querySelector('[data-water-budget="12288,1"]').click();
+    document.getElementById('local-liquid-apply').click();
+    await until(()=>{const s=window.kaminosLocalLiquidState();return s.solver?.particleCount===12288 && s.lastFrame?.frameId;},'Draft solver failed to mount');
+    await wait(1500);
+    const after=window.kaminosLocalLiquidState();
+    const listing=await (await fetch('/api/browse?root=scenes&path=')).json();
+    const previous=new Set((listing.entries||[]).map(e=>e.name));
+    if(!await window.saveSceneAs())throw Error('Saving performance scene failed');
+    const updated=await (await fetch('/api/browse?root=scenes&path=')).json();
+    const files=(updated.entries||[]).filter(e=>e.name.endsWith('.json')&&!previous.has(e.name));
+    if(files.length!==1)throw Error('Save did not identify one new document');
+    const saved=await (await fetch('/api/read?root=scenes&path='+encodeURIComponent(files[0].name))).json();
+    document.getElementById('local-liquid-performance').scrollIntoView({block:'center'});
+    return {before,paused,after,saved,savedFile:files[0].name,origin:location.origin};
+  })()`, {timeoutMs:60000});
+  assertLocalLiquidPerformanceEvidence(lastEvidence.performance);
+  await capturePngScreenshot(ws,siblingPngPath('-draft-controls'));
+  const e=lastEvidence.performance;
+  const reopenUrl=compositionRestoreUrl(e.saved.composition,e.savedFile,e.origin);
+  const epoch=await evaluate(ws,'performance.timeOrigin');
+  await wsRequest(ws,'Page.navigate',{url:'about:blank'});
+  await delay(500);
+  await wsRequest(ws,'Page.navigate',{url:reopenUrl});
+  for(let i=0;i<240;i++) {
+    await delay(125);
+    try {
+      const state=await evaluate(ws,`({epoch:performance.timeOrigin,state:window.kaminosLocalLiquidState?.(),info:document.getElementById('info-bar')?.textContent})`);
+      if(state.epoch>epoch && state.state?.lastFrame?.frameId && state.info?.startsWith('Scene loaded:')) {
+        lastEvidence.performance.reopened=state;
+        break;
+      }
+    }catch{}
+  }
+  const reopened=lastEvidence.performance.reopened?.state;
+  if(!reopened || reopened.solver?.particleCount!==12288 || reopened.solver?.densityIterationsPerStep!==1
+      || reopened.backend!=='WebGPUBackend' || reopened.effectiveRoute!==e.after.effectiveRoute
+      || JSON.stringify(reopened.emitters)!==JSON.stringify(e.after.emitters)) throw Error('Fresh reopen did not restore live Draft budget and emitter identity');
+  await evaluate(ws,`document.getElementById('local-liquid-performance').scrollIntoView({block:'center'})`);
+}
+
 async function runLocalLiquidLiveHostScenario(ws) {
   phase = 'scenario-local-liquid-live-host';
   const first = await evaluate(ws, `
@@ -5255,6 +5331,7 @@ try {
   }
 
   phase = 'launching-chrome';
+  if (headless && chrome.startsWith('/Applications/Google Chrome.app/')) throw Error('Headless witness requires an independent browser executable via KAMINOS_CHROME');
   chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
@@ -5302,6 +5379,11 @@ try {
   await wsRequest(ws, 'Runtime.enable');
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Page.bringToFront');
+  for (let attempt=0;attempt<240;attempt++) {
+    effectiveUrl = await evaluate(ws, 'location.href').catch(()=>null);
+    if (effectiveUrl && effectiveUrl !== 'about:blank') break;
+    await delay(125);
+  }
   await delay(settleMs);
   effectiveUrl = await evaluate(ws, 'location.href');
   const effectiveHref = normalizeUrlForWitness(effectiveUrl);
@@ -5340,6 +5422,8 @@ try {
     await runSelectedDeleteShortcutScenario(ws);
   } else if (scenario === 'save-load-roundtrip') {
     await runSaveLoadRoundtripScenario(ws);
+  } else if (scenario === 'local-liquid-performance') {
+    await runLocalLiquidPerformanceScenario(ws);
   } else if (scenario === 'local-liquid-live-host') {
     await runLocalLiquidLiveHostScenario(ws);
   } else if (scenario === 'transform-inspector') {

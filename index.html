@@ -78,6 +78,9 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 #scene-add-menu-popup[hidden] { display:none; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
+#local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
+#local-liquid-performance .slider-label { flex:0 0 105px; }
+#local-liquid-performance-status { color:#add4d6 !important; }
 .navigation-input { position:relative; display:flex; align-items:center; gap:7px; width:max-content; margin:10px 0 8px; padding:5px 7px; border:1px solid #282828; border-radius:5px; background:rgba(8,8,8,.76); color:#777; font:10px 'SF Mono',monospace; }
 .navigation-input select { border:0; background:transparent; color:#bbb; font:inherit; }
 #navigation-hint { position:absolute; bottom:10px; left:280px; max-width:calc(100% - 420px); z-index:10; color:#888; text-shadow:0 1px 3px #000; pointer-events:none; font:10px 'SF Mono',monospace; }
@@ -773,6 +776,25 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
     </div>
     <div id="burner-status" role="status"></div>
+
+    <section id="local-liquid-performance" hidden>
+      <h2>Water Simulation</h2>
+      <div class="panel">
+        <div class="scene-object-tools">
+          <button type="button" class="btn" data-water-budget="12288,1">Draft</button>
+          <button type="button" class="btn" data-water-budget="24576,2">Balanced</button>
+          <button type="button" class="btn" data-water-budget="49152,3">Full</button>
+        </div>
+        <div class="slider-row"><label class="slider-label" for="local-liquid-particles">Particle budget</label><input class="transform-input" id="local-liquid-particles" type="number" min="1024" step="1" value="49152"></div>
+        <div class="slider-row"><label class="slider-label" for="local-liquid-iterations">Density passes</label><input class="transform-input" id="local-liquid-iterations" type="number" min="1" step="1" value="3"></div>
+        <div class="scene-object-tools">
+          <button type="button" class="btn" id="local-liquid-apply">Apply &amp; Restart Water</button>
+          <button type="button" class="btn" id="local-liquid-pause" aria-pressed="false">Pause Water</button>
+        </div>
+        <p class="hint">Smaller budgets limit sustained water; fewer passes reduce compression accuracy. Applying restarts water and keeps emitter poses. Settings save with the scene.</p>
+        <div id="local-liquid-performance-status" class="hint" role="status" aria-live="polite"></div>
+      </div>
+    </section>
 
     <h2>Scene Objects</h2>
     <div class="panel">
@@ -3293,7 +3315,7 @@ import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
-import { defaultLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
+import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
@@ -3508,6 +3530,8 @@ import {
   resolveFingerFluidUnsupportedSheetStrength,
   resolveFingerFluidInletCutoffStep,
   resolveFingerFluidParticleCount,
+  measureFingerFluidParticleAllocationCapacity,
+  evaluateFingerFluidParticleAllocationRequest,
   resolveFingerFluidWaterfallOraclePreset,
 } from './finger-fluid-webgpu-core.js';
 
@@ -3963,6 +3987,7 @@ let sceneObjects = [];
 let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
+let localLiquidPaused = false;
 let localLiquidGeneration = 0;
 const sceneLoadRequests = createSceneLoadRequests();
 const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
@@ -3982,6 +4007,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   },
   onMounted: host => {
     if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
+    host.setPaused(localLiquidPaused);
   },
 });
 const sceneMembershipEditTargets = new Set();
@@ -6442,6 +6468,7 @@ function renderSceneImportStatus() {
 }
 
 function renderSceneObjectList() {
+  refreshLocalLiquidPerformance();
   const list = document.getElementById('scene-object-list');
   const empty = document.getElementById('scene-object-empty');
   if (!list || !empty) return;
@@ -6702,16 +6729,92 @@ async function mountLocalLiquidHost() {
   if (!localLiquidSetup) return false;
   if (localLiquidHost) return true;
   localLiquidFailure = null;
-  const mounted = await localLiquidHostMount.mount({
+  const mounting = localLiquidHostMount.mount({
     setup: structuredClone(localLiquidSetup),
     emitters: localLiquidEmitterRecords(),
   });
+  refreshLocalLiquidPerformance();
+  const mounted = await mounting;
+  refreshLocalLiquidPerformance();
   if (mounted) {
     setInfo('Local water mounted on the retained analytical basin. The solver restarts from its saved authored setup.');
     window._kaminosDirty?.();
   }
   return mounted;
 }
+
+async function applyLocalLiquidPerformance(values) {
+  if (!localLiquidSetup) throw Error('Add a Water Emitter first');
+  const edit = scenePlacementTools?.edits.state();
+  if (authoringBusy || sceneSaveBlockedByFailedRestore || edit?.active || edit?.replaying || localLiquidHostMount.isLoading()) {
+    throw Error('Finish the current scene action before restarting water');
+  }
+  const next = normalizeLocalLiquidSetup({...localLiquidSetup,
+    particleCount:values.particleCount, densityIterations:values.densityIterations});
+  const capacity = measureFingerFluidParticleAllocationCapacity(sharedGpu.device.limits);
+  const admission = evaluateFingerFluidParticleAllocationRequest(next.particleCount, capacity);
+  if (!admission.ok) throw Error(admission.reason);
+  const generation = ++localLiquidGeneration;
+  localLiquidHost?.dispose();
+  localLiquidHost = null;
+  localLiquidSetup = next;
+  localLiquidFailure = null;
+  refreshLocalLiquidPerformance();
+  const mounted = await mountLocalLiquidHost();
+  if (generation !== localLiquidGeneration) return false;
+  refreshLocalLiquidPerformance();
+  window._kaminosDirty?.();
+  if (!mounted) throw Error(localLiquidFailure || 'Water host could not restart; settings retained for retry');
+  setInfo(`Water restarted: ${next.particleCount.toLocaleString()} particles · ${next.densityIterations} density passes. Emitter poses retained.`);
+  return true;
+}
+
+function refreshLocalLiquidPerformance() {
+  const panel = document.getElementById('local-liquid-performance');
+  if (!panel) return;
+  panel.hidden = !localLiquidSetup;
+  if (!localLiquidSetup) { delete panel.dataset.setup; return; }
+  const signature = JSON.stringify(localLiquidSetup);
+  if (panel.dataset.setup !== signature) {
+    document.getElementById('local-liquid-particles').value = localLiquidSetup.particleCount;
+    document.getElementById('local-liquid-iterations').value = localLiquidSetup.densityIterations;
+    panel.dataset.setup = signature;
+  }
+  const loading = localLiquidHostMount.isLoading();
+  document.getElementById('local-liquid-apply').disabled = loading;
+  const pause = document.getElementById('local-liquid-pause');
+  pause.disabled = !localLiquidHost;
+  pause.textContent = localLiquidPaused ? 'Resume Water' : 'Pause Water';
+  pause.setAttribute('aria-pressed', String(localLiquidPaused));
+  const effective = localLiquidHost?.state().solver;
+  document.getElementById('local-liquid-performance-status').textContent = localLiquidFailure
+    ? `Water unavailable: ${localLiquidFailure}`
+    : loading ? 'Restarting water…'
+    : effective ? `${localLiquidPaused ? 'Paused' : 'Running'} · ${effective.particleCount.toLocaleString()} particles · ${effective.densityIterationsPerStep} density ${effective.densityIterationsPerStep === 1 ? 'pass' : 'passes'}`
+    : 'Water host not mounted';
+}
+
+window.kaminosSetLocalLiquidPerformance = applyLocalLiquidPerformance;
+window.kaminosPauseLocalLiquid = paused => {
+  localLiquidPaused = Boolean(paused);
+  localLiquidHost?.setPaused(localLiquidPaused);
+  refreshLocalLiquidPerformance();
+  window._kaminosDirty?.();
+  return localLiquidPaused;
+};
+document.querySelectorAll('[data-water-budget]').forEach(button => button.addEventListener('click', () => {
+  const [particles, passes] = button.dataset.waterBudget.split(',');
+  document.getElementById('local-liquid-particles').value = particles;
+  document.getElementById('local-liquid-iterations').value = passes;
+  document.getElementById('local-liquid-performance-status').textContent = 'Budget selected; Apply restarts the water.';
+}));
+document.getElementById('local-liquid-apply').addEventListener('click', () => {
+  applyLocalLiquidPerformance({particleCount:Number(document.getElementById('local-liquid-particles').value),
+    densityIterations:Number(document.getElementById('local-liquid-iterations').value)})
+    .catch(error => { refreshLocalLiquidPerformance(); setInfo(error.message);
+      document.getElementById('local-liquid-performance-status').textContent = error.message; });
+});
+document.getElementById('local-liquid-pause').addEventListener('click', () => window.kaminosPauseLocalLiquid(!localLiquidPaused));
 
 window.kaminosLocalLiquidState = () => {
   const hostState = localLiquidHost?.state() || null;
@@ -6721,6 +6824,7 @@ window.kaminosLocalLiquidState = () => {
   backend: renderer?.backend?.constructor?.name || null,
   mounted: Boolean(localLiquidHost),
   loading: localLiquidHostMount.isLoading(),
+  paused: localLiquidPaused,
   frameCount: hostState?.frameCount ?? 0,
   failure: localLiquidFailure,
   setup: localLiquidSetup ? structuredClone(localLiquidSetup) : null,
@@ -11069,6 +11173,7 @@ async function initScene() {
         localLiquidFailure = String(error?.message || error);
         localLiquidHost.dispose();
         localLiquidHost = null;
+        refreshLocalLiquidPerformance();
         renderPipeline.render();
         setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
       }
@@ -11319,6 +11424,7 @@ function clearScene({loadRequestId = null} = {}) {
   localLiquidHost = null;
   localLiquidSetup = null;
   localLiquidFailure = null;
+  localLiquidPaused = false;
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
     scene.remove(entry.object);
