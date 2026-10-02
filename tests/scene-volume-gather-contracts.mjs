@@ -24,4 +24,10 @@ for(const count of [12,16,24,48,96]) {
   for(const d of dirs) assert.ok(Math.abs(Math.hypot(...d)-1)<1e-12);
   for(let axis=0;axis<3;axis++) assert.ok(Math.abs(dirs.reduce((s,d)=>s+d[axis],0))<1e-12);
 }
+const rotated=lightingDirections(12,0.7);
+assert.notDeepEqual(rotated,lightingDirections(12),'angular assay must rotate the actual constellation');
+for(let i=0;i<12;i+=2) {
+  assert.ok(Math.abs(Math.hypot(...rotated[i])-1)<1e-12);
+  assert.ok(rotated[i].every((v,a)=>Math.abs(v+rotated[i+1][a])<1e-12));
+}
 console.log('distributed volume ray and static cache contracts passed');

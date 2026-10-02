@@ -234,6 +234,34 @@ try {
     }
     assert.notEqual(softened[0],softened[1],'independent softness control must affect light');
   }
+  if(process.argv.includes('--angular-pattern-check')) {
+    report.phase='held-angular-pattern';await save();
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.evaluate(()=>{
+      window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);
+      for(const [id,value] of [['rendering-shared-gain',2],['rendering-source-softness',5],['volume-density',.35],['volume-physical-smoke-extinction',.1]]) {
+        const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    });
+    let sourceHash,baselineSurface,builds;
+    const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
+    for(const [name,count,pattern,rotation] of [['fixed24',24,'fixed',0],['rotated24',24,'fixed',.7],['restored24',24,'fixed',0],['spatial24',24,'spatial',0],['spatial16',16,'spatial',0],['spatial12',12,'spatial',0]]) {
+      await page.evaluate(({count,pattern,rotation})=>{window.__kaminosSceneRadiance.setDirections(count);window.__kaminosSceneRadiance.setAngularPattern(pattern,rotation);},{count,pattern,rotation});
+      const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);
+      await page.waitForFunction(f=>{const v=window.__kaminosVolumePrototype.debugState();return v.error||v.frameCount>=f+3;},f,{timeout:0});
+      const signal=await page.evaluate(async()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from((await window.__kaminosSceneRadiance.readback()).surface.data)}));
+      await fs.writeFile(`${out}/angular-${name}-signal.json`,JSON.stringify(signal));
+      assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
+      assert.equal(signal.lighting.frame.directions,count);assert.equal(signal.lighting.frame.angularPattern,pattern);assert.equal(signal.lighting.frame.angularRotation,rotation);
+      const sh=digest(signal.source.values),rh=digest(signal.surface);
+      if(!sourceHash){sourceHash=sh;baselineSurface=rh;builds=signal.lighting.geometryBuilds;}
+      assert.equal(sh,sourceHash,'angular pattern must leave held raw source unchanged');assert.equal(signal.lighting.geometryBuilds,builds);
+      if(name==='restored24')assert.equal(rh,baselineSurface,'restoring constellation must restore exact light');
+      else if(name!=='fixed24')assert.notEqual(rh,baselineSurface,'pattern must reach actual receiver lighting');
+      await page.screenshot({path:`${out}/angular-${name}.png`});
+      report.views.push({name,sourceHash:sh,surfaceHash:rh,lighting:signal.lighting,volume:signal.volume});await save();
+    }
+  }
   if(process.argv.includes('--edit-budget-check')) {
     report.phase='edit-budget-consumer';await save();
     await page.selectOption('#rendering-light-mode','shared');

@@ -3244,6 +3244,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
         <label class="import-mode"><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
         <button type="button" id="rendering-angular-swap" disabled>Swap previous direction count</button>
+        <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation</option><option value="spatial">Stable spatial jitter (experimental)</option></select>
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Lighting-only emission smoothing passes. Zero is unfiltered; more passes soften fine source detail without changing visible flame emission, extinction, or solid ray stops. Geometry-touching source cells stay unfiltered. Saved flame settings are unchanged.</p>
@@ -3374,6 +3375,7 @@ function refreshRenderingControls() {
   if(distributed)source.setSmokeMode(document.getElementById('rendering-smoke-solver').value);
   if(distributed)source.setSourceSoftness(Number(document.getElementById('rendering-source-softness').value));
   if(distributed)source.setRetainComparisons(document.getElementById('rendering-retain-comparisons').checked);
+  if(distributed)source.setAngularPattern(document.getElementById('rendering-angular-pattern').value);
   if (source && !distributed) {
     renderingSourceIntensity ||= source.debugState().source.intensity.slice();
     renderingSourcePosition ||= source.debugState().source.position.slice();
@@ -11375,6 +11377,7 @@ function selectAngularCount(value) {
 document.getElementById('rendering-angular-samples').addEventListener('change',event=>selectAngularCount(Number(event.target.value)));
 document.getElementById('rendering-angular-swap').addEventListener('click',()=>{if(previousAngularCount!==null)selectAngularCount(previousAngularCount);});
 document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-angular-pattern').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-source-softness').addEventListener('input',event=>{
   document.getElementById('rendering-source-softness-value').textContent=event.target.value;

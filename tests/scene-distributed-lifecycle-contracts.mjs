@@ -75,6 +75,18 @@ if(!selected||selected==='angular') {
   assert.deepEqual(f.mount.debugState().frame.angularCache.counts,[12]);
   f.mount.dispose();
 }
+if(!selected||selected==='pattern') {
+  const f=fixture();f.prepare();
+  for(const [pattern,rotation] of [['fixed',.7],['spatial',0],['fixed',0]]) {
+    f.mount.setAngularPattern(pattern,rotation);f.prepare();
+    const state=f.mount.debugState();
+    assert.equal(state.geometryBuilds,1,'angular orientation reuses geometry');
+    assert.equal(state.frame.angularPattern,pattern);assert.equal(state.frame.angularRotation,rotation);
+    assert.deepEqual(state.frame.angularCache.counts,[24],'new pattern invalidates obsolete first hits');
+  }
+  assert.equal(f.mount.debugState().frame.angularCache.visibilityPreparations,4);
+  f.mount.dispose();
+}
 if(!selected||selected==='softness') {
   const f=fixture();f.prepare();
   for(const value of [1,4,0,8,0]){

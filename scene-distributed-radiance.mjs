@@ -9,6 +9,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
   const editing=new Set();let editCommitted=false,rebuildAnnounced=false,retainComparisons=false;
+  let angularPattern='fixed',angularRotation=0;
   const attributeIds=new WeakMap();let nextAttributeId=0;
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
@@ -75,7 +76,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const clone=geometry.clone();clone.setAttribute('sceneReceiverIndex',new THREE.BufferAttribute(ids,1));
       originals.set(mesh,{material:mesh.material,geometry,clone,receiverAttribute:geometry.getAttribute('sceneReceiverIndex')});mesh.geometry=clone;
     });
-    handle=createVolumeGather(device,{geometry:packed,receivers,volumeGrid,directions});
+    handle=createVolumeGather(device,{geometry:packed,receivers,volumeGrid,directions,angularPattern,angularRotation});
     handle.setRetainComparisons(retainComparisons);
     external=new THREE.ExternalTexture(handle.surface);
     external.image={width:handle.surfaceDimensions[0],height:handle.surfaceDimensions[1]};
@@ -140,6 +141,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     if(!handle){onStatus({...status});return;}
     try {
       handle.setDirections(directions);
+      handle.setAngularPattern(angularPattern,angularRotation);
       frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness});
     } catch(error) {
       status.status='preparation-failed';status.error=String(error.message);
@@ -158,6 +160,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke illumination mode');smokeMode=value;},
     setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
     setDirections(value){lightingCount(value);directions=value;status.directions=value;},
+    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
     debugState(){return {...status,gain,smokeMode,sourceSoftness,frame,display:'mesh and flame retain separate camera transforms'};},

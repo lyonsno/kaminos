@@ -3,12 +3,14 @@
 import {createPreparedSmoke,preparedSmokePlan} from './scene-prepared-smoke.mjs';
 import {createSourceSoftening,validateSourceSoftness} from './scene-source-softening.mjs';
 export {DISTRIBUTED_SMOKE_WGSL} from './scene-smoke-reconstruction.mjs';
-export function lightingDirections(count=24) {
+export function lightingDirections(count=24,rotation=0) {
   if(!Number.isInteger(count)||count<2||count%2) throw new Error('even angular sample count required');
+  if(!Number.isFinite(rotation))throw new Error('finite angular rotation required');
   const result=[];
   for(let i=0;i<count/2;i++) {
     const y=(i+.5)/(count/2), r=Math.sqrt(1-y*y), phi=i*Math.PI*(3-Math.sqrt(5));
-    const d=[Math.cos(phi)*r,y,Math.sin(phi)*r];result.push(d,d.map(v=>-v));
+    const x=Math.cos(phi)*r,z=Math.sin(phi)*r,c=Math.cos(rotation),s=Math.sin(rotation);
+    const d=[c*x-s*y,s*x+c*y,z];result.push(d,d.map(v=>-v));
   }
   return result;
 }
@@ -29,7 +31,7 @@ export function receiverDispatch(count,limit) {
   return [Math.min(groups,limit),Math.ceil(groups/limit)];
 }
 
-export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,directions=24,smokeRefinement=4}) {
+export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed'}) {
   lightingDirections(directions); // Validate before allocating shared resources.
   const volumeDimensions=[volumeGrid,volumeGrid*2,volumeGrid];
   const volumeCount=volumeDimensions.reduce((a,b)=>a*b,1);
@@ -71,10 +73,10 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
     const owned=[];
     try {
       receiverDispatch(total*directions,dispatchLimit);
-      const directionBuffer=buffer('distributed incident directions',new Float32Array(lightingDirections(directions).flatMap(d=>[...d,0])),GPUBufferUsage.STORAGE,owned);
+      const directionBuffer=buffer('distributed incident directions',new Float32Array(lightingDirections(directions,angularRotation).flatMap(d=>[...d,0])),GPUBufferUsage.STORAGE,owned);
       const distances=buffer('cached first solid distance per receiver ray',new Float32Array(total*directions),GPUBufferUsage.STORAGE,owned);
       const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;const DIRECTION_COUNT:u32=${directions}u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
-      const module=device.createShaderModule({label:'distributed volume ray gather',code:constants+GATHER_WGSL});
+      const module=device.createShaderModule({label:'distributed volume ray gather',code:`const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};`+constants+GATHER_WGSL});
       const cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry'}});
       const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}}))});
       const gather=device.createComputePipeline({label:'integrate actual flame emission to receivers',layout:'auto',compute:{module,entryPoint:'gatherLight'}});
@@ -89,6 +91,12 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
   }
   return {surface,surfaceBack,smoke,surfaceDimensions:[surfaceWidth,surfaceHeight],volumeDimensions,
     setDirections(value){lightingDirections(value);directions=value;},
+    setAngularPattern(pattern,rotation=0){
+      if(!['fixed','spatial'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');
+      if(pattern===angularPattern&&rotation===angularRotation)return;
+      for(const state of angularStates.values())for(const b of state.owned)b.destroy();angularStates.clear();
+      angularPattern=pattern;angularRotation=rotation;
+    },
     setRetainComparisons(value){retainComparisons=!!value;if(!retainComparisons)pruneComparisons();},
     encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0}={}) {
       if(field.status!=='encoded'||!field.texture) throw new Error('distributed gather needs current raw emission/extinction');
@@ -120,6 +128,7 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
       if(smokeEnabled)preparedSmoke.encode(encoder);
       device.queue.submit([encoder.finish()]);
       return {generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,allocatedVolumeReceivers:volumeCount,directions,stepLength,gain,sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction,
+        angularPattern,angularRotation,
         angularCache:{retained:retainComparisons,counts:[...angularStates.keys()],visibilityPreparations,bytes:[...angularStates.keys()].reduce((sum,n)=>sum+n*(total*4+16),0)}};
     },
     destroy(){for(const state of angularStates.values())for(const b of state.owned)b.destroy();angularStates.clear();softening?.destroy();preparedSmoke.destroy();for(const b of resources)b.destroy();surface.destroy();surfaceBack.destroy();smoke.destroy();},
@@ -158,6 +167,26 @@ struct Receiver {position:vec4<f32>,normal:vec4<f32>}
 @group(0) @binding(7) var smokeOut:texture_storage_3d<rgba32float,write>;
 @group(0) @binding(8) var<uniform> settings:vec4<f32>;
 @group(0) @binding(9) var surfaceBackOut:texture_storage_2d<rgba32float,write>;
+fn receiverRotation(p:vec3<f32>)->vec4<f32> {
+  // Same position, same rotation even at duplicated mesh vertices. No frame or
+  // receiver-index seed: cache and live rays retain exactly the same geometry.
+  if(!SPATIAL_PATTERN){return vec4<f32>(0.0,0.0,0.0,1.0);}
+  var h=bitcast<vec3<u32>>(p);
+  h=(h^(h>>vec3<u32>(16u)))*vec3<u32>(2246822519u);
+  var seed=h.x^(h.y*3266489917u)^(h.z*668265263u);
+  seed=(seed^(seed>>16u))*2246822519u;
+  let a=f32(seed&0x00ffffffu)/16777216.0;
+  seed=(seed^(seed>>13u))*3266489917u;
+  let b=f32(seed&0x00ffffffu)/16777216.0;
+  seed=(seed^(seed>>16u))*668265263u;
+  let c=f32(seed&0x00ffffffu)/16777216.0;
+  // Uniform quaternion rotation of the complete antipodal constellation.
+  return vec4<f32>(sqrt(1.0-a)*sin(6.28318530718*b),sqrt(1.0-a)*cos(6.28318530718*b),sqrt(a)*sin(6.28318530718*c),sqrt(a)*cos(6.28318530718*c));
+}
+fn angularDirection(q:vec4<f32>,a:u32)->vec3<f32> {
+  let d=directions[a].xyz;
+  return d+2.0*cross(q.xyz,cross(q.xyz,d)+q.w*d);
+}
 fn receiverOrigin(r:Receiver,d:vec3<f32>)->vec3<f32> {
   // Opaque sides have different ray origins. Cache and live integration must
   // use the same one, including when a source normal is inverted.
@@ -177,7 +206,7 @@ fn interval(p:vec3<f32>,d:vec3<f32>,lo:vec3<f32>,hi:vec3<f32>,limit:f32)->vec2<f
 fn cacheGeometry(@builtin(global_invocation_id) global:vec3<u32>) {
   let id=vec3<u32>(global.x+global.y*DISPATCH_WIDTH,0u,0u);
   if(id.x>=RECEIVER_COUNT*DIRECTION_COUNT){return;}
-  let r=receivers[id.x/DIRECTION_COUNT];let d=directions[id.x%DIRECTION_COUNT].xyz;
+  let r=receivers[id.x/DIRECTION_COUNT];let d=angularDirection(receiverRotation(r.position.xyz),id.x%DIRECTION_COUNT);
   let p=receiverOrigin(r,d);
   var closest=1e20;var n=0u;
   loop {
@@ -217,9 +246,10 @@ fn gatherLight(@builtin(global_invocation_id) global:vec3<u32>) {
   let id=vec3<u32>(global.x+global.y*DISPATCH_WIDTH,0u,0u);
   if(id.x>=u32(settings.z)){return;}
   let r=receivers[id.x];
+  let rotation=receiverRotation(r.position.xyz);
   var sum=vec3<f32>(0.0);var backSum=vec3<f32>(0.0);
   for(var a=0u;a<DIRECTION_COUNT;a++) {
-    let d=directions[a].xyz;
+    let d=angularDirection(rotation,a);
     var weight=1.0/f32(DIRECTION_COUNT);
     let cosine=dot(r.normal.xyz,d);
     if(r.position.w>0.5){weight*=12.566370614359172*select(max(0.0,cosine),abs(cosine),r.position.w>1.5);}
