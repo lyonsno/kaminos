@@ -76,13 +76,13 @@ test('scene load and save wait for an asynchronous history replay to finish', ()
 });
 
 test('Burner control commits share scene undo and restore through the live flame setters', () => {
-  assert.match(html, /import \{ installSceneControlHistory \} from '\.\/scene-control-history\.mjs'/);
+  assert.match(html, /import \{ installSceneControlHistory, installRelativeNumberDrag \} from '\.\/scene-control-history\.mjs'/);
   assert.match(editTools, /historyScopes = \[\]/);
   assert.match(editTools, /inHistoryScope\(event\.target\)/);
   assert.match(html, /edits\.register\('@burner-controls'/);
-  assert.match(html, /controls: document\.querySelectorAll\('#burner-enabled, #burner-controls input'\)/);
+  assert.match(html, /controls: document\.querySelectorAll\('#burner-enabled, #burner-controls input, #volume-input-radius, #volume-flow-rate/);
   assert.match(html, /function restoreBurnerControlHistoryState\(value\) \{[\s\S]*?setAnnularBurner\(next\.recipe\);[\s\S]*?dispatchEvent\(new Event\('input', \{ bubbles: true \}\)\)/);
-  assert.match(html, /historyScopes: \[document\.getElementById\('burner-enabled'\)\.parentElement, document\.getElementById\('burner-controls'\)\]/);
+  assert.match(html, /historyScopes: \[document\.getElementById\('tab-assets'\), document\.getElementById\('tab-volume'\)/);
   const composition = html.slice(html.indexOf('async function collectSceneComposition()'), html.indexOf('async function withAuthoringAction('));
   const settings = html.slice(html.indexOf('function buildVolumeSettingsPreset('), html.indexOf('function isCompositionAuthoring('));
   assert.match(settings, /inputRadius: parseFloat\(document\.getElementById\('volume-input-radius'\)\.value\)/);

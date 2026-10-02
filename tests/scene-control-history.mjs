@@ -99,3 +99,17 @@ test('a change rejected by the shared edit gate is rolled back and reported', ()
   assert.match(failure.message, /busy/);
   assert.equal(f.edits.state().undoCount, 0);
 });
+
+test('parameter preview occupies the shared edit session until commit and repeated typing starts a new gesture', () => {
+  const f = fixture();
+  f.control.fire('pointerdown', {button:0});
+  f.value.flow=1.1;
+  assert.equal(f.edits.state().active?.id, '@burner');
+  assert.throws(()=>f.edits.undo(), /Finish the active/);
+  f.control.fire('change');
+  f.control.fire('beforeinput');
+  f.value.flow=1.7;
+  f.control.fire('change');
+  assert.equal(f.edits.state().undoCount,2);
+  f.edits.undo();assert.equal(f.value.flow,1.1);
+});

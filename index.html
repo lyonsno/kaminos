@@ -799,6 +799,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <h2>Scene Objects</h2>
     <div class="panel">
       <div class="scene-object-tools">
+        <button type="button" class="btn" id="scene-select-rim">Rim Light</button>
         <button type="button" class="btn" id="scene-add-water-emitter">Add Water Emitter</button>
         <button type="button" class="btn" data-scene-group-create>Create Group</button>
       </div>
@@ -809,6 +810,28 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
       <div id="scene-object-list" class="scene-object-list"></div>
     </div>
+
+    <section id="selected-light-properties" hidden>
+    <h2>Selected Light</h2>
+    <label><input type="checkbox" id="rim-enabled"> Enabled</label>
+    <div id="rim-controls" hidden>
+      <div class="field"><label for="rim-color">Color</label><input type="color" id="rim-color" value="#d6e5ff"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-intensity">Intensity</label><input type="range" id="rim-intensity" min="0" max="500" step="1" value="120"><input class="rim-number" id="rim-intensity-number" aria-label="Rim intensity" type="number" min="0" step="1" value="120"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-angle">Cone Angle</label><input type="range" id="rim-angle" min="1" max="89" step="1" value="35"><input class="rim-number" id="rim-angle-number" aria-label="Rim cone half-angle" type="number" min="1" max="89" step="1" value="35"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-penumbra">Soft Edge</label><input type="range" id="rim-penumbra" min="0" max="1" step="0.01" value="0.65"><input class="rim-number" id="rim-penumbra-number" aria-label="Rim soft edge" type="number" min="0" max="1" step="0.01" value="0.65"></div>
+      <details><summary>Placement values</summary>
+      <div class="slider-row"><label class="slider-label" for="rim-azimuth">Azimuth</label><input type="range" id="rim-azimuth" min="-180" max="180" step="1" value="135"><input class="rim-number" id="rim-azimuth-number" aria-label="Rim azimuth" type="number" step="1" value="135"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-elevation">Elevation</label><input type="range" id="rim-elevation" min="-90" max="90" step="1" value="30"><input class="rim-number" id="rim-elevation-number" aria-label="Rim elevation" type="number" min="-90" max="90" step="1" value="30"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-distance">Distance</label><input type="range" id="rim-distance" min="0.1" max="15" step="0.1" value="6"><input class="rim-number" id="rim-distance-number" aria-label="Rim distance" type="number" min="0.1" step="0.1" value="6"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-x">Target X</label><input type="range" id="rim-target-x" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-x-number" aria-label="Rim target X" type="number" step="0.05" value="0"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-y">Target Y</label><input type="range" id="rim-target-y" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-y-number" aria-label="Rim target Y" type="number" step="0.05" value="0"></div>
+      <div class="slider-row"><label class="slider-label" for="rim-target-z">Target Z</label><input type="range" id="rim-target-z" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-z-number" aria-label="Rim target Z" type="number" step="0.05" value="0"></div>
+      </details>
+      <button class="btn" id="rim-aim" title="Aim at the orbit camera's current target">Aim at View Target</button>
+    </div>
+
+    </section>
+    <section id="selected-flame-properties" hidden><h2>Selected Flame</h2><div id="selected-flame-fields"></div></section>
 
     <h2>Fire Light</h2>
     <div class="panel">
@@ -985,22 +1008,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
 
     <button class="btn" id="env-reset" title="Reset this environment's lighting recipe">Reset Map</button>
-
-    <h2>Rim Light</h2>
-    <label><input type="checkbox" id="rim-enabled"> Enabled</label>
-    <div id="rim-controls" hidden>
-      <div class="field"><label for="rim-color">Color</label><input type="color" id="rim-color" value="#d6e5ff"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-intensity">Intensity</label><input type="range" id="rim-intensity" min="0" max="500" step="1" value="120"><input class="rim-number" id="rim-intensity-number" aria-label="Rim intensity" type="number" min="0" step="1" value="120"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-azimuth">Azimuth</label><input type="range" id="rim-azimuth" min="-180" max="180" step="1" value="135"><input class="rim-number" id="rim-azimuth-number" aria-label="Rim azimuth" type="number" step="1" value="135"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-elevation">Elevation</label><input type="range" id="rim-elevation" min="-89" max="89" step="1" value="30"><input class="rim-number" id="rim-elevation-number" aria-label="Rim elevation" type="number" min="-89" max="89" step="1" value="30"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-distance">Distance</label><input type="range" id="rim-distance" min="0.1" max="15" step="0.1" value="6"><input class="rim-number" id="rim-distance-number" aria-label="Rim distance" type="number" min="0.1" step="0.1" value="6"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-angle">Cone Angle</label><input type="range" id="rim-angle" min="1" max="89" step="1" value="35"><input class="rim-number" id="rim-angle-number" aria-label="Rim cone half-angle" type="number" min="1" max="89" step="1" value="35"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-penumbra">Soft Edge</label><input type="range" id="rim-penumbra" min="0" max="1" step="0.01" value="0.65"><input class="rim-number" id="rim-penumbra-number" aria-label="Rim soft edge" type="number" min="0" max="1" step="0.01" value="0.65"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-target-x">Target X</label><input type="range" id="rim-target-x" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-x-number" aria-label="Rim target X" type="number" step="0.05" value="0"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-target-y">Target Y</label><input type="range" id="rim-target-y" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-y-number" aria-label="Rim target Y" type="number" step="0.05" value="0"></div>
-      <div class="slider-row"><label class="slider-label" for="rim-target-z">Target Z</label><input type="range" id="rim-target-z" min="-5" max="5" step="0.05" value="0"><input class="rim-number" id="rim-target-z-number" aria-label="Rim target Z" type="number" step="0.05" value="0"></div>
-      <button class="btn" id="rim-aim" title="Aim at the orbit camera's current target">Aim at View Target</button>
-    </div>
 
     <h2>Post Processing</h2>
     <div class="slider-row">
@@ -2976,6 +2983,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
       <div id="scene-add-menu-popup" role="menu" aria-label="Add to scene" hidden>
+        <button type="button" role="menuitem" data-scene-add="rim-light">Rim Light <small>existing light</small></button>
         <button type="button" role="menuitem" data-scene-add="water-emitter">Water Emitter <small>source</small></button>
       </div>
     </div>
@@ -3219,13 +3227,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <button class="tb-btn" onclick="rotateAxis('y')" title="Rotate 90 around Y">Rot Y</button>
     <button class="tb-btn" onclick="rotateAxis('z')" title="Rotate 90 around Z">Rot Z</button>
     <div class="tb-sep"></div>
-    <button class="tb-btn" onclick="reverseWinding()" title="Reverse triangle winding order (CW/CCW)">Winding</button>
-    <button class="tb-btn" onclick="flipNormals()" title="Flip vertex normals">Normals</button>
     <button class="tb-btn" id="tb-double-sided" onclick="toggleDoubleSided()" title="Toggle double-sided rendering">2-Sided</button>
     <button class="tb-btn" id="tb-backface" onclick="toggleBackface()" title="Show only backfaces (diagnose inside-out)">Backface</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-opaque" onclick="forceOpaque()" title="Force all materials opaque (fix transparent textures)">Opaque</button>
-    <button class="tb-btn" onclick="cullSmallFaces()" title="Remove debris triangles below area threshold">Cull Debris</button>
     <button class="tb-btn" onclick="snapToGround()" title="Snap lowest vertex to ground plane">Snap Ground</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-gizmo-translate" onclick="setGizmoMode('translate')" title="Translate gizmo (W)">Move</button>
@@ -3547,7 +3552,8 @@ import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
-import { installSceneControlHistory } from './scene-control-history.mjs';
+import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
+import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose } from './scene-rim-light.mjs';
 
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -3593,6 +3599,8 @@ function escapeHtml(s) {
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let scenePlacementTools = null;
 let sceneControlHistory = null;
+const authoringControlSessions = [];
+const authoringParameterTargets = new Map();
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
@@ -6016,7 +6024,7 @@ function serializeSceneGroups() {
 
 function createSceneGroupForObjects(objectIds, label = null, metadata = {}) {
   const ids = [...new Set((objectIds || []).map(String))]
-    .filter(id => sceneObjects.some(record => record.id === id));
+    .filter(id => id !== RIM_LIGHT_ID && sceneObjects.some(record => record.id === id));
   if (!ids.length) return null;
   const id = String(metadata.id || makeSceneObjectId('group'));
   for (const group of sceneGroups) {
@@ -6064,6 +6072,7 @@ function setSceneGroupsFromRecords(groups = [], activeGroupId = null) {
 }
 
 function renameSceneObject(id, label) {
+  if (id === RIM_LIGHT_ID) return false;
   const entry = sceneObjects.find(record => record.id === id);
   if (!entry) return false;
   const clean = String(label || '').trim();
@@ -6425,11 +6434,11 @@ function renderSceneObjectRow(record, options = {}) {
   const typeLabel = record.type || 'object';
   const reloadability = sceneObjectReloadabilityLabel(record);
   const pausedFlame = record.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended;
-  const source = record.source || 'no source';
+  const source = record.id === RIM_LIGHT_ID ? 'saved scene light' : record.source || 'no source';
   return `
     <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name">
+        <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
         <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
       </span>
       <span class="scene-object-actions">
@@ -6472,6 +6481,7 @@ function renderSceneImportStatus() {
 }
 
 function renderSceneObjectList() {
+  updateAuthoringPropertySelection();
   refreshLocalLiquidPerformance();
   const list = document.getElementById('scene-object-list');
   const empty = document.getElementById('scene-object-empty');
@@ -6628,7 +6638,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls');
+  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -6884,6 +6894,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
   const action = event.target.closest('[data-scene-add]');
   if (!action) return;
   setSceneAddMenuOpen(false);
+  if (action.dataset.sceneAdd === 'rim-light') selectAuthoredRimLight();
   if (action.dataset.sceneAdd === 'water-emitter') {
     setActiveTab('assets');
     addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
@@ -7166,7 +7177,9 @@ document.querySelector('[data-scene-group-create]')?.addEventListener('click', (
 function applyAuthoredScenePose(id, transform = {}) {
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
-  if (entry.type === FLAME_EMITTER_TYPE) {
+  if (id === RIM_LIGHT_ID) {
+    writeAuthoredRimPose(transform);
+  } else if (entry.type === FLAME_EMITTER_TYPE) {
     writeAuthoredFlameEmitterPose(transform);
   } else if (entry.type === 'splat') {
     setSceneObjectSceneTransform(entry, transform);
@@ -10124,6 +10137,10 @@ async function recordSceneObjectInsertion(id) {
 window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
 
 function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
+  if (id === RIM_LIGHT_ID) {
+    scenePlacementTools.edits.apply('@rim-settings', {enabled:false}, 'Disable rim light');
+    return true;
+  }
   if (id === FLAME_EMITTER_ID) {
     setInfo('Use flame flow to turn off this source; its simulation domain stays in the scene');
     return false;
@@ -11097,6 +11114,10 @@ async function initScene() {
           }
         }
       }
+      if (entry?.id === RIM_LIGHT_ID && transformControls.dragging) {
+        try { writeAuthoredRimPose(sceneObjectTransformState(entry.object)); }
+        catch(error) { scenePlacementTools?.finish(false); setInfo(error.message); }
+      }
       if (entry?.type === LOCAL_LIQUID_EMITTER_TYPE && validateLiveLocalLiquidEmitterPose(entry)) syncLocalLiquidHostEmitters();
     }
     updateTransformInspector();
@@ -11133,7 +11154,7 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat').map(entry => entry.object),
+    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.id !== RIM_LIGHT_ID).map(entry => entry.object),
       ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
     occluders: () => groundPlane ? [groundPlane] : [],
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
@@ -11176,15 +11197,16 @@ async function initScene() {
       if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after,
         event.operation === 'commit' ? null : event.afterContext);
     },
-    historyScopes: [document.getElementById('burner-enabled').parentElement, document.getElementById('burner-controls')],
+    historyScopes: [document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
   });
   scenePlacementTools.edits.register('@burner-controls', {
     read: readBurnerControlHistoryState,
     write: restoreBurnerControlHistoryState,
     check: checkedBurnerControlHistoryState,
   });
+  createFlameQuickFields();
   sceneControlHistory = installSceneControlHistory({
-    controls: document.querySelectorAll('#burner-enabled, #burner-controls input'),
+    controls: document.querySelectorAll('#burner-enabled, #burner-controls input, #volume-input-radius, #volume-flow-rate, [data-authoring-alias="volume-flow-rate"], [data-authoring-alias="volume-input-radius"]'),
     edits: scenePlacementTools.edits,
     id: '@burner-controls',
     label: 'Adjust Burner',
@@ -11193,6 +11215,7 @@ async function initScene() {
     onError: error => { document.getElementById('burner-status').textContent = error.message; },
   });
   scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
+  installAuthoringParameterEditing();
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
@@ -11473,6 +11496,7 @@ function applyEnvMap(envMap, intensity) {
 // --- File Loading ---
 function clearScene({loadRequestId = null} = {}) {
   if (loadRequestId === null || !sceneLoadRequests.isCurrent(loadRequestId)) sceneLoadRequests.invalidate();
+  authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
   if (flameDomainGuide) {
@@ -24074,6 +24098,7 @@ function updateRimLight() {
   rimLight.shadow.camera.near = Math.min(0.1, settings.distance * 0.05);
   rimLight.shadow.camera.far = Math.max(20, settings.distance * 3);
   rimLight.shadow.camera.updateProjectionMatrix();
+  syncRimAuthoringHandle();
   window._kaminosDirty?.();
 }
 
@@ -24082,7 +24107,7 @@ function setRimLight(recipe = null) {
   if (typeof settings.enabled !== 'boolean' || !/^#[\da-f]{6}$/i.test(settings.color)
     || !Array.isArray(settings.target) || settings.target.length !== 3 || !settings.target.every(Number.isFinite)) throw new Error('Invalid rim light');
   for (const key of rimFields.slice(0, 6)) if (!Number.isFinite(settings[key])) throw new Error(`Invalid rim ${key}`);
-  if (settings.intensity < 0 || settings.distance < 0.1 || Math.abs(settings.elevation) > 89
+  if (settings.intensity < 0 || settings.distance < 0.1 || Math.abs(settings.elevation) > 90
     || settings.angle < 1 || settings.angle > 89 || settings.penumbra < 0 || settings.penumbra > 1) throw new Error('Invalid rim light range');
   document.getElementById('rim-enabled').checked = settings.enabled;
   document.getElementById('rim-color').value = settings.color;
@@ -24101,7 +24126,7 @@ for (const key of rimFields) {
   const range = document.getElementById(`rim-${key}`), number = document.getElementById(`rim-${key}-number`);
   number.step = 'any';
   range.addEventListener('input', () => { number.value = range.value; updateRimLight(); });
-  number.addEventListener('change', () => {
+  number.addEventListener('input', () => {
     if (number.value === '' || !number.validity.valid || !Number.isFinite(number.valueAsNumber)) { number.value = range.value; return; }
     range.min = Math.min(Number(range.min), number.valueAsNumber);
     range.max = Math.max(Number(range.max), number.valueAsNumber);
@@ -24112,9 +24137,141 @@ for (const key of rimFields) {
 document.getElementById('rim-enabled').addEventListener('change', updateRimLight);
 document.getElementById('rim-color').addEventListener('input', updateRimLight);
 document.getElementById('rim-aim').onclick = () => {
-  setRimLight({ ...readRimLightSettings(), target: controls.target.toArray() });
+  scenePlacementTools.edits.apply('@rim-settings', { target: controls.target.toArray() }, 'Aim rim at view');
   saveSettings();
 };
+
+// Editor representation of the existing environment light. Its recipe remains the save authority.
+function syncRimAuthoringHandle() {
+  if (!scene || !rimLight || !scenePlacementTools) return;
+  const recipe=readRimLightSettings();
+  let entry=sceneObjects.find(row=>row.id===RIM_LIGHT_ID);
+  if (!entry && !recipe.enabled) return;
+  if (!entry) {
+    const points=[];
+    const add=(a,b)=>points.push(new THREE.Vector3(...a),new THREE.Vector3(...b));
+    for(let i=0;i<4;i++) {
+      const a=i*Math.PI/2,b=(i+1)*Math.PI/2;
+      const start=[.14*Math.cos(a),.14*Math.sin(a),-.3],end=[.14*Math.cos(b),.14*Math.sin(b),-.3];
+      add([0,0,0],start);add(start,end);
+    }
+    add([0,0,0],[0,0,-.65]);
+    const object=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xffc66d}));
+    object.name='Rim light';object.userData.kaminosEditorOnly=true;
+    scene.add(object);
+    // Register without stealing current selection while loading or replaying a setting.
+    const previous=activeSceneObjectId;
+    entry={id:RIM_LIGHT_ID,object,type:'authored-rim-light',label:'Rim light',fileName:'Rim light',source:null,groupId:null};
+    object.userData.kaminosSceneObject={id:entry.id,type:entry.type,label:entry.label,fileName:entry.fileName};
+    sceneObjects.push(entry);
+    activeSceneObjectId=previous;
+  }
+  applySceneObjectTransformState(entry.object,rimRecipePose(recipe));
+  entry.object.visible=recipe.enabled;
+  renderSceneObjectList();
+  updateTransformInspector();
+}
+function writeAuthoredRimPose(pose) {
+  setRimLight(rimRecipeFromPose(readRimLightSettings(),pose));
+}
+function selectAuthoredRimLight() {
+  try {
+    scenePlacementTools?.finish(false);
+    if(!readRimLightSettings().enabled)scenePlacementTools.edits.apply('@rim-settings',{enabled:true},'Enable rim light');
+    syncRimAuthoringHandle();setActiveTab('assets');setActiveSceneObject(RIM_LIGHT_ID);
+    document.getElementById('selected-light-properties').scrollIntoView({block:'nearest'});
+    document.activeElement?.blur?.();
+  } catch(error){setInfo(error.message);}
+}
+document.getElementById('scene-select-rim').onclick=selectAuthoredRimLight;
+function updateAuthoringPropertySelection() {
+  const light=document.getElementById('selected-light-properties'),flame=document.getElementById('selected-flame-properties');
+  if(light)light.hidden=activeSceneObjectId!==RIM_LIGHT_ID;
+  if(flame)flame.hidden=activeSceneObjectId!==FLAME_EMITTER_ID;
+  document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
+    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB/.test(button.getAttribute('onclick'))) button.hidden=activeSceneObjectId===RIM_LIGHT_ID;
+  });
+}
+function createFlameQuickFields() {
+  const host=document.getElementById('selected-flame-fields');
+  for(const [id,label] of [['volume-flow-rate','Flow'],['volume-input-radius','Radius'],['volume-speed','Speed'],['volume-exposure','Exposure']]) {
+    const source=document.getElementById(id);if(!source)continue;
+    const row=document.createElement('div');row.className='slider-row';
+    const grip=document.createElement('label');grip.className='slider-label';grip.textContent=label;
+    const number=document.createElement('input');number.type='number';number.step='any';number.className='transform-input';number.dataset.authoringAlias=id;
+    number.setAttribute('aria-label',`Flame ${label}`);number.value=source.value;
+    for(const key of ['min','max'])if(source[key])number[key]=source[key];
+    grip.htmlFor=number.id=`selected-${id}`;
+    number.addEventListener('input',()=>{
+      if(!number.value.trim()||!number.validity.valid)return;
+      source.value=number.value;source.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    number.addEventListener('change',()=>{number.value=source.value;});
+    source.addEventListener('input',()=>{if(document.activeElement!==number)number.value=source.value;});
+    row.append(grip,number);host.append(row);
+  }
+}
+function installAuthoringParameterEditing() {
+  const edits=scenePlacementTools.edits;
+  authoringControlSessions.push(sceneControlHistory);
+  // Finish a field before another control's pointerdown can begin a new target.
+  document.addEventListener('pointerdown',event=>{
+    if(event.target.closest?.('input,select,label,button,summary'))authoringControlSessions.forEach(session=>session.commit());
+  },true);
+  const bind=(id,definition)=>{
+    edits.register(id,definition);
+    authoringParameterTargets.set(id,definition);
+    authoringControlSessions.push(installSceneControlHistory({...definition,edits,id,onError:error=>setInfo(error.message)}));
+  };
+  bind('@rim-settings',{
+    controls:document.querySelectorAll('#rim-enabled, #rim-color, #rim-controls input'),label:'Tune rim light',
+    read:readRimLightSettings,write:setRimLight,check:value=>structuredClone(value),
+  });
+  for(const control of collectVolumeCockpitControlElements(document)) {
+    if(['volume-input-radius','volume-flow-rate'].includes(control.id))continue; // existing paired Burner adapter
+    if(!['range','number','checkbox','color'].includes(control.type))continue;
+    const read=()=>({value:readVolumeDomControlValue(control)});
+    const write=state=>{
+      setVolumeControlValue(control.id,state.value);
+      control.dispatchEvent(new Event('input',{bubbles:true}));
+      control.dispatchEvent(new Event('change',{bubbles:true}));
+      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>alias.value=control.value);
+    };
+    const check=state=>{
+      if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
+      else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
+      else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
+      return {value:state.value};
+    };
+    bind(`@parameter:${control.id}`,{controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label:`Adjust ${control.id.replace(/^volume-/,'').replaceAll('-',' ')}`,read,write,check});
+  }
+  for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
+    const control=document.getElementById(id);if(!control)continue;
+    bind(`@parameter:${id}`,{controls:[control],label:`Adjust ${id}`,read:()=>({value:Number(control.value)}),
+      write:state=>{control.value=state.value;control.dispatchEvent(new Event('input',{bubbles:true}));},
+      check:state=>{if(!Number.isFinite(state.value)||state.value<Number(control.min)||state.value>Number(control.max))throw Error('Parameter is outside its supported range');return {value:state.value};}});
+  }
+  // Source values shared by the Volume panel and Burner/quick inspector retain one transaction target.
+  authoringParameterTargets.set('@burner-controls',{read:readBurnerControlHistoryState});
+  window.kaminosAuthoringParameters={
+    list:()=>[...authoringParameterTargets].map(([id,target])=>({id,value:target.read()})),
+    read:id=>{const target=authoringParameterTargets.get(id);if(!target)throw Error(`Unknown authored parameter ${id}`);return structuredClone(target.read());},
+    set:(id,patch)=>{if(!authoringParameterTargets.has(id))throw Error(`Unknown authored parameter ${id}`);return edits.apply(id,patch,'Set authored parameter');},
+  };
+  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields']) {
+    for(const input of document.querySelectorAll(`${scope} input[type=number]`)) {
+      const row=input.closest('.slider-row,.burner-field');const grip=row?.querySelector('label');if(!grip)continue;
+      const source=row.querySelector('input[type=range]');
+      // Number edits preview through the same preexisting setter used on commit.
+      const step=source?.step && source.step!=='any'?Number(source.step):.01;
+      installRelativeNumberDrag({grip,input,step,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
+    }
+  }
+  edits.subscribe(()=>{
+    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias)alias.value=document.getElementById(alias.dataset.authoringAlias).value;});
+  });
+  syncRimAuthoringHandle();
+}
 
 // --- Exposure / Intensity Controls ---
 document.getElementById('exposure-slider').addEventListener('input', e => {
@@ -26924,7 +27081,7 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
 
 function buildSceneData(capture = null) {
   rememberEnvironmentRecipe();
-  const objects = sceneObjects.map(serializeSceneObject);
+  const objects = sceneObjects.filter(entry => entry.id !== RIM_LIGHT_ID).map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
@@ -27094,10 +27251,13 @@ window.captureComposition = () => withAuthoringAction(async () => {
   const visible = helper?.visible;
   const emitterHandle = sceneObjects.find(entry => entry.id === FLAME_EMITTER_ID)?.object;
   const emitterVisible = emitterHandle?.visible;
+  const rimHandle = sceneObjects.find(entry => entry.id === RIM_LIGHT_ID)?.object;
+  const rimVisible = rimHandle?.visible;
   let data;
   try {
     if (helper) helper.visible = false;
     if (emitterHandle) emitterHandle.visible = false;
+    if (rimHandle) rimHandle.visible = false;
     window._kaminosDirty?.();
     // The second callback samples after both render loops have had a turn.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -27114,6 +27274,7 @@ window.captureComposition = () => withAuthoringAction(async () => {
   } finally {
     if (helper) helper.visible = visible;
     if (emitterHandle) emitterHandle.visible = emitterVisible;
+    if (rimHandle) rimHandle.visible = rimVisible;
     window._kaminosDirty?.();
   }
   if (!await saveToServer(data, null)) throw new Error('Capture was not saved');
@@ -27164,7 +27325,7 @@ for (const [key, label, type, step, min, max] of burnerFields) {
       syncBurnerControls();
     }
   };
-  input.onchange = () => commit(type === 'color' ? input.value : input.valueAsNumber);
+  input.oninput = () => { if(type === 'color' || (input.value.trim() && input.validity.valid)) commit(type === 'color' ? input.value : input.valueAsNumber); };
   row.append(caption);
   if (type === 'number') {
     const slider = document.createElement('input');
@@ -27292,8 +27453,8 @@ for (const [id, sourceId] of [['radius', 'volume-input-radius'], ['flow', 'volum
     number.value = source.value;
     window._kaminosDirty?.();
   };
-  number.onchange = () => {
-    if (Number.isFinite(number.valueAsNumber)) {
+  number.oninput = () => {
+    if (number.value.trim() && number.validity.valid && Number.isFinite(number.valueAsNumber)) {
       input.value = number.value;
       input.dispatchEvent(new Event('input', { bubbles: true }));
     }
@@ -27343,6 +27504,7 @@ function sceneIsEmpty() {
 }
 
 function sceneSaveIsBlocked() {
+  if (scenePlacementTools?.edits.state().active) { setInfo('Finish or cancel the active edit before saving'); return true; }
   if (scenePlacementTools?.edits.state().replaying) {
     setInfo('Wait for the current scene history action to finish');
     return true;
@@ -27563,6 +27725,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     await volumePrototype?.setActive?.(false);
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   }
+
+  syncRimAuthoringHandle();
+  if (data.activeObjectId === RIM_LIGHT_ID) setActiveSceneObject(RIM_LIGHT_ID);
 
   // Apply camera
   if (data.camera) {
