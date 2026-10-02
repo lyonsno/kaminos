@@ -12,6 +12,8 @@ import { validateSamplerFixture, validateSamplerTrajectoryFixture, SAMPLER_OBSER
 import { validateDecoderFixture, decoderObservationShapes } from './sparse-decoder-witness-checks.js';
 import { validateOccupancyCoordinateFixture } from './occupancy-coordinate-witness-checks.js';
 import { validateSLatDecoderFixture, slatDecoderObservationShapes, validateSLatProjectionFixture, validateSLatProjectionResult, validateSLatConvolutionFixture, validateSLatConvolutionResult } from './slat-decoder-witness-checks.js';
+import {validateGenerationInputs} from './generation-inputs.js';
+import {GENERATION_FIELDS,validateGenerationResult} from './sparse-generation-witness-checks.js';
 
 const { values } = parseArgs({ options: { ...Object.fromEntries(
   ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture'].map(name => [name, { type: 'string' }])),
@@ -19,7 +21,7 @@ const { values } = parseArgs({ options: { ...Object.fromEntries(
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
   if (!values[name]) throw new Error(`--${name} is required`);
 }
-let root, fixture, prefixFixture, nextBlockFixture, samplerFixture, trajectoryFixture, trajectoryPlan, decoderPlan, coordinatePlan, slatPlan, slatDecoderPlan, slatDecoderManifest, projectionPlan, convolutionPlan;
+let root, fixture, prefixFixture, nextBlockFixture, samplerFixture, trajectoryFixture, trajectoryPlan, decoderPlan, coordinatePlan, slatPlan, slatDecoderPlan, slatDecoderManifest, projectionPlan, convolutionPlan,generationManifest;
 const witness = values.witness || 'prefix';
 const isSampler = witness === 'sampler' || witness === 'sampler-full';
 const output = path.resolve(values.report);
@@ -83,7 +85,7 @@ try {
   report.phase = 'fixture-admission';
   fixture = await fs.realpath(values.fixture); report.fixtureRoot = fixture;
   report.phase = 'witness-admission'; report.witness = witness;
-  if (!['prefix', 'block', 'flow', 'sampler', 'sampler-full', 'decoder', 'coordinates', 'slat', 'slat-decoder', 'slat-projection', 'slat-convolution'].includes(witness)) throw new Error('--witness must be prefix, block, flow, sampler, sampler-full, decoder, coordinates, slat, slat-decoder, slat-projection or slat-convolution');
+  if (!['prefix', 'block', 'flow', 'sampler', 'sampler-full', 'decoder', 'coordinates', 'slat', 'slat-decoder', 'slat-projection', 'slat-convolution','generation'].includes(witness)) throw new Error('--witness must be prefix, block, flow, sampler, sampler-full, decoder, coordinates, slat, slat-decoder, slat-projection, slat-convolution or generation');
   if (values['sampler-fixture'] && !isSampler) throw new Error('--sampler-fixture requires sampler witness');
   if (values['trajectory-fixture'] && witness !== 'sampler-full') throw new Error('--trajectory-fixture requires sampler-full witness');
   if (values['mesh-output'] && witness !== 'slat-decoder') throw Error('--mesh-output requires the learned shape decoder');
@@ -115,6 +117,10 @@ try {
   if (witness === 'flow') { report.phase = 'flow-reference-admission'; report.schema = 'trellis2.sparse-flow-browser.v0'; }
   if (isSampler) { report.phase = 'sampler-reference-admission'; report.schema = witness === 'sampler-full' ? 'trellis2.sparse-sampler-trajectory-browser.v0' : 'trellis2.sparse-sampler-browser.v0'; }
   report.fixtureSha256 = digest(await fs.readFile(path.join(fixture, 'manifest.json')));
+  if(witness==='generation'){
+    report.phase='generation-input-admission';report.schema='trellis2.image-generation-browser.v0';
+    generationManifest=JSON.parse(await fs.readFile(path.join(fixture,'manifest.json'),'utf8'));validateGenerationInputs(generationManifest);
+  }
   if(witness==='slat-convolution'){
     report.phase='convolution-reference-admission';report.schema='trellis2.slat-convolution-browser.v0';
     const m=JSON.parse(await fs.readFile(path.join(fixture,'manifest.json'),'utf8')),parents={};
@@ -173,6 +179,14 @@ try {
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
       if (pathname === '/favicon.ico') { res.writeHead(204).end(); return; }
+      if(req.method==='POST'&&pathname==='/phase'){
+        if(witness!=='generation')throw Error('generation phase route was not requested');
+        const chunks=[];for await(const c of req)chunks.push(c);const row=JSON.parse(Buffer.concat(chunks).toString());
+        if(typeof row.phase!=='string'||!row.phase||row.effectiveRoute!=='trellis2.image-generation.webgpu.v0'||!row.sessionId)
+          throw Error('identified actual generation phase required');
+        report.livePhases??=[];report.livePhases.push({...row,observedAt:new Date().toISOString()});report.lastBrowserPhase=row.phase;
+        await persist();res.end('saved');return;
+      }
       if (req.method === 'POST' && pathname === '/witness-result') {
         const chunks = []; for await (const chunk of req) chunks.push(chunk);
         const receipt = await persistSparseWitnessResult({ report, bytes: Buffer.concat(chunks),
@@ -248,8 +262,8 @@ try {
   await loaded;
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
-    const { ${isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
-    const result = await ${isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? `, {meshOutput:${JSON.stringify(values['mesh-output'])}}` : ''});
+    const { ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
+    const result = await ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? `, {meshOutput:${JSON.stringify(values['mesh-output'])}}` : ''});
     const saved = await fetch('/witness-result', { method: 'POST', body: JSON.stringify(result) });
     if (!saved.ok) throw new Error('browser result was not durably saved');
     return { url: location.href, receipt: await saved.json() };
@@ -261,8 +275,17 @@ try {
   if (value.url !== report.requestedUrl) throw new Error('effective browser URL differs from requested route');
   if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
-  const requiredOutputs = convolutionPlan ? ['neighbors','convolution'] : projectionPlan ? ['f32','f16'] : slatDecoderPlan ? Object.keys(slatDecoderObservationShapes(slatDecoderManifest)) : coordinatePlan ? ['coordinates'] : isSampler ? [...SAMPLER_OBSERVATIONS] : decoderPlan ? Object.keys(decoderObservationShapes(decoderPlan)) : ['projected', 'modulation'];
+  const requiredOutputs = generationManifest ? [...GENERATION_FIELDS] : convolutionPlan ? ['neighbors','convolution'] : projectionPlan ? ['f32','f16'] : slatDecoderPlan ? Object.keys(slatDecoderObservationShapes(slatDecoderManifest)) : coordinatePlan ? ['coordinates'] : isSampler ? [...SAMPLER_OBSERVATIONS] : decoderPlan ? Object.keys(decoderObservationShapes(decoderPlan)) : ['projected', 'modulation'];
   const observedOutputs={...value.result.outputs};
+  if(generationManifest){
+    validateGenerationResult(value.result,generationManifest);
+    for(const name of ['models/trellis2/dinov3-serving.js','models/trellis2/trellis-generation.js','models/trellis2/generation-inputs.js',
+      'models/trellis2/sparse-generation-witness.js','models/trellis2/sparse-flow.js','models/trellis2/slat-flow.js',
+      'models/trellis2/slat-decoder.js','webgpu-inference-kit/src/inference-runtime.js'])
+      if(!report.servedSources[name])throw Error('missing generation served-source attestation '+name);
+    for(const name of requiredOutputs)if(report.rawOutputs?.[name]?.byteLength!==observedOutputs[name].byteLength||
+      report.rawOutputs[name].dtype!==observedOutputs[name].dtype)throw Error('complete raw generation evidence required '+name);
+  }
   if(convolutionPlan){
     validateSLatConvolutionResult(value.result,convolutionPlan);
     for(const name of ['models/trellis2/slat-decoder-ops.js','models/trellis2/slat-decoder-witness-checks.js',

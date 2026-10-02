@@ -11,6 +11,7 @@ import {createTrellisSLatSamplerAdapter} from './slat-sampler.js';
 import {createTrellisSLatCascadeSupportAdapter} from './slat-cascade.js';
 import {createTrellisSLatScaleAdapter} from './slat-scale.js';
 import {createTrellisSLatDecoderAdapter} from './slat-decoder.js';
+import {createTrellisDinoV3ConditioningAdapter} from './dinov3-serving.js';
 
 // A replayable browser Gaussian stream, not an assertion of MLX RNG parity.
 // The complete arrays are retained as open diagnostic input, including on
@@ -33,6 +34,38 @@ function browserNoise(seed){
   };
 }
 
+// The live consumer of DINO's exact output. Only normalized image pixels and
+// checkpoint weights enter from CPU; no learned context crosses an artifact.
+export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWeights,loadLayerWeights,
+  dinoIdentity=null,models,loadModels,meshResolution=1024,seed=42,initialNoise={},onPhase}={}){
+  if(models!==undefined&&loadModels!==undefined)throw TypeError('one checkpoint input source required');
+  if(models===undefined&&typeof loadModels!=='function')throw TypeError('complete generation checkpoint inputs or loader required');
+  let state='new',phase='new',result,disposed=false,generation;
+  const enter=async e=>{phase=e.phase;await onPhase?.({...e,routeId:route.routeId});},
+    producer=createTrellisDinoV3ConditioningAdapter({route,pixelValues,prefixWeights,loadLayerWeights,
+      modelIdentity:dinoIdentity,onPhase:enter});
+  return Object.freeze({runtime:route.runtime,routeId:route.routeId,
+    get state(){return state;},get phase(){return phase;},get outputs(){return result;},
+    get conditioning(){return producer.outputs?.conditioning;},
+    get noiseInputs(){return generation?.noiseInputs??Object.freeze({});},
+    async run(invocation){
+      if(disposed)throw Error('image generation adapter disposed');if(state!=='new')throw Error('image generation adapter is '+state);
+      state='running';
+      try{
+        const dino=await producer.run(invocation);
+        if(loadModels)await enter({phase:'generation-checkpoint-input-loading'});
+        const checkpointModels=models??await loadModels();
+        generation=createTrellisGenerationFromConditioningAdapter({route,conditioningTensor:dino.conditioning,
+          models:checkpointModels,meshResolution,seed,initialNoise,onPhase:enter});
+        const fields=await generation.run(invocation);
+        result=Object.freeze({...fields,conditioning:dino.conditioning,dino});state='completed';phase='completed';return result;
+      }catch(error){state='failed';result=undefined;throw error;}
+    },
+    dispose(){if(state==='running')throw Error('image generation adapter in use');if(disposed)return;disposed=true;
+      generation?.dispose();producer.dispose();}
+  });
+}
+
 export function createTrellisGenerationFromConditioningAdapter({route,conditioningTensor,models,
   meshResolution=1024,seed=42,initialNoise={},onPhase}={}){
   const runtime=route?.runtime,roles=['sparseFlow','occupancyDecoder','lowResolutionShape','highResolutionShape','shapeDecoder','textureFlow','textureDecoder'];
@@ -41,9 +74,12 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   if(models.lowResolutionShape.weights===models.highResolutionShape.weights)
     throw TypeError('source cascade requires the separate high-resolution model, not low-resolution weight reuse');
   if(onPhase!==undefined&&typeof onPhase!=='function')throw TypeError('phase observer must be a function');
-  const gaussian=browserNoise(seed),owned=[],noiseInputs={},phases=[];
+  const gaussian=browserNoise(seed),owned=new Set(),noiseInputs={},phases=[];
   let state='new',phase='new',result,disposed=false;
-  const own=a=>{owned.push(a);return a;},noise=(stage,shape)=>{
+  const own=a=>{owned.add(a);return a;},retire=async(...adapters)=>{
+    await runtime.device?.queue?.onSubmittedWorkDone?.();
+    for(const a of adapters){a.dispose();owned.delete(a);}
+  },noise=(stage,shape)=>{
     const count=shape.reduce((a,b)=>a*b,1),values=initialNoise[stage]??gaussian(count);
     if(!(values instanceof Float32Array)||values.length!==count||!values.every(Number.isFinite))
       throw TypeError('complete finite initial noise required for '+stage+' '+shape);
@@ -58,7 +94,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   const sampleShape=async(role,flow,stage,invocation)=>{
     const sampler=own(createTrellisSLatSamplerAdapter({route,flow,config:{...models[role].config,
       tokenRows:flow.plan.tokenRows,mode:flow.plan.mode},conditioningTensor}));
-    await sampler.run({sample:noise(stage,flow.plan.inputShape)},invocation);return sampler.outputs.sample;
+    await sampler.run({sample:noise(stage,flow.plan.inputShape)},invocation);return{sampler,sample:sampler.outputs.sample};
   };
   return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor}),
     get state(){return state;},get phase(){return phase;},get noiseInputs(){return Object.freeze({...noiseInputs});},
@@ -80,17 +116,20 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
         const coordinates=own(createTrellisOccupancyCoordinatesAdapter({route,resolution:occupancy.plan.outputResolution,
           logitsTensor:occupancy.outputs.logits}));await coordinates.run(invocation);
         const lrCoordinates=await coordinates.coordinates(),lrResolution=coordinates.plan.outputResolution;
+        await retire(occupancy,sparseSampler,sparse);
         await enter('low-resolution-shape-sampling');
-        const lrFlow=shapeFlow('lowResolutionShape',lrCoordinates),lrSample=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
+        const lrFlow=shapeFlow('lowResolutionShape',lrCoordinates),lr=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
         await enter('learned-cascade-support');
         const support=own(createTrellisSLatCascadeSupportAdapter({route,
           config:{...models.shapeDecoder.config,tokenRows:lrCoordinates.shape[0],resolution:lrResolution},
-          weights:models.shapeDecoder.weights,siluTable:models.shapeDecoder.siluTable,sampleTensor:lrSample,
+          weights:models.shapeDecoder.weights,siluTable:models.shapeDecoder.siluTable,sampleTensor:lr.sample,
           coordinateTensor:lrCoordinates,meshResolution})),hr=await support.run(invocation),rows=hr.coordinates.shape[0];
+        await retire(lr.sampler,lrFlow,coordinates);
         await enter('high-resolution-shape-sampling');
         const hrFlow=shapeFlow('highResolutionShape',hr.coordinates),hrSample=await sampleShape('highResolutionShape',hrFlow,'highResolutionShape',invocation),
-          shapeScale=own(createTrellisSLatScaleAdapter({route,tokenRows:rows,sampleTensor:hrSample}));
+          shapeScale=own(createTrellisSLatScaleAdapter({route,tokenRows:rows,sampleTensor:hrSample.sample}));
         await shapeScale.run(invocation);
+        await retire(hrSample.sampler,hrFlow);
         await enter('learned-geometry-decoding');
         const geometryDecoder=own(createTrellisSLatDecoderAdapter({route,
           config:{...models.shapeDecoder.config,tokenRows:rows,resolution:hr.resolution,mode:'shape',structureOnly:false},
@@ -101,8 +140,9 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
         await shapeNormalize.run(invocation);
         const textureFlow=shapeFlow('textureFlow',hr.coordinates,shapeNormalize.outputs.sample),
           textureSample=await sampleShape('textureFlow',textureFlow,'texture',invocation),
-          textureScale=own(createTrellisSLatScaleAdapter({route,tokenRows:rows,mode:'texture',sampleTensor:textureSample}));
+          textureScale=own(createTrellisSLatScaleAdapter({route,tokenRows:rows,mode:'texture',sampleTensor:textureSample.sample}));
         await textureScale.run(invocation);
+        await retire(textureSample.sampler,textureFlow,shapeNormalize);
         await enter('shape-guided-material-decoding');
         const textureDecoder=own(createTrellisSLatDecoderAdapter({route,
           config:{...models.textureDecoder.config,tokenRows:rows,resolution:hr.resolution,mode:'texture'},
@@ -121,6 +161,6 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
       }catch(error){state='failed';result=undefined;throw error;}
     },
     dispose(){if(state==='running')throw Error('generation adapter in use');if(disposed)return;disposed=true;
-      for(const a of owned.reverse())a.dispose();}
+      for(const a of [...owned].reverse())a.dispose();owned.clear();}
   });
 }

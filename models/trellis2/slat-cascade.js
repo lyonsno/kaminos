@@ -28,6 +28,9 @@ export function createTrellisSLatCascadeSupportAdapter({route,config={},weights,
           regrid=createTrellisSLatRegridAdapter({route,tokenRows:decoded.coordinates.shape[0],sourceResolution:decoded.resolution,
             meshResolution,coordinateTensor:decoded.coordinates});
           const result=await regrid.run(invocation);
+          // Regrid owns the new support. Its settled dispatch is the last
+          // consumer of the learned LR decoder's coordinates and scale.
+          decoder.dispose();scale.dispose();decoder=undefined;scale=undefined;
           output=Object.freeze({...result,lowResolutionDecodedRows:decoded.coordinates.shape[0],meshResolution,
             metadataReadbackBytes:decoded.metadataReadbackBytes+result.metadataReadbackBytes,
             featureBytesToCPUDuringServing:0,coordinateBytesToCPUDuringServing:0,

@@ -11,7 +11,8 @@ const runtime={device:{limits:{maxStorageBufferBindingSize:134217728},queue:{asy
   createTensor(spec){const t={...spec,byteLength:spec.shape.reduce((a,b)=>a*b,4),
     buffer:spec.buffer??{destroy(){t.destroyed=true;}}};allocated.push(t);return t;},
   uploadTensor(t,data){uploads.push({t,data});},defineComputeKernel(k){return k;},
-  async runKernel(k,o){runs.push({k,o});if(o.stage==='slat-regrid-mark')marked=true;
+  async runKernel(k,o){for(const b of k.bindings)assert.ok(!b.resource.destroyed&&!b.resource.buffer?.destroyed,'downstream GPU input must remain live: '+b.resource.name);
+    runs.push({k,o});if(o.stage==='slat-regrid-mark')marked=true;
     if(o.stage===failStage)throw Error('injected generation failure');},
   async readTensor(t){reads.push(t);assert.equal(t.dtype,'u32');assert.equal(t.byteLength,4);
     return new Uint32Array([t.name.includes('hash-status')?0:t.name.includes('occupancy.count')?3:
@@ -35,10 +36,22 @@ const shapeConfig={channels:[32,4],numBlocks:[0,0]},occupancyConfig={channels:[2
     textureFlow:{config:common,weights:flowWeights({...common,tokenRows:4},64,32)},
     textureDecoder:{config:shapeConfig,weights:arrays(slatDecoderWeightShapes(buildSLatDecoderPlan({...shapeConfig,tokenRows:4,mode:'texture'}))),siluTable:new Float32Array(65536)}},
   options={route,conditioningTensor:conditioning,models,meshResolution:128,seed:42,
-    onPhase(e){phase=e.phase;if(phase==='learned-cascade-support')marked=false;observed.push(e);}},
+    onPhase(e){phase=e.phase;if(phase==='learned-cascade-support')marked=false;
+      if(['low-resolution-shape-sampling','high-resolution-shape-sampling','learned-geometry-decoding','shape-guided-material-decoding'].includes(phase))
+        assert.equal(allocated.filter(t=>t.name.startsWith('trellis.block.')&&!t.destroyed).length,0,
+          'consumed flow weights/workspace must be released before '+phase);
+      if(['high-resolution-shape-sampling','shape-conditioned-texture-sampling'].includes(phase))
+        assert.equal(uploads.filter(u=>u.t.name.startsWith('trellis.slat-decoder.')&&!u.t.destroyed).length,0,
+          'consumed learned-decoder parameters must be released before '+phase);
+      observed.push(e);}},
   a=create(options),invocation={id:'one-composed-generation'},result=await a.run(invocation);
 assert.equal(a.state,'completed');assert.equal(a.phase,'completed');assert.strictEqual(a.outputs,result);
 assert.deepEqual(result.geometry.features.shape,[5,7]);assert.deepEqual(result.material.features.shape,[5,6]);
+for(const t of [result.geometry.features,result.geometry.coordinates,...result.geometry.subdivisions,
+  result.material.features,result.material.coordinates,result.shapeCodes,result.textureCodes])
+  assert.ok(!t.destroyed,'returned resident output lives until its consumer disposes generation: '+t.name);
+assert.equal(uploads.filter(u=>u.t.name.startsWith('trellis.slat-decoder.')&&!u.t.destroyed).length,0,
+  'completed material decoder retains outputs, not already-consumed parameters');
 assert.equal(result.lowResolutionRows,3);assert.equal(result.highResolutionRows,4);
 assert.deepEqual(Object.keys(result.initialNoise),['sparse','lowResolutionShape','highResolutionShape','texture']);
 assert.deepEqual(result.initialNoise.sparse.shape,[1,8,16,16,16]);assert.equal(result.initialNoise.sparse.values.length,32768);
@@ -69,3 +82,4 @@ const bad=create({...options,initialNoise:{highResolutionShape:new Float32Array(
 await assert.rejects(bad.run(invocation),/complete.*highResolutionShape/);assert.equal(bad.outputs,undefined);bad.dispose();
 assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
 console.log('Production conditioning → sparse/occupancy → LR/cascade/HR shape → guided texture fields composition; replayable complete initial noise and poisoned failure. Fake runtime is not full-model/GPU or mesh/PBR acceptance.');
+export {models};

@@ -126,6 +126,10 @@ export function createTrellisSLatDecoderAdapter({ route, config, weights, siluTa
           }
           await ops.settle();
           ops.release(current);ops.release(neighbors);ops.release(normalized);
+          // This decoder is single-use. Preserve the resident result and
+          // shape guides, not the consumed checkpoint parameters/table.
+          for(const parameter of Object.values(parameters))ops.release(parameter);
+          ops.release(table);
           output = Object.freeze({ features, coordinates, subdivisions: Object.freeze(subdivisions), levels: Object.freeze(levels),
             convNeXtBlocksExecuted, convolutionsExecuted: ops.convolutionsExecuted, metadataReadbackBytes: ops.metadataReadbackBytes,
             featureBytesToCPUDuringServing: 0, coordinateBytesToCPUDuringServing: 0, arithmetic: plan.arithmetic, resolution, structureOnly: plan.structureOnly });
