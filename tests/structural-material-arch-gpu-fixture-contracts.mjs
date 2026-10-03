@@ -28,5 +28,9 @@ for (const [i, bond] of fixture.bonds.entries()) {
 assert.throws(() => buildGpuArchFixture({ ...profile, occupancy: [] }), /occupancy/);
 assert.throws(() => buildGpuArchFixture(profile, { layers: 1 }), /layers/);
 assert.throws(() => buildGpuArchFixture(profile, { strength: NaN }), /strength/);
+assert.equal(buildGpuArchFixture(profile, { initialJointPenalty: 1000 }).config.initialJointPenalty, 1000);
+for (const initialJointPenalty of [0, -1, NaN, Infinity, 1e7]) {
+  assert.throws(() => buildGpuArchFixture(profile, { initialJointPenalty }), /initialJointPenalty/);
+}
 cpu.dispose();
 console.log('GPU arch fixture matches unchanged CPU construction');

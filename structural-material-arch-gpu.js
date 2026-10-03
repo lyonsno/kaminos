@@ -32,8 +32,7 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   for(const cell of cells){const j=engine.addSphericalJoint(null,cell.index,cell.position,[0,0,0],config.gripStiffness,false);engine.setInitialJointActive(j,false);}
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
   if(counts.some(count=>count+1>8))throw new Error('Fixture exceeds observed engine joint-per-body capacity');
-  // Finite material stiffness is the target, not the upstream penalty-ramp starting value.
-  for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.stiffness;data[j*44+40+axis]=config.stiffness;}}
+  for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.initialJointPenalty;data[j*44+40+axis]=config.initialJointPenalty;}}
   engine.step(config.timeStep,renderer);
   const attrs=engine.getResidentAttributes();
   const resident=name=>{const buffer=renderer.backend.get(attrs[name]).buffer;if(!buffer)throw new Error(`Resident ${name} buffer missing`);return buffer;};
@@ -57,7 +56,7 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
     bonds:bonds.map(bond=>({...bond,alive:true,reaction:0,bendingReaction:0,stress:0,lastBreakStep:null}))};
   const gripData=new Float32Array(cells.length*12);
   function parameters(){const buffer=new ArrayBuffer(64),f=new Float32Array(buffer),u=new Uint32Array(buffer);
-    f.set([hand?.target.x??0,hand?.target.y??0,hand?.target.z??0,Math.min(dx,dy,dz)*.15]);u.set([cells.length,bonds.length,stepIndex,0],4);
+    f.set([hand?.target.x??0,hand?.target.y??0,hand?.target.z??0,Math.min(dx,dy,dz)*.15]);u.set([cells.length,bonds.length,stepIndex,0],4);f[7]=config.initialJointPenalty;
     f.set([config.strength,config.timeStep,config.gripStiffness,bindRequest?.radius??Math.max(dx,dy)*2],8);
     u.set([bindRequest?1:0,bindRequest?.index??0,hand?1:0,0],12);device.queue.writeBuffer(buffers.parameters,0,buffer);}
   function dispatch(name){const encoder=device.createCommandEncoder({label:`Arch ${name}`}),pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(Math.max(cells.length,bonds.length)/64));pass.end();device.queue.submit([encoder.finish()]);}
@@ -66,7 +65,7 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
     if(!data.every(Number.isFinite))throw new Error('Non-finite GPU physical state');
     state.bodies.forEach((body,i)=>{const start=i*20;body.position=xyz(data.slice(start,start+3));body.quaternion={...xyz(data.slice(start+4,start+7)),w:data[start+7]};body.velocity=xyz(data.slice(start+8,start+11));body.angularVelocity=xyz(data.slice(start+12,start+15));});
     const changed=[];
-    state.bonds.forEach((bond,i)=>{const start=cells.length*20+i*16;bond.reaction=data[start];bond.bendingReaction=data[start+1];bond.stress=data[start+2];bond.lastBreakStep=data[start+3]||null;bond.alive=data[start+12]===1;
+    state.bonds.forEach((bond,i)=>{const start=cells.length*20+i*16;bond.reaction=data[start];bond.bendingReaction=data[start+1];bond.stress=data[start+2];bond.lastBreakStep=data[start+3]||null;bond.alive=data[start+12]===1;bond.linearPenaltyMaximum=data[start+13];bond.angularPenaltyMaximum=data[start+14];bond.penaltyMinimum=data[start+15];
       for(const offset of [8,4]){const eventStep=data[start+offset+1],kind=data[start+offset+2];if(kind&&eventStep===stepIndex)changed.push({kind:kind===1?'crack':'bind',id:bond.id,step:eventStep,time:eventStep*config.timeStep,reaction:bond.reaction,bendingReaction:bond.bendingReaction,stress:bond.stress,area:bond.area,energyProxy:data[start+offset],handActive:data[start+offset+3]===1});}});
     if(changed.length)epoch++;for(const event of changed)events.push({...event,epoch});
     if(hand){hand.force={x:0,y:0,z:0};for(const member of hand.members){const start=member.index*20+16;for(let axis=0;axis<3;axis++)hand.force[['x','y','z'][axis]]+=data[start+axis];}}
@@ -88,7 +87,7 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   }
   function moveHand(target){if(!hand||Object.values(target).some(value=>!Number.isFinite(value)))throw new Error('Move requires active hand and finite target');hand.target={...target};}
   function bind(index,radius=Math.max(dx,dy)*2){if(!cells[index]||!Number.isFinite(radius)||radius<=0)throw new Error('Bind requires known cell and positive finite radius');bindRequest={index,radius};}
-  async function step(){if(disposed)throw new Error('GPU arch is disposed');const started=performance.now();stepIndex++;parameters();dispatch('commands');bindRequest=null;engine.step(config.timeStep,renderer);dispatch('fracture');await read();if(engine.stats.pairDispatchTruncated)throw new Error('GPU collision dispatch truncated');samples.push({step:stepIndex,milliseconds:performance.now()-started,handActive:Boolean(hand),cracks:events.filter(event=>event.step===stepIndex&&event.kind==='crack').length});}
+  async function step(){if(disposed)throw new Error('GPU arch is disposed');const started=performance.now();stepIndex++;parameters();dispatch('commands');bindRequest=null;engine.step(config.timeStep,renderer);dispatch('fracture');await read();if(engine.stats.pairDispatchTruncated)throw new Error('GPU collision dispatch truncated');samples.push({step:stepIndex,milliseconds:performance.now()-started,handActive:Boolean(hand),cracks:events.filter(event=>event.step===stepIndex&&event.kind==='crack').length,maximumStress:Math.max(...state.bonds.map(bond=>bond.stress))});}
   parameters();await read();
   return {cells:cells.map(cell=>({...cell,half:xyz(cell.halfExtents)})),bonds:state.bonds,step,setSurfaceHand,moveHand,release,isExposedFace,bind,
     worldToLocalPoint:(index,point)=>{if(!cells[index]||Object.values(point).some(value=>!Number.isFinite(value)))throw new Error('World point requires known cell and finite coordinates');return v(point).sub(v(state.bodies[index].position)).applyQuaternion(q(state.bodies[index].quaternion).invert());},

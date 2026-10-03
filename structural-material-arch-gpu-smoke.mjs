@@ -23,8 +23,8 @@ const evaluate=async expression=>{report.inputs.push({expression,at:new Date().t
 function check(name,passed,observed){report.checks.push({name,passed,observed});save();if(!passed)throw new Error(`Predicate failed: ${name}`);}
 const input=async params=>{report.inputs.push({method:'Input.dispatchMouseEvent',params,at:new Date().toISOString()});save();return send('Input.dispatchMouseEvent',params);};
 const witness=()=>evaluate('window.__archCollapse.witness()');
-async function capture(name){
-  const state=await witness(),errors=inspectGpuArchLoad(state),pixels=await evaluate('window.__archCollapse.pixels()');
+async function capture(name,expected){
+  const state=await witness(),errors=inspectGpuArchLoad(state,expected),pixels=await evaluate('window.__archCollapse.pixels()');
   report.states??={};report.states[name]=state;save();
   check(`${name}: native route, requested configuration, live physical and displayed poses`,!errors.length,errors);
   check(`${name}: canvas contains geometry`,pixels.fraction>.001,pixels);
@@ -60,7 +60,7 @@ try {
   if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent native testing browser required');
   report.browser.executable=executable;report.browser.version=execFileSync(executable,['--version'],{encoding:'utf8'}).trim();
   const isArch=page==='structural-material-arch-gpu.html';
-  if(!['load','collapse'].includes(exercise)||exercise==='collapse'&&!isArch)throw new Error('Unsupported exercise');
+  if(!['load','collapse','standing-diagnostics','penalty-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
   if(!isArch&&page!=='structural-material-arch-gpu-conformance.html')throw new Error('Unsupported GPU smoke page');
   for(const source of [page,...(isArch?['structural-material-arch-gpu-view.js','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-gpu-fixture.js']:['structural-material-arch-gpu-conformance.js']),'dist/structural-material-arch-gpu-engine.js','vendor/webphysics/provenance.json','package-lock.json','node_modules/three/build/three.module.js','node_modules/three/build/three.webgpu.js','node_modules/three/build/three.tsl.js'])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
   report.phase='http';save();
@@ -95,7 +95,7 @@ try {
   if(isArch&&report.result.phase==='interactive') { await sleep(350);report.pixels=await evaluate('window.__archCollapse.pixels()'); }
   report.effectiveUrl=await evaluate('location.href');
   const frame=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false}),bytes=Buffer.from(frame.data,'base64');
-  const capture=`${output.slice(0,-path.extname(output).length)}.png`;fs.writeFileSync(capture,bytes);report.captures.desktop={path:capture,sha256:hash(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20)};
+  const capturePath=`${output.slice(0,-path.extname(output).length)}.png`;fs.writeFileSync(capturePath,bytes);report.captures.desktop={path:capturePath,sha256:hash(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20)};
   report.lastTrustworthyEvidence=`${isArch?'paused arch':'native conformance'} report from ${report.effectiveUrl}`;
   report.evidenceErrors=isArch?inspectGpuArchLoad(report.result):inspectGpuConformance(report.result);
   if(isArch){
@@ -104,6 +104,26 @@ try {
     if(!report.result.state?.bodies?.length)report.evidenceErrors.push('No physical body readback');
   }
   if(report.evidenceErrors.length||report.errors.length)throw new Error(JSON.stringify({evidence:report.evidenceErrors,page:report.errors}));
+  if(isArch&&exercise==='standing-diagnostics'){
+    report.phase='standing-convergence-comparison';report.diagnostics={};save();
+    for(const iterations of [20,80]){
+      const url=new URL(report.requestedUrl);url.searchParams.set('strength','1e12');url.searchParams.set('solverIterations',String(iterations));
+      await send('Page.navigate',{url:url.href});while(!await evaluate('Boolean(window.__archCollapse)')){if(report.errors.length)throw new Error(JSON.stringify(report.errors));await sleep(100);}
+      const received=await witness();check('diagnostic control values are actually applied',received.state.config.strength===1e12&&received.state.config.solverIterations===iterations,received.state.config);
+      await evaluate('window.__archCollapse.advance(120)');const state=await capture(`intact-solve-${iterations}`,{layers:3,strength:1e12,timeStep:1/60,gripRadius:.55,solverIterations:iterations});
+      report.diagnostics[iterations]={finalMaximumStress:Math.max(...state.state.bonds.map(bond=>bond.stress)),peakMaximumStress:Math.max(...state.state.samples.map(sample=>sample.maximumStress)),maximumSag:Math.max(...state.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y))),broken:state.state.broken};save();
+    }
+  }
+  if(isArch&&exercise==='penalty-diagnostics'){
+    report.phase='initial-penalty-comparison';report.diagnostics={};save();
+    for(const initialJointPenalty of [1,1000,1e6]){
+      const url=new URL(report.requestedUrl);url.searchParams.set('initialJointPenalty',String(initialJointPenalty));
+      await send('Page.navigate',{url:url.href});while(!await evaluate('Boolean(window.__archCollapse)')){if(report.errors.length)throw new Error(JSON.stringify(report.errors));await sleep(100);}
+      const received=await witness();check('diagnostic penalty is actually applied without changing material strength',received.state.config.strength===80&&received.state.config.initialJointPenalty===initialJointPenalty,received.state.config);
+      await evaluate('window.__archCollapse.advance(120)');const state=await capture(`initial-penalty-${initialJointPenalty}`,{layers:3,strength:80,timeStep:1/60,gripRadius:.55,solverIterations:20,initialJointPenalty});
+      report.diagnostics[initialJointPenalty]={finalMaximumStress:Math.max(...state.state.bonds.map(bond=>bond.stress)),peakMaximumStress:Math.max(...state.state.samples.map(sample=>sample.maximumStress)),maximumSag:Math.max(...state.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y))),broken:state.state.broken,penaltyRange:[Math.min(...state.state.bonds.map(bond=>bond.penaltyMinimum)),Math.max(...state.state.bonds.map(bond=>Math.max(bond.linearPenaltyMaximum,bond.angularPenaltyMaximum)))]};save();
+    }
+  }
   if(isArch&&exercise==='collapse'){
     report.phase='standing-under-weight';save();await evaluate('window.__archCollapse.advance(120)');const standing=await capture('standing');
     check('the arch stands intact under its own weight',standing.state.broken===0&&standing.state.bodies.every(body=>Math.abs(body.position.y-body.rest.y)<.05),{broken:standing.state.broken,maximumSag:Math.max(...standing.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y)))});

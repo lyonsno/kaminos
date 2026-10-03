@@ -33,8 +33,9 @@ fn linearForce(j: u32) -> vec3f {
 fn clearDual(j: u32) {
   let base=j*11u;
   for(var field=5u;field<11u;field++) { joints[base+field]=vec4f(0.0); }
-  joints[base+9u]=vec4f(joints[base+4u].xxx,0.0);
-  joints[base+10u]=vec4f(joints[base+4u].yyy,0.0);
+  let start=bitcast<f32>(params.counts.w);
+  joints[base+9u]=vec4f(vec3f(min(joints[base+4u].x,start)),0.0);
+  joints[base+10u]=vec4f(vec3f(min(joints[base+4u].y,start)),0.0);
 }
 
 @compute @workgroup_size(64)
@@ -109,7 +110,8 @@ fn pack(@builtin(global_invocation_id) id: vec3u) {
     let start=params.counts.x*5u+i*4u;
     output[start]=damage[i*3u]; output[start+1u]=damage[i*3u+1u];
     output[start+2u]=damage[i*3u+2u];
-    output[start+3u]=vec4f(f32(bitcast<vec4u>(joints[i*11u]).w),0.0,0.0,0.0);
+    let lin=joints[i*11u+9u].xyz; let ang=joints[i*11u+10u].xyz;
+    output[start+3u]=vec4f(f32(bitcast<vec4u>(joints[i*11u]).w),max(lin.x,max(lin.y,lin.z)),max(ang.x,max(ang.y,ang.z)),min(min(lin.x,min(lin.y,lin.z)),min(ang.x,min(ang.y,ang.z))));
   }
 }
 `;
