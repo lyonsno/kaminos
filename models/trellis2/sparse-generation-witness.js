@@ -20,9 +20,11 @@ export async function runGenerationWitness(expectedSha){
     report.input={manifestSha256:expectedSha,producer:m.producer,references:m.references,image:m.image,modelIdentities:
       Object.fromEntries(Object.entries(m.models).map(([k,v])=>[k,v.identity])),dinoIdentity:m.dino.identity,seed:m.seed,meshResolution:m.meshResolution};
     report.verifiedTensorCount=0;report.verifiedInputBytes=0;
+    report.verifiedInputMeaning='cumulative successful fetches/bytes, including repeated stage use; not resident memory';
     const fetchTensor=async name=>{
       const row=m.tensors[name];if(!row)throw Error('complete identified input required '+name);
-      report.inputLoading={tensor:name,file:row.file,byteLength:row.byteLength,sha256:row.sha256,phase:'fetch'};
+      report.inputLoading={tensor:name,file:row.file,byteLength:row.byteLength,sha256:row.sha256,
+        ...(report.loadingModelRole?{modelRole:report.loadingModelRole}:{}),phase:'fetch'};
       const r=await fetch('/fixture/'+row.file,{cache:'no-store'});if(!r.ok)throw Error('checkpoint tensor unavailable '+name);
       report.inputLoading.phase='response-body';const raw=await r.arrayBuffer();report.inputLoading.phase='sha256';
       if(raw.byteLength!==row.byteLength||await hash(raw)!==row.sha256)throw Error('partial/changed checkpoint tensor '+name);
@@ -51,10 +53,13 @@ export async function runGenerationWitness(expectedSha){
         return actual.runtime.readTensor(t);}};
     report.phase='cached-checkpoint-input-loading';
     const inputs=await loadGenerationInputs(m,fetchTensor);
+    report.checkpointLoading='per-role uncached complete weights; shared identity-checked activation tables';
     const onPhase=async e=>{
       currentPhase=e.phase;report.phase=e.phase;
+      report.loadingModelRole=e.modelRole??null;
       const saved=await fetch('/phase',{method:'POST',body:JSON.stringify({phase:e.phase,effectiveRoute:actual.routeId,
-        sessionId:session.snapshot().sessionId,verifiedTensorCount:report.verifiedTensorCount,verifiedInputBytes:report.verifiedInputBytes})});
+        sessionId:session.snapshot().sessionId,modelRole:e.modelRole??null,
+        verifiedTensorCount:report.verifiedTensorCount,verifiedInputBytes:report.verifiedInputBytes})});
       if(!saved.ok)throw Error('generation phase receipt not saved');
     };
     implementation=createTrellisImageGenerationAdapter({...inputs,route:{...actual,runtime},onPhase});

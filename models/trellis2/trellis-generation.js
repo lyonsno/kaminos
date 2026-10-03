@@ -37,9 +37,15 @@ function browserNoise(seed){
 // The live consumer of DINO's exact output. Only normalized image pixels and
 // checkpoint weights enter from CPU; no learned context crosses an artifact.
 export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWeights,loadLayerWeights,
-  dinoIdentity=null,models,loadModels,meshResolution=1024,seed=42,initialNoise={},onPhase}={}){
-  if(models!==undefined&&loadModels!==undefined)throw TypeError('one checkpoint input source required');
-  if(models===undefined&&typeof loadModels!=='function')throw TypeError('complete generation checkpoint inputs or loader required');
+  dinoIdentity=null,models,loadModels,modelInputs,loadModel,meshResolution=1024,seed=42,initialNoise={},onPhase}={}){
+  const staged=loadModel!==undefined||modelInputs!==undefined;
+  if(staged){
+    if(typeof loadModel!=='function'||!modelInputs||models!==undefined||loadModels!==undefined)
+      throw TypeError('one complete staged checkpoint input source required');
+  }else{
+    if(models!==undefined&&loadModels!==undefined)throw TypeError('one checkpoint input source required');
+    if(models===undefined&&typeof loadModels!=='function')throw TypeError('complete generation checkpoint inputs or loader required');
+  }
   let state='new',phase='new',result,disposed=false,generation;
   const enter=async e=>{phase=e.phase;await onPhase?.({...e,routeId:route.routeId});},
     producer=createTrellisDinoV3ConditioningAdapter({route,pixelValues,prefixWeights,loadLayerWeights,
@@ -54,9 +60,9 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWei
       try{
         const dino=await producer.run(invocation);
         if(loadModels)await enter({phase:'generation-checkpoint-input-loading'});
-        const checkpointModels=models??await loadModels();
+        const checkpointModels=staged?modelInputs:models??await loadModels();
         generation=createTrellisGenerationFromConditioningAdapter({route,conditioningTensor:dino.conditioning,
-          models:checkpointModels,meshResolution,seed,initialNoise,onPhase:enter});
+          models:checkpointModels,...(staged?{loadModel}:{}),meshResolution,seed,initialNoise,onPhase:enter});
         const fields=await generation.run(invocation);
         result=Object.freeze({...fields,conditioning:dino.conditioning,dino});state='completed';phase='completed';return result;
       }catch(error){state='failed';result=undefined;throw error;}
@@ -66,12 +72,16 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWei
   });
 }
 
-export function createTrellisGenerationFromConditioningAdapter({route,conditioningTensor,models,
+export function createTrellisGenerationFromConditioningAdapter({route,conditioningTensor,models,loadModel,
   meshResolution=1024,seed=42,initialNoise={},onPhase}={}){
   const runtime=route?.runtime,roles=['sparseFlow','occupancyDecoder','lowResolutionShape','highResolutionShape','shapeDecoder','textureFlow','textureDecoder'];
   if(!runtime?.runKernel||!conditioningTensor?.buffer)throw TypeError('registered runtime and resident image conditioning required');
-  for(const role of roles)if(!models?.[role]?.weights)throw TypeError('actual model weight role required: '+role);
-  if(models.lowResolutionShape.weights===models.highResolutionShape.weights)
+  const staged=loadModel!==undefined;
+  if(staged&&typeof loadModel!=='function')throw TypeError('per-role checkpoint loader required');
+  for(const role of roles)if(staged?!models?.[role]?.config:!models?.[role]?.weights)throw TypeError('actual model weight role required: '+role);
+  if((!staged&&models.lowResolutionShape.weights===models.highResolutionShape.weights) ||
+    (staged&&models.lowResolutionShape.identity?.sha256&&
+      models.lowResolutionShape.identity.sha256===models.highResolutionShape.identity?.sha256))
     throw TypeError('source cascade requires the separate high-resolution model, not low-resolution weight reuse');
   if(onPhase!==undefined&&typeof onPhase!=='function')throw TypeError('phase observer must be a function');
   const gaussian=browserNoise(seed),owned=new Set(),noiseInputs={},phases=[];
@@ -88,9 +98,23 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
     return values;
   };
   const enter=async name=>{phase=name;phases.push({phase:name});await onPhase?.({phase:name,routeId:route.routeId});};
-  const shapeFlow=(role,coordinates,concatTensor)=>own(createTrellisSLatFlowAdapter({route,
-    config:{...models[role].config,tokenRows:coordinates.shape[0],mode:role==='textureFlow'?'texture':'shape'},
-    weights:models[role].weights,conditioningTensor,coordinateTensor:coordinates,...(concatTensor?{concatTensor}:{})}));
+  // Checkpoint arrays are scoped to construction/upload, not the entire
+  // generation promise. Returned adapters own GPU parameters, not a cache
+  // of all seven CPU checkpoints.
+  const consume=async(role,name,factory)=>{
+    if(staged){phase='generation-checkpoint-input-loading';
+      await onPhase?.({phase,modelRole:role,routeId:route.routeId});}
+    const checkpoint=staged?await loadModel(role):models[role];
+    if(!checkpoint?.weights||checkpoint.role!==undefined&&checkpoint.role!==role)
+      throw TypeError('actual checkpoint weights for model role required: '+role);
+    await enter(name);
+    return factory({...models[role],weights:checkpoint.weights,phases:checkpoint.phases,siluTable:checkpoint.siluTable});
+  };
+  const shapeFlow=(role,coordinates,concatTensor)=>consume(role,
+    role==='lowResolutionShape'?'low-resolution-shape-sampling':role==='highResolutionShape'?'high-resolution-shape-sampling':'shape-conditioned-texture-sampling',
+    model=>own(createTrellisSLatFlowAdapter({route,
+      config:{...model.config,tokenRows:coordinates.shape[0],mode:role==='textureFlow'?'texture':'shape'},
+      weights:model.weights,conditioningTensor,coordinateTensor:coordinates,...(concatTensor?{concatTensor}:{})})));
   const sampleShape=async(role,flow,stage,invocation)=>{
     const sampler=own(createTrellisSLatSamplerAdapter({route,flow,config:{...models[role].config,
       tokenRows:flow.plan.tokenRows,mode:flow.plan.mode},conditioningTensor}));
@@ -104,50 +128,42 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
       if(state!=='new')throw Error(state==='running'?'generation adapter in use':'generation adapter is '+state);
       state='running';
       try{
-        await enter('sparse-structure-sampling');
-        const sparse=own(createTrellisSparseFlowAdapter({route,config:models.sparseFlow.config,
-          weights:models.sparseFlow.weights,phases:models.sparseFlow.phases,conditioningTensor})),
+        const sparse=await consume('sparseFlow','sparse-structure-sampling',model=>own(createTrellisSparseFlowAdapter({route,config:model.config,
+          weights:model.weights,phases:model.phases,conditioningTensor}))),
           sparseSampler=own(createTrellisSparseSamplerAdapter({route,flow:sparse,config:models.sparseFlow.config,conditioningTensor}));
         await sparseSampler.run({sample:noise('sparse',sparse.plan.prefix.inputShape)},invocation);
-        await enter('occupancy-decoding');
-        const occupancy=own(createTrellisSparseDecoderAdapter({route,config:models.occupancyDecoder.config,
-          weights:models.occupancyDecoder.weights,sampleTensor:sparseSampler.outputs.sample}));
+        const occupancy=await consume('occupancyDecoder','occupancy-decoding',model=>own(createTrellisSparseDecoderAdapter({route,config:model.config,
+          weights:model.weights,sampleTensor:sparseSampler.outputs.sample})));
         await occupancy.run({},invocation);
         const coordinates=own(createTrellisOccupancyCoordinatesAdapter({route,resolution:occupancy.plan.outputResolution,
           logitsTensor:occupancy.outputs.logits}));await coordinates.run(invocation);
         const lrCoordinates=await coordinates.coordinates(),lrResolution=coordinates.plan.outputResolution;
         await retire(occupancy,sparseSampler,sparse);
-        await enter('low-resolution-shape-sampling');
-        const lrFlow=shapeFlow('lowResolutionShape',lrCoordinates),lr=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
-        await enter('learned-cascade-support');
-        const support=own(createTrellisSLatCascadeSupportAdapter({route,
-          config:{...models.shapeDecoder.config,tokenRows:lrCoordinates.shape[0],resolution:lrResolution},
-          weights:models.shapeDecoder.weights,siluTable:models.shapeDecoder.siluTable,sampleTensor:lr.sample,
-          coordinateTensor:lrCoordinates,meshResolution})),hr=await support.run(invocation),rows=hr.coordinates.shape[0];
+        const lrFlow=await shapeFlow('lowResolutionShape',lrCoordinates),lr=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
+        const support=await consume('shapeDecoder','learned-cascade-support',model=>own(createTrellisSLatCascadeSupportAdapter({route,
+          config:{...model.config,tokenRows:lrCoordinates.shape[0],resolution:lrResolution},
+          weights:model.weights,siluTable:model.siluTable,sampleTensor:lr.sample,
+          coordinateTensor:lrCoordinates,meshResolution}))),hr=await support.run(invocation),rows=hr.coordinates.shape[0];
         await retire(lr.sampler,lrFlow,coordinates);
-        await enter('high-resolution-shape-sampling');
-        const hrFlow=shapeFlow('highResolutionShape',hr.coordinates),hrSample=await sampleShape('highResolutionShape',hrFlow,'highResolutionShape',invocation),
+        const hrFlow=await shapeFlow('highResolutionShape',hr.coordinates),hrSample=await sampleShape('highResolutionShape',hrFlow,'highResolutionShape',invocation),
           shapeScale=own(createTrellisSLatScaleAdapter({route,tokenRows:rows,sampleTensor:hrSample.sample}));
         await shapeScale.run(invocation);
         await retire(hrSample.sampler,hrFlow);
-        await enter('learned-geometry-decoding');
-        const geometryDecoder=own(createTrellisSLatDecoderAdapter({route,
-          config:{...models.shapeDecoder.config,tokenRows:rows,resolution:hr.resolution,mode:'shape',structureOnly:false},
-          weights:models.shapeDecoder.weights,siluTable:models.shapeDecoder.siluTable,
-          sampleTensor:shapeScale.outputs.sample,coordinateTensor:hr.coordinates})),geometry=await geometryDecoder.run(invocation);
-        await enter('shape-conditioned-texture-sampling');
+        const geometryDecoder=await consume('shapeDecoder','learned-geometry-decoding',model=>own(createTrellisSLatDecoderAdapter({route,
+          config:{...model.config,tokenRows:rows,resolution:hr.resolution,mode:'shape',structureOnly:false},
+          weights:model.weights,siluTable:model.siluTable,
+          sampleTensor:shapeScale.outputs.sample,coordinateTensor:hr.coordinates}))),geometry=await geometryDecoder.run(invocation);
         const shapeNormalize=own(createTrellisSLatScaleAdapter({route,tokenRows:rows,direction:'normalize',sampleTensor:shapeScale.outputs.sample}));
+        const textureFlow=await shapeFlow('textureFlow',hr.coordinates,shapeNormalize.outputs.sample);
         await shapeNormalize.run(invocation);
-        const textureFlow=shapeFlow('textureFlow',hr.coordinates,shapeNormalize.outputs.sample),
-          textureSample=await sampleShape('textureFlow',textureFlow,'texture',invocation),
+        const textureSample=await sampleShape('textureFlow',textureFlow,'texture',invocation),
           textureScale=own(createTrellisSLatScaleAdapter({route,tokenRows:rows,mode:'texture',sampleTensor:textureSample.sample}));
         await textureScale.run(invocation);
         await retire(textureSample.sampler,textureFlow,shapeNormalize);
-        await enter('shape-guided-material-decoding');
-        const textureDecoder=own(createTrellisSLatDecoderAdapter({route,
-          config:{...models.textureDecoder.config,tokenRows:rows,resolution:hr.resolution,mode:'texture'},
-          weights:models.textureDecoder.weights,siluTable:models.textureDecoder.siluTable,
-          sampleTensor:textureScale.outputs.sample,coordinateTensor:hr.coordinates,guideSubdivisions:geometry.subdivisions})),
+        const textureDecoder=await consume('textureDecoder','shape-guided-material-decoding',model=>own(createTrellisSLatDecoderAdapter({route,
+          config:{...model.config,tokenRows:rows,resolution:hr.resolution,mode:'texture'},
+          weights:model.weights,siluTable:model.siluTable,
+          sampleTensor:textureScale.outputs.sample,coordinateTensor:hr.coordinates,guideSubdivisions:geometry.subdivisions}))),
           material=await textureDecoder.run(invocation);
         await runtime.device?.queue?.onSubmittedWorkDone?.();
         result=Object.freeze({geometry,material,shapeCodes:shapeScale.outputs.sample,textureCodes:textureScale.outputs.sample,

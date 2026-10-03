@@ -73,22 +73,26 @@ export function validateGenerationInputs(m){
 
 export async function loadGenerationInputs(m,fetchTensor){
   const plan=validateGenerationInputs(m);
-  const loadModels=async()=>{const table=await fetchTensor(m.models.sparseFlow.tensors.gelu),
-    silu=await fetchTensor(m.models.shapeDecoder.siluTable),models={};
-  for(const role of GENERATION_ROLES){
-    const model=m.models[role],flat={};
+  let gelu,silu;
+  // Cache only small, identity-checked activation tables. Full checkpoints
+  // belong to their consuming stage and are never cached across model roles.
+  const loadModel=async role=>{
+    if(!GENERATION_ROLES.includes(role))throw RangeError('known generation model role required');
+    const model=m.models[role],flat={},flow='gelu' in plan.shapes.models[role],
+      table=flow?await(gelu??=fetchTensor(m.models.sparseFlow.tensors.gelu)):undefined;
     for(const [key,name]of Object.entries(model.tensors))flat[key]=key==='gelu'?table:await fetchTensor(name);
     let weights=flat;
-    if('gelu' in plan.shapes.models[role])weights={
+    if(flow)weights={
       prefix:Object.fromEntries(Object.entries(flat).filter(([k])=>k.startsWith('prefix.')).map(([k,v])=>[k.slice(7),v])),
       blocks:Array.from({length:model.config.numBlocks},(_,i)=>({...Object.fromEntries(Object.entries(flat).filter(([k])=>k.startsWith('block'+i+'.'))
         .map(([k,v])=>[k.slice(('block'+i+'.').length),v])),gelu:table})),terminal:{weight:flat['terminal.weight'],bias:flat['terminal.bias']}};
-    models[role]={config:model.config,identity:model.identity,weights,
-      ...(model.phases?{phases:await fetchTensor(model.phases)}:{}),...(model.siluTable?{siluTable:silu}:{})};
-  }
-  return models;};
+    return{role,weights,...(model.phases?{phases:await fetchTensor(model.phases)}:{}),
+      ...(model.siluTable?{siluTable:await(silu??=fetchTensor(m.models.shapeDecoder.siluTable))}:{})};
+  };
   const prefixWeights={};for(const [key,name]of Object.entries(m.dino.prefix))prefixWeights[key]=await fetchTensor(name);
-  return{loadModels,prefixWeights,pixelValues:await fetchTensor(m.image.pixelTensor),dinoIdentity:m.dino.identity,
+  return{loadModel,modelInputs:Object.fromEntries(GENERATION_ROLES.map(role=>[role,
+    {config:m.models[role].config,identity:m.models[role].identity}])),
+    prefixWeights,pixelValues:await fetchTensor(m.image.pixelTensor),dinoIdentity:m.dino.identity,
     meshResolution:m.meshResolution,seed:m.seed,
     async loadLayerWeights(i){if(!Number.isInteger(i)||i<0||i>23)throw RangeError('actual DINO layer index required');
       const weights={};for(const [key,name]of Object.entries(m.dino.layers[i]))weights[key]=await fetchTensor(name);return weights;}};

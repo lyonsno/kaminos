@@ -36,6 +36,20 @@ await assert.rejects(failed.run(invocation),/injected/);assert.equal(failed.stat
 assert.equal(failed.phase,'learned-cascade-support');assert.equal(failed.noiseInputs.sparse.values.length,32768);
 failed.dispose();await assert.rejects(failed.run(invocation),/disposed/);
 failStage=undefined;let checkpointLoadObserved=false;
+const stagedLoads=[],modelInputs=Object.fromEntries(Object.entries(models).map(([role,m])=>[role,{config:m.config,identity:m.identity}]));
+const staged=serving.createTrellisImageGenerationAdapter({...options,models:undefined,modelInputs,
+  async loadModel(role){assert.ok(staged.conditioning?.buffer);stagedLoads.push(role);return models[role];}});
+const stagedOut=await staged.run(invocation);
+assert.deepEqual(stagedLoads,['sparseFlow','occupancyDecoder','lowResolutionShape','shapeDecoder',
+  'highResolutionShape','shapeDecoder','textureFlow','textureDecoder']);
+assert.deepEqual(stagedOut.geometry.features.shape,[5,7]);assert.deepEqual(stagedOut.material.features.shape,[5,6]);staged.dispose();
+assert.throws(()=>serving.createTrellisImageGenerationAdapter({...options,modelInputs,loadModel(){}}),/one.*staged.*source/);
+const loadFailure=serving.createTrellisImageGenerationAdapter({...options,models:undefined,modelInputs,
+  async loadModel(role){if(role==='occupancyDecoder')throw Error('observed staged checkpoint failure');return models[role];}});
+await assert.rejects(loadFailure.run(invocation),/observed staged checkpoint failure/);
+assert.equal(loadFailure.state,'failed');assert.equal(loadFailure.phase,'generation-checkpoint-input-loading');
+assert.equal(loadFailure.outputs,undefined);assert.ok(loadFailure.conditioning.buffer);
+assert.equal(loadFailure.noiseInputs.sparse.values.length,32768);loadFailure.dispose();
 const lazy=serving.createTrellisImageGenerationAdapter({...options,models:undefined,async loadModels(){
   assert.ok(lazy.conditioning?.buffer,'checkpoint loader runs after actual DINO producer output exists');
   checkpointLoadObserved=true;return models;}});
