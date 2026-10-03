@@ -132,6 +132,9 @@ export async function mountTimberIgnitionSmoke({restoreScene, setBurner}) {
   section.dataset.volumeCockpitLayoutUi = '';
   section.style.cssText = 'position:absolute;bottom:42px;left:12px;right:12px;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px;background:rgba(0,0,0,.8);';
   section.innerHTML = '<strong style="font-size:13px">Timber transfer</strong><span role="status" style="font-size:12px;overflow-wrap:anywhere">Loading</span><div class="volume-actions"><button class="btn" data-action="run" disabled>Run transfer</button><button class="btn" data-action="pause" disabled>Pause</button><button class="btn" data-action="reset" disabled>Reset</button></div>';
+  for (const type of ['pointerdown', 'mousedown', 'click']) {
+    section.addEventListener(type, event => event.stopPropagation());
+  }
   root.prepend(section);
   const label = section.querySelector('[role="status"]');
   const pause = section.querySelector('[data-action="pause"]');

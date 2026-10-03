@@ -40,6 +40,12 @@ try {
       objects.splice(0,objects.length,...saved);return {freshFluid:true,freshMaterial:true};},
   });
   await new Promise(setImmediate);
+  for (const type of ['pointerdown', 'mousedown', 'click']) {
+    let stopped=false;
+    assert.equal(typeof section.handlers.get(type),'function','experiment controls must not pick the scene beneath them');
+    section.handlers.get(type)({stopPropagation(){stopped=true;}});
+    assert.equal(stopped,true);
+  }
   assert.equal(smoke.status().running,false,'mount must wait indefinitely for a deliberate Run click');
   assert.equal(smoke.status().phase,'cold');
   assert.equal(state.simulationPaused,true);
