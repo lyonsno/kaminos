@@ -19,6 +19,14 @@ for(const role of ['shapeDecoder','textureDecoder'])test('reject shortened '+rol
   assert.throws(()=>serving.validateGenerationInputs(reduced),/canonical decoder architecture/,
     'Regenerating all descriptors for a shortened decoder must not admit a different model as the full source route.');
 });
+test('reject structure-only shape coverage',()=>{
+  const role='shapeDecoder';
+  const reduced=clone();reduced.models[role].config.structureOnly=true;
+  delete reduced.models[role].tensors['output_layer.weight'];
+  delete reduced.models[role].tensors['output_layer.bias'];
+  assert.throws(()=>serving.validateGenerationInputs(reduced),/complete parameter coverage/,
+    'Admission must require terminal weights used by the actual full decoder, even when the package advertises structureOnly.');
+});
 for(const name of [m.models.textureFlow.tensors.gelu,m.models.textureDecoder.siluTable])test('reject substituted activation '+name,()=>{
   const different=clone();
   // The shared SiLU alias needs a distinct descriptor before its content identity can differ.
@@ -40,6 +48,11 @@ bad=clone();bad.models.textureDecoder.config.channels=[1];assert.throws(()=>serv
 bad=clone();bad.status='failed';assert.throws(()=>serving.validateGenerationInputs(bad),/successful/);
 const additive=clone();additive.future={diagnostic:true};additive.tensors['image.pixels'].future='metadata';
 assert.equal(serving.validateGenerationInputs(additive).tensorCount,tensorCount);
+const fullShape=clone();fullShape.models.shapeDecoder.config.structureOnly=true;
+assert.equal(serving.validateGenerationInputs(fullShape).tensorCount,tensorCount,
+  'An ignored shape-plan flag cannot shorten effective full-decoder coverage.');
+const invalidTexture=clone();invalidTexture.models.textureDecoder.config.structureOnly=true;
+assert.throws(()=>serving.validateGenerationInputs(invalidTexture),/structure-only pass requires the learned shape decoder/);
 const fetched=[],loaded=await loadGenerationInputs(m,async key=>{fetched.push(key);return new Float32Array(m.tensors[key].byteLength/4);});
 assert.equal(typeof loaded.loadModels,'function');assert.equal(loaded.models,undefined);
 assert.ok(fetched.every(key=>key.startsWith('dino.')||key==='image.pixels'),

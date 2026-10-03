@@ -18,7 +18,7 @@ export function generationInputShapes(m){
       for(let i=0;i<config.numBlocks;i++)for(const [key,shape]of Object.entries(sparseBlockWeightShapes(p)))shapes['block'+i+'.'+key]=shape;
       models[role]=shapes;
     }else if(role==='occupancyDecoder')models[role]=sparseDecoderWeightShapes(buildSparseDecoderPlan(config));
-    else models[role]=slatDecoderWeightShapes(buildSLatDecoderPlan({...config,tokenRows:1,mode:role==='textureDecoder'?'texture':'shape'}));
+    else models[role]=slatDecoderWeightShapes(buildSLatDecoderPlan({...config,tokenRows:1,...(role==='shapeDecoder'?{structureOnly:false}:{}),mode:role==='textureDecoder'?'texture':'shape'}));
   }
   return{image:[1,512,512,3],models,phases:[4096,64,2],silu:[65536],
     dinoPrefix:{patchProjection:[1024,16,16,3],patchBias:[1024],classToken:[1,1,1024],registerTokens:[1,4,1024],ropeCos:[1024,64],ropeSin:[1024,64]},
