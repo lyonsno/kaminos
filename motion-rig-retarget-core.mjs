@@ -73,7 +73,8 @@ function jointAngle(frame, parentIndex, jointIndex, childIndex, referenceAxis) {
   const aLength = length(incoming);
   const bLength = length(outgoing);
   if (aLength <= 1e-8 || bLength <= 1e-8) throw new Error(`Degenerate SOMA30 joint angle at ${jointIndex}`);
-  const sine = dot(referenceAxis, cross(incoming, outgoing)) / (aLength * bLength);
+  const bend = cross(incoming, outgoing);
+  const sine = (dot(referenceAxis, bend) < 0 ? -1 : 1) * length(bend) / (aLength * bLength);
   const cosine = dot(incoming, outgoing) / (aLength * bLength);
   return Math.atan2(sine, cosine);
 }
@@ -115,8 +116,33 @@ export function createMotionRigRequestGate() {
 }
 
 function sourceAngle(frame, key, planeAxes) {
+  if (key[1] === SOURCE_JOINTS.leftHip || key[1] === SOURCE_JOINTS.rightHip) {
+    const thigh = subtract(point(frame, key[2]), point(frame, key[1]));
+    // Hip flexion is thigh pitch in the pelvis sagittal plane, not the angle
+    // between the transverse pelvis-to-hip offset and the thigh.
+    if (Math.hypot(thigh[1], thigh[2]) <= 1e-8) throw new Error('SOMA30 hip has no sagittal thigh direction');
+    return Math.atan2(thigh[2], -thigh[1]);
+  }
   const [parentIndex, jointIndex, childIndex] = key;
   return jointAngle(frame, parentIndex, jointIndex, childIndex, planeAxes.get(jointIndex));
+}
+
+function donorBodyLocalFrame(frame) {
+  const root = point(frame, SOURCE_JOINTS.pelvis);
+  const lateral = subtract(point(frame, SOURCE_JOINTS.rightHip), point(frame, SOURCE_JOINTS.leftHip));
+  const lateralLength = length(lateral);
+  if (lateralLength <= 1e-8) throw new Error('SOMA30 donor body frame needs bilateral hip landmarks');
+  const x = lateral.map(value => value / lateralLength);
+  const spine = subtract(point(frame, SOURCE_JOINTS.spine), root);
+  const yUnscaled = spine.map((value, axis) => value - dot(spine, x) * x[axis]);
+  const yLength = length(yUnscaled);
+  if (yLength <= 1e-8) throw new Error('SOMA30 donor body frame needs a spine independent of the hip axis');
+  const y = yUnscaled.map(value => value / yLength);
+  const z = cross(x, y);
+  return frame.map((_, index) => {
+    const relative = subtract(point(frame, index), root);
+    return [dot(relative, x), dot(relative, y), dot(relative, z)];
+  });
 }
 
 export function buildKimodoHindquartersTrack(result) {
@@ -142,11 +168,14 @@ export function buildKimodoHindquartersTrack(result) {
     rightStifle: [SOURCE_JOINTS.rightHip, SOURCE_JOINTS.rightKnee, SOURCE_JOINTS.rightAnkle],
     rightHock: [SOURCE_JOINTS.rightKnee, SOURCE_JOINTS.rightAnkle, SOURCE_JOINTS.rightToe],
   };
+  // Bend planes follow the donor body rather than remaining fixed in world
+  // space. A rigid turn must not become apparent knee/ankle articulation.
+  const localFrames = frames.map(donorBodyLocalFrame);
   const planeAxes = new Map(Object.values(keys).map(([parent, joint, child]) => [
     joint,
-    referenceAxis(frames, parent, joint, child),
+    referenceAxis(localFrames, parent, joint, child),
   ]));
-  const baseAngles = Object.fromEntries(Object.entries(keys).map(([name, key]) => [name, sourceAngle(frames[0], key, planeAxes)]));
+  const baseAngles = Object.fromEntries(Object.entries(keys).map(([name, key]) => [name, sourceAngle(localFrames[0], key, planeAxes)]));
   const baseRoot = point(frames[0], SOURCE_JOINTS.pelvis);
   const baseSpine = subtract(point(frames[0], SOURCE_JOINTS.spine), baseRoot);
   const baseSpineLength = length(baseSpine);
@@ -163,7 +192,8 @@ export function buildKimodoHindquartersTrack(result) {
     fps: Number(result.fps) > 0 ? Number(result.fps) : 30,
     targetBoneNames: [...TARGET_BONES],
     mappedSourceJoints: { ...SOURCE_JOINTS },
-    frames: frames.map(frame => {
+    frames: frames.map((frame, frameIndex) => {
+      const localFrame = localFrames[frameIndex];
       const root = point(frame, SOURCE_JOINTS.pelvis);
       const spine = subtract(point(frame, SOURCE_JOINTS.spine), root);
       const spineLength = length(spine);
@@ -176,14 +206,14 @@ export function buildKimodoHindquartersTrack(result) {
         rootOffset: subtract(root, baseRoot),
         pelvisPitchRadians,
         left: {
-          hipRadians: wrapRadians(sourceAngle(frame, keys.leftHip, planeAxes) - baseAngles.leftHip),
-          stifleRadians: wrapRadians(sourceAngle(frame, keys.leftStifle, planeAxes) - baseAngles.leftStifle),
-          hockRadians: wrapRadians(sourceAngle(frame, keys.leftHock, planeAxes) - baseAngles.leftHock),
+          hipRadians: wrapRadians(sourceAngle(localFrame, keys.leftHip, planeAxes) - baseAngles.leftHip),
+          stifleRadians: wrapRadians(sourceAngle(localFrame, keys.leftStifle, planeAxes) - baseAngles.leftStifle),
+          hockRadians: wrapRadians(sourceAngle(localFrame, keys.leftHock, planeAxes) - baseAngles.leftHock),
         },
         right: {
-          hipRadians: wrapRadians(sourceAngle(frame, keys.rightHip, planeAxes) - baseAngles.rightHip),
-          stifleRadians: wrapRadians(sourceAngle(frame, keys.rightStifle, planeAxes) - baseAngles.rightStifle),
-          hockRadians: wrapRadians(sourceAngle(frame, keys.rightHock, planeAxes) - baseAngles.rightHock),
+          hipRadians: wrapRadians(sourceAngle(localFrame, keys.rightHip, planeAxes) - baseAngles.rightHip),
+          stifleRadians: wrapRadians(sourceAngle(localFrame, keys.rightStifle, planeAxes) - baseAngles.rightStifle),
+          hockRadians: wrapRadians(sourceAngle(localFrame, keys.rightHock, planeAxes) - baseAngles.rightHock),
         },
       };
     }),

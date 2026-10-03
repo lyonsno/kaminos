@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as THREE from '../lib/three.core.js';
+const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const match = source.match(/function motionRigHipAxisInParentSpace\(pelvis, leftHip, rightHip\) \{([\s\S]*?)\n\}/);
+assert.ok(match, 'hip flexion needs the bilateral hip axis, not the pelvis-to-thigh cross product');
+const axisFor = Function('THREE', `return function(pelvis,leftHip,rightHip){${match[1]}}`)(THREE);
+const pelvis = new THREE.Object3D(), left = new THREE.Object3D(), right = new THREE.Object3D();
+pelvis.rotation.set(.3,.5,-.4); left.position.set(1,.2,.1); right.position.set(-1,-.2,-.1);
+pelvis.add(left,right); pelvis.updateMatrixWorld(true);
+const axis = axisFor(pelvis,left,right);
+const world = axis.clone().applyQuaternion(pelvis.getWorldQuaternion(new THREE.Quaternion()));
+const bilateral = left.getWorldPosition(new THREE.Vector3()).sub(right.getWorldPosition(new THREE.Vector3())).normalize();
+assert.ok(world.distanceTo(bilateral) < 1e-10, 'hip parent-local rotation preserves the world bilateral flexion axis');
+console.log('cat target hip axis contracts passed');

@@ -8756,6 +8756,12 @@ function motionRigAxisInParentSpace(parent, joint, child) {
   return worldAxis.applyQuaternion(parentWorldRotation.invert()).normalize();
 }
 
+function motionRigHipAxisInParentSpace(pelvis, leftHip, rightHip) {
+  const axis = leftHip.getWorldPosition(new THREE.Vector3()).sub(rightHip.getWorldPosition(new THREE.Vector3()));
+  if (axis.lengthSq() < 1e-10) throw new Error('Target rig has degenerate bilateral hip landmarks');
+  return axis.normalize().applyQuaternion(pelvis.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize();
+}
+
 function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.motion-result', target = selectedSceneBoneTarget, requestToken = null } = {}) {
   if (requestToken && !motionRigPreviewRequestGate.isCurrent(requestToken, motionRigTargetKey(target))) return null;
   const record = target && sceneObjects.find(entry => entry.id === target.objectId);
@@ -8780,9 +8786,9 @@ function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.moti
   }
   scene.updateMatrixWorld(true);
   const axes = {
-    leftHip: motionRigAxisInParentSpace(pelvis, leftHip, leftStifle),
+    leftHip: motionRigHipAxisInParentSpace(pelvis, leftHip, rightHip),
     leftStifle: motionRigAxisInParentSpace(leftHip, leftStifle, leftHock),
-    rightHip: motionRigAxisInParentSpace(pelvis, rightHip, rightStifle),
+    rightHip: motionRigHipAxisInParentSpace(pelvis, leftHip, rightHip),
     rightStifle: motionRigAxisInParentSpace(rightHip, rightStifle, rightHock),
   };
   axes.leftHock = axes.leftStifle.clone();
