@@ -86,3 +86,11 @@ body[data-workspace=authoring] .authoring-splitter { display:block; grid-row:2; 
 #authoring-tree .scene-object-list { gap:2px; }
 #authoring-tree .scene-object-row { min-height:34px; }
 #authoring-inspector #selected-light-properties > h2, #authoring-inspector #selected-flame-properties > h2 { font-size:11px; text-transform:none; letter-spacing:0; }
+
+#selected-flame-fields .flame-scope { font-size:10px; line-height:1.5; color:#92949c; margin:9px 0; }
+#selected-flame-fields .slider-label { flex-basis:126px; }
+#selected-flame-fields .transform-input { min-width:0; width:100%; font-size:11px; }
+#selected-flame-fields input[type=checkbox] { width:auto; margin-right:auto; }
+#flame-basin-search, #flame-basin-select { box-sizing:border-box; width:100%; margin:5px 0; background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; border-radius:3px; font-size:11px; }
+.flame-basin-actions { display:flex; gap:6px; margin-top:6px; }
+#flame-basin-current { overflow-wrap:anywhere; }

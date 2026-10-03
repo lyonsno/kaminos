@@ -3328,6 +3328,7 @@ import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, 
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
+import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
@@ -16337,9 +16338,9 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
   }
 }
 
-async function saveVolumeSettingsPreset({ preset: suppliedPreset } = {}) {
+async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: suppliedLabel, sceneSnapshot = false } = {}) {
   const labelInput = document.getElementById('settings-preset-label');
-  const label = String(labelInput?.value || '').trim()
+  const label = String(suppliedLabel ?? labelInput?.value ?? '').trim()
     || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
   volumeSettingsPresetStatus(`saving ${label}...`);
   try {
@@ -16348,7 +16349,7 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset } = {}) {
     const response = await fetch('/api/volume-settings-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, preset }),
+      body: JSON.stringify({ label, preset, ...(sceneSnapshot ? {publishAlias:false} : {}) }),
     });
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || `preset save failed: ${response.status}`);
@@ -16356,11 +16357,12 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset } = {}) {
       || result.effective?.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
       || Number(result.effective?.controlCount) !== preset.controlCount
       || Number(result.effective?.rendererControlCount) !== preset.rendererControlCount
-      || Number(result.effective?.presentationControlCount) !== preset.presentationControlCount) {
+      || Number(result.effective?.presentationControlCount) !== preset.presentationControlCount
+      || (sceneSnapshot && (result.effective?.publishAlias !== false || result.effective?.alias !== null))) {
       throw new Error('preset write receipt identity or schema mismatch');
     }
     await refreshVolumeSettingsPresetList(result.effective.presetId);
-    if (labelInput) labelInput.value = result.effective.label;
+    if (labelInput && !sceneSnapshot) labelInput.value = result.effective.label;
     volumeSettingsPresetStatus(
       `${result.effective.label} | ${result.effective.presetId} | ${result.effective.controlCount} basin + ${result.effective.rendererControlCount} renderer + ${result.effective.presentationControlCount} presentation controls | ${result.effective.storePath}`,
     );
@@ -24223,25 +24225,71 @@ function updateAuthoringPropertySelection() {
     if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=activeSceneObjectId===RIM_LIGHT_ID;
   });
 }
+let flameInspector = null;
 function createFlameQuickFields() {
-  const host=document.getElementById('selected-flame-fields');
-  for(const [id,label] of [['volume-flow-rate','Flow'],['volume-input-radius','Radius'],['volume-speed','Speed'],['volume-exposure','Exposure']]) {
-    const source=document.getElementById(id);if(!source)continue;
-    const row=document.createElement('div');row.className='slider-row';
-    const grip=document.createElement('label');grip.className='slider-label';grip.textContent=label;
-    const number=document.createElement('input');number.type='number';number.step='any';number.className='transform-input';number.dataset.authoringAlias=id;
-    number.setAttribute('aria-label',`Flame ${label}`);number.value=source.value;
-    for(const key of ['min','max'])if(source[key])number[key]=source[key];
-    grip.htmlFor=number.id=`selected-${id}`;
-    number.addEventListener('input',()=>{
-      if(!number.value.trim()||!number.validity.valid)return;
-      source.value=number.value;source.dispatchEvent(new Event('input',{bubbles:true}));
-    });
-    number.addEventListener('change',()=>{number.value=source.value;});
-    source.addEventListener('input',()=>{if(document.activeElement!==number)number.value=source.value;});
-    row.append(grip,number);host.append(row);
-  }
+  flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),
+    listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+    applyBasin:id=>window.kaminosFlameAuthoring.applyBasin(id),
+    readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
+      modified:!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),activeVolumeSettingsPresetReceipt.preset)} : null,
+    openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
 }
+
+function flameSettingsState(preset=buildVolumeSettingsPreset(),source=activeVolumeSettingsPresetReceipt) {
+  return structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
+    presentationControls:preset.presentationControls,
+    source:source ? {presetId:source.presetId,label:source.label,preset:source.preset} : null});
+}
+function checkFlameSettingsState(state) {
+  const current=flameSettingsState();
+  for(const axis of ['domControls','rendererControls','presentationControls']) {
+    const wanted=state[axis];
+    if(!wanted || Object.keys(wanted).sort().join()!==Object.keys(current[axis]).sort().join())throw Error(`Incomplete flame ${axis}`);
+    for(const [id,descriptor] of Object.entries(wanted)) {
+      if(axis==='presentationControls') {if(!['on','off'].includes(descriptor.value))throw Error('Invalid smoke presentation');continue;}
+      const source=document.getElementById(id),value=descriptor.rawValue??descriptor.value;
+      if(!source)throw Error(`Missing flame setting ${id}`);
+      if(source.tagName==='SELECT') {if(![...source.options].some(option=>option.value===String(value)))throw Error(`Unsupported ${id}: ${value}`);}
+      else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))throw Error(`Invalid ${id}`);}
+      else if(['range','number'].includes(source.type)) {
+        if(!Number.isFinite(Number(value)))throw Error(`Nonfinite ${id}`);
+        // The render-scale control has an explicit Full/legacy value contract.
+        if(id!=='volume-render-scale'&&((source.min!==''&&Number(value)<Number(source.min))||(source.max!==''&&Number(value)>Number(source.max))))throw Error(`Out of range ${id}`);
+      } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))throw Error(`Invalid color ${id}`);
+    }
+  }
+  return state;
+}
+function writeFlameSettingsState(state) {
+  for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis]))setVolumeControlValue(id,descriptor.rawValue??descriptor.value);
+  activeCanonicalVolumeMacroPreset='';activeVolumeRayBudgetPreset='';routedVolumeRayBudgetPreset='';
+  updateVolumeControlLabels();
+  // One complete source update, preserving its authored world pose and domain.
+  applyFlameEmitterPose(flameEmitterPose);
+  const smoke=state.presentationControls['raymarch-smoke-presentation'].value;
+  const receipt=volumePrototype.setRaymarchSmokePresentationMode(smoke);
+  if(receipt?.fallbackReason || receipt?.effectiveMode!==smoke)throw Error('Smoke presentation did not apply');
+  window.__kaminosRaymarchSmokePresentationReceipt=receipt;syncRaymarchSmokePresentationControls(receipt);
+  if(!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),state))throw Error('Flame settings were substituted during application');
+  activeVolumeSettingsPresetReceipt=state.source;
+  window.__kaminosVolumeSettingsPresetReceipt=state.source;
+  syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);
+}
+function installFlameAuthoring() {
+  window.kaminosFlameAuthoring=createFlameAuthoring({edits:scenePlacementTools.edits,
+    read:()=>flameSettingsState(),write:writeFlameSettingsState,check:checkFlameSettingsState,
+    canApply:()=>{if(!volumePrototype?.debugState?.().active || !applyFlameEmitterPose)throw Error('Flame runtime is not active');},
+    changed:()=>flameInspector?.sync(),
+    load:async id=>{
+      const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
+      const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
+      if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
+      const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
+      if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
+      return flameSettingsState(receipt.preset,receipt);
+    }});
+}
+
 function installAuthoringParameterEditing() {
   const edits=scenePlacementTools.edits;
   authoringControlSessions.push(sceneControlHistory);
@@ -24249,6 +24297,7 @@ function installAuthoringParameterEditing() {
   document.addEventListener('pointerdown',event=>{
     if(event.target.closest?.('input,select,label,button,summary'))authoringControlSessions.forEach(session=>session.commit());
   },true);
+  installFlameAuthoring();
   const bind=(id,definition)=>{
     edits.register(id,definition);
     authoringParameterTargets.set(id,definition);
@@ -24260,21 +24309,26 @@ function installAuthoringParameterEditing() {
   });
   for(const control of collectVolumeCockpitControlElements(document)) {
     if(['volume-input-radius','volume-flow-rate'].includes(control.id))continue; // existing paired Burner adapter
-    if(!['range','number','checkbox','color'].includes(control.type))continue;
+    if(control.tagName!=='SELECT'&&!['range','number','checkbox','color'].includes(control.type))continue;
     const read=()=>({value:readVolumeDomControlValue(control)});
     const write=state=>{
       setVolumeControlValue(control.id,state.value);
       control.dispatchEvent(new Event('input',{bubbles:true}));
       control.dispatchEvent(new Event('change',{bubbles:true}));
-      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>alias.value=control.value);
+      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=control.value;});
     };
     const check=state=>{
-      if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
+      if(control.tagName==='SELECT'){if(![...control.options].some(option=>option.value===String(state.value)))throw Error('Unsupported parameter option');}
+      else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
       return {value:state.value};
     };
-    bind(`@parameter:${control.id}`,{controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label:`Adjust ${control.id.replace(/^volume-/,'').replaceAll('-',' ')}`,read,write,check});
+    const id=`@parameter:${control.id}`,label=`Adjust ${control.id.replace(/^volume-/,'').replaceAll('-',' ')}`;
+    const definition={read,write,check};
+    edits.register(id,definition);authoringParameterTargets.set(id,definition);
+    authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
+      controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>setInfo(error.message)}));
   }
   for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
     const control=document.getElementById(id);if(!control)continue;
@@ -24299,7 +24353,8 @@ function installAuthoringParameterEditing() {
     }
   }
   edits.subscribe(()=>{
-    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias)alias.value=document.getElementById(alias.dataset.authoringAlias).value;});
+    flameInspector?.sync();
+    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias){const source=document.getElementById(alias.dataset.authoringAlias);if(alias.type==='checkbox')alias.checked=source.checked;else alias.value=source.value;}});
   });
   syncRimAuthoringHandle();
 }
@@ -27214,7 +27269,7 @@ async function collectSceneComposition() {
     && volumeSettingsPresetControlValuesEqual(preset, activeVolumeSettingsPresetReceipt.preset)
     ? { presetId: activeVolumeSettingsPresetReceipt.presetId,
       label: activeVolumeSettingsPresetReceipt.label || activeVolumeSettingsPresetReceipt.presetId }
-    : (await saveVolumeSettingsPreset({ preset })).effective;
+    : (await saveVolumeSettingsPreset({ preset, sceneSnapshot:true, label:`${document.getElementById('composition-label').value.trim() || 'Scene'} · flame` })).effective;
   assertUnchanged();
   const route = {};
   for (const [key, value] of fireLightFieldRouteParams()) {
@@ -27250,20 +27305,7 @@ async function withAuthoringAction(action) {
 }
 
 async function changeCompositionBasin(entry) {
-  return withAuthoringAction(async () => {
-    if (sceneSaveIsBlocked()) return false;
-    await collectSceneComposition();
-    const next = buildSceneData();
-    next.composition ||= {
-      schema: COMPOSITION_SCHEMA,
-      route: { volume_light_field: '1', volume_light_field_scene_depth: '1', volume_light_field_test_scene: '0' },
-      lightGainStops: 0,
-    };
-    next.composition.flame = { presetId: entry.presetId, label: entry.label, stationary: true };
-    if (!await saveToServer(next, null)) throw new Error('Could not save the basin composition');
-    location.assign(compositionRestoreUrl(next.composition, currentSceneFile, location.origin));
-    return true;
-  });
+  return window.kaminosFlameAuthoring.applyBasin(entry.presetId);
 }
 
 window.captureComposition = () => withAuthoringAction(async () => {
@@ -27323,7 +27365,10 @@ document.getElementById('composition-ground-height').onchange = event => {
   if (groundPlane && Number.isFinite(height)) groundPlane.position.y = height;
   window._kaminosDirty?.();
 };
-document.getElementById('composition-basins').onclick = () => setActiveTab('volume');
+document.getElementById('composition-basins').onclick = () => {
+  if(window.kaminosWorkspace?.state().mode==='authoring'){setActiveSceneObject(FLAME_EMITTER_ID);const panel=document.getElementById('flame-basin-browser');panel.open=true;panel.scrollIntoView({block:'nearest'});}
+  else setActiveTab('volume');
+};
 
 const burnerFields = [
   ['innerRadius', 'Inner radius', 'number', 0.005, 0, 0.85], ['outerRadius', 'Outer radius', 'number', 0.01, 0.01, 2],
