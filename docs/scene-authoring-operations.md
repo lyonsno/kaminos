@@ -18,8 +18,18 @@ await window.kaminosSceneEdits.undo();
 await window.saveSceneAs();
 ```
 
-`@rim-settings` accepts the existing light recipe fields or a partial patch. Invalid recipe values are rejected before acquiring a transaction. `@burner-controls` pairs the burner recipe, source radius and flow across Assets and Volume. Bound Volume range/number/checkbox/color inputs use `@parameter:<control-id>` with `{value}`. Selects, text fields and arbitrary buttons are not implicitly history adapters. Environment and fire-light targets are also discoverable through `list()`.
+`@rim-settings` accepts the existing light recipe fields or a partial patch. Invalid recipe values are rejected before acquiring a transaction. `@burner-controls` pairs the burner recipe, source radius and flow across Assets and Volume. Bound Volume range/number/checkbox/color inputs and selects use `@parameter:<control-id>` with `{value}`. Text fields and arbitrary buttons are not implicitly history adapters. Volume parameter writes capture the complete flame settings, so undo also restores coupled coefficients changed by the original control handler. The experimental Cluster route is rejected by the authored Shape control and parameter API; it remains in Workbench. Environment and fire-light targets are also discoverable through `list()`.
 
-Selected Flame exposes Flow, Radius, Speed and Exposure aliases to the original Volume controls. Drag numeric field labels relatively; Shift makes the drag finer and Escape cancels it. One completed drag is one history entry. Numbers retain direct typing. Undo restores authored coefficients and recipes, not earlier fluid simulation fields.
+Selected Flame groups the original Volume controls into Appearance, Emission, Motion, Simulation and Legacy appearance. Scope labels distinguish the selected source from the shared simulation domain. The Basin browser searches and applies saved recipes in place, preserving the authored source pose and scene objects. Drag numeric field labels relatively; Shift makes the drag finer and Escape cancels it. One completed drag is one history entry. Numbers retain direct typing. Undo restores authored coefficients and recipes, not earlier fluid simulation fields.
+
+`window.kaminosFlameAuthoring.read()` returns a copy of the complete working settings and source recipe receipt. `apply(snapshot, label)` applies a complete validated snapshot as one history entry. `await applyBasin(presetId)` loads an existing immutable recipe and applies it through the same operation as the inspector. It rejects an overlapping load or an intervening scene edit; retry explicitly after resolving that edit. Finish or cancel an active gesture first.
+
+```js
+const before = window.kaminosFlameAuthoring.read();
+await window.kaminosFlameAuthoring.applyBasin(existingPresetId);
+await window.kaminosSceneEdits.undo(); // restores every coefficient and source receipt
+```
+
+Scene saves persist modified settings as an immutable preset with `publishAlias:false`; the original library alias remains unchanged and scene snapshots do not populate the basin library. Saving an explicitly named basin through Workbench retains its existing library behavior.
 
 Save/Save As collect accepted Volume controls into the composition's immutable basin reference and preserve the light recipe. Reopen uses `compositionRestoreUrl()` and the registered scene/asset/basin stores described in [basin presets](basin-presets-for-inference-smokes.md). Scene JSON does not bundle external GLBs. Add Water Emitter consumes the existing typed local-liquid adapter; the menu does not establish mixed kiln/water physical support or a new solver contract.
