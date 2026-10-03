@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { applyWebphysicsPatches } from '../scripts/webphysics-patches.mjs';
+const source=fs.readFileSync(new URL('../vendor/webphysics/src/physics/gpu/avbdState.ts',import.meta.url),'utf8');
+const patched=applyWebphysicsPatches(source);
+assert.ok(/qmul\(qmul\(worldQA, normalize\(restRelative\)\), qconj/.test(patched),'fixed joint must retain the captured relative rotation');
+assert.equal((patched.match(/loadJointRestRelativeRotation\(jointRecords, /g)||[]).length,3);
+assert.throws(()=>applyWebphysicsPatches(patched),/revision drift/);
+assert.throws(()=>applyWebphysicsPatches(source.replace('fn jointFixedAngularConstraint','fn changedJointFixedAngularConstraint')),/revision drift/);
+console.log('Pinned GPU angular constraint uses captured rest in preparation, solve and force capture');

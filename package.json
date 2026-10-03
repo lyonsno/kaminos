@@ -4,6 +4,10 @@
   "type": "module",
   "dependencies": {
     "@kaminos/webgpu-inference-kit": "^0.1.6",
-    "cannon-es": "0.20.0"
+    "cannon-es": "0.20.0",
+    "three": "0.183.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
   }
 }
