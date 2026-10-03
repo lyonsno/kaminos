@@ -5,6 +5,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { Vector3, Quaternion } from 'three';
 import { inspectGpuConformance, inspectGpuArchLoad } from './structural-material-arch-gpu-evidence.mjs';
 
 const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load'] = process.argv.slice(2);
@@ -54,13 +55,43 @@ function minimumY(state){let low=Infinity;for(const body of state.bodies)for(con
   const ux=q.y*z-q.z*y,uy=q.z*x-q.x*z,uz=q.x*y-q.y*x;
   low=Math.min(low,body.position.y+y+2*(q.z*ux-q.x*uz+q.w*uy));
 }return low;}
+function repairTarget(state){
+  const bodyQuaternion=body=>new Quaternion(body.quaternion.x,body.quaternion.y,body.quaternion.z,body.quaternion.w);
+  const anchor=(body,point)=>new Vector3(point.x,point.y,point.z).applyQuaternion(bodyQuaternion(body)).add(new Vector3(body.position.x,body.position.y,body.position.z));
+  const gap=Math.min(...Object.values(state.state.dimensions))*.15;
+  for(const bond of state.state.bonds){if(bond.alive)continue;const a=state.state.bodies[bond.a],b=state.state.bodies[bond.b];
+    if(anchor(a,bond.anchorA).distanceTo(anchor(b,bond.anchorB))>gap||Math.abs(bodyQuaternion(a).dot(bodyQuaternion(b)))<.98)continue;
+    const target=state.pickTargets.find(item=>item.visible&&(item.index===bond.a||item.index===bond.b));if(target)return{target,bond:bond.id};
+  }
+  return null;
+}
+async function repairClick(before){
+  const candidate=repairTarget(before);check('a visible damaged current-pose connection can be repaired',Boolean(candidate),candidate);
+  await evaluate('document.querySelector("#bind").click()');const selected=await witness();
+  check('Bind selection leaves existing damage and pose untouched',selected.state.broken===before.state.broken&&JSON.stringify(selected.state.bodies)===JSON.stringify(before.state.bodies),selected.state.broken);
+  const {target}=candidate,center=before.state.bodies[target.index].position,radius=Math.max(before.state.dimensions.dx,before.state.dimensions.dy)*2;
+  const distance=body=>Math.hypot(body.position.x-center.x,body.position.y-center.y,body.position.z-center.z);
+  const farDead=before.state.bonds.filter(bond=>!bond.alive&&Math.min(distance(before.state.bodies[bond.a]),distance(before.state.bodies[bond.b]))>radius).map(bond=>bond.id);
+  check('local repair has damaged connections outside its neighborhood',farDead.length>0,farDead);
+  await input({type:'mousePressed',x:target.screen.x,y:target.screen.y,button:'left',buttons:1,clickCount:1});
+  check('Bind contact is the advertised current surface',(await witness()).state.hand?.index===target.index,(await witness()).lastPick);
+  await evaluate('window.__archCollapse.advance(1)');const repaired=await capture('local-bind');
+  const bound=repaired.state.events.filter(event=>event.kind==='bind'&&event.step>before.state.step);
+  check('actual Bind input reconnects resident material',bound.length>0&&bound.some(event=>repaired.state.bonds.find(bond=>bond.id===event.id).alive),bound);
+  check('local Bind does not restore remote damage',farDead.every(id=>!repaired.state.bonds.find(bond=>bond.id===id).alive),farDead.length);
+  check('Bind leaves the operator camera untouched',JSON.stringify(repaired.camera)===JSON.stringify(before.camera),repaired.camera);
+  await input({type:'mouseReleased',x:target.screen.x,y:target.screen.y,button:'left',buttons:0,clickCount:1});
+  await evaluate('window.__archCollapse.advance(12)');const retained=await capture('local-bind-released');
+  check('a repaired connection survives release and weight',bound.some(event=>retained.state.bonds.find(bond=>bond.id===event.id).alive),bound.map(event=>event.id));
+  return retained;
+}
 save();
 try {
   const executable=fs.realpathSync(executableInput);
   if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent native testing browser required');
   report.browser.executable=executable;report.browser.version=execFileSync(executable,['--version'],{encoding:'utf8'}).trim();
   const isArch=page==='structural-material-arch-gpu.html';
-  if(!['load','collapse','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
+  if(!['load','collapse','bind','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
   if(!isArch&&page!=='structural-material-arch-gpu-conformance.html')throw new Error('Unsupported GPU smoke page');
   for(const source of [page,...(isArch?['structural-material-arch-gpu-view.js','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-gpu-fixture.js']:['structural-material-arch-gpu-conformance.js']),'dist/structural-material-arch-gpu-engine.js','vendor/webphysics/provenance.json','package-lock.json','node_modules/three/build/three.module.js','node_modules/three/build/three.webgpu.js','node_modules/three/build/three.tsl.js'])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
   report.phase='http';save();
@@ -158,6 +189,10 @@ try {
       report.diagnostics[name]={substeps,preventPenetratingNormalDropout,heldBroken:held.state.broken,broken:rest.state.broken,minimumCornerY:minimumY(rest.state),floorPenetration:rest.state.floorY-minimumY(rest.state),maximumHeight:Math.max(...rest.state.bodies.map(body=>body.position.y)),maximumSpeed:Math.max(...rest.state.bodies.map(body=>Math.hypot(...Object.values(body.velocity))))};save();
     }
   }
+  if(isArch&&exercise==='bind'){
+    report.phase='local-bind-exercise';save();await evaluate('window.__archCollapse.advance(120)');const standing=await capture('standing');
+    await injury(standing.pickTargets.find(item=>item.row===1&&item.visible));const injured=await capture('released-injury');await repairClick(injured);
+  }
   if(isArch&&exercise==='collapse'){
     report.phase='standing-under-weight';save();await evaluate('window.__archCollapse.advance(120)');const standing=await capture('standing');
     check('the arch stands intact under its own weight',standing.state.broken===0&&standing.state.bodies.every(body=>Math.abs(body.position.y-body.rest.y)<.05),{broken:standing.state.broken,maximumSag:Math.max(...standing.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y)))});
@@ -176,8 +211,7 @@ try {
     const second=rest.pickTargets.find(item=>item.visible&&item.row>2&&rest.state.components[rest.state.bodies[item.index].component].count>6);
     await injury(second,{x:1.4,y:.5,z:.6});await evaluate('window.__archCollapse.advance(240)');const repeated=await capture('repeated-injury');
     check('second injury adds damage without healing prior damage',repeated.state.broken>rest.state.broken&&oldDead.every(id=>!repeated.state.bonds.find(bond=>bond.id===id).alive),{before:rest.state.broken,after:repeated.state.broken});
-    await evaluate('document.querySelector("#bind").click()');const binding=await capture('bind-selected');
-    check('Bind mode selection is not a pose or topology reset',binding.state.broken===repeated.state.broken&&JSON.stringify(binding.state.bodies)===JSON.stringify(repeated.state.bodies)&&JSON.stringify(binding.camera)===JSON.stringify(repeated.camera),binding.state.broken);
+    const binding=await repairClick(repeated);
     await evaluate('document.querySelector("#shear").click();await window.__archCollapse.reset()');const reset=await capture('explicit-reset');
     check('explicit Reset clears damage and preserves camera',reset.state.broken===0&&JSON.stringify(reset.camera)===JSON.stringify(binding.camera),reset.state.broken);
     await input({type:'mousePressed',x:40,y:180,button:'left',buttons:1,clickCount:1});check('background press does not grip material',(await witness()).state.hand===null,(await witness()).lastPick);
@@ -186,6 +220,9 @@ try {
     const rotated=orbit.surfaceTargets.find(item=>item.visible&&item.row===2);
     await input({type:'mousePressed',x:rotated.screen.x,y:rotated.screen.y,button:'left',buttons:1,clickCount:1});check('rotated camera picks current surface',(await witness()).state.hand?.index===rotated.index,(await witness()).lastPick);
     await input({type:'mouseReleased',x:rotated.screen.x,y:rotated.screen.y,button:'left',buttons:0,clickCount:1});
+    report.phase='live-clock';const beforeLive=await witness(),wallStart=performance.now();await evaluate('document.querySelector("#pause").click()');await sleep(2000);await evaluate('document.querySelector("#pause").click()');const live=await capture('live-clock');
+    report.liveClock={wallSeconds:(performance.now()-wallStart)/1000,steps:live.state.step-beforeLive.state.step,simulationSeconds:live.state.time-beforeLive.state.time};
+    check('the live clock advances actual GPU physics without manual advance',report.liveClock.steps>2&&report.liveClock.simulationSeconds>0&&live.paused===true,report.liveClock);
     await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await send('Page.navigate',{url:report.requestedUrl});
     while(!await evaluate('Boolean(window.__archCollapse)')){if(report.errors.length)throw new Error(JSON.stringify(report.errors));await sleep(100);}
     await sleep(350);await capture('mobile-standing');check('mobile controls fit without horizontal overflow',await evaluate('document.documentElement.scrollWidth<=innerWidth'),await evaluate('({width:innerWidth,documentWidth:document.documentElement.scrollWidth})'));

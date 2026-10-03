@@ -10,7 +10,7 @@ export function buildGpuArchFixture(profile, options = {}) {
   const config = { layers: 3, depth: 0.65, scale: 4, density: 1, gravity: 9.81,
     timeStep: 1 / 60, solverIterations: 20, stiffness: 1e6, strength: 80,
     friction: 0.65, gripStiffness: 250, gripRadius: 0.55, initialJointPenalty: 1e6, gravityRampSeconds: .5,
-    substeps: 1, preventPenetratingNormalDropout: false, ...options };
+    substeps: 1, preventPenetratingNormalDropout: true, ...options };
   for (const name of ['depth', 'scale', 'density', 'timeStep', 'stiffness', 'strength', 'gripStiffness']) {
     if (!Number.isFinite(config[name]) || config[name] <= 0) throw new Error(`${name} must be positive and finite`);
   }
