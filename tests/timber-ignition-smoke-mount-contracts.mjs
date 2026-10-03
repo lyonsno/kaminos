@@ -40,6 +40,8 @@ try {
       objects.splice(0,objects.length,...saved);return {freshFluid:true,freshMaterial:true};},
   });
   await new Promise(setImmediate);
+  assert.match(section.style.cssText,/bottom:var\(--timber-controls-bottom,42px\)/,'narrow-screen controls must clear the navigation hints');
+  assert.match(readFileSync(new URL('../index.html',import.meta.url),'utf8'),/@media \(max-width: 760px\)[^\n]*--timber-controls-bottom:110px/);
   for (const type of ['pointerdown', 'mousedown', 'click']) {
     let stopped=false;
     assert.equal(typeof section.handlers.get(type),'function','experiment controls must not pick the scene beneath them');
