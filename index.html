@@ -24318,6 +24318,7 @@ function installAuthoringParameterEditing() {
       document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=control.value;});
     };
     const check=state=>{
+      if(control.id==='emitter-assay-family'&&state.value==='cluster')throw Error('Cluster bowl is not a placeable flame; use Workbench');
       if(control.tagName==='SELECT'){if(![...control.options].some(option=>option.value===String(state.value)))throw Error('Unsupported parameter option');}
       else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
@@ -24341,7 +24342,14 @@ function installAuthoringParameterEditing() {
   window.kaminosAuthoringParameters={
     list:()=>[...authoringParameterTargets].map(([id,target])=>({id,value:target.read()})),
     read:id=>{const target=authoringParameterTargets.get(id);if(!target)throw Error(`Unknown authored parameter ${id}`);return structuredClone(target.read());},
-    set:(id,patch)=>{if(!authoringParameterTargets.has(id))throw Error(`Unknown authored parameter ${id}`);return edits.apply(id,patch,'Set authored parameter');},
+    set:(id,patch)=>{
+      const target=authoringParameterTargets.get(id);if(!target)throw Error(`Unknown authored parameter ${id}`);
+      if(id.startsWith('@parameter:volume-')||id==='@parameter:emitter-assay-family') {
+        const next=target.check({...target.read(),...patch});
+        window.kaminosFlameAuthoring.edit(()=>target.write(next),'Set authored parameter');return target.read();
+      }
+      return edits.apply(id,patch,'Set authored parameter');
+    },
   };
   for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields']) {
     for(const input of document.querySelectorAll(`${scope} input[type=number]`)) {

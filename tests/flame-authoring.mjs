@@ -38,3 +38,17 @@ test('concurrent basin loads cannot race and failure releases load state',async(
  await assert.rejects(flame.applyBasin('b'),/already loading/);reject(Error('network'));await assert.rejects(first,/network/);
  const retry=flame.applyBasin('c');reject(Error('again'));await assert.rejects(retry,/again/);
 });
+
+test('selected-flame shape choices exclude the non-placeable cluster mode',async()=>{
+ const {authoredFlameShapeOptions}=await import('../flame-authoring.mjs');
+ const options=[{value:'cluster'},{value:'wick'},{value:'nozzle'},{value:'ribbon'},{value:'ring'}];
+ assert.equal(typeof authoredFlameShapeOptions,'function','selected-flame shape admission is explicit');
+ assert.deepEqual(authoredFlameShapeOptions(options).map(o=>o.value),['wick','nozzle','ribbon','ring']);
+});
+
+test('scripted single-control gesture records all coupled setting changes',()=>{
+ const {edits,flame,read}=fixture();const before=flame.read();
+ assert.equal(typeof flame.edit,'function','script control edits use the whole-settings gesture');
+ flame.edit(()=>{read().domControls.flow.value=2;read().domControls.unexposed.value=.5;});
+ assert.equal(edits.state().undoCount,1);edits.undo();assert.deepEqual(flame.read(),before);
+});

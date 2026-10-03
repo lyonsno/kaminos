@@ -14,18 +14,21 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
     changed();
   }
   edits.register(id, { read, write: restore, check });
-  function apply(next, label = 'Apply flame settings') {
+  function edit(change, label = 'Edit flame settings') {
     canApply();
     if (edits.state().active || edits.state().replaying) throw Error('Finish the current edit before applying a basin');
-    const checked = check(structuredClone(next));
     edits.begin(id, label);
-    try { restore(checked); edits.commit(); }
+    try { change(); check(read()); edits.commit(); changed(); }
     catch (error) { edits.cancel(); throw error; }
     return read();
   }
+  function apply(next, label = 'Apply flame settings') {
+    const checked = check(structuredClone(next));
+    return edit(() => restore(checked), label);
+  }
   let loading = false;
   return {
-    read: () => structuredClone(read()), apply,
+    read: () => structuredClone(read()), apply, edit,
     async applyBasin(presetId) {
       if (loading) throw Error('A basin is already loading');
       canApply();
@@ -82,6 +85,10 @@ export const FLAME_PROPERTY_GROUPS = [
   ] },
 ];
 
+export function authoredFlameShapeOptions(options) {
+  return [...options].filter(option=>option.value!=='cluster');
+}
+
 export function createFlameInspector({ document, host, listBasins, applyBasin, readSource, openWorkbench, onError }) {
   const basin = document.createElement('details'); basin.id='flame-basin-browser'; basin.open=true;
   basin.innerHTML='<summary>Basin</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a basin…" aria-label="Find a basin"><select id="flame-basin-select" aria-label="Flame basin"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
@@ -120,7 +127,7 @@ export function createFlameInspector({ document, host, listBasins, applyBasin, r
       const row=document.createElement('div');row.className='slider-row';
       const grip=document.createElement('label');grip.className='slider-label';grip.textContent=label;
       const field=document.createElement(source.tagName==='SELECT'?'select':'input');
-      if(source.tagName==='SELECT')for(const option of source.options)field.append(option.cloneNode(true));
+      if(source.tagName==='SELECT')for(const option of id==='emitter-assay-family'?authoredFlameShapeOptions(source.options):source.options)field.append(option.cloneNode(true));
       else {field.type=source.type==='range'?'number':source.type;field.step='any';}
       field.className='transform-input';field.dataset.authoringAlias=id;field.id=`selected-${id}`;grip.htmlFor=field.id;
       field.setAttribute('aria-label',`Flame ${label}`);
@@ -130,8 +137,10 @@ export function createFlameInspector({ document, host, listBasins, applyBasin, r
         for(const key of ['min','max'])if(source[key])field[key]=source[key];
         if(field.type==='checkbox')field.checked=source.checked;else field.value=source.value;
       }
+      if(id==='emitter-assay-family')field.title='Placeable flame shapes. Cluster bowl is available in Workbench.';
       const eventName=source.tagName==='SELECT'||source.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
+        if(id==='emitter-assay-family'&&!authoredFlameShapeOptions(source.options).some(option=>option.value===field.value)){syncField(true);onError(Error('Cluster bowl is not a placeable flame; use Workbench'));return;}
         if(field.type==='number'&&(!field.value.trim()||!field.validity.valid))return;
         if(field.type==='checkbox')source.checked=field.checked;else source.value=field.value;
         source.dispatchEvent(new Event(eventName,{bubbles:true}));
