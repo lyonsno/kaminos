@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { applyWebphysicsPatches } from '../scripts/webphysics-patches.mjs';
+import { applyWebphysicsPatches, applyWebphysicsOwnershipPatch } from '../scripts/webphysics-patches.mjs';
 const source=fs.readFileSync(new URL('../vendor/webphysics/src/physics/gpu/avbdState.ts',import.meta.url),'utf8');
 const patched=applyWebphysicsPatches(source);
 assert.ok(/qmul\(qmul\(worldQA, normalize\(restRelative\)\), qconj/.test(patched),'fixed joint must retain the captured relative rotation');
 assert.equal((patched.match(/loadJointRestRelativeRotation\(jointRecords, /g)||[]).length,3);
 assert.throws(()=>applyWebphysicsPatches(patched),/revision drift/);
 assert.throws(()=>applyWebphysicsPatches(source.replace('fn jointFixedAngularConstraint','fn changedJointFixedAngularConstraint')),/revision drift/);
+const broadPhase=fs.readFileSync(new URL('../vendor/webphysics/src/physics/gpu/broadPhase.ts',import.meta.url),'utf8');
+const owned=applyWebphysicsOwnershipPatch(broadPhase);
+assert.ok(owned.includes('this.gpuBVHs = this.enableBvhBuild ? ['));
+assert.ok(owned.includes('] : [];'));
+assert.throws(()=>applyWebphysicsOwnershipPatch(owned),/revision drift/);
+assert.throws(()=>applyWebphysicsOwnershipPatch(broadPhase.replace('const prewarmCapacity','const changedPrewarmCapacity')),/revision drift/);
 console.log('Pinned GPU angular constraint uses captured rest in preparation, solve and force capture');

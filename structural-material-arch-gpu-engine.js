@@ -5,6 +5,40 @@ export const ENGINE_PATCH = 'kaminos-fixed-joint-rest-relative-v1';
 
 // This adapter deliberately binds to the recorded upstream revision's buffer ABI.
 export class ArchGpuEngine extends PhysicsEngine {
+  constructor(device, config) {
+    if (config.enableBvhBuild === true) throw new Error('Arch GPU ownership supports the all-pairs route, not asynchronous BVH construction');
+    const buffers = new Set();
+    const lifetime = { disposed: false };
+    const ownedDevice = new Proxy(device, { get(target, key) {
+      if (key === 'createBuffer') return descriptor => {
+        if (lifetime.disposed) throw new Error('GPU engine is disposed');
+        const buffer = target.createBuffer(descriptor); buffers.add(buffer); return buffer;
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    } });
+    super(ownedDevice, { ...config, enableBvhBuild: false });
+    this.archOwnedBuffers = buffers;
+    this.archLifetime = lifetime;
+  }
+
+  step(...args) {
+    if (this.archLifetime.disposed) throw new Error('GPU engine is disposed');
+    return super.step(...args);
+  }
+
+  dispose(renderer) {
+    if (this.archLifetime.disposed) return;
+    this.archLifetime.disposed = true;
+    const errors = [];
+    // The pinned stages share attributes; raw acquisition is tracked even if a stage constructor rejects.
+    const owners = [this, this.integration, this.derivedInertia, this.contactGeneration, this.broadPhase, this.avbdState, this.playerControl];
+    const attributes = new Set(owners.flatMap(owner => Object.values(owner ?? {}).filter(value => value?.isStorageBufferAttribute)));
+    for (const buffer of this.archOwnedBuffers) try { buffer.destroy(); } catch (error) { errors.push(error); }
+    for (const attribute of attributes) try { renderer.backend.destroyAttribute(attribute); } catch (error) { errors.push(error); }
+    if (errors.length) throw new AggregateError(errors, 'GPU engine resource cleanup failed');
+  }
+
   getStats() { return { ...this.stats }; }
 
   getResidentAttributes() {

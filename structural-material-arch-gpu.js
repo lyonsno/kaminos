@@ -28,7 +28,7 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   const acquire=descriptor=>{const buffer=device.createBuffer(descriptor);ownedBuffers.push(buffer);return buffer;};
   function dispose(){if(disposed)return;disposed=true;const errors=[];
     for(const buffer of ownedBuffers)try{buffer.destroy();}catch(error){errors.push(error);}
-    for(const attr of new Set(Object.values(engine??{}).filter(value=>value?.isStorageBufferAttribute)))try{renderer.backend.destroyAttribute(attr);}catch(error){errors.push(error);}
+    try{engine?.dispose(renderer);}catch(error){errors.push(error);}
     if(errors.length)throw new AggregateError(errors,'GPU arch resource cleanup failed');
   }
   try {

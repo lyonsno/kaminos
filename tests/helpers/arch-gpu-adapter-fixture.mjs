@@ -21,6 +21,7 @@ export async function adapterFixture(fault = null) {
     setGravity(value) { this.config.gravity = value; }
     getGravity() { return this.config.gravity; }
     getStats() { return this.stats; }
+    dispose(renderer) { for (const attribute of attributes) renderer.backend.destroyAttribute(attribute); }
     step() {
       if (!this.positions) {
         this.positions = { isStorageBufferAttribute: true }; this.rotation = { isStorageBufferAttribute: true };

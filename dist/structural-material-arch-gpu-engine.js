@@ -10490,21 +10490,18 @@ var BroadPhaseStage = class {
     this.waitForGpuCompletion = options?.waitForGpuCompletion ?? true;
     this.pairCandidateIndicesAttr = pairCandidateIndices;
     this.pairVisitedBitsAttr = pairVisitedBits;
-    this.gpuBVHs = [
+    this.gpuBVHs = this.enableBvhBuild ? [
       new GPULBVHBuilder(device, {
         sorterType: LBVHSorterType.ONESWEEP
       }),
       new GPULBVHBuilder(device, {
         sorterType: LBVHSorterType.ONESWEEP
       })
-    ];
+    ] : [];
     const prewarmCapacity = Math.max(1, this.maxBodies);
     const prewarmPromises = [];
-    if (typeof this.gpuBVHs[0].prewarm === "function") {
-      prewarmPromises.push(this.gpuBVHs[0].prewarm(prewarmCapacity));
-    }
-    if (typeof this.gpuBVHs[1].prewarm === "function") {
-      prewarmPromises.push(this.gpuBVHs[1].prewarm(prewarmCapacity));
+    for (const builder of this.gpuBVHs) {
+      if (typeof builder.prewarm === "function") prewarmPromises.push(builder.prewarm(prewarmCapacity));
     }
     if (prewarmPromises.length > 0) {
       this.prewarmInFlight = Promise.all(prewarmPromises).then(() => void 0).catch((error) => {
@@ -11222,8 +11219,7 @@ fn finalizeCounter() {
     this.candidateCounterBuffer.destroy();
     this.debugCountersBuffer.destroy();
     this.debugReadbackBuffer.destroy();
-    this.gpuBVHs[0].dispose();
-    this.gpuBVHs[1].dispose();
+    for (const builder of this.gpuBVHs) builder.dispose();
   }
   maybeReadDebugCounters(frameId, bodyCount) {
     if (!this.debugEnabled) return;
@@ -13320,6 +13316,46 @@ var PhysicsEngine = class {
 var ENGINE_REVISION = "96b043c88dc2a4af5367820caf1e1e9f458d5560";
 var ENGINE_PATCH = "kaminos-fixed-joint-rest-relative-v1";
 var ArchGpuEngine = class extends PhysicsEngine {
+  constructor(device, config) {
+    if (config.enableBvhBuild === true) throw new Error("Arch GPU ownership supports the all-pairs route, not asynchronous BVH construction");
+    const buffers = /* @__PURE__ */ new Set();
+    const lifetime = { disposed: false };
+    const ownedDevice = new Proxy(device, { get(target, key) {
+      if (key === "createBuffer") return (descriptor) => {
+        if (lifetime.disposed) throw new Error("GPU engine is disposed");
+        const buffer = target.createBuffer(descriptor);
+        buffers.add(buffer);
+        return buffer;
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    super(ownedDevice, { ...config, enableBvhBuild: false });
+    this.archOwnedBuffers = buffers;
+    this.archLifetime = lifetime;
+  }
+  step(...args) {
+    if (this.archLifetime.disposed) throw new Error("GPU engine is disposed");
+    return super.step(...args);
+  }
+  dispose(renderer) {
+    if (this.archLifetime.disposed) return;
+    this.archLifetime.disposed = true;
+    const errors = [];
+    const owners = [this, this.integration, this.derivedInertia, this.contactGeneration, this.broadPhase, this.avbdState, this.playerControl];
+    const attributes = new Set(owners.flatMap((owner) => Object.values(owner ?? {}).filter((value) => value?.isStorageBufferAttribute)));
+    for (const buffer of this.archOwnedBuffers) try {
+      buffer.destroy();
+    } catch (error) {
+      errors.push(error);
+    }
+    for (const attribute of attributes) try {
+      renderer.backend.destroyAttribute(attribute);
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length) throw new AggregateError(errors, "GPU engine resource cleanup failed");
+  }
   getStats() {
     return { ...this.stats };
   }

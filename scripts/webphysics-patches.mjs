@@ -1,4 +1,21 @@
 export const WEBPHYSICS_PATCH = 'kaminos-fixed-joint-rest-relative-v1';
+export const WEBPHYSICS_OWNERSHIP_PATCH = 'kaminos-disabled-bvh-no-acquisition-v1';
+
+export function applyWebphysicsOwnershipPatch(source) {
+  const replacements = [
+    ['private readonly gpuBVHs: [BvhBuildBackend, BvhBuildBackend];', 'private readonly gpuBVHs: BvhBuildBackend[];'],
+    ['this.gpuBVHs = [', 'this.gpuBVHs = this.enableBvhBuild ? ['],
+    ['    ];\n\n    const prewarmCapacity', '    ] : [];\n\n    const prewarmCapacity'],
+    ["    if (typeof this.gpuBVHs[0].prewarm === 'function') {\n      prewarmPromises.push(this.gpuBVHs[0].prewarm(prewarmCapacity));\n    }\n    if (typeof this.gpuBVHs[1].prewarm === 'function') {\n      prewarmPromises.push(this.gpuBVHs[1].prewarm(prewarmCapacity));\n    }",
+      "    for (const builder of this.gpuBVHs) {\n      if (typeof builder.prewarm === 'function') prewarmPromises.push(builder.prewarm(prewarmCapacity));\n    }"],
+    ['    this.gpuBVHs[0].dispose();\n    this.gpuBVHs[1].dispose();', '    for (const builder of this.gpuBVHs) builder.dispose();'],
+  ];
+  for (const [before, after] of replacements) {
+    if (source.split(before).length !== 2) throw new Error(`Webphysics revision drift in ${WEBPHYSICS_OWNERSHIP_PATCH}: ${before.split('\n')[0]}`);
+    source = source.replace(before, after);
+  }
+  return source;
+}
 
 export function applyWebphysicsPatches(source) {
   const replacements = [
