@@ -9,7 +9,8 @@ export function buildGpuArchFixture(profile, options = {}) {
   }
   const config = { layers: 3, depth: 0.65, scale: 4, density: 1, gravity: 9.81,
     timeStep: 1 / 60, solverIterations: 20, stiffness: 1e6, strength: 80,
-    friction: 0.65, gripStiffness: 250, gripRadius: 0.55, initialJointPenalty: 1e6, gravityRampSeconds: .5, ...options };
+    friction: 0.65, gripStiffness: 250, gripRadius: 0.55, initialJointPenalty: 1e6, gravityRampSeconds: .5,
+    substeps: 1, preventPenetratingNormalDropout: false, ...options };
   for (const name of ['depth', 'scale', 'density', 'timeStep', 'stiffness', 'strength', 'gripStiffness']) {
     if (!Number.isFinite(config[name]) || config[name] <= 0) throw new Error(`${name} must be positive and finite`);
   }
@@ -18,6 +19,8 @@ export function buildGpuArchFixture(profile, options = {}) {
   }
   if (!Number.isInteger(config.layers) || config.layers < 2) throw new Error('layers must be at least two');
   if (!Number.isInteger(config.solverIterations) || config.solverIterations < 1) throw new Error('solverIterations must be positive');
+  if (!Number.isInteger(config.substeps) || config.substeps < 1 || config.substeps > 8) throw new Error('substeps must fit the pinned engine capacity of one through eight');
+  if (typeof config.preventPenetratingNormalDropout !== 'boolean') throw new Error('preventPenetratingNormalDropout must be boolean');
   if (!Number.isFinite(config.initialJointPenalty) || config.initialJointPenalty < 1 ||
       config.initialJointPenalty > config.stiffness) throw new Error('initialJointPenalty must be finite, at least one and no greater than stiffness');
   const dx = (profile.bounds.max[0] - profile.bounds.min[0]) * config.scale / profile.columns;

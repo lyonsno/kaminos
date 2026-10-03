@@ -37,5 +37,8 @@ assert.equal(fixture.config.gravityRampSeconds, .5);
 for (const gravityRampSeconds of [-1, NaN, Infinity]) {
   assert.throws(() => buildGpuArchFixture(profile, { gravityRampSeconds }), /gravityRampSeconds/);
 }
+assert.throws(() => buildGpuArchFixture(profile, { preventPenetratingNormalDropout: 'true' }), /preventPenetratingNormalDropout/);
+for (const substeps of [0, 1.5, 9, NaN]) assert.throws(() => buildGpuArchFixture(profile, { substeps }), /substeps/);
+assert.equal(buildGpuArchFixture(profile, { substeps: 2, preventPenetratingNormalDropout: true }).config.substeps, 2);
 cpu.dispose();
 console.log('GPU arch fixture matches unchanged CPU construction');

@@ -60,7 +60,7 @@ try {
   if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent native testing browser required');
   report.browser.executable=executable;report.browser.version=execFileSync(executable,['--version'],{encoding:'utf8'}).trim();
   const isArch=page==='structural-material-arch-gpu.html';
-  if(!['load','collapse','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
+  if(!['load','collapse','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
   if(!isArch&&page!=='structural-material-arch-gpu-conformance.html')throw new Error('Unsupported GPU smoke page');
   for(const source of [page,...(isArch?['structural-material-arch-gpu-view.js','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-gpu-fixture.js']:['structural-material-arch-gpu-conformance.js']),'dist/structural-material-arch-gpu-engine.js','vendor/webphysics/provenance.json','package-lock.json','node_modules/three/build/three.module.js','node_modules/three/build/three.webgpu.js','node_modules/three/build/three.tsl.js'])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
   report.phase='http';save();
@@ -142,6 +142,20 @@ try {
       const received=await witness();check('construction loads full weight with fracture still active',received.state.config.strength===80&&received.state.config.gravityRampSeconds===gravityRampSeconds&&received.state.constructionLoad.gravityScale===1&&received.state.constructionLoad.complete,received.state.config);
       await evaluate('window.__archCollapse.advance(120)');const state=await capture(`construction-load-${gravityRampSeconds}`,{layers:3,strength:80,timeStep:1/60,gripRadius:.55,solverIterations:20,stiffness:1e6,initialJointPenalty:1e6,gravityRampSeconds});
       report.diagnostics[gravityRampSeconds]={finalMaximumStress:Math.max(...state.state.bonds.map(bond=>bond.stress)),peakMaximumStress:Math.max(...state.state.samples.map(sample=>sample.maximumStress)),maximumSag:Math.max(...state.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y))),broken:state.state.broken};save();
+    }
+  }
+  if(isArch&&exercise==='contact-diagnostics'){
+    report.phase='contact-comparison';report.diagnostics={};save();
+    for(const [name,substeps,preventPenetratingNormalDropout] of [['retained-normal',1,true],['two-substeps',2,false]]){
+      const url=new URL(report.requestedUrl);url.searchParams.set('substeps',String(substeps));url.searchParams.set('preventPenetratingNormalDropout',String(preventPenetratingNormalDropout));
+      await send('Page.navigate',{url:url.href});while(!await evaluate('Boolean(window.__archCollapse)')){if(report.errors.length)throw new Error(JSON.stringify(report.errors));await sleep(100);}
+      const received=await witness(),expected={substeps,preventPenetratingNormalDropout};
+      check('contact controls reach the actual engine without strengthening the material',received.state.config.strength===80&&received.state.residency.substeps===substeps&&received.state.residency.preventPenetratingNormalDropout===preventPenetratingNormalDropout,received.state.residency);
+      await evaluate('window.__archCollapse.advance(120)');const standing=await capture(`${name}-standing`,expected);
+      check('diagnostic arch begins intact at full weight',standing.state.broken===0,{broken:standing.state.broken});
+      const held=await injury(standing.pickTargets.find(item=>item.row===1&&item.visible));
+      await evaluate('window.__archCollapse.advance(480)');const rest=await capture(`${name}-after-fall`,expected);
+      report.diagnostics[name]={substeps,preventPenetratingNormalDropout,heldBroken:held.state.broken,broken:rest.state.broken,minimumCornerY:minimumY(rest.state),floorPenetration:rest.state.floorY-minimumY(rest.state),maximumHeight:Math.max(...rest.state.bodies.map(body=>body.position.y)),maximumSpeed:Math.max(...rest.state.bodies.map(body=>Math.hypot(...Object.values(body.velocity))))};save();
     }
   }
   if(isArch&&exercise==='collapse'){

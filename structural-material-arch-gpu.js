@@ -23,9 +23,10 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   const {dx,dy,dz}=dimensions,device=renderer.backend.device,n=cells.length+1;
   if(cells.length===0)throw new Error('GPU arch requires occupied cells');
   const engine=new ArchGpuEngine(device,{maxBodies:n,gravity:[0,-config.gravity,0],deltaTime:config.timeStep,
-    substeps:1,solverIterations:config.solverIterations,maxFixedStepsPerFrame:1,
+    substeps:config.substeps,solverIterations:config.solverIterations,maxFixedStepsPerFrame:1,
     enableBvhBuild:false,maxPairsPerBodyBroadphase:n-1,maxContactsPerBodySolver:(n-1)*4,
     pairManifoldSlots:4,avbdFriction:config.friction,avbdPenaltyDecayGamma:1});
+  engine.setAvbdPreventPenetratingNormalDropout(config.preventPenetratingNormalDropout);
   for(const cell of cells)engine.addBody({position:cell.position,halfExtents:cell.halfExtents,mass:cell.mass,friction:config.friction});
   engine.addBody({position:[0,floorY-.2,0],halfExtents:[100,.2,100],mass:0,friction:config.friction});
   for(const bond of bonds)engine.addFixedJoint(bond.a,bond.b,bond.anchorA,bond.anchorB,config.stiffness,false);
@@ -99,6 +100,6 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
       hand:hand?{index:hand.index,indices:hand.members.map(member=>member.index),weights:hand.members.map(member=>member.weight),radius:config.gripRadius,layers:hand.layers,normal:hand.normal,target:{...hand.target},force:{...hand.force}}:null,
       bodies:state.bodies.map(body=>({...body,component:graph.labels[body.index],stress:Math.max(0,...state.bonds.filter(bond=>bond.alive&&(bond.a===body.index||bond.b===body.index)).map(bond=>bond.stress))})),
       bonds:state.bonds.map(bond=>({...bond,normal:xyz(bond.normal),anchorA:xyz(bond.anchorA),anchorB:xyz(bond.anchorB)})),broken:state.bonds.filter(bond=>!bond.alive).length,components:graph.components,events:events.map(event=>({...event})),samples:samples.map(sample=>({...sample})),
-      residency:{bodyPose:'gpu-authoritative',connectivity:'gpu-authoritative',collision:'gpu-avbd',consumer:'single-pose-readback-for-current-frame-render-and-pick',allPairsCapacity:engine.maxCandidatePairs,allPairsRequired:n*(n-1)/2,contactsPerBody:(n-1)*4,jointsPerBody:8,stats:engine.getStats()}};},
+      residency:{bodyPose:'gpu-authoritative',connectivity:'gpu-authoritative',collision:'gpu-avbd',consumer:'single-pose-readback-for-current-frame-render-and-pick',allPairsCapacity:engine.maxCandidatePairs,allPairsRequired:n*(n-1)/2,contactsPerBody:(n-1)*4,jointsPerBody:8,substeps:engine.getSubsteps(),preventPenetratingNormalDropout:engine.getAvbdPreventPenetratingNormalDropout(),stats:engine.getStats()}};},
     dispose:()=>{disposed=true;release();for(const buffer of Object.values(buffers))buffer.destroy();for(const attr of new Set(Object.values(engine).filter(value=>value?.isStorageBufferAttribute)))renderer.backend.destroyAttribute(attr);}};
 }
