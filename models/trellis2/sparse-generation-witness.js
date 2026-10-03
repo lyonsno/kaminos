@@ -22,9 +22,12 @@ export async function runGenerationWitness(expectedSha){
     report.verifiedTensorCount=0;report.verifiedInputBytes=0;
     const fetchTensor=async name=>{
       const row=m.tensors[name];if(!row)throw Error('complete identified input required '+name);
+      report.inputLoading={tensor:name,file:row.file,byteLength:row.byteLength,sha256:row.sha256,phase:'fetch'};
       const r=await fetch('/fixture/'+row.file,{cache:'no-store'});if(!r.ok)throw Error('checkpoint tensor unavailable '+name);
-      const raw=await r.arrayBuffer();if(raw.byteLength!==row.byteLength||await hash(raw)!==row.sha256)throw Error('partial/changed checkpoint tensor '+name);
-      report.verifiedTensorCount++;report.verifiedInputBytes+=raw.byteLength;return new Float32Array(raw);
+      report.inputLoading.phase='response-body';const raw=await r.arrayBuffer();report.inputLoading.phase='sha256';
+      if(raw.byteLength!==row.byteLength||await hash(raw)!==row.sha256)throw Error('partial/changed checkpoint tensor '+name);
+      report.inputLoading.phase='typed-array';const values=new Float32Array(raw);report.inputLoading.phase='verified';
+      report.verifiedTensorCount++;report.verifiedInputBytes+=raw.byteLength;return values;
     };
     report.phase='native-device';const adapter=await navigator.gpu?.requestAdapter();if(!adapter)throw Error('WebGPU unavailable');
     report.backend={vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,
@@ -58,15 +61,20 @@ export async function runGenerationWitness(expectedSha){
     report.phase='complete-image-generation';const started=performance.now();serving=true;
     const job=actual.enqueue({jobId:'actual-image-to-geometry-material',execute:invocation=>{invocationOwner=invocation;return implementation.run(invocation);}}),
       completed=await job.completion;serving=false;report.hostElapsedMs=performance.now()-started;
-    report.jobCompletion={jobId:completed.jobId,status:completed.status,error:completed.error};
+    report.jobCompletion={schema:completed.schema,routeId:completed.routeId,jobId:completed.jobId,status:completed.status,
+      outputPresent:completed.outputPresent,failure:completed.failure,cancellation:completed.cancellation};
     // Noise remains useful on failure; save every reached complete input first.
     for(const [name,n]of Object.entries(implementation.noiseInputs))await save('noise.'+name,n.values,n.shape,'f32');
-    if(completed.status!=='succeeded')throw Error(completed.error?.message??'actual image generation failed');
+    if(completed.status!=='succeeded'){
+      const error=Error(completed.failure?.message??'actual image generation '+completed.status);
+      error.name=completed.failure?.name??'Error';throw error;
+    }
     const out=completed.output;if(out!==implementation.outputs)throw Error('actual complete generation output identity required');
     report.composition={dinoBlocksExecuted:out.dino.blocksExecuted,lowResolutionRows:out.lowResolutionRows,highResolutionRows:out.highResolutionRows,
       phases:out.phases.map(p=>p.phase),sameInvocation:true,featureBytesToCPUDuringServing:out.featureBytesToCPUDuringServing,
       coordinateBytesToCPUDuringServing:out.coordinateBytesToCPUDuringServing,stageCounts,sessionId:session.snapshot().sessionId,
-      geometryResolution:out.geometry.resolution,materialResolution:out.material.resolution};
+      geometryResolution:out.geometry.resolution,materialResolution:out.material.resolution,
+      geometryLevels:out.geometry.levels,materialLevels:out.material.levels};
     report.phase='post-model-observation-retention';
     const fields={conditioning:out.conditioning,'geometry.features':out.geometry.features,'geometry.coordinates':out.geometry.coordinates,
       'material.features':out.material.features,'material.coordinates':out.material.coordinates,shapeCodes:out.shapeCodes,textureCodes:out.textureCodes};
@@ -77,7 +85,7 @@ export async function runGenerationWitness(expectedSha){
     const validation=await device.popErrorScope();scope=false;if(validation)errors.push(validation.message);if(errors.length)throw Error(errors.join('\n'));
     report.status='succeeded';validateGenerationResult(report,m);report.phase=null;
     report.handoff='complete resident learned fields retained after serving; mesh/UV/PBR/authoring consumers outstanding';
-  }catch(error){report.status='failed';report.error={message:error.message,stack:error.stack};report.lastGenerationPhase=implementation?.phase;
+  }catch(error){report.status='failed';report.error={name:error.name,message:error.message,stack:error.stack};report.lastGenerationPhase=implementation?.phase;
     if(implementation){serving=false;for(const [name,n]of Object.entries(implementation.noiseInputs))if(!report.outputs['noise.'+name])
       try{await save('noise.'+name,n.values,n.shape,'f32');}catch(e){report.retentionErrors??=[];report.retentionErrors.push(e.message);}}
     if(implementation?.conditioning&&!report.outputs.conditioning)try{const t=implementation.conditioning;

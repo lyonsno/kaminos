@@ -28,6 +28,13 @@ export function generationInputShapes(m){
 export function validateGenerationInputs(m){
   if(m?.schema!=='trellis2.generation-inputs.v0'||m.status!=='succeeded'||m.modelCalls!==0)throw TypeError('successful model-free checkpoint package required');
   if(m.meshResolution!==1024||!Number.isInteger(m.seed)||m.seed<0||m.seed>0xffffffff)throw TypeError('explicit source1024cascade configuration and unsigned32 seed required');
+  // Pin the source architecture before deriving coverage from caller-controlled configs.
+  for(const role of ['shapeDecoder','textureDecoder','occupancyDecoder']){
+    const expected=role==='occupancyDecoder'?{resolution:16,latentChannels:8,outChannels:1,channels:[512,128,32],numResBlocks:2,numResBlocksMiddle:2}:
+      {latentChannels:32,channels:[1024,512,256,128,64],numBlocks:[4,16,8,4,0]};
+    for(const [key,value]of Object.entries(expected))if(JSON.stringify(m.models?.[role]?.config?.[key])!==JSON.stringify(value))
+      throw TypeError('canonical decoder architecture required '+role+'.'+key);
+  }
   const shapes=generationInputShapes(m),admitted=new Set();
   const tensor=(key,shape)=>{
     const row=m.tensors?.[key];if(!row||row.dtype!=='float32'||JSON.stringify(row.shape)!==JSON.stringify(shape)||
@@ -57,6 +64,10 @@ export function validateGenerationInputs(m){
     if(role==='sparseFlow')tensor(model.phases,shapes.phases);
     if(role==='shapeDecoder'||role==='textureDecoder')tensor(model.siluTable,shapes.silu);
   }
+  const geluHash=m.tensors[m.models.sparseFlow.tensors.gelu].sha256,siluHash=m.tensors[m.models.shapeDecoder.siluTable].sha256;
+  for(const role of ['lowResolutionShape','highResolutionShape','textureFlow'])
+    if(m.tensors[m.models[role].tensors.gelu].sha256!==geluHash)throw TypeError('shared GELU activation table content identity required '+role);
+  if(m.tensors[m.models.textureDecoder.siluTable].sha256!==siluHash)throw TypeError('shared SiLU activation table content identity required textureDecoder');
   return Object.freeze({tensorCount:admitted.size,tensorKeys:Object.freeze([...admitted]),shapes});
 }
 
