@@ -37,7 +37,8 @@ function browserNoise(seed){
 // The live consumer of DINO's exact output. Only normalized image pixels and
 // checkpoint weights enter from CPU; no learned context crosses an artifact.
 export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWeights,loadLayerWeights,
-  dinoIdentity=null,models,loadModels,modelInputs,loadModel,meshResolution=1024,seed=42,initialNoise={},onPhase}={}){
+  dinoIdentity=null,models,loadModels,modelInputs,loadModel,meshResolution=1024,seed=42,initialNoise={},onPhase,onNoiseInput}={}){
+  if(onNoiseInput!==undefined&&typeof onNoiseInput!=='function')throw TypeError('noise input observer must be a function');
   const staged=loadModel!==undefined||modelInputs!==undefined;
   if(staged){
     if(typeof loadModel!=='function'||!modelInputs||models!==undefined||loadModels!==undefined)
@@ -62,7 +63,7 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWei
         if(loadModels)await enter({phase:'generation-checkpoint-input-loading'});
         const checkpointModels=staged?modelInputs:models??await loadModels();
         generation=createTrellisGenerationFromConditioningAdapter({route,conditioningTensor:dino.conditioning,
-          models:checkpointModels,...(staged?{loadModel}:{}),meshResolution,seed,initialNoise,onPhase:enter});
+          models:checkpointModels,...(staged?{loadModel}:{}),meshResolution,seed,initialNoise,onPhase:enter,onNoiseInput});
         const fields=await generation.run(invocation);
         result=Object.freeze({...fields,conditioning:dino.conditioning,dino});state='completed';phase='completed';return result;
       }catch(error){state='failed';result=undefined;throw error;}
@@ -73,7 +74,7 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWei
 }
 
 export function createTrellisGenerationFromConditioningAdapter({route,conditioningTensor,models,loadModel,
-  meshResolution=1024,seed=42,initialNoise={},onPhase}={}){
+  meshResolution=1024,seed=42,initialNoise={},onPhase,onNoiseInput}={}){
   const runtime=route?.runtime,roles=['sparseFlow','occupancyDecoder','lowResolutionShape','highResolutionShape','shapeDecoder','textureFlow','textureDecoder'];
   if(!runtime?.runKernel||!conditioningTensor?.buffer)throw TypeError('registered runtime and resident image conditioning required');
   const staged=loadModel!==undefined;
@@ -84,17 +85,21 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
       models.lowResolutionShape.identity.sha256===models.highResolutionShape.identity?.sha256))
     throw TypeError('source cascade requires the separate high-resolution model, not low-resolution weight reuse');
   if(onPhase!==undefined&&typeof onPhase!=='function')throw TypeError('phase observer must be a function');
+  if(onNoiseInput!==undefined&&typeof onNoiseInput!=='function')throw TypeError('noise input observer must be a function');
   const gaussian=browserNoise(seed),owned=new Set(),noiseInputs={},phases=[];
   let state='new',phase='new',result,disposed=false;
   const own=a=>{owned.add(a);return a;},retire=async(...adapters)=>{
     await runtime.device?.queue?.onSubmittedWorkDone?.();
     for(const a of adapters){a.dispose();owned.delete(a);}
-  },noise=(stage,shape)=>{
+  },noise=async(stage,shape)=>{
     const count=shape.reduce((a,b)=>a*b,1),values=initialNoise[stage]??gaussian(count);
     if(!(values instanceof Float32Array)||values.length!==count||!values.every(Number.isFinite))
       throw TypeError('complete finite initial noise required for '+stage+' '+shape);
     noiseInputs[stage]=Object.freeze({shape:Object.freeze([...shape]),values,
       source:initialNoise[stage]===undefined?'browser-u32-counter-mix/Box-Muller/F32':'explicit-caller-F32-input',seed});
+    // The observer can preserve exact CPU-authored input before a native
+    // process fails; it does not supply or replace learned output.
+    await onNoiseInput?.({stage,...noiseInputs[stage]});
     return values;
   };
   const enter=async name=>{phase=name;phases.push({phase:name});await onPhase?.({phase:name,routeId:route.routeId});};
@@ -118,7 +123,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   const sampleShape=async(role,flow,stage,invocation)=>{
     const sampler=own(createTrellisSLatSamplerAdapter({route,flow,config:{...models[role].config,
       tokenRows:flow.plan.tokenRows,mode:flow.plan.mode},conditioningTensor}));
-    await sampler.run({sample:noise(stage,flow.plan.inputShape)},invocation);return{sampler,sample:sampler.outputs.sample};
+    await sampler.run({sample:await noise(stage,flow.plan.inputShape)},invocation);return{sampler,sample:sampler.outputs.sample};
   };
   return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor}),
     get state(){return state;},get phase(){return phase;},get noiseInputs(){return Object.freeze({...noiseInputs});},
@@ -131,7 +136,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
         const sparse=await consume('sparseFlow','sparse-structure-sampling',model=>own(createTrellisSparseFlowAdapter({route,config:model.config,
           weights:model.weights,phases:model.phases,conditioningTensor}))),
           sparseSampler=own(createTrellisSparseSamplerAdapter({route,flow:sparse,config:models.sparseFlow.config,conditioningTensor}));
-        await sparseSampler.run({sample:noise('sparse',sparse.plan.prefix.inputShape)},invocation);
+        await sparseSampler.run({sample:await noise('sparse',sparse.plan.prefix.inputShape)},invocation);
         const occupancy=await consume('occupancyDecoder','occupancy-decoding',model=>own(createTrellisSparseDecoderAdapter({route,config:model.config,
           weights:model.weights,sampleTensor:sparseSampler.outputs.sample})));
         await occupancy.run({},invocation);

@@ -4,6 +4,8 @@ import {WEBGPU_BUFFER_USAGE as U} from '../../webgpu-inference-kit/src/core.js';
 export { createTrellisOccupancyCoordinatesAdapter, buildOccupancyCoordinatesPlan } from './occupancy-coordinates.js';
 export { buildSLatDecoderPlan, slatDecoderWeightShapes, createTrellisSLatDecoderAdapter } from './slat-decoder.js';
 export { extractTrellisDualGridMesh, createTrellisMeshAdapter, encodeTrellisGeometryGLB, compareTrellisMeshes } from './trellis-mesh.js';
+export { sampleTrellisMaterial, rasterizeTrellisMaterialUV, bakeTrellisMaterialTextures, encodeTrellisTexturePNG,
+  encodeTrellisPbrGLB, unwrapTrellisMesh, createTrellisAssetAdapter } from './trellis-material.js';
 export const SPARSE_DECODER_ROUTE='trellis2.sparse-decoder.webgpu.v0';
 
 export function buildSparseDecoderPlan({resolution=16,latentChannels=8,outChannels=1,

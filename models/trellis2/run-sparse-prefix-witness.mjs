@@ -13,7 +13,7 @@ import { validateDecoderFixture, decoderObservationShapes } from './sparse-decod
 import { validateOccupancyCoordinateFixture } from './occupancy-coordinate-witness-checks.js';
 import { validateSLatDecoderFixture, slatDecoderObservationShapes, validateSLatProjectionFixture, validateSLatProjectionResult, validateSLatConvolutionFixture, validateSLatConvolutionResult } from './slat-decoder-witness-checks.js';
 import {validateGenerationInputs} from './generation-inputs.js';
-import {GENERATION_FIELDS,validateGenerationResult} from './sparse-generation-witness-checks.js';
+import {GENERATION_FIELDS,validateGenerationResult,persistGenerationPhase,persistGenerationAsset} from './sparse-generation-witness-checks.js';
 
 const { values } = parseArgs({ options: { ...Object.fromEntries(
   ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture'].map(name => [name, { type: 'string' }])),
@@ -182,10 +182,8 @@ try {
       if(req.method==='POST'&&pathname==='/phase'){
         if(witness!=='generation')throw Error('generation phase route was not requested');
         const chunks=[];for await(const c of req)chunks.push(c);const row=JSON.parse(Buffer.concat(chunks).toString());
-        if(typeof row.phase!=='string'||!row.phase||row.effectiveRoute!=='trellis2.image-generation.webgpu.v0'||!row.sessionId)
-          throw Error('identified actual generation phase required');
-        report.livePhases??=[];report.livePhases.push({...row,observedAt:new Date().toISOString()});report.lastBrowserPhase=row.phase;
-        await persist();res.end('saved');return;
+        await persistGenerationPhase({report,row,kernelLogPath:path.join(evidenceRoot,'kernel-events.jsonl'),append:fs.appendFile,persist});
+        res.end('saved');return;
       }
       if (req.method === 'POST' && pathname === '/witness-result') {
         const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -202,6 +200,12 @@ try {
         const target=path.join(path.dirname(output),'geometry.glb');await fs.writeFile(target,bytes);
         report.meshArtifact={path:target,byteLength:bytes.length,sha256:digest(bytes),class:'learned-geometry-only/neutral-diagnostic-material'};
         await persist();res.setHeader('Content-Type','application/json');res.end(JSON.stringify(report.meshArtifact));return;
+      }
+      if(req.method==='POST'&&pathname==='/asset-output'){
+        if(witness!=='generation')throw Error('learned asset route was not requested');
+        const chunks=[];for await(const chunk of req)chunks.push(chunk);const bytes=Buffer.concat(chunks);
+        const artifact=await persistGenerationAsset({report,bytes,outputPath:path.join(path.dirname(output),'asset.glb'),write:fs.writeFile,persist});
+        res.setHeader('Content-Type','application/json');res.end(JSON.stringify(artifact));return;
       }
       if (req.method === 'POST' && /^\/output\/[\w.-]+$/.test(pathname)) {
         const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -245,6 +249,7 @@ try {
     '--use-mock-keychain', '--password-store=basic', '--no-first-run',
     `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   report.ownedBrowserPid = child.pid;
+  child.once('exit',(code,signal)=>{report.ownedBrowserExit={code,signal,observedAt:new Date().toISOString()};});
   const wsUrl = await new Promise((resolve, reject) => {
     let stderr = '';
     child.stderr.on('data', bytes => { stderr += bytes.toString(); report.browserStderr = stderr;
@@ -370,7 +375,12 @@ try {
     }
   }
   report.status = 'succeeded'; report.phase = null;
-} catch (error) { report.error = { message: error.message, stack: error.stack }; process.exitCode = 1; }
+} catch (error) {
+  report.error = { message: error.message, stack: error.stack };
+  if(child)report.ownedBrowserAtFailure={pid:child.pid,exitCode:child.exitCode,signalCode:child.signalCode,
+    meaning:'child-process observation before cleanup; null exit fields alone do not prove liveness'};
+  process.exitCode = 1;
+}
 finally {
   await finalizeSparseWitness({ report, persist, cleanup: [
     ['browser', async () => { if (cdp) { try { await cdp.call('Browser.close'); } catch {} cdp.close(); } }],

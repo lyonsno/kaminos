@@ -81,5 +81,16 @@ await assert.rejects(failed.run(invocation),/failed/);failed.dispose();failStage
 const bad=create({...options,initialNoise:{highResolutionShape:new Float32Array(96)}});
 await assert.rejects(bad.run(invocation),/complete.*highResolutionShape/);assert.equal(bad.outputs,undefined);bad.dispose();
 assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
+const retainedNoise=[],retention=create({...options,async onNoiseInput(input){
+  retainedNoise.push(input.stage);assert.ok(input.values instanceof Float32Array);
+  assert.ok(input.values.every(Number.isFinite));assert.equal(input.values.length,input.shape.reduce((a,b)=>a*b,1));
+}});
+await retention.run(invocation);
+assert.deepEqual(retainedNoise,['sparse','lowResolutionShape','highResolutionShape','texture'],
+  'Complete initial noise must be observable before its model runs, not only after a browser-dependent full completion.');
+retention.dispose();
+const retentionFailure=create({...options,onNoiseInput(){throw Error('noise retention failed');}});
+await assert.rejects(retentionFailure.run(invocation),/noise retention failed/);
+assert.equal(retentionFailure.state,'failed');assert.equal(retentionFailure.outputs,undefined);retentionFailure.dispose();
 console.log('Production conditioning → sparse/occupancy → LR/cascade/HR shape → guided texture fields composition; replayable complete initial noise and poisoned failure. Fake runtime is not full-model/GPU or mesh/PBR acceptance.');
 export {models};

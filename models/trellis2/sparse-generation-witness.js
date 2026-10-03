@@ -3,15 +3,22 @@ import {createTrellisImageGenerationAdapter} from './trellis-generation.js';
 import {loadGenerationInputs,validateGenerationInputs} from './generation-inputs.js';
 import {GENERATION_ROUTE,GENERATION_FIELDS,validateGenerationResult} from './sparse-generation-witness-checks.js';
 import {validateNativePrefixBackend,prefixAdapterName} from './sparse-prefix-witness-checks.js';
+import {createTrellisAssetAdapter} from './trellis-material.js';
 const hash=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),v=>v.toString(16).padStart(2,'0')).join('');
 export async function runGenerationWitness(expectedSha){
   const report={status:'failed',phase:'input-manifest',requestedRoute:GENERATION_ROUTE,numericalStatus:'not-compared',
     comparison:'actual WebGPU image generation with retained prepared pixels and browser noise; no matched MLX fidelity claim',outputs:{}},errors=[];
-  let session,device,implementation,runtime,scope=false,invocationOwner,serving=false,currentPhase='new';
+  let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new';
   const stageCounts={},save=async(name,values,shape,dtype)=>{
     const response=await fetch('/output/'+name,{method:'POST',headers:{'X-Tensor-Dtype':dtype},body:values});
     if(!response.ok)throw Error('complete raw output not saved '+name);
     report.outputs[name]={shape,dtype,byteLength:values.byteLength,sha256:await hash(values),finite:values.every(Number.isFinite)};
+  };
+  const savePhase=async extra=>{
+    const saved=await fetch('/phase',{method:'POST',body:JSON.stringify({phase:report.phase,effectiveRoute:report.effectiveRoute,
+      sessionId:session.snapshot().sessionId,modelRole:report.loadingModelRole??null,
+      verifiedTensorCount:report.verifiedTensorCount,verifiedInputBytes:report.verifiedInputBytes,...extra})});
+    if(!saved.ok)throw Error('generation phase evidence not saved');
   };
   try{
     const fetched=await fetch('/fixture/manifest.json',{cache:'no-store'});if(!fetched.ok)throw Error('generation inputs unavailable');
@@ -47,7 +54,11 @@ export async function runGenerationWitness(expectedSha){
     report.effectiveRoute=actual.routeId;if(actual.routeId!==GENERATION_ROUTE)throw Error('effective generation route mismatch');
     runtime={...actual.runtime,
       async runKernel(k,o){if(o.schedulerInvocation!==invocationOwner)throw Error('same generation invocation required');
-        await actual.runtime.runKernel(k,o);const counts=stageCounts[currentPhase]??={};counts[o.stage]=(counts[o.stage]??0)+1;},
+        report.lastKernel={stage:o.stage,dispatch:o.dispatch,point:'before-native-kernel'};
+        await savePhase({kernel:report.lastKernel});
+        await actual.runtime.runKernel(k,o);const counts=stageCounts[currentPhase]??={};counts[o.stage]=(counts[o.stage]??0)+1;
+        report.lastKernel={stage:o.stage,dispatch:o.dispatch,point:'native-kernel-returned'};
+        await savePhase({kernel:report.lastKernel});},
       async readTensor(t){if(serving&&(t.dtype!=='u32'||t.byteLength!==4))throw Error('learned-feature/coordinate CPU read during serving forbidden');
         if(serving)report.servingMetadataReadbackBytes=(report.servingMetadataReadbackBytes??0)+4;
         return actual.runtime.readTensor(t);}};
@@ -57,19 +68,20 @@ export async function runGenerationWitness(expectedSha){
     const onPhase=async e=>{
       currentPhase=e.phase;report.phase=e.phase;
       report.loadingModelRole=e.modelRole??null;
-      const saved=await fetch('/phase',{method:'POST',body:JSON.stringify({phase:e.phase,effectiveRoute:actual.routeId,
-        sessionId:session.snapshot().sessionId,modelRole:e.modelRole??null,
-        verifiedTensorCount:report.verifiedTensorCount,verifiedInputBytes:report.verifiedInputBytes})});
-      if(!saved.ok)throw Error('generation phase receipt not saved');
+      await savePhase({backend:report.backend,requiredLimits:report.requiredLimits});
     };
-    implementation=createTrellisImageGenerationAdapter({...inputs,route:{...actual,runtime},onPhase});
+    implementation=createTrellisImageGenerationAdapter({...inputs,route:{...actual,runtime},onPhase,
+      async onNoiseInput(input){
+        await save('noise.'+input.stage,input.values,input.shape,'f32');
+        await savePhase({noiseInput:{stage:input.stage,...report.outputs['noise.'+input.stage],source:input.source,seed:input.seed}});
+      }});
     report.phase='complete-image-generation';const started=performance.now();serving=true;
     const job=actual.enqueue({jobId:'actual-image-to-geometry-material',execute:invocation=>{invocationOwner=invocation;return implementation.run(invocation);}}),
       completed=await job.completion;serving=false;report.hostElapsedMs=performance.now()-started;
     report.jobCompletion={schema:completed.schema,routeId:completed.routeId,jobId:completed.jobId,status:completed.status,
       outputPresent:completed.outputPresent,failure:completed.failure,cancellation:completed.cancellation};
     // Noise remains useful on failure; save every reached complete input first.
-    for(const [name,n]of Object.entries(implementation.noiseInputs))await save('noise.'+name,n.values,n.shape,'f32');
+    for(const [name,n]of Object.entries(implementation.noiseInputs))if(!report.outputs['noise.'+name])await save('noise.'+name,n.values,n.shape,'f32');
     if(completed.status!=='succeeded'){
       const error=Error(completed.failure?.message??'actual image generation '+completed.status);
       error.name=completed.failure?.name??'Error';throw error;
@@ -86,10 +98,23 @@ export async function runGenerationWitness(expectedSha){
     for(const [i,t]of out.geometry.subdivisions.entries())fields['geometry.subdivision'+i]=t;
     for(const [name,t]of Object.entries(fields)){const raw=await runtime.readTensor(t),data=t.dtype==='i32'?new Int32Array(raw):new Float32Array(raw);
       await save(name,data,t.shape,t.dtype);}
+    assetConsumer=createTrellisAssetAdapter({runtime,geometry:out.geometry,material:out.material,
+      provenance:{inputManifestSha256:expectedSha,route:actual.routeId,sessionId:session.snapshot().sessionId,modelIdentities:out.modelIdentities,
+        input:'actual current WebGPU image generation; exact borrowed geometry/material tensors',comparison:report.comparison},
+      async onPhase(e){report.phase=e.phase;await savePhase({backend:report.backend,requiredLimits:report.requiredLimits});}});
+    const asset=await assetConsumer.run();
+    report.phase='post-model-asset-retention';
+    const persisted=await fetch('/asset-output',{method:'POST',body:asset.glb});
+    if(!persisted.ok)throw Error('learned PBR GLB was not saved');
+    report.assetArtifact=await persisted.json();
+    if(report.assetArtifact.sha256!==await hash(asset.glb)||report.assetArtifact.byteLength!==asset.glb.byteLength)
+      throw Error('partial/changed learned asset receipt');
+    report.assetHandoff=asset.handoff;report.assetPostprocess={uv:asset.mesh.uvMetadata,material:asset.textures.metadata,
+      textureSize:[asset.textures.width,asset.textures.height],coveredPixels:asset.textures.coveredPixels};
     report.phase='profile';report.profile=actual.runtime.finishProfile({evidence:{mode:'live',source:'actual-image-to-learned-fields'}});report.profileStatus='passed';
     const validation=await device.popErrorScope();scope=false;if(validation)errors.push(validation.message);if(errors.length)throw Error(errors.join('\n'));
     report.status='succeeded';validateGenerationResult(report,m);report.phase=null;
-    report.handoff='complete resident learned fields retained after serving; mesh/UV/PBR/authoring consumers outstanding';
+    report.handoff='actual borrowed learned fields become retained PBR GLB; Kaminos inspection/placement/save/reopen outstanding';
   }catch(error){report.status='failed';report.error={name:error.name,message:error.message,stack:error.stack};report.lastGenerationPhase=implementation?.phase;
     if(implementation){serving=false;for(const [name,n]of Object.entries(implementation.noiseInputs))if(!report.outputs['noise.'+name])
       try{await save('noise.'+name,n.values,n.shape,'f32');}catch(e){report.retentionErrors??=[];report.retentionErrors.push(e.message);}}
@@ -100,7 +125,7 @@ export async function runGenerationWitness(expectedSha){
   }finally{
     if(scope)try{const e=await device.popErrorScope();if(e)errors.push(e.message);}catch(e){errors.push(e.message);}
     report.errors=errors;if(errors.length)report.status='failed';
-    for(const [name,cleanup]of [['generation',()=>implementation?.dispose()],['session',async()=>{if(session){await session.drain();session.close();}}],['device',()=>device?.destroy()]])
+    for(const [name,cleanup]of [['asset',()=>assetConsumer?.dispose()],['generation',()=>implementation?.dispose()],['session',async()=>{if(session){await session.drain();session.close();}}],['device',()=>device?.destroy()]])
       try{await cleanup();}catch(error){report.cleanupErrors??=[];report.cleanupErrors.push({name,message:error.message});report.status='failed';}
   }
   return report;

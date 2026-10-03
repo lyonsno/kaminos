@@ -15,8 +15,10 @@ globalThis.generationFailurePorts={
   async createSession(){return{async registerRoute(){return{routeId:runtime.routeId,runtime,enqueue:queue.enqueue};},
     snapshot(){return{sessionId:'synthetic-failure-test'};},drain:queue.drain,close(){}};},
   async loadInputs(){return{};},
-  createAdapter({onPhase}){return{noiseInputs:{},phase:'new',async run(){this.phase='generation-checkpoint-input-loading';
-    await onPhase({phase:this.phase});throw new RangeError('observed checkpoint array allocation failure');},dispose(){}};}
+  createAdapter({onPhase,onNoiseInput}){return{noiseInputs:{},phase:'new',async run(){this.phase='generation-checkpoint-input-loading';
+    await onPhase({phase:this.phase});
+    await onNoiseInput({stage:'sparse',shape:[2],values:new Float32Array([.125,-.25]),source:'synthetic-observed-input',seed:42});
+    throw new RangeError('observed checkpoint array allocation failure');},dispose(){}};}
 };
 // Only the external device/producer ports are substituted. The witness body and actual kit queue terminal schema run unchanged.
 let source=await fs.readFile(new URL('../sparse-generation-witness.js',import.meta.url),'utf8');
@@ -35,4 +37,5 @@ assert.equal(report.error.message,'observed checkpoint array allocation failure'
 assert.deepEqual(report.jobCompletion.failure,{name:'RangeError',message:'observed checkpoint array allocation failure'});
 assert.equal(report.phase,'generation-checkpoint-input-loading');
 assert.equal(report.jobCompletion.outputPresent,false);
+assert.deepEqual(report.outputs['noise.sparse'].shape,[2]);assert.equal(report.outputs['noise.sparse'].byteLength,8);
 console.log('Actual kit queue failure survives the unchanged witness body and names its last phase; synthetic device/model ports do not claim native execution.');
