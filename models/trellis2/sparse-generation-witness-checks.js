@@ -73,7 +73,7 @@ export async function persistGenerationPhase({report,row,kernelLogPath,append,pe
   if(report.nativeSessionId&&report.nativeSessionId!==row.sessionId)throw Error('generation session identity changed');
   if(row.kernel){
     const k=row.kernel;
-    if(typeof k.stage!=='string'||!k.stage||!Array.isArray(k.dispatch)||k.dispatch.length!==3||
+    if(typeof k.stage!=='string'||!k.stage||!Array.isArray(k.dispatch)||k.dispatch.length<1||k.dispatch.length>3||
       !k.dispatch.every(v=>Number.isSafeInteger(v)&&v>=0)||
       !['before-native-kernel','native-kernel-returned'].includes(k.point))throw Error('complete native kernel event required');
     if(typeof kernelLogPath!=='string'||!kernelLogPath||typeof append!=='function')throw Error('caller-owned kernel journal required');

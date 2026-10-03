@@ -18,7 +18,7 @@ export async function runGenerationWitness(expectedSha){
     const saved=await fetch('/phase',{method:'POST',body:JSON.stringify({phase:report.phase,effectiveRoute:report.effectiveRoute,
       sessionId:session.snapshot().sessionId,modelRole:report.loadingModelRole??null,
       verifiedTensorCount:report.verifiedTensorCount,verifiedInputBytes:report.verifiedInputBytes,...extra})});
-    if(!saved.ok)throw Error('generation phase evidence not saved');
+    if(!saved.ok)throw Error('generation phase evidence not saved: '+await saved.text());
   };
   try{
     const fetched=await fetch('/fixture/manifest.json',{cache:'no-store'});if(!fetched.ok)throw Error('generation inputs unavailable');

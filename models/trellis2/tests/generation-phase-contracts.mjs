@@ -23,4 +23,18 @@ for(const wrong of [{...row,effectiveRoute:'fallback-route'},{...row,sessionId:'
 const failed={};await assert.rejects(checks.persistGenerationPhase({report:failed,row,kernelLogPath:'/caller-owned/kernel-events.jsonl',
   async append(){throw Error('journal unavailable');},persist}),/journal unavailable/);
 assert.equal(failed.lastKernel,undefined);assert.equal(failed.kernelEvidence,undefined);
+const {readFile}=await import('node:fs/promises'),native=JSON.parse(await readFile(new URL('./fixtures/generation-phase-native.json',import.meta.url),'utf8')),
+  observedState={},observed=[];
+await checks.persistGenerationPhase({report:observedState,row:{phase:native.phase,effectiveRoute:native.effectiveRoute,
+  sessionId:native.sessionId,kernel:native.kernel},kernelLogPath:'/owned/observed-kernel.jsonl',
+  append:async(_path,line)=>observed.push(JSON.parse(line)),persist});
+assert.deepEqual(observed[0].kernel.dispatch,[16384],'Actual kit one-dimensional dispatch must pass unchanged.');
+// Zero is a traceable attempted dispatch, not accepted kit execution; the kit
+// retains its own positive-integer admission after this before-kernel event.
+for(const dispatch of [[2,3],[0],[1,1,1]])await checks.persistGenerationPhase({report:observedState,
+  row:{phase:native.phase,effectiveRoute:native.effectiveRoute,sessionId:native.sessionId,kernel:{...native.kernel,dispatch}},
+  kernelLogPath:'/owned/observed-kernel.jsonl',append:async()=>{},persist});
+for(const dispatch of [[],[1,1,1,1]])await assert.rejects(checks.persistGenerationPhase({report:observedState,
+  row:{phase:native.phase,effectiveRoute:native.effectiveRoute,sessionId:native.sessionId,kernel:{...native.kernel,dispatch}},
+  kernelLogPath:'/owned/observed-kernel.jsonl',append:async()=>{},persist}),/complete native kernel/);
 console.log('Each native kernel event is appended uncapped; route/session/dispatch/input conflicts reject, failed retention cannot publish a successful observation, and compact phase snapshots avoid quadratic journal rewrites.');

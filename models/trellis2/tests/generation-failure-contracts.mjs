@@ -9,10 +9,9 @@ const device={pushErrorScope(){},async popErrorScope(){return null;},addEventLis
     limits:{maxStorageBufferBindingSize:4294967292,maxBufferSize:4294967292,maxComputeWorkgroupsPerDimension:65535},async requestDevice(){return device;}};
 Object.defineProperty(globalThis,'navigator',{configurable:true,value:{gpu:{async requestAdapter(){return adapter;}}}});
 globalThis.fetch=async url=>url==='/fixture/manifest.json'?new Response(manifest):new Response('');
-const runtime={routeId:'trellis2.image-generation.webgpu.v0',async runInvocation(info,fn){return fn(info);}},
-  queue=createWebGpuInferenceQueue({runtime});
+const runtime={routeId:'trellis2.image-generation.webgpu.v0',async runInvocation(info,fn){return fn(info);}};
 globalThis.generationFailurePorts={
-  async createSession(){return{async registerRoute(){return{routeId:runtime.routeId,runtime,enqueue:queue.enqueue};},
+  async createSession(){const queue=createWebGpuInferenceQueue({runtime});return{async registerRoute(){return{routeId:runtime.routeId,runtime,enqueue:queue.enqueue};},
     snapshot(){return{sessionId:'synthetic-failure-test'};},drain:queue.drain,close(){}};},
   async loadInputs(){return{};},
   createAdapter({onPhase,onNoiseInput}){return{noiseInputs:{},phase:'new',async run(){this.phase='generation-checkpoint-input-loading';
@@ -38,4 +37,8 @@ assert.deepEqual(report.jobCompletion.failure,{name:'RangeError',message:'observ
 assert.equal(report.phase,'generation-checkpoint-input-loading');
 assert.equal(report.jobCompletion.outputPresent,false);
 assert.deepEqual(report.outputs['noise.sparse'].shape,[2]);assert.equal(report.outputs['noise.sparse'].byteLength,8);
+globalThis.fetch=async url=>url==='/fixture/manifest.json'?new Response(manifest):
+  url==='/phase'?new Response('complete native kernel event required',{status:500}):new Response('');
+const rejectedPhase=await runGenerationWitness(sha);
+assert.match(rejectedPhase.error.message,/complete native kernel event required/,'The actual phase receiver rejection must survive in the failure report.');
 console.log('Actual kit queue failure survives the unchanged witness body and names its last phase; synthetic device/model ports do not claim native execution.');
