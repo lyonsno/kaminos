@@ -11,6 +11,7 @@ export async function evaluateJsonTransfer(client, expression, {onProgress = () 
     returnByValue: false, awaitPromise: true,
   }));
   if (!remote?.objectId) throw new Error('Capture remote object missing');
+  let primaryError;
   try {
     const read = async (functionDeclaration, args) => checked(await client.call('Runtime.callFunctionOn', {
       objectId: remote.objectId, functionDeclaration, returnByValue: true,
@@ -28,7 +29,11 @@ export async function evaluateJsonTransfer(client, expression, {onProgress = () 
       onProgress({receivedChars: end, totalChars: length});
     }
     return JSON.parse(parts.join(''));
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
-    await client.call('Runtime.releaseObject', {objectId: remote.objectId});
+    try { await client.call('Runtime.releaseObject', {objectId: remote.objectId}); }
+    catch (error) { if (!primaryError) throw error; }
   }
 }
