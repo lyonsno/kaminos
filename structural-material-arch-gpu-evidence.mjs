@@ -16,12 +16,13 @@ export function inspectGpuConformance(report) {
   return errors;
 }
 
-export function inspectGpuArchLoad(witness, expected = { layers:3, strength:80, timeStep:1/60, gripRadius:.55, gravityRampSeconds:.5 }) {
+export function inspectGpuArchLoad(witness, expected = { layers:3, strength:80, timeStep:1/60, gripRadius:.55, gravityRampSeconds:.5 }, expectedFailures = []) {
   const errors=[],identity=witness?.identity,state=witness?.state;
   if(witness?.phase!=='interactive'||witness?.route!=='kaminos.structural-material.arch-gravity-collapse.webgpu-avbd.v0')errors.push('Wrong or failed arch route');
   if(identity?.backend!=='webgpu'||identity.adapterFallback!==false||identity.isFallbackAdapter!==false||/swiftshader|llvmpipe|software/i.test(JSON.stringify(identity)))errors.push('Native GPU identity is unverified');
   if(identity?.engineRevision!=='96b043c88dc2a4af5367820caf1e1e9f458d5560'||identity?.enginePatch!=='kaminos-fixed-joint-rest-relative-v1')errors.push('Wrong engine revision or angular repair');
-  if(!Array.isArray(witness?.failures)||witness.failures.length)errors.push('Page failures or missing failure diagnostics');
+  if(witness?.failure||!Array.isArray(witness?.failures)||witness.failures.length!==expectedFailures.length||
+      witness.failures.some((failure,index)=>['operation','message','step','at'].some(key=>failure[key]!==expectedFailures[index]?.[key])))errors.push('Page failures or missing failure diagnostics');
   if(state?.backend!=='webgpu-avbd')errors.push('Wrong physical backend');
   for(const [key,value]of Object.entries(expected))if(state?.config?.[key]!==value)errors.push(`Effective ${key} differs from requested value`);
   const construction=state?.constructionLoad;

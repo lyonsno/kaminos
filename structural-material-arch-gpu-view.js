@@ -6,10 +6,10 @@ import { createGpuArchCollapse, coarsenGpuArchProfile, ARCH_GPU_ROUTE } from './
 
 const profilePath='./artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json';
 const params=new URLSearchParams(location.search),status=document.querySelector('#status'),receipt=document.querySelector('#receipt'),errorNode=document.querySelector('#error');
-let phase='loading',failure=null,model,paused=params.get('smoke')==='1',mode='shear',grab=null,contactPointer=null,lastPick=null,latestStepCost=0,identity=null;
+let phase='loading',failure=null,model,paused=params.get('smoke')==='1',failurePaused=null,mode='shear',grab=null,contactPointer=null,lastPick=null,latestStepCost=0,identity=null;
 let operations=Promise.resolve(),busy=false,lastTime=performance.now(),simulationRate=1;
 const failures=[];
-function fail(operation,error){paused=true;phase='failed';failure={operation,message:error.message??String(error),stack:error.stack,step:model?.snapshot().step??null,at:new Date().toISOString()};failures.push(failure);status.textContent=`${operation} failed`;errorNode.textContent=failure.message;console.error(error);}
+function fail(operation,error){if(failurePaused===null)failurePaused=paused;paused=true;phase='failed';failure={operation,message:error.message??String(error),stack:error.stack,step:model?.snapshot().step??null,at:new Date().toISOString()};failures.push(failure);status.textContent=`${operation} failed`;errorNode.textContent=failure.message;console.error(error);}
 const act=(operation,callback)=>(...args)=>{if(phase!=='interactive')return;try{const result=callback(...args);result?.catch?.(error=>fail(operation,error));return result;}catch(error){fail(operation,error);}};
 function serialize(operation,callback){const work=operations.then(async()=>{busy=true;try{return await callback();}catch(error){fail(operation,error);throw error;}finally{busy=false;}});operations=work.catch(()=>{});return work;}
 try {
@@ -40,12 +40,16 @@ try {
     receipt.textContent=`${state.bodies.length} blocks · ${grab?`${grab.indices.length}-block grip`:'surface contact'} · ${paused?'paused':`live ${simulationRate.toFixed(2)}x`} · ${latestStepCost.toFixed(1)} ms/step+copy`;
     scene.updateMatrixWorld(true);renderer.render(scene,camera);
   }
-  async function rebuild(){const value=strength();if(value===null)return false;const solverOptions=Object.fromEntries(['solverIterations','stiffness','initialJointPenalty','gravityRampSeconds','substeps'].filter(key=>params.has(key)).map(key=>[key,Number(params.get(key))]));if(params.has('preventPenetratingNormalDropout')){const requested=params.get('preventPenetratingNormalDropout');if(!['true','false'].includes(requested))throw new Error('preventPenetratingNormalDropout must be true or false');solverOptions.preventPenetratingNormalDropout=requested==='true';}const next=await createGpuArchCollapse(profile,renderer,{strength:value,...solverOptions});
-    const {dx,dy,dz}=next.snapshot().dimensions,nextGeometry=new THREE.BoxGeometry(dx*.98,dy*.98,dz*.98),nextEdges=new THREE.EdgesGeometry(nextGeometry);
-    const nextMeshes=next.cells.map(cell=>{const mesh=new THREE.Mesh(nextGeometry,cell.pinned?Array(6).fill(pinnedMaterial):[...materials]);mesh.userData.index=cell.index;const outline=new THREE.LineSegments(nextEdges,outlineMaterial);outline.visible=false;mesh.add(outline);mesh.userData.outline=outline;return mesh;});
+  async function rebuild(){const value=strength();if(value===null)return false;const solverOptions=Object.fromEntries(['solverIterations','stiffness','initialJointPenalty','gravityRampSeconds','substeps'].filter(key=>params.has(key)).map(key=>[key,Number(params.get(key))]));if(params.has('preventPenetratingNormalDropout')){const requested=params.get('preventPenetratingNormalDropout');if(!['true','false'].includes(requested))throw new Error('preventPenetratingNormalDropout must be true or false');solverOptions.preventPenetratingNormalDropout=requested==='true';}
+    let next,nextGeometry,nextEdges,nextMeshes;
+    try {
+      next=await createGpuArchCollapse(profile,renderer,{strength:value,...solverOptions});
+      const {dx,dy,dz}=next.snapshot().dimensions;nextGeometry=new THREE.BoxGeometry(dx*.98,dy*.98,dz*.98);nextEdges=new THREE.EdgesGeometry(nextGeometry);
+      nextMeshes=next.cells.map(cell=>{const mesh=new THREE.Mesh(nextGeometry,cell.pinned?Array(6).fill(pinnedMaterial):[...materials]);mesh.userData.index=cell.index;const outline=new THREE.LineSegments(nextEdges,outlineMaterial);outline.visible=false;mesh.add(outline);mesh.userData.outline=outline;return mesh;});
+    }catch(error){next?.dispose();nextGeometry?.dispose();nextEdges?.dispose();throw error;}
     model?.dispose();for(const mesh of meshes)scene.remove(mesh);geometry?.dispose();edges?.dispose();model=next;geometry=nextGeometry;edges=nextEdges;meshes=nextMeshes;scene.add(...meshes);
     if(!floor){floor=new THREE.Mesh(new THREE.PlaneGeometry(22,18),new THREE.MeshStandardMaterial({color:0x33393b,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=model.snapshot().floorY-.003;scene.add(floor);}
-    grab=null;contactPointer=null;controls.enabled=true;phase='interactive';failure=null;errorNode.textContent='';pauseIcon();synchronize();return true;
+    grab=null;contactPointer=null;controls.enabled=true;lastTime=performance.now();if(failurePaused!==null)paused=failurePaused;phase='interactive';failure=null;failurePaused=null;errorNode.textContent='';pauseIcon();synchronize();return true;
   }
   async function advance(count){if(!Number.isInteger(count)||count<0)throw new Error('Advance count must be a nonnegative integer');for(let i=0;i<count;i++){const start=performance.now();if(grab&&mode==='bind')model.bind(grab.index);await model.step();latestStepCost=performance.now()-start;}synchronize();}
   function ray(event){camera.updateMatrixWorld(true);const rect=canvas.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.ray;}

@@ -7,6 +7,7 @@ export const ARCH_GPU_ROUTE='kaminos.structural-material.arch-gravity-collapse.w
 const xyz=values=>({x:values[0],y:values[1],z:values[2]});
 const v=value=>new THREE.Vector3(value.x,value.y,value.z);
 const q=value=>new THREE.Quaternion(value.x,value.y,value.z,value.w);
+const finitePoint=point=>['x','y','z'].every(axis=>Number.isFinite(point?.[axis]));
 const faceNormals=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].map(value=>new THREE.Vector3(...value));
 
 export function coarsenGpuArchProfile(source, columns=14, rows=10) {
@@ -22,7 +23,16 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   const fixture=buildGpuArchFixture(profile,options),{cells,bonds,config,dimensions,floorY}=fixture;
   const {dx,dy,dz}=dimensions,device=renderer.backend.device,n=cells.length+1;
   if(cells.length===0)throw new Error('GPU arch requires occupied cells');
-  const engine=new ArchGpuEngine(device,{maxBodies:n,gravity:[0,-config.gravity,0],deltaTime:config.timeStep,
+  let engine,disposed=false;
+  const ownedBuffers=[];
+  const acquire=descriptor=>{const buffer=device.createBuffer(descriptor);ownedBuffers.push(buffer);return buffer;};
+  function dispose(){if(disposed)return;disposed=true;const errors=[];
+    for(const buffer of ownedBuffers)try{buffer.destroy();}catch(error){errors.push(error);}
+    for(const attr of new Set(Object.values(engine??{}).filter(value=>value?.isStorageBufferAttribute)))try{renderer.backend.destroyAttribute(attr);}catch(error){errors.push(error);}
+    if(errors.length)throw new AggregateError(errors,'GPU arch resource cleanup failed');
+  }
+  try {
+  engine=new ArchGpuEngine(device,{maxBodies:n,gravity:[0,-config.gravity,0],deltaTime:config.timeStep,
     substeps:config.substeps,solverIterations:config.solverIterations,maxFixedStepsPerFrame:1,
     enableBvhBuild:false,maxPairsPerBodyBroadphase:n-1,maxContactsPerBodySolver:(n-1)*4,
     pairManifoldSlots:4,avbdFriction:config.friction,avbdPenaltyDecayGamma:1});
@@ -39,13 +49,13 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   engine.step(config.timeStep,renderer);
   const attrs=engine.getResidentAttributes();
   const resident=name=>{const buffer=renderer.backend.get(attrs[name]).buffer;if(!buffer)throw new Error(`Resident ${name} buffer missing`);return buffer;};
-  const allocate=(label,data,usage)=>{const buffer=device.createBuffer({label,size:Math.max(16,data.byteLength),usage:usage|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(buffer,0,data);return buffer;};
+  const allocate=(label,data,usage)=>{const buffer=acquire({label,size:Math.max(16,data.byteLength),usage:usage|GPUBufferUsage.COPY_DST});device.queue.writeBuffer(buffer,0,data);return buffer;};
   const geometry=new Float32Array(Math.max(1,bonds.length)*12);
   bonds.forEach((bond,i)=>{geometry.set([bond.area,...bond.normal],i*12);geometry.set([...bond.anchorA,0],i*12+4);geometry.set([...bond.anchorB,0],i*12+8);});
   const buffers={geometry:allocate('Arch contact geometry',geometry,GPUBufferUsage.STORAGE),damage:allocate('Arch persistent damage',new Float32Array(Math.max(1,bonds.length)*12),GPUBufferUsage.STORAGE),
     grip:allocate('Arch hand commands',new Float32Array(cells.length*12),GPUBufferUsage.STORAGE),parameters:allocate('Arch parameters',new Float32Array(16),GPUBufferUsage.UNIFORM),
-    output:device.createBuffer({label:'Arch pose and damage mirror',size:(cells.length*5+bonds.length*4)*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),
-    readback:device.createBuffer({label:'Arch operator pose readback',size:(cells.length*5+bonds.length*4)*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ})};
+    output:acquire({label:'Arch pose and damage mirror',size:(cells.length*5+bonds.length*4)*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),
+    readback:acquire({label:'Arch operator pose readback',size:(cells.length*5+bonds.length*4)*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ})};
   const shader=device.createShaderModule({label:'Arch resident interaction and fracture',code:ARCH_GPU_KERNELS});
   const compilation=await shader.getCompilationInfo();if(compilation.messages.some(message=>message.type==='error'))throw new Error(compilation.messages.map(message=>message.message).join('\n'));
   const layout=device.createBindGroupLayout({entries:Array.from({length:10},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===8?'uniform':[0,1,2,3,5,7].includes(binding)?'read-only-storage':'storage'}}))});
@@ -53,7 +63,7 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   const pipelines={};for(const entryPoint of ['commands','fracture','pack'])pipelines[entryPoint]=await device.createComputePipelineAsync({label:`Arch ${entryPoint}`,layout:pipelineLayout,compute:{module:shader,entryPoint}});
   const resources=[resident('positions'),resident('quaternions'),resident('velocities'),resident('angularVelocities'),resident('joints'),buffers.geometry,buffers.damage,buffers.grip,buffers.parameters,buffers.output];
   const group=device.createBindGroup({layout,entries:resources.map((buffer,binding)=>({binding,resource:{buffer}}))});
-  let stepIndex=1,epoch=0,hand=null,gripGeneration=0,disposed=false,bindRequest=null;
+  let stepIndex=1,epoch=0,hand=null,gripGeneration=0,bindRequest=null;
   const events=[],samples=[];
   const state={bodies:cells.map(cell=>({...cell,position:xyz(cell.position),rest:xyz(cell.position),quaternion:{x:0,y:0,z:0,w:1},velocity:{x:0,y:0,z:0},angularVelocity:{x:0,y:0,z:0}})),
     bonds:bonds.map(bond=>({...bond,alive:true,reaction:0,bendingReaction:0,stress:0,lastBreakStep:null}))};
@@ -78,8 +88,8 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   function isExposedFace(index,normal){if(!cells[index]||!faceNormals.some(face=>face.distanceTo(v(normal))<1e-8))return false;return!state.bonds.some(bond=>bond.alive&&(bond.a===index&&new THREE.Vector3(...bond.normal).dot(v(normal))>.99||bond.b===index&&new THREE.Vector3(...bond.normal).dot(v(normal))<-.99));}
   const worldPoint=(index,point)=>v(point).applyQuaternion(q(state.bodies[index].quaternion)).add(v(state.bodies[index].position));
   function release(){hand=null;gripData.fill(0);device.queue.writeBuffer(buffers.grip,0,gripData);}
-  function setSurfaceHand(index,target,localPoint,normal){const cell=cells[index];if(!cell||cell.pinned||!isExposedFace(index,normal))throw new Error('Surface hand requires unpinned exposed face');
-    if([...Object.values(target),...Object.values(localPoint)].some(value=>!Number.isFinite(value)))throw new Error('Hand coordinates must be finite');
+  function setSurfaceHand(index,target,localPoint,normal){if(![target,localPoint,normal].every(finitePoint))throw new Error('Hand coordinates must contain finite x, y and z');
+    const cell=cells[index];if(!cell||cell.pinned||!isExposedFace(index,normal))throw new Error('Surface hand requires unpinned exposed face');
     const h=xyz(cell.halfExtents),expected=Math.abs(normal.x)*h.x+Math.abs(normal.y)*h.y+Math.abs(normal.z)*h.z;
     if(Math.abs(v(localPoint).dot(v(normal))-expected)>1e-6||['x','y','z'].some(axis=>Math.abs(localPoint[axis])>h[axis]+1e-6))throw new Error('Hand point must lie on selected face');
     release();gripGeneration++;const contact=worldPoint(index,localPoint),worldNormal=v(normal).applyQuaternion(q(state.bodies[index].quaternion)),members=[];
@@ -88,18 +98,19 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
     const total=members.reduce((sum,member)=>sum+member.weight,0);for(const member of members){member.weight/=total;const start=member.index*12;gripData.set([1,member.weight,gripGeneration,0,member.point.x,member.point.y,member.point.z,0,member.offset.x,member.offset.y,member.offset.z,0],start);}
     hand={index,target:{...target},localPoint:{...localPoint},normal:{...normal},members,layers:[...new Set(members.map(member=>cells[member.index].layer))],force:{x:0,y:0,z:0}};device.queue.writeBuffer(buffers.grip,0,gripData);
   }
-  function moveHand(target){if(!hand||Object.values(target).some(value=>!Number.isFinite(value)))throw new Error('Move requires active hand and finite target');hand.target={...target};}
+  function moveHand(target){if(!hand||!finitePoint(target))throw new Error('Move requires active hand and finite x, y and z');hand.target={...target};}
   function bind(index,radius=Math.max(dx,dy)*2){if(!cells[index]||!Number.isFinite(radius)||radius<=0)throw new Error('Bind requires known cell and positive finite radius');bindRequest={index,radius};}
   async function step(){if(disposed)throw new Error('GPU arch is disposed');const started=performance.now();stepIndex++;parameters();dispatch('commands');bindRequest=null;engine.setGravity([0,-config.gravity*gravityScale(stepIndex),0]);engine.step(config.timeStep,renderer);dispatch('fracture');await read();if(engine.stats.pairDispatchTruncated)throw new Error('GPU collision dispatch truncated');samples.push({step:stepIndex,milliseconds:performance.now()-started,handActive:Boolean(hand),gravityScale:gravityScale(stepIndex),cracks:events.filter(event=>event.step===stepIndex&&event.kind==='crack').length,maximumStress:Math.max(...state.bonds.map(bond=>bond.stress))});}
   parameters();dispatch('fracture');await read();
   while(gravityScale(stepIndex)<1)await step();
   return {cells:cells.map(cell=>({...cell,half:xyz(cell.halfExtents)})),bonds:state.bonds,step,setSurfaceHand,moveHand,release,isExposedFace,bind,
-    worldToLocalPoint:(index,point)=>{if(!cells[index]||Object.values(point).some(value=>!Number.isFinite(value)))throw new Error('World point requires known cell and finite coordinates');return v(point).sub(v(state.bodies[index].position)).applyQuaternion(q(state.bodies[index].quaternion).invert());},
+    worldToLocalPoint:(index,point)=>{if(!cells[index]||!finitePoint(point))throw new Error('World point requires known cell and finite x, y and z');return v(point).sub(v(state.bodies[index].position)).applyQuaternion(q(state.bodies[index].quaternion).invert());},
     setStrength:value=>{if(!Number.isFinite(value)||value<=0)throw new Error('Cohesion must be positive and finite');config.strength=value;},
     snapshot:()=>{const graph=components();return{route:ARCH_GPU_ROUTE,backend:'webgpu-avbd',engineVersion:ENGINE_REVISION,config:{...config},step:stepIndex,time:stepIndex*config.timeStep,connectivityEpoch:epoch,floorY,dimensions,constructionLoad:{duration:config.gravityRampSeconds,gravityScale:gravityScale(stepIndex),complete:gravityScale(stepIndex)===1,effectiveGravity:engine.getGravity()},
       hand:hand?{index:hand.index,indices:hand.members.map(member=>member.index),weights:hand.members.map(member=>member.weight),radius:config.gripRadius,layers:hand.layers,normal:hand.normal,target:{...hand.target},force:{...hand.force}}:null,
       bodies:state.bodies.map(body=>({...body,component:graph.labels[body.index],stress:Math.max(0,...state.bonds.filter(bond=>bond.alive&&(bond.a===body.index||bond.b===body.index)).map(bond=>bond.stress))})),
       bonds:state.bonds.map(bond=>({...bond,normal:xyz(bond.normal),anchorA:xyz(bond.anchorA),anchorB:xyz(bond.anchorB)})),broken:state.bonds.filter(bond=>!bond.alive).length,components:graph.components,events:events.map(event=>({...event})),samples:samples.map(sample=>({...sample})),
       residency:{bodyPose:'gpu-authoritative',connectivity:'gpu-authoritative',collision:'gpu-avbd',consumer:'single-pose-readback-for-current-frame-render-and-pick',allPairsCapacity:engine.maxCandidatePairs,allPairsRequired:n*(n-1)/2,contactsPerBody:(n-1)*4,jointsPerBody:8,substeps:engine.getSubsteps(),preventPenetratingNormalDropout:engine.getAvbdPreventPenetratingNormalDropout(),stats:engine.getStats()}};},
-    dispose:()=>{disposed=true;release();for(const buffer of Object.values(buffers))buffer.destroy();for(const attr of new Set(Object.values(engine).filter(value=>value?.isStorageBufferAttribute)))renderer.backend.destroyAttribute(attr);}};
+    dispose};
+  }catch(error){try{dispose();}catch(cleanupError){throw new AggregateError([error,cleanupError],'GPU arch construction and cleanup failed');}throw error;}
 }

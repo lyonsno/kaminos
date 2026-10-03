@@ -24,8 +24,8 @@ const evaluate=async expression=>{report.inputs.push({expression,at:new Date().t
 function check(name,passed,observed){report.checks.push({name,passed,observed});save();if(!passed)throw new Error(`Predicate failed: ${name}`);}
 const input=async params=>{report.inputs.push({method:'Input.dispatchMouseEvent',params,at:new Date().toISOString()});save();return send('Input.dispatchMouseEvent',params);};
 const witness=()=>evaluate('window.__archCollapse.witness()');
-async function capture(name,expected){
-  const state=await witness(),errors=inspectGpuArchLoad(state,expected),pixels=await evaluate('window.__archCollapse.pixels()');
+async function capture(name,expected,expectedFailures){
+  const state=await witness(),errors=inspectGpuArchLoad(state,expected,expectedFailures),pixels=await evaluate('window.__archCollapse.pixels()');
   report.states??={};report.states[name]=state;save();
   check(`${name}: native route, requested configuration, live physical and displayed poses`,!errors.length,errors);
   check(`${name}: canvas contains geometry`,pixels.fraction>.001,pixels);
@@ -35,14 +35,14 @@ async function capture(name,expected){
   check(`${name}: PNG dimensions match effective viewport`,report.captures[name].width===state.viewport.width&&report.captures[name].height===state.viewport.height,state.viewport);
   report.lastTrustworthyEvidence=`${name} at physical step ${state.state.step}`;save();return state;
 }
-async function injury(pick,delta={x:-1.5,y:0,z:.5}){
+async function injury(pick,delta={x:-1.5,y:0,z:.5},frames=60,requireFrontPatch=true){
   check('a visible material contact is available',Boolean(pick?.visible),pick);
   await input({type:'mousePressed',x:pick.screen.x,y:pick.screen.y,button:'left',buttons:1,clickCount:1});
   const selected=await witness();
-  check('pointer selects the advertised finite front patch',selected.state.hand?.index===pick.index&&selected.state.hand.indices.length>1&&selected.state.hand.layers.join(',')==='2',selected.state.hand);
+  check('pointer selects the advertised current material patch',selected.state.hand?.index===pick.index&&selected.state.hand.indices.includes(pick.index)&&(!requireFrontPatch||selected.state.hand.indices.length>1&&selected.state.hand.layers.join(',')==='2'),selected.state.hand);
   let screen=pick.screen;
-  for(let i=0;i<60;i++){
-    const target={x:pick.world.x+delta.x*(i+1)/60,y:pick.world.y+delta.y*(i+1)/60,z:pick.world.z+delta.z*(i+1)/60};
+  for(let i=0;i<frames;i++){
+    const target={x:pick.world.x+delta.x*(i+1)/frames,y:pick.world.y+delta.y*(i+1)/frames,z:pick.world.z+delta.z*(i+1)/frames};
     screen=await evaluate(`window.__archCollapse.projectWorld(${JSON.stringify(target)})`);
     await input({type:'mouseMoved',x:screen.x,y:screen.y,button:'left',buttons:1});await evaluate('window.__archCollapse.advance(1)');
   }
@@ -85,13 +85,20 @@ async function repairClick(before){
   check('a repaired connection survives release and weight',bound.some(event=>retained.state.bonds.find(bond=>bond.id===event.id).alive),bound.map(event=>event.id));
   return retained;
 }
+async function liveClock(name='live-clock',expectedFailures=[]){
+  const before=await witness(),wallStart=performance.now();check('live-clock exercise starts paused',before.paused===true,before.paused);
+  await evaluate('document.querySelector("#pause").click()');await sleep(2000);await evaluate('document.querySelector("#pause").click();await window.__archCollapse.advance(0)');
+  const live=await capture(name,undefined,expectedFailures),clock={wallSeconds:(performance.now()-wallStart)/1000,steps:live.state.step-before.state.step,simulationSeconds:live.state.time-before.state.time};
+  report.liveClocks??={};report.liveClocks[name]=clock;
+  check('the live clock advances actual GPU physics without manual advance',clock.steps>2&&clock.simulationSeconds>0&&live.paused===true,clock);return live;
+}
 save();
 try {
   const executable=fs.realpathSync(executableInput);
   if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent native testing browser required');
   report.browser.executable=executable;report.browser.version=execFileSync(executable,['--version'],{encoding:'utf8'}).trim();
   const isArch=page==='structural-material-arch-gpu.html';
-  if(!['load','collapse','bind','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
+  if(!['load','collapse','bind','controls','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
   if(!isArch&&page!=='structural-material-arch-gpu-conformance.html')throw new Error('Unsupported GPU smoke page');
   for(const source of [page,...(isArch?['structural-material-arch-gpu-view.js','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-gpu-fixture.js']:['structural-material-arch-gpu-conformance.js']),'dist/structural-material-arch-gpu-engine.js','vendor/webphysics/provenance.json','package-lock.json','node_modules/three/build/three.module.js','node_modules/three/build/three.webgpu.js','node_modules/three/build/three.tsl.js'])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
   report.phase='http';save();
@@ -196,9 +203,20 @@ try {
   if(isArch&&exercise==='collapse'){
     report.phase='standing-under-weight';save();await evaluate('window.__archCollapse.advance(120)');const standing=await capture('standing');
     check('the arch stands intact under its own weight',standing.state.broken===0&&standing.state.bodies.every(body=>Math.abs(body.position.y-body.rest.y)<.05),{broken:standing.state.broken,maximumSag:Math.max(...standing.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y)))});
-    report.phase='front-patch-injury';save();const held=await injury(standing.pickTargets.find(item=>item.row===1&&item.visible));const injured=await capture('released-injury');
+    report.phase='front-patch-injury';save();const held=await injury(standing.pickTargets.find(item=>item.row===1&&item.visible),{x:-.35,y:0,z:.12},12);const injured=await capture('released-injury');
     check('front patch produces reaction-dependent fractures',injured.state.broken>0&&injured.state.events.some(event=>event.kind==='crack'&&event.handActive&&event.stress>injured.state.config.strength),injured.state.broken);
     check('object pull leaves camera under operator control',JSON.stringify(injured.camera)===JSON.stringify(standing.camera),injured.camera);
+    report.phase='repeated-injury';save();await evaluate('window.__archCollapse.advance(6)');const wounded=await capture('wounded-before-second-grab');
+    const oldDead=wounded.state.bonds.filter(bond=>!bond.alive).map(bond=>bond.id);
+    check('the wounded arch retains connectivity for a second injury',oldDead.length>0&&oldDead.length<wounded.state.bonds.length,oldDead.length);
+    const second=wounded.pickTargets.find(item=>item.visible&&item.row>2&&wounded.state.components[wounded.state.bodies[item.index].component].count>6);
+    await injury(second,{x:1.4,y:.5,z:.6},60,false);const repeated=await capture('repeated-injury');
+    check('second injury adds damage without healing prior damage',repeated.state.broken>wounded.state.broken&&oldDead.every(id=>!repeated.state.bonds.find(bond=>bond.id===id).alive),{before:wounded.state.broken,after:repeated.state.broken});
+    const binding=await repairClick(repeated);
+    const repairedIds=binding.state.events.filter(event=>event.kind==='bind'&&event.step>repeated.state.step&&binding.state.bonds.find(bond=>bond.id===event.id).alive).map(event=>event.id);
+    const repairedPick=binding.pickTargets.find(item=>item.visible&&binding.state.bonds.some(bond=>repairedIds.includes(bond.id)&&(bond.a===item.index||bond.b===item.index)));
+    await evaluate('document.querySelector("#shear").click()');await injury(repairedPick,{x:-1.2,y:.3,z:.4},60,false);const reinjured=await capture('repaired-material-injury');
+    check('repaired connectivity can fracture under a later actual grab',reinjured.state.events.some(event=>event.kind==='crack'&&event.handActive&&event.step>binding.state.step&&repairedIds.includes(event.id)),repairedIds);
     await evaluate('window.__archCollapse.advance(60)');await capture('fall-1s');
     await evaluate('window.__archCollapse.advance(120)');await capture('fall-3s');
     await evaluate('window.__archCollapse.advance(300)');const rest=await capture('rest-8s');
@@ -207,11 +225,6 @@ try {
     check('the crown falls beyond the grabbed patch',crownDrop>1,crownDrop);
     const penetration=rest.state.floorY-minimumY(rest.state);
     check('rubble meets the floor within six percent of a cell',penetration<Math.min(...Object.values(rest.state.dimensions))*.06,penetration);
-    report.phase='repeated-injury';save();const oldDead=rest.state.bonds.filter(bond=>!bond.alive).map(bond=>bond.id);
-    const second=rest.pickTargets.find(item=>item.visible&&item.row>2&&rest.state.components[rest.state.bodies[item.index].component].count>6);
-    await injury(second,{x:1.4,y:.5,z:.6});await evaluate('window.__archCollapse.advance(240)');const repeated=await capture('repeated-injury');
-    check('second injury adds damage without healing prior damage',repeated.state.broken>rest.state.broken&&oldDead.every(id=>!repeated.state.bonds.find(bond=>bond.id===id).alive),{before:rest.state.broken,after:repeated.state.broken});
-    const binding=await repairClick(repeated);
     await evaluate('document.querySelector("#shear").click();await window.__archCollapse.reset()');const reset=await capture('explicit-reset');
     check('explicit Reset clears damage and preserves camera',reset.state.broken===0&&JSON.stringify(reset.camera)===JSON.stringify(binding.camera),reset.state.broken);
     await input({type:'mousePressed',x:40,y:180,button:'left',buttons:1,clickCount:1});check('background press does not grip material',(await witness()).state.hand===null,(await witness()).lastPick);
@@ -220,12 +233,23 @@ try {
     const rotated=orbit.surfaceTargets.find(item=>item.visible&&item.row===2);
     await input({type:'mousePressed',x:rotated.screen.x,y:rotated.screen.y,button:'left',buttons:1,clickCount:1});check('rotated camera picks current surface',(await witness()).state.hand?.index===rotated.index,(await witness()).lastPick);
     await input({type:'mouseReleased',x:rotated.screen.x,y:rotated.screen.y,button:'left',buttons:0,clickCount:1});
-    report.phase='live-clock';const beforeLive=await witness(),wallStart=performance.now();await evaluate('document.querySelector("#pause").click()');await sleep(2000);await evaluate('document.querySelector("#pause").click()');const live=await capture('live-clock');
-    report.liveClock={wallSeconds:(performance.now()-wallStart)/1000,steps:live.state.step-beforeLive.state.step,simulationSeconds:live.state.time-beforeLive.state.time};
-    check('the live clock advances actual GPU physics without manual advance',report.liveClock.steps>2&&report.liveClock.simulationSeconds>0&&live.paused===true,report.liveClock);
+    report.phase='live-clock';await liveClock();
     await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await send('Page.navigate',{url:report.requestedUrl});
     while(!await evaluate('Boolean(window.__archCollapse)')){if(report.errors.length)throw new Error(JSON.stringify(report.errors));await sleep(100);}
     await sleep(350);await capture('mobile-standing');check('mobile controls fit without horizontal overflow',await evaluate('document.documentElement.scrollWidth<=innerWidth'),await evaluate('({width:innerWidth,documentWidth:document.documentElement.scrollWidth})'));
+  }
+  if(isArch&&exercise==='controls'){
+    report.phase='live-clock-and-recovery';save();await liveClock();const knownFailures=[];
+    for(const initiallyPaused of [false,true]){
+      if(!initiallyPaused)await evaluate('document.querySelector("#pause").click()');
+      const before=await witness();check('recovery starts in the intended clock state',before.paused===initiallyPaused,before.paused);
+      await evaluate('(async()=>{const {ArchGpuEngine}=await import("./dist/structural-material-arch-gpu-engine.js");const original=ArchGpuEngine.prototype.step;ArchGpuEngine.prototype.step=function(){ArchGpuEngine.prototype.step=original;throw new Error("injected native recovery fault");};try{await window.__archCollapse.advance(1);}catch(error){return error.message;}finally{ArchGpuEngine.prototype.step=original;}})()');
+      const failed=await witness();check('the injected fault is visible and stops the live clock',failed.phase==='failed'&&failed.paused===true&&failed.failure.message==='injected native recovery fault'&&failed.failures.length===knownFailures.length+1,failed.failure);
+      knownFailures.push(failed.failure);report.expectedRecoveryFaults=[...knownFailures];save();
+      await evaluate('await window.__archCollapse.reset()');const recovered=await capture(`recovered-${initiallyPaused?'paused':'live'}`,undefined,knownFailures);
+      check('Reset preserves the pre-failure clock and failure history',recovered.paused===initiallyPaused&&recovered.failures.length===knownFailures.length&&JSON.stringify(recovered.camera)===JSON.stringify(before.camera),{paused:recovered.paused,failures:recovered.failures.length});
+      if(!initiallyPaused)await evaluate('document.querySelector("#pause").click();await window.__archCollapse.advance(0)');
+    }
   }
   report.status='passed';report.phase='complete';save();
 }catch(error){report.status='failed';report.failure={phase:report.phase,message:error.message,stack:error.stack};save();process.exitCode=1;

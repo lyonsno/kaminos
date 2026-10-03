@@ -12,4 +12,11 @@ for(const patch of [{identity:null},{phase:'failed'},{route:'cpu-reference'},{fa
  {state:{...valid.state,constructionLoad:{...valid.state.constructionLoad,effectiveGravity:[0,0,0]}}},
  {rendererPoses:[{index:0,position:[0,1,0],quaternion:[0,0,0,1]}]}])assert.ok(inspectGpuArchLoad({...valid,...patch}).length,`must reject ${JSON.stringify(patch)}`);
 assert.deepEqual(inspectGpuArchLoad({...valid,unknownAdditiveField:true}),[]);
+const admittedFailure={operation:'Advance',message:'injected native recovery fault',step:2,at:'2026-10-03T00:00:00Z'};
+const recovered={...valid,failures:[admittedFailure],failure:null};
+assert.deepEqual(inspectGpuArchLoad(recovered,{},[admittedFailure]),[], 'explicitly witnessed recovery may retain its known fault');
+for(const failures of [[],[{...admittedFailure,message:'another failure'}],[admittedFailure,{...admittedFailure,at:'later'}]]) {
+  assert.ok(inspectGpuArchLoad({...recovered,failures},{},[admittedFailure]).length, 'missing, substituted or additional failures cannot masquerade as recovery');
+}
+assert.ok(inspectGpuArchLoad({...recovered,failure:admittedFailure},{},[admittedFailure]).length, 'an active fault is not recovered');
 console.log('GPU arch state rejects wrong route/config, stale patch, incomplete contacts and mismatched display poses');
