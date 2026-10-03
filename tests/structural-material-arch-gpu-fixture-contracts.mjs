@@ -32,5 +32,9 @@ assert.equal(buildGpuArchFixture(profile, { initialJointPenalty: 1000 }).config.
 for (const initialJointPenalty of [0, -1, NaN, Infinity, 1e7]) {
   assert.throws(() => buildGpuArchFixture(profile, { initialJointPenalty }), /initialJointPenalty/);
 }
+assert.equal(buildGpuArchFixture(profile, { gravityRampSeconds: 1 }).config.gravityRampSeconds, 1);
+for (const gravityRampSeconds of [-1, NaN, Infinity]) {
+  assert.throws(() => buildGpuArchFixture(profile, { gravityRampSeconds }), /gravityRampSeconds/);
+}
 cpu.dispose();
 console.log('GPU arch fixture matches unchanged CPU construction');

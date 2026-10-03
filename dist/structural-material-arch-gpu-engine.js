@@ -13339,6 +13339,15 @@ var ArchGpuEngine = class extends PhysicsEngine {
     if (!Number.isInteger(index) || index < 0 || index >= this.jointCount) throw new Error("Invalid joint index");
     new Uint32Array(this.jointRecordsData.buffer)[index * 44 + 3] = active ? 1 : 0;
   }
+  setGravity(gravity) {
+    if (!Array.isArray(gravity) || gravity.length !== 3 || gravity.some((value) => !Number.isFinite(value))) throw new Error("Gravity requires three finite components");
+    this.config.gravity = [...gravity];
+    if (this.initialized) {
+      const uniform2 = this.integration.kernel.computeNode.parameters.gravity;
+      if (!uniform2?.value?.isVector3) throw new Error("Pinned integration gravity uniform is unavailable");
+      uniform2.value.set(...gravity);
+    }
+  }
 };
 async function createNativeGpuRenderer(canvas) {
   const { WebGPURenderer } = await import("three/webgpu");

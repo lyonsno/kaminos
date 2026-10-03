@@ -33,6 +33,8 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   const counts=cells.map(()=>0);for(const bond of bonds){counts[bond.a]++;counts[bond.b]++;}
   if(counts.some(count=>count+1>8))throw new Error('Fixture exceeds observed engine joint-per-body capacity');
   for(let j=0;j<bonds.length;j++){const data=engine.jointRecordsData;for(let axis=0;axis<3;axis++){data[j*44+36+axis]=config.initialJointPenalty;data[j*44+40+axis]=config.initialJointPenalty;}}
+  const gravityScale=step=>config.gravityRampSeconds===0?1:Math.min(1,step*config.timeStep/config.gravityRampSeconds);
+  engine.setGravity([0,-config.gravity*gravityScale(1),0]);
   engine.step(config.timeStep,renderer);
   const attrs=engine.getResidentAttributes();
   const resident=name=>{const buffer=renderer.backend.get(attrs[name]).buffer;if(!buffer)throw new Error(`Resident ${name} buffer missing`);return buffer;};
@@ -87,12 +89,13 @@ export async function createGpuArchCollapse(profile, renderer, options={}) {
   }
   function moveHand(target){if(!hand||Object.values(target).some(value=>!Number.isFinite(value)))throw new Error('Move requires active hand and finite target');hand.target={...target};}
   function bind(index,radius=Math.max(dx,dy)*2){if(!cells[index]||!Number.isFinite(radius)||radius<=0)throw new Error('Bind requires known cell and positive finite radius');bindRequest={index,radius};}
-  async function step(){if(disposed)throw new Error('GPU arch is disposed');const started=performance.now();stepIndex++;parameters();dispatch('commands');bindRequest=null;engine.step(config.timeStep,renderer);dispatch('fracture');await read();if(engine.stats.pairDispatchTruncated)throw new Error('GPU collision dispatch truncated');samples.push({step:stepIndex,milliseconds:performance.now()-started,handActive:Boolean(hand),cracks:events.filter(event=>event.step===stepIndex&&event.kind==='crack').length,maximumStress:Math.max(...state.bonds.map(bond=>bond.stress))});}
-  parameters();await read();
+  async function step(){if(disposed)throw new Error('GPU arch is disposed');const started=performance.now();stepIndex++;parameters();dispatch('commands');bindRequest=null;engine.setGravity([0,-config.gravity*gravityScale(stepIndex),0]);engine.step(config.timeStep,renderer);dispatch('fracture');await read();if(engine.stats.pairDispatchTruncated)throw new Error('GPU collision dispatch truncated');samples.push({step:stepIndex,milliseconds:performance.now()-started,handActive:Boolean(hand),gravityScale:gravityScale(stepIndex),cracks:events.filter(event=>event.step===stepIndex&&event.kind==='crack').length,maximumStress:Math.max(...state.bonds.map(bond=>bond.stress))});}
+  parameters();dispatch('fracture');await read();
+  while(gravityScale(stepIndex)<1)await step();
   return {cells:cells.map(cell=>({...cell,half:xyz(cell.halfExtents)})),bonds:state.bonds,step,setSurfaceHand,moveHand,release,isExposedFace,bind,
     worldToLocalPoint:(index,point)=>{if(!cells[index]||Object.values(point).some(value=>!Number.isFinite(value)))throw new Error('World point requires known cell and finite coordinates');return v(point).sub(v(state.bodies[index].position)).applyQuaternion(q(state.bodies[index].quaternion).invert());},
     setStrength:value=>{if(!Number.isFinite(value)||value<=0)throw new Error('Cohesion must be positive and finite');config.strength=value;},
-    snapshot:()=>{const graph=components();return{route:ARCH_GPU_ROUTE,backend:'webgpu-avbd',engineVersion:ENGINE_REVISION,config:{...config},step:stepIndex,time:stepIndex*config.timeStep,connectivityEpoch:epoch,floorY,dimensions,
+    snapshot:()=>{const graph=components();return{route:ARCH_GPU_ROUTE,backend:'webgpu-avbd',engineVersion:ENGINE_REVISION,config:{...config},step:stepIndex,time:stepIndex*config.timeStep,connectivityEpoch:epoch,floorY,dimensions,constructionLoad:{duration:config.gravityRampSeconds,gravityScale:gravityScale(stepIndex),complete:gravityScale(stepIndex)===1},
       hand:hand?{index:hand.index,indices:hand.members.map(member=>member.index),weights:hand.members.map(member=>member.weight),radius:config.gripRadius,layers:hand.layers,normal:hand.normal,target:{...hand.target},force:{...hand.force}}:null,
       bodies:state.bodies.map(body=>({...body,component:graph.labels[body.index],stress:Math.max(0,...state.bonds.filter(bond=>bond.alive&&(bond.a===body.index||bond.b===body.index)).map(bond=>bond.stress))})),
       bonds:state.bonds.map(bond=>({...bond,normal:xyz(bond.normal),anchorA:xyz(bond.anchorA),anchorB:xyz(bond.anchorB)})),broken:state.bonds.filter(bond=>!bond.alive).length,components:graph.components,events:events.map(event=>({...event})),samples:samples.map(sample=>({...sample})),

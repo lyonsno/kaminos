@@ -60,7 +60,7 @@ try {
   if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent native testing browser required');
   report.browser.executable=executable;report.browser.version=execFileSync(executable,['--version'],{encoding:'utf8'}).trim();
   const isArch=page==='structural-material-arch-gpu.html';
-  if(!['load','collapse','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
+  if(!['load','collapse','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
   if(!isArch&&page!=='structural-material-arch-gpu-conformance.html')throw new Error('Unsupported GPU smoke page');
   for(const source of [page,...(isArch?['structural-material-arch-gpu-view.js','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-gpu-fixture.js']:['structural-material-arch-gpu-conformance.js']),'dist/structural-material-arch-gpu-engine.js','vendor/webphysics/provenance.json','package-lock.json','node_modules/three/build/three.module.js','node_modules/three/build/three.webgpu.js','node_modules/three/build/three.tsl.js'])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
   report.phase='http';save();
@@ -132,6 +132,16 @@ try {
       const received=await witness();check('finite stiffness is applied at unchanged breaking strength',received.state.config.strength===80&&received.state.config.stiffness===stiffness&&received.state.config.initialJointPenalty===stiffness,received.state.config);
       await evaluate('window.__archCollapse.advance(120)');const state=await capture(`finite-stiffness-${stiffness}`,{layers:3,strength:80,timeStep:1/60,gripRadius:.55,solverIterations:20,stiffness,initialJointPenalty:stiffness});
       report.diagnostics[stiffness]={finalMaximumStress:Math.max(...state.state.bonds.map(bond=>bond.stress)),peakMaximumStress:Math.max(...state.state.samples.map(sample=>sample.maximumStress)),maximumSag:Math.max(...state.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y))),broken:state.state.broken};save();
+    }
+  }
+  if(isArch&&exercise==='construction-diagnostics'){
+    report.phase='construction-load-comparison';report.diagnostics={};save();
+    for(const gravityRampSeconds of [.5,1]){
+      const url=new URL(report.requestedUrl);url.searchParams.set('gravityRampSeconds',String(gravityRampSeconds));
+      await send('Page.navigate',{url:url.href});while(!await evaluate('Boolean(window.__archCollapse)')){if(report.errors.length)throw new Error(JSON.stringify(report.errors));await sleep(100);}
+      const received=await witness();check('construction loads full weight with fracture still active',received.state.config.strength===80&&received.state.config.gravityRampSeconds===gravityRampSeconds&&received.state.constructionLoad.gravityScale===1&&received.state.constructionLoad.complete,received.state.config);
+      await evaluate('window.__archCollapse.advance(120)');const state=await capture(`construction-load-${gravityRampSeconds}`,{layers:3,strength:80,timeStep:1/60,gripRadius:.55,solverIterations:20,stiffness:1e6,initialJointPenalty:1e6,gravityRampSeconds});
+      report.diagnostics[gravityRampSeconds]={finalMaximumStress:Math.max(...state.state.bonds.map(bond=>bond.stress)),peakMaximumStress:Math.max(...state.state.samples.map(sample=>sample.maximumStress)),maximumSag:Math.max(...state.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y))),broken:state.state.broken};save();
     }
   }
   if(isArch&&exercise==='collapse'){
