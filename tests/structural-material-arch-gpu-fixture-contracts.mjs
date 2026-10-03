@@ -33,6 +33,7 @@ for (const initialJointPenalty of [0, -1, NaN, Infinity, 1e7]) {
   assert.throws(() => buildGpuArchFixture(profile, { initialJointPenalty }), /initialJointPenalty/);
 }
 assert.equal(buildGpuArchFixture(profile, { gravityRampSeconds: 1 }).config.gravityRampSeconds, 1);
+assert.equal(fixture.config.gravityRampSeconds, .5);
 for (const gravityRampSeconds of [-1, NaN, Infinity]) {
   assert.throws(() => buildGpuArchFixture(profile, { gravityRampSeconds }), /gravityRampSeconds/);
 }

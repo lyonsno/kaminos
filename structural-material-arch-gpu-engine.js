@@ -22,12 +22,19 @@ export class ArchGpuEngine extends PhysicsEngine {
 
   setGravity(gravity) {
     if (!Array.isArray(gravity) || gravity.length !== 3 || gravity.some(value => !Number.isFinite(value))) throw new Error('Gravity requires three finite components');
-    this.config.gravity = [...gravity];
     if (this.initialized) {
-      const uniform = this.integration.kernel.computeNode.parameters.gravity;
+      const uniform = this.integration?.kernel?.computeNode?.parameters?.gravity;
       if (!uniform?.value?.isVector3) throw new Error('Pinned integration gravity uniform is unavailable');
       uniform.value.set(...gravity);
     }
+    this.config.gravity = [...gravity];
+  }
+
+  getGravity() {
+    if (!this.initialized) return [...this.config.gravity];
+    const uniform = this.integration?.kernel?.computeNode?.parameters?.gravity;
+    if (!uniform?.value?.isVector3) throw new Error('Pinned integration gravity uniform is unavailable');
+    return uniform.value.toArray();
   }
 }
 

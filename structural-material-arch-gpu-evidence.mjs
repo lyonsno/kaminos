@@ -16,7 +16,7 @@ export function inspectGpuConformance(report) {
   return errors;
 }
 
-export function inspectGpuArchLoad(witness, expected = { layers:3, strength:80, timeStep:1/60, gripRadius:.55 }) {
+export function inspectGpuArchLoad(witness, expected = { layers:3, strength:80, timeStep:1/60, gripRadius:.55, gravityRampSeconds:.5 }) {
   const errors=[],identity=witness?.identity,state=witness?.state;
   if(witness?.phase!=='interactive'||witness?.route!=='kaminos.structural-material.arch-gravity-collapse.webgpu-avbd.v0')errors.push('Wrong or failed arch route');
   if(identity?.backend!=='webgpu'||identity.adapterFallback!==false||identity.isFallbackAdapter!==false||/swiftshader|llvmpipe|software/i.test(JSON.stringify(identity)))errors.push('Native GPU identity is unverified');
@@ -24,6 +24,10 @@ export function inspectGpuArchLoad(witness, expected = { layers:3, strength:80, 
   if(!Array.isArray(witness?.failures)||witness.failures.length)errors.push('Page failures or missing failure diagnostics');
   if(state?.backend!=='webgpu-avbd')errors.push('Wrong physical backend');
   for(const [key,value]of Object.entries(expected))if(state?.config?.[key]!==value)errors.push(`Effective ${key} differs from requested value`);
+  const construction=state?.constructionLoad;
+  if(construction?.complete!==true||construction.gravityScale!==1||construction.duration!==state?.config?.gravityRampSeconds||
+      !Array.isArray(construction.effectiveGravity)||construction.effectiveGravity.length!==3||
+      construction.effectiveGravity.some((value,axis)=>value!==[0,-state?.config?.gravity,0][axis]))errors.push('Full construction weight is unverified');
   const resident=state?.residency;
   if(resident?.bodyPose!=='gpu-authoritative'||resident?.connectivity!=='gpu-authoritative'||resident?.collision!=='gpu-avbd')errors.push('Physical authority is not GPU resident');
   if(!Number.isInteger(resident?.allPairsRequired)||!Number.isInteger(resident?.allPairsCapacity)||resident.allPairsCapacity<resident.allPairsRequired||resident.stats?.pairDispatchTruncated!==false)errors.push('Collision capacity or dispatch is unverified');

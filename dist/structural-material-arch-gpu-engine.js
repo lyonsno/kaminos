@@ -13341,12 +13341,18 @@ var ArchGpuEngine = class extends PhysicsEngine {
   }
   setGravity(gravity) {
     if (!Array.isArray(gravity) || gravity.length !== 3 || gravity.some((value) => !Number.isFinite(value))) throw new Error("Gravity requires three finite components");
-    this.config.gravity = [...gravity];
     if (this.initialized) {
-      const uniform2 = this.integration.kernel.computeNode.parameters.gravity;
+      const uniform2 = this.integration?.kernel?.computeNode?.parameters?.gravity;
       if (!uniform2?.value?.isVector3) throw new Error("Pinned integration gravity uniform is unavailable");
       uniform2.value.set(...gravity);
     }
+    this.config.gravity = [...gravity];
+  }
+  getGravity() {
+    if (!this.initialized) return [...this.config.gravity];
+    const uniform2 = this.integration?.kernel?.computeNode?.parameters?.gravity;
+    if (!uniform2?.value?.isVector3) throw new Error("Pinned integration gravity uniform is unavailable");
+    return uniform2.value.toArray();
   }
 };
 async function createNativeGpuRenderer(canvas) {
