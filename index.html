@@ -27187,10 +27187,34 @@ sceneInitialization.then(() => {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if (preset !== plan.composition.flame.presetId) throw new Error('Mounted basin does not match the saved scene');
     }
+    const timberExperiment = new URLSearchParams(location.search).get('timber_ignition_smoke') === '1';
+    if (timberExperiment) volumePrototype.setSimulationPaused(true);
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
-    if (new URLSearchParams(location.search).get('timber_ignition_smoke') === '1') {
+    if (timberExperiment) {
       const { mountTimberIgnitionSmoke } = await import('./timber-ignition-smoke.mjs');
-      await mountTimberIgnitionSmoke();
+      const burnerFlow = readVolumeControls().flowRate;
+      const burnerPose = structuredClone(flameEmitterPose);
+      await mountTimberIgnitionSmoke({
+        setBurner(enabled) {
+          setVolumeControlValue(volumeSceneControlId('flowRate'), enabled ? burnerFlow : 0);
+          volumePrototype.setControls(readVolumeControls());
+          flameEmitterInjectionSuspended = !enabled;
+          applyFlameEmitterPose(burnerPose, { sourceEnabled: enabled });
+          updateVolumeControlLabels();
+          return { enabled, flowRate: volumePrototype.debugState().controls.flowRate };
+        },
+        async restoreScene() {
+          const previous = savedMeshCombustionRuntime?.runtime.assembly;
+          await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
+          if (sceneSaveBlockedByFailedRestore || !savedMeshCombustionRuntime
+            || savedMeshCombustionRuntime.runtime.assembly === previous) {
+            throw new Error('Fresh timber scene restoration failed');
+          }
+          // The ordinary saved-scene loader rebuilds the fluid through its
+          // primitive restore, while the new mesh assembly owns fresh material.
+          return { freshFluid: volumePrototype.debugState().simStepCount === 0, freshMaterial: true };
+        },
+      });
     }
   }).catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep

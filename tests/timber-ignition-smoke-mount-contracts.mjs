@@ -12,7 +12,7 @@ const label = element(), pause = element(), reset = element(), run = element();
 const nodes = new Map([['[role="status"]',label],['[data-action="pause"]',pause],['[data-action="reset"]',reset],['[data-action="run"]',run]]);
 const section = {...element(), querySelector:selector=>nodes.get(selector)};
 const root = {prepend:node=>assert.equal(node,section)};
-globalThis.document = {getElementById:id=>id==='volume-primary-control-root'?root:null,createElement:()=>section};
+globalThis.document = {getElementById:id=>id==='viewport'?root:null,createElement:()=>section};
 globalThis.window = {
   __kaminosDefaultVolumeSmokeBasin:{presetId:TIMBER_IGNITION_BASIN},
   kaminosSceneObjectDebugState:()=>structuredClone(objects),
@@ -32,14 +32,28 @@ globalThis.window = {
   },
 };
 try {
-  const smoke=await mountTimberIgnitionSmoke();
+  let restores=0;
+  const smoke=await mountTimberIgnitionSmoke({
+    setBurner:enabled=>{state.controls.flowRate=enabled?1:0;state.analyticEmitterDispatchActive=enabled;},
+    restoreScene:async()=>{restores++;state.simStepCount=0;state.gpuStructuralCombustionAssembly.dispatchCount=0;
+      const saved=JSON.parse(readFileSync(new URL('../scenes/sinter-timber-ignition-operator.kaminos.json',import.meta.url))).objects;
+      objects.splice(0,objects.length,...saved);return {freshFluid:true,freshMaterial:true};},
+  });
   await new Promise(setImmediate);
-  assert.equal(smoke.status().running,true,'mounting the operator fixture must start it without a Run click');
-  assert.equal(smoke.status().phase,'live');
-  assert.equal(state.simulationPaused,false);
+  assert.equal(smoke.status().running,false,'mount must wait indefinitely for a deliberate Run click');
+  assert.equal(smoke.status().phase,'cold');
+  assert.equal(state.simulationPaused,true);
   assert.equal(state.selectiveHeadLiveCapturePaused,false);
   assert.equal(state.controls.flowRate,0);
   assert.equal(state.analyticEmitterDispatchActive,false);
+  assert.equal(run.disabled,false);
+  assert.equal(pause.disabled,true);
+  assert.equal(reset.disabled,false);
+  run.handlers.get('click')();
+  await new Promise(setImmediate);
+  assert.equal(smoke.status().phase,'live');
+  assert.equal(state.simulationPaused,false);
+  assert.equal(run.textContent,'Repeat transfer');
   assert.equal(pause.disabled,false,'the operator must be able to pause after the prescribed sequence');
   assert.equal(pause.textContent,'Pause');
   pause.handlers.get('click')();
@@ -48,6 +62,11 @@ try {
   pause.handlers.get('click')();
   assert.equal(state.simulationPaused,false);
   assert.equal(pause.textContent,'Pause');
+  run.handlers.get('click')();await new Promise(setImmediate);
+  assert.equal(restores,2,'Repeat must restore without navigation');
+  reset.handlers.get('click')();await new Promise(setImmediate);
+  assert.equal(smoke.status().phase,'cold');assert.equal(run.disabled,false);
+  assert.equal(restores,3);assert.equal(state.simulationPaused,true);
 } finally {
   delete globalThis.document;delete globalThis.window;
 }

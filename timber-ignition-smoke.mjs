@@ -4,8 +4,8 @@ const receiverId = 'sinter-receiver-timber';
 const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const requireState = (condition, message) => { if (!condition) throw new Error(message); };
 
-export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, onChange = () => {}}) {
-  let state = {phase: 'loading', running: false, paused: true, simStepCount: null, error: null, receipts: []};
+export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, restoreScene, setBurner, onChange = () => {}}) {
+  let state = {phase: 'loading', running: false, busy: false, paused: true, simStepCount: null, error: null, receipts: []};
   const status = () => structuredClone(state);
   const publish = changes => { state = {...state, ...changes}; onChange(status()); };
   const validate = () => {
@@ -16,8 +16,8 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
     requireState(live.simGrid === 48 && equal(live.simGridDimensions, [48, 96, 48]), 'Expected the local48 domain');
     requireState(basin() === TIMBER_IGNITION_BASIN, 'Unexpected saved fire basin');
     const assembly = live.gpuStructuralCombustionAssembly;
-    requireState(assembly?.structureCount === 2 && assembly.meshTriangleCount === 1728 && assembly.dispatchCount > 0,
-      'The two timber structures must be mounted and dispatched');
+    requireState(assembly?.structureCount === 2 && assembly.meshTriangleCount === 1728 && assembly.dispatchCount >= 0,
+      'The two timber structures must be mounted');
     requireState(assembly.presentationDebugMode === 'off', 'Expected the ordinary wood view');
     requireState(assembly.runtimeReadbackCount === 0 && assembly.hostCausalFeedbackCount === 0,
       'Unexpected host material feedback');
@@ -41,35 +41,65 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
   };
   const fail = error => {
     volume.setSimulationPaused(true);
-    publish({phase: 'failed', running: false, paused: true, error: String(error.message || error)});
+    volume.setSelectiveHeadLiveCapturePaused(false);
+    publish({phase: 'failed', running: false, busy: false, paused: true, error: String(error.message || error)});
     throw error;
+  };
+  const burnerOff = () => {
+    setBurner(false);
+    const shutdown = volume.setAnalyticEmitterDescriptor(null);
+    const live = validate();
+    requireState(shutdown?.mode === 'off' && shutdown.count === 0 && shutdown.sourceLaw === 'inactive'
+      && live.controls.flowRate === 0 && live.analyticEmitterDispatchActive === false, 'Original burner shutdown failed');
+    return shutdown;
+  };
+  const prepare = async () => {
+    validate();
+    presentPausedSimulation();
+    // Finish prior GPU work before replacing the scene's resident resources.
+    await advance(0);
+    burnerOff();
+    const restored = await restoreScene();
+    requireState(restored?.freshFluid === true && restored.freshMaterial === true, 'Scene restoration did not establish fresh fluid and material');
+    burnerOff();
+    const live = validate();
+    requireState(live.simStepCount === 0 && live.gpuStructuralCombustionAssembly.dispatchCount === 0,
+      'Fresh scene advanced before the operator started it');
+    const [source, receiver] = objects();
+    requireState(equal(source.transform.position, [0, -0.5, 0]) && equal(source.transform.rotation, [0, 0, 0.35])
+      && equal(source.transform.scale, [0.8, 0.8, 0.8]) && equal(receiver.transform.position, [2.5, 0.1, 0])
+      && equal(receiver.transform.scale, [0.35, 0.35, 0.35]), 'Unexpected initial timber pose');
+    presentPausedSimulation();
+    publish({phase: 'cold', running: false, paused: true, simStepCount: 0, error: null, receipts: [{restored}]});
   };
   return {
     status,
     async initialize() {
       try {
-        validate();
-        requireState(volume.debugState().controls.flowRate > 0, 'The original burner must start enabled');
-        const [source, receiver] = objects();
-        requireState(equal(source.transform.position, [0, -0.5, 0]) && equal(source.transform.rotation, [0, 0, 0.35])
-          && equal(source.transform.scale, [0.8, 0.8, 0.8]) && equal(receiver.transform.position, [2.5, 0.1, 0])
-          && equal(receiver.transform.scale, [0.35, 0.35, 0.35]), 'Unexpected initial timber pose');
-        await advance(1);
-        presentPausedSimulation();
-        publish({phase: 'paused'});
+        publish({busy: true});
+        await prepare();
+        publish({busy: false});
       } catch (error) { fail(error); }
     },
+    async reset() {
+      requireState(!state.busy, 'An experiment is already in progress');
+      publish({phase: 'restoring', busy: true, running: false, paused: true});
+      try { await prepare(); publish({busy: false}); } catch (error) { fail(error); }
+    },
     async run() {
-      requireState(state.phase === 'paused' && !state.running, 'Use reset before running the sequence again');
+      requireState(!state.busy, 'An experiment is already in progress');
+      requireState(state.phase === 'cold' || state.phase === 'live', 'Restore the cold scene before running');
+      publish({busy: true});
       try {
+        if (state.phase === 'live') { publish({phase: 'restoring', running: false, paused: true}); await prepare(); }
+        setBurner(true);
+        const priming = validate();
+        requireState(priming.controls.flowRate > 0 && priming.analyticEmitterDispatchActive === true, 'Original burner restoration failed');
         volume.setSimulationPaused(false);
         publish({phase: 'burner-on', running: true, paused: false});
         await advance(240);
-        volume.setControls({flowRate: 0});
-        const shutdown = volume.setAnalyticEmitterDescriptor(null);
+        const shutdown = burnerOff();
         const live = validate();
-        requireState(shutdown?.mode === 'off' && shutdown.count === 0 && shutdown.sourceLaw === 'inactive'
-          && live.controls.flowRate === 0 && live.analyticEmitterDispatchActive === false, 'Original burner shutdown failed');
         state.receipts.push({burnerShutdown: shutdown, simStepCount: live.simStepCount});
         for (const [id, position] of [[sourceId, [0.4, -0.55, 0]], [receiverId, [0.4, 0.6, 0]]]) {
           const moved = moveObject(id, {position});
@@ -80,7 +110,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
         const paused = state.paused;
         requireState(volume.setSimulationPaused(paused).paused === paused, 'Live simulation continuation failed');
         requireState(volume.setSelectiveHeadLiveCapturePaused(false).paused === false, 'Live camera presentation failed');
-        publish({phase: 'live', running: true, paused});
+        publish({phase: 'live', running: true, busy: false, paused});
       } catch (error) { fail(error); }
     },
     togglePause() {
@@ -93,22 +123,24 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, o
   };
 }
 
-export async function mountTimberIgnitionSmoke() {
-  const root = document.getElementById('volume-primary-control-root');
-  requireState(root, 'Volume controls are unavailable');
+export async function mountTimberIgnitionSmoke({restoreScene, setBurner}) {
+  const root = document.getElementById('viewport');
+  requireState(root, 'Scene viewport is unavailable');
   const section = document.createElement('section');
   section.id = 'timber-ignition-smoke';
   section.dataset.volumeBasinDriveIgnore = '';
   section.dataset.volumeCockpitLayoutUi = '';
-  section.style.cssText = 'padding:8px 0 12px;border-bottom:1px solid #444;margin-bottom:10px;';
-  section.innerHTML = '<strong style="font-size:13px">Timber ignition</strong><div role="status" style="font-size:11px;line-height:1.5;margin:7px 0;overflow-wrap:anywhere">Loading</div><div class="volume-actions"><button class="btn" data-action="pause" disabled>Pause</button><button class="btn" data-action="reset">Restart</button></div>';
+  section.style.cssText = 'position:absolute;bottom:42px;left:12px;right:12px;z-index:6;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px;background:rgba(0,0,0,.8);';
+  section.innerHTML = '<strong style="font-size:13px">Timber transfer</strong><span role="status" style="font-size:12px;overflow-wrap:anywhere">Loading</span><div class="volume-actions"><button class="btn" data-action="run" disabled>Run transfer</button><button class="btn" data-action="pause" disabled>Pause</button><button class="btn" data-action="reset" disabled>Reset</button></div>';
   root.prepend(section);
   const label = section.querySelector('[role="status"]');
   const pause = section.querySelector('[data-action="pause"]');
-  const phaseLabels = {loading: 'Loading', paused: 'Paused', 'burner-on': 'Burner on',
+  const run = section.querySelector('[data-action="run"]');
+  const reset = section.querySelector('[data-action="reset"]');
+  const phaseLabels = {loading: 'Loading', restoring: 'Restoring', cold: 'Cold', 'burner-on': 'Heating source',
     'burner-off-transfer': 'Burner off / transfer', live: 'Burner off / live', failed: 'Failed'};
   const volume = window.__kaminosVolumePrototype;
-  const smoke = createTimberIgnitionSmoke({volume,
+  const smoke = createTimberIgnitionSmoke({volume, restoreScene, setBurner,
     basin: () => window.__kaminosDefaultVolumeSmokeBasin?.presetId,
     objects: () => window.kaminosSceneObjectDebugState(),
     moveObject: (id, pose) => window.kaminosSetSceneObjectTransform(id, pose),
@@ -117,20 +149,17 @@ export async function mountTimberIgnitionSmoke() {
       label.style.color = state.error ? '#ef9a9a' : '#ccc';
       pause.disabled = !state.running;
       pause.textContent = state.running && state.paused ? 'Resume' : 'Pause';
+      run.disabled = state.busy || !['cold', 'live'].includes(state.phase);
+      run.textContent = state.phase === 'live' ? 'Repeat transfer' : 'Run transfer';
+      reset.disabled = state.busy;
     },
   });
   window.__kaminosTimberIgnitionSmoke = smoke;
-  pause.addEventListener('click', () => smoke.togglePause());
-  section.querySelector('[data-action="reset"]').addEventListener('click', () => location.reload());
+  pause.addEventListener('click', () => { try { smoke.togglePause(); } catch (error) { console.error('Timber pause failed:', error); } });
+  run.addEventListener('click', () => void smoke.run().catch(error => console.error('Timber transfer failed:', error)));
+  reset.addEventListener('click', () => void smoke.reset().catch(error => console.error('Timber reset failed:', error)));
   try {
-    // Saved-scene restoration precedes the first structural GPU dispatch.
-    while (!volume.debugState().gpuStructuralCombustionAssembly?.dispatchCount) {
-      const live = volume.debugState();
-      if (live.error) throw new Error(live.error);
-      await new Promise(requestAnimationFrame);
-    }
     await smoke.initialize();
-    void smoke.run().catch(error => console.error('Timber ignition sequence failed:', error));
   } catch (error) {
     label.textContent = `Failed: ${error.message || error}`;
     throw error;
