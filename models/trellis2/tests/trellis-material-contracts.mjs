@@ -17,7 +17,7 @@ assert.ok(baked.coveredPixels>0);assert.ok(baked.coveredPixels<16);
 assert.equal(baked.alphaMode,'OPAQUE');
 assert.ok(baked.metallicRoughness.every((v,i)=>i%4===0?v===0:i%4===3?v===255:true));
 assert.throws(()=>stages.bakeTrellisMaterialTextures({...mesh,uvs:new Float32Array(2),coordinates,features,resolution:2}),/complete/);
-assert.throws(()=>stages.bakeTrellisMaterialTextures({...mesh,uvs:new Float32Array([0,0,0,0,0,0]),coordinates,features,resolution:2,textureSize:4}),/covered/);
+assert.throws(()=>stages.bakeTrellisMaterialTextures({...mesh,uvs:new Float32Array([0,0,0,0,0,0]),coordinates,features,resolution:2,textureSize:4}),/collapsed|covered/);
 const png=await stages.encodeTrellisTexturePNG({pixels:new Uint8Array([255,127,63,0]),width:1,height:1});
 const {inflateSync}=await import('node:zlib');const p=new Uint8Array(png),v=new DataView(p.buffer,p.byteOffset,p.byteLength);
 assert.deepEqual([...p.slice(0,8)],[137,80,78,71,13,10,26,10]);

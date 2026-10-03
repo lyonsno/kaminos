@@ -81,8 +81,52 @@ function validateSurface({vertices,triangles,uvs},withUV=true){
     (withUV&&!uvs.every(v=>Number.isFinite(v)&&v>=0&&v<=1)))throw RangeError('finite in-range surface/UV values required');
 }
 
+function faceCross({vertices,triangles},face){
+  const a=triangles[face*3]*3,b=triangles[face*3+1]*3,c=triangles[face*3+2]*3,
+    x=vertices[b]-vertices[a],y=vertices[b+1]-vertices[a+1],z=vertices[b+2]-vertices[a+2],
+    u=vertices[c]-vertices[a],v=vertices[c+1]-vertices[a+1],w=vertices[c+2]-vertices[a+2];
+  return [y*w-z*v,z*u-x*w,x*v-y*u];
+}
+
+function validateUVArea(mesh){
+  const {triangles,uvs}=mesh;
+  for(let face=0;face<triangles.length/3;face++){
+    const a=triangles[face*3]*2,b=triangles[face*3+1]*2,c=triangles[face*3+2]*2,
+      area=(uvs[b]-uvs[a])*(uvs[c+1]-uvs[a+1])-(uvs[c]-uvs[a])*(uvs[b+1]-uvs[a+1]);
+    if(area===0&&faceCross(mesh,face).some(v=>v!==0))
+      throw Error('collapsed UV face '+face+'; nondegenerate geometry requires nonzero UV area');
+  }
+}
+
+// Model-owned packing of the shipped worker's remaining tier. Its fixed .005
+// padding consumes dense cells. Keep primary/secondary charts unchanged, but
+// project each remaining source face along its strongest geometric normal and
+// fit padding to its cell. This is a declared postprocess route, not xatlas.
+function repackRemainingUV(mesh){
+  const {vertices,triangles,uvs,faceAssignment}=mesh,remaining=[];
+  for(let face=0;face<faceAssignment.length;face++)if(faceAssignment[face]===12)remaining.push(face);
+  if(!remaining.length)return {remainingFaces:0};
+  const gridW=Math.ceil(Math.sqrt(remaining.length*1.5)),gridH=Math.ceil(remaining.length/gridW),
+    cellW=.5/gridW,cellH=(1/3)/gridH,padding=Math.min(.005,cellW/4,cellH/4);
+  for(let i=0;i<remaining.length;i++){
+    const face=remaining[i],cross=faceCross(mesh,face);
+    if(!cross.some(v=>v!==0))continue; // Do not manufacture a parameterization for zero-area geometry.
+    let axis=0;for(let a=1;a<3;a++)if(Math.abs(cross[a])>Math.abs(cross[axis]))axis=a;
+    const uAxis=(axis+1)%3,vAxis=(axis+2)%3,rows=[triangles[face*3],triangles[face*3+1],triangles[face*3+2]],
+      u=rows.map(row=>vertices[row*3+uAxis]),v=rows.map(row=>vertices[row*3+vAxis]),
+      uMin=Math.min(...u),vMin=Math.min(...v),uRange=Math.max(...u)-uMin,vRange=Math.max(...v)-vMin,
+      offX=.5+(i%gridW)*cellW,offY=2/3+Math.floor(i/gridW)*cellH;
+    for(let k=0;k<3;k++){
+      uvs[rows[k]*2]=offX+padding+(u[k]-uMin)/uRange*(cellW-2*padding);
+      uvs[rows[k]*2+1]=offY+padding+(v[k]-vMin)/vRange*(cellH-2*padding);
+    }
+  }
+  return {remainingFaces:remaining.length,grid:[gridW,gridH],padding,
+    route:'TRELLIS remaining-face dominant-plane charts/cell-compatible padding; shipped primary/secondary unchanged'};
+}
+
 export function rasterizeTrellisMaterialUV({vertices,triangles,uvs,textureSize=1024}){
-  validateSurface({vertices,triangles,uvs});
+  validateSurface({vertices,triangles,uvs});validateUVArea({vertices,triangles,uvs});
   if(!Number.isSafeInteger(textureSize)||textureSize<1||!Number.isSafeInteger(textureSize**2))throw RangeError('finite texture dimensions required');
   const faces=new Int32Array(textureSize**2).fill(-1),bary=new Float32Array(textureSize**2*3);
   for(let face=0;face<triangles.length/3;face++){
@@ -173,7 +217,7 @@ export async function encodeTrellisTexturePNG({pixels,width,height}){
 }
 
 export async function encodeTrellisPbrGLB(mesh,{textures,provenance={}}={}){
-  validateSurface(mesh);
+  validateSurface(mesh);validateUVArea(mesh);
   if(textures?.alphaMode!=='OPAQUE')throw Error('source OPAQUE material contract required');
   const base=encodeTrellisGeometryGLB(mesh,{provenance}),view=new DataView(base),jsonLength=view.getUint32(12,true),
     document=JSON.parse(new TextDecoder().decode(new Uint8Array(base,20,jsonLength))),baseStart=28+jsonLength,
@@ -232,6 +276,8 @@ export async function unwrapTrellisMesh(mesh,{WorkerClass=globalThis.Worker}={})
       if(output.vertices[output.triangles[i]*3+axis]!==mesh.vertices[mesh.triangles[i]*3+axis])
         throw Error('UV worker changed complete source triangle geometry');
     }
+    output.uvMetadata.remainingPacking=repackRemainingUV(output);
+    validateSurface(output);validateUVArea(output);
     return output;
   }finally{worker.terminate();}
 }
