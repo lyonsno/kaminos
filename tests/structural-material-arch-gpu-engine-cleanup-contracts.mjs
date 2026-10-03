@@ -28,17 +28,17 @@ async function acquisition(fault) {
       copyBufferToBuffer() {}, finish: () => ({}) }),
   };
   const backend = { isWebGPUBackend: true, device,
-    get(attribute) {
+    get(attribute) { return attributes.get(attribute) ?? {}; },
+    createStorageAttribute(attribute) {
       if (!attributes.has(attribute)) attributes.set(attribute, { buffer: device.createBuffer({ label: attribute.name || 'Engine storage attribute', size: attribute.array.byteLength }) });
       return attributes.get(attribute);
     },
-    createStorageAttribute(attribute) { this.get(attribute); },
-    destroyAttribute(attribute) { if (attributes.has(attribute)) { attributes.get(attribute).buffer.destroy(); attributes.delete(attribute); destroyedAttributes.push(attribute); } },
+    destroyAttribute(attribute) { attributes.get(attribute).buffer.destroy(); attributes.delete(attribute); destroyedAttributes.push(attribute); },
   };
   const renderer = { backend, compute() {
     const engine = engines.at(-1);
     for (const owner of [engine, ...Object.values(engine).filter(value => value && typeof value === 'object' && !ArrayBuffer.isView(value))]) {
-      for (const value of Object.values(owner)) if (value?.isStorageBufferAttribute || value?.isIndirectStorageBufferAttribute) backend.get(value);
+      for (const value of Object.values(owner)) if (value?.isStorageBufferAttribute || value?.isIndirectStorageBufferAttribute) backend.createStorageAttribute(value);
     }
   } };
   class ObservedEngine extends ArchGpuEngine { constructor(...args) { super(...args); engines.push(this); } }

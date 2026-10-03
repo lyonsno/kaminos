@@ -13350,7 +13350,7 @@ var ArchGpuEngine = class extends PhysicsEngine {
       errors.push(error);
     }
     for (const attribute of attributes) try {
-      renderer.backend.destroyAttribute(attribute);
+      if (renderer.backend.get(attribute)?.buffer) renderer.backend.destroyAttribute(attribute);
     } catch (error) {
       errors.push(error);
     }

@@ -35,7 +35,9 @@ export class ArchGpuEngine extends PhysicsEngine {
     const owners = [this, this.integration, this.derivedInertia, this.contactGeneration, this.broadPhase, this.avbdState, this.playerControl];
     const attributes = new Set(owners.flatMap(owner => Object.values(owner ?? {}).filter(value => value?.isStorageBufferAttribute)));
     for (const buffer of this.archOwnedBuffers) try { buffer.destroy(); } catch (error) { errors.push(error); }
-    for (const attribute of attributes) try { renderer.backend.destroyAttribute(attribute); } catch (error) { errors.push(error); }
+    for (const attribute of attributes) try {
+      if (renderer.backend.get(attribute)?.buffer) renderer.backend.destroyAttribute(attribute);
+    } catch (error) { errors.push(error); }
     if (errors.length) throw new AggregateError(errors, 'GPU engine resource cleanup failed');
   }
 
