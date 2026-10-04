@@ -31,6 +31,9 @@ try {
     assert.equal(await page.evaluate(()=>window.kaminosSceneGIDebugState().gain),2,await page.locator('#info-bar').textContent());
     assert.equal(await page.inputValue('#scene-gi-mode'),'combined');
     assert.equal(await page.inputValue('#scene-gi-gain'),'2');
+    await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]));
+    await page.locator('.env-btn[data-env="neutral"]').click();
+    await page.waitForTimeout(2000);
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();
     await page.screenshot({path:out+'/'+(extra.futureQuality?'additive':'ordinary')+'.png'});
     await page.$eval('#scene-gi-gain',e=>{e.value='1';e.dispatchEvent(new Event('change',{bubbles:true}));});
