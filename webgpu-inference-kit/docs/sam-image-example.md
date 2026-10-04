@@ -42,8 +42,18 @@ Numerical verification distinguishes arithmetic changes from scheduling changes:
 - The static attention specialization at `2130c41e` retained selected masks and indices, with maximum selected-logit difference approximately `0.00108` against its preceding source baseline. It is not bit-exact to that baseline.
 - Complete-output scheduling ranges for DETR attention/pixel convolution (`22393727`), the ViT backbone (`4e3da3f7`), and image-neck convolution (`581a72b2`) were each bit-exact to their preceding accepted source implementation across all 1,327,104 selected logits, scores, boxes, indices, and binary masks in the five-case witness. Empty controls stayed empty. This establishes preservation of these recorded outputs, not unseen intermediate tensors.
 
-Across the latest two range-scheduled runs, cached prompts took approximately **2.4-2.9 seconds**, a new image with the model resident took **18.1-18.3 seconds**, and a cold invocation took **30.8-34.0 seconds**, including **12.6-15.2 seconds** of model preparation. These are observed whole-invocation times on this device and package, not portable performance guarantees. Earlier iterations of this example took 13-14 seconds for cached prompts.
+After program-local pipeline reuse and browser-frame-owned rendering (`ba5a4210`), the same native witness measured:
 
-Cooperation is still under measurement. The ViT-range run recorded 50 ms maximum animation-callback gaps on cached prompts; the subsequent neck-range run recorded 133-167 ms gaps even on the unchanged cached-image path. Callback timestamps are not presented-frame evidence, and smaller GPU phases do not by themselves establish smooth rendering. Complete raw output, provenance, callback timestamps, source revisions, and screenshots are retained by the native witness rather than embedded in UI state. Explicit provenance export may be expensive; ordinary state updates do not enumerate the model-resource inventory.
+| Invocation | Whole invocation | Model execution |
+| --- | ---: | ---: |
+| Cold image + wheel prompt | 30.10 s | 17.01 s |
+| Cached image + wheel prompt | 2.31 s | 2.11 s |
+| Cached image + windows prompt | 2.33 s | 2.12 s |
+| Cached image + empty-control prompt | 2.29 s | 2.13 s |
+| New image + grocery-bags prompt | 17.24 s | 17.06 s |
+
+Cold model preparation accounted for 12.87 seconds. These are observed times on this device and package, not portable performance guarantees. Earlier iterations of this example took 13-14 seconds for cached prompts. The reuse and rendering changes each preserved the complete recorded instance outputs exactly against the preceding source implementation, including all 1,327,104 instance logits and 414,720 top-selected logits.
+
+Cooperation is still under measurement. The browser-frame-owned run recorded maximum animation-callback gaps of 33-67 ms for cached prompts, 50 ms for the new image, and 233 ms during the cold invocation. Earlier range-scheduled runs varied substantially, including 133-167 ms gaps on the cached-image path. Callback timestamps are not presented-frame evidence, and smaller GPU phases do not by themselves establish smooth rendering. Complete raw output, provenance, callback timestamps, source revisions, and screenshots are retained by the native witness rather than embedded in UI state. Explicit provenance export may be expensive; ordinary state updates do not enumerate the model-resource inventory.
 
 For a packaged consumer, import `createSamImageExample` from `@kaminos/webgpu-inference-kit/examples/sam-image` and pass your source canvas and state callback. Serve the HTML and its relative module files together, or replace the checkout import-map entries with your installed package's browser URLs.

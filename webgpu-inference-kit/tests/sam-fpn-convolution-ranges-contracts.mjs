@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import * as fpn from '../src/sam-image-fpn-neck-phase-program.js';
 import { readFileSync } from 'node:fs';
-import { createLinearDispatch, WEBGPU_SHADER_STAGE } from '../src/runtime-primitives.js';
+import { createLinearDispatch, defineComputeKernel, WEBGPU_SHADER_STAGE } from '../src/runtime-primitives.js';
+import { createSamRangePhaseRuntime } from '../src/sam-range-phase-program.js';
 import { defineWebGpuPhaseProgram } from '../src/phase-program.js';
 
 assert.equal(typeof fpn.createSamFpnConvolutionRanges, 'function', 'image neck must partition complete convolution work');
@@ -43,7 +44,8 @@ let program;
 const runtime = {createUniformBuffer: spec=>spec, defineProgram: spec=>defineWebGpuPhaseProgram(spec,{runtime:{defineComputeKernel: spec=>spec}}), async runProgram(value){program=value;} };
 // This extraction captures range construction; pipeline reuse is exercised by
 // sam-range-phase-program-contracts with the real phase-program resolver.
-const run = new Function('tensors','shape','convDimsValues','dispatchFor','kernels','runtime','metadata','createSamFpnConvolutionRanges','maxComputeWorkgroupsPerDimension','CONV2D_RANGE_WGSL','WEBGPU_SHADER_STAGE','createSamRangePhaseRuntime', `${block}; return runKernel;`)(tensors,{batch:1},()=>({}),(_name,total)=>createLinearDispatch(total,{workgroupSize:64}),kernels,runtime,{},fpn.createSamFpnConvolutionRanges,65535,shader(true),WEBGPU_SHADER_STAGE, runtime => runtime);
+const constructRun = new Function('tensors','shape','convDimsValues','dispatchFor','kernels','runtime','metadata','createSamFpnConvolutionRanges','maxComputeWorkgroupsPerDimension','CONV2D_RANGE_WGSL','WEBGPU_SHADER_STAGE','createSamRangePhaseRuntime', `${block}; return runKernel;`);
+const run = constructRun(tensors,{batch:1},()=>({}),(_name,total)=>createLinearDispatch(total,{workgroupSize:64}),kernels,runtime,{},fpn.createSamFpnConvolutionRanges,65535,shader(true),WEBGPU_SHADER_STAGE, runtime => runtime);
 await run({name:'fpn-neck-proj2-0',kernel:'conv2d',inputTensor:'x',outputTensor:'y',weightTensor:'w',biasTensor:'b',inShape:{},outShape:{height:288,width:288,channels:256},spec:{inChannels:256,kernelSize:3}});
 let end = 0;
 for(const phase of program.phases){
@@ -56,4 +58,43 @@ for(const phase of program.phases){
 }
 assert.equal(end,288*288*256);
 assert.equal(program.phases[0].name,'fpn-neck-proj2-0');
-console.log('SAM FPN complete convolution ranges passed');
+async function productionHostConstruction(facade) {
+  let pipelines = 0, bindGroups = 0, captured;
+  const device = {
+    createBindGroupLayout: descriptor => ({ descriptor }),
+    createPipelineLayout: descriptor => ({ descriptor }),
+    createBindGroup(descriptor) { bindGroups++; return { descriptor }; },
+  };
+  const hostTensors = Object.fromEntries(Object.entries(tensors).map(([name, value]) => [name, { ...value, buffer: { name }, byteLength: 16 }]));
+  const hostRuntime = {
+    device,
+    createUniformBuffer: spec => ({ ...spec, buffer: { values: spec.values }, byteLength: 16 }),
+    defineComputeKernel: spec => defineComputeKernel(spec, { device,
+      getShaderModule: (name, code) => ({ name, code }),
+      getComputePipeline(name, descriptor) { pipelines++; return { name, descriptor }; },
+    }),
+    defineProgram(spec) { return defineWebGpuPhaseProgram(spec, { runtime: hostRuntime }); },
+    async runProgram(value) { captured = value; },
+  };
+  const hostRun = constructRun(hostTensors, { batch: 1 }, () => ({}), (_name, total) => createLinearDispatch(total, { workgroupSize: 64 }),
+    kernels, hostRuntime, {}, fpn.createSamFpnConvolutionRanges, 65535, shader(true), WEBGPU_SHADER_STAGE, facade);
+  await hostRun({ name: 'fpn-neck-proj2-0', kernel: 'conv2d', inputTensor: 'x', outputTensor: 'y', weightTensor: 'w', biasTensor: 'b',
+    inShape: {}, outShape: { height: 288, width: 288, channels: 256 }, spec: { inChannels: 256, kernelSize: 3 } });
+  assert.equal(captured.phases.length, 46, 'actual native-shape FPN production expansion');
+  let end = 0;
+  for (const phase of captured.phases) {
+    const entries = phase.kernel.bindGroup.descriptor.entries;
+    const range = entries[5].resource.buffer.values;
+    assert.equal(range.output_start, end);
+    end += range.output_count;
+    assert.equal(entries[0].resource.buffer, hostTensors.x.buffer);
+    assert.equal(entries[3].resource.buffer, hostTensors.y.buffer);
+    assert.equal(phase.yieldAfter, true);
+  }
+  assert.equal(end, 288 * 288 * 256);
+  assert.equal(new Set(captured.phases.map(phase => phase.kernel.bindGroup)).size, 46);
+  return { pipelines, bindGroups };
+}
+assert.deepEqual(await productionHostConstruction(runtime => runtime), { pipelines: 46, bindGroups: 46 }, 'ordinary route exposes repeated production setup');
+assert.deepEqual(await productionHostConstruction(createSamRangePhaseRuntime), { pipelines: 1, bindGroups: 46 }, 'FPN production ranges reuse one executable body');
+console.log('SAM FPN complete convolution ranges and production 46-to-1 pipeline setup passed');

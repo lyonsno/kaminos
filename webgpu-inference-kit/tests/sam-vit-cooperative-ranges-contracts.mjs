@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import * as attention from '../src/sam-online-attention-wgsl.js';
 import { readFileSync } from 'node:fs';
+import * as linear from '../src/sam-vector-linear-wgsl.js';
+import { defineComputeKernel } from '../src/runtime-primitives.js';
+import { defineWebGpuPhaseProgram } from '../src/phase-program.js';
+import { createSamRangePhaseRuntime } from '../src/sam-range-phase-program.js';
 
 assert.equal(typeof attention.SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, 'string', 'ViT needs its own full-domain range shader');
 assert.equal(attention.SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL
@@ -61,4 +65,58 @@ for (const diagnostic of [false, true]) {
     assert.deepEqual(checkpoints[1].readback, { name: 'attention', tensor: 'tensor:attention' });
   }
 }
-console.log('SAM ViT cooperative attention ranges passed');
+function productionHostConstruction(facade) {
+  let pipelines = 0, bindGroups = 0;
+  const device = {
+    createBindGroupLayout: descriptor => ({ descriptor }),
+    createPipelineLayout: descriptor => ({ descriptor }),
+    createBindGroup(descriptor) { bindGroups++; return { descriptor }; },
+  };
+  const runtime = {
+    device,
+    createUniformBuffer: spec => ({ ...spec, buffer: { values: spec.values }, byteLength: 16 }),
+    defineComputeKernel: spec => defineComputeKernel(spec, { device,
+      getShaderModule: (name, code) => ({ name, code }),
+      getComputePipeline(name, descriptor) { pipelines++; return { name, descriptor }; },
+    }),
+    defineProgram(input) { return defineWebGpuPhaseProgram(input, { runtime }); },
+  };
+  const resources = new Map();
+  const bind = (name, access) => {
+    if (!resources.has(name)) resources.set(name, { buffer: { name }, byteLength: 16 });
+    return { name, resource: resources.get(name), ...(access === 'uniform' ? { type: 'uniform' } : { access }) };
+  };
+  const names = ['qProjection', 'kProjection', 'vProjection', 'attention', 'outputProjection', 'mlpFc1', 'mlpFc2'];
+  const kernels = {};
+  const bindings = { ...linear, ...attention, bindTensor: (name, access = 'read-only-storage') => bind(name, access), bindUniform: name => bind(name, 'uniform') };
+  for (const name of names) {
+    const descriptor = source.match(new RegExp(`^        ${name}: (\\{[^\\n]+\\}),$`, 'm'));
+    assert.ok(descriptor, `${name}: production kernel descriptor`);
+    kernels[name] = new Function(...Object.keys(bindings), `return (${descriptor[1]});`)(...Object.values(bindings));
+  }
+  const partitionPhase = new Function('shape', 'layerShape', 'kernels', 'runtime', 'partitionSamAttentionPhase', 'partitionSamLinearPhase',
+    `${partition[0]} return partitionPhase;`)(shape, layerShape, kernels, runtime, attention.partitionSamAttentionPhase, linear.partitionSamLinearPhase);
+  const phases = names.flatMap(kernel => partitionPhase({ name: `native-global-${kernel}`, kernel, dispatch: kernel === 'attention' ? [5184, 16, 1] : [1], yieldAfter: true }));
+  assert.equal(phases.length, 113, 'actual native global layer partition definitions');
+  const codes = [attention.SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, linear.SAM_VECTOR_LINEAR_RANGE_WGSL, linear.SAM_VECTOR_LINEAR_GELU_RANGE_WGSL];
+  const program = facade(runtime, codes).defineProgram({ name: 'native-global-ranges', kernels, phases });
+  assert.equal(new Set(program.phases.map(phase => phase.kernel.bindGroup)).size, 113);
+  const ends = Object.fromEntries(names.map(name => [name, 0]));
+  for (const [index, phase] of program.phases.entries()) {
+    const name = names.find(name => phases[index].name === `native-global-${name}` || phases[index].name.startsWith(`native-global-${name}-`));
+    const range = phase.kernel.bindGroup.descriptor.entries[5].resource.buffer.values;
+    if (name === 'attention') {
+      assert.equal(range.query_offset, ends[name]);
+      ends[name] += phase.dispatch[0];
+    } else {
+      assert.equal(range.output_start, ends[name]);
+      ends[name] += range.output_count;
+    }
+    assert.equal(phase.yieldAfter, true);
+  }
+  for (const name of names) assert.equal(ends[name], name === 'attention' ? 5184 : 5184 * (name === 'mlpFc1' ? 4736 : 1024));
+  return { pipelines, bindGroups, executableBodies: new Set(program.phases.map(phase => phase.kernel.pipeline)).size };
+}
+assert.deepEqual(productionHostConstruction(runtime => runtime), { pipelines: 113, bindGroups: 113, executableBodies: 113 }, 'ordinary route exposes repeated native-global setup');
+assert.deepEqual(productionHostConstruction(createSamRangePhaseRuntime), { pipelines: 3, bindGroups: 113, executableBodies: 3 }, 'native-global ranges share three production shader bodies');
+console.log('SAM ViT cooperative attention ranges and production 113-to-3 pipeline setup passed');
