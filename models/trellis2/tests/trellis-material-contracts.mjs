@@ -30,6 +30,7 @@ assert.equal(doc.meshes[0].primitives[0].attributes.TEXCOORD_0,3);
 assert.equal(doc.materials[0].pbrMetallicRoughness.baseColorTexture.index,0);
 assert.equal(doc.materials[0].pbrMetallicRoughness.metallicRoughnessTexture.index,1);
 assert.equal(doc.materials[0].alphaMode,'OPAQUE');assert.equal(doc.images.length,2);
+assert.equal(doc.materials[0].doubleSided,true,'Source TRELLIS export keeps both sides of the learned surface visible.');
 assert.equal(doc.extras.trellis.material,'learned RGB/metallic/roughness/alpha textures');
 assert.equal(header.getUint32(8,true),glb.byteLength);
 const outputIndex=process.argv.indexOf('--asset-output');

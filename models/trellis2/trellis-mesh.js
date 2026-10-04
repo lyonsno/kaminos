@@ -116,7 +116,7 @@ export function encodeTrellisGeometryGLB(mesh,{provenance={}}={}) {
     binLength=vertices.byteLength+triangles.byteLength+normals.byteLength,
     document={asset:{version:'2.0',generator:'Kaminos TRELLIS2 geometry consumer'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],
       meshes:[{primitives:[{attributes:{POSITION:0,NORMAL:2},indices:1,material:0,mode:4}]}],
-      materials:[{name:'Geometry diagnostic — no learned material',pbrMetallicRoughness:{baseColorFactor:[.65,.65,.65,1],metallicFactor:0,roughnessFactor:1}}],
+      materials:[{name:'Geometry diagnostic — no learned material',doubleSided:true,pbrMetallicRoughness:{baseColorFactor:[.65,.65,.65,1],metallicFactor:0,roughnessFactor:1}}],
       buffers:[{byteLength:binLength}],bufferViews:views,accessors:[{bufferView:0,componentType:5126,count:n,type:'VEC3',min,max},
         {bufferView:1,componentType:5125,count:triangles.length,type:'SCALAR'},{bufferView:2,componentType:5126,count:n,type:'VEC3'}],
       extras:{trellis:{stage:'learned-geometry-only',material:'diagnostic neutral; not texture-decoder/PBR evidence',

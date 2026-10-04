@@ -46,6 +46,7 @@ const jsonLength=view.getUint32(12,true),gltf=JSON.parse(new TextDecoder().decod
 assert.equal(gltf.accessors[0].count,4);assert.equal(gltf.accessors[1].count,6);
 assert.equal(gltf.accessors[0].componentType,5126);assert.equal(gltf.accessors[1].componentType,5125);
 assert.equal(gltf.meshes[0].primitives[0].mode,4);assert.equal(gltf.materials[0].pbrMetallicRoughness.metallicFactor,0);
+assert.equal(gltf.materials[0].doubleSided,true,'Neutral diagnostic must preserve source TRELLIS back-face visibility.');
 assert.equal(gltf.extras.trellis.provenance.inputHandoff,'saved latent; native decoder; browser mesh');
 const binStart=20+jsonLength+8;assert.deepEqual(new Float32Array(bytes,binStart,12),mesh.vertices);
 assert.deepEqual(new Uint32Array(bytes,binStart+48,6),mesh.triangles);

@@ -239,7 +239,7 @@ export async function encodeTrellisPbrGLB(mesh,{textures,provenance={}}={}){
   document.images=[{bufferView:append(new Uint8Array(basePNG)),mimeType:'image/png'},{bufferView:append(new Uint8Array(mrPNG)),mimeType:'image/png'}];
   document.samplers=[{magFilter:9729,minFilter:9987,wrapS:33071,wrapT:33071}];
   document.textures=[{source:0,sampler:0},{source:1,sampler:0}];
-  document.materials=[{name:'TRELLIS2 learned PBR',alphaMode:'OPAQUE',pbrMetallicRoughness:{
+  document.materials=[{name:'TRELLIS2 learned PBR',alphaMode:'OPAQUE',doubleSided:true,pbrMetallicRoughness:{
     baseColorFactor:[1,1,1,1],metallicFactor:1,roughnessFactor:1,baseColorTexture:{index:0},metallicRoughnessTexture:{index:1}}}];
   document.asset.generator='Kaminos TRELLIS2 learned material consumer';document.buffers[0].byteLength=offset;
   document.extras.trellis={stage:'learned-geometry-and-material',material:'learned RGB/metallic/roughness/alpha textures',
