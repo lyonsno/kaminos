@@ -937,6 +937,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="file" id="motion-panel-retained-file" accept="application/json,.json" aria-label="Load previously generated motion JSON">
       <div class="volume-actions">
         <button class="btn" id="motion-panel-play-retained" disabled>Play Retained Clip</button>
+        <button class="btn" id="motion-panel-run-ground" disabled>Run on Ground</button>
         <button class="btn" id="motion-panel-focus-rig">Focus Chosen Cast</button>
         <button class="btn" id="motion-panel-show-pair">Restore Pair View</button>
       </div>
@@ -2906,10 +2907,12 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObject, frameObjects, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { loadRetainedMotionClip, decodeRetainedMotionClip, focusRigMeshes } from './motion-retained-clip.mjs';
+import { buildHindPawTravel, sampleHindPawTravel } from './motion-ground-travel.mjs';
 import {
   buildKimodoHindquartersTrack,
   createMotionRigRequestGate,
   sampleKimodoHindquartersTrackAtElapsed,
+  sampleKimodoHindquartersTrack,
 } from './motion-rig-retarget-core.mjs';
 
 // --- Helpers ---
@@ -8594,6 +8597,7 @@ async function loadMotionPanelRetainedClip(source, expectedSha256 = '') {
   retainedMotionClip = null;
   window.__kaminosRetainedMotionClip = { status: 'loading', authority: 'retained-motion-playback' };
   document.getElementById('motion-panel-play-retained').disabled = true;
+  document.getElementById('motion-panel-run-ground').disabled = true;
   retainedMotionStatus('Loading retained generated clip…');
   try {
     const clip = typeof source === 'string'
@@ -8603,6 +8607,7 @@ async function loadMotionPanelRetainedClip(source, expectedSha256 = '') {
     retainedMotionClip = clip;
     window.__kaminosRetainedMotionClip = { sha256: clip.sha256, frameCount: clip.frameCount, fps: clip.fps, authority: clip.authority };
     document.getElementById('motion-panel-play-retained').disabled = false;
+    document.getElementById('motion-panel-run-ground').disabled = false;
     retainedMotionStatus(`Retained generated clip · ${clip.frameCount} frames · ${clip.fps} fps · ${clip.sha256.slice(0, 12)} · no fresh inference`);
     return clip;
   } catch (error) {
@@ -8647,7 +8652,7 @@ function focusRetainedMotionRig(target = selectRetainedMotionRig()) {
   window._kaminosDirty?.();
 }
 
-function playRetainedMotionRig() {
+function playRetainedMotionRig({ groundTravel = false } = {}) {
   try {
     if (!retainedMotionClip) throw new Error('Load a retained generated clip first');
     stopMotionRigPreview('retained-replay');
@@ -8656,6 +8661,7 @@ function playRetainedMotionRig() {
     return startMotionRigPreview(retainedMotionClip.result, {
       target, prompt: retainedMotionClip.result.prompt || '',
       sourceRoute: `retained-kimodo-clip:sha256:${retainedMotionClip.sha256}`,
+      groundTravel,
     });
   } catch (error) {
     retainedMotionStatus(`Cannot play retained clip: ${error.message}`);
@@ -8683,6 +8689,15 @@ function motionRigPreviewStatus() {
     pelvisRootMotionApplied: false,
     pelvisRotationApplied: state.pelvisRotationApplied === true,
     currentPelvisPitchRadians: state.currentPelvisPitchRadians || 0,
+    groundTravel: state.ground ? {
+      mode: 'painted-hind-paw-backstroke', distance: state.ground.distance,
+      minimumPawClearance: state.ground.minimumPawClearance,
+      forward: state.ground.forward.toArray(), rearUpDegrees: 55,
+      supportSampling: 'all-source-frame-extremal-union',
+      paintedVertexCounts: state.ground.fullVertexCounts,
+      supportVertexCounts: Object.fromEntries(Object.entries(state.ground.vertices).map(([side, list]) => [side, list.length])),
+      worldPosition: state.ground.root.getWorldPosition(new THREE.Vector3()).toArray(),
+    } : null,
     stopReason: state.stopReason || null,
   } : { active: false };
 }
@@ -8694,6 +8709,14 @@ function restoreMotionRigPreview(reason = 'operator-stop') {
   state.stopReason = reason;
   for (const { bone, quaternion } of state.bones.values()) bone.quaternion.copy(quaternion);
   state.pelvis.position.copy(state.pelvisPosition);
+  if (state.ground) {
+    state.ground.root.position.copy(state.ground.originalPosition);
+    state.ground.root.quaternion.copy(state.ground.originalQuaternion);
+    scene.remove(state.ground.grid);
+    state.ground.grid.geometry.dispose();
+    state.ground.grid.material.dispose();
+  }
+  scene.updateMatrixWorld(true);
   state.mesh.skeleton.update();
   motionRigPreviewState = null;
   window.__kaminosMotionRigPreview = {
@@ -8762,7 +8785,7 @@ function motionRigHipAxisInParentSpace(pelvis, leftHip, rightHip) {
   return axis.normalize().applyQuaternion(pelvis.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize();
 }
 
-function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.motion-result', target = selectedSceneBoneTarget, requestToken = null } = {}) {
+function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.motion-result', target = selectedSceneBoneTarget, requestToken = null, groundTravel = false } = {}) {
   if (requestToken && !motionRigPreviewRequestGate.isCurrent(requestToken, motionRigTargetKey(target))) return null;
   const record = target && sceneObjects.find(entry => entry.id === target.objectId);
   if (!record || target.mesh?.isSkinnedMesh !== true || !target.mesh.skeleton
@@ -8831,10 +8854,136 @@ function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.moti
     notMutatedBones,
     stopReason: null,
   };
+  if (groundTravel) {
+    try { prepareMotionGroundTravel(motionRigPreviewState, record.object); }
+    catch (error) { restoreMotionRigPreview('ground-setup-failed'); throw error; }
+    motionRigPreviewState.startedAtSeconds = performance.now() / 1000;
+  }
   window.__kaminosMotionRigPreview = motionRigPreviewStatus();
   setMotionPanelTemporalStatus(`Playing ${track.frameCount} Kimodo frames on selected cat pelvis and hindquarters; inspect the unweighted front/transition`, '#66bb6a');
+  if (groundTravel) setMotionPanelTemporalStatus('Rear-paw ground run · retained Kimodo articulation + kinematic paw support · Stop restores placement', '#66bb6a');
   window._kaminosDirty?.();
   return window.__kaminosMotionRigPreview;
+}
+
+function applyMotionRigSample(state, sample) {
+  const angles = {
+    leftHip: sample.left.hipRadians, leftStifle: sample.left.stifleRadians, leftHock: sample.left.hockRadians,
+    rightHip: sample.right.hipRadians, rightStifle: sample.right.stifleRadians, rightHock: sample.right.hockRadians,
+  };
+  for (const [key, radians] of Object.entries(angles)) {
+    const { bone, quaternion } = state.bones.get(key);
+    bone.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(state.axes[key], radians).multiply(state.ground?.hipRest?.[key] || quaternion));
+  }
+  state.pelvis.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(state.pelvisAxis, sample.pelvisPitchRadians).multiply(state.bones.get('pelvis').quaternion));
+  state.pelvis.position.copy(state.pelvisPosition);
+  scene.updateMatrixWorld(true);
+  state.mesh.skeleton.update();
+}
+
+function motionGroundPaws(state) {
+  const paws = {};
+  for (const side of ['left', 'right']) {
+    let soleY = Infinity;
+    let soleIndex = -1;
+    const center = new THREE.Vector3();
+    const vertex = new THREE.Vector3();
+    for (const index of state.ground.vertices[side]) {
+      state.mesh.getVertexPosition(index, vertex).applyMatrix4(state.mesh.matrixWorld);
+      if (vertex.y < soleY) { soleY = vertex.y; soleIndex = index; }
+      center.add(vertex);
+    }
+    paws[side] = { soleY, soleIndex, center: center.divideScalar(state.ground.vertices[side].length).toArray() };
+  }
+  return paws;
+}
+
+function prepareMotionGroundTravel(state, root) {
+  const mesh = state.mesh;
+  const indices = mesh.geometry.getAttribute('skinIndex');
+  const weights = mesh.geometry.getAttribute('skinWeight');
+  const vertices = { left: [], right: [] };
+  for (const side of ['left', 'right']) {
+    const boneIndex = mesh.skeleton.bones.indexOf(state.bones.get(`${side}Hock`).bone);
+    for (let i = 0; i < indices.count; i++) {
+      let dominant = 0;
+      for (let c = 1; c < 4; c++) if (weights.getComponent(i, c) > weights.getComponent(i, dominant)) dominant = c;
+      if (weights.getComponent(i, dominant) > 0 && indices.getComponent(i, dominant) === boneIndex) vertices[side].push(i);
+    }
+    if (!vertices[side].length) throw new Error(`No painted ${side} hock vertices for ground support`);
+  }
+  // The unweighted forebody establishes facing, independently of donor axes.
+  const neutral = mesh.skeleton.bones.findIndex(bone => ![...state.bones.values()].some(entry => entry.bone === bone));
+  const front = new THREE.Vector3();
+  let count = 0;
+  const vertex = new THREE.Vector3();
+  for (let i = 0; i < indices.count; i++) {
+    for (let c = 0; c < 4; c++) if (indices.getComponent(i, c) === neutral && weights.getComponent(i, c) > 0) {
+      mesh.getVertexPosition(i, vertex).applyMatrix4(mesh.matrixWorld);
+      front.addScaledVector(vertex, weights.getComponent(i, c)); count += weights.getComponent(i, c);
+    }
+  }
+  if (!count) throw new Error('Ground run needs the existing neutral forebody to establish facing');
+  const forward = front.divideScalar(count).sub(state.pelvisWorldPosition); forward.y = 0;
+  if (forward.lengthSq() < 1e-8) throw new Error('Cannot establish creature forward direction');
+  forward.normalize();
+  const grid = new THREE.GridHelper(10, 40, 0x777777, 0x444444);
+  grid.position.y = groundPlane.position.y + 0.001;
+  state.ground = { root, originalPosition: root.position.clone(), originalQuaternion: root.quaternion.clone(), vertices, forward, grid, distance: 0, minimumPawClearance: null };
+  const parentRotation = root.parent.getWorldQuaternion(new THREE.Quaternion());
+  const rearUp = new THREE.Quaternion().setFromAxisAngle(forward.clone().cross(new THREE.Vector3(0, 1, 0)).normalize(), 55 * Math.PI / 180);
+  root.quaternion.copy(parentRotation.clone().invert().multiply(rearUp).multiply(parentRotation).multiply(root.quaternion));
+  scene.updateMatrixWorld(true);
+  // The imported pose already has tucked hind legs. Establish a provisional
+  // biped stance by swinging each hip-to-painted-paw direction downward;
+  // preserve the authored knee/hock bends and layer the donor motion on top.
+  const pelvisWorldRotation = state.pelvis.getWorldQuaternion(new THREE.Quaternion());
+  const restPaws = motionGroundPaws(state);
+  state.ground.hipRest = Object.fromEntries(['left', 'right'].map(side => {
+    const key = `${side}Hip`;
+    const entry = state.bones.get(key);
+    const leg = new THREE.Vector3().fromArray(restPaws[side].center).sub(entry.bone.getWorldPosition(new THREE.Vector3()));
+    if (leg.lengthSq() < 1e-8) throw new Error(`Cannot establish ${side} hip-to-paw stance`);
+    const swing = new THREE.Quaternion().setFromUnitVectors(leg.normalize(), new THREE.Vector3(0, -1, 0));
+    return [key, pelvisWorldRotation.clone().invert().multiply(swing).multiply(pelvisWorldRotation).multiply(entry.quaternion)];
+  }));
+  state.ground.originWorld = root.getWorldPosition(new THREE.Vector3());
+  const paws = [];
+  for (let frame = 0; frame < state.track.frameCount; frame++) {
+    applyMotionRigSample(state, sampleKimodoHindquartersTrack(state.track, frame));
+    paws.push(motionGroundPaws(state));
+  }
+  state.ground.travel = buildHindPawTravel(paws, forward.toArray());
+  // Compile the actual sole witnesses from every source frame. No random
+  // subsampling or fixed vertex cap; playback skins only this extremal union.
+  state.ground.fullVertexCounts = Object.fromEntries(Object.entries(vertices).map(([side, list]) => [side, list.length]));
+  state.ground.fullVertices = vertices;
+  state.ground.vertices = Object.fromEntries(['left', 'right'].map(side => [side, [...new Set(paws.map(frame => frame[side].soleIndex))]]));
+  applyMotionRigSample(state, sampleKimodoHindquartersTrack(state.track, 0));
+  updateMotionGroundTravel(state, 0);
+  scene.add(grid);
+  mesh.computeBoundingBox();
+  frameObject(mesh, camera, controls);
+  // Fixed camera, enough room to see displacement against the ground grid.
+  camera.position.sub(controls.target).multiplyScalar(1.6).add(controls.target);
+  controls.update();
+}
+
+function updateMotionGroundTravel(state, frame) {
+  const ground = state.ground;
+  ground.distance = sampleHindPawTravel(ground.travel, frame);
+  const world = ground.originWorld.clone().addScaledVector(ground.forward, ground.distance);
+  ground.root.position.copy(ground.root.parent.worldToLocal(world));
+  scene.updateMatrixWorld(true);
+  state.mesh.skeleton.update();
+  const paws = motionGroundPaws(state);
+  const correction = groundPlane.position.y - Math.min(paws.left.soleY, paws.right.soleY);
+  const corrected = ground.root.getWorldPosition(new THREE.Vector3()); corrected.y += correction;
+  ground.root.position.copy(ground.root.parent.worldToLocal(corrected));
+  scene.updateMatrixWorld(true);
+  state.mesh.skeleton.update();
+  const supported = motionGroundPaws(state);
+  ground.minimumPawClearance = Math.min(supported.left.soleY, supported.right.soleY) - groundPlane.position.y;
 }
 
 function updateMotionRigPreviewFrame(nowSeconds) {
@@ -8849,28 +8998,20 @@ function updateMotionRigPreviewFrame(nowSeconds) {
     return false;
   }
   if (state.completedFramePresented) {
+    if (state.ground) {
+      state.active = false;
+      state.stopReason = 'clip-complete-held';
+      window.__kaminosMotionRigPreview = motionRigPreviewStatus();
+      setMotionPanelTemporalStatus('Ground run complete · creature held at destination · Stop restores placement', '#90a4ae');
+      return false;
+    }
     restoreMotionRigPreview('clip-complete');
     return false;
   }
   const playback = sampleKimodoHindquartersTrackAtElapsed(state.track, nowSeconds - state.startedAtSeconds);
   const sample = playback.sample;
   state.currentFrame = sample.frame;
-  const angles = {
-    leftHip: sample.left.hipRadians,
-    leftStifle: sample.left.stifleRadians,
-    leftHock: sample.left.hockRadians,
-    rightHip: sample.right.hipRadians,
-    rightStifle: sample.right.stifleRadians,
-    rightHock: sample.right.hockRadians,
-  };
-  for (const [key, radians] of Object.entries(angles)) {
-    const { bone, quaternion } = state.bones.get(key);
-    const delta = new THREE.Quaternion().setFromAxisAngle(state.axes[key], radians);
-    bone.quaternion.copy(delta.multiply(quaternion));
-  }
-  const { bone: pelvis, quaternion: pelvisQuaternion } = state.bones.get('pelvis');
-  const pelvisDelta = new THREE.Quaternion().setFromAxisAngle(state.pelvisAxis, sample.pelvisPitchRadians);
-  pelvis.quaternion.copy(pelvisDelta.multiply(pelvisQuaternion));
+  applyMotionRigSample(state, sample);
   state.pelvisRotationApplied = Math.abs(sample.pelvisPitchRadians) > 1e-8;
   state.currentPelvisPitchRadians = sample.pelvisPitchRadians;
   state.currentSourceRootOffset = [...sample.rootOffset];
@@ -8878,6 +9019,7 @@ function updateMotionRigPreviewFrame(nowSeconds) {
   state.pelvis.position.copy(state.pelvisPosition); // Ignore source travel; rotate only the weighted partial-body preview in place.
   state.mesh.skeleton.update();
   scene.updateMatrixWorld(true);
+  if (state.ground) updateMotionGroundTravel(state, sample.frame);
   state.currentPelvisWorldDisplacement = state.pelvis.getWorldPosition(new THREE.Vector3())
     .sub(state.pelvisWorldPosition).toArray();
   if (playback.done) state.completedFramePresented = true;
@@ -8886,6 +9028,18 @@ function updateMotionRigPreviewFrame(nowSeconds) {
 }
 
 window.kaminosMotionRigPreviewDebugState = motionRigPreviewStatus;
+// Explicit expensive witness read, never called by ordinary playback. Compare
+// the compiled support set against every painted hock vertex at this pose.
+window.kaminosMotionGroundContactDebugState = () => {
+  const state = motionRigPreviewState;
+  if (!state?.ground) return null;
+  const support = state.ground.vertices;
+  try {
+    state.ground.vertices = state.ground.fullVertices;
+    const paws = motionGroundPaws(state);
+    return { frame: state.currentFrame, minimumPaintedPawClearance: Math.min(paws.left.soleY, paws.right.soleY) - groundPlane.position.y };
+  } finally { state.ground.vertices = support; }
+};
 window.kaminosStopMotionRigPreview = () => stopMotionRigPreview('operator-stop');
 window.kaminosPreviewMotionServerResultOnSelectedRig = (result, options = {}) => startMotionRigPreview(result, options);
 
@@ -9222,6 +9376,7 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-panel-generate-wriggle')?.addEventListener('click', () => void generateMotionPanelCatHindquartersPreview());
   document.getElementById('motion-panel-stop-wriggle')?.addEventListener('click', () => stopMotionRigPreview('operator-stop'));
   document.getElementById('motion-panel-play-retained')?.addEventListener('click', playRetainedMotionRig);
+  document.getElementById('motion-panel-run-ground')?.addEventListener('click', () => playRetainedMotionRig({ groundTravel: true }));
   document.getElementById('motion-panel-retained-file')?.addEventListener('change', event => {
     if (event.target.files[0]) void loadMotionPanelRetainedClip(event.target.files[0]);
   });

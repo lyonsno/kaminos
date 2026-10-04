@@ -334,7 +334,7 @@ async function runMeshSkinnedPoseScenario(ws) {
 }
 
 // Exercises the retained route and ordinary buttons. No generation response is mocked.
-async function runCatRetainedPlaybackScenario(ws) {
+async function runCatRetainedPlaybackScenario(ws, { groundTravel = false } = {}) {
   await runMeshAssetLinkScenario(ws);
   phase = 'scenario-cat-retained-playback';
   const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
@@ -354,30 +354,41 @@ async function runCatRetainedPlaybackScenario(ws) {
   await click('motion-panel-focus-rig');
   await delay(300);
   const rest = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
+  const rootBefore = await evaluate(ws, `window.kaminosSceneObjectDebugState().find(x => x.id === ${JSON.stringify(objectId)}).transform`);
   const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-retained-before'));
   const frames = [];
   const evidence = lastEvidence.catRetainedPlayback = { clip, rest, beforeShot, frames, presentation: 'two existing Rot X toolbar clicks on the registered object; source asset unchanged', sourceRoute: 'real retained JSON URL; ordinary visible controls' };
-  await click('motion-panel-play-retained');
+  const playButton = groundTravel ? 'motion-panel-run-ground' : 'motion-panel-play-retained';
+  await click(playButton);
   const startedAt = performance.now();
   for (let index = 0; ; index++) {
     await delay(500);
     const state = await evaluate(ws, 'window.kaminosMotionRigPreviewDebugState()');
     if (!state.active) {
       evidence.completed = await evaluate(ws, 'window.__kaminosMotionRigPreview ?? null');
-      assert.equal(evidence.completed?.stopReason, 'clip-complete', 'inactive playback must be natural completion, not an early stop or failure');
+      assert.equal(evidence.completed?.stopReason, groundTravel ? 'clip-complete-held' : 'clip-complete', 'inactive playback must be natural completion, not an early stop or failure');
       break;
     }
     const frame = { elapsedMs: performance.now() - startedAt, state };
+    frame.root = await evaluate(ws, `window.kaminosSceneObjectDebugState().find(x => x.id === ${JSON.stringify(objectId)}).transform`);
+    if (groundTravel) frame.contactAudit = await evaluate(ws, 'window.kaminosMotionGroundContactDebugState()');
     frames.push(frame);
     frame.screenshot = await capturePngScreenshot(ws, siblingPngPath(`-retained-${index}`));
   }
   assert.ok(new Set(frames.map(frame => frame.state.frame)).size > 1, 'motion frames must advance');
-  await click('motion-panel-play-retained');
+  if (groundTravel) {
+    assert.ok(frames.at(-1).state.groundTravel?.distance > 0.05, 'hind strokes must produce actual ground distance');
+    assert.notDeepEqual(frames.at(-1).root.position, frames[0].root.position, 'registered object must travel, not only report projected travel');
+    for (const frame of frames) assert.ok(Math.abs(frame.state.groundTravel.minimumPawClearance) < 1e-4, 'a painted rear paw must meet the ground');
+    for (const frame of frames) assert.ok(Math.abs(frame.contactAudit?.minimumPaintedPawClearance) < 0.005, 'all painted paw vertices must conform to compiled support within 0.005 scene units');
+  }
+  await click(playButton);
   await delay(250);
   await click('motion-panel-stop-wriggle');
   const restored = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
   evidence.restored = restored;
   assert.deepEqual(restored.meshes.map(mesh => mesh.boneQuaternions), rest.meshes.map(mesh => mesh.boneQuaternions), 'Stop restores both imported casts');
+  assert.deepEqual(await evaluate(ws, `window.kaminosSceneObjectDebugState().find(x => x.id === ${JSON.stringify(objectId)}).transform`), rootBefore, 'Stop restores scene placement and orientation');
   evidence.restoredShot = await capturePngScreenshot(ws, siblingPngPath('-retained-restored'));
   await click('motion-panel-show-pair');
 }
@@ -5428,7 +5439,7 @@ try {
     '--enable-unsafe-webgpu',
     '--enable-features=Vulkan,UseSkiaRenderer',
     '--window-size=1468,960',
-    scenario === 'cat-retained-playback' ? 'about:blank' : url,
+    scenario.startsWith('cat-retained-') ? 'about:blank' : url,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
   const chromeLaunchSignal = new Promise(resolveLaunch => {
@@ -5458,7 +5469,7 @@ try {
   await wsRequest(ws, 'Runtime.enable');
   await wsRequest(ws, 'Page.enable');
   // Seat the owned target explicitly: startup can expose about:blank before argv navigation.
-  if (scenario === 'cat-retained-playback') {
+  if (scenario.startsWith('cat-retained-')) {
     const navigation = await wsRequest(ws, 'Page.navigate', { url });
     if (navigation.errorText) throw new Error(`witness navigation failed: ${navigation.errorText}`);
   }
@@ -5484,6 +5495,8 @@ try {
     await runCatMotionRetargetScenario(ws);
   } else if (scenario === 'cat-retained-playback') {
     await runCatRetainedPlaybackScenario(ws);
+  } else if (scenario === 'cat-retained-ground') {
+    await runCatRetainedPlaybackScenario(ws, { groundTravel: true });
   } else if (scenario === 'mesh-skinned-pose-controls') {
     await runSceneBoneGizmoScenario(ws);
   } else if (scenario === 'scene-bone-gizmo') {
