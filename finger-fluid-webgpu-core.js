@@ -16,7 +16,8 @@ export const KAMINOS_FINGER_FLUID_SOLVER_GPU_TIMING_STAGES = Object.freeze([
   'surface_cohesion',
   'apply_velocity_interface_contact_compaction_particle_shift_adaptive',
 ]);
-export function createFingerFluidSolverGpuTimingStagePlan(densityIterations) {
+export function createFingerFluidSolverGpuTimingStagePlan(densityIterations, packedDensity = false) {
+  if (typeof packedDensity !== 'boolean') throw new TypeError('Packed density timing selection must be boolean');
   if (!Number.isSafeInteger(densityIterations) || densityIterations < 1) {
     throw new RangeError(`Finger Fluid detailed solver timing requires a positive integer density iteration count: ${densityIterations}`);
   }
@@ -24,6 +25,7 @@ export function createFingerFluidSolverGpuTimingStagePlan(densityIterations) {
   const densityDispatches = [
     'clear_grid',
     'build_grid',
+    ...(packedDensity ? ['pack_neighbors'] : []),
     'lambda',
     'position_delta',
     'apply_position_delta',
@@ -14536,7 +14538,7 @@ export async function createWebGPUFingerFluidSolver({
     if (solverGpuTimestampCapture?.writtenPairs < solverGpuTimestampCapture?.pairCount) {
       throw new Error('Finger Fluid solver timestamp capture is already active');
     }
-    const stages = createFingerFluidSolverGpuTimingStagePlan(safeDensityIterations);
+    const stages = createFingerFluidSolverGpuTimingStagePlan(safeDensityIterations, safePackedDensity);
     const queriesPerStep = stages.length * 2;
     const requiredQueries = pairCount * queriesPerStep;
     if (!querySet || querySet.type !== 'timestamp' || !Number.isSafeInteger(querySet.count)) {
@@ -14629,10 +14631,11 @@ export async function createWebGPUFingerFluidSolver({
         });
         pass.setBindGroup(0, computeBindGroup);
       };
-      const advanceStage = (stageIndex) => {
+      let stageIndex = 0;
+      const advanceStage = () => {
         if (!stageCapture) return;
         pass.end();
-        beginStagePass(stageIndex);
+        beginStagePass(++stageIndex);
       };
       if (stageCapture) {
         beginStagePass(0);
@@ -14649,33 +14652,34 @@ export async function createWebGPUFingerFluidSolver({
         pass.setBindGroup(0, computeBindGroup);
       }
       dispatch(pass, pipelines.predict, safeParticleCount);
-      advanceStage(1);
+      advanceStage();
       for (let iteration = 0; iteration < safeDensityIterations; iteration += 1) {
         dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
-        advanceStage(2 + (iteration * 5));
+        advanceStage();
         dispatch(pass, pipelines.build, safeParticleCount);
         if (safePackedDensity) {
+          advanceStage();
           dispatch(pass, pipelines.packedScan, GRID_CELL_COUNT);
           pass.setPipeline(pipelines.packedTotals);
           pass.dispatchWorkgroups(1);
           dispatch(pass, pipelines.packedRecords, GRID_CELL_COUNT);
         }
-        advanceStage(3 + (iteration * 5));
+        advanceStage();
         dispatch(pass, pipelines.lambda, safeParticleCount);
-        advanceStage(4 + (iteration * 5));
+        advanceStage();
         dispatch(pass, pipelines.delta, safeParticleCount);
-        advanceStage(5 + (iteration * 5));
+        advanceStage();
         dispatch(pass, pipelines.applyDelta, safeParticleCount);
-        advanceStage(6 + (iteration * 5));
+        advanceStage();
         linkedCellGridBuildCount += 1;
         densityIterationCount += 1;
       }
       dispatch(pass, pipelines.clear, GRID_CELL_COUNT);
-      advanceStage(2 + (safeDensityIterations * 5));
+      advanceStage();
       dispatch(pass, pipelines.build, safeParticleCount);
       linkedCellGridBuildCount += 1;
       postProjectionGridRefreshCount += 1;
-      advanceStage(3 + (safeDensityIterations * 5));
+      advanceStage();
       dispatch(pass, pipelines.measureTopology, safeParticleCount);
       topologyMeasurementPassCount += 1;
       if (safeChemistryDiffusion > 0) {
@@ -14686,7 +14690,7 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.classifySurface, safeParticleCount);
       freeSurfaceClassificationPassCount += 1;
       dispatchEnergy(pass, energyPipelines.projection);
-      advanceStage(4 + (safeDensityIterations * 5));
+      advanceStage();
       dispatch(pass, pipelines.velocity, safeParticleCount);
       dispatchEnergy(pass, energyPipelines.viscosity);
       if (frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
@@ -14703,11 +14707,11 @@ export async function createWebGPUFingerFluidSolver({
         dispatch(pass, pipelines.commitUnsupportedSheet, safeParticleCount);
         sheetSupportPassCount += 3;
       }
-      advanceStage(5 + (safeDensityIterations * 5));
+      advanceStage();
       dispatch(pass, pipelines.cohesion, safeParticleCount);
       surfaceCohesionPassCount += 1;
       dispatchEnergy(pass, energyPipelines.cohesion);
-      advanceStage(6 + (safeDensityIterations * 5));
+      advanceStage();
       dispatch(pass, pipelines.applyVelocity, safeParticleCount);
       dispatch(pass, pipelines.clearInterface, 1);
       dispatch(pass, pipelines.compactInterface, safeParticleCount);
