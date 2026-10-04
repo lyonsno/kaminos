@@ -22,6 +22,9 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .panel { background: #1f1f1f; border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
 .field { display: flex; justify-content: space-between; font-size: 11px; margin: 3px 0; padding: 2px 0; }
 .field-key { color: #666; }
+#scene-gi-controls .field { align-items:center; gap:12px; }
+#scene-gi-controls input[type="number"], #scene-gi-controls select, #scene-gi-mode { min-width:0; width:148px; max-width:55%; box-sizing:border-box; border:1px solid #405157; border-radius:4px; padding:6px; background:#151a1c; color:#ddd; }
+body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { visibility:hidden !important; }
 .field-val { color: #999; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-val.present { color: #66bb6a; }
 .field-val.missing { color: #ef5350; }
@@ -3228,6 +3231,17 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="rendering-panel-content" role="tabpanel" aria-labelledby="right-tab-rendering" hidden>
       <div class="volume-authored-mix-kicker">Scene light</div>
       <h2 class="volume-authored-mix-title">Rendering</h2>
+      <div class="field"><label for="scene-gi-mode">Surface illumination</label><select id="scene-gi-mode"><option value="gtao">GTAO baseline</option><option value="combined">Combined AO + GI</option></select></div>
+      <div id="scene-gi-controls" hidden>
+        <div class="field"><label for="scene-gi-view">View</label><select id="scene-gi-view"><option value="scene">Scene</option><option value="ao">AO visibility</option><option value="gi">Indirect light</option></select></div>
+        <div class="field"><label for="scene-gi-gain" title="Artistic multiplier on estimated surface bounce; not camera exposure">Bounce gain</label><input id="scene-gi-gain" type="number" min="0" step="0.1" value="1"></div>
+        <div class="field"><label for="scene-gi-radius">Radius</label><input id="scene-gi-radius" type="number" min="0.01" step="0.1" value="4"></div>
+        <div class="field"><label for="scene-gi-thickness">Thickness</label><input id="scene-gi-thickness" type="number" min="0.01" step="0.01" value="0.3"></div>
+        <div class="field"><label for="scene-gi-slices">Slices</label><input id="scene-gi-slices" type="number" min="1" step="1" value="3"></div>
+        <div class="field"><label for="scene-gi-steps">Steps</label><input id="scene-gi-steps" type="number" min="1" step="1" value="8"></div>
+        <div class="slider-row"><label class="slider-label" for="scene-gi-denoise">GI/AO filter</label><input id="scene-gi-denoise" type="range" min="0" max="10" step="0.5" value="3"><output id="scene-gi-denoise-value">3</output></div>
+      </div>
+      <div id="scene-gi-status" role="status"></div>
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
       <label for="rendering-light-mode">Light contributions</label>
       <select class="rendering-channel-select" id="rendering-light-mode">
@@ -3320,6 +3334,8 @@ import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light
 import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
+import { createSceneGI } from './scene-gi.mjs';
+import { resolveSceneGISettings } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
@@ -3637,6 +3653,8 @@ let scenePlacementTools = null;
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
+let sceneGISettings = resolveSceneGISettings();
+let updateSceneGI = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -10458,21 +10476,58 @@ async function initScene() {
   const aoOutput = mix(float(1.0), aoVisibility, aoIntensity.min(1)).div(
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
-  const baseSceneOutput = scenePass;
-  fireLightFieldPass?.dispose?.();
+  const sceneGI = createSceneGI(scene,camera,aoIntensity);
+  let activeSceneDepth = prePassDepth;
+  let rawSceneOutput, sceneEmissiveCamera = null;
+  const giOutputGraphs = new Map();
+  function rebuildSceneGIOutput() {
+    const combined = sceneGISettings.mode === 'combined';
+    const diagnostic = combined && sceneGISettings.view !== 'scene';
+    document.body.dataset.sceneGiDiagnostic = String(diagnostic);
+    const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
+    activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
+    const graphKey = combined ? sceneGISettings.view : 'gtao';
+    const cached = giOutputGraphs.get(graphKey);
+    if (cached) {
+      ({rawSceneOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
+      renderPipeline.outputNode = rawSceneOutput;
+      renderPipeline.outputColorTransform = true;
+      renderPipeline.needsUpdate = true;
+      refreshRenderingControls();
+      return;
+    }
+  // Retain each graph across A/B: Three may still reference its resources in
+  // cached bindings. No per-toggle destruction of live GPU textures.
   fireLightFieldPass = null;
-  if (isFireLightFieldRoute() && sharedGpu?.device) {
-    fireLightFieldPass = createFireLightFieldReceiverPass(baseSceneOutput, prePassDepth, prePassNormal);
+  if (isFireLightFieldRoute() && sharedGpu?.device && (!combined || sceneGISettings.view === 'scene')) {
+    const receiverNormal = combined ? sceneGI.source.getTextureNode('normal') : prePassNormal;
+    fireLightFieldPass = createFireLightFieldReceiverPass(baseSceneOutput, activeSceneDepth, receiverNormal);
     renderPipeline.outputNode = fireLightFieldPass.outputNode;
     refreshRenderingControls();
   } else {
     renderPipeline.outputNode = baseSceneOutput;
   }
-  let sceneEmissiveCamera=null;
-  const rawSceneOutput=renderPipeline.outputNode;
+  rawSceneOutput=renderPipeline.outputNode;
+  sceneEmissiveCamera=null;
   if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
     sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float},THREE});
   }
+    giOutputGraphs.set(graphKey,{rawSceneOutput,sceneEmissiveCamera,fireLightFieldPass});
+    renderPipeline.outputColorTransform = true;
+    renderPipeline.needsUpdate = true;
+  }
+  updateSceneGI = value => {
+    const next = resolveSceneGISettings(value);
+    const rebuild = next.mode !== sceneGISettings.mode || next.view !== sceneGISettings.view;
+    sceneGISettings = next;
+    sceneGI.setSettings(next);
+    if (rebuild) rebuildSceneGIOutput();
+    window._kaminosDirty?.();
+  };
+  sceneGI.setSettings(sceneGISettings);
+  rebuildSceneGIOutput();
+  window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),effectiveMode:sceneGISettings.mode,view:sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
+  window.kaminosSceneGIReadback = () => sceneGI.readback(renderer);
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
   let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
@@ -10651,7 +10706,7 @@ async function initScene() {
     fireLightFieldPass?.update();
     if (renderSceneFrame() === false) return null;
     sceneRenderedForVolume = true;
-    const texture = renderer.backend.get(prePass.getTexture('depth')).texture;
+    const texture = renderer.backend.get(activeSceneDepth.value).texture;
     return {device:sharedGpu.device, camera, texture};
   };
   window.kaminosOrdinaryDepthSetEnabled = enabled => {
@@ -10671,7 +10726,7 @@ async function initScene() {
     const t0 = performance.now();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
-    if(sceneEmissiveCamera) {
+    if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
       const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,sceneEmissiveCamera.outputNode,state.effective);
@@ -10704,7 +10759,7 @@ async function initScene() {
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
-    const fireLightFieldRouteActive = fireLightFieldPass !== null;
+    const fireLightFieldRouteActive = isFireLightFieldRoute();
     const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
@@ -23667,6 +23722,25 @@ function updateBackground() {
 }
 
 // --- AO Controls ---
+function setSceneGIControls(value) {
+  const settings = resolveSceneGISettings(value);
+  for (const key of Object.keys(settings)) document.getElementById(`scene-gi-${key}`).value = String(settings[key]);
+  document.getElementById('scene-gi-controls').hidden = settings.mode !== 'combined';
+  document.getElementById('scene-gi-denoise-value').textContent = String(settings.denoise);
+  if (updateSceneGI) updateSceneGI(settings);
+  else sceneGISettings = settings;
+}
+for (const key of Object.keys(sceneGISettings)) {
+  document.getElementById(`scene-gi-${key}`).addEventListener(key === 'denoise' ? 'input' : 'change',event => {
+    try {
+      const value = ['mode','view'].includes(key) ? event.target.value : Number(event.target.value);
+      setSceneGIControls({...sceneGISettings,[key]:value});
+      document.getElementById('scene-gi-status').textContent = '';
+    } catch (error) {
+      document.getElementById('scene-gi-status').textContent = error.message;
+    }
+  });
+}
 document.getElementById('ao-toggle').addEventListener('change', e => {
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
   if (aoIntensity) {
@@ -26394,6 +26468,7 @@ function buildSceneData(capture = null) {
     },
     volumePrimitives: getVolumePrimitiveState(),
     postprocessing: {
+      sceneGI: {...sceneGISettings},
       ao: {
         enabled: document.getElementById('ao-toggle').checked,
         radius: readNumberControl('ao-radius'),
@@ -26934,6 +27009,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 
   // Apply postprocessing
   if (data.postprocessing) {
+    setSceneGIControls(data.postprocessing.sceneGI ?? {});
     const ao = data.postprocessing.ao;
     if (ao) {
       const aoEnabled = ao.enabled ?? true;
