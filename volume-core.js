@@ -14266,6 +14266,9 @@ export function createKaminosVolumePrototype({
     const volumeExposure = clampFinite(controlsSnapshot.volumeExposure, 0, 3, 1);
     uniforms[331] = 0;
     uniforms[332] = volumeExposure;
+    // A paused grid rebuild still needs current collision textures for inspection.
+    // Refresh is revision-cached and does not advance the fluid.
+    if (controlsSnapshot.collisionVoxelView && controlsSnapshot.collisionVoxelView !== 'off') refreshSceneCollision();
     uniforms[333] = controlsSnapshot.collisionVoxelView === 'fine' ? 1 : controlsSnapshot.collisionVoxelView === 'outer' ? 2 : 0;
     state.collisionVoxelView = {requested:controlsSnapshot.collisionVoxelView || 'off',
       effective:uniforms[333] === 0 ? 'off' : state.sceneCollision?.effective !== 'mesh-voxel-solid' ? 'unavailable-no-collision-mask' : uniforms[333] === 2 && !outerSmoke ? 'unavailable-no-outer-grid' : controlsSnapshot.collisionVoxelView,

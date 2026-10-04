@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
+import vm from 'node:vm';
 import {outerSmokeConfig,validateOuterSmokeDevice} from '../volume-outer-smoke.mjs';
 import {reconcileVolumeCockpitLayoutDocument,VOLUME_COCKPIT_LAYOUT_IDENTITY} from '../volume-cockpit-layout.mjs';
 const core=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
@@ -31,4 +32,19 @@ test('denser comparison keeps extent while doubling cells across old box',()=>{
   assert.deepEqual(a.min,b.min);assert.deepEqual(a.max,b.max);
   assert.equal(2/a.cellWidth,8);assert.equal(2/b.cellWidth,16);
   assert.throws(()=>validateOuterSmokeDevice(b,{maxTextureDimension3D:64,maxBufferSize:1e9,maxStorageBufferBindingSize:1e9}),/capacity/i);
+});
+test('paused diagnostic draw refreshes replacement masks before claiming installation',()=>{
+  // Execute the actual uniform/receipt boundary after a paused rebuild. No
+  // encodeSim call is available to install the new masks in this scenario.
+  const start=core.indexOf('    uniforms[332] = volumeExposure;')+'    uniforms[332] = volumeExposure;'.length;
+  const end=core.indexOf('    uniforms[334]',start);
+  let installed=false;
+  const state={sceneCollision:{effective:'mesh-voxel-solid',outerGrid:32}};
+  const context=vm.createContext({uniforms:new Float32Array(600),controlsSnapshot:{collisionVoxelView:'outer'},state,
+    gridSize:64,gridHeight:128,outerSmoke:{config:{shape:[64,128,64]}},
+    refreshSceneCollision(){installed=true;state.sceneCollision.outerGrid=64;}});
+  vm.runInContext(core.slice(start,end),context);
+  assert.equal(installed,true,'new mask installed without advancing simulation');
+  assert.equal(state.sceneCollision.outerGrid,64);
+  assert.equal(state.collisionVoxelView.effective,'outer');
 });
