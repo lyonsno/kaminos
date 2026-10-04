@@ -65,6 +65,23 @@ struct BlockDims {
   _pad0: u32,
 };`;
 
+function createStaticQkReductionWgsl() {
+  const lines = [];
+  for (let component = 0; component < 64; component += 1) {
+    lines.push(`var product_${component} = 0.0;`);
+    lines.push(`if (${component}u < dims.head_dim) {`);
+    lines.push(`  product_${component} = q_values[q_base + ${component}u] * k_values[k_base + ${component}u];`);
+    lines.push('}');
+  }
+  // Preserve the original in-place 64-element tree, including padded zeros.
+  for (let stride = 32; stride >= 1; stride /= 2) {
+    for (let index = 0; index < stride; index += 1) {
+      lines.push(`product_${index} = product_${index} + product_${index + stride};`);
+    }
+  }
+  return lines.join('\n      ');
+}
+
 function createOnlineAttentionWgsl({
   dimsStruct,
   dimsType,
@@ -127,22 +144,8 @@ fn main(
     let token = tile_start + dimension;
     if (dimension < tile_count) {
       let k_base = ${kBase};
-      var products: array<f32, 64>;
-      for (var component = 0u; component < 64u; component = component + 1u) {
-        products[component] = 0.0;
-        if (component < dims.head_dim) {
-          products[component] = q_values[q_base + component] * k_values[k_base + component];
-        }
-      }
-      var reduction_stride = 32u;
-      loop {
-        for (var reduction_index = 0u; reduction_index < reduction_stride; reduction_index = reduction_index + 1u) {
-          products[reduction_index] = products[reduction_index] + products[reduction_index + reduction_stride];
-        }
-        if (reduction_stride == 1u) { break; }
-        reduction_stride = reduction_stride / 2u;
-      }
-      var score = products[0] * scale;
+      ${createStaticQkReductionWgsl()}
+      var score = product_0 * scale;
       ${scoreAdjustment}
       scores[dimension] = score;
     }
