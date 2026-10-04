@@ -23,6 +23,7 @@ for variant in d['variants']:
  assert not any(k in g['nodes'][0] for k in ['translation','rotation','scale','matrix']), 'transforms must be baked'
  p=g['meshes'][0]['primitives'][0];pos=accessor(g,blob,p['attributes']['POSITION']);norm=accessor(g,blob,p['attributes']['NORMAL']);uv=accessor(g,blob,p['attributes']['TEXCOORD_0']);indices=[a[0] for a in accessor(g,blob,p['indices'])]
  assert len(pos)==len(norm)==len(uv) and len(indices)%3==0
+ assert all(0<=x<=1 for pair in uv for x in pair), 'nonperiodic stone maps must not cross texture-repeat seams'
  for axis,target in enumerate(sizes):
   lo=min(p[axis] for p in pos);hi=max(p[axis] for p in pos)
   assert abs(lo+target/2)<3e-8 and abs(hi-target/2)<3e-8, 'common centered fit differs'
@@ -43,4 +44,4 @@ for variant in d['variants']:
   assert im['mimeType']=='image/png' and 'uri' not in im
   assert blob[v['byteOffset']:v['byteOffset']+8]==b'\x89PNG\r\n\x1a\n'
  print(variant['assetId'],len(indices)//3,'triangles; closed; centered; embedded PBR')
-print('PASS: all five distributable stone blocks match the consumer brief')
+print('PASS: five blocks satisfy closed geometry, common fit and embedded-map checks; visual judgment remains separate')

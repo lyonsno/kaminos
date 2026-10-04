@@ -45,10 +45,10 @@ def clipped_stone(seed):
  pos=[];norm=[];uv=[];indices=[]
  for polygon in faces:
   normal=np.cross(polygon[1]-polygon[0],polygon[2]-polygon[0]);normal/=np.linalg.norm(normal)
-  axis=int(np.argmax(abs(normal)));other=[i for i in range(3) if i!=axis];offset=rng.random(2)*2
+  axis=int(np.argmax(abs(normal)));other=[i for i in range(3) if i!=axis];offset=rng.uniform(.08,.18,2)
   start=len(pos)
   for p in polygon:
-   pos.append(p);norm.append(normal);uv.append([p[other[0]]*3+offset[0],p[other[1]]*3+offset[1]])
+   pos.append(p);norm.append(normal);uv.append([(p[other[0]]/SIZE[other[0]]+.5)*.72+offset[0],(p[other[1]]/SIZE[other[1]]+.5)*.72+offset[1]])
   for i in range(1,len(polygon)-1):indices.extend([start,start+i,start+i+1])
  return np.array(pos,dtype='<f4'),np.array(norm,dtype='<f4'),np.array(uv,dtype='<f4'),np.array(indices,dtype='<u2')
 
