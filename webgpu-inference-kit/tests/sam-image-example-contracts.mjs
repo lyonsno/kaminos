@@ -195,7 +195,12 @@ try {
       decodeSource: async () => ({ ...source, image: {}, release() {} }),
       createRuntime: options => { sharedOptions = options; return {
         async run(_manifest, request) {
+          const submitted = events.filter(event => event === 'submit').length;
           await options.yield({ phase: 'fixture-boundary' });
+          await options.yield({ phase: 'fixture-next-boundary' });
+          assert.equal(events.filter(event => event === 'submit').length, submitted,
+            'model yields must not manufacture renders between browser animation frames');
+          tick(3000);
           return { ...maskOutput, invocationId: request.invocationId, promptText: request.promptText,
             promptSha256: promptDigest, sourceImage: request.sourceImage,
             outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
@@ -211,7 +216,7 @@ try {
   await shared.run({ manifestUrl: '/model.json', promptText: 'wheel' });
   assert.equal(sharedOptions.inferenceSession.device, sharedDevice);
   assert.ok(events.indexOf('queue.done') < events.lastIndexOf('submit'), 'kit yield drains prior work before a source submission');
-  assert.equal(shared.snapshot().foreground.yields, 1);
+  assert.equal(shared.snapshot().foreground.yields, 2);
   assert.equal(shared.snapshot().foreground.submissions, 3);
   assert.equal(typeof gpuListeners.get('uncapturederror'), 'function', 'asynchronous GPU errors must be visible');
   gpuListeners.get('uncapturederror')({ error: { message: 'fixture validation failure' } });

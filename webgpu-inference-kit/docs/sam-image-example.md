@@ -20,7 +20,7 @@ Exports use decoded source dimensions. The public `createSam3SourceMask()` inter
 
 ## Ownership And Lifetime
 
-`createSamImageExample({ canvas, onState })` owns its explicitly acquired device and kit session. Source rendering uses that exact device/queue; SAM borrows the same session. `createCooperativeYield()` drains previously submitted work and services a source draw at SAM's existing phase boundaries. A browser animation callback also requests source draws between boundaries. No new shared runtime API, generic scheduler, cancellation signal, or model-execution timeout is added.
+`createSamImageExample({ canvas, onState })` owns its explicitly acquired device and kit session. Source rendering uses that exact device/queue; SAM borrows the same session. `createCooperativeYield()` drains previously submitted work and gives the browser an event-loop turn at SAM's phase boundaries. Browser animation callbacks own source draws; a model yield does not submit an additional frame or update the UI between those callbacks. This avoids making thousands of model phases generate thousands of redundant renders. No new shared runtime API, generic scheduler, cancellation signal, or model-execution timeout is added.
 
 Image decode/authentication and inference are single-flight. Source/prompt controls cannot change during an invocation. A new invocation clears previous masks before starting. Output is admitted only when invocation, source digest/artifact/dimensions, prompt text/digest, route fields, execution authority, dimensions, and instance logits agree with the local contract. Status reports busy phases and errors; it does not imply a model is loaded before the first run.
 

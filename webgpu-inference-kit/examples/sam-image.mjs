@@ -73,7 +73,7 @@ struct Vertex { @builtin(position) position: vec4f, @location(0) uv: vec2f };
   return vec4f(mix(vec3f(0.15), color.rgb, color.a), 1);
 }`;
 
-// Example-local renderer: the kit yield services source work at existing SAM boundaries.
+// Browser frames own rendering; kit yields make room without submitting extra frames.
 async function createSourceForeground({ device, canvas, gpu, onError, onSubmission }) {
   const context = canvas.getContext('webgpu');
   if (!context) throw new Error('source canvas WebGPU context unavailable');
@@ -143,9 +143,8 @@ async function createSourceForeground({ device, canvas, gpu, onError, onSubmissi
     yieldMs: 0, sleep: async ms => {
       if (failure) throw failure;
       if (closed) throw new Error('source foreground is closed');
-      draw(performance.now());
-      if (failure) throw failure;
       await new Promise(resolve => setTimeout(resolve, ms));
+      if (failure) throw failure;
     } });
   return { setSource, close, async yield(metadata) { yields += 1; return cooperativeYield(metadata); },
     evidence() { return { submissions, yields, error: failure?.message || null }; } };
