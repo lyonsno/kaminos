@@ -199,7 +199,7 @@ export async function main(env = process.env) {
             outputs: { 'pixel-embed': { artifactId: `native-pixel-boundary-${label}`, shape: [1, 288, 288, 256] } },
           });
           const result = await runSam3PixelDecoderPhaseProgramRoute({ request, route, device, queue: device.queue,
-            adapterName: info.description || info.device, browser: navigator.userAgent, kernel: route.kernel,
+            adapterName: info.description || info.device || info.vendor, browser: navigator.userAgent, kernel: route.kernel,
             tensors: { features, weights: { stages }, shape: { batch: 1, channels: 256, groups: 8, levels: [288, 144, 72].map(size => ({ height: size, width: size })) } },
             includeReadback: true, readbackFormat: 'typed-array' });
           if (deviceFailure) throw new Error(deviceFailure);

@@ -6,6 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+// Native Chrome153 exposed Apple vendor/architecture but empty device/description.
+const witnessSource = await readFile(new URL('./sam-pixel-boundary-browser-smoke.mjs', import.meta.url), 'utf8');
+assert.match(witnessSource, /adapterName: info\.description \|\| info\.device \|\| info\.vendor/,
+  'native vendor identity must reach the production route when descriptive fields are empty');
+
 const bytes = Buffer.from(new Float32Array([1, 2]).buffer);
 const descriptor = { dtype: 'float32', shape: [2], byteLength: 8,
   sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
