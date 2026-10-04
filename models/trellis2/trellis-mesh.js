@@ -114,7 +114,10 @@ export function encodeTrellisGeometryGLB(mesh,{provenance={}}={}) {
     {buffer:0,byteOffset:vertices.byteLength,byteLength:triangles.byteLength,target:34963},
     {buffer:0,byteOffset:vertices.byteLength+triangles.byteLength,byteLength:normals.byteLength,target:34962}],
     binLength=vertices.byteLength+triangles.byteLength+normals.byteLength,
-    document={asset:{version:'2.0',generator:'Kaminos TRELLIS2 geometry consumer'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],
+    // Source export maps (x,y,z) to (x,z,-y). A node transform also rotates
+    // normals while preserving model-space bytes used by texture sampling.
+    document={asset:{version:'2.0',generator:'Kaminos TRELLIS2 geometry consumer'},scene:0,scenes:[{nodes:[0]}],
+      nodes:[{mesh:0,matrix:[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]}],
       meshes:[{primitives:[{attributes:{POSITION:0,NORMAL:2},indices:1,material:0,mode:4}]}],
       materials:[{name:'Geometry diagnostic — no learned material',doubleSided:true,pbrMetallicRoughness:{baseColorFactor:[.65,.65,.65,1],metallicFactor:0,roughnessFactor:1}}],
       buffers:[{byteLength:binLength}],bufferViews:views,accessors:[{bufferView:0,componentType:5126,count:n,type:'VEC3',min,max},
