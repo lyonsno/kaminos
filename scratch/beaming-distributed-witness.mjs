@@ -334,6 +334,7 @@ ${needle}`);
   }
   if(process.argv.includes('--surface-reconstruction-check')) {
     report.phase='current-frame-surface-reconstruction';await save();
+    report.surfaceGPU=await page.evaluate(async()=>{const m=await import('/scratch/beaming-surface-gpu-check.mjs');return m.checkSurfaceGPU();});await save();
     report.reconstructionProfile={camera:[2,1.5,6],target:[0,.7,0],gainStops:4,sourceSoftness:0,density:.35,smokeExtinction:.1};
     await page.selectOption('#rendering-light-mode','shared');
     await page.evaluate(p=>{
@@ -344,7 +345,7 @@ ${needle}`);
     },report.reconstructionProfile);
     const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
     let sourceHash,raw16,smoke16,builds;
-    for(const [name,count,pattern,passes] of [['raw16',16,'spatial',0],['smooth16-8',16,'spatial',8],['smooth16-32',16,'spatial',32],['restored16',16,'spatial',0],['fixed16',16,'fixed',0],['raw12',12,'spatial',0],['smooth12-32',12,'spatial',32]]) {
+    for(const [name,count,pattern,passes] of [['raw16',16,'spatial',0],['smooth16-8',16,'spatial',8],['smooth16-32',16,'spatial',32],['restored16',16,'spatial',0],['fixed16',16,'fixed',0],['raw12',12,'spatial',0],['smooth12-8',12,'spatial',8],['smooth12-32',12,'spatial',32]]) {
       await page.selectOption('#rendering-angular-samples',String(count));
       await page.selectOption('#rendering-angular-pattern',pattern);
       await page.evaluate(passes=>{const e=document.getElementById('rendering-surface-reconstruction');e.value=String(passes);e.dispatchEvent(new Event('input',{bubbles:true}));},passes);
