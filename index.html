@@ -27596,7 +27596,9 @@ function burnerEdit(change,label) {
   const edits=scenePlacementTools.edits;
   if(edits.state().active||edits.state().replaying)throw Error('Finish the current edit first');
   const next=readBurnerGraph();const result=change(next);checkBurnerGraph(next);
-  edits.apply('@burner-graph',next,label);return result;
+  try { edits.apply('@burner-graph',next,label); }
+  catch(error) { if(edits.state().active)edits.cancel();throw error; }
+  return result;
 }
 function newBedRecord(recipe,pose) {
   return {id:makeSceneObjectId('burner-bed'),type:BURNER_BED_TYPE,source:BURNER_BED_SOURCE,fileName:'Annular bed',label:'Burner bed',
@@ -27609,6 +27611,8 @@ function bedPoseBelowSource() {
   return pose;
 }
 function addBurnerObject(kind) {
+  if(!['burner-assembly','burner-bed','flame-source'].includes(kind))throw Error('Unknown burner object kind');
+  if(kind!=='burner-bed'&&window.__kaminosVolumeEmitterReceipt?.effective?.family==='cluster')throw Error('Choose an analytic flame emitter before adding its source or assembly');
   if(!isFireLightFieldRoute()||!applyFlameEmitterPose)throw Error('Open a flame composition before adding its source or assembly');
   if(kind==='flame-source' && authoredFlamePresent){setActiveSceneObject(FLAME_EMITTER_ID);setInfo('This domain already has its flame source');return FLAME_EMITTER_ID;}
   const existingAssembly=sceneGroups.find(group=>group.type===BURNER_ASSEMBLY_TYPE&&group.objectIds.includes(FLAME_EMITTER_ID));
@@ -27619,6 +27623,7 @@ function addBurnerObject(kind) {
     if(kind==='flame-source'){selectedId=FLAME_EMITTER_ID;return;}
     const bed=newBedRecord(BURNER_DEFAULTS,bedPoseBelowSource());next.objects.push(bed);selectedId=bed.id;
     if(kind==='burner-assembly'){
+      next.groups=next.groups.map(group=>({...group,objectIds:group.objectIds.filter(id=>id!==FLAME_EMITTER_ID)})).filter(group=>group.objectIds.length);
       const group={id:makeSceneObjectId('burner'),label:'Burner assembly',type:BURNER_ASSEMBLY_TYPE,transform:structuredClone(flameEmitterPose),objectIds:[bed.id,FLAME_EMITTER_ID],createdAt:new Date().toISOString()};
       next.groups.push(group);selectedId=group.id;
     }
