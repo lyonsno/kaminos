@@ -4,12 +4,14 @@ import {collectStaticSceneGeometry,staticSceneGeometryRevision} from './scene-li
 import {buildTriangleVisibility} from './scene-light-visibility.mjs';
 import {createVolumeGather} from './scene-volume-gather.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
+import {validateSurfaceReconstruction} from './scene-surface-reconstruction.mjs';
 
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,onStatus=()=>{}}) {
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
   const editing=new Set();let editCommitted=false,rebuildAnnounced=false,retainComparisons=false;
   let angularPattern='fixed',angularRotation=0;
+  let surfaceReconstruction=0;
   const attributeIds=new WeakMap();let nextAttributeId=0;
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
@@ -57,7 +59,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     retire();status.status='building-static-visibility';
     const geometry=collectStaticSceneGeometry(scene);
     const packed=buildTriangleVisibility(geometry.triangles).packGpu();
-    const receivers=[];
+    const receivers=[],surfaceTriangles=[];
     const position=new THREE.Vector3(),normal=new THREE.Vector3(),normalMatrix=new THREE.Matrix3();
     scene.traverseVisible(mesh=>{
       if(!mesh.isMesh)return;
@@ -67,16 +69,19 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const geometry=mesh.geometry,vertices=geometry.attributes.position,normals=geometry.attributes.normal;
       if(!normals)throw new Error(`distributed surface normal missing: ${mesh.name}`);
       const ids=new Float32Array(vertices.count);
+      const offset=receivers.length;
       normalMatrix.getNormalMatrix(mesh.matrixWorld);
       for(let i=0;i<vertices.count;i++) {
         position.fromBufferAttribute(vertices,i).applyMatrix4(mesh.matrixWorld);
         normal.fromBufferAttribute(normals,i).applyMatrix3(normalMatrix).normalize();
         ids[i]=receivers.length;receivers.push({position:position.toArray(),normal:normal.toArray(),twoSided:materialList.some(m=>m.side!==THREE.FrontSide)});
       }
+      const index=geometry.index;
+      for(let i=0;i<(index?index.count:vertices.count)-2;i+=3)for(let c=0;c<3;c++)surfaceTriangles.push(offset+(index?index.getX(i+c):i+c));
       const clone=geometry.clone();clone.setAttribute('sceneReceiverIndex',new THREE.BufferAttribute(ids,1));
       originals.set(mesh,{material:mesh.material,geometry,clone,receiverAttribute:geometry.getAttribute('sceneReceiverIndex')});mesh.geometry=clone;
     });
-    handle=createVolumeGather(device,{geometry:packed,receivers,volumeGrid,directions,angularPattern,angularRotation});
+    handle=createVolumeGather(device,{geometry:packed,receivers,surfaceTriangles:new Uint32Array(surfaceTriangles),volumeGrid,directions,angularPattern,angularRotation});
     handle.setRetainComparisons(retainComparisons);
     external=new THREE.ExternalTexture(handle.surface);
     external.image={width:handle.surfaceDimensions[0],height:handle.surfaceDimensions[1]};
@@ -142,7 +147,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     try {
       handle.setDirections(directions);
       handle.setAngularPattern(angularPattern,angularRotation);
-      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness});
+      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction});
     } catch(error) {
       status.status='preparation-failed';status.error=String(error.message);
       onStatus({...status});throw error;
@@ -159,11 +164,12 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setGain(value){if(!Number.isFinite(value)||value<0)throw new Error('nonnegative light gain required');gain=value;},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke illumination mode');smokeMode=value;},
     setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
+    setSurfaceReconstruction(value){surfaceReconstruction=validateSurfaceReconstruction(value);},
     setDirections(value){lightingCount(value);directions=value;status.directions=value;},
     setAngularPattern(pattern,rotation=0){if(!['fixed','spatial'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
-    debugState(){return {...status,gain,smokeMode,sourceSoftness,frame,display:'mesh and flame retain separate camera transforms'};},
+    debugState(){return {...status,gain,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
     canRender(){return !disposed&&!status.error&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
     dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();},

@@ -3255,6 +3255,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Lighting-only emission smoothing passes. Zero is unfiltered; more passes soften fine source detail without changing visible flame emission, extinction, or solid ray stops. Geometry-touching source cells stay unfiltered. Saved flame settings are unchanged.</p>
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
+        <div class="slider-row"><label class="slider-label" for="rendering-surface-reconstruction">Surface reconstruction</label><input type="range" id="rendering-surface-reconstruction" min="0" max="32" step="2" value="0"><span class="slider-val" id="rendering-surface-reconstruction-value">0</span></div>
+        <p class="rendering-description">Experimental same-frame mesh smoothing passes. Follows triangle connectivity and stops across sharp normal changes; split vertices remain split. No temporal history. Does not alter smoke or the visible flame. Zero bypasses reconstruction.</p>
         <p class="rendering-description">The smoke solvers are exclusive. Source gain affects distributed receiving, not direct visible flame emission or legacy smoke illumination. Legacy comparison stops live distributed smoke gathering; distributed mode stops the old smoke solve. Surface bounce is not implemented.</p></div>
       <h2>Flame field</h2>
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
@@ -3381,6 +3383,7 @@ function refreshRenderingControls() {
   if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
   if(distributed)source.setSmokeMode(document.getElementById('rendering-smoke-solver').value);
   if(distributed)source.setSourceSoftness(Number(document.getElementById('rendering-source-softness').value));
+  if(distributed)source.setSurfaceReconstruction(Number(document.getElementById('rendering-surface-reconstruction').value));
   if(distributed)source.setRetainComparisons(document.getElementById('rendering-retain-comparisons').checked);
   if(distributed)source.setAngularPattern(document.getElementById('rendering-angular-pattern').value);
   if (source && !distributed) {
@@ -11400,6 +11403,10 @@ document.getElementById('rendering-angular-swap').addEventListener('click',()=>{
 document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-angular-pattern').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-surface-reconstruction').addEventListener('input',event=>{
+  document.getElementById('rendering-surface-reconstruction-value').textContent=event.target.value;
+  refreshRenderingControls();
+});
 document.getElementById('rendering-source-softness').addEventListener('input',event=>{
   document.getElementById('rendering-source-softness-value').textContent=event.target.value;
   refreshRenderingControls();

@@ -2,6 +2,7 @@
 // use the same rays; only their angular weighting differs.
 import {createPreparedSmoke,preparedSmokePlan} from './scene-prepared-smoke.mjs';
 import {createSourceSoftening,validateSourceSoftness} from './scene-source-softening.mjs';
+import {surfaceGraph,createSurfaceReconstruction,validateSurfaceReconstruction} from './scene-surface-reconstruction.mjs';
 export {DISTRIBUTED_SMOKE_WGSL} from './scene-smoke-reconstruction.mjs';
 export function lightingDirections(count=24,rotation=0) {
   if(!Number.isInteger(count)||count<2||count%2) throw new Error('even angular sample count required');
@@ -31,7 +32,7 @@ export function receiverDispatch(count,limit) {
   return [Math.min(groups,limit),Math.ceil(groups/limit)];
 }
 
-export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed'}) {
+export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed'}) {
   lightingDirections(directions); // Validate before allocating shared resources.
   const volumeDimensions=[volumeGrid,volumeGrid*2,volumeGrid];
   const volumeCount=volumeDimensions.reduce((a,b)=>a*b,1);
@@ -67,7 +68,7 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
   // Geometry, material bindings, outputs and smoke reconstruction are shared.
   // Only direction-specific pipelines/ray distances change with angular quality.
   const angularStates=new Map();let retainComparisons=false,visibilityPreparations=0;
-  let softening=null,softeningDimensions=null;
+  let softening=null,softeningDimensions=null,reconstruction=null;
   function angularState() {
     if(angularStates.has(directions))return angularStates.get(directions);
     const owned=[];
@@ -98,10 +99,12 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
       angularPattern=pattern;angularRotation=rotation;
     },
     setRetainComparisons(value){retainComparisons=!!value;if(!retainComparisons)pruneComparisons();},
-    encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0}={}) {
+    encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0,surfaceReconstruction=0}={}) {
       if(field.status!=='encoded'||!field.texture) throw new Error('distributed gather needs current raw emission/extinction');
       if(field.localMax[1]!==3) throw new Error('first distributed gather requires tall identity volume');
       validateSourceSoftness(sourceSoftness);
+      validateSurfaceReconstruction(surfaceReconstruction);
+      if(surfaceReconstruction&&!reconstruction)reconstruction=createSurfaceReconstruction(device,{graph:surfaceGraph(receivers,surfaceTriangles),front:surface,back:surfaceBack,dimensions:[surfaceWidth,surfaceHeight]});
       const state=angularState();
       const encoder=device.createCommandEncoder({label:'same-state distributed flame lighting'});
       if(softening&&softeningDimensions!==field.dimensions.join(',')){softening.destroy();softening=null;}
@@ -126,12 +129,13 @@ export function createVolumeGather(device,{geometry,receivers,volumeGrid=16,dire
       const pass=encoder.beginComputePass({label:'live distributed flame transport'});
       pass.setPipeline(state.gather);pass.setBindGroup(0,state.gatherGroup);pass.dispatchWorkgroups(...receiverDispatch(smokeEnabled?total:receivers.length,dispatchLimit));pass.end();
       if(smokeEnabled)preparedSmoke.encode(encoder);
+      if(surfaceReconstruction)reconstruction.encode(encoder,surfaceReconstruction);
       device.queue.submit([encoder.finish()]);
       return {generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,allocatedVolumeReceivers:volumeCount,directions,stepLength,gain,sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction,
-        angularPattern,angularRotation,
+        angularPattern,angularRotation,surfaceReconstruction:{passes:surfaceReconstruction,...reconstruction?.metadata},
         angularCache:{retained:retainComparisons,counts:[...angularStates.keys()],visibilityPreparations,bytes:[...angularStates.keys()].reduce((sum,n)=>sum+n*(total*4+16),0)}};
     },
-    destroy(){for(const state of angularStates.values())for(const b of state.owned)b.destroy();angularStates.clear();softening?.destroy();preparedSmoke.destroy();for(const b of resources)b.destroy();surface.destroy();surfaceBack.destroy();smoke.destroy();},
+    destroy(){for(const state of angularStates.values())for(const b of state.owned)b.destroy();angularStates.clear();softening?.destroy();reconstruction?.destroy();preparedSmoke.destroy();for(const b of resources)b.destroy();surface.destroy();surfaceBack.destroy();smoke.destroy();},
     async readback() {
       const staging=[];
       const encoder=device.createCommandEncoder({label:'distributed receiver evidence'});

@@ -6,13 +6,13 @@ import {mountDistributedSceneRadiance} from '../scene-distributed-radiance.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
 function fixture(castShadow=true) {
-  const uploads=[];
+  const uploads=[],passes=[];
   const pipeline={getBindGroupLayout(){return {};}};
   const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
     queue:{writeBuffer(buffer,offset,data){if(buffer.label==='surface and smoke receivers')uploads.push(new Float32Array(data));},submit(){}},
     createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
     createShaderModule(){return {};},createComputePipeline(){return pipeline;},createBindGroup(){return {};},
-    createCommandEncoder(){return {beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+    createCommandEncoder(){return {beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
   let consume;
   const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(){}};
   const renderer={library:new THREE.StandardNodeLibrary(),backend:{get(){return {};}}};
@@ -25,9 +25,21 @@ function fixture(castShadow=true) {
   const statuses=[];
   const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
-  return {mesh,mount,geometry,material,uploads,device,statuses,prepare(){consume(field);}};
+  return {mesh,mount,geometry,material,uploads,device,statuses,passes,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='reconstruction') {
+  const f=fixture();f.prepare();
+  assert.equal(f.passes.filter(p=>p==='current-frame surface reconstruction').length,0);
+  f.mount.setSurfaceReconstruction?.(4);f.prepare();
+  assert.equal(f.passes.filter(p=>p==='current-frame surface reconstruction').length,4,'requested reconstruction must filter the current gather before mesh presentation');
+  assert.equal(f.mount.debugState().frame.surfaceReconstruction.passes,4);
+  assert.equal(f.mount.debugState().geometryBuilds,1,'reconstruction must reuse static visibility');
+  f.mount.setSurfaceReconstruction(0);f.prepare();
+  assert.equal(f.passes.filter(p=>p==='current-frame surface reconstruction').length,4,'off must dispatch no filtering');
+  assert.throws(()=>f.mount.setSurfaceReconstruction(3),/nonnegative even integer/);
+  f.mount.dispose();
+}
 if(!selected||selected==='failure') {
   const f=fixture();f.prepare();
   const previous=f.mount.debugState().frame;

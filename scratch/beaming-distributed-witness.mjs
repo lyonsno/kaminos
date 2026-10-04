@@ -332,6 +332,44 @@ ${needle}`);
       report.views.push({name,sourceHash:sh,surfaceHash:rh,lighting:signal.lighting,volume:signal.volume});await save();
     }
   }
+  if(process.argv.includes('--surface-reconstruction-check')) {
+    report.phase='current-frame-surface-reconstruction';await save();
+    report.reconstructionProfile={camera:[2,1.5,6],target:[0,.7,0],gainStops:4,sourceSoftness:0,density:.35,smokeExtinction:.1};
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.evaluate(p=>{
+      window.__kaminosSetSceneCameraFrame(p.camera,p.target);
+      for(const [id,value] of [['rendering-shared-gain',p.gainStops],['rendering-source-softness',p.sourceSoftness],['volume-density',p.density],['volume-physical-smoke-extinction',p.smokeExtinction]]) {
+        const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    },report.reconstructionProfile);
+    const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
+    let sourceHash,raw16,smoke16,builds;
+    for(const [name,count,pattern,passes] of [['raw16',16,'spatial',0],['smooth16-8',16,'spatial',8],['smooth16-32',16,'spatial',32],['restored16',16,'spatial',0],['fixed16',16,'fixed',0],['raw12',12,'spatial',0],['smooth12-32',12,'spatial',32]]) {
+      await page.selectOption('#rendering-angular-samples',String(count));
+      await page.selectOption('#rendering-angular-pattern',pattern);
+      await page.evaluate(passes=>{const e=document.getElementById('rendering-surface-reconstruction');e.value=String(passes);e.dispatchEvent(new Event('input',{bubbles:true}));},passes);
+      const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);
+      await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosVolumePrototype.debugState().frameCount>=f+3,f,{timeout:0});
+      const signal=await page.evaluate(async()=>{
+        const fields=await window.__kaminosSceneRadiance.readback();
+        return {lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),
+          surface:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data),smoke:Array.from(fields.smoke.data)};
+      });
+      await fs.writeFile(`${out}/surface-${name}-signal.json`,JSON.stringify(signal));
+      report.lastTrustworthyState={lighting:signal.lighting,volume:signal.volume};await save();
+      assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
+      assert.equal(signal.lighting.frame.surfaceReconstruction.passes,passes);assert.equal(signal.lighting.frame.directions,count);
+      assert.equal(signal.lighting.frame.angularPattern,pattern);
+      const sh=digest(signal.source.values),rh=digest(signal.surface),mh=digest(signal.smoke);
+      if(!sourceHash){sourceHash=sh;raw16=rh;smoke16=mh;builds=signal.lighting.geometryBuilds;}
+      assert.equal(sh,sourceHash);assert.equal(signal.lighting.geometryBuilds,builds);
+      if(count===16&&pattern==='spatial')assert.equal(mh,smoke16,'mesh reconstruction cannot change smoke');
+      if(name==='restored16')assert.equal(rh,raw16,'off must restore raw current-frame light exactly');
+      if(passes){assert.notEqual(rh,raw16);assert.equal(signal.lighting.frame.surfaceReconstruction.history,false);assert.ok(signal.lighting.frame.surfaceReconstruction.directedEdges>0);}
+      await page.screenshot({path:`${out}/surface-${name}.png`});
+      report.views.push({name,sourceHash:sh,surfaceHash:rh,smokeHash:mh,lighting:signal.lighting});await save();
+    }
+  }
   if(process.argv.includes('--edit-budget-check')) {
     report.phase='edit-budget-consumer';await save();
     await page.selectOption('#rendering-light-mode','shared');
