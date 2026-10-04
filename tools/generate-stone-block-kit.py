@@ -59,15 +59,15 @@ def stone_maps(seed,res=512):
   return np.array(Image.fromarray(a).resize((res,res),Image.Resampling.BICUBIC))-.5
  cloud=noise(5);grain=noise(64);fine=noise(256);coarse=noise(20);speck=rng.random((res,res))-.5
  # Broad mineral clouds plus fine granular matrix and shallow isolated pores.
- porefield=noise(110);pits=np.clip((-porefield-.22)*3,0,1)
+ porefield=noise(110);pits=np.clip((-porefield-.32)*3,0,1)
  tool=np.sin((xx*76+yy*5+noise(12)*.35)*math.pi)*.007
  relief=coarse*.15+grain*.10+fine*.028+speck*.012-pits*.14+tool
- shade=.59+cloud*.12+coarse*.07+grain*.035+fine*.025+speck*.018-pits*.20
+ shade=.46+cloud*.22+coarse*.10+grain*.030+fine*.018+speck*.012-pits*.065
  mineral=np.clip(noise(9)+.12,0,1)*.032
  tint=[np.array([1.015,1.00,.975]),np.array([.99,1.0,1.012]),np.array([1.025,1.00,.967]),np.array([1.0,1.0,1.0]),np.array([1.01,1.005,.99])][seed%5]
  shade+=rng.uniform(-.035,.025)
  color=np.clip(shade[...,None]*tint+mineral[...,None],0,1)
- dy,dx=np.gradient(relief);normal=np.stack([-dx*8,dy*8,np.ones_like(dx)],axis=-1);normal/=np.linalg.norm(normal,axis=-1,keepdims=True)
+ dy,dx=np.gradient(relief);normal=np.stack([-dx*3,dy*3,np.ones_like(dx)],axis=-1);normal/=np.linalg.norm(normal,axis=-1,keepdims=True)
  rough=np.clip(.86+coarse*.09+pits*.07,.75,.98);mr=np.zeros((res,res,3));mr[:,:,0]=1;mr[:,:,1]=rough
  def png(a):
   buf=io.BytesIO();Image.fromarray(np.uint8(np.clip(a,0,1)*255)).save(buf,format='PNG');return buf.getvalue()
@@ -96,6 +96,28 @@ def write_glb(path,asset_id,arrays,maps):
  total=12+8+len(js)+8+len(blob);path.write_bytes(struct.pack('<III',0x46546c67,2,total)+struct.pack('<II',len(js),0x4e4f534a)+js+struct.pack('<II',len(blob),0x004e4942)+blob)
  return {'assetId':asset_id,'visualRef':path.name,'preferredNode':asset_id,'localBounds':{'min':pos.min(axis=0).tolist(),'max':pos.max(axis=0).tolist()},'pivot':[0,0,0],'transformsBaked':True,'triangleCount':len(idx)//3,'embeddedTextures':list(maps),'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
 
+def write_comparison(root,variants):
+ """Assemble the exact distributable buffers for a five-block inspection view."""
+ blob=bytearray();g={'asset':{'version':'2.0','generator':'stone kit comparison assembly'},'scene':0,'scenes':[{'nodes':[]}],**{k:[] for k in ['nodes','meshes','accessors','bufferViews','buffers','images','textures','samplers','materials']}}
+ for i,variant in enumerate(variants):
+  b=(root/variant['visualRef']).read_bytes();length=struct.unpack_from('<I',b,12)[0];source=json.loads(b[20:20+length]);data=b[28+length:]
+  offsets={k:len(g[k]) for k in ['bufferViews','accessors','images','textures','samplers','materials','meshes','nodes']};off=len(blob);blob.extend(data)
+  for v in source['bufferViews']:v['byteOffset']=v.get('byteOffset',0)+off
+  for a in source['accessors']:a['bufferView']+=offsets['bufferViews']
+  for im in source['images']:im['bufferView']+=offsets['bufferViews']
+  for t in source['textures']:t['source']+=offsets['images'];t['sampler']+=offsets['samplers']
+  for material in source['materials']:
+   for key in ['baseColorTexture','metallicRoughnessTexture']:material['pbrMetallicRoughness'][key]['index']+=offsets['textures']
+   material['normalTexture']['index']+=offsets['textures']
+  for mesh in source['meshes']:
+   for primitive in mesh['primitives']:
+    primitive['attributes']={k:v+offsets['accessors'] for k,v in primitive['attributes'].items()};primitive['indices']+=offsets['accessors'];primitive['material']+=offsets['materials']
+  for node in source['nodes']:node['mesh']+=offsets['meshes'];node['translation']=[(i-2)*.37,0,0]
+  for k in offsets:g[k].extend(source[k])
+  g['scenes'][0]['nodes'].append(offsets['nodes'])
+ g['buffers']=[{'byteLength':len(blob)}];js=json.dumps(g,separators=(',',':')).encode();js+=b' '*(-len(js)%4);blob+=b'\0'*(-len(blob)%4)
+ (root/'kit-comparison.glb').write_bytes(struct.pack('<III',0x46546c67,2,28+len(js)+len(blob))+struct.pack('<II',len(js),0x4e4f534a)+js+struct.pack('<II',len(blob),0x004e4942)+blob)
+
 def main():
  parser=argparse.ArgumentParser();parser.add_argument('--out',type=Path,required=True);args=parser.parse_args();args.out.mkdir(parents=True,exist_ok=True)
  variants=[]
@@ -103,5 +125,6 @@ def main():
   seed=100301+i;asset_id=f'limestone-block-{i+1:02d}';arrays=clipped_stone(seed);maps=stone_maps(seed)
   item=write_glb(args.out/f'{asset_id}.glb',asset_id,arrays,maps);item['seed']=seed;variants.append(item)
  descriptor={'schema':'kaminos.stone-block-kit.v0','assetId':'limestone-block-kit-v0','route':'deterministic clipped cuboids with procedural limestone PBR','coordinateFrame':{'handedness':'right','up':'+Y','forward':'+Z','unit':'uncalibrated-simulation-coordinate'},'commonEnvelope':SIZE.tolist(),'instancePolicy':'stable-body-id modulo variant-count; body-owned transforms','structuralAuthority':False,'collisionAuthority':False,'contactFacePolicy':'major faces remain at common box planes; edge and corner relief is inward','variants':variants}
+ write_comparison(args.out,variants)
  (args.out/'descriptor.json').write_text(json.dumps(descriptor,indent=2)+'\n');print(json.dumps({'output':str(args.out),'variants':len(variants),'bytes':sum((args.out/v['visualRef']).stat().st_size for v in variants)}))
 if __name__=='__main__':main()
