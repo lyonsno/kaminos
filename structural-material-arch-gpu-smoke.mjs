@@ -225,6 +225,13 @@ try {
     check('the crown falls beyond the grabbed patch',crownDrop>1,crownDrop);
     const penetration=rest.state.floorY-minimumY(rest.state);
     check('rubble meets the floor within six percent of a cell',penetration<Math.min(...Object.values(rest.state.dimensions))*.06,penetration);
+    report.phase='fallen-material-grab';save();
+    const fallen=rest.surfaceTargets.find(item=>item.visible&&rest.state.bodies[item.index].row>=8&&rest.state.bodies[item.index].position.y<rest.state.floorY+rest.state.dimensions.dy*2);
+    const lifted=await injury(fallen,{x:.2,y:.4,z:.1},30,false),releasedRubble=await capture('rubble-grab-released');
+    const originalPosition=rest.state.bodies[fallen.index].position,liftedPosition=lifted.state.bodies[fallen.index].position;
+    const travel=Math.hypot(liftedPosition.x-originalPosition.x,liftedPosition.y-originalPosition.y,liftedPosition.z-originalPosition.z);
+    check('fallen material remains pickable and moves from its current pose',travel>.05,{index:fallen.index,originalPosition,liftedPosition,travel});
+    check('rubble manipulation leaves the operator camera untouched',JSON.stringify(releasedRubble.camera)===JSON.stringify(rest.camera),releasedRubble.camera);
     await evaluate('(async()=>{document.querySelector("#shear").click();await window.__archCollapse.reset();})()');const reset=await capture('explicit-reset');
     check('explicit Reset clears damage and preserves camera',reset.state.broken===0&&JSON.stringify(reset.camera)===JSON.stringify(binding.camera),reset.state.broken);
     await input({type:'mousePressed',x:40,y:180,button:'left',buttons:1,clickCount:1});check('background press does not grip material',(await witness()).state.hand===null,(await witness()).lastPick);
