@@ -50,6 +50,76 @@ export function extractTrellisDualGridMesh({ features, coordinates, resolution, 
   return {status:'surface',vertices,triangles,quadCount,intersectedEdges,metadata};
 }
 
+// Final source adjacency orientation is separate from raw dual-grid extraction.
+// Preserve the first face of each component, all vertices and the face order.
+// This does not repair nonmanifold topology, fill holes, prune or simplify.
+export function orientTrellisMeshFaces(mesh) {
+  const {vertices,triangles}=mesh??{},n=vertices?.length/3;
+  if(!(vertices instanceof Float32Array)||!(triangles instanceof Uint32Array)||
+    !Number.isSafeInteger(n)||n<1||!triangles.length||triangles.length%3)
+    throw TypeError('complete triangle surface required for face orientation');
+  if(!vertices.every(Number.isFinite))throw TypeError('finite face-orientation vertices required');
+  if(!triangles.every(i=>i<n))throw RangeError('face-orientation indices outside vertex domain');
+  const edges=triangles.length,faces=edges/3,none=0xffffffff;
+  // Counting-sort complete edge references by (min vertex,max vertex), keeping
+  // source insertion order within each key. O(V+F) typed storage, no object hash
+  // per edge, truncation, geometry cap or new dependency.
+  let order=new Uint32Array(edges),scratch=new Uint32Array(edges);
+  const counts=new Uint32Array(n+1);
+  const end=e=>triangles[e-e%3+(e%3+1)%3];
+  const low=e=>Math.min(triangles[e],end(e)),high=e=>Math.max(triangles[e],end(e));
+  for(let e=0;e<edges;e++)order[e]=e;
+  for(const key of [high,low]){
+    counts.fill(0);
+    for(let i=0;i<edges;i++)counts[key(order[i])+1]++;
+    for(let v=1;v<=n;v++)counts[v]+=counts[v-1];
+    for(let i=0;i<edges;i++){const e=order[i];scratch[counts[key(e)]++]=e;}
+    [order,scratch]=[scratch,order];
+  }
+  const neighbors=new Uint32Array(edges).fill(none),firstSeen=new Uint32Array(edges).fill(none),same=new Uint8Array(edges);
+  let boundaryEdges=0,nonmanifoldEdges=0,manifoldEdges=0;
+  for(let i=0;i<edges;){
+    const a=order[i],lo=low(a),hi=high(a);let j=i+1;
+    while(j<edges&&low(order[j])===lo&&high(order[j])===hi)j++;
+    if(j-i===2){
+      const b=order[i+1],faceA=Math.floor(a/3),faceB=Math.floor(b/3),direction=Number(triangles[a]===triangles[b]&&end(a)===end(b));
+      neighbors[a]=faceB;neighbors[b]=faceA;firstSeen[a]=firstSeen[b]=a;same[a]=same[b]=direction;manifoldEdges++;
+    }else if(j-i===1)boundaryEdges++;else nonmanifoldEdges++;
+    i=j;
+  }
+  // Match source dictionary edge-insertion order, including source DFS/LIFO
+  // choices in inconsistent cycles, rather than choosing a new orientation.
+  for(let f=0;f<faces;f++)for(let j=1;j<3;j++)for(let k=j;k>0;k--){
+    const a=f*3+k-1,b=a+1;if(firstSeen[a]<=firstSeen[b])break;
+    for(const array of [firstSeen,neighbors,same]){const t=array[a];array[a]=array[b];array[b]=t;}
+  }
+  const seen=new Uint8Array(faces),flips=new Uint8Array(faces),stack=new Uint32Array(faces);
+  let components=0,flippedFaces=0;
+  for(let root=0;root<faces;root++){
+    if(seen[root])continue;components++;seen[root]=1;let top=0;stack[top++]=root;
+    while(top){
+      const current=stack[--top];
+      for(let j=0;j<3;j++){
+        const e=current*3+j,neighbor=neighbors[e];if(neighbor===none||seen[neighbor])continue;
+        flips[neighbor]=flips[current]^same[e];seen[neighbor]=1;stack[top++]=neighbor;
+      }
+    }
+  }
+  const oriented=triangles.slice();let remainingManifoldDirectionConflicts=0;
+  for(let f=0;f<faces;f++){
+    if(flips[f]){const e=f*3,t=oriented[e+1];oriented[e+1]=oriented[e+2];oriented[e+2]=t;flippedFaces++;}
+    for(let j=0;j<3;j++){
+      const e=f*3+j,neighbor=neighbors[e];
+      if(neighbor!==none&&f<neighbor&&(same[e]^flips[f]^flips[neighbor]))remainingManifoldDirectionConflicts++;
+    }
+  }
+  return {...mesh,triangles:oriented,metadata:{...mesh.metadata,faceOrientation:{
+    route:'source-adjacency-first-face-preserved',source:'trellmlx/mesh_cleanup.py::orient_faces_by_adjacency@34a7a570',
+    faceCount:faces,vertexCount:n,components,flippedFaces,manifoldEdges,boundaryEdges,nonmanifoldEdges,remainingManifoldDirectionConflicts,
+    preserved:'all vertices/face membership/face order; raw input unmodified',
+    claimCeiling:'Adjacency winding only; not source-native cleanup/QEM, outward-orientation selection or decoder fidelity.'}}};
+}
+
 export function createTrellisMeshAdapter({ runtime, decoded }) {
   if (!runtime?.readTensor) throw TypeError('actual decoder runtime required');
   const a=decoded?.features,b=decoded?.coordinates,n=a?.shape?.[0];
@@ -65,7 +135,8 @@ export function createTrellisMeshAdapter({ runtime, decoded }) {
         const features=await runtime.readTensor(a),coordinates=await runtime.readTensor(b);
         if (!(features instanceof ArrayBuffer) || !(coordinates instanceof ArrayBuffer) || features.byteLength!==a.byteLength ||
           coordinates.byteLength!==b.byteLength) throw Error('complete post-decoder geometry readback required');
-        output=extractTrellisDualGridMesh({features:new Float32Array(features),coordinates:new Int32Array(coordinates),resolution:decoded.resolution});
+        const raw=extractTrellisDualGridMesh({features:new Float32Array(features),coordinates:new Int32Array(coordinates),resolution:decoded.resolution});
+        output=raw.status==='surface'?orientTrellisMeshFaces(raw):raw;
         output.handoff={phase:'post-decoder-geometry-consumer',featureBytesToCPU:a.byteLength,coordinateBytesToCPU:b.byteLength,
           input:'exact borrowed decoder tensors; no NPZ or fixture replacement'};status='completed';return output;
       } catch(error) { status='failed';throw error; }

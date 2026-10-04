@@ -36,6 +36,9 @@ const runtime = { device:{queue:{async onSubmittedWorkDone(){}}}, async readTens
 } };
 const consumer = createTrellisMeshAdapter({ runtime, decoded:{features:featureTensor,coordinates:coordinateTensor,resolution:2} });
 const consumed = await consumer.run();assert.deepEqual(consumed.vertices,mesh.vertices);
+assert.equal(consumed.metadata.faceOrientation.route,'source-adjacency-first-face-preserved',
+  'Actual GPU-tensor mesh adapter composes winding before downstream normals/UV/PBR.');
+assert.equal(consumed.metadata.faceOrientation.remainingManifoldDirectionConflicts,0);
 assert.equal(consumed.handoff.featureBytesToCPU,112);assert.equal(consumed.handoff.coordinateBytesToCPU,48);
 assert.equal(consumed.handoff.phase,'post-decoder-geometry-consumer');assert.deepEqual(reads,[featureTensor,coordinateTensor]);
 consumer.dispose();assert.equal(featureTensor.buffer.destroy,undefined);
