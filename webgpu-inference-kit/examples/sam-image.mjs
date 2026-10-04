@@ -284,7 +284,8 @@ export async function createSamImageExample({ canvas, onState = () => {},
           promptSha256: result.promptSha256, sourceImage: result.sourceImage,
           requestedRouteId: result.requestedRouteId, effectiveRouteId: result.effectiveRouteId,
           outputAuthority: result.outputAuthority, verificationState: result.verificationState,
-          width: result.width, height: result.height, imageCache: result.imageCache,
+          width: result.width, height: result.height,
+          imageCache: result.imageCache ? { status: result.imageCache.status, key: result.imageCache.key } : null,
           instances: result.instances.map(({ index, score, box }) => ({ index, score, box })) };
         if (!closing) state.status = 'succeeded';
         state.phase = indices.length ? 'Masks returned' : 'No instances retained';

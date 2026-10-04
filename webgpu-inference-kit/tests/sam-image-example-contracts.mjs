@@ -77,12 +77,19 @@ assert.equal(activeRequest.sourceImage.sha256, source.sha256);
 assert.equal(runtimeOptions.yield, foreground.yield);
 await assert.rejects(example.run({ manifestUrl: '/model.json', promptText: 'other' }), /busy/);
 await assert.rejects(example.loadImage({}), /busy/);
-const output = () => ({ ...maskOutput, invocationId: activeRequest.invocationId, promptText: 'wheel',
+let inventoryReads = 0;
+const imageCache = { status: 'miss', key: 'fixture-image', get resources() {
+  inventoryReads += 1; return { fullInventory: true };
+} };
+const output = () => ({ ...maskOutput, imageCache, invocationId: activeRequest.invocationId, promptText: 'wheel',
   promptSha256: promptDigest, sourceImage: { sha256: source.sha256, artifactId: source.artifactId,
     encodedResolution: [3, 1] }, outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
   requestedRouteId: 'fixture.requested', effectiveRouteId: 'fixture.effective' });
 complete(output());
-await run;
+const returned = await run;
+assert.equal(returned.imageCache, imageCache, 'raw invocation retains its complete cache evidence');
+assert.deepEqual(example.snapshot().output.imageCache, { status: 'miss', key: 'fixture-image' });
+assert.equal(inventoryReads, 0, 'live state publication must not walk the diagnostic resource inventory');
 assert.equal(evidenceReads, 0, 'normal mask completion must not materialize the full diagnostic inventory');
 assert.equal(example.snapshot().status, 'succeeded');
 assert.deepEqual(example.snapshot().selectedIndices, [7, 9]);

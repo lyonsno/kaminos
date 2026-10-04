@@ -1,6 +1,53 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 
+export function validateSamImageCases(inputs) {
+  assert.ok(Array.isArray(inputs) && inputs.length > 0, 'case list required');
+  const names = new Set();
+  for (const input of inputs) {
+    assert.match(input.name, /^[a-z0-9-]+$/);
+    assert.ok(!names.has(input.name), `duplicate case name: ${input.name}`);
+    names.add(input.name);
+  }
+}
+
+export function collectSamImageTrial() {
+  const trial = window.samTrial, app = window.samImageExample;
+  if (!trial || !app) return null;
+  const { output, ...snapshot } = app.snapshot();
+  const result = trial.output || output;
+  return { startedAt: trial.startedAt, completedAt: trial.completedAt, done: trial.done,
+    wallMilliseconds: trial.completedAt - trial.startedAt, frames: trial.frames, phases: trial.phases,
+    error: trial.error || snapshot.error, adapter: window.samAdapters.at(-1), snapshot,
+    invocationId: result?.invocationId, foreground: snapshot.foreground,
+    outputAvailable: Boolean(trial.output),
+    outputMetadata: result ? { invocationId: result.invocationId, outputAuthority: result.outputAuthority,
+      verificationState: result.verificationState, requestedRouteId: result.requestedRouteId,
+      effectiveRouteId: result.effectiveRouteId, width: result.width, height: result.height,
+      selectedCandidateCount: result.selectedCandidateCount, instanceCount: result.instances?.length,
+      maskLength: result.mask?.length, logitsLength: result.logits?.length,
+      receiptCount: result.receiptChain?.length } : null };
+}
+
+export async function finalizeSamImageFailure(report, error, collect, persist = async () => {}, transfer = async () => {}) {
+  report.error = { message: error.message, stack: error.stack };
+  try {
+    const collected = await collect();
+    if (collected) {
+      const existing = report.runs.find(row => row.name === collected.name);
+      if (existing) Object.assign(existing, collected);
+      else report.runs.push(collected);
+    }
+  } catch (collectionError) { report.collectionError = collectionError.message; }
+  const row = report.runs.find(row => row.name === report.phase);
+  if (row) row.validation = { status: 'failed', partial: true, message: error.message };
+  try { await persist(); } catch (persistError) { report.persistError = persistError.message; }
+  if (row) {
+    try { await transfer(row); } catch (artifactError) { row.artifactError = artifactError.message; }
+  }
+  try { await persist(); } catch (persistError) { report.persistError = persistError.message; }
+}
+
 export function validateSamImageRun(row, expected) {
   const { output, adapter } = row;
   assert.equal(adapter?.isFallbackAdapter, false, 'native adapter evidence required');

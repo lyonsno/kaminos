@@ -89,8 +89,11 @@ composition result, not a frame-pacing claim.
 The source-checkout [SAM image example](webgpu-inference-kit/docs/sam-image-example.md)
 accepts uploaded images and text, exposes all retained instances, and exports
 source-sized masks, transparent cutouts, and provenance through the public kit
-entrypoints. It shares its session with a moving source-image renderer; native
-coexistence and new attention-kernel timings remain under verification.
+entrypoints. Native browser runs exercise cold and cached prompts, multiple
+instances, an empty negative control, and source-sized PNG exports. It shares
+its session with a moving source-image renderer, but observed foreground stalls
+remain: shared-device execution is not a smooth-frame-pacing claim. See the
+example guide for the current numerical and performance boundaries.
 
 The package includes a complete minimal port, an executable render-plus-inference
 walkthrough, focused integration documentation, and runtime contracts for

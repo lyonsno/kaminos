@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { validateAttentionBrowser } from './sam-attention-witness-checks.mjs';
-import { validateSamImageRun } from './sam-image-native-checks.mjs';
+import { validateSamImageRun, validateSamImageCases, finalizeSamImageFailure, collectSamImageTrial } from './sam-image-native-checks.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const out = process.env.SAM_IMAGE_OUTPUT;
@@ -20,6 +20,40 @@ const report = { status: 'failed', phase: 'setup', repoRoot: root, runs: [], err
 const hash = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const persist = () => fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
 let browser, server, page;
+let activeRow;
+const collectTrial = async () => {
+  if (!activeRow || !page) return null;
+  const signals = await page.evaluate(collectSamImageTrial);
+  return signals ? { ...signals, name: activeRow.name } : null;
+};
+const saveTrialArtifact = async (row, kind) => {
+  if (row[`${kind}TransferAttempted`]) return;
+  row[`${kind}TransferAttempted`] = true;
+  await persist();
+  const event = page.waitForEvent('download');
+  // Observe both promises even if creating the Blob fails before a download starts.
+  const trigger = page.evaluate(kind => {
+    const value = kind === 'output' ? window.samTrial.output : window.samImageExample.provenance();
+    const blob = new Blob([JSON.stringify(value, (_key, item) => ArrayBuffer.isView(item) ? Array.from(item) : item)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = `${kind}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }, kind);
+  const [, download] = await Promise.all([trigger, event]);
+  const artifactPath = path.join(out, `${row.name}-${kind}.json`);
+  await download.saveAs(artifactPath);
+  row[`${kind}Path`] = artifactPath;
+  row[`${kind}Sha256`] = hash(await fs.readFile(artifactPath));
+  await persist();
+};
+const saveFailureArtifacts = async row => {
+  if (!activeRow) return;
+  for (const kind of ['output', 'provenance']) {
+    if (kind === 'output' && !row.outputAvailable) continue;
+    try { await saveTrialArtifact(row, kind); }
+    catch (error) { (row.artifactErrors ||= {})[kind] = error.message; }
+  }
+};
 try {
   await persist();
   const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
@@ -49,9 +83,8 @@ try {
   report.model = { root: modelRoot, manifestSha256: hash(manifest) };
   assert.equal(report.model.manifestSha256, process.env.SAM_IMAGE_MANIFEST_SHA256, 'model manifest changed');
   const inputs = JSON.parse(await fs.readFile(process.env.SAM_IMAGE_CASES, 'utf8'));
-  assert.ok(Array.isArray(inputs) && inputs.length > 0, 'case list required');
+  validateSamImageCases(inputs);
   for (const input of inputs) {
-    assert.match(input.name, /^[a-z0-9-]+$/);
     assert.equal(hash(await fs.readFile(input.image)), input.sha256, `image changed: ${input.name}`);
   }
   report.inputs = inputs;
@@ -98,7 +131,11 @@ try {
   assert.equal(await page.locator('#status').getAttribute('data-error'), 'false');
   let previousSource;
   for (const input of inputs) {
-    report.phase = input.name; await persist();
+    report.phase = input.name;
+    await page.evaluate(() => { window.samTrial = null; });
+    activeRow = { name: input.name, validation: { status: 'partial', partial: true } };
+    report.runs.push(activeRow);
+    await persist();
     if (input.sha256 !== previousSource) {
       await page.locator('#image').setInputFiles(input.image);
       await page.waitForFunction(sha => window.samImageExample.snapshot().error
@@ -121,7 +158,7 @@ try {
         .then(output => { row.output = output; }, error => { row.error = error.stack || error.message; })
         .finally(() => { row.completedAt = performance.now(); row.done = true; });
     });
-    const motion = [];
+    const motion = activeRow.motion = [];
     await page.waitForFunction(() => window.samTrial.done || window.samImageExample.snapshot().phase.startsWith('run-'));
     for (let sample = 0; sample < 2; sample++) {
       const observation = await page.evaluate(() => ({ time: performance.now(), done: window.samTrial.done,
@@ -132,29 +169,19 @@ try {
       await new Promise(resolve => setTimeout(resolve, 300));
     }
     await page.waitForFunction(() => window.samTrial.done);
-    const error = await page.evaluate(() => window.samTrial.error || window.samImageExample.snapshot().error);
+    Object.assign(activeRow, await collectTrial());
+    await persist();
+    const error = activeRow.error;
     assert.ok(!error, error);
-    const row = await page.evaluate(() => ({ wallMilliseconds: window.samTrial.completedAt - window.samTrial.startedAt,
-      adapter: window.samAdapters.at(-1), invocationId: window.samImageExample.snapshot().output.invocationId,
-      foreground: window.samImageExample.snapshot().foreground, phases: window.samTrial.phases, frames: window.samTrial.frames }));
-    row.name = input.name; row.motion = motion;
-    const downloadEvent = page.waitForEvent('download');
-    await page.evaluate(() => {
-      const blob = new Blob([JSON.stringify(window.samTrial.output, (_key, value) => ArrayBuffer.isView(value) ? Array.from(value) : value)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = 'output.json'; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-    });
-    const download = await downloadEvent;
-    row.outputPath = path.join(out, `${input.name}-output.json`); await download.saveAs(row.outputPath);
-    const outputBytes = await fs.readFile(row.outputPath); row.outputSha256 = hash(outputBytes);
-    row.output = JSON.parse(outputBytes);
-    validateSamImageRun(row, { invocationId: row.invocationId, sourceSha256: input.sha256,
+    const row = activeRow;
+    await saveTrialArtifact(row, 'output');
+    const output = JSON.parse(await fs.readFile(row.outputPath, 'utf8'));
+    validateSamImageRun({ ...row, output }, { invocationId: row.invocationId, sourceSha256: input.sha256,
       prompt: input.prompt, cache: input.cache, empty: input.empty, maskSize: input.maskSize });
     row.capture = path.join(out, `${input.name}.png`); await page.screenshot({ path: row.capture, fullPage: true });
-    row.summary = { instances: row.output.instances.map(({ index, score, box, foregroundPixelCount }) => ({ index, score, box, foregroundPixelCount })),
-      servingTimings: row.output.servingTimings, imageCache: row.output.imageCache.status };
-    delete row.output;
-    report.runs.push(row); await persist();
+    row.summary = { instances: output.instances.map(({ index, score, box, foregroundPixelCount }) => ({ index, score, box, foregroundPixelCount })),
+      servingTimings: output.servingTimings, imageCache: output.imageCache.status };
+    await persist();
     for (const kind of ['mask', 'cutout']) {
       const event = page.waitForEvent('download'); await page.locator(`#save-${kind}`).click();
       const pngPath = path.join(out, `${input.name}-${kind}.png`);
@@ -181,17 +208,22 @@ try {
       assert.equal(pixels.mismatches, 0, `${kind} export differs from displayed source-sized selection`);
       (row.exports ||= []).push({ kind, path: pngPath, sha256: hash(bytes), ...pixels });
     }
+    row.provenanceTransferAttempted = true;
+    await persist();
     const provenanceEvent = page.waitForEvent('download');
     await page.locator('#save-provenance').click();
     row.provenancePath = path.join(out, `${input.name}-provenance.json`);
     await (await provenanceEvent).saveAs(row.provenancePath);
     const provenanceBytes = await fs.readFile(row.provenancePath), provenance = JSON.parse(provenanceBytes);
+    row.provenanceSha256 = hash(provenanceBytes);
+    await persist();
     assert.equal(provenance.request.invocationId, row.invocationId, 'exported provenance invocation changed');
     assert.equal(provenance.source.sha256, input.sha256, 'exported provenance source changed');
     assert.equal(provenance.request.promptText, input.prompt, 'exported provenance prompt changed');
     assert.equal(provenance.runtimeEvidence.status, 'executed', 'exported runtime evidence incomplete');
-    row.provenanceSha256 = hash(provenanceBytes);
+    row.validation = { status: 'passed', partial: false };
     await persist();
+    activeRow = null;
   }
   report.phase = 'mobile';
   await page.setViewportSize({ width: 390, height: 844 });
@@ -204,9 +236,9 @@ try {
   assert.deepEqual(report.errors, []);
   report.status = 'succeeded'; report.phase = null;
 } catch (error) {
-  report.error = { message: error.message, stack: error.stack }; process.exitCode = 1;
-  if (page && !page.isClosed()) {
-    try { await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }); }
+  await finalizeSamImageFailure(report, error, collectTrial, persist, saveFailureArtifacts); process.exitCode = 1;
+  if (page) {
+    try { if (!page.isClosed()) await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }); }
     catch (captureError) { report.captureError = captureError.message; }
   }
 } finally {

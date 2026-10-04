@@ -72,7 +72,8 @@ function expectedDomains(route, s, index) {
   } else if (route === 'sam-pixel-decoder') {
     const level = s.levels[s.levels.length - 2 - index];
     add('upsample-add conv3x3 groupnorm-relu', b * level.height * level.width * c);
-    add('groupnorm-stats', b * s.groups, 1);
+    add('groupnorm-stats', b * s.groups, 256);
+    result['groupnorm-stats'].perWorkgroup = true;
   } else {
     add('mask-embedder-layer-0 mask-embedder-layer-1 mask-embedder-layer-2', b * s.maskTokens * c);
     add('instance-projection-1x1', b * c * s.height * s.width);
@@ -147,12 +148,16 @@ function checkProduction(route, source, shape, index = 0) {
     };
   }
   bindings.onlineAttentionDispatch = onlineAttentionDispatch;
+  bindings.createLinearDispatch = (total, options) => {
+    logicalTotal = total;
+    return createLinearDispatch(total, options);
+  };
   const expected = expectedDomains(route, shape, index), observed = {};
   const tokens = Object.fromEntries(kernelTokens[route].split(' ').map(pair => pair.split(':')));
   const expectedShaders = Object.fromEntries(Object.entries(shaderClasses[route]).flatMap(([shader, kernels]) => kernels.split(' ').map(kernel => [kernel, `${shader}_WGSL`])));
   assert.deepEqual(Object.keys(expectedShaders).sort(), Object.values(tokens).sort(), `${route}: shader/domain coverage`);
   assert.deepEqual(Object.keys(tokens).sort(), Object.keys(expected).sort(), `${route}: kernel/domain coverage`);
-  const phases = [...run.matchAll(/\{ name: (`[^`]+`|'[^']+'), kernel: (.+?), dispatch: (.+?), yieldAfter: true \}/g)];
+  const phases = [...run.matchAll(/\{ name: (`[^`]+`|'[^']+'), kernel: (.+?), dispatch: (.+?), yieldAfter: true \}/gs)];
   assert.equal(phases.length, [...run.matchAll(/dispatch:/g)].length, `${route}: every production dispatch must be inspected`);
   for (const [, nameExpression, kernelExpression, dispatchExpression] of phases) {
     const fullName = evaluate(nameExpression);
@@ -174,10 +179,13 @@ function checkProduction(route, source, shape, index = 0) {
     logicalTotal = undefined;
     vectorDispatch = undefined;
     const dispatch = [].concat(evaluate(dispatchExpression));
-    const { total, size, dispatch: nativeDispatch } = expected[name];
+    const { total, size, dispatch: nativeDispatch, perWorkgroup } = expected[name];
     if (nativeDispatch) {
       assert.deepEqual(dispatch, nativeDispatch, `${fullName}: native query/head/batch grid`);
       assert.equal(dispatch[0] * dispatch[1] * dispatch[2] * (shape.channels / shape.heads), total, `${fullName}: logical output domain`);
+    } else if (perWorkgroup) {
+      assert.equal(logicalTotal, total, `${fullName}: logical group domain`);
+      assert.deepEqual(dispatch, createLinearDispatch(total, { workgroupSize: 1, maxWorkgroupsPerDimension: 65535 }), `${fullName}: group grid`);
     } else if (vector) {
       assert.equal(logicalTotal, total, `${fullName}: logical domain`);
       assert.deepEqual(dispatch, vectorDispatch, `${fullName}: vector grid`);
@@ -201,6 +209,14 @@ for (const route of ['sam-detr-encoder', 'sam-detr-decoder', 'sam-pixel-decoder'
     shape.headDim = shape.channels / shape.heads;
     if (route === 'sam-mask-tail') { shape.height *= 4; shape.width *= 4; }
     for (const index of route === 'sam-pixel-decoder' ? [0, 1] : [0, 5]) checkProduction(route, source, shape, index);
+    if (route === 'sam-pixel-decoder') {
+      const missingGroups = source.replace('createLinearDispatch(shape.batch * shape.groups,', 'createLinearDispatch(shape.batch,');
+      assert.notEqual(missingGroups, source);
+      assert.throws(() => checkProduction(route, missingGroups, shape), /logical group domain/);
+      const serialShader = source.replace('@workgroup_size(256)', '@workgroup_size(1)');
+      assert.notEqual(serialShader, source);
+      assert.throws(() => checkProduction(route, serialShader, shape), /workgroup class/);
+    }
     if (route === 'sam-mask-tail') {
       const bad = source.replace("kernel: 'decodeMask', dispatch: workgroups(maskTotal, input.device)", "kernel: 'decodeMask', dispatch: workgroups(shape.batch, input.device)");
       assert.notEqual(bad, source);
