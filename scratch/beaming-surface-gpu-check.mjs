@@ -42,17 +42,21 @@ export async function measureSurfaceGPU({device,graph,front,back,dimensions}) {
   const read=device.createBuffer({size:256,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
   const result={status:'measured',scope:'isolated reconstruction dispatch span on actual authored receiver graph; excludes gather and rendering',vertices:graph.count,edges:graph.neighbors.length,samples:[]};
   try {
-    for(const passes of [0,8,32])for(let repeat=0;repeat<8;repeat++) {
+    for(const passes of [8,32])for(let repeat=0;repeat<8;repeat++) {
+      const started=performance.now();
       const encoder=device.createCommandEncoder();
       for(const [i,source] of [front,back].entries())encoder.copyTextureToTexture({texture:source},{texture:textures[i]},dimensions);
-      encoder.beginComputePass({timestampWrites:{querySet:queries,beginningOfPassWriteIndex:0}}).end();
-      filter.encode(encoder,passes);
-      encoder.beginComputePass({timestampWrites:{querySet:queries,endOfPassWriteIndex:1}}).end();
+      let passIndex=0;
+      filter.encode({beginComputePass(descriptor){
+        const i=passIndex++,timestampWrites={querySet:queries,...(i===0?{beginningOfPassWriteIndex:0}:{}),...(i===passes-1?{endOfPassWriteIndex:1}:{})};
+        return encoder.beginComputePass({...descriptor,...(i===0||i===passes-1?{timestampWrites}:{})});
+      }},passes);
       encoder.resolveQuerySet(queries,0,2,resolve,0);encoder.copyBufferToBuffer(resolve,0,read,0,16);
       device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
-      const times=new BigUint64Array(read.getMappedRange());const ms=Number(times[1]-times[0])/1e6;read.unmap();
-      if(!Number.isFinite(ms)||ms<0)throw new Error('invalid GPU timestamp span');
-      result.samples.push({passes,repeat,ms});
+      const times=new BigUint64Array(read.getMappedRange()),ticks=Array.from(times.slice(0,2),String);const ms=Number(times[1]-times[0])/1e6;read.unmap();
+      const wallMs=performance.now()-started,valid=ticks[0]!=='0'&&Number.isFinite(ms)&&ms>=0&&ms<=wallMs+1;
+      result.samples.push({passes,repeat,ms,ticks,wallMs,valid});
+      if(!valid)result.status='invalid-timestamp-evidence';
     }
     return result;
   }finally{filter.destroy();textures.forEach(t=>t.destroy());queries.destroy();resolve.destroy();read.destroy();}
