@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Vector3, Quaternion } from 'three';
-import { inspectGpuConformance, inspectGpuArchLoad } from './structural-material-arch-gpu-evidence.mjs';
+import { inspectGpuConformance, inspectGpuArchLoad, inspectGpuArchRendererLifetime } from './structural-material-arch-gpu-evidence.mjs';
 
 const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load'] = process.argv.slice(2);
 if (!outputInput || !executableInput) throw new Error('usage: node structural-material-arch-gpu-smoke.mjs OUTPUT.json INDEPENDENT_CHROME [PAGE]');
@@ -247,6 +247,14 @@ try {
   }
   if(isArch&&exercise==='controls'){
     report.phase='live-clock-and-recovery';save();await liveClock();const knownFailures=[];
+    const lifetimeBaseline=await evaluate('window.__archCollapse.rendererLifetime()');
+    report.rendererLifetimes=[{name:'before-reset',...lifetimeBaseline}];save();
+    check('active renderer lifetime baseline is observed',!inspectGpuArchRendererLifetime(lifetimeBaseline,lifetimeBaseline).length,lifetimeBaseline);
+    async function checkLifetime(name){
+      const current=await evaluate('window.__archCollapse.rendererLifetime()');
+      report.rendererLifetimes.push({name,...current});save();
+      check(`${name}: Reset releases old compute registrations`,!inspectGpuArchRendererLifetime(current,lifetimeBaseline).length,current);
+    }
     for(const initiallyPaused of [false,true]){
       if(!initiallyPaused)await evaluate('document.querySelector("#pause").click()');
       const before=await witness();check('recovery starts in the intended clock state',before.paused===initiallyPaused,before.paused);
@@ -254,9 +262,15 @@ try {
       const failed=await witness();check('the injected fault is visible and stops the live clock',failed.phase==='failed'&&failed.paused===true&&failed.failure.message==='injected native recovery fault'&&failed.failures.length===knownFailures.length+1,failed.failure);
       knownFailures.push(failed.failure);report.expectedRecoveryFaults=[...knownFailures];save();
       await evaluate('window.__archCollapse.reset()');const recovered=await capture(`recovered-${initiallyPaused?'paused':'live'}`,undefined,knownFailures);
+      await checkLifetime(`recovered-${initiallyPaused?'paused':'live'}`);
       check('Reset preserves the pre-failure clock and failure history',recovered.paused===initiallyPaused&&recovered.failures.length===knownFailures.length&&JSON.stringify(recovered.camera)===JSON.stringify(before.camera),{paused:recovered.paused,failures:recovered.failures.length});
       if(!initiallyPaused)await evaluate('(async()=>{document.querySelector("#pause").click();await window.__archCollapse.advance(0);})()');
     }
+    for(let reset=1;reset<=3;reset++){
+      await evaluate('(async()=>{await window.__archCollapse.reset();await window.__archCollapse.advance(3);})()');
+      await checkLifetime(`repeat-reset-${reset}`);
+    }
+    await capture('repeated-reset-standing',undefined,knownFailures);
   }
   report.status='passed';report.phase='complete';save();
 }catch(error){report.status='failed';report.failure={phase:report.phase,message:error.message,stack:error.stack};save();process.exitCode=1;

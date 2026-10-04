@@ -13344,6 +13344,12 @@ var ArchGpuEngine = class extends PhysicsEngine {
     const errors = [];
     const owners = [this, this.integration, this.derivedInertia, this.contactGeneration, this.broadPhase, this.avbdState, this.playerControl];
     const attributes = new Set(owners.flatMap((owner) => Object.values(owner ?? {}).filter((value) => value?.isStorageBufferAttribute)));
+    const computeNodes = new Set(owners.flatMap((owner) => Object.values(owner ?? {}).filter((value) => value?.isComputeNode)));
+    for (const node of computeNodes) try {
+      node.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
     for (const buffer of this.archOwnedBuffers) try {
       buffer.destroy();
     } catch (error) {

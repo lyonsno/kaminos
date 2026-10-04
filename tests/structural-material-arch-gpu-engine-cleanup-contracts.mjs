@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import Renderer from 'three/src/renderers/common/Renderer.js';
+import Pipelines from 'three/src/renderers/common/Pipelines.js';
 import { ArchGpuEngine, ENGINE_REVISION } from '../dist/structural-material-arch-gpu-engine.js';
 import { profile } from './helpers/arch-gpu-adapter-fixture.mjs';
 
@@ -8,6 +10,19 @@ Object.assign(globalThis, {
   GPUBufferUsage: { MAP_READ: 1, MAP_WRITE: 2, COPY_SRC: 4, COPY_DST: 8, INDEX: 16, VERTEX: 32, UNIFORM: 64, STORAGE: 128, INDIRECT: 256, QUERY_RESOLVE: 512 },
   GPUShaderStage: { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 }, GPUMapMode: { READ: 1, WRITE: 2 },
 });
+
+// Keep the real pinned renderer registration and pipeline cache across acquisitions.
+// Only shader building, bindings and device execution are substituted here.
+const nodeStates = new Map(), computeBindings = new Map();
+const nodes = { nodeFrame: { renderId: 0 }, updateForCompute() {},
+  getForCompute(node) {
+    if (!nodeStates.has(node)) nodeStates.set(node, { computeShader: `test shader ${node.name}`, transforms: [], nodeAttributes: [] });
+    return nodeStates.get(node);
+  }, delete(node) { nodeStates.delete(node); } };
+const bindings = { updateForCompute(node) { if (!computeBindings.has(node)) computeBindings.set(node, []); },
+  getForCompute: node => computeBindings.get(node), deleteForCompute: node => computeBindings.delete(node) };
+const pipelines = new Pipelines({ createProgram() {}, createComputePipeline() {} }, nodes);
+let acquisitionId = 0;
 
 async function acquisition(fault) {
   const buffers = [], attributes = new Map(), destroyedAttributes = [], engines = [];
@@ -28,6 +43,7 @@ async function acquisition(fault) {
       copyBufferToBuffer() {}, finish: () => ({}) }),
   };
   const backend = { isWebGPUBackend: true, device,
+    updateTimeStampUID() {}, getTimestampUID: () => 0, beginCompute() {}, compute() {}, finishCompute() {},
     get(attribute) { return attributes.get(attribute) ?? {}; },
     createStorageAttribute(attribute) {
       if (!attributes.has(attribute)) attributes.set(attribute, { buffer: device.createBuffer({ label: attribute.name || 'Engine storage attribute', size: attribute.array.byteLength }) });
@@ -35,11 +51,14 @@ async function acquisition(fault) {
     },
     destroyAttribute(attribute) { attributes.get(attribute).buffer.destroy(); attributes.delete(attribute); destroyedAttributes.push(attribute); },
   };
-  const renderer = { backend, compute() {
+  const renderer = { backend, _initialized: true, _nodes: nodes, _bindings: bindings, _pipelines: pipelines,
+    info: { calls: 0, compute: { calls: 0, frameCalls: 0 } }, inspector: { beginCompute() {}, finishCompute() {} },
+    compute(...args) {
     const engine = engines.at(-1);
     for (const owner of [engine, ...Object.values(engine).filter(value => value && typeof value === 'object' && !ArrayBuffer.isView(value))]) {
       for (const value of Object.values(owner)) if (value?.isStorageBufferAttribute || value?.isIndirectStorageBufferAttribute) backend.createStorageAttribute(value);
     }
+    return Renderer.prototype.compute.apply(this, args);
   } };
   class ObservedEngine extends ArchGpuEngine { constructor(...args) { super(...args); engines.push(this); } }
   globalThis.__archOwnedEngine = { ArchGpuEngine: ObservedEngine, ENGINE_REVISION };
@@ -48,7 +67,7 @@ async function acquisition(fault) {
     .replace("import { ArchGpuEngine, ENGINE_REVISION } from './dist/structural-material-arch-gpu-engine.js';", 'const { ArchGpuEngine, ENGINE_REVISION } = globalThis.__archOwnedEngine;')
     .replaceAll("'./structural-material-arch-gpu-fixture.js'", JSON.stringify(new URL('../structural-material-arch-gpu-fixture.js', import.meta.url).href))
     .replaceAll("'./structural-material-arch-gpu-kernels.js'", JSON.stringify(new URL('../structural-material-arch-gpu-kernels.js', import.meta.url).href));
-  const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#engine-owner-${fault ?? 'success'}`);
+  const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#engine-owner-${++acquisitionId}`);
   if (fault) await assert.rejects(module.createGpuArchCollapse(profile, renderer, { gravityRampSeconds: 0 }), new RegExp(`injected ${fault} rejection`));
   else {
     const model = await module.createGpuArchCollapse(profile, renderer, { gravityRampSeconds: 0 });
@@ -62,13 +81,17 @@ async function acquisition(fault) {
   assert.ok(buffers.length > (fault === 'partial-stage' ? 0 : 6), 'real pinned engine acquires resources beyond the adapter, including a partial stage');
   assert.ok(buffers.every(buffer => buffer.destroyed === 1), `${fault ?? 'success'} must release every actual engine and adapter buffer exactly once; ${buffers.filter(buffer => buffer.destroyed !== 1).length} escaped`);
   assert.equal(attributes.size, 0, 'no nested allocated storage attributes remain');
+  assert.equal(pipelines.caches.size, 0, `${fault ?? 'success'} leaves no old arch compute pipelines in the shared renderer`);
+  assert.equal(pipelines.programs.compute.size, 0, 'unused compute programs are released');
+  assert.equal(nodeStates.size, 0, 'renderer node state is released');
+  assert.equal(computeBindings.size, 0, 'renderer compute bindings are released');
   if (engines[0].broadPhase) {
     assert.equal(engines[0].broadPhase.gpuBVHs.length, 0, 'all-pairs engine must not start unused async BVH acquisition');
     assert.equal(engines[0].broadPhase.prewarmInFlight, null);
   }
-  return { fault: fault ?? 'success', allocated: buffers.length, destroyed: buffers.reduce((sum, buffer) => sum + buffer.destroyed, 0), attributesDestroyed: destroyedAttributes.length };
+  return { fault: fault ?? 'success', allocated: buffers.length, destroyed: buffers.reduce((sum, buffer) => sum + buffer.destroyed, 0), attributesDestroyed: destroyedAttributes.length, retainedComputePipelines: pipelines.caches.size };
 }
 
 const evidence = [];
-for (const fault of ['compilation', 'pipeline', 'readback', 'partial-stage', null]) evidence.push(await acquisition(fault));
+for (const fault of ['compilation', 'pipeline', 'readback', 'partial-stage', null, null, null]) evidence.push(await acquisition(fault));
 console.log(JSON.stringify({ engineRevision: ENGINE_REVISION, resourceOwnership: evidence }));

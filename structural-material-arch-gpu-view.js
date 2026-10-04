@@ -85,7 +85,7 @@ try {
       return{bright,total:width*height,fraction:bright/(width*height),source:'actual-webgpu-presentation-texture',format:texture.format};
     }finally{buffer.destroy();}
   }
-  window.__archCollapse={advance:count=>serialize('Advance',()=>advance(count)),reset:()=>serialize('Reset',rebuild),release:()=>{release();model.release();synchronize();},projectWorld:project,bind:index=>model.bind(index),
+  window.__archCollapse={rendererLifetime:()=>({source:'three-0.183.0-renderer-compute-cache',computePipelines:[...renderer._pipelines.caches.values()].filter(pipeline=>pipeline.isComputePipeline).length,computePrograms:renderer._pipelines.programs.compute.size}),advance:count=>serialize('Advance',()=>advance(count)),reset:()=>serialize('Reset',rebuild),release:()=>{release();model.release();synchronize();},projectWorld:project,bind:index=>model.bind(index),
     witness:()=>{const surfaces=targets();return{phase,failure,failures:[...failures],identity,route:ARCH_GPU_ROUTE,effectiveUrl:location.href,profilePath,constructionSource:profile.constructionSource,source:source.source,viewport:{width:innerWidth,height:innerHeight},paused,mode,lastPick,contactPointer,camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray()},state:model.snapshot(),rendererPoses:meshes.map(mesh=>({index:mesh.userData.index,position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray()})),surfaceTargets:surfaces,pickTargets:surfaces.filter(item=>item.layer===2&&item.normal[2]===1)};},pixels};
   requestAnimationFrame(frame);
 }catch(error){fail('Startup',error);window.__archCollapse={witness:()=>({phase,failure,failures:[...failures],route:ARCH_GPU_ROUTE,effectiveUrl:location.href,identity,state:model?.snapshot()??null})};}

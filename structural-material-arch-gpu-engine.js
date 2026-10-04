@@ -34,6 +34,9 @@ export class ArchGpuEngine extends PhysicsEngine {
     // The pinned stages share attributes; raw acquisition is tracked even if a stage constructor rejects.
     const owners = [this, this.integration, this.derivedInertia, this.contactGeneration, this.broadPhase, this.avbdState, this.playerControl];
     const attributes = new Set(owners.flatMap(owner => Object.values(owner ?? {}).filter(value => value?.isStorageBufferAttribute)));
+    const computeNodes = new Set(owners.flatMap(owner => Object.values(owner ?? {}).filter(value => value?.isComputeNode)));
+    // Node disposal releases this engine's renderer pipelines, bindings and node state.
+    for (const node of computeNodes) try { node.dispose(); } catch (error) { errors.push(error); }
     for (const buffer of this.archOwnedBuffers) try { buffer.destroy(); } catch (error) { errors.push(error); }
     for (const attribute of attributes) try {
       if (renderer.backend.get(attribute)?.buffer) renderer.backend.destroyAttribute(attribute);

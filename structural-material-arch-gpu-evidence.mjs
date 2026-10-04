@@ -16,6 +16,20 @@ export function inspectGpuConformance(report) {
   return errors;
 }
 
+export function inspectGpuArchRendererLifetime(current, baseline) {
+  const errors = [];
+  for (const [name, value] of [['baseline', baseline], ['current', current]]) {
+    if (value?.source !== 'three-0.183.0-renderer-compute-cache') errors.push(`${name}: unverified renderer lifetime source`);
+    for (const key of ['computePipelines', 'computePrograms']) {
+      if (!Number.isInteger(value?.[key]) || value[key] <= 0) errors.push(`${name}: missing active ${key}`);
+    }
+  }
+  if (!errors.length) for (const key of ['computePipelines', 'computePrograms']) {
+    if (current[key] !== baseline[key]) errors.push(`${key} changed across Reset: ${baseline[key]} -> ${current[key]}`);
+  }
+  return errors;
+}
+
 export function inspectGpuArchLoad(witness, expected = { layers:3, strength:80, timeStep:1/60, gripRadius:.55, gravityRampSeconds:.5 }, expectedFailures = []) {
   const errors=[],identity=witness?.identity,state=witness?.state;
   if(witness?.phase!=='interactive'||witness?.route!=='kaminos.structural-material.arch-gravity-collapse.webgpu-avbd.v0')errors.push('Wrong or failed arch route');
