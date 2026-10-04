@@ -1,3 +1,5 @@
+import { WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+
 const STANDARD_DIMS = `
 struct AttentionDims {
   batch: u32,
@@ -96,6 +98,7 @@ function createOnlineAttentionWgsl({
   kBase,
   vIndex,
   scoreAdjustment = '',
+  queryOffset = '',
 }) {
   return `${dimsStruct}
 
@@ -116,7 +119,7 @@ fn main(
   @builtin(local_invocation_index) dimension: u32,
   @builtin(workgroup_id) workgroup: vec3<u32>,
 ) {
-  let query = workgroup.x;
+  let query = workgroup.x${queryOffset};
   let head = workgroup.y;
   let batch = workgroup.z;
   if (
@@ -189,6 +192,40 @@ const standard = {
 };
 
 export const SAM_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl(standard);
+
+export const SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
+  ...standard,
+  extraBinding: '\nstruct QueryRange { query_offset: u32, };\n@group(0) @binding(5) var<uniform> query_range: QueryRange;',
+  queryOffset: ' + query_range.query_offset',
+});
+
+// 123 ms / 5184 queries projects to about 6.1 ms per 256-query phase.
+// This partitions execution, never the full query/key tensor dimensions.
+export function partitionSamAttentionPhase(phase, kernels, runtime) {
+  const [queries, heads, batches] = phase.dispatch;
+  onlineAttentionDispatch(queries, heads, batches, 64);
+  const chunks = [];
+  const template = kernels[phase.kernel];
+  for (let offset = 0; offset < queries; offset += 256) {
+    const kernel = `${phase.kernel}Query${offset}`;
+    const range = runtime.createUniformBuffer({
+      label: `${kernel}.query-range`,
+      schema: [{ name: 'query_offset', type: 'u32' }],
+      values: { query_offset: offset },
+    });
+    kernels[kernel] = {
+      ...template,
+      bindings: [...template.bindings, { name: 'queryRange', resource: range, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }],
+    };
+    chunks.push({
+      ...phase,
+      name: offset === 0 ? phase.name : `${phase.name}-query-${offset}`,
+      kernel,
+      dispatch: [Math.min(256, queries - offset), heads, batches],
+    });
+  }
+  return chunks;
+}
 
 export const SAM_MASKED_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
   ...standard,

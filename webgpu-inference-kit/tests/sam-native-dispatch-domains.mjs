@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './sam-attention-query-partition-contracts.mjs';
 import { readFileSync } from 'node:fs';
 import { createLinearDispatch } from '../src/runtime-primitives.js';
 import {
@@ -6,6 +7,7 @@ import {
   SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL,
   SAM_MASKED_ONLINE_ATTENTION_WGSL,
   SAM_ONLINE_ATTENTION_WGSL,
+  SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL,
   onlineAttentionDispatch,
 } from '../src/sam-online-attention-wgsl.js';
 import {
@@ -26,7 +28,7 @@ const shaderClasses = {
   'sam-detr-encoder': {
     LAYERNORM: 'LayerNorm1 LayerNorm2 LayerNorm3', ADD: 'AddPos SelfResidual CrossResidual MlpResidual',
     SAM_VECTOR_LINEAR: 'SelfQ SelfK SelfV SelfOutput CrossQ CrossK CrossV CrossOutput MlpFc2',
-    SAM_VECTOR_LINEAR_RELU: 'MlpFc1Relu', SAM_ONLINE_ATTENTION: 'SelfAttention', SAM_MASKED_ONLINE_ATTENTION: 'CrossAttention',
+    SAM_VECTOR_LINEAR_RELU: 'MlpFc1Relu', SAM_QUERY_RANGE_ONLINE_ATTENTION: 'SelfAttention', SAM_MASKED_ONLINE_ATTENTION: 'CrossAttention',
   },
   'sam-detr-decoder': {
     LAYERNORM: 'SelfNorm TextNorm VisionNorm MlpNorm OutputNorm PresenceNorm',
@@ -90,6 +92,7 @@ function checkProduction(route, source, shape, index = 0) {
   if (route === 'sam-detr-decoder') bindings.k = evaluate(run.match(/const k = ([^;]+);/)[1]);
   const shaders = {
     SAM_ONLINE_ATTENTION_WGSL,
+    SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL,
     SAM_MASKED_ONLINE_ATTENTION_WGSL,
     SAM_DECODER_MASKED_ONLINE_ATTENTION_WGSL,
     SAM_BIASED_ONLINE_ATTENTION_WGSL,
@@ -158,7 +161,15 @@ function checkProduction(route, source, shape, index = 0) {
   assert.deepEqual(Object.keys(expectedShaders).sort(), Object.values(tokens).sort(), `${route}: shader/domain coverage`);
   assert.deepEqual(Object.keys(tokens).sort(), Object.keys(expected).sort(), `${route}: kernel/domain coverage`);
   const phases = [...run.matchAll(/\{ name: (`[^`]+`|'[^']+'), kernel: (.+?), dispatch: (.+?), yieldAfter: true \}/gs)];
-  assert.equal(phases.length, [...run.matchAll(/dispatch:/g)].length, `${route}: every production dispatch must be inspected`);
+  // Keep the original full-domain template check; pixel runtime-capture
+  // contracts independently exercise the expanded chunk bindings and order.
+  const pixelChunkDispatches = route === 'sam-pixel-decoder'
+    ? [...run.matchAll(/dispatch: workgroups\(chunk\.count, input\.device\)/g)].length : 0;
+  if (route === 'sam-pixel-decoder') {
+    assert.equal(pixelChunkDispatches, 1, 'pixel convolution expansion must use the complete chunk count');
+    assert.match(run, /phases\.splice\(convolutionPhaseIndex, 1, \.\.\.chunks\.map/);
+  }
+  assert.equal(phases.length + pixelChunkDispatches, [...run.matchAll(/dispatch:/g)].length, `${route}: every production dispatch must be inspected`);
   for (const [, nameExpression, kernelExpression, dispatchExpression] of phases) {
     const fullName = evaluate(nameExpression);
     const name = route === 'sam-mask-tail' ? fullName : fullName.replace(/^(detr-encoder|detr-decoder|pixel)-/, '').replace(/-\d+$/, '');

@@ -71,6 +71,8 @@ struct PixelStageDims {
   target_width: u32,
   total: u32,
   groups: u32,
+  output_start: u32,
+  output_count: u32,
 };
 
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
@@ -81,7 +83,9 @@ struct PixelStageDims {
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
+  let local_index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
+  if (local_index >= dims.output_count) { return; }
+  let index = dims.output_start + local_index;
   if (index >= dims.total) { return; }
   let out_channel = index % dims.channels;
   let x = (index / dims.channels) % dims.target_width;
@@ -449,6 +453,22 @@ function workgroups(total, device) {
   });
 }
 
+export function createSamPixelConvolutionChunks(shape, level) {
+  for (const value of [shape.batch, shape.channels, level.height, level.width]) {
+    if (!Number.isSafeInteger(value) || value <= 0) throw new Error('pixel convolution dimensions must be positive safe integers');
+  }
+  const total = levelElementCount(shape, level);
+  if (!Number.isSafeInteger(total) || total > 0xffffffff) throw new Error('pixel convolution output exceeds u32 indexing');
+  // Native 288x288x256 took 243ms as one dispatch. Eight rows target ~7ms;
+  // scale the output range by input-channel work while retaining every value.
+  const chunkSize = Math.max(64, Math.floor((8 * 288 * 256 * 256) / shape.channels / 64) * 64);
+  const chunks = [];
+  for (let offset = 0; offset < total; offset += chunkSize) {
+    chunks.push({ offset, count: Math.min(chunkSize, total - offset) });
+  }
+  return chunks;
+}
+
 export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const projection = validatePixelDecoderInputs(input.tensors || {});
@@ -563,6 +583,27 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
         }), yieldAfter: true },
         { name: `pixel-groupnorm-relu-${index}`, kernel: `groupnormRelu${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
       );
+      const convolutionPhaseIndex = phases.length - 3;
+      const convolutionPhase = phases[convolutionPhaseIndex];
+      const convolutionKernel = kernels[convolutionPhase.kernel];
+      const sourceLevel = shape.levels[shape.levels.length - 1 - index];
+      const chunks = createSamPixelConvolutionChunks(shape, targetLevel);
+      phases.splice(convolutionPhaseIndex, 1, ...chunks.map((chunk, chunkIndex) => {
+        const name = chunkIndex === 0 ? convolutionPhase.name : `${convolutionPhase.name}-chunk-${chunkIndex}`;
+        const kernel = chunkIndex === 0 ? convolutionPhase.kernel : `${convolutionPhase.kernel}Chunk${chunkIndex}`;
+        const uniform = `convDims${index}Chunk${chunkIndex}`;
+        uniforms[uniform] = runtime.createUniformBuffer({
+          label: `sam3.pixel-decoder.${index}.conv-chunk-${chunkIndex}`,
+          schema: ['batch', 'channels', 'source_height', 'source_width', 'target_height', 'target_width', 'total', 'groups', 'output_start', 'output_count'].map(name => ({ name, type: 'u32' })),
+          values: { batch: shape.batch, channels: shape.channels, source_height: sourceLevel.height, source_width: sourceLevel.width, target_height: targetLevel.height, target_width: targetLevel.width, total, groups: shape.groups, output_start: chunk.offset, output_count: chunk.count },
+        });
+        kernels[kernel] = {
+          ...convolutionKernel,
+          bindings: convolutionKernel.bindings.map(binding => binding.name === 'dims' ? { ...binding, resource: `uniform:${uniform}` } : binding),
+        };
+        return { ...convolutionPhase, name, kernel, dispatch: workgroups(chunk.count, input.device),
+          metadata: { outputStart: chunk.offset, outputCount: chunk.count, totalOutput: total } };
+      }));
     }
     phases.push({ name: 'readback-pixel-embed', readbacks: [{ name: 'pixelEmbed', tensor: `normalized${stageCount - 1}` }] });
     const program = runtime.defineProgram({

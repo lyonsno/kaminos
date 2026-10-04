@@ -45,7 +45,7 @@ function assertStaticQkTree(name, shader) {
 }
 
 const shaders = Object.entries(attention).filter(([name]) => name.endsWith('_WGSL'));
-assert.equal(shaders.length, 7, 'every shared attention variant must exercise the static QK contract');
+assert.equal(shaders.length, 8, 'every shared attention variant must exercise the static QK contract');
 for (const [name, shader] of shaders) {
   assertStaticQkTree(name, shader);
   assert.throws(() => assertStaticQkTree(name, shader.replace(
