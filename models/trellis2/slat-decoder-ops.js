@@ -60,6 +60,8 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>,@builtin(workgroup_id) wid:v
 
 export function slatDecoderNormShader(rows, channels, affine = true, half = true, eps = 1e-6) {
   const end = affine ? 3 : 1;
+  // MLX0.32.3 layer_norm.metal casts normalized input to T before affine;
+  // T is half for the decoder torso. F32 endpoints keep their F32 value.
   return `${round}${binding(0, 'input')}${affine ? binding(1, 'weight') + binding(2, 'bias') : ''}${binding(end, 'output', 'f32', true)}
 var<workgroup> partial:array<f32,256>;
 @compute @workgroup_size(256)
@@ -72,7 +74,7 @@ fn main(@builtin(local_invocation_index) lane:u32,@builtin(workgroup_id) wid:vec
  for(var stride=128u;stride>0u;stride/=2u){if(lane<stride){partial[lane]+=partial[lane+stride];}workgroupBarrier();}
  let inverse=inverseSqrt(partial[0]/${channels}.0+${eps});
  for(var c=lane;c<${channels}u;c+=256u){var value=(input[row*${channels}u+c]-mean)*inverse;
-  ${affine ? 'value=value*weight[c]+bias[c];' : ''}output[row*${channels}u+c]=${half ? 'round_f16(value)' : 'value'};}
+  ${affine ? `value=${half ? 'round_f16(value)' : 'value'}*weight[c]+bias[c];` : ''}output[row*${channels}u+c]=${half ? 'round_f16(value)' : 'value'};}
 }`;
 }
 
