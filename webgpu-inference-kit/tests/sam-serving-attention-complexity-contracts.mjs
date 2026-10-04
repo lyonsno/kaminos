@@ -15,7 +15,7 @@ const consumers = [
   ['DETR decoder', 'sam-detr-decoder-phase-program.js', /detr-decoder-vision-attention-softmax/, /onlineAttentionDispatch\(shape\.queryTokens \+ 1, shape\.heads, shape\.batch, shape\.headDim\)/],
 ];
 const productionBindings = [
-  ['ViT', 'sam-image-vit-block-stack-phase-program.js', 'SAM_VIT_ONLINE_ATTENTION_WGSL', /attention:\s*\{\s*code:\s*SAM_VIT_ONLINE_ATTENTION_WGSL/],
+  ['ViT', 'sam-image-vit-block-stack-phase-program.js', 'SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL', /attention:\s*\{\s*code:\s*SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL/],
   ['prompt text', 'sam-prompt-text-ingress-phase-program.js', 'SAM_CAUSAL_MASKED_ONLINE_ATTENTION_WGSL', /registerLayerKernel\(`\$\{prefix\}\.attention`,\s*SAM_CAUSAL_MASKED_ONLINE_ATTENTION_WGSL/],
   ['prompt FPN', 'sam-prompt-fpn-phase-program.js', 'SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL', /attention:\s*\{\s*code:\s*SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL/],
 ];
@@ -45,7 +45,7 @@ function assertStaticQkTree(name, shader) {
 }
 
 const shaders = Object.entries(attention).filter(([name]) => name.endsWith('_WGSL'));
-assert.equal(shaders.length, 8, 'every shared attention variant must exercise the static QK contract');
+assert.equal(shaders.length, 9, 'every shared attention variant must exercise the static QK contract');
 for (const [name, shader] of shaders) {
   assertStaticQkTree(name, shader);
   assert.throws(() => assertStaticQkTree(name, shader.replace(

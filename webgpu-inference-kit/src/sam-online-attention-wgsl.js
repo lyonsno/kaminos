@@ -201,12 +201,13 @@ export const SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
 
 // 123 ms / 5184 queries projects to about 6.1 ms per 256-query phase.
 // This partitions execution, never the full query/key tensor dimensions.
-export function partitionSamAttentionPhase(phase, kernels, runtime) {
+export function partitionSamAttentionPhase(phase, kernels, runtime, queriesPerPhase = 256) {
   const [queries, heads, batches] = phase.dispatch;
   onlineAttentionDispatch(queries, heads, batches, 64);
+  positiveDispatchDimension(queriesPerPhase, 'queriesPerPhase');
   const chunks = [];
   const template = kernels[phase.kernel];
-  for (let offset = 0; offset < queries; offset += 256) {
+  for (let offset = 0; offset < queries; offset += queriesPerPhase) {
     const kernel = `${phase.kernel}Query${offset}`;
     const range = runtime.createUniformBuffer({
       label: `${kernel}.query-range`,
@@ -221,7 +222,7 @@ export function partitionSamAttentionPhase(phase, kernels, runtime) {
       ...phase,
       name: offset === 0 ? phase.name : `${phase.name}-query-${offset}`,
       kernel,
-      dispatch: [Math.min(256, queries - offset), heads, batches],
+      dispatch: [Math.min(queriesPerPhase, queries - offset), heads, batches],
     });
   }
   return chunks;
@@ -291,7 +292,7 @@ export const SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
       }`,
 });
 
-export const SAM_VIT_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
+const vit = {
   dimsStruct: VIT_DIMS,
   dimsType: 'BlockDims',
   queryTokens: 'dims.window_tokens',
@@ -301,6 +302,13 @@ export const SAM_VIT_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
   qBase: '(batch * dims.window_tokens + query) * dims.channels + head_offset',
   kBase: '(batch * dims.window_tokens + token) * dims.channels + head_offset',
   vIndex: '(batch * dims.window_tokens + token) * dims.channels + head_offset + dimension',
+};
+
+export const SAM_VIT_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl(vit);
+export const SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
+  ...vit,
+  extraBinding: '\nstruct QueryRange { query_offset: u32, };\n@group(0) @binding(5) var<uniform> query_range: QueryRange;',
+  queryOffset: ' + query_range.query_offset',
 });
 
 function positiveDispatchDimension(value, name) {
