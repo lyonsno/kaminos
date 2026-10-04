@@ -41,7 +41,9 @@ const tensors = { x: {name:'x'}, y: {name:'y'}, w: {name:'w'}, b: {name:'b'}, co
 const kernels = {conv2d:{code:shader(false), bindings:['input','weight','bias','output','convDims'].map((name,i)=>({name,resource:`${i===4?'uniform':'tensor'}:${name}`}))}};
 let program;
 const runtime = {createUniformBuffer: spec=>spec, defineProgram: spec=>defineWebGpuPhaseProgram(spec,{runtime:{defineComputeKernel: spec=>spec}}), async runProgram(value){program=value;} };
-const run = new Function('tensors','shape','convDimsValues','dispatchFor','kernels','runtime','metadata','createSamFpnConvolutionRanges','maxComputeWorkgroupsPerDimension','CONV2D_RANGE_WGSL','WEBGPU_SHADER_STAGE', `${block}; return runKernel;`)(tensors,{batch:1},()=>({}),(_name,total)=>createLinearDispatch(total,{workgroupSize:64}),kernels,runtime,{},fpn.createSamFpnConvolutionRanges,65535,shader(true),WEBGPU_SHADER_STAGE);
+// This extraction captures range construction; pipeline reuse is exercised by
+// sam-range-phase-program-contracts with the real phase-program resolver.
+const run = new Function('tensors','shape','convDimsValues','dispatchFor','kernels','runtime','metadata','createSamFpnConvolutionRanges','maxComputeWorkgroupsPerDimension','CONV2D_RANGE_WGSL','WEBGPU_SHADER_STAGE','createSamRangePhaseRuntime', `${block}; return runKernel;`)(tensors,{batch:1},()=>({}),(_name,total)=>createLinearDispatch(total,{workgroupSize:64}),kernels,runtime,{},fpn.createSamFpnConvolutionRanges,65535,shader(true),WEBGPU_SHADER_STAGE, runtime => runtime);
 await run({name:'fpn-neck-proj2-0',kernel:'conv2d',inputTensor:'x',outputTensor:'y',weightTensor:'w',biasTensor:'b',inShape:{},outShape:{height:288,width:288,channels:256},spec:{inChannels:256,kernelSize:3}});
 let end = 0;
 for(const phase of program.phases){

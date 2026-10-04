@@ -1,4 +1,5 @@
 import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
+import { createSamRangePhaseRuntime } from './sam-range-phase-program.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -27,6 +28,8 @@ import {
 } from './sam-online-attention-wgsl.js';
 import {
   SAM_VECTOR_LINEAR_GELU_WGSL,
+  SAM_VECTOR_LINEAR_GELU_RANGE_WGSL,
+  SAM_VECTOR_LINEAR_RANGE_WGSL,
   SAM_VECTOR_LINEAR_WGSL,
   partitionSamLinearPhase,
   vectorLinearDispatch,
@@ -1156,7 +1159,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
         }
         return expanded;
       });
-      return runtime.defineProgram({
+      return createSamRangePhaseRuntime(runtime, [SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, SAM_VECTOR_LINEAR_RANGE_WGSL, SAM_VECTOR_LINEAR_GELU_RANGE_WGSL]).defineProgram({
         name: `sam3.image-vit-block-stack-layer-${layerShape.layerIndex}-phase-program`,
         tensors: programTensors,
         uniforms: { blockDims: tensors.blockDims, lnDims: tensors.lnDims, windowLinearDims: tensors.windowLinearDims, fc1Dims: tensors.fc1Dims, fc2Dims: tensors.fc2Dims },

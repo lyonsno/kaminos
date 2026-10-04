@@ -1,4 +1,5 @@
 import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
+import { createSamRangePhaseRuntime } from './sam-range-phase-program.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -624,7 +625,7 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
     }
     phases.push({ name: 'readback-encoder-hidden-states', readbacks: [{ name: 'encoderHiddenStates', tensor: currentHidden }] });
 
-    const program = runtime.defineProgram({
+    const program = createSamRangePhaseRuntime(runtime, [SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL]).defineProgram({
       name: 'sam3.detr-encoder-phase-program',
       tensors: programTensors,
       uniforms: {

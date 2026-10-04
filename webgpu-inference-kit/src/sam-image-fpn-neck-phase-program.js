@@ -1,4 +1,5 @@
 import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
+import { createSamRangePhaseRuntime } from './sam-range-phase-program.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -1017,7 +1018,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
           phases.push({ name: start === 0 ? name : `${name}-range-${start}`, kernel: rangeKernel, dispatch, yieldAfter: true });
         }
       }
-      const single = runtime.defineProgram({
+      const single = createSamRangePhaseRuntime(runtime, [CONV2D_RANGE_WGSL]).defineProgram({
         name: `sam3.image-fpn-neck.${name}`,
         tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor], weight: tensors[weightTensor], bias: tensors[biasTensor] },
         uniforms: { convDims: tensors.convDims },

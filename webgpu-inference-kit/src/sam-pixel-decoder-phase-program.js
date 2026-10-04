@@ -1,4 +1,5 @@
 import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
+import { createSamRangePhaseRuntime } from './sam-range-phase-program.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -606,7 +607,7 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
       }));
     }
     phases.push({ name: 'readback-pixel-embed', readbacks: [{ name: 'pixelEmbed', tensor: `normalized${stageCount - 1}` }] });
-    const program = runtime.defineProgram({
+    const program = createSamRangePhaseRuntime(runtime, [CONV3X3_WGSL]).defineProgram({
       name: 'sam3.pixel-decoder-phase-program',
       tensors: programTensors,
       uniforms,

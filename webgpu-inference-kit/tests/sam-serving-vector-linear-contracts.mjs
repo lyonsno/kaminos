@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import './sam-linear-range-contracts.mjs';
+import './sam-range-phase-program-contracts.mjs';
 import { existsSync } from 'node:fs';
 
 const sharedUrl = new URL('../src/sam-vector-linear-wgsl.js', import.meta.url);
