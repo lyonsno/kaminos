@@ -41,11 +41,13 @@ function cameraFrame(camera, width, height, generation) {
 export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
+  const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
+  let publishedEmitterKey=JSON.stringify(initialPacket.emitters);
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
     particleCount:authored.particleCount, densityIterations:authored.densityIterations,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
-    liveInletPacket:localLiquidInletPacket(authored, authoredEmitters, sourceGeneration)});
+    liveInletPacket:initialPacket});
   if (!isCurrent()) {
     solver.destroy?.();
     return null;
@@ -151,9 +153,15 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   return {group,render,
     setEmitters(records) {
       const packet=localLiquidInletPacket(authored,records,sourceGeneration+1);
+      const key=JSON.stringify(packet.emitters);
+      // Gizmo selection/hover also reconciles sources. Republish only a real
+      // inlet change: every solver publication restarts its release epoch.
+      if (key===publishedEmitterKey) {authoredEmitters=structuredClone(records);return false;}
       solver.setLiveInletPacket(packet);
       authoredEmitters=structuredClone(records);
+      publishedEmitterKey=key;
       sourceGeneration++;
+      return true;
     },
     setSetup(nextSetup) {
       const next=normalizeLocalLiquidSetup(nextSetup);

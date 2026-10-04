@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-evidence.mjs';
+import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
 
@@ -15,7 +17,8 @@ const url = args.get('--url') || 'http://127.0.0.1:8095/';
 const out = resolve(args.get('--out') || '/tmp/kaminos-scene-object-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const port = Number(args.get('--debug-port') || 9439);
-const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const chrome = process.env.KAMINOS_CHROME || null;
+let browserLaunch = null;
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-scene-object-witness-profile-${port}-${process.pid}`;
 const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
@@ -45,6 +48,7 @@ function writeReport(report) {
     scenario,
     debugPort: port,
     chrome,
+    browserLaunch,
     userDataDir,
     settleMs,
     phase,
@@ -1373,6 +1377,100 @@ async function runLocalLiquidLiveHostScenario(ws) {
   }
   lastEvidence.localLiquidLiveHost.shortcutOpened = shortcutOpened;
   lastEvidence.localLiquidLiveHost.reopened = reopened;
+}
+
+async function runLocalLiquidSelectionContinuityScenario(ws) {
+  await runLocalLiquidLiveHostScenario(ws);
+  phase = 'local-water-selection-setup';
+  await evaluate(ws, `document.getElementById('scene-add-water-emitter').click()`);
+  await delay(1000);
+  const probe = async action => {
+    const state = await evaluate(ws, `({water:window.kaminosLocalLiquidState(),
+      rows:[...document.querySelectorAll('[data-scene-object-id]')].map(row=>({id:row.dataset.sceneObjectId,active:row.classList.contains('active')})),
+      url:location.href})`);
+    const water=state.water;
+    if (water?.backend!=='WebGPUBackend' || water?.mounted!==true || water?.failure
+      || water?.effectiveRoute!=='kaminos/finger-fluid/local-analytic-host-frame-v0'
+      || water?.lastFrame?.frameId!==water?.hostFrameCompositionEvidence?.hostFrameId
+      || water?.solver?.liveInlets?.activeInletCount!==2) {
+      throw Error('Selection witness requires two active sources on the effective live host: '+JSON.stringify(state));
+    }
+    const sample={action,at:new Date().toISOString(),...state};
+    lastEvidence.localLiquidSelection.samples.push(sample);
+    writeReport({ok:false,incomplete:true,evidence:lastEvidence});
+    return sample;
+  };
+  lastEvidence.localLiquidSelection={samples:[],screenshots:[]};
+  // Separate the sources before the observation so each stream can be inspected.
+  await evaluate(ws, `(() => {
+    const emitter=window.kaminosLocalLiquidState().emitters[1],pose=emitter.transform;
+    window.kaminosSetSceneObjectTransform(emitter.id,{...pose,position:[pose.position[0]+.6,pose.position[1],pose.position[2]+.1]});
+  })()`);
+  await delay(1000);
+  const initial=await probe('two-source-initial');
+  const ids=initial.water.emitters.map(row=>row.id);
+  assert.equal(ids.length,2);
+  const before=initial.water.solver.liveInlets.generation;
+  for (let i=0;i<6;i++) {
+    phase='local-water-select-'+i;
+    await evaluate(ws, `window.selectSceneObject(null)`);
+    await probe('deselect-'+i);
+    const id=ids[i%2];
+    await evaluate(ws, `document.querySelector('[data-scene-object-id="${id}"]').click()`);
+    const selected=await probe('select-'+id);
+    assert.ok(selected.rows.some(row=>row.id===id&&row.active),'real scene row must be selected');
+    await delay(1500);
+    await probe('after-select-'+i);
+    const shot=await capturePngScreenshot(ws,siblingPngPath('-selection-'+i));
+    lastEvidence.localLiquidSelection.screenshots.push(shot.path);
+  }
+  const end=await probe('selection-end');
+  assert.ok(end.water.frameCount>initial.water.frameCount,'selection interval must contain newly rendered host frames');
+  assertLocalLiquidSelectionContinuity(lastEvidence.localLiquidSelection.samples);
+  const pose=initial.water.emitters[0].transform;
+  await evaluate(ws, `window.kaminosSetSceneObjectTransform('${ids[0]}',${JSON.stringify({...pose,position:[pose.position[0]+.2,...pose.position.slice(1)],rotation:[pose.rotation[0]+.1,...pose.rotation.slice(1)]})})`);
+  const moved=await probe('move-and-rotate');
+  assert.ok(moved.water.solver.liveInlets.generation>before,'authored pose must publish');
+  await evaluate(ws, `window.kaminosSceneEdits.undo()`);
+  const undone=await probe('undo-pose');
+  assert.deepEqual(undone.water.emitters[0].transform,pose,'undo must restore the authored emitter');
+  const saved=await evaluate(ws, `(async()=>{
+    const names=async()=>{const r=await(await fetch('/api/browse?root=scenes&path=')).json();if(r.error)throw Error(r.error);return r.entries.filter(e=>e.name.endsWith('.json')).map(e=>e.name)};
+    const before=new Set(await names());await window.saveSceneAs();
+    const created=(await names()).filter(name=>!before.has(name));
+    if(created.length!==1)throw Error('Save As must create one scene');
+    const file=created[0];const doc=await(await fetch('/api/read?root=scenes&path='+encodeURIComponent(file))).json();
+    if(doc.error)throw Error(doc.error);return {file,doc,url:location.origin+'/#authoring=1&scene='+encodeURIComponent(file)};
+  })()`);
+  assert.deepEqual(saved.doc.objects.map(row=>row.id),ids,'save must retain both source identities');
+  lastEvidence.localLiquidSelection.saved=saved;
+  phase='local-water-fresh-reopen';
+  const beforeReopenEpoch=await evaluate(ws,'performance.timeOrigin');
+  lastEvidence.localLiquidSelection.beforeReopenEpoch=beforeReopenEpoch;
+  await wsRequest(ws,'Page.navigate',{url:'about:blank'});
+  for(let attempt=0;attempt<80;attempt++) {
+    if(await evaluate(ws,'location.href').catch(()=>null)==='about:blank') break;
+    await delay(125);
+  }
+  assert.equal(await evaluate(ws,'location.href'),'about:blank','fresh reopen must leave the old document');
+  await wsRequest(ws,'Page.navigate',{url:saved.url});
+  await delay(settleMs);
+  effectiveUrl=await evaluate(ws,'location.href');
+  assert.equal(effectiveUrl,saved.url,'fresh reopen must use the exact saved document URL');
+  const reopenedEpoch=await evaluate(ws,'performance.timeOrigin');
+  lastEvidence.localLiquidSelection.reopenedEpoch=reopenedEpoch;
+  assert.ok(reopenedEpoch>beforeReopenEpoch,'fresh reopen must replace the document, not only change its hash');
+  await evaluate(ws, `(async()=>{const started=Date.now();while(!window.kaminosLocalLiquidState?.()?.lastFrame?.frameId){if(Date.now()-started>30000)throw Error('fresh document water mount failed');await new Promise(r=>setTimeout(r,100));}return true})()`,{timeoutMs:40000});
+  const reopened=await probe('fresh-reopen');
+  assert.deepEqual(reopened.water.emitters.map(row=>row.id),ids);
+  assert.deepEqual(reopened.water.emitters.map(row=>row.transform),initial.water.emitters.map(row=>row.transform));
+  lastEvidence.localLiquidSelection.simulationRestoration='authored setup; particle dynamics restart';
+  const reopenBefore=reopened.water.solver.liveInlets.generation;
+  await evaluate(ws, `window.selectSceneObject(null);document.querySelector('[data-scene-object-id="${ids[0]}"]').click()`);
+  await delay(1500);
+  const reselected=await probe('fresh-reopen-reselect');
+  assert.equal(reselected.water.solver.liveInlets.generation,reopenBefore);
+  lastEvidence.localLiquidSelection.screenshots.push((await capturePngScreenshot(ws,siblingPngPath('-reopened-selection'))).path);
 }
 
 async function runTransformInspectorScenario(ws) {
@@ -5386,17 +5484,14 @@ try {
     throw new Error(`CDP debug port already in use before launch: ${port}`);
   }
 
+  phase='validating-browser';
+  browserLaunch=fluidBrowserLaunch({executable:chrome,debugPort:port,userDataDir,width:1468,height:960});
   phase = 'launching-chrome';
-  if (headless && chrome.startsWith('/Applications/Google Chrome.app/')) throw Error('Headless witness requires an independent browser executable via KAMINOS_CHROME');
-  chromeProcess = spawn(chrome, [
-    `--remote-debugging-port=${port}`,
-    `--user-data-dir=${userDataDir}`,
-    ...(headless ? ['--headless=new'] : ['--no-first-run', '--no-default-browser-check', '--disable-extensions']),
-    '--disable-gpu-sandbox',
-    '--enable-unsafe-webgpu',
+  chromeProcess = spawn(browserLaunch.executable, [
+    ...browserLaunch.args,
+    ...(headless ? ['--headless=new'] : []),
+    '--disable-gpu-sandbox', '--enable-unsafe-webgpu',
     '--enable-features=Vulkan,UseSkiaRenderer',
-    '--window-size=1468,960',
-    url,
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
   const chromeLaunchSignal = new Promise(resolveLaunch => {
@@ -5419,22 +5514,15 @@ try {
 
   phase = 'opening-target';
   const requestedHref = normalizeUrlForWitness(url);
-  let target = null;
-  let targets = [];
-  for (let attempt = 0; attempt < 40; attempt++) {
-    targets = await cdpFetch('/json/list');
-    target = targets.find(t => t.type === 'page' && normalizeUrlForWitness(t.url) === requestedHref);
-    if (target) break;
-    await delay(125);
-  }
-  if (!target?.webSocketDebuggerUrl) {
-    throw new Error(`Requested browser page did not open: ${requestedHref}; observed ${JSON.stringify(targets.map(t => ({type:t.type,url:t.url})))}`);
-  }
+  const targets=await cdpFetch('/json/list');
+  const target=targets.find(t=>t.type==='page' && t.url==='about:blank');
+  if (!target?.webSocketDebuggerUrl) throw Error('Owned browser blank page is missing');
   ws = new WebSocket(target.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
   await wsRequest(ws, 'Runtime.enable');
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Page.bringToFront');
+  await wsRequest(ws,'Page.navigate',{url},{timeoutMs:60000});
   for (let attempt=0;attempt<240;attempt++) {
     effectiveUrl = await evaluate(ws, 'location.href').catch(()=>null);
     if (effectiveUrl && effectiveUrl !== 'about:blank') break;
@@ -5484,6 +5572,8 @@ try {
     await runLocalLiquidPerformanceScenario(ws);
   } else if (scenario === 'local-liquid-live-host') {
     await runLocalLiquidLiveHostScenario(ws);
+  } else if (scenario === 'local-liquid-selection-continuity') {
+    await runLocalLiquidSelectionContinuityScenario(ws);
   } else if (scenario === 'transform-inspector') {
     await runTransformInspectorScenario(ws);
   } else if (scenario === 'object-groups-roundtrip') {
@@ -5545,6 +5635,7 @@ try {
   writeReport(report);
   console.log(JSON.stringify({ report: reportPath, ...report }, null, 2));
 } catch (error) {
+  const failurePhase=phase;
   let failureShot = null;
   try {
     if (ws) {
@@ -5556,6 +5647,7 @@ try {
   }
   writeReport({
     ok: false,
+    failurePhase,
     error: error.stack || String(error),
     screenshot: failureShot?.path || null,
     screenshotBytes: failureShot?.bytes || 0,
