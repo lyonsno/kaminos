@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {assertSofteningView} from './beaming-softening-evidence.mjs';
 import {assertCameraPixels} from './beaming-camera-pixels.mjs';
+import {assertSurfaceView,floatEvidenceBytes} from './beaming-surface-evidence.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -353,8 +354,8 @@ ${needle}`);
       }
     },report.reconstructionProfile);
     const digest=data=>createHash('sha256').update(Buffer.from(new Float32Array(data).buffer)).digest('hex');
-    let sourceHash,raw16,smoke16,builds;
-    for(const [name,count,pattern,passes] of [['raw16',16,'spatial',0],['smooth16-8',16,'spatial',8],['smooth16-32',16,'spatial',32],['restored16',16,'spatial',0],['fixed16',16,'fixed',0],['raw12',12,'spatial',0],['smooth12-8',12,'spatial',8],['smooth12-32',12,'spatial',32]]) {
+    let sourceHash,builds;const baselines=new Map();
+    for(const [name,count,pattern,passes] of [['raw16',16,'spatial',0],['smooth16-8',16,'spatial',8],['smooth16-32',16,'spatial',32],['restored16',16,'spatial',0],['fixed16',16,'fixed',0],['raw12',12,'spatial',0],['smooth12-8',12,'spatial',8],['smooth12-32',12,'spatial',32],['restored12',12,'spatial',0]]) {
       await page.selectOption('#rendering-angular-samples',String(count));
       await page.selectOption('#rendering-angular-pattern',pattern);
       await page.evaluate(passes=>{const e=document.getElementById('rendering-surface-reconstruction');e.value=String(passes);e.dispatchEvent(new Event('input',{bubbles:true}));},passes);
@@ -366,18 +367,24 @@ ${needle}`);
           surface:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data),smoke:Array.from(fields.smoke.data)};
       });
       await fs.writeFile(`${out}/surface-${name}-signal.json`,JSON.stringify(signal));
+      const binary={};
+      for(const [field,values] of Object.entries({front:signal.surface,back:signal.back,smoke:signal.smoke,source:signal.source.values})) {
+        const bytes=floatEvidenceBytes(values),path=`${out}/surface-${name}-${field}.f32`;
+        await fs.writeFile(path,bytes);assert.deepEqual(await fs.readFile(path),bytes,'binary evidence roundtrip mismatch');
+        binary[field]={path,sha256:createHash('sha256').update(bytes).digest('hex'),negativeZeros:values.filter(v=>Object.is(v,-0)).length,format:'native-little-endian-float32'};
+      }
       report.lastTrustworthyState={lighting:signal.lighting,volume:signal.volume};await save();
       assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
       assert.equal(signal.lighting.frame.surfaceReconstruction.passes,passes);assert.equal(signal.lighting.frame.directions,count);
       assert.equal(signal.lighting.frame.angularPattern,pattern);
       const sh=digest(signal.source.values),rh=digest(signal.surface),mh=digest(signal.smoke);
-      if(!sourceHash){sourceHash=sh;raw16=rh;smoke16=mh;builds=signal.lighting.geometryBuilds;}
+      if(!sourceHash){sourceHash=sh;builds=signal.lighting.geometryBuilds;}
       assert.equal(sh,sourceHash);assert.equal(signal.lighting.geometryBuilds,builds);
-      if(count===16&&pattern==='spatial')assert.equal(mh,smoke16,'mesh reconstruction cannot change smoke');
-      if(name==='restored16')assert.equal(rh,raw16,'off must restore raw current-frame light exactly');
-      if(passes){assert.notEqual(rh,raw16);assert.equal(signal.lighting.frame.surfaceReconstruction.history,false);assert.ok(signal.lighting.frame.surfaceReconstruction.directedEdges>0);}
+      const key=`${count}/${pattern}`;
+      assertSurfaceView(signal,{baseline:baselines.get(key),count,pattern,passes});
+      if(!baselines.has(key))baselines.set(key,signal);
       await page.screenshot({path:`${out}/surface-${name}.png`});
-      report.views.push({name,sourceHash:sh,surfaceHash:rh,smokeHash:mh,lighting:signal.lighting});await save();
+      report.views.push({name,sourceHash:sh,surfaceHash:rh,smokeHash:mh,binary,lighting:signal.lighting});await save();
     }
     if(process.argv.includes('--surface-cost-check')) {
       report.phase='surface-GPU-cost';await save();
