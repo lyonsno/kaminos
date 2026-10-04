@@ -15,6 +15,7 @@ export function validateSamImageRun(row, expected) {
   assert.equal(output.requestedRouteId, output.effectiveRouteId, 'route fallback');
   assert.ok(output.effectiveRouteId?.includes('.webgpu-local.'), 'missing native route');
   assert.ok(Array.isArray(output.receiptChain) && output.receiptChain.length === 13, 'incomplete route chain');
+  assert.equal(new Set(output.receiptChain).size, 13, 'duplicate route chain');
   assert.deepEqual([output.width, output.height], expected.maskSize, 'mask resolution changed');
   assert.ok(Array.isArray(output.instances), 'missing instances');
   assert.equal(output.instances.length, output.selectedCandidateCount, 'partial instances');
@@ -33,5 +34,6 @@ export function validateSamImageRun(row, expected) {
   assert.equal(output.mask?.length, count, 'partial selected mask');
   assert.equal(output.logits?.length, count, 'partial selected logits');
   assert.ok(output.logits.every(Number.isFinite), 'nonfinite selected logits');
+  assert.ok(output.mask.every((value, i) => value === Number(output.logits[i] > 0)), 'selected mask/logit disagreement');
   assert.ok(Number.isFinite(row.wallMilliseconds) && row.wallMilliseconds > 0, 'missing timing');
 }

@@ -123,9 +123,11 @@ struct PixelStageDims {
 @group(0) @binding(1) var<storage, read_write> stats: array<f32>;
 @group(0) @binding(2) var<uniform> dims: PixelStageDims;
 
-@compute @workgroup_size(1)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+var<workgroup> partial: array<f32, 256>;
+
+@compute @workgroup_size(256)
+fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = wid.x + wid.y * dispatch_grid.x + wid.z * dispatch_grid.x * dispatch_grid.y;
   let group_total = dims.batch * dims.groups;
   if (index >= group_total) { return; }
   let group = index % dims.groups;
@@ -133,19 +135,38 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let per_batch_total = dims.target_height * dims.target_width * dims.channels;
   let count = per_batch_total / dims.groups;
   let batch_base = batch * per_batch_total;
-  var mean = 0.0;
-  for (var i = 0u; i < count; i = i + 1u) {
-    mean = mean + input_values[batch_base + i * dims.groups + group];
+  var sum = 0.0;
+  for (var i = lane; i < count; i = i + 256u) {
+    sum = sum + input_values[batch_base + i * dims.groups + group];
   }
-  mean = mean / f32(count);
+  partial[lane] = sum;
+  workgroupBarrier();
+  for (var stride = 128u; stride > 0u; stride = stride / 2u) {
+    if (lane < stride) {
+      partial[lane] = partial[lane] + partial[lane + stride];
+    }
+    workgroupBarrier();
+  }
+  let mean = partial[0] / f32(count);
+  // Every lane must capture the mean before the variance pass reuses scratch.
+  workgroupBarrier();
   var variance = 0.0;
-  for (var i = 0u; i < count; i = i + 1u) {
+  for (var i = lane; i < count; i = i + 256u) {
     let delta = input_values[batch_base + i * dims.groups + group] - mean;
     variance = variance + delta * delta;
   }
-  variance = variance / f32(count);
-  stats[index * 2u] = mean;
-  stats[index * 2u + 1u] = variance;
+  partial[lane] = variance;
+  workgroupBarrier();
+  for (var stride = 128u; stride > 0u; stride = stride / 2u) {
+    if (lane < stride) {
+      partial[lane] = partial[lane] + partial[lane + stride];
+    }
+    workgroupBarrier();
+  }
+  if (lane == 0u) {
+    stats[index * 2u] = mean;
+    stats[index * 2u + 1u] = partial[0] / f32(count);
+  }
 }
 `;
 
@@ -536,7 +557,10 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
       phases.push(
         { name: `pixel-upsample-add-${index}`, kernel: `upsampleAdd${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
         { name: `pixel-conv3x3-${index}`, kernel: `conv3x3_${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
-        { name: `pixel-groupnorm-stats-${index}`, kernel: `groupnormStats${index}`, dispatch: [shape.batch * shape.groups], yieldAfter: true },
+        { name: `pixel-groupnorm-stats-${index}`, kernel: `groupnormStats${index}`, dispatch: createLinearDispatch(shape.batch * shape.groups, {
+          workgroupSize: 1,
+          maxWorkgroupsPerDimension: input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+        }), yieldAfter: true },
         { name: `pixel-groupnorm-relu-${index}`, kernel: `groupnormRelu${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
       );
     }

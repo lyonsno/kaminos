@@ -31,7 +31,7 @@ assert.throws(() => createSamImagePixels(source, maskOutput, [7], 'fake'), /view
 // Local orchestration fixtures do not establish GPU execution.
 const calls = [], states = [];
 let complete, rejectRun, failDecode = false;
-let activeRequest, activeManifest, runtimeOptions, runtimeCount = 0, foreground;
+let activeRequest, activeManifest, runtimeOptions, runtimeCount = 0, evidenceReads = 0, foreground;
 const device = { lost: new Promise(() => {}), destroy() { calls.push('device.destroy'); } };
 const session = { device, async drain() { calls.push('session.drain'); }, close() { calls.push('session.close'); } };
 const services = {
@@ -55,7 +55,7 @@ const services = {
         activeManifest = manifest; activeRequest = request;
         return new Promise((resolve, reject) => { complete = resolve; rejectRun = reject; });
       },
-      evidence: () => ({ backendIdentity: { kind: 'test-only' }, packageInvocationEvidence: { fixture: true } }),
+      evidence: () => { evidenceReads += 1; return { backendIdentity: { kind: 'test-only' }, packageInvocationEvidence: { fixture: true } }; },
       async close() { calls.push('sam.close'); },
     };
   },
@@ -83,11 +83,15 @@ const output = () => ({ ...maskOutput, invocationId: activeRequest.invocationId,
   requestedRouteId: 'fixture.requested', effectiveRouteId: 'fixture.effective' });
 complete(output());
 await run;
+assert.equal(evidenceReads, 0, 'normal mask completion must not materialize the full diagnostic inventory');
 assert.equal(example.snapshot().status, 'succeeded');
 assert.deepEqual(example.snapshot().selectedIndices, [7, 9]);
 example.select([7]);
 assert.equal(example.pixels('cutout')[3], 128);
 assert.equal(example.provenance().output.effectiveRouteId, 'fixture.effective');
+assert.equal(example.provenance().runtimeEvidence.packageInvocationEvidence.fixture, true,
+  'explicit provenance still preserves complete runtime evidence');
+assert.equal(evidenceReads, 1, 'unchanged invocation diagnostic export reuses its snapshot');
 assert.equal(example.provenance().foreground.authority, 'queue-submissions-not-presented-frames');
 assert.equal(example.provenance().foreground.coexistence, 'unverified');
 const stale = example.run({ manifestUrl: '/model.json', promptText: 'wheel' });

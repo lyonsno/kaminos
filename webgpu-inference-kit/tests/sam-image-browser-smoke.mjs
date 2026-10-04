@@ -135,7 +135,7 @@ try {
     const error = await page.evaluate(() => window.samTrial.error || window.samImageExample.snapshot().error);
     assert.ok(!error, error);
     const row = await page.evaluate(() => ({ wallMilliseconds: window.samTrial.completedAt - window.samTrial.startedAt,
-      adapter: window.samAdapters.at(-1), invocationId: window.samImageExample.provenance().request.invocationId,
+      adapter: window.samAdapters.at(-1), invocationId: window.samImageExample.snapshot().output.invocationId,
       foreground: window.samImageExample.snapshot().foreground, phases: window.samTrial.phases, frames: window.samTrial.frames }));
     row.name = input.name; row.motion = motion;
     const downloadEvent = page.waitForEvent('download');
@@ -157,8 +157,41 @@ try {
     report.runs.push(row); await persist();
     for (const kind of ['mask', 'cutout']) {
       const event = page.waitForEvent('download'); await page.locator(`#save-${kind}`).click();
-      await (await event).saveAs(path.join(out, `${input.name}-${kind}.png`));
+      const pngPath = path.join(out, `${input.name}-${kind}.png`);
+      await (await event).saveAs(pngPath);
+      const bytes = await fs.readFile(pngPath);
+      const pixels = await page.evaluate(async ({ base64, kind }) => {
+        const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${base64}`)).blob());
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height), context = canvas.getContext('2d');
+        context.drawImage(bitmap, 0, 0); bitmap.close();
+        const actual = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        const expected = window.samImageExample.pixels(kind), source = window.samImageExample.snapshot().source;
+        let mismatches = 0;
+        // PNG canvas decoding discards RGB beneath zero alpha; those bytes are not visible content.
+        for (let i = 0; i < actual.length; i++) {
+          if (i % 4 !== 3 && actual[i - i % 4 + 3] === 0 && expected[i - i % 4 + 3] === 0) continue;
+          if (actual[i] !== expected[i]) mismatches++;
+        }
+        return { width: canvas.width, height: canvas.height, sourceWidth: source.width, sourceHeight: source.height,
+          actualLength: actual.length, expectedLength: expected.length, mismatches };
+      }, { base64: bytes.toString('base64'), kind });
+      assert.equal(pixels.width, pixels.sourceWidth, 'export width differs from source');
+      assert.equal(pixels.height, pixels.sourceHeight, 'export height differs from source');
+      assert.equal(pixels.actualLength, pixels.expectedLength, 'export pixel count differs');
+      assert.equal(pixels.mismatches, 0, `${kind} export differs from displayed source-sized selection`);
+      (row.exports ||= []).push({ kind, path: pngPath, sha256: hash(bytes), ...pixels });
     }
+    const provenanceEvent = page.waitForEvent('download');
+    await page.locator('#save-provenance').click();
+    row.provenancePath = path.join(out, `${input.name}-provenance.json`);
+    await (await provenanceEvent).saveAs(row.provenancePath);
+    const provenanceBytes = await fs.readFile(row.provenancePath), provenance = JSON.parse(provenanceBytes);
+    assert.equal(provenance.request.invocationId, row.invocationId, 'exported provenance invocation changed');
+    assert.equal(provenance.source.sha256, input.sha256, 'exported provenance source changed');
+    assert.equal(provenance.request.promptText, input.prompt, 'exported provenance prompt changed');
+    assert.equal(provenance.runtimeEvidence.status, 'executed', 'exported runtime evidence incomplete');
+    row.provenanceSha256 = hash(provenanceBytes);
+    await persist();
   }
   report.phase = 'mobile';
   await page.setViewportSize({ width: 390, height: 844 });

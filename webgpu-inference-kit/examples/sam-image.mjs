@@ -289,7 +289,7 @@ export async function createSamImageExample({ canvas, onState = () => {},
         if (!closing) state.status = 'succeeded';
         state.phase = indices.length ? 'Masks returned' : 'No instances retained';
         return result;
-      } finally { runtimeEvidence = sam.evidence(); }
+      } finally { runtimeEvidence = null; }
     });
   }
   function select(indices) {
@@ -329,10 +329,14 @@ export async function createSamImageExample({ canvas, onState = () => {},
     return disposal;
   }
   publish();
-  return Object.freeze({ loadImage, run, select, pixels, unloadModel, dispose, snapshot,
-    provenance: () => structuredClone({ source: state.source, request: requested, output: state.output,
+  function provenance() {
+    // Full resource inventories are an explicit export, not mask-completion work.
+    if (sam && runtimeEvidence === null) runtimeEvidence = sam.evidence();
+    return structuredClone({ source: state.source, request: requested, output: state.output,
       selectedIndices: state.selectedIndices, backend: state.backend, runtimeEvidence,
-      foreground: foregroundEvidence(), status: state.status, error: state.error }) });
+      foreground: foregroundEvidence(), status: state.status, error: state.error });
+  }
+  return Object.freeze({ loadImage, run, select, pixels, unloadModel, dispose, snapshot, provenance });
 }
 
 export async function mountSamImagePage(document) {

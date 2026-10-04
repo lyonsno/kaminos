@@ -24,6 +24,8 @@ for (const [change, message] of [
   [r => { r.output.instances[0].mask = [0, 0]; }, /mask\/logit/],
   [r => { r.output.instances = []; }, /partial instances/],
   [r => { r.output.logits[0] = NaN; }, /nonfinite selected/],
+  [r => { r.output.mask[0] = 0; }, /selected mask\/logit/],
+  [r => { r.output.receiptChain[1] = r.output.receiptChain[0]; }, /route chain/],
 ]) {
   const invalid = structuredClone(row); change(invalid);
   assert.throws(() => validateSamImageRun(invalid, expected), message);
