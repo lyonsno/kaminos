@@ -82,3 +82,36 @@ test('direct bake and encoding cannot publish a nondegenerate surface with colla
   assert.throws(()=>bakeTrellisMaterialTextures({...mesh,coordinates,features,resolution:1,textureSize:4}),/collapsed|nonzero UV area/);
   await assert.rejects(encodeTrellisPbrGLB(mesh,{textures}),/collapsed|nonzero UV area/);
 });
+const observedRange=JSON.parse(await readFile(new URL('./fixtures/trellis-uv-native-range-source.json',import.meta.url),'utf8'));
+class ObservedReplyWorker {
+  constructor(url){assert.equal(url.href,workerPath.href);this.terminated=false;workers.push(this);}
+  postMessage(request){
+    const r=observedRange.reply,reply={id:request.id,ok:true,newNumVertices:r.newNumVertices,newNumFaces:r.newNumFaces};
+    for(const [name,Type]of [['newVertices',Float32Array],['newNormals',Float32Array],['newFaces',Uint32Array],
+      ['uvs',Float32Array],['faceAssignment',Int32Array]])reply[name]=new Type(r[name]).buffer;
+    this.change?.(reply);queueMicrotask(()=>this.onmessage?.({data:reply}));
+  }
+  terminate(){this.terminated=true;}
+}
+const observedMesh=()=>({vertices:new Float32Array(observedRange.input.vertices),triangles:new Uint32Array(observedRange.input.triangles)});
+test('observed native remaining-tier range defect is repaired before final UV admission',async()=>{
+  assert.equal(observedRange.source.nativeJob,'384fa486248c');
+  assert.ok(observedRange.reply.uvs.some(v=>v>1),'The fixture preserves the actual out-of-range reply.');
+  const output=await unwrapTrellisMesh(observedMesh(),{WorkerClass:ObservedReplyWorker});
+  assert.deepEqual([...output.uvs.subarray(0,6)],observedRange.reply.uvs.slice(0,6),'Unchanged primary chart must survive.');
+  assert.ok(output.uvs.every(v=>Number.isFinite(v)&&v>=0&&v<=1));
+  for(let face=0;face<2;face++)assert.notEqual(area(output,face),0);
+  assert.equal(output.uvMetadata.remainingPacking.remainingFaces,1);
+  assert.deepEqual([...output.vertices],observedRange.input.vertices);
+  assert.deepEqual([...output.triangles],observedRange.input.triangles);
+  assert.equal(workers.at(-1).terminated,true);
+});
+test('owned remaining-tier repair does not excuse invalid primary charts or nonfinite worker data',async()=>{
+  class BadPrimary extends ObservedReplyWorker {change(reply){new Float32Array(reply.uvs)[0]=1.125;}}
+  class NonfiniteRemaining extends ObservedReplyWorker {change(reply){new Float32Array(reply.uvs)[6]=NaN;}}
+  class ChangedGeometry extends ObservedReplyWorker {change(reply){new Float32Array(reply.newVertices)[0]=0;}}
+  for(const [WorkerClass,reason]of [[BadPrimary,/finite|range/],[NonfiniteRemaining,/finite/],[ChangedGeometry,/geometry|range/]]){
+    await assert.rejects(unwrapTrellisMesh(observedMesh(),{WorkerClass}),reason);
+    assert.equal(workers.at(-1).terminated,true);
+  }
+});

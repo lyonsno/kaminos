@@ -271,7 +271,11 @@ export async function unwrapTrellisMesh(mesh,{WorkerClass=globalThis.Worker}={})
       faceAssignment:read('faceAssignment',Int32Array,reply.newNumFaces),metadata:mesh.metadata,
       uvMetadata:{route:'shipped SF3D pure UV worker/box charts and overlap tiers',source:'lib/sf3d/assets/uv_unwrap_worker-29CGZ7RB.js',
         sourceComparison:'not source default xatlas',inputVertices:mesh.vertices.length/3,outputVertices:n,triangles:reply.newNumFaces}};
-    validateSurface(output);if(!output.normals.every(Number.isFinite)||!output.faceAssignment.every(v=>v>=0&&v<=12))throw Error('finite complete UV worker normal/chart output required');
+    // Observed dense remaining-tier replies can exceed the atlas bounds before
+    // our owned repack. Admit finite source geometry/UVs here, then enforce all
+    // final bounds and area after repacking; primary/secondary charts stay fixed.
+    validateSurface(output,false);if(!output.uvs.every(Number.isFinite)||!output.normals.every(Number.isFinite)||
+      !output.faceAssignment.every(v=>v>=0&&v<=12))throw Error('finite complete UV worker normal/chart output required');
     for(let i=0;i<mesh.triangles.length;i++)for(let axis=0;axis<3;axis++){
       if(output.vertices[output.triangles[i]*3+axis]!==mesh.vertices[mesh.triangles[i]*3+axis])
         throw Error('UV worker changed complete source triangle geometry');
