@@ -11,7 +11,7 @@ const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end
 function mounted() {
   let status = '';
   const context = vm.createContext({
-    window: {}, authoringBusy: false, currentSceneFile: 'input.kaminos.json',
+    window: {}, authoringBusy: false, kilnPerformanceSnapshot: null, currentSceneFile: 'input.kaminos.json',
     document: { getElementById: () => ({ value: 'Comparison', disabled: false }) },
     compositionStatus: text => { status = text; }, setInfo: text => { status = text; },
     grBrowseScenes() {}, compositionRestoreUrl,savedSceneLocation:authoring.savedSceneLocation,URL,URLSearchParams,location: { origin: 'http://localhost:9000',href:'http://localhost:9000/?mesh_root=generated-meshes#authoring=1&scene=input.kaminos.json' },history:{replaceState(_state,_title,url){context.location.href=url;}},
@@ -43,6 +43,14 @@ test('save returns the exact document and restore URL for this invocation', asyn
   assert.equal(result.document.objects[0].id, 'actual-object');
   assert.equal(new URL(result.url).hash, '#authoring=1&scene=accepted.kaminos.json');
   assert.equal(await run('window.saveScene()'), true, 'ordinary caller keeps its boolean');
+});
+
+test('performance modulation cannot be mistaken for an authored save', async () => {
+  const {run,context} = mounted();
+  context.kilnPerformanceSnapshot = { controls: {} };
+  const result = await run('window.saveScene({result:true})');
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Return to authoring/);
 });
 
 test('capture returns pixels and the scene saved with those pixels', async () => {

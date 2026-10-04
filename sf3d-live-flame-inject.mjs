@@ -156,7 +156,9 @@ function summarizeGaps(gaps) {
     over33_3: xs.filter(g => g > 33.3).length, over100: xs.filter(g => g > 100).length };
 }
 
-async function runSf3d(producer, image, host, prototype) {
+async function runSf3d(producer, image, host, prototype, onEvent = () => {}) {
+  if (state.running) throw new Error('SF3D inference is already running');
+  state.running = true;
   const button = hud('sf3d-run');
   button.disabled = true;
   state.inferring = true;
@@ -175,9 +177,11 @@ async function runSf3d(producer, image, host, prototype) {
   const runId = `sf3d-live-flame-${Date.now()}`;
   const t0 = performance.now();
   try {
+    onEvent({ type: 'started', runId });
     const result = await producer.run(image, {
       runId,
       onProgress: (msg) => {
+        onEvent({ type: 'progress', runId, message: String(msg) });
         const m = /(\d+)\s*\/\s*(\d+)/.exec(String(msg));
         if (m) hud('sf3d-progress').value = Math.round(100 * Number(m[1]) / Number(m[2]));
         hud('sf3d-infer').textContent = String(msg).slice(0, 44);
@@ -217,6 +221,7 @@ async function runSf3d(producer, image, host, prototype) {
     const presentation = await host.presentGlb(result.glb, {runId,sha256:glbSha256});
     state.lastResult = Object.freeze({...output,presentation});
     state.pendingOutput = null;
+    onEvent({ type: 'presented', runId, presentation });
     hud('sf3d-infer').textContent = `done in ${(wallMs / 1000).toFixed(1)}s · ${result.numVertices}v/${result.numFaces}f`;
     hud('sf3d-infer').className = 'v good';
     hud('sf3d-duties').textContent = duties.join(' / ');
@@ -231,19 +236,23 @@ async function runSf3d(producer, image, host, prototype) {
       a.href = URL.createObjectURL(blob); a.download = `sf3d-live-flame-${runId}.glb`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     };
+    return state.lastResult;
   } catch (error) {
     state.inferring = false;
     state.lastError = { phase, message: error?.message || String(error), sf3dRun: error?.sf3dRun ?? null };
     hud('sf3d-infer').textContent = `error: ${state.lastError.message}`.slice(0, 60);
     hud('sf3d-infer').className = 'v bad';
     console.error('SF3D run failed:', error);
+    onEvent({ type: 'failed', runId, error: state.lastError });
+    return null;
   } finally {
+    state.running = false;
     button.disabled = false;
     button.textContent = 'Run SF3D again';
   }
 }
 
-export async function mountComposition({ prototype, params, sharedGpu, host } = {}) {
+export async function mountComposition({ prototype, params, sharedGpu, host, onEvent = () => {} } = {}) {
   injectHud();
   startFrameMonitor();
   mirrorFireStatus();
@@ -346,7 +355,8 @@ export async function mountComposition({ prototype, params, sharedGpu, host } = 
   const button = hud('sf3d-run');
   button.disabled = false;
   button.textContent = 'Run SF3D image → mesh (cooperative)';
-  button.onclick = () => runSf3d(producer, image, host, prototype);
+  const run = () => runSf3d(producer, image, host, prototype, onEvent);
+  button.onclick = run;
   window.__sf3dLiveFlameReady = true;
-  return { producer, image };
+  return { producer, image, run };
 }
