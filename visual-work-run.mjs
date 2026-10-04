@@ -4,17 +4,21 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { visualWork } from './visual-work.mjs';
 
-const { values } = parseArgs({ options: Object.fromEntries([
-  'origin', 'repo', 'scene', 'scenes', 'basins', 'out', 'example', 'inputs', 'playwright', 'browser',
-].map(name => [name, { type: 'string' }])) });
-if (!values.out) throw Error('--out required for retained output');
-const out = path.resolve(values.out);
+// Locate the caller's output before validating the full invocation, so a typo
+// in another option still leaves a useful terminal artifact.
+const { values: output } = parseArgs({ options: { out: { type: 'string' } }, strict: false, allowPositionals: true });
+if (!output.out) throw Error('--out required for retained output');
+const out = path.resolve(output.out);
 await fs.mkdir(out, { recursive: true });
-const launch = { requested: values, startedAt: new Date().toISOString(), pid: process.pid, status: 'running', phase: 'arguments' };
+const launch = { argv: process.argv.slice(2), startedAt: new Date().toISOString(), pid: process.pid, status: 'running', phase: 'arguments' };
 const write = () => fs.writeFile(path.join(out, 'launch.json'), JSON.stringify(launch, null, 2));
 await write();
 let browser;
 try {
+  const { values } = parseArgs({ options: Object.fromEntries([
+    'origin', 'repo', 'scene', 'scenes', 'basins', 'out', 'example', 'inputs', 'playwright', 'browser',
+  ].map(name => [name, { type: 'string' }])) });
+  launch.requested = values;
   for (const name of ['origin', 'repo', 'scene', 'example', 'playwright', 'browser']) if (!values[name]) throw Error(`--${name} required`);
   launch.executable = await fs.realpath(values.browser);
   if (/Google Chrome\.app\//.test(launch.executable)) throw Error('Use independent Chrome for Testing or Chromium, preserving the operator browser');

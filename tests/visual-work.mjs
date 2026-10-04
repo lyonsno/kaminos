@@ -17,6 +17,18 @@ test('startup failure survives before the scene report exists', async () => {
     assert.match(report.failure, /--origin required/);
   } finally { await fs.rm(out, { recursive: true }); }
 });
+test('malformed arguments with a supplied output path retain parser failure', async () => {
+  for (const extra of [['--origin'], ['--unknown-flag']]) {
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), 'visual-work-parse-failure-'));
+    try {
+      assert.throws(() => execFileSync(process.execPath, ['visual-work-run.mjs', '--out', out, ...extra], { cwd: new URL('..', import.meta.url), stdio: 'pipe' }));
+      const report = JSON.parse(await fs.readFile(path.join(out, 'failure.json')));
+      assert.equal(report.status, 'failed');
+      assert.equal(report.phase, 'arguments');
+      assert.match(report.failure, /argument|option/i);
+    } finally { await fs.rm(out, { recursive: true }); }
+  }
+});
 test('mount requires requested identity, source and authored pose', () => {
   const document = { objects: [object] };
   assertMountedScene(document, [{ ...object, extraTelemetry: true }]);
