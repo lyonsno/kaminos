@@ -1,4 +1,15 @@
 // Runs in an owned browser on its observed native WebGPU adapter.
+export function assertSurfaceGPUFrame(name,actual,expected) {
+  let maxError=0;
+  for(let side=0;side<2;side++)for(let i=0;i<28;i++) {
+    if(!Number.isFinite(actual[side][i]))throw new Error(`GPU surface ${name}: nonfinite actual at ${side}/${i}`);
+    if(!Number.isFinite(expected[side][i]))throw new Error(`GPU surface ${name}: nonfinite expected at ${side}/${i}`);
+    maxError=Math.max(maxError,Math.abs(actual[side][i]-expected[side][i]));
+  }
+  if(!Number.isFinite(maxError)||maxError>1e-5)throw new Error('GPU surface reconstruction differs from CPU oracle: '+maxError);
+  if(name==='black'&&actual.some(a=>a.some((v,i)=>i%4!==3&&v!==0)))throw new Error('GPU retained previous-frame light');
+  return maxError;
+}
 export async function checkSurfaceGPU() {
   const {surfaceGraph,reconstructSurfaceCPU,createSurfaceReconstruction}=await import('/scene-surface-reconstruction.mjs');
   const adapter=await navigator.gpu.requestAdapter();
@@ -20,10 +31,7 @@ export async function checkSurfaceGPU() {
       device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
       const raw=new Float32Array(read.getMappedRange()),actual=[Array.from(raw.slice(0,28)),Array.from(raw.slice(64,92))];read.unmap();
       const expected=[front,back].map(v=>Array.from(reconstructSurfaceCPU(v.subarray(0,28),graph,8)));
-      let maxError=0;
-      for(let side=0;side<2;side++)for(let i=0;i<28;i++)maxError=Math.max(maxError,Math.abs(actual[side][i]-expected[side][i]));
-      if(maxError>1e-5)throw new Error('GPU surface reconstruction differs from CPU oracle: '+maxError);
-      if(name==='black'&&actual.some(a=>a.some((v,i)=>i%4!==3&&v!==0)))throw new Error('GPU retained previous-frame light');
+      const maxError=assertSurfaceGPUFrame(name,actual,expected);
       frames.push({name,actual,expected,maxError});
     }
     await device.queue.onSubmittedWorkDone();
