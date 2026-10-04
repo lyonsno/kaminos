@@ -23,7 +23,7 @@ for (const name of ['sam-detr-encoder', 'sam-detr-decoder', 'sam-pixel-decoder',
     assert.ok(dispatch.reduce((n, d) => n * d, 64) >= total, `${name}: native dispatch must not truncate`);
   }
   assert.deepEqual(dispatchFor(65 * 64, { limits: { maxComputeWorkgroupsPerDimension: 64 } }), [9, 8]);
-  const kernels = [...source.matchAll(/@workgroup_size\(64\)\s+fn main\(([^]*?)\)\s*\{\s*let (?:index|token) = ([^;]+);/g)];
+  const kernels = [...source.matchAll(/@workgroup_size\(64\)\s+fn main\(([^{}]*?)\)\s*\{\s*let (?:index|token|local_index) = ([^;]+);/g)];
   assert.equal(kernels.length, [...source.matchAll(/@workgroup_size\(64\)/g)].length, `${name}: inspect every linear shader`);
   assert.ok(kernels.length > 0);
   for (const [, parameters, index] of kernels) {
