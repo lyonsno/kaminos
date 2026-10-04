@@ -31,3 +31,29 @@ export async function checkSurfaceGPU() {
     return {status:'passed',adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:adapter.isFallbackAdapter},frames};
   } finally {filter.destroy();read.destroy();textures.forEach(t=>t.destroy());device.destroy();}
 }
+
+export async function measureSurfaceGPU({device,graph,front,back,dimensions}) {
+  if(!device.features.has('timestamp-query'))return {status:'unsupported',reason:'effective device has no timestamp-query'};
+  const {createSurfaceReconstruction}=await import('/scene-surface-reconstruction.mjs');
+  const textures=[0,1].map(()=>device.createTexture({size:dimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST}));
+  const filter=createSurfaceReconstruction(device,{graph,front:textures[0],back:textures[1],dimensions});
+  const queries=device.createQuerySet({type:'timestamp',count:2});
+  const resolve=device.createBuffer({size:256,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
+  const read=device.createBuffer({size:256,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  const result={status:'measured',scope:'isolated reconstruction dispatch span on actual authored receiver graph; excludes gather and rendering',vertices:graph.count,edges:graph.neighbors.length,samples:[]};
+  try {
+    for(const passes of [0,8,32])for(let repeat=0;repeat<8;repeat++) {
+      const encoder=device.createCommandEncoder();
+      for(const [i,source] of [front,back].entries())encoder.copyTextureToTexture({texture:source},{texture:textures[i]},dimensions);
+      encoder.beginComputePass({timestampWrites:{querySet:queries,beginningOfPassWriteIndex:0}}).end();
+      filter.encode(encoder,passes);
+      encoder.beginComputePass({timestampWrites:{querySet:queries,endOfPassWriteIndex:1}}).end();
+      encoder.resolveQuerySet(queries,0,2,resolve,0);encoder.copyBufferToBuffer(resolve,0,read,0,16);
+      device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);
+      const times=new BigUint64Array(read.getMappedRange());const ms=Number(times[1]-times[0])/1e6;read.unmap();
+      if(!Number.isFinite(ms)||ms<0)throw new Error('invalid GPU timestamp span');
+      result.samples.push({passes,repeat,ms});
+    }
+    return result;
+  }finally{filter.destroy();textures.forEach(t=>t.destroy());queries.destroy();resolve.destroy();read.destroy();}
+}

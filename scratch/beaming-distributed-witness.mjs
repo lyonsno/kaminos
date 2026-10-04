@@ -19,6 +19,15 @@ try {
   await fs.access(executable);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  if(process.argv.includes('--surface-cost-check')) {
+    await page.route('**/scene-surface-reconstruction.mjs',async route=>{
+      const response=await route.fetch(),original=await response.text();
+      const needle='  const resources=[];';assert.equal(original.split(needle).length,2);
+      const body=original.replace(needle,'  if(!window.__beamingSurfaceFixture||graph.count>window.__beamingSurfaceFixture.graph.count)window.__beamingSurfaceFixture={device,graph,front,back,dimensions};\n'+needle);
+      report.surfaceInstrumentation={url:route.request().url(),original,body};await save();
+      await route.fulfill({response,body});
+    });
+  }
   if(process.argv.includes('--camera-match-check')) {
     // Independent native reference in this owned browser only. Bypass the feature
     // node/selector for a reference, then restore the exact prior pipeline state.
@@ -369,6 +378,10 @@ ${needle}`);
       if(passes){assert.notEqual(rh,raw16);assert.equal(signal.lighting.frame.surfaceReconstruction.history,false);assert.ok(signal.lighting.frame.surfaceReconstruction.directedEdges>0);}
       await page.screenshot({path:`${out}/surface-${name}.png`});
       report.views.push({name,sourceHash:sh,surfaceHash:rh,smokeHash:mh,lighting:signal.lighting});await save();
+    }
+    if(process.argv.includes('--surface-cost-check')) {
+      report.phase='surface-GPU-cost';await save();
+      report.surfaceCost=await page.evaluate(async()=>{const m=await import('/scratch/beaming-surface-gpu-check.mjs');const f=window.__beamingSurfaceFixture;if(f.graph.count!==window.__kaminosSceneRadiance.debugState().frame.surfaceReceivers)throw new Error('timing fixture is not the authored receiver graph');return m.measureSurfaceGPU(f);});await save();
     }
   }
   if(process.argv.includes('--edit-budget-check')) {
