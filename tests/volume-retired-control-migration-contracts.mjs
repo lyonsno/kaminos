@@ -247,7 +247,10 @@ const layoutMigration = reconcileVolumeCockpitLayoutDocument({
   retiredControls: schema.retiredControls,
 });
 assert.deepEqual(layoutMigration.retiredControlIds, [retired.key]);
-assert.deepEqual(layoutMigration.document.groups[0].controlIds, activeControlIds);
+assert.deepEqual(new Set(layoutMigration.document.groups[0].controlIds), new Set(activeControlIds));
+const gridCompanions = new Set(['volume-domain-shape','volume-outer-resolution','volume-collision-voxels']);
+assert.deepEqual(layoutMigration.document.groups[0].controlIds.filter(id=>!gridCompanions.has(id)),
+  activeControlIds.filter(id=>!gridCompanions.has(id)), 'unrelated authored order survives grid companion placement');
 assert.equal(layoutMigration.document.groups[0].collapsed, true, 'surviving group state is preserved');
 
 const inventedLayout = structuredClone(historicalLayout);

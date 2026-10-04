@@ -238,7 +238,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
       {bytesPerRow,rowsPerImage:2*c.grid},c.shape);solidRevision=null;
   };
   return {
-    config:c,optical,shader,clearSolids,
+    config:c,optical,solids,shader,clearSolids,
     setSolids(packed,revision){device.queue.writeTexture({texture:solids},packed.data,{bytesPerRow:packed.bytesPerRow,rowsPerImage:packed.rowsPerImage},c.shape);solidRevision=revision;},
     encode(encoder,nearIndex,{dtScale,backtraceScale},buoyancy=.002){
       device.queue.writeBuffer(params,0,new Float32Array([dtScale,backtraceScale,buoyancy,.998]));

@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 217,
+  "controlCount": 219,
   "controls": [
     { "key": "volume-physical-material-law", "param": "volume_physical_material_law", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
     { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
@@ -249,6 +249,8 @@
       "additiveSinceControlCount": 216
     },
     {"key":"volume-domain-shape","param":"volume_domain_shape","tagName":"SELECT","type":"select-one","additiveDefault":"tall","allowedValues":["cube","tall"],"additiveSinceControlCount":217},
+    {"key":"volume-outer-resolution","param":"volume_outer_grid","tagName":"SELECT","type":"select-one","additiveDefault":"32","additiveSinceControlCount":218},
+    {"key":"volume-collision-voxels","param":"volume_collision_voxels","tagName":"SELECT","type":"select-one","additiveDefault":"off","allowedValues":["off","fine","outer"],"additiveSinceControlCount":219},
     {
       "key": "volume-pyro-compare",
       "param": "volume_pyro_compare",

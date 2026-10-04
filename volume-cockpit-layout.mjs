@@ -198,8 +198,14 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
     }
     gridGroup.controlIds.splice(gridGroup.controlIds.indexOf('volume-resolution'), 0, 'volume-domain-shape');
   }
+  const gridCompanions = ['volume-outer-resolution','volume-collision-voxels'].filter(id=>authorableSet.has(id) && gridGroup && receipt.missingControlIds.includes(id));
+  for(const id of gridCompanions){
+    for(const group of reconciled.groups)group.controlIds=group.controlIds.filter(x=>x!==id);
+    gridGroup.controlIds.push(id);
+  }
   const ordinaryMissingControlIds = receipt.missingControlIds
     .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId)
+      && !gridCompanions.includes(controlId)
       && !(colocateShape && controlId === 'volume-domain-shape'));
   if (ordinaryMissingControlIds.length) {
     let newControls = reconciled.groups.find(group => group.id === 'new-controls');

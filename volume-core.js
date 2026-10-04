@@ -6,7 +6,7 @@ import {
   normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
-import { outerSmokeConfig, createOuterSmoke } from './volume-outer-smoke.mjs';
+import { outerSmokeConfig, createOuterSmoke, validateOuterSmokeDevice } from './volume-outer-smoke.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
@@ -2674,6 +2674,7 @@ override LEAN_STOCK_RAYMARCH: bool = false;
 const OUTER_SMOKE: bool = false;
 const OUTER_EXTENT: f32 = 4.0;
 @group(0) @binding(17) var outerSmokeOptical: texture_3d<f32>;
+@group(0) @binding(18) var outerSceneSolidCells: texture_3d<u32>;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -6324,6 +6325,45 @@ fn sampleOuterSmoke(p:vec3<f32>)->vec4<f32>{
 }
 fn outerSmokeAmbient()->vec3<f32>{return vec3<f32>(u.emissive_material.z);}
 
+// Exact cell traversal of the solver's installed collision texture. Diagnostic
+// x-ray: bypass optical density and mesh depth; never substitute source triangles.
+fn raymarchCollisionVoxels(ro:vec3<f32>,rd:vec3<f32>,outer:bool)->vec4<f32>{
+  var dims=vec3<i32>(textureDimensions(sceneSolidCells));
+  var lo=vec3<f32>(-1.0);var h=2.0/f32(GRID);
+  if(outer){dims=vec3<i32>(textureDimensions(outerSceneSolidCells));lo=vec3<f32>(-OUTER_EXTENT);h=2.0*OUTER_EXTENT/f32(dims.x);}
+  if(dims.x<=1 || (outer && !OUTER_SMOKE)){return vec4<f32>(0.0);}
+  let span=vec3<f32>(dims)*h;let hit=boxHit(ro-(lo+span*.5),rd,span*.5);
+  var t=max(0.0,hit.x)+h*.0001;
+  if(hit.y<=t){return vec4<f32>(0.0);}
+  var c=clamp(vec3<i32>(floor((ro+rd*t-lo)/h)),vec3<i32>(0),dims-1);
+  let direction=vec3<i32>(sign(rd));var delta=vec3<f32>(1e30);var edge=vec3<f32>(1e30);
+  for(var a=0;a<3;a++){if(abs(rd[a])>1e-12){
+    delta[a]=h/abs(rd[a]);
+    edge[a]=(lo[a]+(f32(c[a])+select(0.0,1.0,rd[a]>0.0))*h-ro[a])/rd[a];
+  }}
+  var faceAxis=0;
+  let entry=(ro+rd*t-lo)/h;
+  let faceDistance=min(entry,vec3<f32>(dims)-entry);
+  if(faceDistance.y<faceDistance.x){faceAxis=1;}
+  if(faceDistance.z<faceDistance[faceAxis]){faceAxis=2;}
+  for(var visited=0;visited<dims.x+dims.y+dims.z+3;visited++){
+    if(any(c<vec3<i32>(0))||any(c>=dims)||t>hit.y){break;}
+    var occupied=0u;
+    if(outer){occupied=textureLoad(outerSceneSolidCells,c,0).x;}else{occupied=textureLoad(sceneSolidCells,c,0).x;}
+    if(occupied!=0u){
+      let f=clamp((ro+rd*t-lo)/h-vec3<f32>(c),vec3<f32>(0.0),vec3<f32>(1.0));
+      var line=1.0;
+      for(var a=0;a<3;a++){if(a!=faceAxis){line=min(line,min(f[a],1.0-f[a]));}}
+      let base=select(vec3<f32>(.08,.65,.85),vec3<f32>(.95,.34,.055),outer);
+      let shade=select(select(.65,.82,faceAxis==2),1.0,faceAxis==1);
+      return vec4<f32>(base*shade*mix(.18,1.0,smoothstep(.015,.055,line)),1.0);
+    }
+    let next=min(edge.x,min(edge.y,edge.z));t=next+h*.0001;
+    for(var a=0;a<3;a++){if(edge[a]<=next+h*.00001){c[a]+=direction[a];edge[a]+=delta[a];faceAxis=a;}}
+  }
+  return vec4<f32>(0.0);
+}
+
 fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && nonRidgeOpticalCaptureHeader.mode >= 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
@@ -6335,6 +6375,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
+  if(u.volume_presentation_controls.y>0.5){
+    let voxel=raymarchCollisionVoxels(ro, rd, u.volume_presentation_controls.y>1.5);
+    return makeRaymarchResult(voxel,1.0-voxel.a,vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0));
+  }
   let halfHeight = f32(GRID_Y)/f32(GRID);
   let nearHit = boxHit(ro - vec3<f32>(0.0, halfHeight-1.0, 0.0), rd, vec3<f32>(1.0, halfHeight, 1.0));
   var hit = nearHit;
@@ -9359,8 +9403,8 @@ export function createKaminosVolumePrototype({
   let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
   const outerRoute = new URLSearchParams(`${globalThis.location?.search?.slice(1)||''}&${globalThis.location?.hash?.slice(1)||''}`);
   const outerRequested = surroundingSmoke !== null || outerRoute.get('volume_outer_smoke') === '1';
-  const outerConfig = outerRequested ? outerSmokeConfig(surroundingSmoke || {
-    grid:Number(outerRoute.get('volume_outer_grid') || 32),
+  let outerConfig = outerRequested ? outerSmokeConfig(surroundingSmoke || {
+    grid:Number(controlsSnapshot.outerResolution ?? outerRoute.get('volume_outer_grid') ?? 32),
     extent:Number(outerRoute.get('volume_outer_extent') || 4),
     pressureIterations:Number(outerRoute.get('volume_outer_pressure') || 24),
   }) : null;
@@ -10943,6 +10987,7 @@ export function createKaminosVolumePrototype({
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 16, resource: sceneSolidTextureView },
         { binding: 17, resource: (outerSmoke?.optical || outerSmokeFallback).createView() },
+        { binding: 18, resource: outerSmoke?.solids.createView() || sceneSolidTextureView },
       ],
     });
   }
@@ -12840,6 +12885,7 @@ export function createKaminosVolumePrototype({
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
         { binding: 17, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '3d' } },
+        { binding: 18, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'uint', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -14220,7 +14266,11 @@ export function createKaminosVolumePrototype({
     const volumeExposure = clampFinite(controlsSnapshot.volumeExposure, 0, 3, 1);
     uniforms[331] = 0;
     uniforms[332] = volumeExposure;
-    uniforms[333] = 0;
+    uniforms[333] = controlsSnapshot.collisionVoxelView === 'fine' ? 1 : controlsSnapshot.collisionVoxelView === 'outer' ? 2 : 0;
+    state.collisionVoxelView = {requested:controlsSnapshot.collisionVoxelView || 'off',
+      effective:uniforms[333] === 0 ? 'off' : state.sceneCollision?.effective !== 'mesh-voxel-solid' ? 'unavailable-no-collision-mask' : uniforms[333] === 2 && !outerSmoke ? 'unavailable-no-outer-grid' : controlsSnapshot.collisionVoxelView,
+      authority:'installed-solver-solid-texture', presentation:'x-ray-replaces-volume',
+      fineShape:[gridSize,gridHeight,gridSize],outerShape:outerSmoke?.config.shape || null};
     uniforms[334] = 0;
     uniforms[335] = 0;
     writeBoundaryFirePaletteUniform(
@@ -24542,6 +24592,14 @@ export function createKaminosVolumePrototype({
       return encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now });
     },
     setControls(next) {
+      if(next.collisionVoxelView !== undefined && !['off','fine','outer'].includes(next.collisionVoxelView)) throw new Error('Invalid collision voxel view');
+      const requestedOuterGrid = Number(next.outerResolution ?? outerConfig?.grid ?? 32);
+      const outerGridChanged = outerRequested && requestedOuterGrid !== outerConfig.grid;
+      if(outerGridChanged){
+        const candidate=outerSmokeConfig({...outerConfig,grid:requestedOuterGrid});
+        if(device)validateOuterSmokeDevice(candidate,device.limits);
+        outerConfig=candidate;
+      }
       const previousGrid = gridSize;
       const previousHeight = gridHeight;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
@@ -24580,7 +24638,7 @@ export function createKaminosVolumePrototype({
         && requestedGrid === previousGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && (requestedGrid !== previousGrid || gridHeightForSize(requestedGrid) !== previousHeight)) {
+      if (device && (outerGridChanged || requestedGrid !== previousGrid || gridHeightForSize(requestedGrid) !== previousHeight)) {
         rebuildFluidState(requestedGrid);
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, 'canonical-source-control-change');
