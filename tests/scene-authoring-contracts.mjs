@@ -10,6 +10,10 @@ const forwarded = new URL(forwardCompositionHash('http://localhost:8106/?setting
 assert.equal(forwarded.searchParams.get('settings_preset'), 'exact');
 assert.equal(new URLSearchParams(forwarded.hash.slice(1)).get('scene'), 'test.kaminos.json');
 assert.equal(new URLSearchParams(forwarded.hash.slice(1)).get('composition_module_url'), './consumer.mjs');
+const collisionTarget = new URL(forwardCompositionHash('http://localhost:8106/?settings_preset=exact',
+  '#scene=test.kaminos.json&volume_collision=kiln'));
+assert.equal(new URLSearchParams(collisionTarget.hash.slice(1)).get('volume_collision'), 'kiln',
+  'the saved-preset launcher must retain the opt-in authored-kiln collision route');
 assert.throws(() => compositionRestoreUrl(state, '../wrong.json', target.origin));
 const calls = [];
 const host = { width: 800, height: 600, getBoundingClientRect: () => ({ left: 50, top: 20, width: 400, height: 300 }) };
@@ -23,4 +27,6 @@ assert.throws(() => captureComposedCanvases({ host: null, document, label: 'A' }
 assert.throws(() => captureComposedCanvases({ host, document, label: '' }), /label/);
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 assert.match(index, /id="composition-ground-visible"/, 'author can remove the inspection floor that clips a lowered kiln');
+assert.match(index, /if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\| new URLSearchParams\(location.search\).get\('kaminos_volume_smoke'\) === '1'\)/,
+  'a geometry-only authored scene must preserve an explicitly requested live volume route');
 console.log('scene authoring contracts passed');

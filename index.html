@@ -3340,6 +3340,10 @@ function isFireLightFieldRoute(params = fireLightFieldRouteParams()) {
   return params.get('volume_light_field') === '1';
 }
 
+function isAuthoredKilnCollisionRoute(params = new URLSearchParams(window.location.hash.replace(/^#/, ''))) {
+  return params.get('volume_collision') === 'kiln';
+}
+
 function isFireLightFieldIsolateRoute(params = fireLightFieldRouteParams()) {
   return params.get('volume_light_field_isolate') === '1';
 }
@@ -10701,7 +10705,8 @@ async function initScene() {
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
 
-  let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1';
+  let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
+    || isAuthoredKilnCollisionRoute();
   let sceneRenderedForVolume = false;
   let foregroundServiceActive = false;
   let insideForegroundFrame = false;
@@ -10759,7 +10764,9 @@ async function initScene() {
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
     const fireLightFieldRouteActive = fireLightFieldPass !== null;
-    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && volumeBridge ? volumeBridge.update() === true : false;
+    // Kiln composition already overlays the depth-clipped native canvas. Do
+    // not upload that canvas back into the scene rendered by its depth provider.
+    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
@@ -22021,16 +22028,26 @@ async function initKaminosVolumeRoute() {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
-    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute(),
+    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute(),
     // The finger-fluid liquid-contact route adopts the fluid solver's device
     // through its descriptor; seating the host device here would refuse it.
     sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
-    getSceneDepth: isFireLightFieldRoute() ? () => ordinarySceneDepthProvider?.() ?? null : null,
+    getSceneDepth: (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute())
+      ? () => ordinarySceneDepthProvider?.() ?? null
+      : null,
+    // The kiln is an explicit authored-solid experiment. Its exact registered
+    // mesh and world transform, not its bounding box or camera depth, feed the
+    // volume solver when the scene route requests volume_collision=kiln.
+    getSceneCollision: () => {
+      if (!isAuthoredKilnCollisionRoute()) return null;
+      const entry = sceneObjects.find(record => record.id === 'kiln' && record.type === 'glb');
+      return { requested: true, id: 'kiln', object: entry?.object ?? null };
+    },
   });
-  if (isFireLightFieldRoute()) {
-    // Fire-to-scene lighting needs the live Three scene visible under the
-    // flame: alpha-composite the native volume canvas instead of the opaque
-    // near-black overlay, and keep the CanvasTexture bridge out of the route.
+  if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
+    // Composition routes need the live Three scene visible under the flame:
+    // alpha-composite the native volume canvas and depth-clip volume behind
+    // authored surfaces instead of painting an opaque near-black overlay.
     const volumeCanvasElement = volumePrototype.canvasElement?.();
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
@@ -26927,7 +26944,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (!activeSceneComposition || JSON.stringify(previousVolumePrimitiveState) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
-  if (hasVolumePrimitiveScene || activeSceneComposition) {
+  if (hasVolumePrimitiveScene || activeSceneComposition || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1') {
     setActiveTab(activeSceneComposition ? 'assets' : 'volume');
     await volumePrototype?.setActive?.(true);
   } else {
