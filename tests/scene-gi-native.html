@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Scene GI material assay</title>
+<style>body{margin:0;background:#000}canvas{display:block;width:100vw;height:100vh}</style>
+<script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import {uniform} from 'three/tsl';
+import {createSceneGI} from '../scene-gi.mjs';
+const renderer=new THREE.WebGPURenderer({antialias:false});
+await renderer.init();
+renderer.setSize(800,600);renderer.setPixelRatio(1);
+renderer.toneMapping=THREE.NoToneMapping;
+document.body.append(renderer.domElement);
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,800/600,.1,30);
+window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();pipeline.render();});
+scene.background=new THREE.Color(0);
+camera.position.set(4,3,5);camera.lookAt(0,.5,0);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshStandardNodeMaterial({color:0xffffff,roughness:1,metalness:0}));
+floor.rotation.x=-Math.PI/2;scene.add(floor);
+const emitter=new THREE.Mesh(new THREE.PlaneGeometry(3,2),new THREE.MeshStandardNodeMaterial({color:0,emissive:0xff2205,emissiveIntensity:4,side:THREE.DoubleSide}));
+emitter.position.set(-1,1,0);emitter.rotation.y=Math.PI/2;scene.add(emitter);
+const gi=createSceneGI(scene,camera,uniform(1));
+const pipeline=new THREE.RenderPipeline(renderer);pipeline.outputNode=gi.output();
+const frames=async()=>{for(let i=0;i<3;i++){pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();}};
+const read=async()=>Array.from(await renderer.readRenderTargetPixelsAsync(gi.beauty.renderTarget,0,0,800,600),THREE.DataUtils.fromHalfFloat);
+window.giAssay={
+  async sourceResponse() {
+    floor.material.metalness=0;gi.setSettings({mode:'combined',gain:1});
+    const result=[];
+    for(const power of [4,1,0]){emitter.material.emissiveIntensity=power;await frames();result.push({power,raw:(await gi.readback(renderer)).stats});}
+    emitter.material.emissiveIntensity=4;await frames();return result;
+  },
+  async material() {
+    const results=[];
+    for(const metalness of [0,.5,1]) {
+      floor.material.metalness=metalness;
+      gi.setSettings({mode:'combined',gain:0});await frames();const zero=await read();
+      gi.setSettings({mode:'combined',gain:1});await frames();const lit=await read();
+      let sum=0,max=0;
+      for(let i=0;i<lit.length;i++)if(i%4<3){const d=Math.abs(lit[i]-zero[i]);sum+=d;max=Math.max(max,d);}
+      results.push({metalness,sum,max,raw:(await gi.readback(renderer)).stats});
+    }
+    return results;
+  },
+  async view(gain,position=[4,3,5]) {
+    floor.material.metalness=0;camera.position.fromArray(position);camera.lookAt(0,.5,0);
+    gi.setSettings({mode:'combined',gain});await frames();
+    return gi.debugState();
+  }
+};
+await window.giAssay.view(1);window.assayLoaded=true;
+</script></html>

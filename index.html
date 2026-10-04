@@ -974,9 +974,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
 
     <h2>Post Processing</h2>
+    <div id="scene-gi-general-slot"></div>
     <div class="slider-row">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-        <input type="checkbox" id="ao-toggle" checked> GTAO Compute
+        <input type="checkbox" id="ao-toggle" checked> Ambient occlusion
       </label>
     </div>
     <div id="ao-controls">
@@ -3231,6 +3232,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="rendering-panel-content" role="tabpanel" aria-labelledby="right-tab-rendering" hidden>
       <div class="volume-authored-mix-kicker">Scene light</div>
       <h2 class="volume-authored-mix-title">Rendering</h2>
+      <div id="scene-gi-panel">
       <div class="field"><label for="scene-gi-mode">Surface illumination</label><select id="scene-gi-mode"><option value="gtao">GTAO baseline</option><option value="combined">Combined AO + GI</option></select></div>
       <div id="scene-gi-controls" hidden>
         <div class="field"><label for="scene-gi-view">View</label><select id="scene-gi-view"><option value="scene">Scene</option><option value="ao">AO visibility</option><option value="gi">Indirect light</option></select></div>
@@ -3242,6 +3244,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div class="slider-row"><label class="slider-label" for="scene-gi-denoise">GI/AO filter</label><input id="scene-gi-denoise" type="range" min="0" max="10" step="0.5" value="3"><output id="scene-gi-denoise-value">3</output></div>
       </div>
       <div id="scene-gi-status" role="status"></div>
+      </div>
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
       <label for="rendering-light-mode">Light contributions</label>
       <select class="rendering-channel-select" id="rendering-light-mode">
@@ -10528,7 +10531,7 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   rebuildSceneGIOutput();
-  window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),effectiveMode:sceneGISettings.mode,view:sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
+  window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = () => sceneGI.readback(renderer);
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
   let sceneCameraStatusText='';
@@ -23726,6 +23729,7 @@ function updateBackground() {
 }
 
 // --- AO Controls ---
+if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
 function setSceneGIControls(value) {
   const settings = resolveSceneGISettings(value);
   for (const key of Object.keys(settings)) document.getElementById(`scene-gi-${key}`).value = String(settings[key]);

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {admitSceneGIComparison} from './scene-gi-evidence.mjs';
-const [url,out,root] = process.argv.slice(2);
+const [url,out,root,operation] = process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
 const report={requestedUrl:url,expectedRoot:root,executable,status:'running',phase:'load',errors:[],httpErrors:[],views:[]};
@@ -73,6 +73,26 @@ try {
     evidence[name]={...v.pixels,view:v.gi.view,gain:v.gi.gain,frameBefore:v.frameBefore,frameAfter:v.gi.frames,values:await fs.readFile(`${out}/${name}.rgba`)};
   }
   report.pixelComparison=admitSceneGIComparison(evidence);
+  if(operation==='--benchmark') {
+    report.phase='benchmark';report.performance=[];await save();
+    for(const mode of ['gtao','combined','gtao']) {
+      await page.selectOption('#scene-gi-mode',mode);
+      if(mode==='combined')await page.selectOption('#scene-gi-view','scene');
+      await page.waitForTimeout(3000);
+      const sample=await page.evaluate(async()=>{
+        const start=performance.now(),before=window.kaminosSceneGIDebugState(),frames=[];
+        while(performance.now()-start<5000) {
+          await new Promise(requestAnimationFrame);
+          frames.push({time:performance.now()-start,sceneFrames:window.kaminosSceneGIDebugState().sceneFrames});
+        }
+        const after=window.kaminosSceneGIDebugState(),elapsed=performance.now()-start;
+        return {before,after,elapsed,frames,sceneFramesPerSecond:(after.sceneFrames-before.sceneFrames)*1000/elapsed};
+      });
+      report.performance.push({mode,...sample,scope:'whole-app-render-invocation-throughput-not-GPU-only-or-presentation'});await save();
+    }
+  }
+  report.runtimeAfter=await(await fetch(new URL('/api/runtime-config',url))).json();
+  assert.deepEqual(report.runtimeAfter.source,report.runtime.source,'source revision changed during witness');
   report.status='captured';report.phase='complete';
 } catch(e) {report.status='failed';report.error=String(e.stack||e);process.exitCode=1;await page?.screenshot({path:`${out}/failure.png`}).catch(()=>{});}
 finally {await save();await browser?.close();}
