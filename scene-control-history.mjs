@@ -52,11 +52,15 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
   input.title='Drag to adjust · Click to type · Shift for fine · Esc to cancel';
   input.addEventListener('focus',()=>{if(!gesture)input.readOnly=false;}); // Tab preserves normal keyboard editing.
   input.addEventListener('blur',()=>{if(gesture)finish(true);input.readOnly=true;});
-  function finish(cancel=false) {
-    if(!gesture)return;
+  function releaseGesture() {
+    if(!gesture)return null;
     const ended=gesture;gesture=null;
     if(ended.target.hasPointerCapture?.(ended.pointerId))ended.target.releasePointerCapture(ended.pointerId);
     input.classList?.remove('scrubbing');
+    return ended;
+  }
+  function finish(cancel=false) {
+    const ended=releaseGesture();if(!ended)return;
     if(cancel) {input.dispatchEvent(new Event('pointercancel'));suppressClick=true;}
     else if(ended.moved) {input.dispatchEvent(new Event('change',{bubbles:true}));suppressClick=true;input.readOnly=true;input.blur?.();}
     else {input.readOnly=false;input.focus?.();input.select?.();}
@@ -93,4 +97,8 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
   }
   window.addEventListener('blur',()=>finish(true));
   document.addEventListener('keydown',event=>{if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}},true);
+  // The transaction owner can finish via Escape/Enter/selection before our
+  // document listener runs. Release pointer ownership without emitting a second
+  // transaction-ending event back into that owner.
+  return {stop(){if(releaseGesture()){suppressClick=true;input.readOnly=true;onEnd();}}};
 }

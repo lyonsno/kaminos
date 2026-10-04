@@ -34,6 +34,7 @@ export function installScenePlacementTools({
 
   let modal = null;
   let field = null;
+  const fieldScrubbers = new WeakMap();
   let lastPointer = { x: 0, y: 0 };
   let hover = false;
   let historyScopeArmed = false;
@@ -83,7 +84,9 @@ export function installScenePlacementTools({
     if (!edits.state().active && !gizmoEditing) return false;
     const prior = modal?.prior || gizmoPrior;
     const capture = field?.capture || (gizmoEditing ? pointerOrigin : null);
+    const fieldInput = field?.input;
     modal = null; field = null; gizmoEditing = false; gizmoPrior = null;
+    if (fieldInput) fieldScrubbers.get(fieldInput)?.stop();
     if (gizmo.dragging) { gizmo.pointerUp({ button: 0 }); gizmo.dragging = false; gizmo.axis = null; }
     if (capture?.target?.hasPointerCapture?.(capture.pointerId)) capture.target.releasePointerCapture(capture.pointerId);
     let error;
@@ -317,8 +320,8 @@ export function installScenePlacementTools({
     input.addEventListener('blur', () => { if (field?.input === input && !field.drag) finish(true); });
     input.addEventListener('change', () => { if (field?.input === input && !field.drag) finish(true); });
     input.addEventListener('pointercancel', () => { if (field?.input === input) finish(false); });
-    installRelativeNumberDrag({grip:input,input,step:input.dataset.transformField.startsWith('rotation.')?.2:.01,
-      onStart:()=>{if(edits.state().active)finish(true);}});
+    fieldScrubbers.set(input,installRelativeNumberDrag({grip:input,input,step:input.dataset.transformField.startsWith('rotation.')?.2:.01,
+      onStart:()=>{if(edits.state().active)finish(true);}}));
     const grip = input.parentElement.querySelector('.transform-axis');
     if (!grip) continue;
     grip.title = 'Drag to adjust; edit the number to type'; grip.style.cursor = 'ew-resize'; grip.style.touchAction = 'none';
