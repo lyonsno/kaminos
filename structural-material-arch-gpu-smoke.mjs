@@ -87,7 +87,7 @@ async function repairClick(before){
 }
 async function liveClock(name='live-clock',expectedFailures=[]){
   const before=await witness(),wallStart=performance.now();check('live-clock exercise starts paused',before.paused===true,before.paused);
-  await evaluate('document.querySelector("#pause").click()');await sleep(2000);await evaluate('document.querySelector("#pause").click();await window.__archCollapse.advance(0)');
+  await evaluate('document.querySelector("#pause").click()');await sleep(2000);await evaluate('(async()=>{document.querySelector("#pause").click();await window.__archCollapse.advance(0);})()');
   const live=await capture(name,undefined,expectedFailures),clock={wallSeconds:(performance.now()-wallStart)/1000,steps:live.state.step-before.state.step,simulationSeconds:live.state.time-before.state.time};
   report.liveClocks??={};report.liveClocks[name]=clock;
   check('the live clock advances actual GPU physics without manual advance',clock.steps>2&&clock.simulationSeconds>0&&live.paused===true,clock);return live;
@@ -225,7 +225,7 @@ try {
     check('the crown falls beyond the grabbed patch',crownDrop>1,crownDrop);
     const penetration=rest.state.floorY-minimumY(rest.state);
     check('rubble meets the floor within six percent of a cell',penetration<Math.min(...Object.values(rest.state.dimensions))*.06,penetration);
-    await evaluate('document.querySelector("#shear").click();await window.__archCollapse.reset()');const reset=await capture('explicit-reset');
+    await evaluate('(async()=>{document.querySelector("#shear").click();await window.__archCollapse.reset();})()');const reset=await capture('explicit-reset');
     check('explicit Reset clears damage and preserves camera',reset.state.broken===0&&JSON.stringify(reset.camera)===JSON.stringify(binding.camera),reset.state.broken);
     await input({type:'mousePressed',x:40,y:180,button:'left',buttons:1,clickCount:1});check('background press does not grip material',(await witness()).state.hand===null,(await witness()).lastPick);
     await input({type:'mouseMoved',x:100,y:210,button:'left',buttons:1});await input({type:'mouseReleased',x:100,y:210,button:'left',buttons:0,clickCount:1});await sleep(350);const orbit=await capture('operator-orbit');
@@ -246,9 +246,9 @@ try {
       await evaluate('(async()=>{const {ArchGpuEngine}=await import("./dist/structural-material-arch-gpu-engine.js");const original=ArchGpuEngine.prototype.step;ArchGpuEngine.prototype.step=function(){ArchGpuEngine.prototype.step=original;throw new Error("injected native recovery fault");};try{await window.__archCollapse.advance(1);}catch(error){return error.message;}finally{ArchGpuEngine.prototype.step=original;}})()');
       const failed=await witness();check('the injected fault is visible and stops the live clock',failed.phase==='failed'&&failed.paused===true&&failed.failure.message==='injected native recovery fault'&&failed.failures.length===knownFailures.length+1,failed.failure);
       knownFailures.push(failed.failure);report.expectedRecoveryFaults=[...knownFailures];save();
-      await evaluate('await window.__archCollapse.reset()');const recovered=await capture(`recovered-${initiallyPaused?'paused':'live'}`,undefined,knownFailures);
+      await evaluate('window.__archCollapse.reset()');const recovered=await capture(`recovered-${initiallyPaused?'paused':'live'}`,undefined,knownFailures);
       check('Reset preserves the pre-failure clock and failure history',recovered.paused===initiallyPaused&&recovered.failures.length===knownFailures.length&&JSON.stringify(recovered.camera)===JSON.stringify(before.camera),{paused:recovered.paused,failures:recovered.failures.length});
-      if(!initiallyPaused)await evaluate('document.querySelector("#pause").click();await window.__archCollapse.advance(0)');
+      if(!initiallyPaused)await evaluate('(async()=>{document.querySelector("#pause").click();await window.__archCollapse.advance(0);})()');
     }
   }
   report.status='passed';report.phase='complete';save();
