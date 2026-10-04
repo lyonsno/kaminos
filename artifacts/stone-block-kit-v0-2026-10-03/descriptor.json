@@ -1,0 +1,177 @@
+{
+  "schema": "kaminos.stone-block-kit.v0",
+  "assetId": "limestone-block-kit-v0",
+  "route": "deterministic clipped cuboids with procedural limestone PBR",
+  "coordinateFrame": {
+    "handedness": "right",
+    "up": "+Y",
+    "forward": "+Z",
+    "unit": "uncalibrated-simulation-coordinate"
+  },
+  "commonEnvelope": [
+    0.28,
+    0.30576,
+    0.2123333333
+  ],
+  "instancePolicy": "stable-body-id modulo variant-count; body-owned transforms",
+  "structuralAuthority": false,
+  "collisionAuthority": false,
+  "contactFacePolicy": "major faces remain at common box planes; edge and corner relief is inward",
+  "variants": [
+    {
+      "assetId": "limestone-block-01",
+      "visualRef": "limestone-block-01.glb",
+      "preferredNode": "limestone-block-01",
+      "localBounds": {
+        "min": [
+          -0.14000000059604645,
+          -0.152879998087883,
+          -0.10616666823625565
+        ],
+        "max": [
+          0.14000000059604645,
+          0.152879998087883,
+          0.10616666823625565
+        ]
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "transformsBaked": true,
+      "triangleCount": 92,
+      "embeddedTextures": [
+        "basecolor",
+        "normal",
+        "roughness"
+      ],
+      "sha256": "1059ce57146d8c9ab4eaeaa5f1d44f7e4fbe3f2e8fa73d775758e520be2cbc44",
+      "seed": 100301
+    },
+    {
+      "assetId": "limestone-block-02",
+      "visualRef": "limestone-block-02.glb",
+      "preferredNode": "limestone-block-02",
+      "localBounds": {
+        "min": [
+          -0.14000000059604645,
+          -0.152879998087883,
+          -0.10616666823625565
+        ],
+        "max": [
+          0.14000000059604645,
+          0.152879998087883,
+          0.10616666823625565
+        ]
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "transformsBaked": true,
+      "triangleCount": 92,
+      "embeddedTextures": [
+        "basecolor",
+        "normal",
+        "roughness"
+      ],
+      "sha256": "ad1423138c457857e32d5bc30869dc3a338000e9c41d4c5bedc387a3aa54eaa4",
+      "seed": 100302
+    },
+    {
+      "assetId": "limestone-block-03",
+      "visualRef": "limestone-block-03.glb",
+      "preferredNode": "limestone-block-03",
+      "localBounds": {
+        "min": [
+          -0.14000000059604645,
+          -0.152879998087883,
+          -0.10616666823625565
+        ],
+        "max": [
+          0.14000000059604645,
+          0.152879998087883,
+          0.10616666823625565
+        ]
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "transformsBaked": true,
+      "triangleCount": 92,
+      "embeddedTextures": [
+        "basecolor",
+        "normal",
+        "roughness"
+      ],
+      "sha256": "70acf43f9d6f08821625efdd74dbc851facdcf308ff76de602441dc3a14fe1f7",
+      "seed": 100303
+    },
+    {
+      "assetId": "limestone-block-04",
+      "visualRef": "limestone-block-04.glb",
+      "preferredNode": "limestone-block-04",
+      "localBounds": {
+        "min": [
+          -0.14000000059604645,
+          -0.152879998087883,
+          -0.10616666823625565
+        ],
+        "max": [
+          0.14000000059604645,
+          0.152879998087883,
+          0.10616666823625565
+        ]
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "transformsBaked": true,
+      "triangleCount": 88,
+      "embeddedTextures": [
+        "basecolor",
+        "normal",
+        "roughness"
+      ],
+      "sha256": "001a197feee629cb3e6a2a1dad72f45ea65fffc4fc5aaac247c45b3519288338",
+      "seed": 100304
+    },
+    {
+      "assetId": "limestone-block-05",
+      "visualRef": "limestone-block-05.glb",
+      "preferredNode": "limestone-block-05",
+      "localBounds": {
+        "min": [
+          -0.14000000059604645,
+          -0.152879998087883,
+          -0.10616666823625565
+        ],
+        "max": [
+          0.14000000059604645,
+          0.152879998087883,
+          0.10616666823625565
+        ]
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "transformsBaked": true,
+      "triangleCount": 92,
+      "embeddedTextures": [
+        "basecolor",
+        "normal",
+        "roughness"
+      ],
+      "sha256": "1c7f6ee72cb48089008180a26a3811d5cd4879415544492aa96170e1b37f52ea",
+      "seed": 100305
+    }
+  ]
+}
