@@ -45,7 +45,7 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
   let pose={position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]};
   let suspended=false;
   const calls=[];
-  const context={normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain,
+  const context={authoredFlamePresent:true,normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain,
     flameDomainTranslation:[0,0,0],
     applyFlameEmitterPose:(next,{sourceEnabled=true}={})=>{
       calls.push({x:next.position[0],sourceEnabled});
@@ -94,7 +94,7 @@ test('clearing a scene removes its old flame member before the next scene saves'
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
+  const context={authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
     sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},
     greenroomPreviewState:null,currentMesh:null,sceneGroups:[],activeSceneObjectId:flame.id,
@@ -113,7 +113,7 @@ test('switching to cluster removes the analytic member from scene membership', (
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={scene:{remove:object=>removed.push(object)},isFireLightFieldRoute:()=>true,
+  const context={authoredFlamePresent:true,scene:{remove:object=>removed.push(object)},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'cluster',sourceMode:'cluster'}}},
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:null,flameDomainGuide:null,
     scenePlacementTools:{finish:()=>{},edits:{discard:()=>{}}},
@@ -129,7 +129,7 @@ test('a source-free analytic family retains the flame handle for editing and sav
   const end=html.indexOf('function writeAuthoredFlameEmitterPose(value)',start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   let removed=0,updated=0;
-  const context={scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
+  const context={authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'off'}}},
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:{visible:false,box:{set:()=>{}}},
     flameDomainTranslation:[0,0,0],

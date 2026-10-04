@@ -352,6 +352,7 @@ export function installScenePlacementTools({
   }
   return {
     edits, state, start, finish, selectionChanged, draw,
+    addHistoryScope: scope => historyScopes.push(scope),
     clear() { finish(false); edits.clear(); draw(); },
   };
 }

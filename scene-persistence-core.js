@@ -1,10 +1,11 @@
+import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
   flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 5;
+export const SCENE_VERSION = 6;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -17,8 +18,10 @@ function normalizeSceneObjectRecord(record) {
   if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
     throw new Error('Unsupported flame source identity');
   }
+  if (record.type === BURNER_BED_TYPE) record = checkedBurnerBed(record);
   return {
     id,
+    ...(record.type === BURNER_BED_TYPE ? {burner:cloneJson(record.burner)} : {}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
@@ -51,6 +54,7 @@ function normalizeSceneGroupRecord(record) {
     id,
     label: record.label ?? id,
     objectIds,
+    ...(record.type === BURNER_ASSEMBLY_TYPE ? {type:BURNER_ASSEMBLY_TYPE,transform:checkedAssemblyPose(record.transform)} : {}),
     source: record.source ?? null,
     createdAt: record.createdAt ?? null,
   };
@@ -113,6 +117,7 @@ export function sceneDocumentIsLoadable(data) {
 export function isReloadableSceneObjectRecord(record) {
   const type = record?.type || 'glb';
   const source = record?.source;
+  if (type === BURNER_BED_TYPE) return source === BURNER_BED_SOURCE;
   if (type === FLAME_EMITTER_TYPE) return record.id === FLAME_EMITTER_ID && source === FLAME_EMITTER_SOURCE;
   if (type === LOCAL_LIQUID_EMITTER_TYPE) return source === LOCAL_LIQUID_EMITTER_SOURCE;
   if (!['glb', 'pbr', 'splat', 'image'].includes(type) || typeof source !== 'string') return false;
@@ -156,6 +161,7 @@ export function planSceneRestore(data) {
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
     flameDomainTranslation,
+    flameSourcePresent: flameSources.length > 0 || (data.version < 6 && !!data.composition),
     localLiquid,
   };
 }

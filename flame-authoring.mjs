@@ -49,7 +49,7 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
 // UI grouping describes the current singleton flame and its shared domain. It
 // does not assign simulator-wide coefficients to independent scene emitters.
 export const FLAME_PROPERTY_GROUPS = [
-  { name:'Appearance', open:true, scope:'Flame and smoke', fields:[
+  { name:'Appearance', open:true, scope:'Shared flame and smoke appearance', fields:[
     ['volume-physical-temperature','Temperature'], ['volume-physical-spread','Temperature spread'],
     ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
     ['volume-physical-exposure','Exposure'], ['volume-physical-knee','Highlight knee'],
@@ -85,7 +85,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, listBasins, applyBasin, readSource, openWorkbench, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, openWorkbench, onError }) {
   const basin = document.createElement('details'); basin.id='flame-basin-browser'; basin.open=true;
   basin.innerHTML='<summary>Basin</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a basin…" aria-label="Find a basin"><select id="flame-basin-select" aria-label="Flame basin"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   host.append(basin);
@@ -144,7 +144,7 @@ export function createFlameInspector({ document, host, listBasins, applyBasin, r
       source.addEventListener('input',syncField);source.addEventListener('change',syncField);
       aliases.push(syncField);syncField();row.append(grip,field);section.append(row);
     }
-    host.append(section);
+    (group.name==='Simulation'||group.name==='Motion'?sharedHost:host).append(section);
   }
   const more=document.createElement('button');more.type='button';more.className='btn';more.textContent='All controls in Workbench';more.onclick=openWorkbench;host.append(more);
   function sync(force=false) {

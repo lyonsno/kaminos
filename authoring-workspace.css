@@ -104,3 +104,12 @@ body[data-workspace=authoring] .authoring-splitter { display:block; grid-row:2; 
 
 #authoring-inspector .slider-row:has(.authoring-number) input[type=range], #authoring-inspector .burner-field:has(.authoring-number) input[type=range] { display:none; }
 #authoring-inspector .slider-row .authoring-number { flex:1; min-width:0; }
+
+body[data-workspace="authoring"] #authoring-burner-slot { display:none; }
+#selected-bed-properties, #selected-assembly-properties, #shared-flame-domain-properties { padding: 12px 0; }
+#selected-bed-properties h3, #selected-assembly-properties h3, #shared-flame-domain-properties h3 { font-size:13px; margin:8px 0; }
+
+#selected-bed-properties .flame-scope, #selected-assembly-properties .flame-scope, #shared-flame-domain-properties .flame-scope { font-size:11px; line-height:1.5; color:#92949c; margin:9px 0; }
+#selected-bed-properties label.flame-scope { display:block; margin:14px 0 5px; }
+#bed-assembly-choice { box-sizing:border-box; width:100%; background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; border-radius:3px; font-size:11px; }
+#selected-bed-properties .btn, #selected-assembly-properties .btn { font-size:11px; }

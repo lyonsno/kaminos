@@ -141,12 +141,23 @@ export function createAnnularBurner(THREE, mergeGeometries, value) {
   let state = { effective: false, reason: 'ring-emitter-unavailable', recipe };
   return {
     group, recipe,
-    update(receipt, active, now, domainTranslation = [0, 0, 0]) {
-      const source = burnerSource(receipt);
-      group.visible = !!source;
+    update(receipt, active, now, domainTranslation = [0, 0, 0], { authored = false } = {}) {
+      let source = burnerSource(receipt);
+      group.visible = authored ? recipe.enabled !== false : !!source;
+      if (authored && source) {
+        // Only heat concentric, aligned channels beneath this actual authored bed.
+        // Geometry remains visible and independently placeable without emission.
+        group.updateWorldMatrix(true, false);
+        const origin = group.worldToLocal(new THREE.Vector3(...source.origin).add(new THREE.Vector3(...domainTranslation)));
+        const axis = new THREE.Vector3(...source.axis).transformDirection(group.matrixWorld.clone().invert());
+        const scale = group.getWorldScale(new THREE.Vector3()).x;
+        if (Math.hypot(origin.x, origin.z) > source.width / scale || axis.y < .999
+            || origin.y < 0 || origin.y > (source.axialHalfExtent + .02) / scale) source = null;
+        else source = {...source, radius:source.radius/scale, width:source.width/scale};
+      }
       const seconds = lastTime === null ? 0 : (now - lastTime) / 1000;
       lastTime = now;
-      if (source) {
+      if (source && !authored) {
         const axis = new THREE.Vector3(...source.axis);
         group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
         group.position.set(
