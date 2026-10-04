@@ -27296,16 +27296,17 @@ async function collectSceneComposition() {
   return assertUnchanged;
 }
 
-async function withAuthoringAction(action) {
-  if (authoringBusy) return false;
+async function withAuthoringAction(action, { result = false } = {}) {
+  if (authoringBusy) return result ? { ok: false, error: 'Another authoring action is busy' } : false;
   authoringBusy = true;
   document.getElementById('composition-capture').disabled = true;
   try {
-    return await action();
+    const value = await action();
+    return result && value === false ? { ok: false, error: 'Scene action was blocked; finish the active edit or load a valid scene' } : value;
   } catch (error) {
     compositionStatus(error.message || String(error), true);
     setInfo(`Composition failed: ${error.message || error}`);
-    return false;
+    return result ? { ok: false, error: error.message || String(error) } : false;
   } finally {
     authoringBusy = false;
     document.getElementById('composition-capture').disabled = false;
@@ -27316,7 +27317,7 @@ async function changeCompositionBasin(entry) {
   return window.kaminosFlameAuthoring.applyBasin(entry.presetId);
 }
 
-window.captureComposition = () => withAuthoringAction(async () => {
+window.captureComposition = ({ result = false } = {}) => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked() || sceneIsEmpty()) return false;
   if (volumePrototype?.debugState?.()?.active && !isFireLightFieldRoute()) {
     throw new Error('Capture supports the ordinary flame light-field composition, not this volume route');
@@ -27358,10 +27359,11 @@ window.captureComposition = () => withAuthoringAction(async () => {
     if (rimHandle) rimHandle.visible = rimVisible;
     window._kaminosDirty?.();
   }
-  if (!await saveToServer(data, null)) throw new Error('Capture was not saved');
+  const saved = await saveToServer(data, null, { result });
+  if (!saved || saved.ok === false) throw new Error(saved?.error || 'Capture was not saved');
   compositionStatus(`${label} | ${activeSceneComposition?.flame.label || 'Mesh scene'}`);
-  return true;
-});
+  return saved;
+}, { result });
 
 document.getElementById('composition-capture').onclick = window.captureComposition;
 document.getElementById('composition-ground-visible').onchange = event => {
@@ -27558,7 +27560,7 @@ document.getElementById('composition-library').onclick = () => {
   grBrowseScenes().then(() => document.getElementById('scenes-list').scrollIntoView({ block: 'start' }));
 };
 
-async function saveToServer(sceneData, filename) {
+async function saveToServer(sceneData, filename, { result: detailed = false } = {}) {
   const body = { ...sceneData };
   if (filename) body._filename = filename; // hint to server to overwrite
   const jsonStr = JSON.stringify(body, null, 2);
@@ -27569,15 +27571,20 @@ async function saveToServer(sceneData, filename) {
       body: jsonStr,
     });
     const result = await resp.json();
-    if (result.saved) {
+    if (!resp.ok) throw new Error(result.error || `Scene save failed: HTTP ${resp.status}`);
+    if (typeof result.saved === 'string' && result.saved.endsWith('.kaminos.json') && !/[/\\]/.test(result.saved)) {
+      const document = JSON.parse(jsonStr);
+      delete document._filename;
+      const url = compositionRestoreUrl(document.composition, result.saved, location.origin);
       currentSceneFile = result.saved;
       setInfo(`Scene saved: ${result.saved}`);
       grBrowseScenes();
-      return true;
+      return detailed ? { ok: true, filename: result.saved, url, document } : true;
     }
-    setInfo(`Save failed: ${result.error || 'unknown'}`);
-  } catch {
-    setInfo('Server unreachable');
+    throw new Error(result.error || 'Server did not return a valid saved scene filename');
+  } catch (error) {
+    setInfo(`Save failed: ${error.message || error}`);
+    if (detailed) return { ok: false, error: error.message || String(error) };
   }
   return false;
 }
@@ -27603,7 +27610,7 @@ function sceneSaveIsBlocked() {
 }
 
 // Save: overwrite current scene file, or create new if none
-window.saveScene = () => withAuthoringAction(async () => {
+window.saveScene = ({ result = false } = {}) => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked()) return false;
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
@@ -27611,11 +27618,11 @@ window.saveScene = () => withAuthoringAction(async () => {
   }
   await collectSceneComposition();
   const data = buildSceneData();
-  return saveToServer(data, currentSceneFile);
-});
+  return saveToServer(data, currentSceneFile, { result });
+}, { result });
 
 // Save As: always create a new scene file
-window.saveSceneAs = () => withAuthoringAction(async () => {
+window.saveSceneAs = ({ result = false } = {}) => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked()) return false;
   if (sceneIsEmpty()) {
     setInfo('Nothing to save');
@@ -27623,8 +27630,8 @@ window.saveSceneAs = () => withAuthoringAction(async () => {
   }
   await collectSceneComposition();
   const data = buildSceneData();
-  return saveToServer(data, null);
-});
+  return saveToServer(data, null, { result });
+}, { result });
 
 function getMaterialState() {
   return getMaterialStateForObject(currentMesh);

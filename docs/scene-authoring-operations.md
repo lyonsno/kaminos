@@ -2,6 +2,8 @@
 
 These operations act on the mounted Kaminos page and its current scene/history. Browser automation calls them in that page's JavaScript context. They use the same setters and edit ledger as the human controls.
 
+For scripted comparisons and editable human handoff, use [repeatable visual work](repeatable-visual-work.md). Save, Save As and Capture accept `{result:true}` to return the exact saved filename, restore URL and document for that invocation; existing calls retain their boolean result.
+
 `window.kaminosSceneObjectDebugState()` lists IDs, types, sources and poses. `window.selectSceneObject(id)` selects an object. `window.kaminosSetSceneObjectTransform(id, patch)` applies an accepted pose edit; position and scale are triples, rotation is an XYZ Euler triple in radians. `window.kaminosSceneEdits` exposes `begin(id, label)`, `preview(patch)`, `commit()`, `cancel()`, `undo()`, `redo()` and `state()`. Await undo/redo when membership replay can load assets. Complete or cancel an active gesture before another operation or saving.
 
 The existing rim light appears under `@rim-light`. Enable/select it through Add → Rim Light or the Assets scene-list button. Moving translates its target with the light; rotating aims the beam from its existing position. Use Cone Angle for spread: object scaling is rejected. It remains one light backed by `environment.rimLight`. The editor handle is excluded from saved object records and composition captures, recreated from the recipe, and excluded from grouping and renaming.
