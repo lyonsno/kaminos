@@ -2907,7 +2907,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObject, frameObjects, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { loadRetainedMotionClip, decodeRetainedMotionClip, focusRigMeshes } from './motion-retained-clip.mjs';
-import { buildHindPawTravel, sampleHindPawTravel } from './motion-ground-travel.mjs';
+import { buildHindPawTravel, sampleHindPawTravel, sampleHindPawSupportOffset } from './motion-ground-travel.mjs';
 import {
   buildKimodoHindquartersTrack,
   createMotionRigRequestGate,
@@ -8873,7 +8873,10 @@ function applyMotionRigSample(state, sample) {
   };
   for (const [key, radians] of Object.entries(angles)) {
     const { bone, quaternion } = state.bones.get(key);
-    bone.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(state.axes[key], radians).multiply(state.ground?.hipRest?.[key] || quaternion));
+    // A human gallop's deep knee tuck overwhelms these short digitigrade
+    // legs. Preserve its phase while reducing only the ground-mode flexion.
+    const angle = state.ground && key.endsWith('Stifle') ? radians * 0.65 : radians;
+    bone.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(state.axes[key], angle).multiply(state.ground?.hipRest?.[key] || quaternion));
   }
   state.pelvis.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(state.pelvisAxis, sample.pelvisPitchRadians).multiply(state.bones.get('pelvis').quaternion));
   state.pelvis.position.copy(state.pelvisPosition);
@@ -8896,6 +8899,19 @@ function motionGroundPaws(state) {
     paws[side] = { soleY, soleIndex, center: center.divideScalar(state.ground.vertices[side].length).toArray() };
   }
   return paws;
+}
+
+function motionGroundOpenKnee(hip, knee, hock) {
+  const pivot = knee.getWorldPosition(new THREE.Vector3());
+  const incoming = hip.getWorldPosition(new THREE.Vector3()).sub(pivot).normalize();
+  const outgoing = hock.getWorldPosition(new THREE.Vector3()).sub(pivot).normalize();
+  const opening = 150 * Math.PI / 180 - incoming.angleTo(outgoing);
+  if (opening <= 1e-8) return;
+  const axis = incoming.clone().cross(outgoing);
+  if (axis.lengthSq() < 1e-10) throw new Error('Cannot open a degenerate hind knee');
+  axis.normalize().applyQuaternion(knee.parent.getWorldQuaternion(new THREE.Quaternion()).invert());
+  knee.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, opening));
+  knee.updateWorldMatrix(false, true);
 }
 
 function prepareMotionGroundTravel(state, root) {
@@ -8934,19 +8950,27 @@ function prepareMotionGroundTravel(state, root) {
   const rearUp = new THREE.Quaternion().setFromAxisAngle(forward.clone().cross(new THREE.Vector3(0, 1, 0)).normalize(), 55 * Math.PI / 180);
   root.quaternion.copy(parentRotation.clone().invert().multiply(rearUp).multiply(parentRotation).multiply(root.quaternion));
   scene.updateMatrixWorld(true);
-  // The imported pose already has tucked hind legs. Establish a provisional
-  // biped stance by swinging each hip-to-painted-paw direction downward;
-  // preserve the authored knee/hock bends and layer the donor motion on top.
+  // Runtime-only rear-legged stance. Open the tucked knees before aligning
+  // the support lines, leaving spring room instead of locking the legs.
+  // Stop restores the imported pose; no authored rig/weight changes.
+  state.ground.hipRest = {};
+  for (const side of ['left', 'right']) {
+    const knee = state.bones.get(`${side}Stifle`).bone;
+    motionGroundOpenKnee(state.bones.get(`${side}Hip`).bone, knee, state.bones.get(`${side}Hock`).bone);
+    state.ground.hipRest[`${side}Stifle`] = knee.quaternion.clone();
+  }
+  scene.updateMatrixWorld(true);
+  mesh.skeleton.update();
   const pelvisWorldRotation = state.pelvis.getWorldQuaternion(new THREE.Quaternion());
   const restPaws = motionGroundPaws(state);
-  state.ground.hipRest = Object.fromEntries(['left', 'right'].map(side => {
+  Object.assign(state.ground.hipRest, Object.fromEntries(['left', 'right'].map(side => {
     const key = `${side}Hip`;
     const entry = state.bones.get(key);
     const leg = new THREE.Vector3().fromArray(restPaws[side].center).sub(entry.bone.getWorldPosition(new THREE.Vector3()));
     if (leg.lengthSq() < 1e-8) throw new Error(`Cannot establish ${side} hip-to-paw stance`);
     const swing = new THREE.Quaternion().setFromUnitVectors(leg.normalize(), new THREE.Vector3(0, -1, 0));
     return [key, pelvisWorldRotation.clone().invert().multiply(swing).multiply(pelvisWorldRotation).multiply(entry.quaternion)];
-  }));
+  })));
   state.ground.originWorld = root.getWorldPosition(new THREE.Vector3());
   const paws = [];
   for (let frame = 0; frame < state.track.frameCount; frame++) {
@@ -8972,7 +8996,7 @@ function prepareMotionGroundTravel(state, root) {
 function updateMotionGroundTravel(state, frame) {
   const ground = state.ground;
   ground.distance = sampleHindPawTravel(ground.travel, frame);
-  const world = ground.originWorld.clone().addScaledVector(ground.forward, ground.distance);
+  const world = ground.originWorld.clone().add(new THREE.Vector3().fromArray(sampleHindPawSupportOffset(ground.travel, frame)));
   ground.root.position.copy(ground.root.parent.worldToLocal(world));
   scene.updateMatrixWorld(true);
   state.mesh.skeleton.update();

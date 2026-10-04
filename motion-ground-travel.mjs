@@ -7,6 +7,7 @@ export function buildHindPawTravel(frames, forward) {
   if (!(norm > 1e-8)) throw new Error('Ground travel needs a horizontal forward direction');
   const direction = [forward[0] / norm, 0, forward[2] / norm];
   let distance = 0;
+  const offset = [0, 0, 0];
   return frames.map((frame, index) => {
     for (const side of ['left', 'right']) {
       if (!frame[side]?.center?.every(Number.isFinite) || frame[side].center.length !== 3 || !Number.isFinite(frame[side].soleY)) {
@@ -18,9 +19,18 @@ export function buildHindPawTravel(frames, forward) {
       const previous = frames[index - 1];
       const backwardStroke = direction.reduce((sum, axis, i) => sum + axis * (previous[support].center[i] - frame[support].center[i]), 0);
       distance += Math.max(0, backwardStroke);
+      if (backwardStroke > 0) {
+        for (const axis of [0, 2]) offset[axis] += previous[support].center[axis] - frame[support].center[axis];
+      }
     }
-    return { distance, support };
+    return { distance, support, offset: [...offset] };
   });
+}
+
+export function sampleHindPawSupportOffset(track, frame) {
+  const position = Math.max(0, Math.min(track.length - 1, frame));
+  const index = Math.floor(position), next = Math.min(index + 1, track.length - 1);
+  return track[index].offset.map((value, axis) => value + (track[next].offset[axis] - value) * (position - index));
 }
 
 export function sampleHindPawTravel(track, frame) {
