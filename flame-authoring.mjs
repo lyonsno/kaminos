@@ -50,12 +50,11 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
 // does not assign simulator-wide coefficients to independent scene emitters.
 export const FLAME_PROPERTY_GROUPS = [
   { name:'Appearance', open:true, scope:'Flame and smoke', fields:[
-    ['volume-physical-material-law','Physical material'], ['volume-physical-mode','Color model'],
     ['volume-physical-temperature','Temperature'], ['volume-physical-spread','Temperature spread'],
     ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
     ['volume-physical-exposure','Exposure'], ['volume-physical-knee','Highlight knee'],
     ['volume-physical-white','White point'], ['volume-physical-smoke-extinction','Smoke extinction'],
-    ['volume-physical-smoke-albedo','Smoke albedo'], ['volume-physical-ambient','Ambient light'],
+    ['volume-physical-smoke-albedo','Smoke albedo'],
   ] },
   { name:'Emission', scope:'Selected flame source', fields:[
     ['emitter-assay-family','Shape'], ['volume-flow-rate','Flow'], ['volume-input-radius','Radius'],
@@ -65,12 +64,9 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-emitter-edge-entrainment','Edge entrainment'],
   ] },
   { name:'Motion', scope:'Shared flame domain', fields:[
-    ['volume-speed','Speed'], ['volume-plume-height','Plume height'], ['volume-curl','Curl'],
-    ['volume-microdetail','Microdetail'], ['volume-interface-shred','Interface shred'],
-    ['volume-fire-licks','Fire licks'], ['volume-wind-strength','Wind strength'],
+    ['volume-speed','Speed'], ['volume-plume-height','Plume height'],
+    ['volume-wind-strength','Wind strength'],
     ['volume-wind-angle','Wind direction'], ['volume-wind-height','Wind height'],
-    ['volume-artistic-swirl','Artistic swirl'], ['volume-phased-sway','Phased sway'],
-    ['volume-procedural-detail-forces','Detail forces'],
   ] },
   { name:'Simulation', scope:'Shared domain · resolution changes restart the fluid', fields:[
     ['volume-resolution','Resolution'], ['volume-pressure-solver','Pressure solver'],

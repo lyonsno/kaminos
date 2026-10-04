@@ -94,3 +94,13 @@ body[data-workspace=authoring] .authoring-splitter { display:block; grid-row:2; 
 #flame-basin-search, #flame-basin-select { box-sizing:border-box; width:100%; margin:5px 0; background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; border-radius:3px; font-size:11px; }
 .flame-basin-actions { display:flex; gap:6px; margin-top:6px; }
 #flame-basin-current { overflow-wrap:anywhere; }
+
+/* Numeric fields are relative scrub surfaces; text mode keeps normal selection. */
+#authoring-inspector .authoring-number { appearance:textfield; cursor:ew-resize; text-align:right; padding:4px 9px; border:1px solid #424348; border-radius:4px; background:linear-gradient(#37383c,#303135); font-variant-numeric:tabular-nums; transition:border-color .1s,background .1s; }
+#authoring-inspector .authoring-number:hover { background:#414247; border-color:#606168; }
+#authoring-inspector .authoring-number.scrubbing { background:#4b4131; border-color:#c3a06b; }
+#authoring-inspector .authoring-number:focus:not([readonly]) { cursor:text !important; background:#17181a; border-color:#c3a06b; outline:none; }
+#authoring-inspector .authoring-number::-webkit-inner-spin-button, #authoring-inspector .authoring-number::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+
+#authoring-inspector .slider-row:has(.authoring-number) input[type=range], #authoring-inspector .burner-field:has(.authoring-number) input[type=range] { display:none; }
+#authoring-inspector .slider-row .authoring-number { flex:1; min-width:0; }

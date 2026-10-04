@@ -1,4 +1,5 @@
 import { Vector2, Vector3, Raycaster, Plane } from './lib/three.core.js';
+import { installRelativeNumberDrag } from './scene-control-history.mjs';
 import { createSceneEdits, transformPose, axisVector } from './scene-edit-session.mjs';
 
 export function getPivotViewState(camera, point, width, height) {
@@ -315,6 +316,9 @@ export function installScenePlacementTools({
     input.addEventListener('input', () => fieldInput(input));
     input.addEventListener('blur', () => { if (field?.input === input && !field.drag) finish(true); });
     input.addEventListener('change', () => { if (field?.input === input && !field.drag) finish(true); });
+    input.addEventListener('pointercancel', () => { if (field?.input === input) finish(false); });
+    installRelativeNumberDrag({grip:input,input,step:input.dataset.transformField.startsWith('rotation.')?.2:.01,
+      onStart:()=>{if(edits.state().active)finish(true);}});
     const grip = input.parentElement.querySelector('.transform-axis');
     if (!grip) continue;
     grip.title = 'Drag to adjust; edit the number to type'; grip.style.cursor = 'ew-resize'; grip.style.touchAction = 'none';

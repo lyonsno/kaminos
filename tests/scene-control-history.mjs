@@ -4,6 +4,7 @@ import { createSceneEdits } from '../scene-edit-session.mjs';
 import { installSceneControlHistory } from '../scene-control-history.mjs';
 
 class Control extends EventTarget {
+  constructor(){super();this.style={};}
   fire(type, init = {}) {
     const event = new Event(type, { cancelable: true });
     for (const [key, value] of Object.entries(init)) Object.defineProperty(event, key, { configurable: true, value });
@@ -117,14 +118,34 @@ test('parameter preview occupies the shared edit session until commit and repeat
 test('a relative label drag suppresses the label click that would open a second empty edit',async()=>{
  const {installRelativeNumberDrag}=await import('../scene-control-history.mjs');
  const f=fixture(),grip=new Control();grip.style={};grip.setPointerCapture=()=>{};grip.hasPointerCapture=()=>false;
- f.control.value='1';globalThis.window=new Control();globalThis.document=new Control();
+ f.control.setPointerCapture=()=>{};f.control.hasPointerCapture=()=>false;f.control.value='1';globalThis.window=new Control();globalThis.document=new Control();
  try {
   installRelativeNumberDrag({grip,input:f.control,step:1});
   grip.fire('pointerdown',{button:0,pointerId:1,clientX:10});
-  f.value.flow=2;grip.fire('pointermove',{clientX:11});grip.fire('pointerup');
+  f.value.flow=2;grip.fire('pointermove',{clientX:14});grip.fire('pointerup');
   const click=grip.fire('click');
   if(!click.defaultPrevented)f.control.fire('focusin'); // browser label activation
   assert.equal(f.edits.state().active,null);
   assert.equal(f.edits.undo(),true);
  }finally{delete globalThis.window;delete globalThis.document;}
+});
+
+
+test('number body drags from its starting value, while a click enters typing',async()=>{
+ const {installRelativeNumberDrag}=await import('../scene-control-history.mjs');
+ const f=fixture(),grip=new Control();
+ globalThis.window=new Control();globalThis.document=new Control();
+ for(const el of [grip,f.control]) {el.style={};el.classList={add(){},remove(){}};el.dataset={};el.setPointerCapture=()=>{};el.hasPointerCapture=()=>false;}
+ f.control.value='1';f.control.focus=()=>{document.activeElement=f.control;f.control.fire('focusin');};f.control.select=()=>{f.control.selected=true;};f.control.blur=()=>{document.activeElement=null;f.control.fire('blur');};
+ f.control.addEventListener('input',()=>{f.value.flow=Number(f.control.value);});
+ try {
+  installRelativeNumberDrag({grip,input:f.control,step:.1});
+  f.control.fire('pointerdown',{button:0,pointerId:1,clientX:200});
+  assert.equal(f.control.value,'1','press position must not change the value');
+  f.control.fire('pointermove',{pointerId:1,clientX:210});f.control.fire('pointerup',{pointerId:1});f.control.fire('click');
+  assert.equal(f.value.flow,2);assert.equal(f.edits.state().undoCount,1);assert.equal(f.edits.state().active,null);
+  f.edits.undo();assert.equal(f.value.flow,.8);
+  f.control.fire('pointerdown',{button:0,pointerId:2,clientX:203});f.control.fire('pointerup',{pointerId:2});f.control.fire('click');
+  assert.equal(f.control.selected,true);assert.equal(f.control.readOnly,false);assert.equal(document.activeElement,f.control);
+ } finally{delete globalThis.window;delete globalThis.document;}
 });

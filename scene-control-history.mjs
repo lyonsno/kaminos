@@ -42,35 +42,55 @@ export function installSceneControlHistory({controls, edits, id, label='Edit con
   return {commit,cancel,state:()=>({pending:!!active(),id:active()?id:null}),dispose(){cancel();listeners.splice(0).forEach(remove=>remove());}};
 }
 
-/** Drag a field label relatively; keep the number itself available for ordinary typing. */
+/** One field: relative dragging while idle, ordinary text editing after a click. */
 export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=()=>{}}) {
-  let drag=null;
-  // Label activation after pointerup would focus the range and start a second edit.
-  grip.addEventListener('click',event=>event.preventDefault());
-  grip.style.cursor='ew-resize';grip.style.touchAction='none';
-  grip.title='Drag to adjust · Shift for fine · Esc to cancel';
-  grip.addEventListener('pointerdown',event=>{
-    if(event.button!==0)return;
-    event.preventDefault();onStart();
-    input.dispatchEvent(new Event('focusin'));
-    drag={x:event.clientX,value:Number(input.value),pointerId:event.pointerId};
-    grip.setPointerCapture(event.pointerId);
-  });
-  grip.addEventListener('pointermove',event=>{
-    if(!drag)return;
-    const delta=(event.clientX-drag.x)*step*(event.shiftKey?.1:1);
-    input.value=String(drag.value+delta);
-    input.dispatchEvent(new Event('input',{bubbles:true}));
-  });
+  let gesture=null, suppressClick=false;
+  const doc=input.ownerDocument || document;
+  const targets=[...new Set([grip,input].filter(Boolean))];
+  input.readOnly=true;
+  input.classList?.add('authoring-number');
+  input.title='Drag to adjust · Click to type · Shift for fine · Esc to cancel';
+  input.addEventListener('focus',()=>{if(!gesture)input.readOnly=false;}); // Tab preserves normal keyboard editing.
+  input.addEventListener('blur',()=>{if(gesture)finish(true);input.readOnly=true;});
   function finish(cancel=false) {
-    if(!drag)return;
-    if(grip.hasPointerCapture(drag.pointerId))grip.releasePointerCapture(drag.pointerId);
-    if(cancel)input.dispatchEvent(new Event('pointercancel'));
-    else input.dispatchEvent(new Event('change',{bubbles:true}));
-    drag=null;onEnd();
+    if(!gesture)return;
+    const ended=gesture;gesture=null;
+    if(ended.target.hasPointerCapture?.(ended.pointerId))ended.target.releasePointerCapture(ended.pointerId);
+    input.classList?.remove('scrubbing');
+    if(cancel) {input.dispatchEvent(new Event('pointercancel'));suppressClick=true;}
+    else if(ended.moved) {input.dispatchEvent(new Event('change',{bubbles:true}));suppressClick=true;input.readOnly=true;input.blur?.();}
+    else {input.readOnly=false;input.focus?.();input.select?.();}
+    onEnd();
   }
-  grip.addEventListener('pointerup',()=>finish());
-  grip.addEventListener('pointercancel',()=>finish(true));
+  for(const target of targets) {
+    target.style.cursor='ew-resize';target.style.touchAction='none';
+    target.addEventListener('click',event=>{
+      if(suppressClick){event.preventDefault();suppressClick=false;return;}
+      if(target!==input){event.preventDefault();input.readOnly=false;input.focus?.();input.select?.();}
+    });
+    target.addEventListener('pointerdown',event=>{
+      if(event.button!==0 || gesture || input.disabled)return;
+      if(target===input && doc.activeElement===input && !input.readOnly)return;
+      event.preventDefault();onStart();suppressClick=false;
+      input.dispatchEvent(new Event('focusin'));
+      gesture={target,x:event.clientX,lastX:event.clientX,startValue:Number(input.value),value:Number(input.value),pointerId:event.pointerId,moved:false};
+      target.setPointerCapture(event.pointerId);
+    });
+    target.addEventListener('pointermove',event=>{
+      if(!gesture || gesture.target!==target || (event.pointerId!==undefined && event.pointerId!==gesture.pointerId))return;
+      if(!gesture.moved && Math.abs(event.clientX-gesture.x)<3)return;
+      const dx=event.clientX-gesture.lastX;gesture.lastX=event.clientX;gesture.moved=true;
+      gesture.value+=dx*step*(event.shiftKey?.1:1);
+      let value=step>=1?Math.round(gesture.value):gesture.value;
+      if(input.min!==undefined && input.min!=='')value=Math.max(Number(input.min),value);
+      if(input.max!==undefined && input.max!=='')value=Math.min(Number(input.max),value);
+      input.classList?.add('scrubbing');input.value=String(value);
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    target.addEventListener('pointerup',()=>{if(gesture?.target===target)finish();});
+    target.addEventListener('pointercancel',()=>{if(gesture?.target===target)finish(true);});
+    target.addEventListener('lostpointercapture',()=>{if(gesture?.target===target)finish(true);});
+  }
   window.addEventListener('blur',()=>finish(true));
-  document.addEventListener('keydown',event=>{if(drag&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}},true);
+  document.addEventListener('keydown',event=>{if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}},true);
 }
