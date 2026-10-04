@@ -1,4 +1,5 @@
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
+import { normalizeKilnCues } from './kiln-cinematic-cues.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
   flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
@@ -157,6 +158,7 @@ export function planSceneRestore(data) {
     composition: normalizeComposition(data.composition),
     flameDomainTranslation,
     localLiquid,
+    cinematic: normalizeKilnCues(data.cinematic),
   };
 }
 
@@ -172,6 +174,7 @@ export function buildSceneDocument({
   flameDomainTranslation = undefined,
   localLiquid = null,
   capture = null,
+  cinematic = null,
   camera = null,
   environment = null,
   postprocessing = null,
@@ -213,6 +216,7 @@ export function buildSceneDocument({
     ...(flameSource ? { flameDomainTranslation: authoredFlameDomain } : {}),
     localLiquid: liquidSetup,
     capture: normalizeSceneCapture(capture),
+    cinematic: normalizeKilnCues(cinematic),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
     environment: cloneJson(environment),

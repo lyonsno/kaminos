@@ -48,6 +48,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     splatCorrectionMode: null,
     transformControls: null,
     sceneSaveBlockedByFailedRestore: false,
+    sceneMutationToken: 0,
     isReloadableSceneObjectRecord: record => record?.type === 'glb' && typeof record.source === 'string',
     serializeSceneObject: entry => ({
       id: entry.id, source: entry.source, type: entry.type, fileName: entry.fileName,
@@ -97,7 +98,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
 }
 
 function presentGlbMethod() {
-  const match = html.match(/    async presentGlb\(glb, \{runId, sha256\}\) \{[\s\S]*?\n    \},(?=\n  \};)/);
+  const match = html.match(/    async presentGlb\(glb, \{runId, sha256(?:, signal)?\}\) \{[\s\S]*?\n    \},(?=\n  \};)/);
   assert.ok(match, 'production SF3D presenter must be extractable');
   return match[0].trim().replace(/,$/, '');
 }

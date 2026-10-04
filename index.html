@@ -3330,6 +3330,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
+import { normalizeKilnCues, defaultKilnCues } from './kiln-cinematic-cues.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -3634,6 +3635,8 @@ let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let activeSceneComposition = null;
+let kilnCues = null, kilnPerformanceSnapshot = null, applyKilnPerformanceEmitter = null;
+let cinematicSceneLoadId = null;
 let authoringBusy = false;
 let volumePrototype = null;
 let annularBurner = null;
@@ -11340,6 +11343,113 @@ async function initScene() {
   }
   compositionHost = {
     device: renderer.backend.device,
+    cinematic: {
+      available: () => cinematicSceneLoadId === null && !authoringBusy && !sceneSaveBlockedByFailedRestore && !!applyKilnPerformanceEmitter && sceneObjects.some(row => row.id === 'kiln'),
+      contains: id => sceneObjects.some(row => row.id === id),
+      findOutput(sha256) {
+        const row = sceneObjects.find(row => row.source?.endsWith(`${sha256}.glb`));
+        return row ? {status:'registered',objectId:row.id,source:row.source,sha256,runId:'retained-scene-output'} : null;
+      },
+      read: () => structuredClone(kilnCues || defaultKilnCues(readVolumeControls())),
+      write(recipe) {
+        if (kilnPerformanceSnapshot) throw new Error('Return to authoring before editing cues');
+        kilnCues = normalizeKilnCues(recipe);
+        window._kaminosDirty?.();
+        return structuredClone(kilnCues);
+      },
+      begin() {
+        if (kilnPerformanceSnapshot || cinematicSceneLoadId !== null || authoringBusy || sceneSaveBlockedByFailedRestore) throw new Error('Scene is busy or has not loaded');
+        if (!applyKilnPerformanceEmitter || document.getElementById('emitter-assay-family').value === 'cluster') throw new Error('Cinematic kiln requires an analytic flame source');
+        if (scenePlacementTools?.edits.state().active || scenePlacementTools?.edits.state().replaying) throw new Error('Finish the current scene edit first');
+        kilnCues ||= defaultKilnCues(readVolumeControls());
+        kilnPerformanceSnapshot = { controls: readVolumeControls(), position: camera.position.toArray(),
+          target: controls.target.toArray(), intensity: scene.environmentIntensity, orbit: controls.enabled,
+          sourceEnabled: !flameEmitterInjectionSuspended, visibility: new Map(), transforms: new Map() };
+        controls.enabled = false;
+        transformControls?.detach();
+      },
+      sample(sample) {
+        const baseline = kilnPerformanceSnapshot;
+        if (!baseline) throw new Error('No active kiln performance');
+        transformControls?.detach();
+        for (const helper of [transformControls?.getHelper(), flameDomainGuide,
+          sceneObjects.find(row=>row.id===FLAME_EMITTER_ID)?.object, sceneObjects.find(row=>row.id===RIM_LIGHT_ID)?.object]) {
+          if (!helper) continue;
+          if (!baseline.visibility.has(helper)) baseline.visibility.set(helper, helper.visible);
+          helper.visible = false;
+        }
+        applyKilnPerformanceEmitter({ ...baseline.controls, inputRadius: sample.radius, flowRate: sample.flow }, sample.sourceEnabled);
+        scene.environmentIntensity = baseline.intensity * sample.light;
+        const target = new THREE.Vector3().fromArray(baseline.target);
+        camera.position.fromArray(baseline.position).sub(target).multiplyScalar((1 - sample.push) * Math.max(1, 1 / camera.aspect)).add(target);
+        controls.target.fromArray(baseline.target);
+        camera.lookAt(controls.target);
+        camera.updateMatrixWorld();
+        if (sample.result) {
+          const object = sceneObjects.find(row => row.id === sample.result.objectId)?.object;
+          if (!object) throw new Error('Kiln output was removed during playback');
+          if (!baseline.visibility.has(object)) baseline.visibility.set(object, object.visible);
+          object.visible = sample.outputVisible;
+        }
+        window._kaminosDirty?.();
+      },
+      stage(objectId, {temporary = false} = {}) {
+        const entry = sceneObjects.find(row => row.id === objectId);
+        if (!entry || !kilnPerformanceSnapshot) throw new Error('Kiln staging requires an active performance and registered mesh');
+        const object = entry.object;
+        const bounds = new THREE.Box3().setFromObject(object), size = bounds.getSize(new THREE.Vector3());
+        const factor = 1.15 / Math.max(size.x, size.y, size.z);
+        const center = bounds.getCenter(new THREE.Vector3());
+        const origin = flameEmitterPose.position;
+        const staged = {
+          scale: object.scale.toArray().map(value => value * factor),
+          position: [origin[0] + (object.position.x - center.x) * factor,
+            origin[1] + (object.position.y - bounds.min.y) * factor,
+            origin[2] + (object.position.z - center.z) * factor],
+        };
+        if (temporary) {
+          if (!kilnPerformanceSnapshot.transforms.has(object)) kilnPerformanceSnapshot.transforms.set(object, {
+            position:object.position.toArray(), scale:object.scale.toArray(), quaternion:object.quaternion.toArray(),
+          });
+          object.position.fromArray(staged.position); object.scale.fromArray(staged.scale); object.updateMatrixWorld(true);
+        } else {
+          window.kaminosSetSceneObjectTransform(objectId, staged);
+        }
+        kilnPerformanceSnapshot.visibility.set(object, true);
+        object.visible = false;
+      },
+      hideOutputs(ids) {
+        if (!kilnPerformanceSnapshot) throw new Error('No active kiln performance');
+        for (const id of ids) {
+          const object = sceneObjects.find(row=>row.id===id)?.object;
+          if (!object) continue;
+          if (!kilnPerformanceSnapshot.visibility.has(object)) kilnPerformanceSnapshot.visibility.set(object, object.visible);
+          object.visible = false;
+        }
+      },
+      end() {
+        const baseline = kilnPerformanceSnapshot;
+        if (!baseline) return;
+        try { applyKilnPerformanceEmitter(baseline.controls, baseline.sourceEnabled); }
+        finally {
+          kilnPerformanceSnapshot = null;
+          scene.environmentIntensity = baseline.intensity;
+          camera.position.fromArray(baseline.position);
+          controls.target.fromArray(baseline.target);
+          controls.enabled = baseline.orbit;
+          controls.update();
+          for (const [object, visible] of baseline.visibility) object.visible = visible;
+          for (const [object, transform] of baseline.transforms || []) {
+            object.position.fromArray(transform.position); object.scale.fromArray(transform.scale);
+            object.quaternion.fromArray(transform.quaternion); object.updateMatrixWorld(true);
+          }
+          window._kaminosDirty?.();
+        }
+      },
+      quiesce() {
+        if (kilnPerformanceSnapshot) applyKilnPerformanceEmitter({...kilnPerformanceSnapshot.controls,flowRate:0}, false);
+      },
+    },
     setForegroundServiceActive(active) { foregroundServiceActive = Boolean(active); },
     runForegroundFrame(run) {
       if (!foregroundServiceActive || insideForegroundFrame) throw new Error('invalid foreground scene frame state');
@@ -11358,15 +11468,20 @@ async function initScene() {
         return {...result, sceneFrameCount, sceneAuthority:'three-render-returned-inside-service-not-presentation'};
       } finally { insideForegroundFrame = false; }
     },
-    async presentGlb(glb, {runId, sha256}) {
-      const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
+    async presentGlb(glb, {runId, sha256, signal}) {
+      signal?.throwIfAborted();
+      const loadToken = sceneMutationToken;
+      const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb,signal});
       const saved = await response.json();
       if (!response.ok || saved.sha256 !== sha256) throw new Error(saved.error || 'generated mesh persistence hash mismatch');
       await scenePlacementTools.edits.waitForReplay();
-      const object = await showGLB(saved.source, {clear:false, metadata:{source:saved.source,type:'glb',fileName:`${sha256}.glb`,label:`SF3D chair · ${runId}`}});
+      signal?.throwIfAborted();
+      if (loadToken !== sceneMutationToken) throw new Error('Scene changed during output persistence');
+      const object = await showGLB(saved.source, {clear:false, signal, metadata:{source:saved.source,type:'glb',fileName:`${sha256}.glb`,label:`SF3D chair · ${runId}`}});
       const entry = sceneObjects.find(row => row.object === object);
       if (!entry) throw new Error('SF3D output was not registered in the host scene');
       try {
+        signal?.throwIfAborted();
         if (!await recordSceneObjectInsertion(entry.id)) throw new Error('SF3D output has no retained scene-membership history target');
       } catch (error) {
         removeSceneObjectInternal(entry.id, { recordHistory: false });
@@ -11717,6 +11832,7 @@ async function showPBRPreview(options = {}) {
 
 // --- GLB Inspector ---
 async function showGLB(file, options = {}) {
+  options.signal?.throwIfAborted();
   if (shouldClearSceneForImport(options)) clearScene();
   const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
@@ -11728,16 +11844,16 @@ async function showGLB(file, options = {}) {
 	return new Promise((resolve, reject) => {
 	  loader.load(url, gltf => {
 	    if (isBlob) URL.revokeObjectURL(url);
-	    glbSourceScene = gltf.scene;
 	    const model = gltf.scene;
       const stalePreviewLoad = options.register === false
         && options.previewGeneration !== undefined
         && greenroomPreviewState?.previewGeneration !== options.previewGeneration;
-      if (loadToken !== sceneMutationToken || stalePreviewLoad || (greenroomPreviewIsActive() && options.register !== false)) {
+      if (options.signal?.aborted || loadToken !== sceneMutationToken || stalePreviewLoad || (greenroomPreviewIsActive() && options.register !== false)) {
         disposeObjectTree(model);
         reject(new Error('stale async GLB load ignored'));
         return;
       }
+      glbSourceScene = gltf.scene;
       if (options.normalize !== false) {
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
@@ -22690,6 +22806,11 @@ async function initKaminosVolumeRoute() {
     return receipt;
   }
   applyFlameEmitterPose = (pose, options) => applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls(), pose, options);
+  applyKilnPerformanceEmitter = (snapshot, sourceEnabled) => applyVolumeEmitterFamilyRuntime({
+    prototype: volumePrototype, family: document.getElementById('emitter-assay-family').value,
+    controls: emitterCompilerControls(snapshot), emitterPose: flamePoseToDomain(flameEmitterPose, flameDomainTranslation),
+    sourceEnabled, timestampMs: performance.now(), frameId: 'kiln-cinematic',
+  });
   if (params.get('promoted_fire_parity') === '1') {
     volumePrototype.setSelectiveHeadLiveCapturePaused(true);
   }
@@ -27187,6 +27308,7 @@ function buildSceneData(capture = null) {
     activeGroupId: activeSceneGroupId,
     provenance,
     composition: activeSceneComposition,
+    cinematic: kilnCues,
     localLiquid: localLiquidSetup,
     capture,
     camera: {
@@ -27297,6 +27419,11 @@ async function collectSceneComposition() {
 }
 
 async function withAuthoringAction(action, { result = false } = {}) {
+  if (kilnPerformanceSnapshot) {
+    const error = 'Return to authoring before saving or capturing the scene';
+    setInfo(error);
+    return result ? { ok: false, error } : false;
+  }
   if (authoringBusy) return result ? { ok: false, error: 'Another authoring action is busy' } : false;
   authoringBusy = true;
   document.getElementById('composition-capture').disabled = true;
@@ -27666,6 +27793,7 @@ function claimLoadedSceneFile(file) {
 }
 
 async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
+  if (kilnPerformanceSnapshot) { setInfo('Return to authoring before loading a scene'); return; }
   if (authoringBusy) {
     setInfo('Wait for the current capture or save');
     return;
@@ -27675,6 +27803,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     return;
   }
   const loadRequestId = sceneLoadRequests.begin();
+  cinematicSceneLoadId = loadRequestId;
   const previousSceneFile = currentSceneFile;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
   const previousFlameDomainTranslation = [...flameDomainTranslation];
@@ -27720,6 +27849,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     return;
   }
   activeSceneComposition = restorePlan.composition;
+  kilnCues = restorePlan.cinematic;
   if (activeSceneComposition && !objectRecords.some(record => record.type === FLAME_EMITTER_TYPE)) {
     flameEmitterPose = defaultFlameEmitterPose();
     flameEmitterInjectionSuspended = false;
@@ -27908,6 +28038,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 
   if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   claimLoadedSceneFile(file);
+  cinematicSceneLoadId = null;
   if (data.label) document.getElementById('composition-label').value = data.label;
   if (activeSceneComposition) {
     const gain = document.getElementById('fire-light-gain-stops');
