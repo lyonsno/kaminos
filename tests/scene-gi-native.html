@@ -6,7 +6,8 @@
 import * as THREE from 'three/webgpu';
 import {uniform} from 'three/tsl';
 import {createSceneGI} from '../scene-gi.mjs';
-const renderer=new THREE.WebGPURenderer({antialias:false});
+const antialias=new URLSearchParams(location.search).get('antialias')==='1';
+const renderer=new THREE.WebGPURenderer({antialias});
 await renderer.init();
 renderer.setSize(800,600);renderer.setPixelRatio(1);
 renderer.toneMapping=THREE.NoToneMapping;
@@ -24,6 +25,7 @@ const pipeline=new THREE.RenderPipeline(renderer);pipeline.outputNode=gi.output(
 const frames=async()=>{for(let i=0;i<3;i++){pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();}};
 const read=async()=>Array.from(await renderer.readRenderTargetPixelsAsync(gi.beauty.renderTarget,0,0,800,600),THREE.DataUtils.fromHalfFloat);
 window.giAssay={
+  state:()=>({rendererSamples:renderer.samples,...gi.debugState()}),
   async sourceResponse() {
     floor.material.metalness=0;gi.setSettings({mode:'combined',gain:1});
     const result=[];

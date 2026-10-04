@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
-const [origin,out,expectedRoot]=process.argv.slice(2);
+const [origin,out,expectedRoot,option]=process.argv.slice(2);
+assert.ok(option===undefined||option==='--antialias');
+const antialias=option==='--antialias';
 await fs.mkdir(out,{recursive:true});
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
-const report={status:'running',phase:'launch',origin,expectedRoot,executable,errors:[]};
+const report={status:'running',phase:'launch',origin,expectedRoot,executable,antialias,errors:[]};
 let browser;
 try {
   report.runtime=await(await fetch(new URL('/api/runtime-config',origin))).json();
@@ -14,9 +16,13 @@ try {
   await page.addInitScript(()=>{for(const type of ['error','unhandledrejection'])window.addEventListener(type,()=>{window.assayFailed=true;});});
   page.on('pageerror',e=>report.errors.push(String(e)));
   page.on('console',m=>{if(m.type()==='error'&&!m.text().startsWith('Failed to load resource:'))report.errors.push(m.text());});
-  await page.goto(new URL('/tests/scene-gi-native.html',origin).href);
+  await page.goto(new URL('/tests/scene-gi-native.html?antialias='+(antialias?'1':'0'),origin).href);
   await page.waitForFunction(()=>window.assayLoaded||window.assayFailed,null,{timeout:0});
   assert.equal(await page.evaluate(()=>window.assayLoaded),true,'native assay initialization failed');
+  report.sampling=await page.evaluate(()=>window.giAssay.state());
+  assert.equal(report.sampling.sourceSamples,0,'GI source must be single-sample');
+  assert.equal(report.sampling.rendererSamples,antialias?4:0,'requested MSAA route must be effective');
+  assert.equal(report.sampling.receivingSamples,report.sampling.rendererSamples,'beauty retains renderer MSAA');
   report.adapter=await page.evaluate(async()=>{const a=await navigator.gpu.requestAdapter();return {vendor:a.info.vendor,architecture:a.info.architecture};});
   assert.equal(report.adapter.vendor,'apple');
   report.phase='material';

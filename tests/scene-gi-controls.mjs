@@ -17,6 +17,7 @@ try {
   let rejectLoad;
   const loadFailure=new Promise((_,reject)=>{rejectLoad=reject;});
   page.on('pageerror',e=>{report.errors.push(String(e));void save();rejectLoad(e);});
+  page.on('console',m=>{if(m.type()==='error'){report.errors.push(m.text());void save();}});
   await page.goto(origin);
   await Promise.race([page.waitForFunction(()=>window.kaminosSceneGIDebugState,null,{timeout:0}),loadFailure]);
   assert.equal(await page.locator('#scene-gi-general-slot #scene-gi-mode').count(),1);
@@ -33,12 +34,19 @@ try {
     assert.equal(await page.inputValue('#scene-gi-gain'),'2');
     await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]));
     await page.locator('.env-btn[data-env="neutral"]').click();
+    await page.locator('#rim-enabled').check();
     await page.waitForTimeout(2000);
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();
     await page.screenshot({path:out+'/'+(extra.futureQuality?'additive':'ordinary')+'.png'});
     await page.$eval('#scene-gi-gain',e=>{e.value='1';e.dispatchEvent(new Event('change',{bubbles:true}));});
   }
   await page.selectOption('#scene-gi-mode','gtao');
+  await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]));
+  await page.waitForTimeout(2000);
+  await page.screenshot({path:out+'/restored-gtao.png'});
+  report.state=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),objects:window.kaminosSceneObjectDebugState(),
+    canvases:[...document.querySelectorAll('canvas')].map(c=>({id:c.id,width:c.width,height:c.height,opacity:getComputedStyle(c).opacity,display:getComputedStyle(c).display,position:getComputedStyle(c).position,zIndex:getComputedStyle(c).zIndex})),
+    volumeActive:window.__kaminosVolumePrototype?.debugState().active}));
   assert.equal((await page.evaluate(()=>window.kaminosSceneGIDebugState())).effectiveMode,'gtao');
   report.status='passed';report.phase='complete';assert.deepEqual(report.errors,[]);
 } catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}

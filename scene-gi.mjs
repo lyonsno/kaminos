@@ -5,7 +5,9 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, sceneGIReceives } from './scene-gi-settings.mjs';
 
 export function createSceneGI(scene, camera, aoIntensity) {
-  const source = pass(scene, camera);
+  // The screen-space field samples one depth/normal per pixel on both device routes.
+  // Keep MSAA on the receiving beauty pass, not on the GI source attachments.
+  const source = pass(scene, camera, { samples: 0 });
   source.name = 'SSGI opaque linear source';
   source.transparent = false;
   const visibleNormal = normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(),normalView);
@@ -74,6 +76,7 @@ export function createSceneGI(scene, camera, aoIntensity) {
     debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,frames,
       temporal:false,source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
-      sourcePasses:1,receivingPasses:1,standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain'}),
+      sourcePasses:1,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:beauty.renderTarget.samples,
+      standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain'}),
   };
 }
