@@ -90,7 +90,11 @@ The source-checkout [SAM image example](webgpu-inference-kit/docs/sam-image-exam
 accepts uploaded images and text, exposes all retained instances, and exports
 source-sized masks, transparent cutouts, and provenance through the public kit
 entrypoints. Native browser runs exercise cold and cached prompts, multiple
-instances, an empty negative control, and source-sized PNG exports. It shares
+instances, an empty negative control, and source-sized PNG exports. Recent
+Apple Metal source-checkout runs returned cached prompts in **2.4-2.9 seconds**
+and a new image with the model resident in **18.1-18.3 seconds**. Complete-output
+scheduling changes preserved all 1,327,104 selected logits and their masks
+exactly across the recorded five-case corpus. It shares
 its session with a moving source-image renderer, but observed foreground stalls
 remain: shared-device execution is not a smooth-frame-pacing claim. See the
 example guide for the current numerical and performance boundaries.
