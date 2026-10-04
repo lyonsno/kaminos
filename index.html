@@ -24,7 +24,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .field-key { color: #666; }
 #scene-gi-controls .field { align-items:center; gap:12px; }
 #scene-gi-controls input[type="number"], #scene-gi-controls select, #scene-gi-mode { min-width:0; width:148px; max-width:55%; box-sizing:border-box; border:1px solid #405157; border-radius:4px; padding:6px; background:#151a1c; color:#ddd; }
-body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { visibility:hidden !important; }
+body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !important; }
 .field-val { color: #999; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-val.present { color: #66bb6a; }
 .field-val.missing { color: #ef5350; }
@@ -3415,7 +3415,7 @@ function refreshRenderingControls() {
       document.getElementById(`rendering-source-${axis}`).value = String(value);
     }
   }
-  fireLightFieldPass?.setWitnessMute(!selected.flameField);
+  fireLightFieldPass?.setWitnessMute(!selected.flameField || (sceneGISettings.mode === 'combined' && sceneGISettings.view !== 'scene'));
   const select = document.getElementById('rendering-light-mode');
   if (select) {
     select.value = renderingMode;
@@ -10486,7 +10486,7 @@ async function initScene() {
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = combined ? sceneGISettings.view : 'gtao';
+    const graphKey = sceneGISettings.mode;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -10499,7 +10499,7 @@ async function initScene() {
   // Retain each graph across A/B: Three may still reference its resources in
   // cached bindings. No per-toggle destruction of live GPU textures.
   fireLightFieldPass = null;
-  if (isFireLightFieldRoute() && sharedGpu?.device && (!combined || sceneGISettings.view === 'scene')) {
+  if (isFireLightFieldRoute() && sharedGpu?.device) {
     const receiverNormal = combined ? sceneGI.source.getTextureNode('normal') : prePassNormal;
     fireLightFieldPass = createFireLightFieldReceiverPass(baseSceneOutput, activeSceneDepth, receiverNormal);
     renderPipeline.outputNode = fireLightFieldPass.outputNode;
@@ -10518,10 +10518,12 @@ async function initScene() {
   }
   updateSceneGI = value => {
     const next = resolveSceneGISettings(value);
-    const rebuild = next.mode !== sceneGISettings.mode || next.view !== sceneGISettings.view;
+    const rebuild = next.mode !== sceneGISettings.mode;
     sceneGISettings = next;
     sceneGI.setSettings(next);
     if (rebuild) rebuildSceneGIOutput();
+    document.body.dataset.sceneGiDiagnostic = String(next.mode === 'combined' && next.view !== 'scene');
+    refreshRenderingControls();
     window._kaminosDirty?.();
   };
   sceneGI.setSettings(sceneGISettings);
@@ -10732,6 +10734,8 @@ async function initScene() {
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,sceneEmissiveCamera.outputNode,state.effective);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
+    } else if(sceneEmissiveCamera) {
+      applySceneEmissiveCamera(renderPipeline,rawSceneOutput,rawSceneOutput,false);
     }
     renderPipeline.render();
     sceneFrameCount++;

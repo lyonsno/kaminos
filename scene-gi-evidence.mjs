@@ -4,7 +4,7 @@ export function admitSceneGIComparison(e) {
   assert.deepEqual(e.errors,[],'scene GI evidence contains render errors');
   assert.ok(e.sourceBefore&&e.sourceBefore===e.sourceAfter,'scene GI evidence changed the held source');
   assert.ok(Number.isFinite(e.giRaw?.max)&&e.giRaw.max>0&&e.giRaw.nonzero>0,'scene GI evidence has no finite indirect radiance');
-  for(const name of ['baseline','restored','combined','zero']) {
+  for(const name of ['baseline','restored','combined','zero','bounce','visibility']) {
     const p=e[name];
     assert.ok(p?.width>0&&p?.height>0&&p.values?.length===p.width*p.height*4,'scene GI evidence has missing/partial pixels');
     assert.ok(p.values.every(Number.isFinite),'scene GI evidence has nonfinite pixels');
@@ -19,6 +19,12 @@ export function admitSceneGIComparison(e) {
     return sum/(a.width*a.height*3);
   };
   const bounceDelta=delta(e.combined,e.zero),restoreDelta=delta(e.baseline,e.restored);
+  for (const [name,view] of [['bounce','gi'],['visibility','ao']]) {
+    const p=e[name];
+    assert.ok(p.view===view&&p.gain===1,'scene GI evidence has wrong diagnostic settings');
+    assert.ok(p.frameAfter>p.frameBefore,'scene GI evidence has stale diagnostic execution');
+    assert.ok(delta(p,e.combined)>0,'scene GI evidence diagnostic substituted composed output');
+  }
   assert.ok(bounceDelta>0,'scene GI evidence shows disconnected bounce control');
   assert.ok(restoreDelta<=1,'scene GI evidence did not restore baseline');
   return {bounceMeanCodeDelta:bounceDelta,baselineMeanCodeDelta:restoreDelta};

@@ -1,5 +1,5 @@
 import { DataUtils } from 'three/webgpu';
-import { pass, mrt, output, normalView, positionViewDirection, diffuseColor, context, builtinAOContext, sample, texture, screenUV, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
+import { pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, context, builtinAOContext, texture, screenUV, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
 import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, sceneGIReceives } from './scene-gi-settings.mjs';
@@ -22,7 +22,7 @@ export function createSceneGI(scene, camera, aoIntensity) {
   aoFilter.depthPhi.value = giFilter.depthPhi.value = .1;
   const aoTexture = convertToTexture(aoFilter), giTexture = convertToTexture(giFilter);
   const rawAO = effect.getAONode(), rawGI = effect.getGINode();
-  const gain = uniform(1), filtered = uniform(true,'bool');
+  const gain = uniform(1), filtered = uniform(true,'bool'), viewMode = uniform(0,'int');
   const visibility = filtered.select(texture(aoTexture.value,screenUV).r,texture(rawAO.value,screenUV).r).clamp(0,1);
   const irradianceOverPi = filtered.select(texture(giTexture.value,screenUV).rgb,texture(rawGI.value,screenUV).rgb).mul(gain);
   const ao = mix(float(1),visibility,aoIntensity.min(1)).div(float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(visibility))));
@@ -31,9 +31,9 @@ export function createSceneGI(scene, camera, aoIntensity) {
   beauty.contextNode = context({
     ...builtinAOContext(ao).getFlowContextData(),
     getOutput(node,{material}) {
-      // diffuseColor has the physical material's metalness reduction. Leave
-      // transparent, unlit and custom fragment materials on their existing path.
-      return sceneGIReceives(material) ? vec4(node.rgb.add(irradianceOverPi.mul(diffuseColor.rgb)),node.a) : node;
+      // Match Three's diffuseContribution, including mapped/node metalness.
+      const diffuseReceiver = diffuseColor.rgb.mul(metalness.oneMinus());
+      return sceneGIReceives(material) ? vec4(node.rgb.add(irradianceOverPi.mul(diffuseReceiver)),node.a) : node;
     },
   });
   const setup = beauty.setup;
@@ -41,20 +41,24 @@ export function createSceneGI(scene, camera, aoIntensity) {
     aoTexture.build(builder); giTexture.build(builder);
     return setup.call(this,builder);
   };
-  const aoView = sample(uv=>vec4(filtered.select(aoTexture.sample(uv).rrr,rawAO.sample(uv).rrr),1));
-  const giView = sample(uv=>vec4(filtered.select(giTexture.sample(uv).rgb,rawGI.sample(uv).rgb).mul(gain).mul(depth.sample(uv).r.lessThan(1)),1));
+  // The receiving pass owns producer scheduling. Diagnostics read its resolved
+  // textures without pulling the producer graph into isolated conditional scopes.
+  const aoView = vec4(visibility,visibility,visibility,1);
+  const giView = vec4(irradianceOverPi.mul(texture(depth.value,screenUV).r.lessThan(1)),1);
+  const combinedOutput = mix(mix(beauty,aoView,float(viewMode.equal(1))),giView,float(viewMode.equal(2)));
   let settings = resolveSceneGISettings();
   let frames = 0;
   const update = effect.updateBefore;
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };
   return {
     depth, source, beauty,
-    output(view) { return view === 'ao' ? aoView : view === 'gi' ? giView : beauty; },
+    output() { return combinedOutput; },
     setSettings(value) {
       settings = resolveSceneGISettings(value);
       effect.radius.value = settings.radius; effect.thickness.value = settings.thickness;
       effect.sliceCount.value = settings.slices; effect.stepCount.value = settings.steps;
       gain.value = settings.gain; filtered.value = settings.denoise > 0;
+      viewMode.value = ['scene','ao','gi'].indexOf(settings.view);
       aoFilter.radius.value = giFilter.radius.value = settings.denoise;
     },
     async readback(renderer) {

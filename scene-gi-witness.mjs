@@ -5,7 +5,7 @@ import {admitSceneGIComparison} from './scene-gi-evidence.mjs';
 const [url,out,root] = process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
-const report={requestedUrl:url,expectedRoot:root,executable,status:'running',phase:'load',errors:[],views:[]};
+const report={requestedUrl:url,expectedRoot:root,executable,status:'running',phase:'load',errors:[],httpErrors:[],views:[]};
 const save=()=>fs.writeFile(`${out}/report.json`,JSON.stringify(report,null,2));
 await save();let browser,page;
 try {
@@ -14,8 +14,10 @@ try {
   assert.equal(report.runtime.source.repoRoot,root);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  page.setDefaultTimeout(0);
   page.on('pageerror',e=>{report.errors.push(String(e));void save();});
-  page.on('console',m=>{if(m.type()==='error'&&!m.text().includes('favicon')){report.errors.push(m.text());void save();}});
+  page.on('console',m=>{if(m.type()==='error'&&!m.text().startsWith('Failed to load resource:')){report.errors.push(m.text());void save();}});
+  page.on('response',r=>{if(r.status()>=400&&new URL(r.url()).pathname!=='/favicon.ico'){report.httpErrors.push({url:r.url(),status:r.status()});void save();}});
   await page.goto(new URL('/api/runtime-config',url).href);
   report.adapter=await page.evaluate(async()=>{const a=await navigator.gpu.requestAdapter();return {vendor:a.info.vendor,architecture:a.info.architecture,device:a.info.device,isFallbackAdapter:a.isFallbackAdapter};});
   assert.ok(!report.adapter.isFallbackAdapter&&!/swiftshader/i.test(JSON.stringify(report.adapter)));
@@ -28,6 +30,7 @@ try {
   report.sourceHash=createHash('sha256').update(JSON.stringify(signal.source.values)).digest('hex');
   report.phase='comparison';await save();
   for(const [name,mode,view,gain] of [['baseline','gtao','scene',1],['combined','combined','scene',1],['zero','combined','scene',0],['bounce','combined','gi',1],['visibility','combined','ao',1],['restored','gtao','scene',1]]) {
+    const frameBefore=await page.evaluate(()=>window.kaminosSceneGIDebugState().frames);
     await page.selectOption('#scene-gi-mode',mode);
     if(mode==='combined') {
       await page.selectOption('#scene-gi-view',view);
@@ -35,7 +38,8 @@ try {
     }
     await page.waitForTimeout(1500);
     const state=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()}));
-    report.views.push({name,...state});await save();
+    if(mode==='combined'){assert.equal(state.gi.view,view);assert.equal(state.gi.gain,gain);assert.ok(state.gi.frames>frameBefore);}
+    report.views.push({name,frameBefore,...state});await save();
     const png=await page.screenshot({path:`${out}/${name}.png`});
     report.views.at(-1).pixels=await page.evaluate(async base64=>{
       const image=new Image();image.src=`data:image/png;base64,${base64}`;await image.decode();
@@ -62,9 +66,12 @@ try {
   const final=await page.evaluate(async()=>await window.__kaminosVolumePrototype.sampleSceneVolumeSource());
   const sourceAfter=createHash('sha256').update(JSON.stringify(final.values)).digest('hex');
   assert.equal(sourceAfter,report.sourceHash);
-  assert.deepEqual(report.errors.filter(e=>!e.includes('status of 404')),[]);
-  const evidence={native:report.adapter.vendor==='apple'&&!report.adapter.isFallbackAdapter,root:report.runtime.source.repoRoot,expectedRoot:root,errors:report.errors.filter(e=>!e.includes('status of 404')),sourceBefore:report.sourceHash,sourceAfter,giRaw:report.giRaw};
-  for(const name of ['baseline','restored','combined','zero'])evidence[name]={...report.views.find(v=>v.name===name).pixels,values:await fs.readFile(`${out}/${name}.rgba`)};
+  assert.deepEqual(report.errors,[]);assert.deepEqual(report.httpErrors,[]);
+  const evidence={native:report.adapter.vendor==='apple'&&!report.adapter.isFallbackAdapter,root:report.runtime.source.repoRoot,expectedRoot:root,errors:report.errors,sourceBefore:report.sourceHash,sourceAfter,giRaw:report.giRaw};
+  for(const name of ['baseline','restored','combined','zero','bounce','visibility']) {
+    const v=report.views.find(v=>v.name===name);
+    evidence[name]={...v.pixels,view:v.gi.view,gain:v.gi.gain,frameBefore:v.frameBefore,frameAfter:v.gi.frames,values:await fs.readFile(`${out}/${name}.rgba`)};
+  }
   report.pixelComparison=admitSceneGIComparison(evidence);
   report.status='captured';report.phase='complete';
 } catch(e) {report.status='failed';report.error=String(e.stack||e);process.exitCode=1;await page?.screenshot({path:`${out}/failure.png`}).catch(()=>{});}
