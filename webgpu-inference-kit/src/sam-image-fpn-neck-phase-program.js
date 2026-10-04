@@ -146,7 +146,8 @@ fn main(
 }
 `;
 
-const CONV2D_WGSL = `
+function createConv2dWgsl(range = false) {
+  return `
 struct FpnConvDims {
   batch: u32,
   input_height: u32,
@@ -168,12 +169,16 @@ struct FpnConvDims {
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: FpnConvDims;
 
+${range ? 'struct OutputRange { output_start: u32, output_count: u32, };\n@group(0) @binding(5) var<uniform> output_range: OutputRange;' : ''}
+
 @compute @workgroup_size(64)
 fn main(
   @builtin(global_invocation_id) gid: vec3<u32>,
   @builtin(num_workgroups) dispatch_grid: vec3<u32>,
 ) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u;
+  ${range ? `let local_index = gid.x + gid.y * dispatch_grid.x * 64u;
+  if (local_index >= output_range.output_count) { return; }
+  let index = output_range.output_start + local_index;` : 'let index = gid.x + gid.y * dispatch_grid.x * 64u;'}
   if (index >= dims.total_output) { return; }
   let out_c = index % dims.output_channels;
   let out_x = (index / dims.output_channels) % dims.output_width;
@@ -198,6 +203,27 @@ fn main(
   output_values[index] = sum;
 }
 `;
+
+}
+
+const CONV2D_WGSL = createConv2dWgsl();
+const CONV2D_RANGE_WGSL = createConv2dWgsl(true);
+
+export function createSamFpnConvolutionRanges(totalOutput, inputChannels, kernelSize, maxWorkgroupsPerDimension = 65_535) {
+  for (const value of [totalOutput, inputChannels, kernelSize, maxWorkgroupsPerDimension]) {
+    if (!Number.isSafeInteger(value) || value <= 0 || value > 0xffff_ffff) throw new Error('convolution range dimensions must be positive u32 integers');
+  }
+  // Native 288x288x256, 3x3x256 convolution: 247 ms; about 5 ms per range.
+  const productsPerOutput = inputChannels * kernelSize * kernelSize;
+  const capacity = maxWorkgroupsPerDimension ** 2 * 64;
+  const rangeSize = Math.min(capacity, Math.max(64, Math.floor(2 ** 30 / productsPerOutput / 64) * 64));
+  const ranges = [];
+  for (let start = 0; start < totalOutput; start += rangeSize) {
+    const count = Math.min(rangeSize, totalOutput - start);
+    ranges.push({ start, count, dispatch: createLinearDispatch(count, { workgroupSize: 64, maxWorkgroupsPerDimension }) });
+  }
+  return ranges;
+}
 
 const GELU_WGSL = `
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
@@ -970,12 +996,33 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     const metadata = { routeId: SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', fpnLevels: [0, 1, 2, 3], detectorConsumedLevels: [0, 1, 2] };
     const runKernel = async ({ name, kernel, inputTensor, outputTensor, weightTensor, biasTensor, inShape, outShape, spec }) => {
       tensors.convDims.update(convDimsValues(shape, inShape, spec, outShape));
+      const totalOutput = shape.batch * outShape.height * outShape.width * outShape.channels;
+      const phases = [{ name, kernel, dispatch: dispatchFor(name, totalOutput), yieldAfter: true }];
+      const programKernels = { ...kernels };
+      if (kernel === 'conv2d') {
+        const ranges = createSamFpnConvolutionRanges(totalOutput, spec.inChannels, spec.kernelSize, maxComputeWorkgroupsPerDimension);
+        phases.length = 0;
+        for (const { start, count, dispatch } of ranges) {
+          const rangeKernel = `${kernel}Range${start}`;
+          const rangeUniform = runtime.createUniformBuffer({
+            label: `${name}.range-${start}`,
+            schema: [{ name: 'output_start', type: 'u32' }, { name: 'output_count', type: 'u32' }],
+            values: { output_start: start, output_count: count },
+          });
+          programKernels[rangeKernel] = {
+            ...kernels[kernel],
+            code: CONV2D_RANGE_WGSL,
+            bindings: [...kernels[kernel].bindings, { name: 'outputRange', resource: rangeUniform, type: 'uniform', visibility: WEBGPU_SHADER_STAGE.compute }],
+          };
+          phases.push({ name: start === 0 ? name : `${name}-range-${start}`, kernel: rangeKernel, dispatch, yieldAfter: true });
+        }
+      }
       const single = runtime.defineProgram({
         name: `sam3.image-fpn-neck.${name}`,
         tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor], weight: tensors[weightTensor], bias: tensors[biasTensor] },
         uniforms: { convDims: tensors.convDims },
-        kernels,
-        phases: [{ name, kernel, dispatch: dispatchFor(name, shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
+        kernels: programKernels,
+        phases,
         metadata,
       });
       await runtime.runProgram(single);
