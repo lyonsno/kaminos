@@ -8,7 +8,16 @@ assert.throws(() => compareAttention(new Float32Array([NaN]), new Float32Array([
 assert.throws(() => compareAttention(new Float32Array([1]), new Float32Array([Infinity])), /nonfinite/);
 assert.deepEqual(compareAttention(new Float32Array([1, 2]), new Float32Array([1, 3])), { count: 2, maxAbs: 1, rms: Math.sqrt(0.5), differing: 1 });
 assert.equal(new Set(attentionCases.map(row => row.shader)).size, 7);
-for (const spec of attentionCases.filter(row => row.name !== 'long-spatial-keys')) {
+assert.deepEqual(attentionCases.find(row => row.name === 'long-spatial-keys-head32'), {
+  name: 'long-spatial-keys-head32', shader: 'SAM_ONLINE_ATTENTION_WGSL',
+  queries: 32, keys: 5184, heads: 8, dim: 32, domains: 1,
+}, 'the browser witness must include native DETR head32 with long spatial keys and 32 queries');
+assert.deepEqual(attentionCases.find(row => row.name === 'long-spatial-keys'), {
+  name: 'long-spatial-keys', shader: 'SAM_ONLINE_ATTENTION_WGSL',
+  queries: 32, keys: 5184, heads: 8, dim: 64, domains: 1,
+}, 'the existing long head64 case must remain unchanged');
+const browserOnlyOracleCases = new Set(['long-spatial-keys', 'long-spatial-keys-head32']);
+for (const spec of attentionCases.filter(row => !browserOnlyOracleCases.has(row.name))) {
   const fixture = attentionFixture(spec);
   assert.equal(fixture.q.length, spec.domains * spec.queries * spec.heads * spec.dim);
   const oracle = attentionOracle(spec, fixture);

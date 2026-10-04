@@ -9,6 +9,7 @@ export const attentionCases = [
   { name: 'prompt-fpn-partial', shader: 'SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL', queries: 5, keys: 77, heads: 4, dim: 16, domains: 2, mask: true, prompt: true },
   { name: 'vit-multiple-windows', shader: 'SAM_VIT_ONLINE_ATTENTION_WGSL', queries: 65, keys: 65, heads: 2, dim: 64, domains: 4, windows: 2 },
   { name: 'long-spatial-keys', shader: 'SAM_ONLINE_ATTENTION_WGSL', queries: 32, keys: 5184, heads: 8, dim: 64, domains: 1 },
+  { name: 'long-spatial-keys-head32', shader: 'SAM_ONLINE_ATTENTION_WGSL', queries: 32, keys: 5184, heads: 8, dim: 32, domains: 1 },
 ];
 
 export function attentionFixture(spec) {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
 import { onlineAttentionDispatch } from '../src/sam-online-attention-wgsl.js';
+import * as attention from '../src/sam-online-attention-wgsl.js';
 
 const root = new URL('../src/', import.meta.url);
 const sharedUrl = new URL('sam-online-attention-wgsl.js', root);
@@ -21,12 +22,43 @@ const productionBindings = [
 
 assert.equal(existsSync(sharedUrl), true, 'serving attention must share one online-softmax WGSL family');
 const shared = existsSync(sharedUrl) ? readFileSync(sharedUrl, 'utf8') : '';
-assert.match(shared, /var products: array<f32, 64>/, 'each lane must retain the original 64-element QK reduction tree for its key');
+function assertStaticQkTree(name, shader) {
+  assert.doesNotMatch(shader, /var\s+products\s*:\s*array|products\[/, `${name} must not dynamically index a private products array`);
+  const block = shader.match(/let k_base = [^;]+;([\s\S]*?)var score = ([^;]+);/);
+  assert.ok(block, `${name} must expose its QK reduction before score adjustment`);
+  const expected = [];
+  for (let component = 0; component < 64; component += 1) {
+    expected.push(`var product_${component} = 0.0;`);
+    expected.push(`if (${component}u < dims.head_dim) {`);
+    expected.push(`product_${component} = q_values[q_base + ${component}u] * k_values[k_base + ${component}u];`);
+    expected.push('}');
+  }
+  // The baseline's in-place tree pairs opposite halves, not adjacent leaves.
+  for (const stride of [32, 16, 8, 4, 2, 1]) {
+    for (let index = 0; index < stride; index += 1) {
+      expected.push(`product_${index} = product_${index} + product_${index + stride};`);
+    }
+  }
+  assert.deepEqual(block[1].trim().split('\n').map(line => line.trim()), expected,
+    `${name} must preserve all 64 guarded zero-padded products and exact tree operation order`);
+  assert.equal(block[2], 'product_0 * scale', `${name} must scale only the tree root`);
+}
+
+const shaders = Object.entries(attention).filter(([name]) => name.endsWith('_WGSL'));
+assert.equal(shaders.length, 7, 'every shared attention variant must exercise the static QK contract');
+for (const [name, shader] of shaders) {
+  assertStaticQkTree(name, shader);
+  assert.throws(() => assertStaticQkTree(name, shader.replace(
+    'product_0 = product_0 + product_32;', 'product_0 = product_0 + product_1;',
+  )), /exact tree operation order/, 'the contract must reject an adjacent-pair replacement');
+  assert.throws(() => assertStaticQkTree(name, shader.replace(
+    'if (63u < dims.head_dim)', 'if (62u < dims.head_dim)',
+  )), /guarded zero-padded products/, 'the contract must reject a wrong padding guard');
+}
 assert.match(shared, /var<workgroup> scores: array<f32, 64>/, 'a workgroup must calculate a tile of distinct key scores');
 assert.match(shared, /tile_start = tile_start \+ 64u/, 'synchronization must advance in 64-key tiles');
 assert.equal((shared.match(/workgroupBarrier\(\)/g) || []).length, 4, 'attention must use initialization plus three barriers per tile, not barriers per key or reduction step');
 assert.match(shared, /accumulator = accumulator \* old_scales\[offset\] \+ token_scales\[offset\] \* v_values/, 'value accumulation must preserve the original token recurrence');
-assert.match(shared, /products\[reduction_index\] = products\[reduction_index\] \+ products\[reduction_index \+ reduction_stride\]/, 'QK reduction must preserve tree pair ordering');
 assert.match(shared, /let tile_count = min\(64u, .* - tile_start\)/, 'a partial final tile must not read nonexistent keys');
 assert.match(shared, /head_dim > 64u/, 'the shared kernel must fail closed when a head exceeds its workgroup width');
 assert.match(packageJson.scripts.test, /sam-serving-attention-complexity-contracts\.mjs/, 'the default suite must retain the serving attention regression contract');
