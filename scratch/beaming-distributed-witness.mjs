@@ -20,6 +20,15 @@ try {
   await fs.access(executable);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  if(process.argv.includes('--source-aware-light-only')) {
+    await page.route(u=>u.pathname==='/'||u.pathname==='/index.html',async route=>{
+      const response=await route.fetch(),original=await response.text();
+      const needle='  function renderSceneFrame() {';assert.equal(original.split(needle).length,2);
+      const body=original.replace(needle,"  window.__beamingEnvironment=()=>({intensity:scene.environmentIntensity,exposure:renderer.toneMappingExposure,rim:document.getElementById('rim-enabled').checked});\n"+needle);
+      report.environmentInstrumentation={url:route.request().url(),original,body};await save();
+      await route.fulfill({response,body});
+    });
+  }
   if(process.argv.includes('--surface-cost-check')) {
     await page.route('**/scene-surface-reconstruction.mjs',async route=>{
       const response=await route.fetch(),original=await response.text();
@@ -393,6 +402,13 @@ ${needle}`);
   }
   if(process.argv.includes('--source-aware-motion-check')) {
     report.phase='matched-moving-source';await save();
+    const lightOnly=process.argv.includes('--source-aware-light-only');
+    if(lightOnly) {
+      await page.evaluate(()=>{
+        for(const [id,value] of [['env-intensity-slider',0],['exposure-slider',1]]){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
+      });
+      await page.uncheck('#rim-enabled');
+    }
     await page.selectOption('#rendering-light-mode','shared');
     await page.check('#rendering-retain-comparisons');
     await page.evaluate(()=>{
@@ -426,15 +442,15 @@ ${needle}`);
         await settle();
         const signal=await page.evaluate(async()=>{
           const fields=await window.__kaminosSceneRadiance.readback();
-          return {lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),
+          return {environment:window.__beamingEnvironment?.(),lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),
             source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data)};
         });
-        assertSourceMotionView(signal,{count,pattern,heldSource:held.values});
+        assertSourceMotionView(signal,{count,pattern,heldSource:held.values,lightOnly});
         const name=`motion-${state}-${pattern}${count}`;
         for(const [field,values] of [['front',signal.surface],['back',signal.back]])await fs.writeFile(`${out}/${name}-${field}.f32`,floatEvidenceBytes(values));
         await page.screenshot({path:`${out}/${name}.png`});
         const mean=v=>v.reduce((s,x,i)=>s+(i%4<3?x:0),0)/(v.length/4);
-        report.views.push({name,state,pattern,count,sourceHash,surfaceHash:digest(signal.surface),frontMean:mean(signal.surface),lighting:signal.lighting,volume:signal.volume,sourceMetadata:{...held,values:undefined}});
+        report.views.push({name,state,pattern,count,lightOnly,environment:signal.environment,sourceHash,surfaceHash:digest(signal.surface),frontMean:mean(signal.surface),lighting:signal.lighting,volume:signal.volume,sourceMetadata:{...held,values:undefined}});
         await save();
       }
     }
