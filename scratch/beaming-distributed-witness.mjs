@@ -405,7 +405,9 @@ ${needle}`);
     const lightOnly=process.argv.includes('--source-aware-light-only');
     if(lightOnly) {
       await page.evaluate(()=>{
-        for(const [id,value] of [['env-intensity-slider',0],['exposure-slider',1]]){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
+        // The ordinary environment slider has minimum .1. This explicitly
+        // declared diagnostic permits zero in the owned browser only.
+        for(const [id,value] of [['env-intensity-slider',0],['exposure-slider',1]]){const e=document.getElementById(id);if(id==='env-intensity-slider')e.min='0';e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
       });
       await page.uncheck('#rim-enabled');
     }
