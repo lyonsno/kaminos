@@ -194,3 +194,16 @@ test('browser unlock cancels once and a denied lock leaves bounded dragging avai
  target.requestPointerLock=()=>Promise.reject(Error('denied'));
  const denied=beginContinuousPointer(target,{x:0,y:0},{move(){},unavailable(){unavailable++;}});denied.request();await new Promise(resolve=>setImmediate(resolve));assert.equal(denied.locked,false);assert.equal(unavailable,1);denied.stop();
 });
+
+test('Escape from typed parameter cancels before blur can commit it',async()=>{
+ const {installRelativeNumberDrag}=await import('../scene-control-history.mjs');
+ const f=fixture(),doc=new Control();globalThis.document=doc;globalThis.window=new Control();
+ f.control.ownerDocument=doc;f.control.value='1';f.control.blur=()=>{doc.activeElement=null;f.control.fire('blur');};
+ try {
+  installRelativeNumberDrag({input:f.control,step:.1});
+  doc.activeElement=f.control;f.control.readOnly=false;f.control.fire('focusin');
+  const before=structuredClone(f.value);f.value.flow=2;f.control.value='2';f.control.fire('input');
+  doc.fire('keydown',{key:'Escape'});
+  assert.deepEqual(f.value,before);assert.equal(f.edits.state().undoCount,0);assert.equal(f.edits.state().active,null);
+ }finally{delete globalThis.document;delete globalThis.window;}
+});

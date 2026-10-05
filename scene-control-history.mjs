@@ -125,7 +125,7 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     target.addEventListener('lostpointercapture',()=>{if(gesture?.target===target && !gesture.continuous?.locked)finish(true);});
   }
   window.addEventListener('blur',()=>finish(true));
-  document.addEventListener('keydown',event=>{if(!gesture && doc.activeElement===input && event.key==='Escape'){input.blur?.();return;}if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}},true);
+  document.addEventListener('keydown',event=>{if(!gesture && doc.activeElement===input && event.key==='Escape'){event.preventDefault();input.dispatchEvent(new Event('pointercancel'));input.blur?.();return;}if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}},true);
   // The transaction owner can finish via Escape/Enter/selection before our
   // document listener runs. Release pointer ownership without emitting a second
   // transaction-ending event back into that owner.
