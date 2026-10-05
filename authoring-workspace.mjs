@@ -25,17 +25,18 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     <button type="button" data-workbench-tab="generate">Generate</button>`;
   const hierarchy = document.createElement('aside');
   hierarchy.id = 'authoring-hierarchy'; hierarchy.setAttribute('aria-label', 'Scene hierarchy');
-  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Scene</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Select in the scene or viewport</p></div>`;
+  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Scene</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Click to select · Double-click name to rename · × removes (Undo restores)</p></div>`;
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Object</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
     <div id="authoring-object-properties" class="authoring-inspector-body"><div id="authoring-transform-slot"></div><div id="authoring-type-slot"></div><details id="authoring-object-tools"><summary>Object tools</summary></details></div>
     <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><h2>Composition</h2><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><details id="authoring-burner-slot"><summary>Burner</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
   const toolbar = document.createElement('div'); toolbar.id = 'authoring-viewport-tools';
-  toolbar.innerHTML = `<div id="authoring-add-slot"></div><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><div class="authoring-header-spacer"></div><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
+  toolbar.innerHTML = `<div id="authoring-add-slot"></div><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
   document.body.prepend(header);
   document.body.append(hierarchy, inspector);
   byId('viewport').prepend(toolbar);
+  for(const [id,key] of [['viewport-show-gizmos','gizmos'],['viewport-show-hints','hints']])byId(id).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
   const entries = [];
   const move = (node, destination) => entries.push({ node, destination: byId(destination) });
   move(byId('scene-object-list').closest('.panel'), 'authoring-tree');

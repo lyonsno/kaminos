@@ -47,3 +47,11 @@ Bed geometry remains visible without a source. Removing a source stops injection
 The scene tree's Group loose objects action preserves existing groups and assemblies, excludes the rim helper, and records one reversible organization change. Existing group IDs are available from the saved scene document and burner service snapshot.
 
 Scene version 6 stores each bed's recipe on its object record and the assembly frame on its group. Opening an older composition migrates its legacy burner recipe into these records in memory; Save writes the migrated document. Explicit source absence in version 6 survives reopen. Older scene compositions retain their legacy implicit source behavior. Geometry assets remain external, as with other scene saves.
+
+## Viewport interaction
+
+Scene hierarchy rows select on one click. Double-click a name (or use F2 on a focused row) to rename; Enter or blur accepts, Escape cancels. The rim helper remains named by its light role. The existing × removal and Add actions continue to use their scene operations. Add → Asset browser opens the full Workbench import surface; it does not introduce a new append/file-retention contract.
+
+Viewport → Transform gizmos is a view preference across selections, independent of saved object poses. Navigation hints are another viewport preference. Move/Rotate/Scale toolbar buttons explicitly enable their gizmo. These preferences are session-local, not authored scene history. Grid and global wireframe controls are not implemented by this menu.
+
+Numeric scrub fields display three significant figures while idle; the input retains its precise value and shows it for text editing. Relative numeric drags (including transform axis labels) and G/R/S request browser Pointer Lock, use unbounded logical movement and draw a wrapping software cursor. The browser restores its system cursor to the entry point on release. Escape or unexpected lock loss cancels the edit. When Pointer Lock is unavailable, ordinary bounded dragging remains usable. This does not change native Three.js gizmo-handle dragging or trackpad camera navigation.

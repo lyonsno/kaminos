@@ -149,3 +149,48 @@ test('number body drags from its starting value, while a click enters typing',as
   assert.equal(f.control.selected,true);assert.equal(f.control.readOnly,false);assert.equal(document.activeElement,f.control);
  } finally{delete globalThis.window;delete globalThis.document;}
 });
+
+test('locked scrub uses movement deltas when screen coordinates stop changing', async () => {
+ const {installRelativeNumberDrag}=await import('../scene-control-history.mjs');
+ const input=new Control(),doc=new Control();globalThis.document=doc;globalThis.window=new Control();
+ input.ownerDocument=doc;input.value='1';input.setPointerCapture=()=>{};input.hasPointerCapture=()=>false;
+ input.requestPointerLock=()=>{doc.pointerLockElement=input;doc.fire('pointerlockchange');};
+ doc.exitPointerLock=()=>{doc.pointerLockElement=null;doc.fire('pointerlockchange');};
+ try {
+  installRelativeNumberDrag({input,step:.1});
+  input.fire('pointerdown',{button:0,pointerId:1,clientX:100,clientY:50});
+  input.fire('pointermove',{pointerId:1,clientX:104,clientY:50});
+  doc.fire('mousemove',{clientX:104,clientY:50,movementX:20,movementY:0});
+  assert.equal(Number(input.value),3.4);
+  doc.fire('mouseup',{button:0});
+  assert.equal(doc.pointerLockElement,null);
+ }finally{delete globalThis.document;delete globalThis.window;}
+});
+
+test('compact numeric presentation retains useful scale without trailing noise',async()=>{
+ const module=await import('../scene-control-history.mjs');
+ assert.equal(typeof module.formatAuthoringNumber,'function');
+ assert.equal(module.formatAuthoringNumber('0.123456789'),'0.123');
+ assert.equal(module.formatAuthoringNumber('1234.56789'),'1230');
+ assert.equal(module.formatAuthoringNumber('0.0000123456'),'0.0000123');
+ assert.equal(module.formatAuthoringNumber('1.0000000000000002'),'1');
+});
+
+test('late pointer-lock acquisition is released after the gesture already ended',async()=>{
+ const {beginContinuousPointer}=await import('../continuous-pointer.mjs');
+ const doc=new Control(),target={ownerDocument:doc};doc.defaultView={};let complete,exits=0;
+ target.requestPointerLock=()=>new Promise(resolve=>complete=resolve);
+ doc.exitPointerLock=()=>{exits++;doc.pointerLockElement=null;doc.fire('pointerlockchange');};
+ const pointer=beginContinuousPointer(target,{x:0,y:0},{move(){assert.fail('ended gesture moved');}});
+ pointer.request();pointer.stop();doc.pointerLockElement=target;doc.fire('pointerlockchange');complete();
+ await Promise.resolve();assert.equal(exits,1);assert.equal(doc.pointerLockElement,null);
+});
+
+test('browser unlock cancels once and a denied lock leaves bounded dragging available',async()=>{
+ const {beginContinuousPointer}=await import('../continuous-pointer.mjs');
+ const doc=new Control(),target={ownerDocument:doc};doc.defaultView={};let lost=0,unavailable=0;
+ target.requestPointerLock=()=>{doc.pointerLockElement=target;doc.fire('pointerlockchange');};doc.exitPointerLock=()=>{doc.pointerLockElement=null;doc.fire('pointerlockchange');};
+ const p=beginContinuousPointer(target,{x:0,y:0},{move(){},lost(){lost++;}});p.request();doc.exitPointerLock();p.stop();assert.equal(lost,1);
+ target.requestPointerLock=()=>Promise.reject(Error('denied'));
+ const denied=beginContinuousPointer(target,{x:0,y:0},{move(){},unavailable(){unavailable++;}});denied.request();await new Promise(resolve=>setImmediate(resolve));assert.equal(denied.locked,false);assert.equal(unavailable,1);denied.stop();
+});

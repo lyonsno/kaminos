@@ -113,3 +113,17 @@ body[data-workspace="authoring"] #authoring-burner-slot { display:none; }
 #selected-bed-properties label.flame-scope { display:block; margin:14px 0 5px; }
 #bed-assembly-choice { box-sizing:border-box; width:100%; background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; border-radius:3px; font-size:11px; }
 #selected-bed-properties .btn, #selected-assembly-properties .btn { font-size:11px; }
+
+.authoring-number-wrap { position:relative; display:inline-flex; flex:1; min-width:0; }
+.authoring-number-wrap > input { width:100%; min-width:0; box-sizing:border-box; }
+.authoring-number-display { display:none; position:absolute; inset:0; align-items:center; justify-content:flex-end; padding:4px 9px; color:#d6d7db; font:inherit; font-variant-numeric:tabular-nums; pointer-events:none; }
+.authoring-number-wrap > input[readonly] { color:transparent !important; }
+.authoring-number-wrap > input[readonly] + .authoring-number-display { display:flex; }
+.continuous-drag-cursor { position:fixed; left:0; top:0; width:14px; height:14px; margin:-7px; border:1px solid #fff; border-radius:50%; box-shadow:0 0 0 1px #111; background:#2225; pointer-events:none; z-index:2147483647; }
+.scene-name-input[readonly] { cursor:default; pointer-events:none; }
+#authoring-viewport-settings { position:relative; font-size:11px; }
+#authoring-viewport-settings summary { padding:5px 8px; cursor:pointer; list-style:none; }
+#authoring-viewport-settings > div { position:absolute; top:100%; right:0; min-width:190px; padding:12px; background:#25262a; border:1px solid #48494d; border-radius:5px; box-shadow:0 8px 24px #0008; }
+#authoring-viewport-settings label { display:block; margin:6px 0; white-space:nowrap; }
+
+body[data-workspace=authoring] #tb-gizmo-off { display:none; }

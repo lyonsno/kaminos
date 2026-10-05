@@ -1,4 +1,5 @@
 import { Vector2, Vector3, Raycaster, Plane } from './lib/three.core.js';
+import { beginContinuousPointer } from './continuous-pointer.mjs';
 import { installRelativeNumberDrag } from './scene-control-history.mjs';
 import { createSceneEdits, transformPose, axisVector } from './scene-edit-session.mjs';
 
@@ -33,6 +34,7 @@ export function installScenePlacementTools({
   viewport.append(overlay, hud);
 
   let modal = null;
+  let continuous = null;
   let field = null;
   const fieldScrubbers = new WeakMap();
   let lastPointer = { x: 0, y: 0 };
@@ -85,7 +87,7 @@ export function installScenePlacementTools({
     const prior = modal?.prior || gizmoPrior;
     const capture = field?.capture || (gizmoEditing ? pointerOrigin : null);
     const fieldInput = field?.input;
-    modal = null; field = null; gizmoEditing = false; gizmoPrior = null;
+    modal = null; continuous?.stop(); continuous=null; field = null; gizmoEditing = false; gizmoPrior = null;
     if (fieldInput) fieldScrubbers.get(fieldInput)?.stop();
     if (gizmo.dragging) { gizmo.pointerUp({ button: 0 }); gizmo.dragging = false; gizmo.axis = null; }
     if (capture?.target?.hasPointerCapture?.(capture.pointerId)) capture.target.releasePointerCapture(capture.pointerId);
@@ -121,8 +123,16 @@ export function installScenePlacementTools({
     controls.enabled = false;
     gizmo.enabled = false;
     gizmo.getHelper().visible = false;
+    if(!continuous && !modal.awaitViewportEntry) lockModalPointer();
     draw();
     return true;
+  }
+  function lockModalPointer() {
+    continuous=beginContinuousPointer(viewport,lastPointer,{move:({x,y,event})=>{
+      if(!modal)return;lastPointer={x,y};modal.snap=event.ctrlKey;modal.precise=event.shiftKey;
+      try{preview();}catch(error){finish(false);hud.textContent=error.message;}
+    },lost:()=>finish(false),unavailable:()=>{hud.textContent+=' · Continuous pointer unavailable';}});
+    continuous.request(lastPointer);
   }
   function preview() {
     if (!modal) return;
@@ -228,6 +238,7 @@ export function installScenePlacementTools({
     }
   }, true);
   document.addEventListener('pointermove', event => {
+    if(continuous?.locked)return;
     lastPointer = { x: event.clientX, y: event.clientY };
     if (modal) {
       modal.snap = event.ctrlKey;
@@ -236,6 +247,7 @@ export function installScenePlacementTools({
         if (pointerInViewport(lastPointer)) {
           modal.anchor = { ...lastPointer };
           modal.awaitViewportEntry = false;
+          lockModalPointer();
         }
       } else {
         try { preview(); } catch (error) { finish(false); hud.textContent = error.message; }
@@ -247,6 +259,7 @@ export function installScenePlacementTools({
       fieldInput(field.input);
     }
   }, true);
+  document.addEventListener('mousedown',event=>{if(modal && continuous?.locked){steal(event);suppressClick=true;finish(event.button!==2);}},true);
   document.addEventListener('pointerdown', event => { if (modal && !viewport.contains(event.target)) finish(false); }, true);
   viewport.addEventListener('pointerdown', event => {
     pointerOrigin = { target: event.target, pointerId: event.pointerId, prior: priorControls() };
@@ -320,23 +333,9 @@ export function installScenePlacementTools({
     input.addEventListener('blur', () => { if (field?.input === input && !field.drag) finish(true); });
     input.addEventListener('change', () => { if (field?.input === input && !field.drag) finish(true); });
     input.addEventListener('pointercancel', () => { if (field?.input === input) finish(false); });
-    fieldScrubbers.set(input,installRelativeNumberDrag({grip:input,input,step:input.dataset.transformField.startsWith('rotation.')?.2:.01,
+    const grip=input.closest('.transform-axis-field')?.querySelector('.transform-axis') || input;
+    fieldScrubbers.set(input,installRelativeNumberDrag({grip,input,step:input.dataset.transformField.startsWith('rotation.')?.2:.01,
       onStart:()=>{if(edits.state().active)finish(true);}}));
-    const grip = input.parentElement.querySelector('.transform-axis');
-    if (!grip) continue;
-    grip.title = 'Drag to adjust; edit the number to type'; grip.style.cursor = 'ew-resize'; grip.style.touchAction = 'none';
-    grip.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || !selected()) return;
-      event.preventDefault(); if (edits.state().active) finish(true);
-      const [group, axis] = input.dataset.transformField.split('.');
-      const startValue = pose()[group][{ x: 0, y: 1, z: 2 }[axis]] * (group === 'rotation' ? 180 / Math.PI : 1);
-      if (!begin(selected(), `Adjust ${input.dataset.transformField}`)) return;
-      field = { input, drag: true, startX: event.clientX, startValue, step: group === 'rotation' ? .2 : .01, capture: { target: grip, pointerId: event.pointerId } };
-      grip.setPointerCapture(event.pointerId); draw();
-    });
-    grip.addEventListener('pointerup', () => { if (field?.drag) finish(true); });
-    grip.addEventListener('pointercancel', () => { if (field?.drag) finish(false); });
-    grip.addEventListener('lostpointercapture', () => { if (field?.drag) finish(false); });
   }
   gizmo.addEventListener('mouseDown', () => {
     if (!allowed()) return;
