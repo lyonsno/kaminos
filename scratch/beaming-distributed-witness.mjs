@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {assertSofteningView} from './beaming-softening-evidence.mjs';
 import {assertCameraPixels} from './beaming-camera-pixels.mjs';
-import {assertSurfaceView,floatEvidenceBytes} from './beaming-surface-evidence.mjs';
+import {assertSurfaceView,floatEvidenceBytes,assertSourceMotionView} from './beaming-surface-evidence.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -389,6 +389,54 @@ ${needle}`);
     if(process.argv.includes('--surface-cost-check')) {
       report.phase='surface-GPU-cost';await save();
       report.surfaceCost=await page.evaluate(async()=>{const m=await import('/scratch/beaming-surface-gpu-check.mjs');const f=window.__beamingSurfaceFixture;if(f.graph.count!==window.__kaminosSceneRadiance.debugState().frame.surfaceReceivers)throw new Error('timing fixture is not the authored receiver graph');return m.measureSurfaceGPU(f);});await save();
+    }
+  }
+  if(process.argv.includes('--source-aware-motion-check')) {
+    report.phase='matched-moving-source';await save();
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.check('#rendering-retain-comparisons');
+    await page.evaluate(()=>{
+      window.__kaminosSetSceneCameraFrame([2,1.5,6],[0,.7,0]);
+      for(const [id,value] of [['rendering-shared-gain',4],['rendering-source-softness',0],['rendering-surface-reconstruction',0]]) {
+        const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    });
+    const modes=[['fixed',24],['source',12],['source',16],['source',24]];
+    const digest=v=>createHash('sha256').update(floatEvidenceBytes(v)).digest('hex');
+    const settle=async()=>{
+      const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);
+      await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosSceneRadianceSetup?.status==='failed'||window.__kaminosVolumePrototype.debugState().frameCount>=f+2,f,{timeout:0});
+    };
+    let priorSourceHash;
+    for(let state=0;state<8;state++) {
+      if(state){
+        const f=await page.evaluate(()=>{window.__kaminosVolumePrototype.setSimulationPaused(false);return window.__kaminosVolumePrototype.debugState().frameCount;});
+        await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosVolumePrototype.debugState().frameCount>=f+6,f,{timeout:0});
+        await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
+      }
+      await settle();
+      const held=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
+      const sourceHash=digest(held.values);
+      if(priorSourceHash)assert.notEqual(sourceHash,priorSourceHash,'sequence must contain changing live flame coefficients');
+      priorSourceHash=sourceHash;
+      await fs.writeFile(`${out}/motion-${state}-source.f32`,floatEvidenceBytes(held.values));
+      for(const [pattern,count] of modes) {
+        await page.selectOption('#rendering-angular-samples',String(count));
+        await page.selectOption('#rendering-angular-pattern',pattern);
+        await settle();
+        const signal=await page.evaluate(async()=>{
+          const fields=await window.__kaminosSceneRadiance.readback();
+          return {lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),
+            source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data)};
+        });
+        assertSourceMotionView(signal,{count,pattern,heldSource:held.values});
+        const name=`motion-${state}-${pattern}${count}`;
+        for(const [field,values] of [['front',signal.surface],['back',signal.back]])await fs.writeFile(`${out}/${name}-${field}.f32`,floatEvidenceBytes(values));
+        await page.screenshot({path:`${out}/${name}.png`});
+        const mean=v=>v.reduce((s,x,i)=>s+(i%4<3?x:0),0)/(v.length/4);
+        report.views.push({name,state,pattern,count,sourceHash,surfaceHash:digest(signal.surface),frontMean:mean(signal.surface),lighting:signal.lighting,volume:signal.volume,sourceMetadata:{...held,values:undefined}});
+        await save();
+      }
     }
   }
   if(process.argv.includes('--edit-budget-check')) {

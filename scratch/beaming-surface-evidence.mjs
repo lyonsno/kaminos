@@ -3,6 +3,16 @@ export function floatEvidenceBytes(values) {
   assert.ok(values.length>0&&values.every(v=>typeof v==='number'&&Number.isFinite(v)),'float evidence must be nonempty finite numbers');
   return Buffer.from(new Float32Array(values).buffer);
 }
+export function assertSourceMotionView(signal,{count,pattern,heldSource}) {
+  assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
+  const frame=signal.lighting.frame;
+  assert.equal(frame.directions,count);assert.equal(frame.angularPattern,pattern);
+  assert.equal(frame.integration,pattern==='source'?'exact-cell':'midpoint');
+  assert.equal(frame.sourceSoftness,0);assert.equal(frame.surfaceReconstruction.passes,0);
+  assert.equal(frame.generation,signal.source.generation);assert.ok(frame.surfaceReceivers>0);
+  for(const values of [signal.surface,signal.back,signal.source.values])floatEvidenceBytes(values);
+  assert.deepEqual(signal.source.values,heldSource,'mode comparison must use identical live coefficients');
+}
 export function assertSurfaceView(signal,{baseline,count,pattern,passes}) {
   assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
   const frame=signal.lighting.frame;
